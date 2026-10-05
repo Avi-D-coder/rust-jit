@@ -1,0 +1,15 @@
+--- a/src/backend.rs
++++ b/src/backend.rs
+@@ -35,6 +35,12 @@
+ }
+ 
+ impl JITBuilder {
++    /// Disable all fallback symbol lookup; explicit symbols remain available.
++    pub fn clear_symbol_lookup_functions(&mut self) -> &mut Self {
++        self.lookup_symbols.clear();
++        self
++    }
++
+     /// Create a new `JITBuilder`.
+     ///
+     /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`

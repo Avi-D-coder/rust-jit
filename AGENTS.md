@@ -1,0 +1,7 @@
+# Implementation instructions
+
+Specification: [LRR revision 3](lrr_rust2024_hybrid_cargo_implementation_spec.md).
+
+Implement the fixed LRR architecture and task ledger in order. Do not choose a different frontend, query framework, native backend, language profile, sandbox backend, or tiering strategy. Preserve explicit interpreter/JIT/capability semantics. Before changing code, identify the task and invariant being implemented. Add its acceptance test before marking the task complete. Run the current milestone gate after each integrated task. Never mark a selected fixture passed by skipping it, catching all errors as success, or hard-coding an expected output. Never load arbitrary native symbols or invoke guest build/procedural-macro code during live execution. Only explicit authorized native preparation may run Cargo-native build code, and only its immutable schema-checked generation may load in an authorized hybrid worker. Use pinned dependency source to repair mechanical API mismatches. Record an actual contradiction as a minimal witness plus regression and erratum, not an undocumented design fork. Finish with reproducible release artifacts and an honest feature/performance/security report.
+
+Follow Section 32.2: deterministic indexes, typed outcomes, checked sizes and explicit stable encodings. Local production unsafe is confined to jit/abi.rs, jit/helpers.rs, jit/module_cache.rs, native/loader.rs, and native/ffi.rs. Do not claim planned or unexercised checks passed. Keep docs/tasks.json and artifacts accurate.

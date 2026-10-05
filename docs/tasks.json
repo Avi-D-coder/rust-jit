@@ -1,0 +1,1060 @@
+{
+  "schema": 1,
+  "spec_revision": "3.0",
+  "tasks": [
+    {
+      "id": "T000",
+      "title": "Create workspace and execution instructions",
+      "status": "complete",
+      "commit_id": null,
+      "acceptance_tests": [
+        "workspace_has_exact_members",
+        "toolchain_is_pinned",
+        "task_ledger_validates"
+      ],
+      "acceptance_contract": "host `cargo test --workspace --locked` succeeds; task ledger validates; `workspace_has_exact_members` and `toolchain_is_pinned` pass. AGENTS.md contains the operating rules in Section 32.",
+      "commands": [
+        "cargo +1.99.0 test --workspace --locked",
+        "cargo +1.99.0 run --locked --offline -p xtask -- gate 00 (Linux x86-64 container)"
+      ],
+      "fixture_ids": [],
+      "artifact_paths": [
+        "artifacts/bootstrap.json",
+        "artifacts/gates/00.json"
+      ]
+    },
+    {
+      "id": "T001",
+      "title": "Freeze dependencies and patch JIT symbol lookup",
+      "status": "complete",
+      "commit_id": null,
+      "acceptance_tests": [
+        "direct_versions_match_spec",
+        "vendor_patch_is_exact",
+        "dependency_license_inventory_is_complete"
+      ],
+      "acceptance_contract": "`vendor_patch_is_exact`, `direct_versions_match_spec`, and dependency license inventory pass. No git/unversioned direct dependency is permitted. A package-resolution failure blocks the gate with evidence; it is not permission to upgrade silently.",
+      "commands": [
+        "cargo +1.99.0 test --workspace --locked",
+        "cargo +1.99.0 run --locked --offline -p xtask -- gate 00 (Linux x86-64 container)"
+      ],
+      "fixture_ids": [],
+      "artifact_paths": [
+        "artifacts/bootstrap.json",
+        "artifacts/gates/00.json",
+        "artifacts/dependency-licenses.json"
+      ]
+    },
+    {
+      "id": "T002",
+      "title": "Parser and native smoke tests",
+      "status": "complete",
+      "commit_id": null,
+      "acceptance_tests": [
+        "parser_counts_cold_function_without_resolving",
+        "jit_adds_seven",
+        "jit_calls_registered_helper",
+        "jit_does_not_resolve_ambient_symbol"
+      ],
+      "acceptance_contract": "`parser_counts_cold_function_without_resolving`, `jit_adds_seven`, `jit_calls_registered_helper`, and `jit_does_not_resolve_ambient_symbol` pass. Run the bad-import case in a child test process so upstream error/panic behavior cannot compromise the host test runner.",
+      "commands": [
+        "cargo +1.99.0 test --workspace --locked",
+        "cargo +1.99.0 run --locked --offline -p xtask -- gate 00 (Linux x86-64 container)"
+      ],
+      "fixture_ids": [],
+      "artifact_paths": [
+        "artifacts/bootstrap.json",
+        "artifacts/gates/00.json"
+      ]
+    },
+    {
+      "id": "T003",
+      "title": "Gate harness and architecture audit",
+      "status": "complete",
+      "commit_id": null,
+      "acceptance_tests": [
+        "forbidden_worker_import_is_rejected",
+        "unsafe_outside_boundary_is_rejected",
+        "missing_fixture_reference_fails_audit"
+      ],
+      "acceptance_contract": "inject a forbidden `std::fs` use into a worker-module test sample and verify the audit fails; restore the real source and gate 00 passes. The audit scans parsed Rust paths where possible, not only fragile substring matches.",
+      "commands": [
+        "cargo +1.99.0 test --workspace --locked",
+        "cargo +1.99.0 run --locked --offline -p xtask -- gate 00 (Linux x86-64 container)"
+      ],
+      "fixture_ids": [],
+      "artifact_paths": [
+        "artifacts/bootstrap.json",
+        "artifacts/gates/00.json"
+      ]
+    },
+    {
+      "id": "T010",
+      "title": "Stable keys and encodings",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "maps with different insertion order have identical hashes; field/order/version changes alter expected hashes; distinct key families cannot collide through identical byte concatenation; source-location fields are excluded from semantic keys where specified.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T011",
+      "title": "Source loader and immutable snapshots",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "`snapshot_is_immutable_after_disk_edit`, `module_path_escape_denied`, `module_rs_ambiguity_is_error`, `source_batch_is_atomic`, and `racing_capture_reports_limit` pass using controlled temporary directories.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T012",
+      "title": "Syntax adapter and outline split",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "edit a function body and keep its header/bucket fingerprints unchanged; insert lines before an unchanged function and update its displayed location; cold missing-name and unsupported-expression fixtures outline successfully.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T013",
+      "title": "Query fetch, dependency validation, and cycles",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "synthetic diamond dependency graph runs each provider once per invalidating change; unchanged-output recomputation keeps downstream reuse; active cycle returns a typed non-cacheable error; breaking that cycle by an edit succeeds immediately; repeated ordinary function identity lookup is not a cycle.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T014",
+      "title": "Fine-grained input publication and negative dependencies",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "adding a previously absent name invalidates cached missing lookup; body-only edits do not invalidate name buckets; duplicate candidates are deterministic; a failed query with unchanged dependencies is cached. Trace includes provider execute/reuse/invalidated events with real counts.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T015",
+      "title": "Cache budgets and source-map attachment",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "constrained synthetic cache tests evict deterministic victims; a live parse/source-map handle is pinned; an edited line offset cannot produce an old line number. Gate 01 records provider counts for the edit matrix's initial rows.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T020",
+      "title": "Namespaces and imports",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "lexical shadowing, explicit-vs-glob resolution, missing/ambiguous imports, cyclic reexports, and inactive cfg items have dedicated deterministic tests. A macro-blocked namespace cannot be reported complete.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T021",
+      "title": "Called-body structural index",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "an entered function containing a cold invalid branch indexes without resolving that branch; nested function bodies are opaque; node/slot budgets fail only when that body is reached. Repeat indexing yields identical keys.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T022",
+      "title": "Minimal LRIR types and verifier",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "malformed slot kinds and missing terminal exits fail structural verification; a legal Unsupported recipe passes structural verification but faults on execution. No successor thunk is requested by a branch recipe.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T023",
+      "title": "Primitive values and checked arenas",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "stale/wrong-arena/zero/out-of-range handles fail; bit-copy cannot bypass guest ownership; ValueRepr layout assertions pass. A run reset invalidates every previous guest handle.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T024",
+      "title": "First VM path",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "no AST evaluator exists; opcode counters are nonzero and accurate; a following cold function is not semantically queried. The CLI prints a structured actual result, not a hard-coded success.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T025",
+      "title": "Numeric operations and contexts",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "exhaustive i8/u8 arithmetic boundary loops; random wider arithmetic/cast comparisons; works/fails context examples; signed-min literal; distinct usize/u64 contracts. Gate rejects silent i32 defaulting.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T030",
+      "title": "Blocks, let, assignment, and shadowing",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "RHS-before-LHS assignment trace; new binding initializer sees the old shadowed binding; immutable reassignment faults; loop-local reincarnations do not reuse stale refs or leak ownership. Source invalidity after an early return remains untouched.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T031",
+      "title": "If, short circuit, while, and loop",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "cold undefined branch and short-circuit RHS have zero thunk/query events; hot condition loops terminate correctly; nested labeled break/continue choose correct scopes. Fuel exhaustion is deterministic.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T032",
+      "title": "Function signatures and call packets",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "uncalled invalid function signature/body does not fail another call; an unused generic bound is ignored; incompatible actual parameter/return descriptors fault only at reached boundaries; effectful arguments execute once.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T033",
+      "title": "Dispatcher-owned recursion and interruption",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "recursive factorial with concrete types; deep recursion hits guest frame limit rather than host stack overflow; cancellation/fuel produce the specified status and no duplicated output. Host call stack depth stays bounded in a 2,000-frame fixture.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T034",
+      "title": "Minimal test harness and builtin assertions",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "one selected test passes despite another broken body; exact/substr/no-match behavior works; should_panic cannot accept an unsupported-feature fault. Add the fixture manifest/harness format from Section 28.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T040",
+      "title": "Nominal/tuple/array descriptors and construction",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "named-field written evaluation order differs correctly from declaration-order storage; duplicate/missing field faults occur at reached construction; partial constructor panic drops completed fields once; cold unused schema errors are not forced.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T041",
+      "title": "Places and leases",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "out-of-bounds/index-type faults; same-location scalar assignment remains visible through a ref; whole move invalidates inline refs; shared writes fail; two mutable guest aliases serialize without a host RefCell panic.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T042",
+      "title": "Copy, move, and partial initialization",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "String move/use-after-move; Copy scalar repeat reads; partial tuple/struct moves preserve other fields; double-owner property tests fail the buggy model and pass the implementation.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T043",
+      "title": "Lexical scopes and temporary annotations",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "direct extending borrow, tuple/struct extension, extending pattern, non-extending call, Rust 2024 if-let else, block tail, and short-circuit temporary lifetimes match the recorded supported oracle cases.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T044",
+      "title": "User Drop and explicit cleanup machine",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "normal/drop/replace/early-return paths drop once; cold Drop body is prepared only on drop; partial moves skip moved fields; bounded ambiguous Drop selection faults when reached.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T045",
+      "title": "Guest panic unwinding and fatal faults",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "separate fixtures assert each difference through drop output; worker crash is not should_panic success; hostpanic injection terminates only the worker process in integration tests.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T050",
+      "title": "Transactional pattern engine",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "failed arms preserve scrutinee ownership; true arms move once; conflicting moves fault before commit; or-pattern names/modes and binding order validate; overlapping alternatives can rerun false guards without replaying scrutinee evaluation.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T051",
+      "title": "Match, if-let, while-let, let-else, and question mark",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "unvisited arms have no semantic thunks; no-match fault is reached only after all mismatches; let-else normal fallthrough faults; question-mark error type mismatch fails at return boundary without From resolution.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T052",
+      "title": "Inherent and restricted trait dispatch",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "receiver-rank precedence; unused bound succeeds; reached missing method fails; new competing impl invalidates cached dispatch; bounded candidate is not silently discarded.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T053",
+      "title": "Named function values",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "call a selected function through a local variable; incompatible fn signature faults; a numeric payload cannot become a callable; closure creation receives the specific unsupported diagnostic only when reached.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T054",
+      "title": "Pure constants",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "array length constant, recursive bounded const fn, cycle, cold effect branch, reached forbidden effect, and two uses with independently mutable guest arrays. Constant memo contains no guest handles.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T060",
+      "title": "Vec and slice operations",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "push/pop/get/get_mut/index/slice, reallocation invalidation, nonreallocating push preservation, pop invalidating only removed element, consuming iteration drops remaining elements, quota reservation preserves prior ownership.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T061",
+      "title": "String and formatting",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "multibyte len/char/slice cases; invalid boundary panic/error; formatter unsupported spec; capture-name lookup; formatting never moves String; failure-only assert message remains lazy.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T062",
+      "title": "Option, Result, scalar methods, and iterators",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "empty Option/Result explicit context; unwrap/expect panics; `collect::<Vec<i64>>`, enumerate/count, inclusive max integer range terminates without overflow; user iterator fails explicitly.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T063",
+      "title": "Macros and derives",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "vec list/repeat including zero count evaluation; Debug/Copy/Clone/PartialEq/Eq field rules; unknown derive completeness; source-position intrinsics after edit; includes are source dependencies with deferred errors; user macros never execute.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T064",
+      "title": "Worker protocol and fake-broker equivalence",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "malformed/oversized/truncated frames fail closed; duplicate replies do not replay effects; 100 sequential tests retain caches but no guest state.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T065",
+      "title": "Real broker permissions",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "default FS deny, read-only grant, write-only grant, prefix confusion, `..`, absolute path, escaping symlink, oversized read, and reused native policy scenario through the fake artifact stub until JIT arrives. No worker std::fs/env/process operation is introduced.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T070",
+      "title": "Freeze ABI and helper registration",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "wrong ABI status, wrong frame ID, stale semantic epoch, unlisted symbol, and wrong scratch layout fail safely. The three permitted unsafe modules contain documented preconditions at every unsafe block.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T071",
+      "title": "Record real executions and form regions",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "skipped branch/callee never enters a region; errored operation is excluded; effect/call splits occur; repeated traversal count is separate from opcode count; no guest value payload enters an observation.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T072",
+      "title": "Generic Cranelift lowering",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "force-mode repeated loop has actual native entries and helper-op counts; recursive guest calls still use dispatcher frames; a failed helper exits before following helper; interpreter/native transcript and fuel match.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T073",
+      "title": "Precise exits and once-only resumption",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "inject guard misses after zero, one, and multiple completed operations; earlier writes/output/ownership transfers occur once; the missed operation executes once; later operations are not skipped. Artificial ABI inconsistency fails as an internal defect.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T074",
+      "title": "Promotion policy and compilation failures",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "auto threshold32 exact; force observes before compiling; one-shot force fixture reports zero native entries without replay; auto compile-resource fallback is visible; force compile failure fails its fixture.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T080",
+      "title": "Scalar staging and commit",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "unresolved literal, different type, moved slot, or changed descriptor causes Deopt before commit; failure uses interpreter diagnosis; output slot ownership is reserved before mutation; scratch access never escapes.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T081",
+      "title": "Whitelisted fast paths",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "boundary tables and 10,000 random pairs per arithmetic/comparison type match the shared helper; native_scalar_ops is positive in hot-add/compare fixtures; multiplication/float fixtures execute via helpers, not invented unsupported fast paths.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T082",
+      "title": "Artifact provenance and edit reuse",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "every Section 22.5 edit matrix row; permission changes do not recompile but deny effects; source-position intrinsics reflect new lines; changed shape triggers a guard miss without a second artifact for the same region recipe.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T083",
+      "title": "Module arena retirement",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "tiny test budgets repeatedly create/evict arenas, no stale pointer is callable, active invocation prevents free, dropped entry cannot be relabeled as another artifact, and RSS stress does not grow without bound across source revisions.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T084",
+      "title": "Native audit and reproducible diagnostics",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "deliberately malformed native plan is rejected before publication; diagnostic bundle is bounded/redacted; real CLIF dumps correspond to regions that entered native execution.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T090",
+      "title": "Managed Cargo manifest subset audit",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "ordinary two-package workspace accepted; optional/target-specific/build/proc-macro dependencies rejected; missing lock/cache fails offline; sentinel build.rs and proc-macro never execute.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T091",
+      "title": "Prepared units and staleness",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "unit vs integration vs run cfg fixtures; duplicate target ambiguity; manifest/lock/config edit blocks execution until prepare; source body edit does not require prepare. No rlib or generated-output loading path exists.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T092",
+      "title": "Complete CLI and test result schema",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "golden CLI parser cases; ignored/should_panic/no-match semantics; real counters serialized; unsupported sandbox request exits before source execution.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T093",
+      "title": "Stdio service and atomic overlays",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "one client edits called function and reruns with cache reuse; concurrent cancel is processed; malformed request does not mutate snapshot; guest/protocol bytes cannot inject stdout log records.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T094",
+      "title": "Watch, shutdown, and worker recovery",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "repeated rapid source changes run only committed snapshots; no mixed revisions; crash resets native cache claims; shutdown reaps worker and releases broker resources.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T100",
+      "title": "Native Rust oracle harness",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "oracle cache keys include all source/helper/compiler inputs; unsupported-relaxed fixtures are never sent to rustc as expected-pass cases; outputs/drop order/results compare with explicit normalizations.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T101",
+      "title": "Three-mode equivalence harness",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "same value/panic/fault, source origin, output, ownership/drop log, and fuel; mode-specific native counters differ as expected. Every force-native fixture must assert actual entries and direct scalar entries where applicable.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T102",
+      "title": "Generators and reducer",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "injected arithmetic, ownership, stale-cache, and replay bugs are caught; reducer produces a smaller failing fixture preserving expected failure class. Persist seeds and reduced cases as regression tests.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T103",
+      "title": "Protocol, parser, and quota stress",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "no unbounded allocation, hang, host panic on guest input, or unauthorized effect; timeouts are classified and subprocesses reaped.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T104",
+      "title": "Full feature/diagnostic coverage audit",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "deleting a referenced fixture or leaving a release TODO/not-yet-implemented code makes the gate fail. Coverage is about actual exercised paths, not only file presence.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T110",
+      "title": "Benchmark driver and datasets",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "setup time is separated correctly; native run includes compilation when promised; rustc/cargo baseline commands and cache states are recorded; source changes are verified, not simulated counters.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T111",
+      "title": "Profile actual overhead",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "totals/overlaps are documented; pure interpreter vs generic native vs direct-scalar counters explain the observed results; no unsupported speedup claim appears.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T112",
+      "title": "Implement only local in-architecture improvements",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "all gates rerun unchanged; benchmark raw results show the change's effect. A nonimproving patch is reverted, not rationalized.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T120",
+      "title": "User and agent documentation",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "every documented command is exercised in a clean integration test; screenshots or examples do not imply unimplemented capabilities.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T121",
+      "title": "Reproduce from clean checkout",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "all mandatory gates pass without untracked source files; fixture/benchmark artifacts are attached; version/license/vendor manifest complete; no ignored selected fixture, stale fixture expectation, or degraded JIT run remains.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "T122",
+      "title": "Final acceptance demonstration",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "a recorded JSON transcript and command script reproduce every assertion. This is the completion artifact, not a narrative claim.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H001",
+      "title": "Edition identities and parser",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "parser smoke uses Edition2024; E2409/E2411 pass; selected older-edition live target rejects while a native dependency does not.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H002",
+      "title": "2024 temporary lifetime machinery",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "E2401\u2013E2407/E2410 pass under off/auto/force with equal drop transcripts and no preparation of skipped clauses.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H003",
+      "title": "Pattern ergonomics and reserved namespace",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "E2408 plus shadowing/explicit-reference fixtures; full prior pattern suite rerun. Gate `xtask edition2024-gate` requires H001\u2013H003 and all E24 fixtures except native-dependent E2412, which joins the final hybrid gate.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H004",
+      "title": "Artifact reuse probe",
+      "status": "in_progress",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "Cargo reports native dependency fresh when first compiling the bridge; bridge changes do not compile live source; native source edit changes returned value and marks the relevant dependency dirty. Record raw JSON and toolchain. A failure must be reduced before native-loader implementation.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H005",
+      "title": "Configuration/parser",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "golden canonical outputs, duplicate path/type failures, malformed types, explicit generics, and arbitrary code strings rejected.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H006",
+      "title": "Native/live partition",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "HN010\u2013HN012; preparation logs show no live-unit build command.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H007",
+      "title": "Workspace transaction",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "no writes in preview; repeated init is byte-identical; user comments preserved where toml_edit supports them; HN007/HN009 workspace cases and concurrent-edit fixtures pass.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H008",
+      "title": "Compiler/configuration provenance",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "compiler older than 1.85 rejected for generated source; host vs explicit-target invocations preserved; no wrapper inserted merely for telemetry.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H009",
+      "title": "Cargo message collector",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "HN001/HN002/HN008/HN009/HN024; cached build-script output is not falsely counted as a script execution.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H010",
+      "title": "Native input inventory",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "escaped-path unit tests, HN029/HN030, native-source overlay change, and integration-test-only change that does not invalidate normal library when inputs permit.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H011",
+      "title": "Generation publication",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "HN025/HN027/HN031/HN035, no coordinator dlopen, no publication on source/probe failure.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H012",
+      "title": "ABI table and safe wire codec",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "C/Rust layout comparison, golden byte strings, malformed/oversized-input property tests, and no foreign pointer accepted as a guest value.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H013",
+      "title": "Typed bridge generator",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "scalar/generic/associated/native-trait wrappers compile; private/unsafe/wrong-signature wrappers fail prepare with the right origin; generated call expressions contain no unchecked transmute.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H014",
+      "title": "Native object store and reply lease",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "HN013/HN014; fuzzed stale/wrong-type IDs do not enter binding; allocator/free ownership tracked by fixture counters.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H015",
+      "title": "Call-scoped borrows and writeback",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "HN015/HN016; staged UTF-8 boundary/range tests; native mutation visible after return.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H016",
+      "title": "Entry transaction and panic",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "HN017/HN019; panic=abort handled by supervisor fixture; no worker catch_unwind around foreign calls.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H017",
+      "title": "Cleanup integration",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "HN014/HN020, no native value enters a managed struct-layout operation, and mem::forget policy is defined as Section 44.7 prescribes.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H018",
+      "title": "Native namespace/query records",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "HN006/HN028; no native call or loader runs in a query provider; native source bodies absent from live parse telemetry.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H019",
+      "title": "Shared dispatcher and JIT barrier",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "HN003/HN004/HN033; a native-call event occurs once under all tiers; interpreter and JIT identical ownership/writeback behavior.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H020",
+      "title": "Fresh hybrid worker and supervision",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "HN018/HN021/HN025/HN036; repeat request resets a native static; tests in one batch demonstrate declared shared globals.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H021",
+      "title": "Dedicated output/control channels",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "HN026 and native exit(0) fixture; parser never treats native JSON-like logs as protocol messages.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H022",
+      "title": "Portable checkpoint encoding and import",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "HN003/HN027/HN028/HN034; corrupt checkpoint cold-falls back; stale negative lookup and body indexes never execute.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H023",
+      "title": "Checkpoint transport and bounds",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "fresh hybrid worker imports source work but reports zero restored JIT pointers; crashed worker cannot poison the prior checkpoint; quota failure changes performance only.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H024",
+      "title": "CLI/service authority and freshness",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "HN003/HN005/HN022/HN023/HN024; a service native miss cannot trigger prepare; generation changes require newly scoped authorization.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H025",
+      "title": "Telemetry and diagnostics",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "result schema fixtures, HN007/HN019/HN032, and test harness fails if any counter is fabricated or double-counted.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H026",
+      "title": "Full hybrid conformance",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "HN001\u2013HN036 and E2412 pass; skipped required fixture is failure; controlled native crashes do not stop the whole report.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H027",
+      "title": "Performance report",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "raw sample CSV/JSON, generated summary, reproducible commands, no \u201cinstant\u201d claim unsupported by data.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    },
+    {
+      "id": "H028",
+      "title": "Release audit and handoff",
+      "status": "not_started",
+      "commit_id": null,
+      "acceptance_tests": [],
+      "acceptance_contract": "all required behavior proven; security label none_native tested; no remaining unconditional ban or silent native fallback contradicts this revision.",
+      "commands": [],
+      "fixture_ids": [],
+      "artifact_paths": []
+    }
+  ]
+}

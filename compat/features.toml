@@ -1,0 +1,12 @@
+schema = 1
+inventory_scope = "bootstrap infrastructure; guest release inventory pending"
+
+[[feature]]
+id = "edition2024_parser_bootstrap"
+status = "infrastructure"
+fixtures = ["BOOT-PARSER"]
+
+[[feature]]
+id = "closed_jit_symbols_bootstrap"
+status = "infrastructure"
+fixtures = ["BOOT-JIT", "BOOT-IMPORT"]

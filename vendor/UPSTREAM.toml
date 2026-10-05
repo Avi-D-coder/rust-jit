@@ -1,0 +1,6 @@
+name = "cranelift-jit"
+version = "0.136.2"
+source = "https://static.crates.io/crates/cranelift-jit/cranelift-jit-0.136.2.crate"
+archive = "cranelift-jit-0.136.2.crate"
+sha256 = "3b295275f5b395c764bc8e19f10afe1845cadd8fbcdd933ed40c298427c95ec2"
+patch = "closed-symbols.patch"

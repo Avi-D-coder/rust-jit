@@ -1,0 +1,26 @@
+schema = 1
+
+[[fixture]]
+id = "BOOT-PARSER"
+path = "crates/lrr/src/syntax/parse.rs"
+test = "parser_counts_cold_function_without_resolving"
+
+[[fixture]]
+id = "BOOT-HOST"
+path = "crates/lrr/src/core/profile.rs"
+test = "unsupported_host_fails_closed"
+
+[[fixture]]
+id = "BOOT-JIT"
+path = "crates/lrr/src/jit/abi.rs"
+test = "jit_adds_seven"
+
+[[fixture]]
+id = "BOOT-IMPORT"
+path = "xtask/tests/bootstrap.rs"
+test = "jit_does_not_resolve_ambient_symbol"
+
+[[fixture]]
+id = "BOOT-DEVELOPMENT"
+path = "crates/lrr/src/cli/mod.rs"
+test = "development_entry_fails_closed"

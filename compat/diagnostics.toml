@@ -1,0 +1,21 @@
+schema = 1
+
+[[diagnostic]]
+code = "LRR-E-HOST-TARGET"
+phase = "startup"
+invariant = "I-MEMORY"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "Starting lrr on aarch64-apple-darwin fails before guest execution."
+corrective_command = "Use x86_64-unknown-linux-gnu with Rust 1.99.0."
+fixtures = ["BOOT-HOST"]
+
+[[diagnostic]]
+code = "LRR-E-NOT-YET-IMPLEMENTED"
+phase = "development"
+invariant = "I-ORDER"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "The bootstrap binary cannot run guest tests."
+corrective_command = "Complete the task ledger; this diagnostic is forbidden in a release."
+fixtures = ["BOOT-DEVELOPMENT"]

@@ -1,0 +1,103 @@
+{
+  "build_id": "0.1.0",
+  "checks": [
+    {
+      "detail": {
+        "arguments": [
+          "test",
+          "--workspace",
+          "--locked",
+          "--offline",
+          "--",
+          "--list"
+        ],
+        "command": "cargo",
+        "elapsed_ms": 52404,
+        "exit_code": 0,
+        "stderr": "   Compiling libc v0.2.190\n   Compiling cranelift-codegen v0.136.2\n   Compiling proc-macro2 v1.0.107\n   Compiling libm v0.2.16\n   Compiling rustix v1.1.5\n   Compiling cranelift-assembler-x64 v0.136.2\n   Compiling target-lexicon v0.13.5\n   Compiling serde_core v1.0.229\n   Compiling quote v1.0.47\n   Compiling wasmtime-internal-core v49.0.2\n   Compiling getrandom v0.3.4\n   Compiling io-lifetimes v2.0.4\n   Compiling syn v3.0.6\n   Compiling crossbeam-utils v0.8.23\n   Compiling io-extras v0.19.0\n   Compiling cranelift-bitset v0.136.2\n   Compiling crossbeam-channel v0.5.17\n   Compiling cranelift-entity v0.136.2\n   Compiling fs-set-times v0.20.3\n   Compiling rustix-linux-procfs v0.1.1\n   Compiling memoffset v0.9.1\n   Compiling cranelift-bforest v0.136.2\n   Compiling getrandom v0.4.3\n   Compiling rowan v0.17.0\n   Compiling ra_ap_stdx v0.0.356\n   Compiling zerocopy v0.8.59\n   Compiling region v3.0.2\n   Compiling rand_core v0.9.5\n   Compiling cap-primitives v4.0.3\n   Compiling serde_spanned v1.1.1\n   Compiling toml_datetime v1.1.1+spec-1.1.0\n   Compiling wasmtime-internal-jit-icache-coherence v49.0.2\n   Compiling serde_derive v1.0.229\n   Compiling clap_derive v4.6.7\n   Compiling memmap2 v0.9.11\n   Compiling zmij v1.0.23\n   Compiling ra_ap_syntax v0.0.356\n   Compiling toml v1.1.6+spec-1.1.0\n   Compiling cap-std v4.0.3\n   Compiling serde_json v1.0.151\n   Compiling blake3 v1.8.7\n   Compiling clap v4.6.7\n   Compiling serde v1.0.229\n   Compiling wait-timeout v0.2.1\n   Compiling tempfile v3.27.0\n   Compiling rand v0.9.5\n   Compiling rand_xorshift v0.4.0\n   Compiling rusty-fork v0.3.1\n   Compiling ppv-lite86 v0.2.21\n   Compiling rand_chacha v0.9.0\n   Compiling proptest v1.11.0\n   Compiling cranelift-module v0.136.2\n   Compiling cranelift-native v0.136.2\n   Compiling cranelift-frontend v0.136.2\n   Compiling cranelift-jit v0.136.2 (/workspace/vendor/cranelift-jit)\n   Compiling lrr v0.1.0 (/workspace/crates/lrr)\n   Compiling xtask v0.1.0 (/workspace/xtask)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 51.76s\n     Running unittests src/lib.rs (target/linux-x86_64/debug/deps/lrr-c823f8af5c8d34ea)\n     Running unittests src/bin/cargo-lrr.rs (target/linux-x86_64/debug/deps/cargo_lrr-a34952c17cb80bd3)\n     Running unittests src/bin/lrr.rs (target/linux-x86_64/debug/deps/lrr-c7e15ed41b20e8ca)\n     Running unittests src/bin/lrr-worker.rs (target/linux-x86_64/debug/deps/lrr_worker-bfa028de4344d77f)\n     Running unittests src/main.rs (target/linux-x86_64/debug/deps/xtask-3d717a02ac31cadc)\n     Running tests/bootstrap.rs (target/linux-x86_64/debug/deps/bootstrap-de61e87f769cef64)\n   Doc-tests lrr\n",
+        "stdout": "cli::tests::development_entry_fails_closed: test\ncore::profile::tests::unsupported_host_fails_closed: test\njit::abi::tests::jit_adds_seven: test\njit::abi::tests::jit_calls_registered_helper: test\nsyntax::audit::tests::grouped_imports_and_aliases_are_owned_paths: test\nsyntax::audit::tests::strings_and_comments_do_not_create_unsafe_tokens: test\nsyntax::parse::tests::parser_counts_cold_function_without_resolving: test\n\n7 tests, 0 benchmarks\n0 tests, 0 benchmarks\n0 tests, 0 benchmarks\n0 tests, 0 benchmarks\naudit::inventory_tests::missing_fixture_reference_fails_audit: test\naudit::tests::forbidden_worker_import_is_rejected: test\naudit::tests::unsafe_outside_boundary_is_rejected: test\ntasks::license_tests::dependency_license_inventory_is_complete: test\ntasks::tests::direct_versions_match_spec: test\ntasks::tests::task_ledger_validates: test\ntasks::tests::toolchain_is_pinned: test\ntasks::tests::vendor_patch_is_exact: test\ntasks::tests::workspace_has_exact_members: test\n\n9 tests, 0 benchmarks\njit_does_not_resolve_ambient_symbol: test\n\n1 test, 0 benchmarks\n0 tests, 0 benchmarks\n",
+        "success": true
+      },
+      "name": "test_inventory",
+      "status": "passed"
+    },
+    {
+      "detail": {
+        "arguments": [
+          "test",
+          "--workspace",
+          "--locked",
+          "--offline"
+        ],
+        "command": "cargo",
+        "elapsed_ms": 32918,
+        "exit_code": 0,
+        "stderr": "   Compiling cranelift-codegen v0.136.2\n   Compiling cranelift-module v0.136.2\n   Compiling cranelift-native v0.136.2\n   Compiling cranelift-frontend v0.136.2\n   Compiling cranelift-jit v0.136.2 (/workspace/vendor/cranelift-jit)\n   Compiling lrr v0.1.0 (/workspace/crates/lrr)\n   Compiling xtask v0.1.0 (/workspace/xtask)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 31.36s\n     Running unittests src/lib.rs (target/linux-x86_64/debug/deps/lrr-c823f8af5c8d34ea)\n     Running unittests src/bin/cargo-lrr.rs (target/linux-x86_64/debug/deps/cargo_lrr-a34952c17cb80bd3)\n     Running unittests src/bin/lrr.rs (target/linux-x86_64/debug/deps/lrr-c7e15ed41b20e8ca)\n     Running unittests src/bin/lrr-worker.rs (target/linux-x86_64/debug/deps/lrr_worker-bfa028de4344d77f)\n     Running unittests src/main.rs (target/linux-x86_64/debug/deps/xtask-3d717a02ac31cadc)\n     Running tests/bootstrap.rs (target/linux-x86_64/debug/deps/bootstrap-de61e87f769cef64)\n   Doc-tests lrr\n",
+        "stdout": "\nrunning 7 tests\ntest core::profile::tests::unsupported_host_fails_closed ... ok\ntest cli::tests::development_entry_fails_closed ... ok\ntest syntax::parse::tests::parser_counts_cold_function_without_resolving ... ok\ntest syntax::audit::tests::strings_and_comments_do_not_create_unsafe_tokens ... ok\ntest syntax::audit::tests::grouped_imports_and_aliases_are_owned_paths ... ok\ntest jit::abi::tests::jit_adds_seven ... ok\ntest jit::abi::tests::jit_calls_registered_helper ... ok\n\ntest result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 9 tests\ntest tasks::tests::toolchain_is_pinned ... ok\ntest tasks::tests::task_ledger_validates ... ok\ntest audit::inventory_tests::missing_fixture_reference_fails_audit ... ok\ntest tasks::tests::workspace_has_exact_members ... ok\ntest tasks::tests::direct_versions_match_spec ... ok\ntest audit::tests::unsafe_outside_boundary_is_rejected ... ok\ntest audit::tests::forbidden_worker_import_is_rejected ... ok\nvendor_patch_is_exact: passed\ntest tasks::tests::vendor_patch_is_exact ... ok\ntest tasks::license_tests::dependency_license_inventory_is_complete ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s\n\n\nrunning 1 test\ntest jit_does_not_resolve_ambient_symbol ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+        "success": true
+      },
+      "name": "host_tests",
+      "status": "passed"
+    },
+    {
+      "detail": true,
+      "name": "architecture",
+      "status": "passed"
+    },
+    {
+      "detail": true,
+      "name": "fixture_references",
+      "status": "passed"
+    },
+    {
+      "detail": {
+        "artifact": "artifacts/dependency-licenses.json",
+        "packages": 145
+      },
+      "name": "dependency_licenses",
+      "status": "passed"
+    },
+    {
+      "detail": true,
+      "name": "ledger",
+      "status": "passed"
+    },
+    {
+      "detail": true,
+      "name": "bootstrap",
+      "status": "passed"
+    }
+  ],
+  "git": {
+    "arguments": [
+      "rev-parse",
+      "HEAD"
+    ],
+    "command": "git",
+    "elapsed_ms": 26,
+    "exit_code": 128,
+    "stderr": "fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.\nUse '--' to separate paths from revisions, like this:\n'git <command> [<revision>...] -- [<file>...]'\n",
+    "stdout": "HEAD\n",
+    "success": false
+  },
+  "host": {
+    "arch": "x86_64",
+    "os": "linux",
+    "pointer_width": 64
+  },
+  "passed": true,
+  "runtime_version": "0.1.0",
+  "schema": 1,
+  "semantics_profile": "lrr-2024-v1",
+  "toolchain": {
+    "arguments": [
+      "-Vv"
+    ],
+    "command": "rustc",
+    "elapsed_ms": 130,
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+    "success": true
+  }
+}
