@@ -6,7 +6,7 @@
       "id": "T000",
       "title": "Create workspace and execution instructions",
       "status": "complete",
-      "commit_id": null,
+      "commit_id": "b5d51b2",
       "acceptance_tests": [
         "workspace_has_exact_members",
         "toolchain_is_pinned",
@@ -27,7 +27,7 @@
       "id": "T001",
       "title": "Freeze dependencies and patch JIT symbol lookup",
       "status": "complete",
-      "commit_id": null,
+      "commit_id": "b5d51b2",
       "acceptance_tests": [
         "direct_versions_match_spec",
         "vendor_patch_is_exact",
@@ -49,7 +49,7 @@
       "id": "T002",
       "title": "Parser and native smoke tests",
       "status": "complete",
-      "commit_id": null,
+      "commit_id": "b5d51b2",
       "acceptance_tests": [
         "parser_counts_cold_function_without_resolving",
         "jit_adds_seven",
@@ -71,7 +71,7 @@
       "id": "T003",
       "title": "Gate harness and architecture audit",
       "status": "complete",
-      "commit_id": null,
+      "commit_id": "b5d51b2",
       "acceptance_tests": [
         "forbidden_worker_import_is_rejected",
         "unsafe_outside_boundary_is_rejected",
@@ -91,24 +91,59 @@
     {
       "id": "T010",
       "title": "Stable keys and encodings",
-      "status": "not_started",
+      "status": "in_progress",
       "commit_id": null,
-      "acceptance_tests": [],
+      "acceptance_tests": [
+        "worker_ids_are_nonzero_monotonic_and_do_not_wrap",
+        "guest_identity_retains_epoch_and_index",
+        "digest_json_is_strict_lowercase_hex",
+        "stable_encoding_has_explicit_widths_and_lengths",
+        "maps_are_independent_of_insertion_order",
+        "fields_order_versions_and_domains_change_hashes",
+        "semantic_keys_exclude_locations_and_distinguish_families",
+        "edition_changes_crate_and_definition_identity",
+        "definition_changes_name_namespace_and_duplicate_ordinal"
+      ],
       "acceptance_contract": "maps with different insertion order have identical hashes; field/order/version changes alter expected hashes; distinct key families cannot collide through identical byte concatenation; source-location fields are excluded from semantic keys where specified.",
-      "commands": [],
+      "commands": [
+        "cargo +1.99.0 test --workspace --locked --offline (macOS supplementary)",
+        "cargo +1.99.0 run --locked --offline -p xtask -- gate 00 (Linux x86-64 regression gate): passed"
+      ],
       "fixture_ids": [],
-      "artifact_paths": []
+      "artifact_paths": [
+        "artifacts/gates/00.json",
+        "artifacts/gates/00-command.log"
+      ]
     },
     {
       "id": "T011",
       "title": "Source loader and immutable snapshots",
-      "status": "not_started",
+      "status": "in_progress",
       "commit_id": null,
-      "acceptance_tests": [],
+      "acceptance_tests": [
+        "snapshot_is_immutable_after_disk_edit",
+        "module_path_escape_denied",
+        "module_symlink_escape_denied",
+        "module_rs_ambiguity_is_error",
+        "source_batch_is_atomic",
+        "racing_capture_reports_limit",
+        "approved_binary_include_is_captured_without_parsing",
+        "overlay_module_addition_requires_atomic_source_bytes",
+        "path_override_uses_file_parent_and_inline_override_directory",
+        "snapshot_identity_excludes_parent_and_maps_utf8_lines",
+        "source_paths_are_normalized_and_cannot_escape",
+        "source_blob_rejects_invalid_encoding_and_limit"
+      ],
       "acceptance_contract": "`snapshot_is_immutable_after_disk_edit`, `module_path_escape_denied`, `module_rs_ambiguity_is_error`, `source_batch_is_atomic`, and `racing_capture_reports_limit` pass using controlled temporary directories.",
-      "commands": [],
+      "commands": [
+        "cargo +1.99.0 test --workspace --locked --offline (macOS supplementary)",
+        "cargo +1.99.0 run --locked --offline -p xtask -- gate 00 (Linux x86-64 regression gate): passed"
+      ],
       "fixture_ids": [],
-      "artifact_paths": []
+      "artifact_paths": [
+        "artifacts/gates/00.json",
+        "artifacts/gates/00-command.log"
+      ]
     },
     {
       "id": "T012",
@@ -784,13 +819,31 @@
     {
       "id": "H004",
       "title": "Artifact reuse probe",
-      "status": "in_progress",
+      "status": "complete",
       "commit_id": null,
-      "acceptance_tests": [],
+      "acceptance_tests": [
+        "first-bridge: native_math fresh and byte-identical",
+        "unchanged-bridge: both units fresh",
+        "live-edit: zero Cargo invocations",
+        "generic-wrapper-edit: dependency fresh, bridge rebuilt",
+        "native-edit: dependency and bridge rebuilt, changed result"
+      ],
       "acceptance_contract": "Cargo reports native dependency fresh when first compiling the bridge; bridge changes do not compile live source; native source edit changes returned value and marks the relevant dependency dirty. Record raw JSON and toolchain. A failure must be reduced before native-loader implementation.",
-      "commands": [],
+      "commands": [
+        "python3 tools/cargo-reuse-probe/probe.py --allow-native-build --work-dir /workspace/target/reuse-probe-001 (Linux x86-64 container)",
+        "repeat /workspace/target/reuse-probe-002: unchanged bridge unexpectedly rebuilt",
+        "python3 tools/cargo-reuse-probe/probe.py --allow-native-build --trace-fingerprints --work-dir /tmp/lrr-reuse-check (Linux x86-64 container filesystem): passed"
+      ],
       "fixture_ids": [],
-      "artifact_paths": []
+      "artifact_paths": [
+        "artifacts/probe/report.json",
+        "artifacts/probe/attempt-002/report.json",
+        "artifacts/probe/linux-filesystem/report.json",
+        "artifacts/probe/attempt-003/report.json",
+        "artifacts/probe/attempt-004/report.json",
+        "artifacts/probe/attempt-005/report.json",
+        "docs/cargo-reuse-probe.md"
+      ]
     },
     {
       "id": "H005",

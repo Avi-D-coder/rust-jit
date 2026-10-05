@@ -1,0 +1,721 @@
+{
+  "schema": 1,
+  "passed": true,
+  "commands": [
+    {
+      "label": "cargo-version",
+      "role": "native_preparation",
+      "arguments": [
+        "cargo",
+        "--version"
+      ],
+      "cwd": "/tmp/lrr-reuse-check",
+      "environment_overrides": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.10135625000111759,
+      "stdout": "00-cargo-version.stdout",
+      "stderr": "00-cargo-version.stderr"
+    },
+    {
+      "label": "rustc-version",
+      "role": "native_preparation",
+      "arguments": [
+        "rustc",
+        "-vV"
+      ],
+      "cwd": "/tmp/lrr-reuse-check",
+      "environment_overrides": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.12036974999864469,
+      "stdout": "01-rustc-version.stdout",
+      "stderr": "01-rustc-version.stderr"
+    },
+    {
+      "label": "initial-lock",
+      "role": "native_preparation",
+      "arguments": [
+        "cargo",
+        "generate-lockfile",
+        "--offline"
+      ],
+      "cwd": "/tmp/lrr-reuse-check",
+      "environment_overrides": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.2487518749985611,
+      "stdout": "02-initial-lock.stdout",
+      "stderr": "02-initial-lock.stderr"
+    },
+    {
+      "label": "baseline",
+      "role": "native_preparation",
+      "arguments": [
+        "cargo",
+        "build",
+        "--package",
+        "native_math",
+        "--lib",
+        "--release",
+        "--locked",
+        "--offline",
+        "--message-format=json",
+        "-vv"
+      ],
+      "cwd": "/tmp/lrr-reuse-check",
+      "environment_overrides": {
+        "CARGO_LOG": "cargo::core::compiler::fingerprint=trace"
+      },
+      "exit_code": 0,
+      "elapsed_seconds": 0.9542274999985239,
+      "stdout": "03-baseline.stdout",
+      "stderr": "03-baseline.stderr"
+    },
+    {
+      "label": "bridge-lock",
+      "role": "native_preparation",
+      "arguments": [
+        "cargo",
+        "generate-lockfile",
+        "--offline"
+      ],
+      "cwd": "/tmp/lrr-reuse-check",
+      "environment_overrides": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.18461925000156043,
+      "stdout": "04-bridge-lock.stdout",
+      "stderr": "04-bridge-lock.stderr"
+    },
+    {
+      "label": "first-bridge",
+      "role": "native_preparation",
+      "arguments": [
+        "cargo",
+        "build",
+        "--package",
+        "lrr_probe_bridge",
+        "--lib",
+        "--release",
+        "--locked",
+        "--offline",
+        "--message-format=json",
+        "-vv"
+      ],
+      "cwd": "/tmp/lrr-reuse-check",
+      "environment_overrides": {
+        "CARGO_LOG": "cargo::core::compiler::fingerprint=trace"
+      },
+      "exit_code": 0,
+      "elapsed_seconds": 0.9497907920012949,
+      "stdout": "05-first-bridge.stdout",
+      "stderr": "05-first-bridge.stderr"
+    },
+    {
+      "label": "first-load",
+      "role": "unsandboxed_native_probe",
+      "arguments": [
+        "/usr/bin/python3",
+        "-c",
+        "import ctypes,json,sys\nlibrary=ctypes.CDLL(sys.argv[1])\nscale=library.lrr_probe_scale\nscale.argtypes=[ctypes.c_int64]\nscale.restype=ctypes.c_int64\nresult={'scale':scale(6)}\nif sys.argv[2]=='yes':\n    twice=library.lrr_probe_twice\n    twice.argtypes=[ctypes.c_int64]\n    twice.restype=ctypes.c_int64\n    result['twice']=twice(7)\nprint(json.dumps(result))\n",
+        "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so",
+        "no"
+      ],
+      "cwd": "/tmp/lrr-reuse-check",
+      "environment_overrides": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.09939879100056714,
+      "stdout": "06-first-load.stdout",
+      "stderr": "06-first-load.stderr"
+    },
+    {
+      "label": "unchanged-bridge",
+      "role": "native_preparation",
+      "arguments": [
+        "cargo",
+        "build",
+        "--package",
+        "lrr_probe_bridge",
+        "--lib",
+        "--release",
+        "--locked",
+        "--offline",
+        "--message-format=json",
+        "-vv"
+      ],
+      "cwd": "/tmp/lrr-reuse-check",
+      "environment_overrides": {
+        "CARGO_LOG": "cargo::core::compiler::fingerprint=trace"
+      },
+      "exit_code": 0,
+      "elapsed_seconds": 0.23592966700016405,
+      "stdout": "07-unchanged-bridge.stdout",
+      "stderr": "07-unchanged-bridge.stderr"
+    },
+    {
+      "label": "live-edit-load-without-cargo",
+      "role": "unsandboxed_native_probe",
+      "arguments": [
+        "/usr/bin/python3",
+        "-c",
+        "import ctypes,json,sys\nlibrary=ctypes.CDLL(sys.argv[1])\nscale=library.lrr_probe_scale\nscale.argtypes=[ctypes.c_int64]\nscale.restype=ctypes.c_int64\nresult={'scale':scale(6)}\nif sys.argv[2]=='yes':\n    twice=library.lrr_probe_twice\n    twice.argtypes=[ctypes.c_int64]\n    twice.restype=ctypes.c_int64\n    result['twice']=twice(7)\nprint(json.dumps(result))\n",
+        "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so",
+        "no"
+      ],
+      "cwd": "/tmp/lrr-reuse-check",
+      "environment_overrides": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.1028803750014049,
+      "stdout": "08-live-edit-load-without-cargo.stdout",
+      "stderr": "08-live-edit-load-without-cargo.stderr"
+    },
+    {
+      "label": "generic-wrapper-edit",
+      "role": "native_preparation",
+      "arguments": [
+        "cargo",
+        "build",
+        "--package",
+        "lrr_probe_bridge",
+        "--lib",
+        "--release",
+        "--locked",
+        "--offline",
+        "--message-format=json",
+        "-vv"
+      ],
+      "cwd": "/tmp/lrr-reuse-check",
+      "environment_overrides": {
+        "CARGO_LOG": "cargo::core::compiler::fingerprint=trace"
+      },
+      "exit_code": 0,
+      "elapsed_seconds": 1.1572905419998278,
+      "stdout": "09-generic-wrapper-edit.stdout",
+      "stderr": "09-generic-wrapper-edit.stderr"
+    },
+    {
+      "label": "generic-load",
+      "role": "unsandboxed_native_probe",
+      "arguments": [
+        "/usr/bin/python3",
+        "-c",
+        "import ctypes,json,sys\nlibrary=ctypes.CDLL(sys.argv[1])\nscale=library.lrr_probe_scale\nscale.argtypes=[ctypes.c_int64]\nscale.restype=ctypes.c_int64\nresult={'scale':scale(6)}\nif sys.argv[2]=='yes':\n    twice=library.lrr_probe_twice\n    twice.argtypes=[ctypes.c_int64]\n    twice.restype=ctypes.c_int64\n    result['twice']=twice(7)\nprint(json.dumps(result))\n",
+        "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so",
+        "yes"
+      ],
+      "cwd": "/tmp/lrr-reuse-check",
+      "environment_overrides": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.09683779099941603,
+      "stdout": "10-generic-load.stdout",
+      "stderr": "10-generic-load.stderr"
+    },
+    {
+      "label": "native-edit",
+      "role": "native_preparation",
+      "arguments": [
+        "cargo",
+        "build",
+        "--package",
+        "lrr_probe_bridge",
+        "--lib",
+        "--release",
+        "--locked",
+        "--offline",
+        "--message-format=json",
+        "-vv"
+      ],
+      "cwd": "/tmp/lrr-reuse-check",
+      "environment_overrides": {
+        "CARGO_LOG": "cargo::core::compiler::fingerprint=trace"
+      },
+      "exit_code": 0,
+      "elapsed_seconds": 1.2795378340015304,
+      "stdout": "11-native-edit.stdout",
+      "stderr": "11-native-edit.stderr"
+    },
+    {
+      "label": "native-edit-load",
+      "role": "unsandboxed_native_probe",
+      "arguments": [
+        "/usr/bin/python3",
+        "-c",
+        "import ctypes,json,sys\nlibrary=ctypes.CDLL(sys.argv[1])\nscale=library.lrr_probe_scale\nscale.argtypes=[ctypes.c_int64]\nscale.restype=ctypes.c_int64\nresult={'scale':scale(6)}\nif sys.argv[2]=='yes':\n    twice=library.lrr_probe_twice\n    twice.argtypes=[ctypes.c_int64]\n    twice.restype=ctypes.c_int64\n    result['twice']=twice(7)\nprint(json.dumps(result))\n",
+        "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so",
+        "yes"
+      ],
+      "cwd": "/tmp/lrr-reuse-check",
+      "environment_overrides": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.10021516599954339,
+      "stdout": "12-native-edit-load.stdout",
+      "stderr": "12-native-edit-load.stderr"
+    }
+  ],
+  "stages": [
+    {
+      "name": "baseline",
+      "artifacts": [
+        {
+          "reason": "compiler-artifact",
+          "package_id": "path+file:///tmp/lrr-reuse-check/native_math#0.1.0",
+          "manifest_path": "/tmp/lrr-reuse-check/native_math/Cargo.toml",
+          "target": {
+            "kind": [
+              "lib"
+            ],
+            "crate_types": [
+              "lib"
+            ],
+            "name": "native_math",
+            "src_path": "/tmp/lrr-reuse-check/native_math/src/lib.rs",
+            "edition": "2024",
+            "doc": true,
+            "doctest": true,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          },
+          "features": [],
+          "filenames": [
+            "/tmp/lrr-reuse-check/target/release/libnative_math.rlib",
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rmeta"
+          ],
+          "executable": null,
+          "fresh": false,
+          "content_hashes": {
+            "/tmp/lrr-reuse-check/target/release/libnative_math.rlib": "7e5393851dae227b0ef19e8b0cc1bd46c45be716d52a6b3950e6b127d87e8631",
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rmeta": "6a1c3f328c1e8b356df5def1c07f58fff10ba964256d2110724581773c1887fa"
+          }
+        }
+      ]
+    },
+    {
+      "name": "first-bridge",
+      "artifacts": [
+        {
+          "reason": "compiler-artifact",
+          "package_id": "path+file:///tmp/lrr-reuse-check/native_math#0.1.0",
+          "manifest_path": "/tmp/lrr-reuse-check/native_math/Cargo.toml",
+          "target": {
+            "kind": [
+              "lib"
+            ],
+            "crate_types": [
+              "lib"
+            ],
+            "name": "native_math",
+            "src_path": "/tmp/lrr-reuse-check/native_math/src/lib.rs",
+            "edition": "2024",
+            "doc": true,
+            "doctest": true,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          },
+          "features": [],
+          "filenames": [
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rlib",
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rmeta"
+          ],
+          "executable": null,
+          "fresh": true,
+          "content_hashes": {
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rlib": "7e5393851dae227b0ef19e8b0cc1bd46c45be716d52a6b3950e6b127d87e8631",
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rmeta": "6a1c3f328c1e8b356df5def1c07f58fff10ba964256d2110724581773c1887fa"
+          }
+        },
+        {
+          "reason": "compiler-artifact",
+          "package_id": "path+file:///tmp/lrr-reuse-check/lrr_probe_bridge#0.1.0",
+          "manifest_path": "/tmp/lrr-reuse-check/lrr_probe_bridge/Cargo.toml",
+          "target": {
+            "kind": [
+              "cdylib"
+            ],
+            "crate_types": [
+              "cdylib"
+            ],
+            "name": "lrr_probe_bridge",
+            "src_path": "/tmp/lrr-reuse-check/lrr_probe_bridge/src/lib.rs",
+            "edition": "2024",
+            "doc": true,
+            "doctest": false,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          },
+          "features": [],
+          "filenames": [
+            "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so"
+          ],
+          "executable": null,
+          "fresh": false,
+          "content_hashes": {
+            "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so": "d96a8e982c1ab004629deca04707130e85e22efa090325246ab249d7628940b6"
+          }
+        }
+      ]
+    },
+    {
+      "name": "first-load",
+      "native_output": {
+        "scale": 18
+      },
+      "bridge": {
+        "path": "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so",
+        "sha256": "d96a8e982c1ab004629deca04707130e85e22efa090325246ab249d7628940b6",
+        "fresh": false,
+        "package_id": "path+file:///tmp/lrr-reuse-check/lrr_probe_bridge#0.1.0",
+        "profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "features": []
+      }
+    },
+    {
+      "name": "unchanged-bridge",
+      "artifacts": [
+        {
+          "reason": "compiler-artifact",
+          "package_id": "path+file:///tmp/lrr-reuse-check/native_math#0.1.0",
+          "manifest_path": "/tmp/lrr-reuse-check/native_math/Cargo.toml",
+          "target": {
+            "kind": [
+              "lib"
+            ],
+            "crate_types": [
+              "lib"
+            ],
+            "name": "native_math",
+            "src_path": "/tmp/lrr-reuse-check/native_math/src/lib.rs",
+            "edition": "2024",
+            "doc": true,
+            "doctest": true,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          },
+          "features": [],
+          "filenames": [
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rlib",
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rmeta"
+          ],
+          "executable": null,
+          "fresh": true,
+          "content_hashes": {
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rlib": "7e5393851dae227b0ef19e8b0cc1bd46c45be716d52a6b3950e6b127d87e8631",
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rmeta": "6a1c3f328c1e8b356df5def1c07f58fff10ba964256d2110724581773c1887fa"
+          }
+        },
+        {
+          "reason": "compiler-artifact",
+          "package_id": "path+file:///tmp/lrr-reuse-check/lrr_probe_bridge#0.1.0",
+          "manifest_path": "/tmp/lrr-reuse-check/lrr_probe_bridge/Cargo.toml",
+          "target": {
+            "kind": [
+              "cdylib"
+            ],
+            "crate_types": [
+              "cdylib"
+            ],
+            "name": "lrr_probe_bridge",
+            "src_path": "/tmp/lrr-reuse-check/lrr_probe_bridge/src/lib.rs",
+            "edition": "2024",
+            "doc": true,
+            "doctest": false,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          },
+          "features": [],
+          "filenames": [
+            "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so"
+          ],
+          "executable": null,
+          "fresh": true,
+          "content_hashes": {
+            "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so": "d96a8e982c1ab004629deca04707130e85e22efa090325246ab249d7628940b6"
+          }
+        }
+      ]
+    },
+    {
+      "name": "live-edit-load-without-cargo",
+      "native_output": {
+        "scale": 18
+      },
+      "bridge": {
+        "path": "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so",
+        "sha256": "d96a8e982c1ab004629deca04707130e85e22efa090325246ab249d7628940b6",
+        "fresh": false,
+        "package_id": "path+file:///tmp/lrr-reuse-check/lrr_probe_bridge#0.1.0",
+        "profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "features": []
+      }
+    },
+    {
+      "name": "live-edit",
+      "cargo_invocations": 0,
+      "live_code_executed": false
+    },
+    {
+      "name": "generic-wrapper-edit",
+      "artifacts": [
+        {
+          "reason": "compiler-artifact",
+          "package_id": "path+file:///tmp/lrr-reuse-check/native_math#0.1.0",
+          "manifest_path": "/tmp/lrr-reuse-check/native_math/Cargo.toml",
+          "target": {
+            "kind": [
+              "lib"
+            ],
+            "crate_types": [
+              "lib"
+            ],
+            "name": "native_math",
+            "src_path": "/tmp/lrr-reuse-check/native_math/src/lib.rs",
+            "edition": "2024",
+            "doc": true,
+            "doctest": true,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          },
+          "features": [],
+          "filenames": [
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rlib",
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rmeta"
+          ],
+          "executable": null,
+          "fresh": true,
+          "content_hashes": {
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rlib": "7e5393851dae227b0ef19e8b0cc1bd46c45be716d52a6b3950e6b127d87e8631",
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rmeta": "6a1c3f328c1e8b356df5def1c07f58fff10ba964256d2110724581773c1887fa"
+          }
+        },
+        {
+          "reason": "compiler-artifact",
+          "package_id": "path+file:///tmp/lrr-reuse-check/lrr_probe_bridge#0.1.0",
+          "manifest_path": "/tmp/lrr-reuse-check/lrr_probe_bridge/Cargo.toml",
+          "target": {
+            "kind": [
+              "cdylib"
+            ],
+            "crate_types": [
+              "cdylib"
+            ],
+            "name": "lrr_probe_bridge",
+            "src_path": "/tmp/lrr-reuse-check/lrr_probe_bridge/src/lib.rs",
+            "edition": "2024",
+            "doc": true,
+            "doctest": false,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          },
+          "features": [],
+          "filenames": [
+            "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so"
+          ],
+          "executable": null,
+          "fresh": false,
+          "content_hashes": {
+            "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so": "b83685b1b8883718da3e278fde7ded473632ab0965d1d3e4aa24dace99f709a1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic-load",
+      "native_output": {
+        "scale": 18,
+        "twice": 14
+      },
+      "bridge": {
+        "path": "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so",
+        "sha256": "b83685b1b8883718da3e278fde7ded473632ab0965d1d3e4aa24dace99f709a1",
+        "fresh": false,
+        "package_id": "path+file:///tmp/lrr-reuse-check/lrr_probe_bridge#0.1.0",
+        "profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "features": []
+      }
+    },
+    {
+      "name": "native-edit",
+      "artifacts": [
+        {
+          "reason": "compiler-artifact",
+          "package_id": "path+file:///tmp/lrr-reuse-check/native_math#0.1.0",
+          "manifest_path": "/tmp/lrr-reuse-check/native_math/Cargo.toml",
+          "target": {
+            "kind": [
+              "lib"
+            ],
+            "crate_types": [
+              "lib"
+            ],
+            "name": "native_math",
+            "src_path": "/tmp/lrr-reuse-check/native_math/src/lib.rs",
+            "edition": "2024",
+            "doc": true,
+            "doctest": true,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          },
+          "features": [],
+          "filenames": [
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rlib",
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rmeta"
+          ],
+          "executable": null,
+          "fresh": false,
+          "content_hashes": {
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rlib": "00dbaa7a308810055f08bb2d5ec9f50ab0917c4f81438d1ab13910fc27806427",
+            "/tmp/lrr-reuse-check/target/release/deps/libnative_math-c9b4e4176ff13a8a.rmeta": "033bc7344eed6a12576d599fb33b9f0fbeeb0c0c7c9bbc2afb57dc4e0910820f"
+          }
+        },
+        {
+          "reason": "compiler-artifact",
+          "package_id": "path+file:///tmp/lrr-reuse-check/lrr_probe_bridge#0.1.0",
+          "manifest_path": "/tmp/lrr-reuse-check/lrr_probe_bridge/Cargo.toml",
+          "target": {
+            "kind": [
+              "cdylib"
+            ],
+            "crate_types": [
+              "cdylib"
+            ],
+            "name": "lrr_probe_bridge",
+            "src_path": "/tmp/lrr-reuse-check/lrr_probe_bridge/src/lib.rs",
+            "edition": "2024",
+            "doc": true,
+            "doctest": false,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          },
+          "features": [],
+          "filenames": [
+            "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so"
+          ],
+          "executable": null,
+          "fresh": false,
+          "content_hashes": {
+            "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so": "07589e656893d087efbd8ec69db0657321551fa3ad5d80ce0f662efd61e6e3ec"
+          }
+        }
+      ]
+    },
+    {
+      "name": "native-edit-load",
+      "native_output": {
+        "scale": 24,
+        "twice": 14
+      },
+      "bridge": {
+        "path": "/tmp/lrr-reuse-check/target/release/liblrr_probe_bridge.so",
+        "sha256": "07589e656893d087efbd8ec69db0657321551fa3ad5d80ce0f662efd61e6e3ec",
+        "fresh": false,
+        "package_id": "path+file:///tmp/lrr-reuse-check/lrr_probe_bridge#0.1.0",
+        "profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": false
+        },
+        "features": []
+      }
+    }
+  ],
+  "errors": [],
+  "scope": "Cargo artifact reuse only; no live execution or production ABI",
+  "toolchain": {
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)\n",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1\n"
+  },
+  "baseline": {
+    "path": "/tmp/lrr-reuse-check/target/release/libnative_math.rlib",
+    "sha256": "7e5393851dae227b0ef19e8b0cc1bd46c45be716d52a6b3950e6b127d87e8631",
+    "fresh": false,
+    "package_id": "path+file:///tmp/lrr-reuse-check/native_math#0.1.0",
+    "profile": {
+      "opt_level": "3",
+      "debuginfo": 0,
+      "debug_assertions": false,
+      "overflow_checks": false,
+      "test": false
+    },
+    "features": []
+  },
+  "inputs": {
+    "Cargo.lock": "# This file is automatically @generated by Cargo.\n# It is not intended for manual editing.\nversion = 4\n\n[[package]]\nname = \"live_app\"\nversion = \"0.1.0\"\ndependencies = [\n \"native_math\",\n]\n\n[[package]]\nname = \"lrr_probe_bridge\"\nversion = \"0.1.0\"\ndependencies = [\n \"native_math\",\n]\n\n[[package]]\nname = \"native_math\"\nversion = \"0.1.0\"\n",
+    "Cargo.toml": "[workspace]\nmembers = [\"native_math\", \"live_app\", \"lrr_probe_bridge\"]\nresolver = \"3\"\n\n[profile.release.package.lrr_probe_bridge]\nopt-level = 3\nincremental = true\ncodegen-units = 16\n",
+    "live_app/Cargo.toml": "[package]\nname = \"live_app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[dependencies]\nnative_math = { path = \"../native_math\" }\n",
+    "live_app/src/lib.rs": "pub fn live(value: i64) -> i64 { native_math::scale(value + 1) }\nfn cold() { absent_after_live_edit(); }\n",
+    "lrr_probe_bridge/Cargo.toml": "[package]\nname = \"lrr_probe_bridge\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[lib]\ncrate-type = [\"cdylib\"]\n[dependencies]\nnative_math = { path = \"../native_math\" }\n",
+    "lrr_probe_bridge/src/lib.rs": "#[unsafe(no_mangle)]\npub extern \"C\" fn lrr_probe_scale(value: i64) -> i64 { native_math::scale(value) }\n#[unsafe(no_mangle)]\npub extern \"C\" fn lrr_probe_twice(value: i64) -> i64 { native_math::twice::<i64>(value) }\n",
+    "native_math/Cargo.toml": "[package]\nname = \"native_math\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    "native_math/src/lib.rs": "pub fn scale(value: i64) -> i64 { value * 4 }\npub fn twice<T: Copy + std::ops::Add<Output=T>>(value: T) -> T { value + value }\n"
+  }
+}

@@ -24,3 +24,58 @@ test = "jit_does_not_resolve_ambient_symbol"
 id = "BOOT-DEVELOPMENT"
 path = "crates/lrr/src/cli/mod.rs"
 test = "development_entry_fails_closed"
+
+[[fixture]]
+id = "ID-EXHAUSTION"
+path = "crates/lrr/src/core/ids.rs"
+test = "worker_ids_are_nonzero_monotonic_and_do_not_wrap"
+
+[[fixture]]
+id = "SOURCE-SOURCE-PATH"
+path = "crates/lrr/src/source/snapshot.rs"
+test = "source_paths_are_normalized_and_cannot_escape"
+
+[[fixture]]
+id = "SOURCE-SOURCE-LIMIT"
+path = "crates/lrr/src/source/snapshot.rs"
+test = "source_blob_rejects_invalid_encoding_and_limit"
+
+[[fixture]]
+id = "SOURCE-SOURCE-UTF8"
+path = "crates/lrr/src/source/snapshot.rs"
+test = "source_blob_rejects_invalid_encoding_and_limit"
+
+[[fixture]]
+id = "SOURCE-INTERNAL-SOURCE-MAP"
+path = "crates/lrr/src/source/loader.rs"
+test = "snapshot_identity_excludes_parent_and_maps_utf8_lines"
+
+[[fixture]]
+id = "SOURCE-SOURCE-MISSING"
+path = "crates/lrr/src/source/loader.rs"
+test = "overlay_module_addition_requires_atomic_source_bytes"
+
+[[fixture]]
+id = "SOURCE-SOURCE-BATCH"
+path = "crates/lrr/src/source/loader.rs"
+test = "source_batch_is_atomic"
+
+[[fixture]]
+id = "SOURCE-SOURCE-IO"
+path = "crates/lrr/src/source/loader.rs"
+test = "source_io_error_is_configuration_failure"
+
+[[fixture]]
+id = "SOURCE-SNAPSHOT-RACE"
+path = "crates/lrr/src/source/loader.rs"
+test = "racing_capture_reports_limit"
+
+[[fixture]]
+id = "SOURCE-MODULE-AMBIGUOUS"
+path = "crates/lrr/src/source/loader.rs"
+test = "module_rs_ambiguity_is_error"
+
+[[fixture]]
+id = "SOURCE-SOURCE-MODULE"
+path = "crates/lrr/src/syntax/modules.rs"
+test = "invalid_module_path_attribute_is_error"

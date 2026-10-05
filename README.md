@@ -38,3 +38,8 @@ docker run --rm --platform linux/amd64 \
 On the first container invocation omit --offline to fetch the locked packages.
 Emulated execution does not establish native x86-64 performance targets.
 The runtime rejects macOS/ARM64 startup with LRR-E-HOST-TARGET.
+
+The Cargo reuse experiment is implemented in tools/cargo-reuse-probe/probe.py.
+Its full passing Linux-storage evidence and the retained bind-mount failures are
+explained in docs/cargo-reuse-probe.md. Stable identity and immutable source-capture
+components are also implemented internally; milestone 01 is still in progress.

@@ -1,5 +1,5 @@
 {
-  "build_id": "0.1.0",
+  "build_id": "0738a9b049f5272c723326572c81f1f6051abfc9283d3b68cfe2c6d4e66f5e70",
   "checks": [
     {
       "detail": "x86_64-unknown-linux-gnu",
@@ -12,7 +12,7 @@
           "-Vv"
         ],
         "command": "rustc",
-        "elapsed_ms": 129,
+        "elapsed_ms": 170,
         "exit_code": 0,
         "stderr": "",
         "stdout": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
@@ -58,9 +58,9 @@
     },
     {
       "detail": {
-        "elapsed_ms": 87,
+        "elapsed_ms": 105,
         "exit_code": null,
-        "stderr": "\nthread 'main' (3764) panicked at vendor/cranelift-jit/src/backend.rs:269:21:\ncan't resolve symbol getpid\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+        "stderr": "\nthread 'main' (1393) panicked at vendor/cranelift-jit/src/backend.rs:269:21:\ncan't resolve symbol getpid\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
       },
       "name": "jit_does_not_resolve_ambient_symbol",
       "status": "passed"
@@ -73,10 +73,10 @@
     ],
     "command": "git",
     "elapsed_ms": 28,
-    "exit_code": 128,
-    "stderr": "fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.\nUse '--' to separate paths from revisions, like this:\n'git <command> [<revision>...] -- [<file>...]'\n",
-    "stdout": "HEAD\n",
-    "success": false
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "b5d51b2c263ece87fe7932a620a61d4ef3ff83b9\n",
+    "success": true
   },
   "host": {
     "arch": "x86_64",
@@ -92,7 +92,7 @@
       "-Vv"
     ],
     "command": "rustc",
-    "elapsed_ms": 131,
+    "elapsed_ms": 148,
     "exit_code": 0,
     "stderr": "",
     "stdout": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1\n",

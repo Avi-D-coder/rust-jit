@@ -19,3 +19,113 @@ cleanup_runs = false
 example = "The bootstrap binary cannot run guest tests."
 corrective_command = "Complete the task ledger; this diagnostic is forbidden in a release."
 fixtures = ["BOOT-DEVELOPMENT"]
+
+[[diagnostic]]
+code = "LRR-E-ID-EXHAUSTED"
+phase = "query"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "Allocating another worker identity after u32::MAX fails without wrapping."
+corrective_command = "Retire and restart the worker between runs."
+fixtures = ["ID-EXHAUSTION"]
+
+[[diagnostic]]
+code = "LRR-E-SOURCE-PATH"
+phase = "source_capture"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "Source path escapes the approved root or is not UTF-8."
+corrective_command = "Correct the relative module or include path."
+fixtures = ["SOURCE-SOURCE-PATH"]
+
+[[diagnostic]]
+code = "LRR-E-SOURCE-LIMIT"
+phase = "source_capture"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "A captured file exceeds 8 MiB or the bundle exceeds 128 MiB."
+corrective_command = "Reduce the captured source size."
+fixtures = ["SOURCE-SOURCE-LIMIT"]
+
+[[diagnostic]]
+code = "LRR-E-SOURCE-UTF8"
+phase = "source_capture"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "A Rust source file contains a non-UTF-8 byte."
+corrective_command = "Save Rust source as UTF-8."
+fixtures = ["SOURCE-SOURCE-UTF8"]
+
+[[diagnostic]]
+code = "LRR-E-INTERNAL-SOURCE-MAP"
+phase = "query"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "A requested diagnostic offset is not a UTF-8 boundary."
+corrective_command = "Report the source-map defect with its snapshot and relative origin."
+fixtures = ["SOURCE-INTERNAL-SOURCE-MAP"]
+
+[[diagnostic]]
+code = "LRR-E-SOURCE-MISSING"
+phase = "source_capture"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "A module added by an overlay has no captured source."
+corrective_command = "Supply the referenced file in the same change batch."
+fixtures = ["SOURCE-SOURCE-MISSING"]
+
+[[diagnostic]]
+code = "LRR-E-SOURCE-BATCH"
+phase = "source_capture"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "An overlay attempts to delete the selected root."
+corrective_command = "Keep the selected root in the atomic change batch."
+fixtures = ["SOURCE-SOURCE-BATCH"]
+
+[[diagnostic]]
+code = "LRR-E-SOURCE-IO"
+phase = "source_capture"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "Opening the selected source file fails."
+corrective_command = "Correct the source path or its host permissions."
+fixtures = ["SOURCE-SOURCE-IO"]
+
+[[diagnostic]]
+code = "LRR-E-SNAPSHOT-RACE"
+phase = "source_capture"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "Source changed during all three capture attempts."
+corrective_command = "Retry after the editing process has finished writing source."
+fixtures = ["SOURCE-SNAPSHOT-RACE"]
+
+[[diagnostic]]
+code = "LRR-E-MODULE-AMBIGUOUS"
+phase = "source_capture"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "Both child.rs and child/mod.rs exist."
+corrective_command = "Keep one module source or select it with an explicit path attribute."
+fixtures = ["SOURCE-MODULE-AMBIGUOUS"]
+
+[[diagnostic]]
+code = "LRR-E-SOURCE-MODULE"
+phase = "source_capture"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "A module path attribute is not a literal string."
+corrective_command = "Use a literal relative path or repair the module declaration."
+fixtures = ["SOURCE-SOURCE-MODULE"]
