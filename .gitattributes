@@ -4,5 +4,5 @@
 *.toml text eol=lf
 *.md text eol=lf
 *.py text eol=lf
-fixtures/upstream/rustc-checkout/** -text
+**/fixtures/upstream/rustc-checkout/** -text
 vendor/** -text

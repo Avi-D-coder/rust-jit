@@ -28,7 +28,7 @@ def main():
             errors.append(f"local build/validation input staged: {name}")
         if size > 5 * 1024 * 1024:
             errors.append(f"blob exceeds 5 MiB: {name} ({size} bytes)")
-        if path.startswith((b"vendor/", b"fixtures/upstream/rustc-checkout/")):
+        if path.startswith((b"vendor/", b"fixtures/upstream/rustc-checkout/")) or b"/fixtures/upstream/rustc-checkout/" in path:
             if mode == "120000":
                 raw = os.fsencode(os.readlink(os.fsdecode(path)))
             else:
