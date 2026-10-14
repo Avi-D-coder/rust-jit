@@ -1,0 +1,4925 @@
+--- /dev/null
++++ b/crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs
+@@ -0,0 +1,329 @@
++//! Exact generated declaration owner to compiler-facet transfer; no effects.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    expand::{record::ExpansionRecord, source_declarative::SourceDeclarative},
++    frontend::{
++        compile_input_catalog::CompileInputCatalog, generated_macros::GeneratedMacroCatalog,
++    },
++    source::{
++        changes::crate_policy::PreparedCratePreludePolicy,
++        changes::{PreparedSourceView, SourceSelection},
++        module_syntax::ModuleSyntaxInput,
++    },
++    syntax::{outline::ScopeKey, token_wire::Key},
++};
++use std::sync::Arc;
++pub(super) struct PreparedGeneratedCompilerFacet {
++    caller: PreparedSourceView,
++    selection: SourceSelection,
++    scope: ScopeKey,
++    caller_root: Key,
++    record: Arc<ExpansionRecord>,
++    epoch: u64,
++    compiler: Arc<CompileInputCatalog>,
++    compiler_identity: Digest,
++    child: Option<(PreparedSourceView, SourceSelection, Digest)>,
++    bytes: usize,
++    policy: PreparedCratePreludePolicy,
++    child_policy: Option<PreparedCratePreludePolicy>,
++}
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-COMPILE-INPUT", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "generated compiler facet transfer budget".into(),
++    )
++}
++impl PreparedGeneratedCompilerFacet {
++    pub(super) fn capture_current(
++        parent: &SourceDeclarative,
++        generated: &GeneratedMacroCatalog,
++        epoch: u64,
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        let (items, scope, root) = generated.captured_owner();
++        let source = parent.module_source();
++        let selection = source.selection();
++        if epoch == 0
++            || items.epoch() != epoch
++            || items
++                .record()
++                .key()
++                .procedural_epoch
++                .is_some_and(|e| e != epoch)
++        {
++            return Err(fault("generated compiler facet current epoch differs"));
++        }
++        items.record().key().validate()?;
++        source.require_declaration_syntax()?;
++        if scope.owner.is_some()
++            || scope.crate_key != selection.outline.crate_key
++            || !scope
++                .module_path
++                .starts_with(&selection.outline.module_path)
++            || generated.owning_cfg() != source.captured_macro_cfg()?
++            || root.parent.is_some()
++            || root.defining_unit.0 != scope.crate_key.0
++            || parent.macro_index().hygiene_facts().context(root.key())? != root
++        {
++            return Err(fault(
++                "generated compiler facet exact caller scope/profile/hygiene differs",
++            ));
++        }
++        let compiler = parent
++            .compiler
++            .as_ref()
++            .ok_or_else(|| fault("generated compiler facet matched parent catalogue absent"))?;
++        let compiler_identity = compiler.owning_profile_identity()?;
++        if compiler.has_standard_facets()
++            && compiler
++                .canonical_standalone_member(&selection.outline.parse.profile)?
++                .is_none()
++        {
++            return Err(fault(
++                "generated compiler facet lacks matched owning-profile membership",
++            ));
++        }
++        let bytes = std::mem::size_of::<Self>()
++            .checked_add(256)
++            .and_then(|n| n.checked_add(selection.metadata_bytes().ok()?))
++            .and_then(|n| n.checked_add(scope.heap_bytes()))
++            .and_then(|n| n.checked_add(compiler.owning_profile_metadata_bytes().ok()?))
++            .filter(|n| byte_limit <= 64 * 1024 * 1024 && *n <= byte_limit)
++            .ok_or_else(limit)?;
++        let residual = byte_limit
++            .checked_sub(bytes)
++            .ok_or_else(limit)?
++            .min(32 * 1024 * 1024);
++        let policy = PreparedCratePreludePolicy::capture_current(source, epoch, residual)?;
++        let bytes = bytes
++            .checked_add(policy.metadata_bytes())
++            .filter(|n| *n <= byte_limit)
++            .ok_or_else(limit)?;
++        Ok(Self {
++            policy,
++            child_policy: None,
++            caller: source.share(),
++            selection: selection.clone(),
++            scope: scope.clone(),
++            caller_root: root.key(),
++            record: items.record_input(),
++            epoch,
++            compiler: compiler.clone(),
++            compiler_identity,
++            child: None,
++            bytes,
++        })
++    }
++    pub(super) fn capture_module_current(
++        syntax: &ModuleSyntaxInput,
++        parent: &SourceDeclarative,
++        generated: &GeneratedMacroCatalog,
++        epoch: u64,
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        let mut proof = Self::capture_current(parent, generated, epoch, byte_limit)?;
++        proof.check_module_origin(syntax, generated)?;
++        let child = syntax.prepared_source();
++        let bytes = proof
++            .bytes
++            .checked_add(std::mem::size_of::<(
++                PreparedSourceView,
++                SourceSelection,
++                Digest,
++            )>())
++            .and_then(|n| n.checked_add(child.selection().metadata_bytes().ok()?))
++            .and_then(|n| n.checked_add(128))
++            .filter(|n| *n <= byte_limit)
++            .ok_or_else(limit)?;
++        let residual = byte_limit
++            .checked_sub(bytes)
++            .ok_or_else(limit)?
++            .min(32 * 1024 * 1024);
++        let policy = PreparedCratePreludePolicy::capture_current(child, epoch, residual)?;
++        let bytes = bytes
++            .checked_add(policy.metadata_bytes())
++            .filter(|n| *n <= byte_limit)
++            .ok_or_else(limit)?;
++        proof.child_policy = Some(policy);
++        proof.child = Some((child.share(), child.selection().clone(), syntax.identity()));
++        proof.bytes = bytes;
++        Ok(proof)
++    }
++    fn check_module_origin(
++        &self,
++        syntax: &ModuleSyntaxInput,
++        generated: &GeneratedMacroCatalog,
++    ) -> Result<(), Diagnostic> {
++        let origin = syntax.origin();
++        let child = syntax.prepared_source();
++        if !origin.caller().same_publication(&self.caller)
++            || origin.caller().selection() != &self.selection
++            || !origin.parent().record().same_record(&self.record)
++            || origin.parent().epoch() != self.epoch
++            || origin.parent_header().expansion != self.record.key().fingerprint()
++            || child.selection().outline.crate_key != self.selection.outline.crate_key
++            || child.selection().outline.parse.profile != self.selection.outline.parse.profile
++            || child.selection().outline.cfg != self.selection.outline.cfg
++            || !child
++                .selection()
++                .outline
++                .module_path
++                .starts_with(&self.scope.module_path)
++            || !generated.unresolved_module_sources().any(|d| {
++                d.producer() == origin.producer()
++                    && d.header() == origin.parent_header()
++                    && d.scope() == &child.outline().root_scope
++            })
++        {
++            return Err(fault(
++                "generated compiler facet module origin/member/source differs",
++            ));
++        }
++        // Absent file attributes cannot manufacture crate-wide no_std policy.
++        if self.caller.macro_prelude_policy()?.standard != child.macro_prelude_policy()?.standard {
++            return Err(fault(
++                "generated compiler facet requires retained crate-wide prelude policy",
++            ));
++        }
++        Ok(())
++    }
++    pub(super) fn revalidate_current(
++        &self,
++        parent: &SourceDeclarative,
++        generated: &GeneratedMacroCatalog,
++        epoch: u64,
++    ) -> Result<(), Diagnostic> {
++        self.policy
++            .revalidate_current(parent.module_source(), epoch)?;
++        let (items, scope, root) = generated.captured_owner();
++        if epoch != self.epoch
++            || items.epoch() != self.epoch
++            || !parent.module_source().same_publication(&self.caller)
++            || parent.module_source().selection() != &self.selection
++            || scope != &self.scope
++            || generated.owning_cfg() != parent.module_source().captured_macro_cfg()?
++            || root.key() != self.caller_root
++            || !items.record().same_record(&self.record)
++            || parent.macro_index().hygiene_facts().context(root.key())? != root
++            || parent
++                .compiler
++                .as_ref()
++                .map(|c| c.owning_profile_identity())
++                .transpose()?
++                != Some(self.compiler_identity)
++        {
++            return Err(fault(
++                "generated compiler facet current owner/record/epoch/catalogue differs",
++            ));
++        }
++        Ok(())
++    }
++    pub(super) fn install_module(
++        &self,
++        syntax: &ModuleSyntaxInput,
++        target: &mut SourceDeclarative,
++        parent: &SourceDeclarative,
++        generated: &GeneratedMacroCatalog,
++        epoch: u64,
++    ) -> Result<(), Diagnostic> {
++        self.revalidate_current(parent, generated, epoch)?;
++        self.check_module_origin(syntax, generated)?;
++        self.check_child(syntax, target)?;
++        self.child_policy
++            .as_ref()
++            .ok_or_else(|| fault("generated child owning policy absent"))?
++            .revalidate_current(syntax.prepared_source(), epoch)?;
++        if target.compiler.is_some() {
++            return Err(fault("generated compiler facet target already installed"));
++        }
++        target.compiler = Some(self.compiler.clone());
++        Ok(())
++    }
++    fn check_child(
++        &self,
++        syntax: &ModuleSyntaxInput,
++        target: &SourceDeclarative,
++    ) -> Result<(), Diagnostic> {
++        let (child, selection, identity) = self
++            .child
++            .as_ref()
++            .ok_or_else(|| fault("generated compiler facet has no admitted child"))?;
++        if syntax.identity() != *identity
++            || !syntax.prepared_source().same_publication(child)
++            || syntax.prepared_source().selection() != selection
++            || !target.module_source().same_publication(child)
++            || target.module_source().selection() != selection
++        {
++            return Err(fault(
++                "generated compiler facet target publication/projection differs",
++            ));
++        }
++        Ok(())
++    }
++    pub(super) fn revalidate_module(
++        &self,
++        syntax: &ModuleSyntaxInput,
++        target: &SourceDeclarative,
++        parent: &SourceDeclarative,
++        generated: &GeneratedMacroCatalog,
++        epoch: u64,
++    ) -> Result<(), Diagnostic> {
++        self.revalidate_current(parent, generated, epoch)?;
++        self.check_module_origin(syntax, generated)?;
++        self.check_child(syntax, target)?;
++        self.child_policy
++            .as_ref()
++            .ok_or_else(|| fault("generated child owning policy absent"))?
++            .revalidate_current(syntax.prepared_source(), epoch)?;
++        if target
++            .compiler
++            .as_ref()
++            .map(|c| c.owning_profile_identity())
++            .transpose()?
++            != Some(self.compiler_identity)
++        {
++            return Err(fault(
++                "generated compiler facet attached target catalogue differs",
++            ));
++        }
++        Ok(())
++    }
++    pub(super) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(super) fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v2/generated-source-compiler-facet");
++        e.digest(self.selection.location_identity());
++        e.record(&self.selection.outline.parse);
++        e.digest(self.selection.outline.cfg);
++        e.record(self.record.key());
++        e.digest(self.record.output());
++        e.record(&self.scope);
++        e.bytes(&self.caller_root.0);
++        e.u64(self.epoch);
++        e.digest(self.compiler_identity);
++        e.digest(self.policy.identity());
++        e.bool(self.child_policy.is_some());
++        if let Some(policy) = &self.child_policy {
++            e.digest(policy.identity());
++        }
++        e.bool(self.child.is_some());
++        if let Some((_, selection, projection)) = &self.child {
++            e.digest(selection.location_identity());
++            e.record(&selection.outline.parse);
++            e.digest(selection.outline.cfg);
++            e.digest(*projection);
++        }
++        e.finish()
++    }
++}
++
++#[cfg(test)]
++#[path = "generated_compiler_facets_tests.rs"]
++mod tests;
+--- /dev/null
++++ b/crates/lrr/src/frontend/compile_input_catalog/primitive_facet.rs
+@@ -0,0 +1,202 @@
++//! Closed language Type facet. Neither a standard-library export nor a macro facet.
++//! Pin: rustc_resolve::{lib builtin_type_decls, ident Scope::BuiltinTypes},
++//! rustc_hir::PrimTy::ALL at ae0fe511b15ab760d7e963b13389d1bc2ab42b18.
++use super::*;
++use crate::{core::profile::ProfileIdentity, ir::op::PrimitiveType};
++#[derive(Debug, Clone)]
++pub(crate) struct CompilerPrimitiveFacet {
++    profile: ProfileIdentity,
++}
++impl CompilerPrimitiveFacet {
++    // Only the real standalone compiler catalogue constructor may mint this.
++    pub(super) fn for_profile(profile: &ProfileIdentity) -> Result<Self, Diagnostic> {
++        profile.validate_source()?;
++        Ok(Self {
++            profile: profile.clone(),
++        })
++    }
++    pub(super) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
++        std::mem::size_of::<Self>()
++            .checked_add(self.profile.semantics.capacity())
++            .and_then(|n| n.checked_add(128))
++            .ok_or_else(|| fault("primitive facet metadata overflow"))
++    }
++    pub(crate) fn select(&self, name: &str) -> Option<PrimitiveType> {
++        // A private positive compiler declaration inventory, invoked only after
++        // a current source/prelude precedence proof. Unknown/unstable/unsized
++        // entries never receive a scalar identity. Unit is structural syntax.
++        Some(match name {
++            "bool" => PrimitiveType::Bool,
++            "char" => PrimitiveType::Char,
++            "i8" => PrimitiveType::I8,
++            "i16" => PrimitiveType::I16,
++            "i32" => PrimitiveType::I32,
++            "i64" => PrimitiveType::I64,
++            "i128" => PrimitiveType::I128,
++            "isize" => PrimitiveType::Isize,
++            "u8" => PrimitiveType::U8,
++            "u16" => PrimitiveType::U16,
++            "u32" => PrimitiveType::U32,
++            "u64" => PrimitiveType::U64,
++            "u128" => PrimitiveType::U128,
++            "usize" => PrimitiveType::Usize,
++            "f32" => PrimitiveType::F32,
++            "f64" => PrimitiveType::F64,
++            _ => return None,
++        })
++    }
++    pub(crate) fn member_identity(&self, primitive: PrimitiveType) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/compiler-language-primitive-member");
++        e.record(self);
++        e.u32(primitive.tag());
++        e.finish()
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        self.fingerprint()
++    }
++}
++impl StableEncode for CompilerPrimitiveFacet {
++    const DOMAIN: &'static str = "lrr/v1/compiler-language-primitive-facet";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.record(&self.profile);
++        e.string("ae0fe511b15ab760d7e963b13389d1bc2ab42b18");
++        e.string("rustc_resolve/BuiltinTypes/PrimTy/v1");
++        // Explicit scalar inventory; no copied toolchain IDs or std membership.
++        for name in [
++            "bool", "char", "i8", "i16", "i32", "i64", "i128", "isize", "u8", "u16", "u32", "u64",
++            "u128", "usize", "f32", "f64",
++        ] {
++            e.string(name);
++            e.u32(self.select(name).expect("closed primitive inventory").tag());
++        }
++    }
++}
++impl CompileInputCatalog {
++    pub(crate) fn primitive_facet(
++        &self,
++        profile: &ProfileIdentity,
++    ) -> Result<Option<&CompilerPrimitiveFacet>, Diagnostic> {
++        let Some(facet) = &self.primitive else {
++            return Ok(None);
++        };
++        if &facet.profile != profile || self.canonical_standalone_member(profile)?.is_none() {
++            return Err(fault(
++                "language primitive facet owning compiler profile/catalogue differs",
++            ));
++        }
++        Ok(Some(facet))
++    }
++}
++
++/// Sealed source preparation receipt. Only actual owning provider capture mints
++/// it; publishing inside a completed Type DiscoveryInput supplies currentness.
++#[derive(Debug, Clone)]
++pub(crate) struct CompilerPrimitiveReceipt {
++    source: crate::source::changes::SourceSelection,
++    facet: Digest,
++    catalog: Digest,
++    bytes: usize,
++}
++impl CompilerPrimitiveReceipt {
++    fn capture(
++        provider: &crate::expand::source_declarative::SourceDeclarative,
++        maximum: usize,
++    ) -> Result<Option<Self>, Diagnostic> {
++        let source = provider.module_source();
++        source.require_declaration_syntax()?;
++        let Some(catalog) = &provider.compiler else {
++            return Ok(None);
++        };
++        let profile = &source.selection().outline.parse.profile;
++        let Some(facet) = catalog.primitive_facet(profile)? else {
++            return Ok(None);
++        };
++        let bytes = std::mem::size_of::<Self>()
++            .checked_add(source.selection().metadata_bytes()?)
++            .and_then(|n| n.checked_add(128))
++            .filter(|n| *n <= maximum)
++            .ok_or_else(|| fault("primitive receipt metadata budget"))?;
++        Ok(Some(Self {
++            source: source.selection().clone(),
++            facet: facet.identity(),
++            catalog: catalog.owning_profile_identity()?,
++            bytes,
++        }))
++    }
++    pub(crate) fn matches(
++        &self,
++        source: &crate::source::changes::SourceSelection,
++        catalog: &CompileInputCatalog,
++    ) -> Result<bool, Diagnostic> {
++        let Some(facet) = catalog.primitive_facet(&source.outline.parse.profile)? else {
++            return Ok(false);
++        };
++        Ok(&self.source == source
++            && self.facet == facet.identity()
++            && self.catalog == catalog.owning_profile_identity()?)
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn source(&self) -> &crate::source::changes::SourceSelection {
++        &self.source
++    }
++}
++impl StableEncode for CompilerPrimitiveReceipt {
++    const DOMAIN: &'static str = "lrr/v1/source-compiler-language-primitive-receipt";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.string(self.source.path.as_str());
++        e.record(&self.source.outline);
++        e.digest(self.facet);
++        e.digest(self.catalog)
++    }
++}
++pub(crate) fn prepare_primitive_receipts(
++    providers: &[crate::expand::source_declarative::SourceDeclarative],
++    maximum: usize,
++) -> Result<Vec<CompilerPrimitiveReceipt>, Diagnostic> {
++    if providers.len() > 100_000 || maximum > 64 * 1024 * 1024 {
++        return Err(fault("primitive receipt source count/byte budget"));
++    };
++    let mut bytes = providers
++        .len()
++        .checked_mul(std::mem::size_of::<CompilerPrimitiveReceipt>())
++        .filter(|n| *n <= maximum)
++        .ok_or_else(|| fault("primitive receipt allocation budget"))?;
++    let mut out = Vec::new();
++    out.try_reserve_exact(providers.len())
++        .map_err(|_| fault("primitive receipt allocation"))?;
++    for provider in providers {
++        // Canonical validation reconstructs a closed bounded catalogue; reserve
++        // its transient peak before invoking the private receipt constructor.
++        if let Some(catalog) = &provider.compiler {
++            let transient = catalog
++                .owning_profile_metadata_bytes()?
++                .checked_mul(2)
++                .ok_or_else(|| fault("primitive receipt compiler metadata overflow"))?;
++            let available = maximum
++                .checked_sub(bytes)
++                .filter(|n| *n >= transient)
++                .ok_or_else(|| fault("primitive receipt compiler metadata budget"))?;
++            if let Some(receipt) = CompilerPrimitiveReceipt::capture(
++                provider,
++                available
++                    .checked_sub(transient)
++                    .ok_or_else(|| fault("primitive receipt residual budget"))?,
++            )? {
++                bytes = bytes
++                    .checked_add(receipt.metadata_bytes())
++                    .filter(|n| *n <= maximum)
++                    .ok_or_else(|| fault("primitive receipt retained budget"))?;
++                out.push(receipt);
++            }
++        }
++    }
++    out.sort_by_key(|row| row.source.location_identity());
++    for pair in out.windows(2) {
++        if pair[0].source.location_identity() == pair[1].source.location_identity() {
++            return Err(fault("primitive receipt owning source duplicated"));
++        }
++    }
++    Ok(out)
++}
+--- /dev/null
++++ b/crates/lrr/src/frontend/compile_input_catalog/type_prelude_facet.rs
+@@ -0,0 +1,289 @@
++//! Section17 explicit compiler-owned default Type-prelude declaration closure.
++//! Conservative exported spellings only; present names require actual members.
++//! No sysroot/native source read, parsing or binding equivalence is implied.
++use super::*;
++use crate::core::profile::ProfileIdentity;
++#[derive(Debug, Clone)]
++pub(crate) struct CompilerTypePreludeFacet {
++    profile: ProfileIdentity,
++}
++impl CompilerTypePreludeFacet {
++    pub(super) fn for_profile(profile: &ProfileIdentity) -> Result<Self, Diagnostic> {
++        profile.validate_source()?;
++        Ok(Self {
++            profile: profile.clone(),
++        })
++    }
++    pub(super) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
++        std::mem::size_of::<Self>()
++            .checked_add(self.profile.semantics.capacity())
++            .and_then(|n| n.checked_add(128))
++            .ok_or_else(|| fault("Type prelude facet metadata overflow"))
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        self.fingerprint()
++    }
++    pub(crate) fn contains_export_spelling(&self, standard: bool, name: &str) -> bool {
++        let base = if standard { STD_V1 } else { CORE_V1 };
++        base.binary_search(&name).is_ok()
++            || (matches!(self.profile.edition, 2021 | 2024)
++                && matches!(name, "FromIterator" | "TryFrom" | "TryInto"))
++            || (self.profile.edition == 2024 && matches!(name, "Future" | "IntoFuture"))
++    }
++}
++impl StableEncode for CompilerTypePreludeFacet {
++    const DOMAIN: &'static str = "lrr/v1/compiler-default-type-prelude-facet";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.record(&self.profile);
++        e.string("ae0fe511b15ab760d7e963b13389d1bc2ab42b18");
++        e.string("synthetic-facade/type-prelude/conservative-spellings/generation1");
++        e.string("library/core/src/prelude/mod.rs");
++        e.string("3db82d282c4ac980659183842d446e13d28b0bab609f3dc37e2036d9fefceb4c");
++        e.string("library/core/src/prelude/v1.rs");
++        e.string("b57d120c6762622bd33114f46267dab8ba6c88be38f1433adb62d4ba36cd3a68");
++        e.string("library/std/src/prelude/mod.rs");
++        e.string("04e3eabaab3ff44016155b2949e7b6751547f9c480be51fb8a448ac8c9b2e105");
++        e.string("library/std/src/prelude/v1.rs");
++        e.string("393900118db4000a0bd90f7c8f50fcb55475939586f24285ecca70925d6a6a2c");
++        e.sequence(CORE_V1, |e, n| e.string(n));
++        e.sequence(STD_V1, |e, n| e.string(n));
++        e.u16(self.profile.edition);
++    }
++}
++impl CompileInputCatalog {
++    pub(crate) fn type_prelude_facet(
++        &self,
++        profile: &ProfileIdentity,
++    ) -> Result<Option<&CompilerTypePreludeFacet>, Diagnostic> {
++        let Some(facet) = &self.type_prelude else {
++            return Ok(None);
++        };
++        if &facet.profile != profile || self.canonical_standalone_member(profile)?.is_none() {
++            return Err(fault(
++                "actual Type prelude facet owning compiler profile differs",
++            ));
++        }
++        Ok(Some(facet))
++    }
++}
++const CORE_V1: &[&str] = &[
++    "AsMut",
++    "AsRef",
++    "AsyncFn",
++    "AsyncFnMut",
++    "AsyncFnOnce",
++    "Clone",
++    "Copy",
++    "Debug",
++    "Default",
++    "DoubleEndedIterator",
++    "Drop",
++    "Eq",
++    "Err",
++    "ExactSizeIterator",
++    "Extend",
++    "Fn",
++    "FnMut",
++    "FnOnce",
++    "From",
++    "Hash",
++    "Into",
++    "IntoIterator",
++    "Iterator",
++    "None",
++    "Ok",
++    "Option",
++    "Ord",
++    "PartialEq",
++    "PartialOrd",
++    "Result",
++    "Send",
++    "Sized",
++    "Some",
++    "Sync",
++    "Unpin",
++    "align_of",
++    "align_of_val",
++    "alloc_error_handler",
++    "ambiguous_macros_only",
++    "assert",
++    "assert_eq",
++    "assert_ne",
++    "bench",
++    "builtin",
++    "cfg",
++    "cfg_accessible",
++    "cfg_eval",
++    "cfg_select",
++    "clone",
++    "cmp",
++    "column",
++    "compile_error",
++    "concat",
++    "concat_bytes",
++    "const_format_args",
++    "convert",
++    "debug_assert",
++    "debug_assert_eq",
++    "debug_assert_ne",
++    "default",
++    "define_opaque",
++    "deref",
++    "derive",
++    "derive_const",
++    "drop",
++    "eii",
++    "eii_declaration",
++    "env",
++    "file",
++    "fmt",
++    "format_args",
++    "global_allocator",
++    "hash",
++    "include",
++    "include_bytes",
++    "include_str",
++    "iter",
++    "line",
++    "log_syntax",
++    "macros",
++    "marker",
++    "matches",
++    "mem",
++    "module_path",
++    "ops",
++    "option",
++    "option_env",
++    "panic",
++    "pattern_type",
++    "result",
++    "size_of",
++    "size_of_val",
++    "stringify",
++    "test",
++    "test_case",
++    "todo",
++    "trace_macros",
++    "try",
++    "type_ascribe",
++    "unimplemented",
++    "unreachable",
++    "unsafe_eii",
++    "write",
++    "writeln",
++];
++const STD_V1: &[&str] = &[
++    "AsMut",
++    "AsRef",
++    "AsyncFn",
++    "AsyncFnMut",
++    "AsyncFnOnce",
++    "Box",
++    "Clone",
++    "Copy",
++    "Debug",
++    "Default",
++    "DoubleEndedIterator",
++    "Drop",
++    "Eq",
++    "Err",
++    "ExactSizeIterator",
++    "Extend",
++    "Fn",
++    "FnMut",
++    "FnOnce",
++    "From",
++    "Hash",
++    "Into",
++    "IntoIterator",
++    "Iterator",
++    "None",
++    "Ok",
++    "Option",
++    "Ord",
++    "PartialEq",
++    "PartialOrd",
++    "Result",
++    "Send",
++    "Sized",
++    "Some",
++    "String",
++    "Sync",
++    "ToOwned",
++    "ToString",
++    "Unpin",
++    "Vec",
++    "align_of",
++    "align_of_val",
++    "alloc_error_handler",
++    "ambiguous_macros_only",
++    "assert",
++    "assert_eq",
++    "assert_ne",
++    "bench",
++    "borrow",
++    "boxed",
++    "cfg",
++    "cfg_accessible",
++    "cfg_eval",
++    "cfg_select",
++    "column",
++    "compile_error",
++    "concat",
++    "concat_bytes",
++    "const_format_args",
++    "convert",
++    "dbg",
++    "debug_assert",
++    "debug_assert_eq",
++    "debug_assert_ne",
++    "define_opaque",
++    "deref",
++    "derive",
++    "derive_const",
++    "drop",
++    "eii",
++    "eii_declaration",
++    "env",
++    "eprint",
++    "eprintln",
++    "file",
++    "format",
++    "format_args",
++    "global_allocator",
++    "include",
++    "include_bytes",
++    "include_str",
++    "is_x86_feature_detected",
++    "iter",
++    "line",
++    "log_syntax",
++    "marker",
++    "matches",
++    "mem",
++    "module_path",
++    "ops",
++    "option",
++    "option_env",
++    "panic",
++    "print",
++    "println",
++    "result",
++    "size_of",
++    "size_of_val",
++    "string",
++    "stringify",
++    "test",
++    "test_case",
++    "thread_local",
++    "todo",
++    "trace_macros",
++    "try",
++    "type_ascribe",
++    "unimplemented",
++    "unreachable",
++    "unsafe_eii",
++    "vec",
++    "write",
++    "writeln",
++];
+--- /dev/null
++++ b/crates/lrr/src/frontend/dollar_crate.rs
+@@ -0,0 +1,78 @@
++//! Pinned rustc_resolve::resolve_crate_root mark selection (ae0fe lib.rs:2351).
++//! Uses actual adapter-normalized ancestry; no mark/source/context is erased.
++use super::*;
++pub(crate) struct DollarCrateOrigin {
++    normalized: Key,
++    mark: Key,
++    expansion: Key,
++    unit: Key,
++}
++impl DollarCrateOrigin {
++    pub(crate) fn normalized_context(&self) -> Key {
++        self.normalized
++    }
++    pub(crate) fn mark(&self) -> Key {
++        self.mark
++    }
++    pub(crate) fn expansion(&self) -> Key {
++        self.expansion
++    }
++    pub(crate) fn unit(&self) -> Key {
++        self.unit
++    }
++}
++pub(super) fn select(facts: &HygieneFacts, key: Key) -> Result<Key, Diagnostic> {
++    Ok(select_origin(facts, key)?.unit())
++}
++fn finish(
++    facts: &HygieneFacts,
++    normalized: Key,
++    selected: Option<Key>,
++) -> Result<DollarCrateOrigin, Diagnostic> {
++    let mark =
++        selected.ok_or_else(|| error("dollar-crate token lacks definition-site authority"))?;
++    let record = facts.context(mark)?;
++    let expansion = record
++        .expansion
++        .ok_or_else(|| error("dollar-crate selected mark expansion absent"))?;
++    Ok(DollarCrateOrigin {
++        normalized,
++        mark,
++        expansion,
++        unit: record.defining_unit,
++    })
++}
++pub(super) fn select_origin(
++    facts: &HygieneFacts,
++    key: Key,
++) -> Result<DollarCrateOrigin, Diagnostic> {
++    let normalized = facts.local(key)?;
++    let mut cursor = normalized; // pinned normalize_to_macro_rules row
++    let mut selected = None;
++    let mut opaque_suffix = true;
++    for _ in 0..=256 {
++        let record = facts.context(cursor)?;
++        if record.expansion.is_none() {
++            return finish(facts, normalized, selected);
++        }
++        match record.transparency {
++            Transparency::Opaque if opaque_suffix => selected = Some(cursor),
++            Transparency::SemiTransparent => {
++                opaque_suffix = false;
++                selected = Some(cursor);
++            }
++            Transparency::Opaque => {
++                return finish(facts, normalized, selected);
++            }
++            Transparency::Transparent => {
++                return Err(error(
++                    "dollar-crate normalized ancestry contains a transparent mark",
++                ));
++            }
++        }
++        cursor = record
++            .parent
++            .ok_or_else(|| error("dollar-crate mark parent is missing"))?;
++    }
++    Err(error("dollar-crate definition ancestry depth exceeded"))
++}
+--- /dev/null
++++ b/crates/lrr/src/frontend/generated_alias_origin.rs
+@@ -0,0 +1,276 @@
++//! Pin-backed original source owner/hygiene replay for reached generated scalar aliases.
++//! No generated constant, query/layout or runtime admission is minted here.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode},
++    },
++    db::{
++        dependency::{InputKey, InputValue},
++        memo::Database,
++    },
++    expand::{
++        generated_syntax::GeneratedSyntaxInput, identity::MacroIdentity,
++        source_declarative::SourceDeclarative,
++    },
++    source::manifest::ItemKind,
++    syntax::{
++        generated_type_site::{GeneratedTypeSegment, WrittenGeneratedType},
++        outline::{DeclarationContext, ScopeKey},
++        token_wire::{Key, Transparency},
++    },
++};
++use std::collections::BTreeMap;
++const MAX_ROWS: usize = 100_000;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-GENERATED-TYPE-CONTEXT", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "generated alias origin metadata budget".into(),
++    )
++}
++fn charge(bytes: &mut usize, n: usize, maximum: usize) -> Result<(), Diagnostic> {
++    *bytes = bytes
++        .checked_add(n)
++        .filter(|n| *n <= maximum)
++        .ok_or_else(limit)?;
++    Ok(())
++}
++#[derive(Debug, Clone, Eq, PartialEq)]
++pub(crate) enum GeneratedAliasOriginPrerequisite {
++    DefinitionSiteSource,
++    AliasTargetHygiene,
++}
++#[derive(Clone, Copy)]
++enum RouteKind {
++    CallSite,
++    DefinitionSite,
++}
++fn stamp(
++    db: &Database,
++    out: &mut BTreeMap<InputKey, Digest>,
++    key: &InputKey,
++    bytes: &mut usize,
++    maximum: usize,
++) -> Result<(), Diagnostic> {
++    let (_, value) = db
++        .published_input(key)
++        .ok_or_else(|| fault("generated type current published input absent"))?;
++    if let Some(old) = out.get(key) {
++        return if *old == value {
++            Ok(())
++        } else {
++            Err(fault("generated type input changed"))
++        };
++    }
++    if out.len() >= MAX_ROWS {
++        return Err(limit());
++    }
++    charge(
++        bytes,
++        std::mem::size_of::<(InputKey, Digest)>()
++            .checked_add(128)
++            .and_then(|n| n.checked_add(key.heap_bytes()))
++            .ok_or_else(limit)?,
++        maximum,
++    )?;
++    out.insert(key.clone(), value);
++    Ok(())
++}
++fn source_owner<'a>(
++    db: &Database,
++    id: Digest,
++    owner: &'a SourceDeclarative,
++    providers: &[&'a SourceDeclarative],
++) -> Result<Option<&'a SourceDeclarative>, Diagnostic> {
++    let Some((InputValue::DefinitionSource(parse), _)) =
++        db.published_input(&InputKey::DefinitionSource(id))
++    else {
++        return Ok(None);
++    };
++    let mut selected: Option<&SourceDeclarative> = None;
++    for provider in std::iter::once(owner).chain(providers.iter().copied()) {
++        let source = provider.module_source();
++        if &source.selection().outline.parse != parse
++            || !source
++                .outline()
++                .items
++                .iter()
++                .any(|i| i.def_key.fingerprint() == id)
++        {
++            continue;
++        }
++        source.require_original_hygiene()?;
++        if !matches!(db.published_input(&InputKey::CapturedSource(source.selection().location_identity())), Some((InputValue::CapturedSource(actual), _)) if actual == source.selection())
++        {
++            return Err(fault(
++                "generated type exact declaration owner source changed",
++            ));
++        }
++        if let Some(old) = selected {
++            if !old.module_source().same_publication(source)
++                || old.module_source().selection() != source.selection()
++            {
++                return Err(fault("generated type retained source owner is ambiguous"));
++            }
++        } else {
++            selected = Some(provider);
++        }
++    }
++    Ok(selected)
++}
++#[allow(clippy::too_many_arguments)]
++fn origin_scope(
++    db: &Database,
++    owner: &SourceDeclarative,
++    providers: &[&SourceDeclarative],
++    unit: &GeneratedSyntaxInput,
++    call_scope: &ScopeKey,
++    part: &GeneratedTypeSegment,
++    stamps: &mut BTreeMap<InputKey, Digest>,
++    bytes: &mut usize,
++    maximum: usize,
++) -> Result<Result<(ScopeKey, RouteKind), GeneratedAliasOriginPrerequisite>, Diagnostic> {
++    let facts = unit.items.hygiene_facts();
++    let call = Key(unit.items.record().key().parent_context.0);
++    if facts.name_item(part.span().context)? == facts.name_item(call)? {
++        charge(bytes, call_scope.heap_bytes(), maximum)?;
++        return Ok(Ok((call_scope.clone(), RouteKind::CallSite)));
++    }
++    let normalized = facts.item(part.span().context)?;
++    let mark = facts.context(normalized)?;
++    let Some(expansion) = mark.expansion else {
++        return Ok(Err(GeneratedAliasOriginPrerequisite::DefinitionSiteSource));
++    };
++    if mark.transparency != Transparency::Opaque {
++        return Ok(Err(GeneratedAliasOriginPrerequisite::DefinitionSiteSource));
++    }
++    let key = InputKey::ExpansionRecord(Digest(expansion.0));
++    let Some((InputValue::ExpansionRecord(record), _)) = db.published_input(&key) else {
++        return Ok(Err(GeneratedAliasOriginPrerequisite::DefinitionSiteSource));
++    };
++    if record.key().fingerprint().0 != expansion.0 {
++        return Err(fault("generated definition-site mark record differs"));
++    }
++    let definition = match &record.key().macro_identity {
++        MacroIdentity::Declaration { definition } => *definition,
++        _ => return Ok(Err(GeneratedAliasOriginPrerequisite::DefinitionSiteSource)),
++    };
++    let Some(provider) = source_owner(db, definition, owner, providers)? else {
++        return Ok(Err(GeneratedAliasOriginPrerequisite::DefinitionSiteSource));
++    };
++    let source = provider.module_source();
++    let declaration = source
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.fingerprint() == definition)
++        .ok_or_else(|| fault("generated type definition-site declaration absent"))?;
++    if declaration.def_key.item_kind != ItemKind::Macro
++        || declaration.scope.owner.is_some()
++        || declaration.scope.crate_key.0 != mark.defining_unit.0
++        || source.outline().profile.edition != record.key().definition_edition
++    {
++        return Ok(Err(GeneratedAliasOriginPrerequisite::DefinitionSiteSource));
++    }
++    charge(
++        bytes,
++        declaration
++            .scope
++            .heap_bytes()
++            .checked_mul(2)
++            .ok_or_else(limit)?,
++        maximum,
++    )?;
++    let actual_context = DeclarationContext {
++        scope: declaration.scope.clone(),
++        range: declaration.declaration_span,
++    };
++    if !matches!(db.published_input(&InputKey::DefinitionHeader(definition)), Some((InputValue::DefinitionHeader(actual), _)) if actual == &declaration.header)
++        || !matches!(db.published_input(&InputKey::DeclarationContext(definition)), Some((InputValue::DeclarationContext(actual), _)) if actual == &actual_context)
++    {
++        return Err(fault(
++            "generated type definition-site header/context differs",
++        ));
++    }
++    for key in [
++        key,
++        InputKey::DefinitionSource(definition),
++        InputKey::DefinitionHeader(definition),
++        InputKey::DeclarationContext(definition),
++        InputKey::CapturedSource(source.selection().location_identity()),
++    ] {
++        stamp(db, stamps, &key, bytes, maximum)?;
++    }
++    Ok(Ok((declaration.scope.clone(), RouteKind::DefinitionSite)))
++}
++
++/// Borrowed actual source selected by the existing pinned generated Type origin
++/// route. This does not establish primitive/prelude/alias semantics itself.
++pub(crate) struct GeneratedPrimitiveOrigin<'a> {
++    pub(crate) scope: ScopeKey,
++    pub(crate) provider: &'a SourceDeclarative,
++}
++#[allow(clippy::too_many_arguments)]
++pub(crate) fn primitive_origin<'a>(
++    db: &Database,
++    owner: &'a SourceDeclarative,
++    providers: &[&'a SourceDeclarative],
++    unit: &GeneratedSyntaxInput,
++    site: &WrittenGeneratedType,
++    part: &GeneratedTypeSegment,
++    stamps: &mut BTreeMap<InputKey, Digest>,
++    bytes: &mut usize,
++    maximum: usize,
++) -> Result<Result<GeneratedPrimitiveOrigin<'a>, GeneratedAliasOriginPrerequisite>, Diagnostic> {
++    let (scope, route) = match origin_scope(
++        db,
++        owner,
++        providers,
++        unit,
++        site.scope(),
++        part,
++        stamps,
++        bytes,
++        maximum,
++    )? {
++        Ok(route) => route,
++        Err(need) => return Ok(Err(need)),
++    };
++    let provider = match route {
++        RouteKind::CallSite => owner,
++        RouteKind::DefinitionSite => {
++            let facts = unit.items.hygiene_facts();
++            let normalized = facts.item(part.span().context)?;
++            let Some(expansion) = facts.context(normalized)?.expansion else {
++                return Ok(Err(GeneratedAliasOriginPrerequisite::DefinitionSiteSource));
++            };
++            let Some((InputValue::ExpansionRecord(record), _)) =
++                db.published_input(&InputKey::ExpansionRecord(Digest(expansion.0)))
++            else {
++                return Ok(Err(GeneratedAliasOriginPrerequisite::DefinitionSiteSource));
++            };
++            let MacroIdentity::Declaration { definition } = &record.key().macro_identity else {
++                return Ok(Err(GeneratedAliasOriginPrerequisite::DefinitionSiteSource));
++            };
++            let Some(provider) = source_owner(db, *definition, owner, providers)? else {
++                return Ok(Err(GeneratedAliasOriginPrerequisite::DefinitionSiteSource));
++            };
++            provider
++        }
++    };
++    let source = provider.module_source();
++    if source.selection().outline.crate_key != scope.crate_key
++        || !scope
++            .module_path
++            .starts_with(&source.selection().outline.module_path)
++        || scope.owner.is_some()
++    {
++        return Err(fault(
++            "generated primitive origin actual owning source/scope differs",
++        ));
++    }
++    Ok(Ok(GeneratedPrimitiveOrigin { scope, provider }))
++}
+--- /dev/null
++++ b/crates/lrr/src/frontend/source_type_alias_normalization/generated.rs
+@@ -0,0 +1,390 @@
++//! Original-module generated alias replay. Names alone never establish item hygiene.
++use super::*;
++use crate::{expand::generated_syntax::GeneratedSyntaxInput, syntax::token_wire::NameContextKey};
++fn owner<'a>(
++    unit: &GeneratedSyntaxInput,
++    owners: &[&'a SourceDeclarative],
++) -> Result<Option<&'a SourceDeclarative>, Diagnostic> {
++    let mut found: Option<&SourceDeclarative> = None;
++    for candidate in owners {
++        let source = candidate.module_source();
++        let matches = source
++            .outline()
++            .item_invocations
++            .iter()
++            .filter(|c| {
++                c.item_input == unit.items.record().key().invocation
++                    && c.attribute_input.is_none()
++                    && c.scope == unit.scope
++            })
++            .count();
++        if matches == 0 {
++            continue;
++        };
++        if matches != 1
++            || unit.scope.owner.is_some()
++            || unit.scope.crate_key != source.selection().outline.crate_key
++        {
++            return Err(fault("generated alias original caller is ambiguous"));
++        };
++        if let Some(old) = found {
++            if !old.module_source().same_publication(source) {
++                return Err(fault("generated alias actual original owners differ"));
++            }
++        } else {
++            found = Some(*candidate)
++        };
++    }
++    Ok(found)
++}
++/// Exact original invocation-owner data, not a type/visibility/completeness certificate.
++pub(super) fn original_owner_data(
++    db: &Database,
++    identity: Digest,
++    sources: &[&crate::source::changes::PreparedSourceView],
++    max: usize,
++) -> Result<Option<(usize, ScopeKey, String)>, Diagnostic> {
++    db.require_coordinator()?;
++    if sources.len() > 100_000 || max > MAX_BYTES {
++        return Err(limit());
++    };
++    let Some((InputValue::DefinitionSource(parse), _)) =
++        db.published_input(&InputKey::DefinitionSource(identity))
++    else {
++        return Ok(None);
++    };
++    let Some((InputValue::GeneratedSyntax(unit), _)) =
++        db.published_input(&InputKey::GeneratedSyntax(parse.content))
++    else {
++        return Ok(None);
++    };
++    if unit.key != *parse {
++        return Err(fault("generated alias selected parse differs"));
++    };
++    let Some(definition) = unit.definitions.get(&identity) else {
++        return Ok(None);
++    };
++    if definition.item_kind != ItemKind::TypeAlias {
++        return Ok(None);
++    };
++    let bytes = unit
++        .scope
++        .heap_bytes()
++        .checked_add(definition.declared_name.capacity())
++        .and_then(|n| n.checked_add(128))
++        .filter(|n| *n <= max)
++        .ok_or_else(limit)?;
++    let _ = bytes;
++    let mut found = None;
++    for (i, s) in sources.iter().enumerate() {
++        if s.outline().item_invocations.iter().any(|c| {
++            c.item_input == unit.items.record().key().invocation
++                && c.attribute_input.is_none()
++                && c.scope == unit.scope
++        }) {
++            if found.is_some() {
++                return Err(fault("generated alias original source catalogue ambiguous"));
++            };
++            found = Some(i);
++        }
++    }
++    Ok(found.map(|i| (i, unit.scope.clone(), definition.declared_name.clone())))
++}
++fn same_class(
++    db: &Database,
++    next: &NameDefinition,
++    comparison: NameContextKey,
++    owners: &[&SourceDeclarative],
++) -> Result<bool, Diagnostic> {
++    if let Some(source) = provider_for(db, next.identity, owners)? {
++        let (k, f) = source.macro_index().original_root_hygiene()?;
++        return Ok(f.name_item(k)? == comparison);
++    };
++    let Some((InputValue::DefinitionSource(parse), _)) =
++        db.published_input(&InputKey::DefinitionSource(next.identity))
++    else {
++        return Ok(false);
++    };
++    let Some((InputValue::GeneratedSyntax(unit), _)) =
++        db.published_input(&InputKey::GeneratedSyntax(parse.content))
++    else {
++        return Ok(false);
++    };
++    if unit.key != *parse {
++        return Err(fault("generated alias next parse differs"));
++    };
++    let Some(header) = unit
++        .items
++        .items()
++        .iter()
++        .find(|h| h.key.fingerprint() == next.identity)
++    else {
++        return Ok(false);
++    };
++    let Some(name) = &header.name else {
++        return Ok(false);
++    };
++    let Some(span) = unit
++        .items
++        .tokens()
++        .spans()
++        .iter()
++        .find(|s| s.key() == name.span)
++    else {
++        return Err(fault("generated alias next marked name missing"));
++    };
++    Ok(unit.items.item_class(span.context)? == comparison)
++}
++pub(super) fn walk_generated(
++    db: &Database,
++    selected: NameDefinition,
++    seed: Digest,
++    world: &SealKey,
++    owners: &[&SourceDeclarative],
++    mut capture: Capture,
++) -> Result<SourceAliasOutcome, Diagnostic> {
++    let Some((InputValue::DefinitionSource(parse), _)) =
++        db.published_input(&InputKey::DefinitionSource(selected.identity))
++    else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::RetainedDeclaration(selected.identity),
++        ));
++    };
++    let Some((InputValue::GeneratedSyntax(unit), _)) =
++        db.published_input(&InputKey::GeneratedSyntax(parse.content))
++    else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::RetainedDeclaration(selected.identity),
++        ));
++    };
++    if unit.key != *parse
++        || unit.scope.crate_key != selected.defining_unit
++        || unit.key.profile.edition != selected.definition_edition
++        || unit.seal.epoch != world.epoch
++        || unit.seal.unit_graph != world.unit_graph
++        || unit.items.epoch() != world.epoch
++    {
++        return Err(fault(
++            "generated alias owning parse/edition/epoch/world differs",
++        ));
++    };
++    let Some(owner) = owner(unit, owners)? else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::GeneratedOwner(selected.identity),
++        ));
++    };
++    let key = seal_for(&unit.scope, world);
++    let Some(input) = capture.scope(db, owner, &unit.scope, &key)? else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::TypeNamespace(unit.scope.clone()),
++        ));
++    };
++    let descriptor = unit.items.record().descriptor();
++    if input
++        .records
++        .iter()
++        .filter(|r| r.fingerprint() == descriptor.fingerprint())
++        .count()
++        != 1
++        || input
++            .seal
++            .input_dependencies()
++            .binary_search(&(
++                unit.items.record().key().fingerprint(),
++                descriptor.fingerprint(),
++            ))
++            .is_err()
++    {
++        return Err(fault(
++            "generated alias record absent from actual current Type universe",
++        ));
++    };
++    let record_key = InputKey::ExpansionRecord(unit.items.record().key().fingerprint());
++    if !matches!(db.published_input(&record_key),Some((InputValue::ExpansionRecord(actual),_))if actual.same_record(unit.items.record()))
++    {
++        return Err(fault("generated alias actual retained record differs"));
++    };
++    let definition = unit
++        .definitions
++        .get(&selected.identity)
++        .ok_or_else(|| fault("generated alias canonical definition absent"))?;
++    if definition.item_kind != ItemKind::TypeAlias {
++        return Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Name(
++            NameLookup::Defined(selected),
++        )));
++    };
++    let header = unit
++        .items
++        .items()
++        .iter()
++        .find(|h| h.key.fingerprint() == selected.identity)
++        .ok_or_else(|| fault("generated alias exact structural member absent"))?;
++    let name = header
++        .name
++        .as_ref()
++        .ok_or_else(|| fault("generated alias actual name token absent"))?;
++    let span = unit
++        .items
++        .tokens()
++        .spans()
++        .iter()
++        .find(|s| s.key() == name.span)
++        .ok_or_else(|| fault("generated alias actual name span absent"))?;
++    let (root, facts) = owner.macro_index().original_root_hygiene()?;
++    // This producer supports original-root visible item declarations. Opaque use sites need their actual written-site producer.
++    if unit.items.item_class(span.context)? != facts.name_item(root)? {
++        return Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Origin(
++            GeneratedAliasOriginPrerequisite::DefinitionSiteSource,
++        )));
++    };
++    let actual = input
++        .scope
++        .as_ref()
++        .ok_or_else(|| fault("generated alias Type scope missing"))?
++        .lookup(&BucketKey {
++            scope: unit.scope.clone(),
++            namespace: Namespace::Type,
++            name: definition.declared_name.clone(),
++        })?;
++    if actual != NameLookup::Defined(selected.clone()) {
++        return Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Name(
++            actual,
++        )));
++    };
++    let Some((InputValue::DefinitionHeader(h), _)) =
++        db.published_input(&InputKey::DefinitionHeader(selected.identity))
++    else {
++        return Err(fault("generated alias header absent"));
++    };
++    let Some((InputValue::DeclarationContext(context), _)) =
++        db.published_input(&InputKey::DeclarationContext(selected.identity))
++    else {
++        return Err(fault("generated alias context absent"));
++    };
++    let site = WrittenGeneratedType::capture(
++        &unit.items,
++        &unit.scope,
++        &unit.cfg,
++        &header.key,
++        GeneratedTypeRole::AliasTarget,
++        capture.residual()?,
++    )?;
++    if definition.fingerprint() != site.declaration_fingerprint()
++        || h.fingerprint() != site.header_fingerprint()
++        || context.scope != *site.scope()
++        || context.range != site.declaration()
++    {
++        return Err(fault(
++            "generated alias selected header/context/site differs",
++        ));
++    };
++    charge(
++        &mut capture.bytes,
++        site.metadata_bytes().checked_mul(2).ok_or_else(limit)?,
++        capture.max,
++    )?;
++    charge(
++        &mut capture.bytes,
++        unit.items
++            .text()
++            .len()
++            .checked_mul(128)
++            .and_then(|n| n.checked_add(unit.items.syntax_events().len().checked_mul(128)?))
++            .ok_or_else(limit)?,
++        capture.max,
++    )?;
++    let parsed = ParsedFile::from_generated_items(&unit.items)?;
++    let recipe = parsed.type_alias_recipe(selected.identity, h, context)?;
++    capture.push(
++        selected.identity,
++        definition,
++        parse,
++        context,
++        &recipe,
++        Some(site.identity()),
++    )?;
++    for k in [
++        record_key,
++        InputKey::GeneratedSyntax(parse.content),
++        InputKey::DefinitionSource(selected.identity),
++        InputKey::DefinitionHeader(selected.identity),
++        InputKey::DeclarationContext(selected.identity),
++        InputKey::DiscoverySeal(unit.seal.clone()),
++    ] {
++        capture.stamp(db, k)?;
++    }
++    if !recipe.generics.is_empty() || requires_substitution(&parsed, context)? {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::GenericSubstitution(selected.identity),
++        ));
++    };
++    let GeneratedTypeSyntax::Path(parts) = site.shape() else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::WrittenTarget(selected.identity),
++        ));
++    };
++    let [part] = parts.as_slice() else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::WrittenTarget(selected.identity),
++        ));
++    };
++    let GeneratedTypeSegmentKind::Name(target) = part.kind() else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::WrittenTarget(selected.identity),
++        ));
++    };
++    let origin = match primitive_origin(
++        db,
++        owner,
++        owners,
++        unit,
++        &site,
++        part,
++        &mut capture.stamps,
++        &mut capture.bytes,
++        capture.max,
++    )? {
++        Ok(o) => o,
++        Err(n) => return Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Origin(n))),
++    };
++    let target_key = seal_for(&origin.scope, world);
++    let Some(input) = capture.scope(db, origin.provider, &origin.scope, &target_key)? else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::TypeNamespace(origin.scope),
++        ));
++    };
++    match input
++        .scope
++        .as_ref()
++        .ok_or_else(|| fault("generated alias target Type certificate absent"))?
++        .lookup(&BucketKey {
++            scope: origin.scope.clone(),
++            namespace: Namespace::Type,
++            name: target.clone(),
++        })? {
++        NameLookup::Absent => capture.finish(
++            db,
++            seed,
++            origin.provider,
++            &origin.scope,
++            &target_key,
++            target,
++        ),
++        NameLookup::Defined(next) => {
++            if !same_class(
++                db,
++                &next,
++                unit.items.item_class(part.span().context)?,
++                owners,
++            )? {
++                return Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Origin(
++                    GeneratedAliasOriginPrerequisite::AliasTargetHygiene,
++                )));
++            };
++            CurrentSourcePrimitiveAlias::walk_original(db, next, seed, world, owners, capture)
++        }
++        other => Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Name(
++            other,
++        ))),
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/frontend/source_type_alias_normalization/qualified.rs
+@@ -0,0 +1,330 @@
++//! Qualified original paths replay actual retained namespaces; missing exports are not primitives.
++use super::*;
++use crate::{frontend::names::NameNamespaces, syntax::imports::ImportSegment};
++use std::{collections::BTreeSet, sync::Arc};
++
++pub(super) struct WrittenPath {
++    pub(super) segments: Vec<ImportSegment>,
++    pub(super) absolute: bool,
++}
++impl WrittenPath {
++    pub(super) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
++        self.segments.iter().try_fold(
++            std::mem::size_of::<Self>()
++                .checked_add(
++                    self.segments
++                        .capacity()
++                        .checked_mul(std::mem::size_of::<ImportSegment>())
++                        .ok_or_else(limit)?,
++                )
++                .ok_or_else(limit)?,
++            |n, segment| {
++                n.checked_add(match segment {
++                    ImportSegment::Name(name) => name.capacity(),
++                    _ => 0,
++                })
++                .ok_or_else(limit)
++            },
++        )
++    }
++}
++/// Structural original AST classification only. It grants no selected type identity.
++pub(super) fn written_path(
++    parsed: &ParsedFile,
++    header: &crate::syntax::outline::HeaderRecipe,
++    context: &DeclarationContext,
++    max: usize,
++) -> Result<Option<WrittenPath>, Diagnostic> {
++    if header.profile != parsed.profile || max > MAX_BYTES {
++        return Err(fault("qualified alias original profile/budget differs"));
++    }
++    let transient = header
++        .estimated_bytes()
++        .checked_mul(4)
++        .filter(|n| *n <= max)
++        .ok_or_else(limit)?;
++    let alias = parsed
++        .parsed
++        .tree()
++        .syntax()
++        .descendants()
++        .filter_map(ast::TypeAlias::cast)
++        .find(|a| {
++            crate::syntax::ast_adapter::range(a.syntax().text_range()) == context.range
++                && crate::syntax::ast_adapter::tokens(a.syntax(), None) == header.tokens
++        })
++        .ok_or_else(|| fault("qualified alias exact original AST header absent"))?;
++    let Some(ast::Type::PathType(ty)) = alias.ty() else {
++        return Ok(None);
++    };
++    let Some(mut path) = ty.path() else {
++        return Ok(None);
++    };
++    let mut segments = Vec::new();
++    let mut bytes = transient
++        .checked_add(std::mem::size_of::<WrittenPath>())
++        .ok_or_else(limit)?;
++    let absolute;
++    loop {
++        if segments.len() >= MAX_STEPS {
++            return Err(limit());
++        }
++        let Some(segment) = path.segment() else {
++            return Ok(None);
++        };
++        if segment.generic_arg_list().is_some() {
++            return Ok(None);
++        }
++        let Some(kind) = segment.kind() else {
++            return Ok(None);
++        };
++        charge(
++            &mut bytes,
++            std::mem::size_of::<ImportSegment>()
++                .checked_add(
++                    usize::try_from(u32::from(segment.syntax().text_range().len()))
++                        .map_err(|_| limit())?,
++                )
++                .ok_or_else(limit)?,
++            max,
++        )?;
++        let owned = match kind {
++            ast::PathSegmentKind::Name(name) => {
++                let text = name.text().to_string();
++                crate::expand::scopes::MacroName::parse(&text, header.profile.edition)?;
++                ImportSegment::Name(text)
++            }
++            ast::PathSegmentKind::CrateKw => ImportSegment::Crate,
++            ast::PathSegmentKind::SelfKw => ImportSegment::SelfModule,
++            ast::PathSegmentKind::SuperKw => ImportSegment::Super,
++            _ => return Ok(None),
++        };
++        segments
++            .try_reserve_exact(1)
++            .map_err(|_| crate::runtime::arena::resource())?;
++        segments.push(owned);
++        if let Some(parent) = path.qualifier() {
++            path = parent
++        } else {
++            absolute = segment.coloncolon_token().is_some();
++            break;
++        }
++    }
++    segments.reverse();
++    Ok((absolute || segments.len() > 1).then_some(WrittenPath { segments, absolute }))
++}
++
++/// No caller graph, completeness flag, catalogue default or selected member enters here.
++/// The graph and routes are replayed from actual admitted original sources.
++#[allow(clippy::too_many_arguments)]
++pub(super) fn lookup(
++    db: &Database,
++    owner: &SourceDeclarative,
++    scope: &ScopeKey,
++    key: &SealKey,
++    path: &WrittenPath,
++    owners: &[&SourceDeclarative],
++    capture: &mut Capture,
++) -> Result<Option<NameLookup>, Diagnostic> {
++    let Some(input) = capture.scope(db, owner, scope, key)? else {
++        return Ok(None);
++    };
++    if !input.records.is_empty()
++        || !input.procedural_catalogs.is_empty()
++        || !input.helper_declarations.is_empty()
++        || !input.argument_summaries.is_empty()
++        || !input.argument_indexes.is_empty()
++        || !input.argument_fragments.is_empty()
++        || !input.source_replacements.is_empty()
++        || !input.declaration_fragments.is_empty()
++    {
++        // Original replay cannot certify completed generated/native/replacement routes.
++        return Ok(None);
++    }
++    let mut sources: Vec<&crate::source::changes::PreparedSourceView> = Vec::new();
++    let mut seen = BTreeSet::new();
++    charge(
++        &mut capture.bytes,
++        owners
++            .len()
++            .checked_add(1)
++            .and_then(|n| {
++                n.checked_mul(
++                    std::mem::size_of::<&crate::source::changes::PreparedSourceView>() + 128,
++                )
++            })
++            .ok_or_else(limit)?,
++        capture.max,
++    )?;
++    for provider in std::iter::once(owner).chain(owners.iter().copied()) {
++        let view = provider.module_source();
++        view.require_original_hygiene()?;
++        view.require_declaration_syntax()?;
++        if let Some(old) = sources
++            .iter()
++            .copied()
++            .find(|old| old.selection().location_identity() == view.selection().location_identity())
++        {
++            if !old.same_publication(view) {
++                return Err(fault(
++                    "qualified alias original source publication ambiguous",
++                ));
++            }
++            continue;
++        }
++        if !input.sources.contains(view.selection()) {
++            return Err(fault(
++                "qualified alias owner absent from actual Type universe",
++            ));
++        }
++        if !seen.insert(view.selection().location_identity()) {
++            return Err(fault("qualified alias source location repeats"));
++        }
++        for (k, v) in view.prepared_inputs() {
++            if db
++                .published_input(k)
++                .is_none_or(|(_, a)| a != v.fingerprint())
++            {
++                return Err(fault("qualified alias original prepared facts changed"));
++            }
++            capture.stamp(db, k.clone())?;
++        }
++        charge(
++            &mut capture.bytes,
++            view.outline()
++                .estimated_bytes()
++                .checked_mul(16)
++                .and_then(|n| n.checked_add(view.prepared_metadata_bytes().ok()?.checked_mul(2)?))
++                .and_then(|n| {
++                    n.checked_add(
++                        view.captured_macro_blob()
++                            .ok()?
++                            .bytes()
++                            .len()
++                            .checked_mul(128)?,
++                    )
++                })
++                .and_then(|n| {
++                    n.checked_add(
++                        view.source_dependencies()
++                            .ok()?
++                            .metadata_bytes()
++                            .ok()?
++                            .checked_mul(2)?,
++                    )
++                })
++                .ok_or_else(limit)?,
++            capture.max,
++        )?;
++        sources
++            .try_reserve_exact(1)
++            .map_err(|_| crate::runtime::arena::resource())?;
++        sources.push(view);
++    }
++    if input.sources.len() != sources.len()
++        || input
++            .sources
++            .iter()
++            .any(|s| !sources.iter().any(|v| v.selection() == s))
++    {
++        return Err(fault(
++            "qualified alias complete Type source set is not retained",
++        ));
++    }
++    charge(
++        &mut capture.bytes,
++        sources
++            .len()
++            .checked_mul(std::mem::size_of::<SourceDeclarative>())
++            .ok_or_else(limit)?,
++        capture.max,
++    )?;
++    let mut providers = Vec::new();
++    providers
++        .try_reserve_exact(sources.len())
++        .map_err(|_| crate::runtime::arena::resource())?;
++    for view in &sources {
++        let mut provider = SourceDeclarative::new(view.share())?;
++        let catalogs = std::iter::once(owner)
++            .chain(owners.iter().copied())
++            .filter(|p| {
++                p.module_source().same_publication(view)
++                    && p.module_source().selection() == view.selection()
++            })
++            .filter_map(|p| p.compiler.as_ref());
++        for catalog in catalogs {
++            // Receipt replay constructs a bounded canonical catalogue internally.
++            charge(&mut capture.bytes, 64 * 1024, capture.max)?;
++            input.validate_compiler_primitive_receipts()?;
++            let Some(receipt) = input.compiler_primitive_receipt(view.selection())? else {
++                return Ok(None);
++            };
++            if !receipt.matches(view.selection(), catalog)? {
++                return Err(fault("qualified alias current compiler receipt differs"));
++            }
++            charge(
++                &mut capture.bytes,
++                catalog
++                    .owning_profile_metadata_bytes()?
++                    .checked_mul(2)
++                    .ok_or_else(limit)?,
++                capture.max,
++            )?;
++            provider.compiler = Some(Arc::clone(catalog));
++        }
++        providers.push(provider);
++    }
++    SourceDeclarative::configure_captured_modules(&mut providers)?;
++    let outlines = sources.iter().map(|v| v.outline()).collect::<Vec<_>>();
++    let mut graph = NameNamespaces::from_outlines(&outlines)?;
++    for provider in &providers {
++        if let Some(catalog) = &provider.compiler {
++            catalog.install_ordinary_module_facets(&mut graph)?;
++            graph.install_compiler_injection(catalog, provider.module_source())?;
++        }
++        for route in provider.routes_in(&providers)? {
++            charge(&mut capture.bytes, route.metadata_bytes()?, capture.max)?;
++            for (unit, names) in &route.modules {
++                if names.is_empty() {
++                    graph.declare_module(
++                        *unit,
++                        &[],
++                        route.edition,
++                        crate::syntax::visibility::VisibilityScope::Public,
++                    )?;
++                }
++            }
++            if let Some((consumer, _)) = route.modules.iter().find(|(_, names)| names.is_empty()) {
++                for (alias, unit) in &route.dependencies {
++                    graph.compiler_dependency(*consumer, alias.clone(), *unit)?;
++                }
++            }
++            for disabled in &route.implicit_disabled {
++                graph.disable_compiler_prelude(disabled.clone())?;
++            }
++            for row in &route.extern_aliases {
++                graph.extern_alias(row, route.edition)?;
++            }
++        }
++    }
++    let _ = graph.resolve_imports()?;
++    let replay = graph.certified_scope(scope, Namespace::Type, owner.profile().edition)?;
++    if replay.fingerprint()
++        != input
++            .scope
++            .as_ref()
++            .ok_or_else(|| fault("qualified alias Type scope absent"))?
++            .fingerprint()
++    {
++        return Err(fault(
++            "qualified alias original namespace replay differs from current Type seal",
++        ));
++    }
++    Ok(Some(graph.lookup_source_path(
++        Namespace::Type,
++        &path.segments,
++        path.absolute,
++        scope,
++        owner.profile().edition,
++    )?))
++}
+--- /dev/null
++++ b/crates/lrr/src/frontend/source_type_alias_normalization.rs
+@@ -0,0 +1,805 @@
++//! Current source-owned primitive alias chains. No symbolic recipe or descriptor grants authority.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::{
++        dependency::{InputKey, InputValue},
++        key::BucketKey,
++        memo::Database,
++        seals::{DiscoveryInput, SealDomain, SealKey},
++    },
++    expand::source_declarative::SourceDeclarative,
++    frontend::{
++        generated_alias_origin::{GeneratedAliasOriginPrerequisite, primitive_origin},
++        names::{NameDefinition, NameLookup},
++        type_prelude_admission::{
++            CurrentTypePreludeAbsence, TypePreludeAbsenceOutcome, TypePreludePrerequisite,
++        },
++    },
++    ir::op::PrimitiveType,
++    source::manifest::{DefKey, ItemKind, Namespace},
++    syntax::{
++        generated_type_site::{
++            GeneratedTypeRole, GeneratedTypeSegmentKind, GeneratedTypeSyntax, WrittenGeneratedType,
++        },
++        outline::{DeclarationContext, ScopeKey},
++        parse::{ParseKey, ParsedFile},
++        type_aliases::TypeAliasRecipe,
++    },
++};
++use ra_ap_syntax::{
++    AstNode,
++    ast::{self, HasGenericParams},
++};
++use std::collections::BTreeMap;
++const MAX_BYTES: usize = 32 * 1024 * 1024;
++const MAX_STEPS: usize = 256;
++fn fault(s: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-SOURCE-ALIAS", s.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new("LRR-E-METADATA-LIMIT", "source alias proof budget".into())
++}
++fn charge(bytes: &mut usize, n: usize, max: usize) -> Result<(), Diagnostic> {
++    *bytes = bytes
++        .checked_add(n)
++        .filter(|n| *n <= max)
++        .ok_or_else(limit)?;
++    Ok(())
++}
++#[derive(Debug, Clone, Eq, PartialEq)]
++pub(crate) enum SourceAliasPrerequisite {
++    TypeNamespace(ScopeKey),
++    Name(NameLookup),
++    RetainedDeclaration(Digest),
++    GenericSubstitution(Digest),
++    OwnerContext(ScopeKey),
++    WrittenTarget(Digest),
++    GeneratedOwner(Digest),
++    Origin(GeneratedAliasOriginPrerequisite),
++    Prelude(TypePreludePrerequisite),
++    CompilerPrimitiveFacet,
++    UnknownPrimitive,
++}
++pub(crate) enum SourceAliasOutcome {
++    Ready(CurrentSourcePrimitiveAlias),
++    Need(SourceAliasPrerequisite),
++}
++/// Each step names its actual immutable source member, never an inferred runtime identity.
++struct AliasStep {
++    member: Digest,
++    definition: DefKey,
++    parse: ParseKey,
++    context: DeclarationContext,
++    header: Digest,
++    recipe: Digest,
++    written: Option<Digest>,
++}
++pub(crate) struct CurrentSourcePrimitiveAlias {
++    seed: Digest,
++    integrity: Digest,
++    steps: Vec<AliasStep>,
++    primitive: PrimitiveType,
++    compiler_member: Digest,
++    terminal_scope: ScopeKey,
++    prelude: Digest,
++    facet: Digest,
++    stamps: BTreeMap<InputKey, Digest>,
++    revision: u64,
++    bytes: usize,
++}
++struct Capture {
++    steps: Vec<AliasStep>,
++    stamps: BTreeMap<InputKey, Digest>,
++    bytes: usize,
++    max: usize,
++}
++impl Capture {
++    fn new(max: usize) -> Result<Self, Diagnostic> {
++        if max > MAX_BYTES || max < std::mem::size_of::<CurrentSourcePrimitiveAlias>() {
++            return Err(limit());
++        }
++        Ok(Self {
++            steps: Vec::new(),
++            stamps: BTreeMap::new(),
++            bytes: std::mem::size_of::<CurrentSourcePrimitiveAlias>(),
++            max,
++        })
++    }
++    fn residual(&self) -> Result<usize, Diagnostic> {
++        self.max.checked_sub(self.bytes).ok_or_else(limit)
++    }
++    fn stamp(&mut self, db: &Database, key: InputKey) -> Result<(), Diagnostic> {
++        let (_, value) = db
++            .published_input(&key)
++            .ok_or_else(|| fault("alias current published input absent"))?;
++        if let Some(old) = self.stamps.get(&key) {
++            return if *old == value {
++                Ok(())
++            } else {
++                Err(fault("alias input changed during capture"))
++            };
++        };
++        if self.stamps.len() >= 100_000 {
++            return Err(limit());
++        };
++        charge(
++            &mut self.bytes,
++            std::mem::size_of::<(InputKey, Digest)>()
++                .checked_add(128)
++                .and_then(|n| n.checked_add(key.heap_bytes()))
++                .ok_or_else(limit)?,
++            self.max,
++        )?;
++        self.stamps.insert(key, value);
++        Ok(())
++    }
++    fn scope<'a>(
++        &mut self,
++        db: &'a Database,
++        owner: &SourceDeclarative,
++        scope: &ScopeKey,
++        key: &SealKey,
++    ) -> Result<Option<&'a DiscoveryInput>, Diagnostic> {
++        if scope.owner.is_some() {
++            return Ok(None);
++        };
++        let source = owner.module_source();
++        source.require_original_hygiene()?;
++        if scope.crate_key != source.selection().outline.crate_key
++            || !scope
++                .module_path
++                .starts_with(&source.selection().outline.module_path)
++        {
++            return Err(fault("alias scope/source owner differs"));
++        };
++        if key.domain
++            != (SealDomain::Scope {
++                id: scope.fingerprint(),
++                namespace: Namespace::Type,
++            })
++        {
++            return Err(fault("alias Type seal domain differs"));
++        };
++        let Some((InputValue::DiscoverySeal(input), _)) =
++            db.published_input(&InputKey::DiscoverySeal(key.clone()))
++        else {
++            return Ok(None);
++        };
++        let Some(cert) = &input.scope else {
++            return Err(fault("alias Type scope certificate absent"));
++        };
++        if input.seal.key() != *key
++            || input.seal.unresolved_frontiers() != 0
++            || cert.scope != *scope
++            || cert.namespace != Namespace::Type
++            || cert.edition != source.outline().profile.edition
++            || !input.sources.contains(source.selection())
++            || !matches!(db.published_input(&InputKey::ExpansionEpoch),Some((InputValue::ExpansionEpoch(e),_))if *e==key.epoch)
++            || !matches!(db.published_input(&InputKey::SourceDependencies),Some((InputValue::SourceDependencies(g),_))if g.fingerprint()==input.source_dependencies)
++            || !matches!(db.published_input(&InputKey::CapturedSource(source.selection().location_identity())),Some((InputValue::CapturedSource(s),_))if s==source.selection())
++            || !matches!(db.published_input(&InputKey::SourceBlob(source.selection().outline.parse.content)),Some((InputValue::SourceBlob(b),_))if b.content()==source.selection().outline.parse.content)
++            || !matches!(db.published_input(&InputKey::CrateCfg(scope.crate_key)),Some((InputValue::CrateCfg(c),_))if c.fingerprint()==source.selection().outline.cfg)
++        {
++            return Err(fault("alias current source/edition/cfg/world differs"));
++        };
++        if input.sources.is_empty()
++            || input.sources.len() > 100_000
++            || input.compiler_inputs.len() > 100_000
++            || input.records.len() > 100_000
++        {
++            return Err(limit());
++        };
++        for retained in &input.sources {
++            charge(&mut self.bytes, retained.metadata_bytes()?, self.max)?;
++            if !matches!(db.published_input(&InputKey::CapturedSource(retained.location_identity())), Some((InputValue::CapturedSource(actual), _)) if actual == retained)
++                || !matches!(db.published_input(&InputKey::SourceBlob(retained.outline.parse.content)), Some((InputValue::SourceBlob(actual), _)) if actual.content() == retained.outline.parse.content)
++                || !matches!(db.published_input(&InputKey::CrateCfg(retained.outline.crate_key)), Some((InputValue::CrateCfg(actual), _)) if actual.fingerprint() == retained.outline.cfg)
++            {
++                return Err(fault("alias Type retained source/content/cfg changed"));
++            }
++            for k in [
++                InputKey::CapturedSource(retained.location_identity()),
++                InputKey::SourceBlob(retained.outline.parse.content),
++                InputKey::CrateCfg(retained.outline.crate_key),
++            ] {
++                self.stamp(db, k)?;
++            }
++        }
++        for (k, v) in &input.compiler_inputs {
++            if db.published_input(k).is_none_or(|(_, a)| a != *v) {
++                return Err(fault("alias compiler selection changed"));
++            };
++            self.stamp(db, k.clone())?;
++        }
++        for d in &input.records {
++            let k = InputKey::ExpansionRecord(d.key.fingerprint());
++            if !matches!(db.published_input(&k),Some((InputValue::ExpansionRecord(r),_))if r.descriptor().fingerprint()==d.fingerprint())
++            {
++                return Err(fault("alias Type record changed"));
++            };
++            self.stamp(db, k)?;
++        }
++        for k in [
++            InputKey::DiscoverySeal(key.clone()),
++            InputKey::ExpansionEpoch,
++            InputKey::SourceDependencies,
++            InputKey::CapturedSource(source.selection().location_identity()),
++            InputKey::CrateCfg(scope.crate_key),
++            InputKey::SourceBlob(source.selection().outline.parse.content),
++        ] {
++            self.stamp(db, k)?;
++        }
++        Ok(Some(input))
++    }
++    fn push(
++        &mut self,
++        member: Digest,
++        definition: &DefKey,
++        parse: &ParseKey,
++        context: &DeclarationContext,
++        recipe: &TypeAliasRecipe,
++        written: Option<Digest>,
++    ) -> Result<(), Diagnostic> {
++        if self.steps.iter().any(|s| s.member == member) {
++            return Err(Diagnostic::new(
++                "LRR-E-TYPE-ALIAS-CYCLE",
++                "reached source alias identity repeats".into(),
++            ));
++        };
++        if self.steps.len() >= MAX_STEPS {
++            return Err(limit());
++        };
++        let mut n = std::mem::size_of::<AliasStep>()
++            .checked_add(recipe.estimated_bytes())
++            .and_then(|n| n.checked_add(context.scope.heap_bytes()))
++            .and_then(|n| n.checked_add(parse.profile.semantics.capacity()))
++            .and_then(|n| n.checked_add(definition.declared_name.capacity()))
++            .and_then(|n| {
++                n.checked_add(
++                    definition
++                        .module_path
++                        .capacity()
++                        .checked_mul(std::mem::size_of::<String>())?,
++                )
++            })
++            .ok_or_else(limit)?;
++        for p in &definition.module_path {
++            n = n.checked_add(p.capacity()).ok_or_else(limit)?;
++        }
++        charge(&mut self.bytes, n, self.max)?;
++        self.steps
++            .try_reserve_exact(1)
++            .map_err(|_| crate::runtime::arena::resource())?;
++        self.steps.push(AliasStep {
++            member,
++            definition: definition.clone(),
++            parse: parse.clone(),
++            context: context.clone(),
++            header: recipe.header.fingerprint(),
++            recipe: recipe.fingerprint(),
++            written,
++        });
++        Ok(())
++    }
++    fn finish(
++        mut self,
++        db: &Database,
++        seed: Digest,
++        owner: &SourceDeclarative,
++        scope: &ScopeKey,
++        key: &SealKey,
++        name: &str,
++    ) -> Result<SourceAliasOutcome, Diagnostic> {
++        let input = match self.scope(db, owner, scope, key)? {
++            Some(i) => i,
++            None => {
++                return Ok(SourceAliasOutcome::Need(
++                    SourceAliasPrerequisite::TypeNamespace(scope.clone()),
++                ));
++            }
++        };
++        let proof = match CurrentTypePreludeAbsence::capture_current(
++            db,
++            owner,
++            scope,
++            key,
++            name,
++            self.residual()?.checked_div(2).ok_or_else(limit)?,
++        )? {
++            TypePreludeAbsenceOutcome::Absent(p) => p,
++            TypePreludeAbsenceOutcome::Need(n) => {
++                return Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Prelude(
++                    n,
++                )));
++            }
++        };
++        proof.revalidate_inputs(db)?;
++        charge(
++            &mut self.bytes,
++            proof.metadata_bytes().checked_mul(2).ok_or_else(limit)?,
++            self.max,
++        )?;
++        for k in proof.dependencies().keys() {
++            self.stamp(db, k.clone())?;
++        }
++        let Some(catalog) = &owner.compiler else {
++            return Ok(SourceAliasOutcome::Need(
++                SourceAliasPrerequisite::CompilerPrimitiveFacet,
++            ));
++        };
++        charge(
++            &mut self.bytes,
++            catalog
++                .owning_profile_metadata_bytes()?
++                .checked_mul(2)
++                .ok_or_else(limit)?,
++            self.max,
++        )?;
++        input.validate_compiler_primitive_receipts()?;
++        let Some(receipt) = input.compiler_primitive_receipt(owner.module_source().selection())?
++        else {
++            return Ok(SourceAliasOutcome::Need(
++                SourceAliasPrerequisite::CompilerPrimitiveFacet,
++            ));
++        };
++        if !receipt.matches(owner.module_source().selection(), catalog)? {
++            return Err(fault("alias actual compiler primitive receipt differs"));
++        };
++        let Some(facet) = catalog.primitive_facet(owner.profile())? else {
++            return Ok(SourceAliasOutcome::Need(
++                SourceAliasPrerequisite::CompilerPrimitiveFacet,
++            ));
++        };
++        let Some(primitive) = facet.select(name) else {
++            return Ok(SourceAliasOutcome::Need(
++                SourceAliasPrerequisite::UnknownPrimitive,
++            ));
++        };
++        charge(&mut self.bytes, scope.heap_bytes(), self.max)?;
++        let mut admitted = CurrentSourcePrimitiveAlias {
++            seed,
++            integrity: Digest([0; 32]),
++            steps: self.steps,
++            primitive,
++            compiler_member: facet.member_identity(primitive),
++            terminal_scope: scope.clone(),
++            prelude: proof.identity(),
++            facet: facet.identity(),
++            stamps: self.stamps,
++            revision: db.revision(),
++            bytes: self.bytes,
++        };
++        admitted.integrity = admitted.identity();
++        Ok(SourceAliasOutcome::Ready(admitted))
++    }
++}
++// This classifies an exact retained header only; no spelling supplies type authority.
++fn requires_substitution(
++    parsed: &ParsedFile,
++    context: &DeclarationContext,
++) -> Result<bool, Diagnostic> {
++    let alias = parsed
++        .parsed
++        .tree()
++        .syntax()
++        .descendants()
++        .filter_map(ast::TypeAlias::cast)
++        .find(|a| crate::syntax::ast_adapter::range(a.syntax().text_range()) == context.range)
++        .ok_or_else(|| fault("alias exact retained syntax absent"))?;
++    Ok(alias.generic_param_list().is_some()
++        || alias.where_clause().is_some()
++        || alias.ty().is_some_and(|ty| {
++            ty.syntax()
++                .descendants()
++                .any(|n| ast::GenericArgList::can_cast(n.kind()))
++        }))
++}
++fn seal_for(scope: &ScopeKey, world: &SealKey) -> SealKey {
++    SealKey {
++        domain: SealDomain::Scope {
++            id: scope.fingerprint(),
++            namespace: Namespace::Type,
++        },
++        unit_graph: world.unit_graph,
++        epoch: world.epoch,
++    }
++}
++fn provider_for<'a>(
++    db: &Database,
++    definition: Digest,
++    owners: &[&'a SourceDeclarative],
++) -> Result<Option<&'a SourceDeclarative>, Diagnostic> {
++    let Some((InputValue::DefinitionSource(parse), _)) =
++        db.published_input(&InputKey::DefinitionSource(definition))
++    else {
++        return Ok(None);
++    };
++    let mut actual: Option<&SourceDeclarative> = None;
++    for owner in owners {
++        let source = owner.module_source();
++        if source.selection().outline.parse != *parse
++            || !source
++                .outline()
++                .items
++                .iter()
++                .any(|i| i.def_key.fingerprint() == definition)
++        {
++            continue;
++        };
++        if let Some(old) = actual {
++            if !old.module_source().same_publication(source) {
++                return Err(fault("alias original source owner ambiguous"));
++            }
++        } else {
++            actual = Some(owner)
++        };
++    }
++    Ok(actual)
++}
++impl CurrentSourcePrimitiveAlias {
++    /// Exact original header classification; this boolean never grants type authority.
++    pub(crate) fn has_qualified_original_target(
++        db: &Database,
++        member: Digest,
++        sources: &[&crate::source::changes::PreparedSourceView],
++    ) -> Result<bool, Diagnostic> {
++        db.require_coordinator()?;
++        if sources.len() > 100_000 {
++            return Err(limit());
++        }
++        let mut found = None;
++        for source in sources {
++            if let Some(item) = source
++                .outline()
++                .items
++                .iter()
++                .find(|i| i.def_key.fingerprint() == member)
++            {
++                if found.is_some() {
++                    return Err(fault("qualified alias original member owner ambiguous"));
++                }
++                found = Some((*source, item));
++            }
++        }
++        let Some((source, item)) = found else {
++            return Ok(false);
++        };
++        if item.def_key.item_kind != ItemKind::TypeAlias {
++            return Ok(false);
++        }
++        item.scope
++            .heap_bytes()
++            .checked_add(
++                item.header
++                    .estimated_bytes()
++                    .checked_mul(4)
++                    .ok_or_else(limit)?,
++            )
++            .filter(|n| *n <= MAX_BYTES)
++            .ok_or_else(limit)?;
++        let context = DeclarationContext {
++            scope: item.scope.clone(),
++            range: item.declaration_span,
++        };
++        if !matches!(db.published_input(&InputKey::DefinitionSource(member)),Some((InputValue::DefinitionSource(parse),_)) if parse == &source.selection().outline.parse)
++            || !matches!(db.published_input(&InputKey::DefinitionHeader(member)),Some((InputValue::DefinitionHeader(header),_)) if header == &item.header)
++            || !matches!(db.published_input(&InputKey::DeclarationContext(member)),Some((InputValue::DeclarationContext(actual),_)) if actual == &context)
++        {
++            return Err(fault(
++                "qualified alias structural source/header/context differs",
++            ));
++        }
++        let Some(parsed) = db.prepared_parse(&source.selection().outline.parse) else {
++            return Ok(false);
++        };
++        Ok(qualified::written_path(&parsed, &item.header, &context, MAX_BYTES)?.is_some())
++    }
++
++    /// Readonly owner data for a genuinely retained original module invocation.
++    /// Positive admission still requires capture_original_current and its current Type proof.
++    pub(crate) fn original_owner_for_generated(
++        db: &Database,
++        identity: Digest,
++        sources: &[&crate::source::changes::PreparedSourceView],
++        max: usize,
++    ) -> Result<Option<(usize, ScopeKey, String)>, Diagnostic> {
++        generated::original_owner_data(db, identity, sources, max)
++    }
++    /// The caller name is a lookup demand, never a selected definition or primitive identity.
++    pub(crate) fn capture_original_current(
++        db: &Database,
++        owner: &SourceDeclarative,
++        scope: &ScopeKey,
++        key: &SealKey,
++        name: &str,
++        owners: &[&SourceDeclarative],
++        max: usize,
++    ) -> Result<SourceAliasOutcome, Diagnostic> {
++        db.require_coordinator()?;
++        if owners.len() > 100_000 || name.len() > 65536 {
++            return Err(limit());
++        };
++        let mut capture = Capture::new(max)?;
++        charge(
++            &mut capture.bytes,
++            name.len()
++                .checked_add(scope.heap_bytes())
++                .ok_or_else(limit)?,
++            max,
++        )?;
++        let Some(input) = capture.scope(db, owner, scope, key)? else {
++            return Ok(SourceAliasOutcome::Need(
++                SourceAliasPrerequisite::TypeNamespace(scope.clone()),
++            ));
++        };
++        let lookup = input
++            .scope
++            .as_ref()
++            .ok_or_else(|| fault("alias scope absent"))?
++            .lookup(&BucketKey {
++                scope: scope.clone(),
++                namespace: Namespace::Type,
++                name: name.into(),
++            })?;
++        let NameLookup::Defined(selected) = lookup else {
++            return Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Name(
++                lookup,
++            )));
++        };
++        let mut e = StableEncoder::new("lrr/v1/original-selected-source-alias");
++        e.record(&selected);
++        e.record(scope);
++        e.record(key);
++        e.string(name);
++        charge(
++            &mut capture.bytes,
++            owners
++                .len()
++                .checked_add(1)
++                .and_then(|n| n.checked_mul(std::mem::size_of::<&SourceDeclarative>()))
++                .ok_or_else(limit)?,
++            max,
++        )?;
++        let all = std::iter::once(owner)
++            .chain(owners.iter().copied())
++            .collect::<Vec<_>>();
++        Self::walk_original(db, selected, e.finish(), key, &all, capture)
++    }
++    fn walk_original(
++        db: &Database,
++        mut selected: NameDefinition,
++        seed: Digest,
++        world: &SealKey,
++        owners: &[&SourceDeclarative],
++        mut capture: Capture,
++    ) -> Result<SourceAliasOutcome, Diagnostic> {
++        loop {
++            let Some(owner) = provider_for(db, selected.identity, owners)? else {
++                return generated::walk_generated(db, selected, seed, world, owners, capture);
++            };
++            let source = owner.module_source();
++            let item = source
++                .outline()
++                .items
++                .iter()
++                .find(|i| i.def_key.fingerprint() == selected.identity)
++                .ok_or_else(|| fault("alias exact source member absent"))?;
++            if selected.namespace != Namespace::Type
++                || selected.defining_unit != item.scope.crate_key
++                || selected.definition_edition != item.header.profile.edition
++            {
++                return Err(fault("alias selected unit/edition differs"));
++            };
++            if item.scope.owner.is_some() {
++                return Ok(SourceAliasOutcome::Need(
++                    SourceAliasPrerequisite::OwnerContext(item.scope.clone()),
++                ));
++            };
++            if item.def_key.item_kind != ItemKind::TypeAlias {
++                return Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Name(
++                    NameLookup::Defined(selected),
++                )));
++            };
++            let context = DeclarationContext {
++                scope: item.scope.clone(),
++                range: item.declaration_span,
++            };
++            let key = seal_for(&context.scope, world);
++            let Some(_) = capture.scope(db, owner, &context.scope, &key)? else {
++                return Ok(SourceAliasOutcome::Need(
++                    SourceAliasPrerequisite::TypeNamespace(context.scope),
++                ));
++            };
++            if !matches!(db.published_input(&InputKey::DefinitionHeader(selected.identity)),Some((InputValue::DefinitionHeader(h),_))if h==&item.header)
++                || !matches!(db.published_input(&InputKey::DeclarationContext(selected.identity)),Some((InputValue::DeclarationContext(c),_))if c==&context)
++            {
++                return Err(fault("alias published exact header/context differs"));
++            };
++            let Some(parsed) = db.prepared_parse(&source.selection().outline.parse) else {
++                return Ok(SourceAliasOutcome::Need(
++                    SourceAliasPrerequisite::RetainedDeclaration(selected.identity),
++                ));
++            };
++            charge(
++                &mut capture.bytes,
++                item.header
++                    .estimated_bytes()
++                    .checked_mul(4)
++                    .ok_or_else(limit)?,
++                capture.max,
++            )?;
++            let recipe = parsed.type_alias_recipe(selected.identity, &item.header, &context)?;
++            for k in [
++                InputKey::DefinitionSource(selected.identity),
++                InputKey::DefinitionHeader(selected.identity),
++                InputKey::DeclarationContext(selected.identity),
++            ] {
++                capture.stamp(db, k)?;
++            }
++            capture.push(
++                selected.identity,
++                &item.def_key,
++                &source.selection().outline.parse,
++                &context,
++                &recipe,
++                None,
++            )?;
++            if !recipe.generics.is_empty() || requires_substitution(&parsed, &context)? {
++                return Ok(SourceAliasOutcome::Need(
++                    SourceAliasPrerequisite::GenericSubstitution(selected.identity),
++                ));
++            };
++            // Never accept recipe.symbolic: lower_type sees spelling before namespace/prelude authority.
++            if let Some(path) =
++                qualified::written_path(&parsed, &item.header, &context, capture.residual()?)?
++            {
++                charge(&mut capture.bytes, path.metadata_bytes()?, capture.max)?;
++                let Some(lookup) = qualified::lookup(
++                    db,
++                    owner,
++                    &context.scope,
++                    &key,
++                    &path,
++                    owners,
++                    &mut capture,
++                )?
++                else {
++                    return Ok(SourceAliasOutcome::Need(
++                        SourceAliasPrerequisite::WrittenTarget(selected.identity),
++                    ));
++                };
++                match lookup {
++                    NameLookup::Defined(next) => {
++                        selected = next;
++                        continue;
++                    }
++                    // A qualified absence is an unresolved export/associated/compiler route,
++                    // never primitive fallback in the caller or terminal module.
++                    NameLookup::Absent => {
++                        return Ok(SourceAliasOutcome::Need(
++                            SourceAliasPrerequisite::WrittenTarget(selected.identity),
++                        ));
++                    }
++                    other => {
++                        return Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Name(
++                            other,
++                        )));
++                    }
++                }
++            }
++            let [token] = recipe.target.as_slice() else {
++                return Ok(SourceAliasOutcome::Need(
++                    SourceAliasPrerequisite::WrittenTarget(selected.identity),
++                ));
++            };
++            let input = capture
++                .scope(db, owner, &context.scope, &key)?
++                .ok_or_else(|| fault("alias scope changed"))?;
++            let lookup = input
++                .scope
++                .as_ref()
++                .ok_or_else(|| fault("alias scope absent"))?
++                .lookup(&BucketKey {
++                    scope: context.scope.clone(),
++                    namespace: Namespace::Type,
++                    name: token.text.clone(),
++                })?;
++            match lookup {
++                NameLookup::Defined(next) => selected = next,
++                NameLookup::Absent => {
++                    return capture.finish(db, seed, owner, &context.scope, &key, &token.text);
++                }
++                other => {
++                    return Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Name(
++                        other,
++                    )));
++                }
++            }
++        }
++    }
++    pub(crate) fn primitive(&self) -> PrimitiveType {
++        self.primitive
++    }
++    pub(crate) fn selected_definition(&self) -> Digest {
++        self.steps
++            .first()
++            .expect("private nonempty admitted alias chain")
++            .member
++    }
++    pub(crate) fn alias_members(&self) -> impl Iterator<Item = Digest> {
++        self.steps.iter().map(|s| s.member)
++    }
++    #[cfg(test)]
++    pub(crate) fn alias_definitions(&self) -> impl Iterator<Item = &DefKey> {
++        self.steps.iter().map(|s| &s.definition)
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn dependencies(&self) -> &BTreeMap<InputKey, Digest> {
++        &self.stamps
++    }
++    /// Root's actual TypeAlias query consumer can compare its immutable recipe without guessing an alias row.
++    pub(crate) fn matches_query_recipe(&self, recipe: &TypeAliasRecipe) -> bool {
++        self.steps.iter().any(|s| {
++            s.member == recipe.definition
++                && s.recipe == recipe.fingerprint()
++                && s.header == recipe.header.fingerprint()
++                && s.context.scope == recipe.scope
++        })
++    }
++    pub(crate) fn revalidate_inputs(&self, db: &Database) -> Result<(), Diagnostic> {
++        db.require_coordinator()?;
++        if self.integrity != self.identity() {
++            return Err(fault("alias private admitted payload differs"));
++        }
++        if self.revision != db.revision() {
++            return Err(fault("alias publication changed; remint required"));
++        };
++        for (k, v) in &self.stamps {
++            if db.published_input(k).is_none_or(|(_, a)| a != *v) {
++                return Err(fault("alias retained source dependency changed"));
++            }
++        }
++        Ok(())
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v2/current-source-primitive-alias/canonical-member-v1");
++        e.digest(self.seed);
++        e.sequence(&self.steps, |e, s| {
++            e.digest(s.member);
++            e.record(&s.definition);
++            e.record(&s.parse);
++            e.record(&s.context.scope);
++            e.u32(s.context.range.start);
++            e.u32(s.context.range.end);
++            e.digest(s.header);
++            e.digest(s.recipe);
++            e.option(&s.written, |e, d| e.digest(*d));
++        });
++        e.u32(self.primitive.tag());
++        e.digest(self.compiler_member);
++        e.record(&self.terminal_scope);
++        e.digest(self.prelude);
++        e.digest(self.facet);
++        e.u64(u64::try_from(self.stamps.len()).expect("bounded alias input count"));
++        for (key, value) in &self.stamps {
++            e.record(key);
++            e.digest(*value);
++        }
++        e.finish()
++    }
++}
++
++#[path = "source_type_alias_normalization/generated.rs"]
++mod generated;
++
++#[cfg(test)]
++#[path = "source_type_alias_normalization_tests.rs"]
++mod tests;
++
++#[path = "source_type_alias_normalization/qualified.rs"]
++mod qualified;
+--- /dev/null
++++ b/crates/lrr/src/frontend/source_type_alias_query.rs
+@@ -0,0 +1,108 @@
++//! Explicit reached alias-header query join. Input suspension never performs preparation.
++use crate::{
++    core::{diagnostic::Diagnostic, digest::Digest},
++    db::{
++        key::QueryKey, memo::Database, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue,
++    },
++    frontend::source_type_alias_normalization::CurrentSourcePrimitiveAlias,
++};
++const MAX_BYTES: usize = 32 * 1024 * 1024;
++fn fault() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-SOURCE-ALIAS",
++        "source alias query/header join differs".into(),
++    )
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "source alias query join budget".into(),
++    )
++}
++pub(crate) struct QueriedSourcePrimitiveAlias {
++    source: CurrentSourcePrimitiveAlias,
++    queries: Vec<(QueryKey, Digest)>,
++    bytes: usize,
++}
++impl QueriedSourcePrimitiveAlias {
++    pub(crate) fn capture_current(
++        db: &mut Database,
++        source: CurrentSourcePrimitiveAlias,
++        max: usize,
++    ) -> QueryPoll<Self> {
++        if let Err(e) = source.revalidate_inputs(db) {
++            return QueryPoll::Ready(Err(e));
++        };
++        let count = source.alias_members().count();
++        let Some(bytes) = count
++            .checked_mul(std::mem::size_of::<(QueryKey, Digest)>())
++            .and_then(|n| n.checked_add(source.metadata_bytes().checked_mul(2)?))
++            .and_then(|n| n.checked_add(std::mem::size_of::<Self>()))
++            .filter(|n| max <= MAX_BYTES && *n <= max)
++        else {
++            return QueryPoll::Ready(Err(limit()));
++        };
++        let mut queries = Vec::new();
++        if queries.try_reserve_exact(count).is_err() {
++            return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
++        };
++        for member in source.alias_members() {
++            let key = QueryKey::TypeAlias(member);
++            let outcome = match db.fetch(&SyntaxProvider, key.clone()) {
++                QueryPoll::Ready(Ok(v)) => v,
++                QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
++                QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
++            };
++            let QueryValue::TypeAlias(recipe) = outcome.value.as_ref() else {
++                return QueryPoll::Ready(Err(fault()));
++            };
++            if !source.matches_query_recipe(recipe) {
++                return QueryPoll::Ready(Err(fault()));
++            };
++            queries.push((key, outcome.fingerprint));
++        }
++        if let Err(e) = source.revalidate_inputs(db) {
++            return QueryPoll::Ready(Err(e));
++        };
++        QueryPoll::Ready(Ok(Self {
++            source,
++            queries,
++            bytes,
++        }))
++    }
++    pub(crate) fn source(&self) -> &CurrentSourcePrimitiveAlias {
++        &self.source
++    }
++    pub(crate) fn query_dependencies(&self) -> &[(QueryKey, Digest)] {
++        &self.queries
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    #[cfg(test)]
++    pub(crate) fn revalidate_current(&self, db: &mut Database) -> QueryPoll<()> {
++        if let Err(e) = self.source.revalidate_inputs(db) {
++            return QueryPoll::Ready(Err(e));
++        };
++        for (key, expected) in &self.queries {
++            let out = match db.fetch(&SyntaxProvider, key.clone()) {
++                QueryPoll::Ready(Ok(v)) => v,
++                QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
++                QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
++            };
++            if out.fingerprint != *expected {
++                return QueryPoll::Ready(Err(fault()));
++            };
++            let QueryValue::TypeAlias(recipe) = out.value.as_ref() else {
++                return QueryPoll::Ready(Err(fault()));
++            };
++            if !self.source.matches_query_recipe(recipe) {
++                return QueryPoll::Ready(Err(fault()));
++            };
++        }
++        match self.source.revalidate_inputs(db) {
++            Ok(()) => QueryPoll::Ready(Ok(())),
++            Err(e) => QueryPoll::Ready(Err(e)),
++        }
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/frontend/type_prelude_admission.rs
+@@ -0,0 +1,1076 @@
++//! Opaque Type-prelude source preparation and readonly current absence.
++//! Selection never evaluates a type/constant/body or performs discovery/provider work.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::{
++        dependency::{InputKey, InputValue},
++        key::BucketKey,
++        memo::Database,
++        seals::{DiscoveryInput, SealDomain, SealKey},
++    },
++    expand::{
++        generated_items::GeneratedItems,
++        identity::{GrammarSlot, MacroIdentity},
++        nested_inert::NestedInertProof,
++        record::ExpansionRecord,
++        source_declarative::SourceDeclarative,
++    },
++    frontend::{
++        macro_names::ModuleLookup,
++        names::{NameLookup, NameNamespaces},
++    },
++    source::{
++        changes::{SourceSelection, crate_policy::PreparedCratePreludePolicy},
++        manifest::Namespace,
++    },
++    syntax::{
++        outline::{ProducerKind, ScopeKey, TextualEventKind},
++        parse::ParsedFile,
++        spans::SourceRange,
++        type_prelude_sites::{TypePreludeDirective, TypePreludeSites},
++        visibility::VisibilityScope,
++    },
++};
++use std::{collections::BTreeMap, sync::Arc};
++const MAX_BYTES: usize = 32 * 1024 * 1024;
++const MAX_ROWS: usize = 100_000;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-TYPE-PRELUDE-SOURCE", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new("LRR-E-METADATA-LIMIT", "Type prelude source budget".into())
++}
++fn charge(bytes: &mut usize, n: usize, maximum: usize) -> Result<(), Diagnostic> {
++    *bytes = bytes
++        .checked_add(n)
++        .filter(|n| *n <= maximum)
++        .ok_or_else(limit)?;
++    Ok(())
++}
++#[derive(Debug, Clone)]
++pub(crate) enum TypePreludePrerequisite {
++    RetainedSource(Digest),
++    DeclarationProducer(Digest),
++    LocalDirective(SourceRange),
++    NonGlobDirective(SourceRange),
++    GeneratedDirective(Digest),
++    GeneratedLineage(Digest),
++    ReplacementOrForeignWorld,
++    MultipleDirectives,
++    AttributeFacet(Digest),
++    Module(ModuleLookup),
++    CompilerFacet,
++    TargetTypeNamespace(ScopeKey),
++    Member(NameLookup),
++    DefaultExportSpelling,
++}
++impl PartialEq for TypePreludePrerequisite {
++    fn eq(&self, other: &Self) -> bool {
++        let mut a = StableEncoder::new("lrr/v1/type-prelude-prerequisite");
++        let mut b = StableEncoder::new("lrr/v1/type-prelude-prerequisite");
++        encode_need(self, &mut a);
++        encode_need(other, &mut b);
++        a.finish() == b.finish()
++    }
++}
++impl Eq for TypePreludePrerequisite {}
++#[derive(Debug, Clone)]
++enum PreparedMode {
++    Disabled,
++    Default {
++        standard: bool,
++        facet: Digest,
++    },
++    Custom {
++        directive: TypePreludeDirective,
++        module: ScopeKey,
++        source: SourceSelection,
++        attribute: Digest,
++        visibility: VisibilityScope,
++    },
++    Need(TypePreludePrerequisite),
++}
++/// Only actual completed source preparation can mint this; published scope
++/// membership/current source stamps supply currentness, not these fields alone.
++#[derive(Debug, Clone)]
++pub(crate) struct TypePreludeReceipt {
++    source: SourceSelection,
++    scope: ScopeKey,
++    policy: Digest,
++    catalog: Option<Digest>,
++    sources: Vec<SourceSelection>,
++    records: Vec<Digest>,
++    mode: PreparedMode,
++    bytes: usize,
++}
++fn original_provider<'a>(
++    selection: &SourceSelection,
++    providers: &'a [SourceDeclarative],
++) -> Result<Option<&'a SourceDeclarative>, Diagnostic> {
++    let mut selected: Option<&SourceDeclarative> = None;
++    for provider in providers {
++        if provider.module_source().selection() == selection {
++            if let Some(old) = selected {
++                if !old
++                    .module_source()
++                    .same_publication(provider.module_source())
++                {
++                    return Err(fault("Type prelude actual source publication ambiguous"));
++                }
++            }
++            selected = Some(provider);
++        }
++    }
++    Ok(selected)
++}
++#[allow(clippy::too_many_arguments)]
++fn prepare_one(
++    owner: &SourceDeclarative,
++    providers: &[SourceDeclarative],
++    published_sources: &[SourceSelection],
++    graph: &NameNamespaces,
++    scope: &ScopeKey,
++    records: &[Arc<ExpansionRecord>],
++    owners: &crate::expand::source_discovery::type_prelude::TypePreludeRecordOwners<'_>,
++    inert: &BTreeMap<Digest, NestedInertProof>,
++    epoch: u64,
++    maximum: usize,
++) -> Result<TypePreludeReceipt, Diagnostic> {
++    let source = owner.module_source();
++    let mut bytes = std::mem::size_of::<TypePreludeReceipt>();
++    charge(
++        &mut bytes,
++        source
++            .selection()
++            .metadata_bytes()?
++            .checked_add(scope.heap_bytes())
++            .ok_or_else(limit)?,
++        maximum,
++    )?;
++    let policy = PreparedCratePreludePolicy::capture_current(
++        source,
++        epoch,
++        maximum
++            .checked_sub(bytes)
++            .ok_or_else(limit)?
++            .checked_div(2)
++            .ok_or_else(limit)?,
++    )?;
++    charge(
++        &mut bytes,
++        policy.metadata_bytes().checked_mul(2).ok_or_else(limit)?,
++        maximum,
++    )?;
++    for ancestor in policy.source_selections() {
++        if !published_sources.contains(ancestor) {
++            return Err(fault(
++                "Type prelude owning policy ancestor absent from actual publication",
++            ));
++        }
++    }
++    let actual = policy.policy();
++    let suffix = scope
++        .module_path
++        .strip_prefix(source.selection().outline.module_path.as_slice())
++        .ok_or_else(|| fault("Type prelude policy scope differs"))?;
++    let mut out = TypePreludeReceipt {
++        source: source.selection().clone(),
++        scope: scope.clone(),
++        policy: policy.identity(),
++        catalog: None,
++        sources: Vec::new(),
++        records: Vec::new(),
++        mode: PreparedMode::Need(TypePreludePrerequisite::CompilerFacet),
++        bytes,
++    };
++    if actual
++        .disabled
++        .iter()
++        .any(|prefix| suffix.starts_with(prefix))
++    {
++        out.mode = PreparedMode::Disabled;
++        return Ok(out);
++    }
++    let Some(compiler) = &owner.compiler else {
++        return Ok(out);
++    };
++    charge(
++        &mut out.bytes,
++        compiler
++            .owning_profile_metadata_bytes()?
++            .checked_mul(2)
++            .ok_or_else(limit)?,
++        maximum,
++    )?;
++    let Some(facet) = compiler.type_prelude_facet(&source.outline().profile)? else {
++        return Ok(out);
++    };
++    out.catalog = Some(compiler.owning_profile_identity()?);
++    // The actual publication source set determines membership. Providers are
++    // retained evidence and cannot assert that a source or producer is absent.
++    let owning_count = published_sources
++        .iter()
++        .filter(|selected| selected.outline.crate_key == scope.crate_key)
++        .count();
++    if owning_count > MAX_ROWS || records.len() > MAX_ROWS || inert.len() > MAX_ROWS {
++        return Err(limit());
++    }
++    charge(
++        &mut out.bytes,
++        owning_count
++            .checked_mul(std::mem::size_of::<SourceSelection>())
++            .ok_or_else(limit)?,
++        maximum,
++    )?;
++    out.sources
++        .try_reserve_exact(owning_count)
++        .map_err(|_| limit())?;
++    let mut chosen: Option<(TypePreludeDirective, SourceSelection, Digest)> = None;
++    for selected in published_sources
++        .iter()
++        .filter(|selected| selected.outline.crate_key == scope.crate_key)
++    {
++        let Some(provider) = original_provider(selected, providers)? else {
++            out.mode = PreparedMode::Need(TypePreludePrerequisite::RetainedSource(
++                selected.location_identity(),
++            ));
++            return Ok(out);
++        };
++        let view = provider.module_source();
++        view.require_original_hygiene()?;
++        if selected.outline.parse.profile != source.outline().profile
++            || selected.outline.cfg != source.selection().outline.cfg
++        {
++            return Err(fault(
++                "owning crate Type prelude source profile/cfg differs",
++            ));
++        }
++        charge(&mut out.bytes, selected.metadata_bytes()?, maximum)?;
++        out.sources.push(selected.clone());
++        // Missing external module source is a declaration prerequisite, even
++        // when it does not occur in the requested primitive's module.
++        for event in &view.outline().textual_events {
++            if let TextualEventKind::Producer {
++                identity,
++                kind: ProducerKind::ModuleSource,
++            } = &event.kind
++            {
++                if !published_sources.iter().any(|s| {
++                    s.outline.crate_key == scope.crate_key
++                        && s.outline.module_path == event.scope.module_path
++                }) {
++                    out.mode =
++                        PreparedMode::Need(TypePreludePrerequisite::DeclarationProducer(*identity));
++                    return Ok(out);
++                }
++            }
++        }
++        for call in &view.outline().item_invocations {
++            if !records
++                .iter()
++                .any(|record| record.key().invocation == call.item_input)
++            {
++                out.mode = PreparedMode::Need(TypePreludePrerequisite::DeclarationProducer(
++                    call.item_input,
++                ));
++                return Ok(out);
++            }
++        }
++        let transient = view
++            .captured_macro_blob()?
++            .bytes()
++            .len()
++            .checked_mul(128)
++            .and_then(|n| n.checked_add(view.outline().estimated_bytes()))
++            .ok_or_else(limit)?;
++        if transient > maximum.checked_sub(out.bytes).ok_or_else(limit)? {
++            return Err(limit());
++        };
++        let parsed =
++            ParsedFile::parse(view.captured_macro_blob()?, view.outline().profile.clone())?;
++        // Source is already captured; pure owned parsing is bounded structural
++        // replay, never a live toolchain/library or guest preparation fallback.
++        let directives = match parsed.type_prelude_sites(
++            view.outline(),
++            view.captured_macro_cfg()?,
++            maximum.checked_sub(out.bytes).ok_or_else(limit)?,
++        )? {
++            TypePreludeSites::Captured(sites) => sites,
++            TypePreludeSites::NeedLocal(range) => {
++                out.mode = PreparedMode::Need(TypePreludePrerequisite::LocalDirective(range));
++                return Ok(out);
++            }
++            TypePreludeSites::NeedNonGlob(range) => {
++                out.mode = PreparedMode::Need(TypePreludePrerequisite::NonGlobDirective(range));
++                return Ok(out);
++            }
++        };
++        for directive in directives {
++            charge(&mut out.bytes, directive.metadata_bytes()?, maximum)?;
++            let proof = inert.values().find(|proof| {
++                proof.attribute_facet().is_some()
++                    && proof.scan().parse() == &selected.outline.parse
++                    && proof.scan().path() == &selected.path
++                    && proof.scan().cfg() == selected.outline.cfg
++                    && proof.name().is_ok_and(|name| name == "prelude_import")
++                    && proof.scan().producers().iter().any(|row| {
++                        row.identity == proof.producer() && row.range == directive.meta()
++                    })
++            });
++            let Some(proof) = proof else {
++                out.mode = PreparedMode::Need(TypePreludePrerequisite::AttributeFacet(
++                    directive.identity(),
++                ));
++                return Ok(out);
++            };
++            proof.revalidate(view.captured_macro_blob()?, view.captured_macro_cfg()?)?;
++            if chosen.is_some() {
++                out.mode = PreparedMode::Need(TypePreludePrerequisite::MultipleDirectives);
++                return Ok(out);
++            };
++            charge(&mut out.bytes, selected.metadata_bytes()?, maximum)?;
++            chosen = Some((directive, selected.clone(), proof.fingerprint()));
++        }
++    }
++    // Inspect only actual retained declaration outputs. Generated custom/local
++    // routes lacking semantic hygiene producers stay precise prerequisites.
++    for record in records {
++        if record.token_count() == 0 {
++            continue;
++        };
++        let Some(caller) = owners.owner(record)? else {
++            out.mode = PreparedMode::Need(TypePreludePrerequisite::GeneratedLineage(
++                record.key().fingerprint(),
++            ));
++            return Ok(out);
++        };
++        if caller.source().selection().outline.crate_key != scope.crate_key {
++            continue;
++        };
++        if record.key().grammar != GrammarSlot::Items
++            || matches!(
++                &record.key().macro_identity,
++                MacroIdentity::Procedural { .. }
++            )
++        {
++            out.mode = PreparedMode::Need(TypePreludePrerequisite::GeneratedLineage(
++                record.key().fingerprint(),
++            ));
++            return Ok(out);
++        };
++        let cost = record
++            .estimated_bytes()?
++            .checked_mul(128)
++            .filter(|n| *n <= maximum.checked_sub(out.bytes).unwrap_or(0))
++            .ok_or_else(limit)?;
++        let items = GeneratedItems::admit(record.key(), record.clone(), epoch)?;
++        let parsed = ParsedFile::from_generated_items(&items)?;
++        let generated = parsed.outline(
++            caller.scope().crate_key,
++            caller.scope().module_path.clone(),
++            caller.source().captured_macro_cfg()?,
++        )?;
++        match parsed.type_prelude_sites(&generated, caller.source().captured_macro_cfg()?, cost)? {
++            TypePreludeSites::Captured(sites) if sites.is_empty() => {}
++            _ => {
++                out.mode = PreparedMode::Need(TypePreludePrerequisite::GeneratedDirective(
++                    record.key().fingerprint(),
++                ));
++                return Ok(out);
++            }
++        }
++        // Completed SourceDiscovery supplies the actual retained nested records
++        // and its private owner join. Reconstructed outline call IDs are not
++        // interchangeable with generated-catalogue invocation identities.
++        charge(&mut out.bytes, std::mem::size_of::<Digest>(), maximum)?;
++        out.records.try_reserve(1).map_err(|_| limit())?;
++        out.records.push(record.descriptor().fingerprint());
++    }
++    out.mode = if let Some((directive, selected, attribute)) = chosen {
++        if 256usize.checked_mul(65_536).ok_or_else(limit)?
++            > maximum.checked_sub(out.bytes).ok_or_else(limit)?
++        {
++            return Err(limit());
++        };
++        match graph
++            .lookup_import_module(directive.import(), selected.outline.parse.profile.edition)?
++        {
++            ModuleLookup::Defined {
++                unit,
++                components,
++                visibility,
++            } => {
++                let path_bytes = components
++                    .iter()
++                    .try_fold(0usize, |n, c| {
++                        n.checked_add(c.as_str().len())
++                            .and_then(|n| n.checked_add(std::mem::size_of::<String>()))
++                    })
++                    .ok_or_else(limit)?;
++                charge(&mut out.bytes, path_bytes, maximum)?;
++                let module = ScopeKey {
++                    crate_key: unit,
++                    module_path: components.iter().map(|c| c.as_str().to_owned()).collect(),
++                    owner: None,
++                };
++                charge(&mut out.bytes, module.heap_bytes(), maximum)?;
++                PreparedMode::Custom {
++                    directive,
++                    module,
++                    source: selected,
++                    attribute,
++                    visibility,
++                }
++            }
++            other => PreparedMode::Need(TypePreludePrerequisite::Module(other)),
++        }
++    } else {
++        PreparedMode::Default {
++            standard: actual.standard,
++            facet: facet.identity(),
++        }
++    };
++    Ok(out)
++}
++/// Called only by actual completed Type SourceDiscovery publication.
++#[allow(clippy::too_many_arguments)]
++pub(crate) fn prepare_type_prelude_receipts(
++    providers: &[SourceDeclarative],
++    sources: &[SourceSelection],
++    graph: &NameNamespaces,
++    scope: &ScopeKey,
++    records: &[Arc<ExpansionRecord>],
++    owners: &crate::expand::source_discovery::type_prelude::TypePreludeRecordOwners<'_>,
++    inert: &BTreeMap<Digest, NestedInertProof>,
++    epoch: u64,
++    maximum: usize,
++) -> Result<Vec<TypePreludeReceipt>, Diagnostic> {
++    if providers.len() > MAX_ROWS
++        || sources.len() > MAX_ROWS
++        || scope.owner.is_some()
++        || maximum > MAX_BYTES
++        || epoch == 0
++    {
++        return Err(limit());
++    }
++    let mut bytes = providers
++        .len()
++        .checked_mul(std::mem::size_of::<TypePreludeReceipt>())
++        .filter(|n| *n <= maximum)
++        .ok_or_else(limit)?;
++    let mut out = Vec::new();
++    out.try_reserve_exact(providers.len())
++        .map_err(|_| limit())?;
++    for owner in providers.iter().filter(|p| {
++        p.module_source().selection().outline.crate_key == scope.crate_key
++            && scope
++                .module_path
++                .starts_with(&p.module_source().selection().outline.module_path)
++    }) {
++        let receipt = prepare_one(
++            owner,
++            providers,
++            sources,
++            graph,
++            scope,
++            records,
++            owners,
++            inert,
++            epoch,
++            maximum.checked_sub(bytes).ok_or_else(limit)?,
++        )?;
++        charge(&mut bytes, receipt.metadata_bytes(), maximum)?;
++        out.push(receipt);
++    }
++    out.sort_by_key(|r| r.source.location_identity());
++    if out
++        .windows(2)
++        .any(|r| r[0].source.location_identity() == r[1].source.location_identity())
++    {
++        return Err(fault("Type prelude receipt source duplicated"));
++    }
++    Ok(out)
++}
++impl TypePreludeReceipt {
++    pub(crate) fn source(&self) -> &SourceSelection {
++        &self.source
++    }
++    pub(crate) fn scope(&self) -> &ScopeKey {
++        &self.scope
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        self.fingerprint()
++    }
++}
++impl StableEncode for TypePreludeReceipt {
++    const DOMAIN: &'static str = "lrr/v1/prepared-source-type-prelude-receipt";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.string(self.source.path.as_str());
++        e.record(&self.source.outline);
++        e.record(&self.scope);
++        e.digest(self.policy);
++        e.option(&self.catalog, |e, id| e.digest(*id));
++        e.sequence(&self.sources, |e, s| {
++            e.string(s.path.as_str());
++            e.record(&s.outline)
++        });
++        e.sequence(&self.records, |e, id| e.digest(*id));
++        match &self.mode {
++            PreparedMode::Disabled => e.u8(0),
++            PreparedMode::Default { standard, facet } => {
++                e.u8(1);
++                e.bool(*standard);
++                e.digest(*facet)
++            }
++            PreparedMode::Custom {
++                directive,
++                module,
++                source,
++                attribute,
++                visibility,
++            } => {
++                e.u8(2);
++                e.record(directive);
++                e.record(module);
++                e.string(source.path.as_str());
++                e.record(&source.outline);
++                e.digest(*attribute);
++                e.record(visibility)
++            }
++            PreparedMode::Need(need) => {
++                e.u8(3);
++                encode_need(need, e)
++            }
++        }
++    }
++}
++fn encode_need(need: &TypePreludePrerequisite, e: &mut StableEncoder) {
++    match need {
++        TypePreludePrerequisite::RetainedSource(id) => {
++            e.u8(0);
++            e.digest(*id)
++        }
++        TypePreludePrerequisite::DeclarationProducer(id) => {
++            e.u8(1);
++            e.digest(*id)
++        }
++        TypePreludePrerequisite::LocalDirective(r) => {
++            e.u8(2);
++            e.u32(r.start);
++            e.u32(r.end)
++        }
++        TypePreludePrerequisite::NonGlobDirective(r) => {
++            e.u8(3);
++            e.u32(r.start);
++            e.u32(r.end)
++        }
++        TypePreludePrerequisite::GeneratedDirective(id) => {
++            e.u8(4);
++            e.digest(*id)
++        }
++        TypePreludePrerequisite::GeneratedLineage(id) => {
++            e.u8(5);
++            e.digest(*id)
++        }
++        TypePreludePrerequisite::ReplacementOrForeignWorld => e.u8(6),
++        TypePreludePrerequisite::MultipleDirectives => e.u8(7),
++        TypePreludePrerequisite::AttributeFacet(id) => {
++            e.u8(8);
++            e.digest(*id)
++        }
++        TypePreludePrerequisite::Module(found) => {
++            e.u8(9);
++            match found {
++                ModuleLookup::Defined {
++                    unit,
++                    components,
++                    visibility,
++                } => {
++                    e.u8(0);
++                    e.digest(*unit);
++                    e.sequence(components, |e, n| e.string(n.as_str()));
++                    e.record(visibility)
++                }
++                ModuleLookup::Absent => e.u8(1),
++                ModuleLookup::Ambiguous(paths) => {
++                    e.u8(2);
++                    e.sequence(paths, |e, (unit, path)| {
++                        e.digest(*unit);
++                        e.sequence(path, |e, n| e.string(n.as_str()))
++                    })
++                }
++                ModuleLookup::Inaccessible { unit, components } => {
++                    e.u8(3);
++                    e.digest(*unit);
++                    e.sequence(components, |e, n| e.string(n.as_str()))
++                }
++            }
++        }
++        TypePreludePrerequisite::CompilerFacet => e.u8(10),
++        TypePreludePrerequisite::TargetTypeNamespace(scope) => {
++            e.u8(11);
++            e.record(scope)
++        }
++        TypePreludePrerequisite::Member(name) => {
++            e.u8(12);
++            e.record(name)
++        }
++        TypePreludePrerequisite::DefaultExportSpelling => e.u8(13),
++    }
++}
++
++pub(crate) enum TypePreludeAbsenceOutcome {
++    Absent(CurrentTypePreludeAbsence),
++    Need(TypePreludePrerequisite),
++}
++/// Private exact name/scope/current-world absence. No type or descriptor is minted.
++pub(crate) struct CurrentTypePreludeAbsence {
++    receipt: Digest,
++    name: Digest,
++    stamps: BTreeMap<InputKey, Digest>,
++    revision: u64,
++    bytes: usize,
++}
++fn stamp(
++    db: &Database,
++    key: &InputKey,
++    out: &mut BTreeMap<InputKey, Digest>,
++    bytes: &mut usize,
++    maximum: usize,
++) -> Result<(), Diagnostic> {
++    let (_, value) = db
++        .published_input(key)
++        .ok_or_else(|| fault("Type prelude current input absent"))?;
++    if let Some(old) = out.get(key) {
++        return if *old == value {
++            Ok(())
++        } else {
++            Err(fault("Type prelude current input changed"))
++        };
++    };
++    if out.len() >= MAX_ROWS {
++        return Err(limit());
++    };
++    charge(
++        bytes,
++        std::mem::size_of::<(InputKey, Digest)>()
++            .checked_add(128)
++            .and_then(|n| n.checked_add(key.heap_bytes()))
++            .ok_or_else(limit)?,
++        maximum,
++    )?;
++    out.insert(key.clone(), value);
++    Ok(())
++}
++fn current_scope<'a>(
++    db: &'a Database,
++    key: &SealKey,
++    scope: &ScopeKey,
++    source_graph: Digest,
++    stamps: &mut BTreeMap<InputKey, Digest>,
++    bytes: &mut usize,
++    maximum: usize,
++) -> Result<Option<&'a DiscoveryInput>, Diagnostic> {
++    let Some((InputValue::DiscoverySeal(input), _)) =
++        db.published_input(&InputKey::DiscoverySeal(key.clone()))
++    else {
++        return Ok(None);
++    };
++    let certified = input
++        .scope
++        .as_ref()
++        .ok_or_else(|| fault("Type prelude selected certified scope absent"))?;
++    if input.seal.key() != *key
++        || certified.scope != *scope
++        || certified.namespace != Namespace::Type
++        || input.seal.unresolved_frontiers() != 0
++        || input.source_dependencies != source_graph
++        || !matches!(db.published_input(&InputKey::ExpansionEpoch),Some((InputValue::ExpansionEpoch(epoch),_))if *epoch==key.epoch)
++        || !matches!(db.published_input(&InputKey::SourceDependencies),Some((InputValue::SourceDependencies(graph),_))if graph.fingerprint()==input.source_dependencies)
++    {
++        return Err(fault(
++            "Type prelude actual Type world/epoch/source graph differs",
++        ));
++    }
++    input.validate_type_prelude_receipts()?;
++    if input.compiler_inputs.len() > MAX_ROWS || input.records.len() > MAX_ROWS {
++        return Err(limit());
++    };
++    for (key, expected) in &input.compiler_inputs {
++        if db
++            .published_input(key)
++            .is_none_or(|(_, value)| value != *expected)
++        {
++            return Err(fault("Type prelude compiler publication changed"));
++        }
++        stamp(db, key, stamps, bytes, maximum)?
++    }
++    for descriptor in &input.records {
++        let key = InputKey::ExpansionRecord(descriptor.key.fingerprint());
++        if !matches!(db.published_input(&key),Some((InputValue::ExpansionRecord(record),_))if record.descriptor().fingerprint()==descriptor.fingerprint())
++        {
++            return Err(fault("Type prelude actual expansion record changed"));
++        }
++        stamp(db, &key, stamps, bytes, maximum)?
++    }
++    stamp(
++        db,
++        &InputKey::DiscoverySeal(key.clone()),
++        stamps,
++        bytes,
++        maximum,
++    )?;
++    stamp(db, &InputKey::SourceDependencies, stamps, bytes, maximum)?;
++    stamp(db, &InputKey::ExpansionEpoch, stamps, bytes, maximum)?;
++    Ok(Some(input))
++}
++impl CurrentTypePreludeAbsence {
++    pub(crate) fn capture_current(
++        db: &Database,
++        owner: &SourceDeclarative,
++        scope: &ScopeKey,
++        key: &SealKey,
++        name: &str,
++        maximum: usize,
++    ) -> Result<TypePreludeAbsenceOutcome, Diagnostic> {
++        db.require_coordinator()?;
++        if maximum > MAX_BYTES || name.len() > 64 * 1024 || scope.owner.is_some() {
++            return Err(limit());
++        };
++        let source = owner.module_source();
++        source.require_original_hygiene()?;
++        let mut bytes = std::mem::size_of::<Self>();
++        let mut stamps = BTreeMap::new();
++        let graph = match db.published_input(&InputKey::SourceDependencies) {
++            Some((InputValue::SourceDependencies(graph), _)) => graph.fingerprint(),
++            _ => return Err(fault("Type prelude actual source graph absent")),
++        };
++        let Some(input) = current_scope(db, key, scope, graph, &mut stamps, &mut bytes, maximum)?
++        else {
++            return Ok(TypePreludeAbsenceOutcome::Need(
++                TypePreludePrerequisite::TargetTypeNamespace(scope.clone()),
++            ));
++        };
++        charge(
++            &mut bytes,
++            scope
++                .heap_bytes()
++                .checked_add(name.len())
++                .ok_or_else(limit)?,
++            maximum,
++        )?;
++        let own = input
++            .scope
++            .as_ref()
++            .ok_or_else(|| fault("Type prelude own scope absent"))?
++            .lookup(&BucketKey {
++                scope: scope.clone(),
++                namespace: Namespace::Type,
++                name: name.into(),
++            })?;
++        if own != NameLookup::Absent {
++            return Ok(TypePreludeAbsenceOutcome::Need(
++                TypePreludePrerequisite::Member(own),
++            ));
++        };
++        let Some(receipt) = input.type_prelude_receipt(source.selection(), scope)? else {
++            return Ok(TypePreludeAbsenceOutcome::Need(
++                TypePreludePrerequisite::CompilerFacet,
++            ));
++        };
++        charge(&mut bytes, receipt.metadata_bytes(), maximum)?;
++        if !input.sources.contains(source.selection())
++            || input
++                .scope
++                .as_ref()
++                .is_none_or(|s| s.edition != source.outline().profile.edition)
++        {
++            return Err(fault("Type prelude owning source/profile differs"));
++        };
++        if !input.source_replacements.is_empty() || !input.procedural_catalogs.is_empty() {
++            return Ok(TypePreludeAbsenceOutcome::Need(
++                TypePreludePrerequisite::ReplacementOrForeignWorld,
++            ));
++        };
++        for selected in std::iter::once(&receipt.source).chain(&receipt.sources) {
++            if !matches!(db.published_input(&InputKey::CapturedSource(selected.location_identity())),Some((InputValue::CapturedSource(current),_))if current==selected)
++                || !matches!(db.published_input(&InputKey::SourceBlob(selected.outline.parse.content)),Some((InputValue::SourceBlob(blob),_))if blob.content()==selected.outline.parse.content)
++                || !matches!(db.published_input(&InputKey::CrateCfg(selected.outline.crate_key)),Some((InputValue::CrateCfg(cfg),_))if cfg.fingerprint()==selected.outline.cfg)
++            {
++                return Err(fault("Type prelude retained source/header/cfg changed"));
++            };
++            for key in [
++                InputKey::CapturedSource(selected.location_identity()),
++                InputKey::SourceBlob(selected.outline.parse.content),
++                InputKey::CrateCfg(selected.outline.crate_key),
++            ] {
++                stamp(db, &key, &mut stamps, &mut bytes, maximum)?
++            }
++        }
++        let policy = PreparedCratePreludePolicy::capture_current(
++            source,
++            key.epoch,
++            maximum
++                .checked_sub(bytes)
++                .ok_or_else(limit)?
++                .checked_div(2)
++                .ok_or_else(limit)?,
++        )?;
++        if !matches!(db.published_input(&InputKey::SourceDependencies),Some((InputValue::SourceDependencies(graph),_))if graph.root_for(scope.crate_key)==Some(policy.owning_root_selection()))
++        {
++            return Err(fault("Type prelude actual owning root selection differs"));
++        }
++        if policy.identity() != receipt.policy {
++            return Err(fault("Type prelude owning policy receipt differs"));
++        };
++        for selected in policy.source_selections() {
++            if !matches!(db.published_input(&InputKey::CapturedSource(selected.location_identity())),Some((InputValue::CapturedSource(actual),_))if actual==selected)
++            {
++                return Err(fault("Type prelude policy ancestor publication differs"));
++            };
++            stamp(
++                db,
++                &InputKey::CapturedSource(selected.location_identity()),
++                &mut stamps,
++                &mut bytes,
++                maximum,
++            )?;
++        }
++        charge(
++            &mut bytes,
++            policy.metadata_bytes().checked_mul(2).ok_or_else(limit)?,
++            maximum,
++        )?;
++        match &receipt.mode {
++            PreparedMode::Need(need) => return Ok(TypePreludeAbsenceOutcome::Need(need.clone())),
++            PreparedMode::Disabled => {}
++            PreparedMode::Default { standard, facet } => {
++                let Some(compiler) = &owner.compiler else {
++                    return Ok(TypePreludeAbsenceOutcome::Need(
++                        TypePreludePrerequisite::CompilerFacet,
++                    ));
++                };
++                charge(
++                    &mut bytes,
++                    compiler
++                        .owning_profile_metadata_bytes()?
++                        .checked_mul(2)
++                        .ok_or_else(limit)?,
++                    maximum,
++                )?;
++                let Some(actual) = compiler.type_prelude_facet(&source.outline().profile)? else {
++                    return Ok(TypePreludeAbsenceOutcome::Need(
++                        TypePreludePrerequisite::CompilerFacet,
++                    ));
++                };
++                if actual.identity() != *facet
++                    || Some(compiler.owning_profile_identity()?) != receipt.catalog
++                {
++                    return Err(fault(
++                        "Type prelude actual published compiler facet differs",
++                    ));
++                };
++                if actual.contains_export_spelling(*standard, name) {
++                    return Ok(TypePreludeAbsenceOutcome::Need(
++                        TypePreludePrerequisite::DefaultExportSpelling,
++                    ));
++                }
++            }
++            PreparedMode::Custom {
++                directive,
++                module,
++                source: selected,
++                ..
++            } => {
++                if !matches!(db.published_input(&InputKey::DefinitionHeader(directive.definition())),Some((InputValue::DefinitionHeader(header),_))if header.fingerprint()==directive.header())
++                    || !matches!(db.published_input(&InputKey::DefinitionSource(directive.definition())),Some((InputValue::DefinitionSource(parse),_))if parse==&selected.outline.parse)
++                {
++                    return Err(fault("Type prelude custom actual header/source changed"));
++                };
++                if !matches!(db.published_input(&InputKey::DeclarationContext(directive.definition())),Some((InputValue::DeclarationContext(context),_))if context.scope==directive.import().scope)
++                {
++                    return Err(fault("Type prelude custom declaration context differs"));
++                }
++                stamp(
++                    db,
++                    &InputKey::DeclarationContext(directive.definition()),
++                    &mut stamps,
++                    &mut bytes,
++                    maximum,
++                )?;
++                stamp(
++                    db,
++                    &InputKey::DefinitionHeader(directive.definition()),
++                    &mut stamps,
++                    &mut bytes,
++                    maximum,
++                )?;
++                stamp(
++                    db,
++                    &InputKey::DefinitionSource(directive.definition()),
++                    &mut stamps,
++                    &mut bytes,
++                    maximum,
++                )?;
++                let target_key = SealKey {
++                    domain: SealDomain::Scope {
++                        id: module.fingerprint(),
++                        namespace: Namespace::Type,
++                    },
++                    unit_graph: key.unit_graph,
++                    epoch: key.epoch,
++                };
++                let Some(target) = current_scope(
++                    db,
++                    &target_key,
++                    module,
++                    graph,
++                    &mut stamps,
++                    &mut bytes,
++                    maximum,
++                )?
++                else {
++                    return Ok(TypePreludeAbsenceOutcome::Need(
++                        TypePreludePrerequisite::TargetTypeNamespace(module.clone()),
++                    ));
++                };
++                let Some((InputValue::SourceDependencies(dependencies), _)) =
++                    db.published_input(&InputKey::SourceDependencies)
++                else {
++                    return Err(fault("custom Type prelude source graph disappeared"));
++                };
++                let Some(target_root) = dependencies.root_for(module.crate_key) else {
++                    return Ok(TypePreludeAbsenceOutcome::Need(
++                        TypePreludePrerequisite::RetainedSource(module.crate_key),
++                    ));
++                };
++                if !target.sources.contains(target_root)
++                    || target.scope.as_ref().is_none_or(|scope| {
++                        scope.edition != target_root.outline.parse.profile.edition
++                    })
++                    || !matches!(db.published_input(&InputKey::CapturedSource(target_root.location_identity())),Some((InputValue::CapturedSource(actual),_))if actual==target_root)
++                    || !matches!(db.published_input(&InputKey::CrateCfg(module.crate_key)),Some((InputValue::CrateCfg(cfg),_))if cfg.fingerprint()==target_root.outline.cfg)
++                {
++                    return Err(fault(
++                        "custom Type prelude actual target owning source/profile/cfg differs",
++                    ));
++                }
++                for key in [
++                    InputKey::CapturedSource(target_root.location_identity()),
++                    InputKey::SourceBlob(target_root.outline.parse.content),
++                    InputKey::CrateCfg(module.crate_key),
++                ] {
++                    stamp(db, &key, &mut stamps, &mut bytes, maximum)?;
++                }
++                charge(
++                    &mut bytes,
++                    module
++                        .heap_bytes()
++                        .checked_add(name.len())
++                        .ok_or_else(limit)?,
++                    maximum,
++                )?;
++                let found = target
++                    .scope
++                    .as_ref()
++                    .ok_or_else(|| fault("custom Type prelude target scope absent"))?
++                    .lookup(&BucketKey {
++                        scope: module.clone(),
++                        namespace: Namespace::Type,
++                        name: name.into(),
++                    })?;
++                if found != NameLookup::Absent {
++                    return Ok(TypePreludeAbsenceOutcome::Need(
++                        TypePreludePrerequisite::Member(found),
++                    ));
++                };
++            }
++        }
++        let mut encoded = StableEncoder::new("lrr/v1/type-prelude-absence-name");
++        encoded.string(name);
++        Ok(TypePreludeAbsenceOutcome::Absent(Self {
++            receipt: receipt.identity(),
++            name: encoded.finish(),
++            stamps,
++            revision: db.revision(),
++            bytes,
++        }))
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn dependencies(&self) -> &BTreeMap<InputKey, Digest> {
++        &self.stamps
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/current-type-prelude-absence");
++        e.digest(self.receipt);
++        e.digest(self.name);
++        e.u64(u64::try_from(self.stamps.len()).expect("bounded Type prelude input count"));
++        for (key, value) in &self.stamps {
++            e.record(key);
++            e.digest(*value)
++        }
++        e.finish()
++    }
++    pub(crate) fn revalidate_inputs(&self, db: &Database) -> Result<(), Diagnostic> {
++        db.require_coordinator()?;
++        if self.revision != db.revision() {
++            return Err(fault("Type prelude publication barrier changed"));
++        }
++        for (key, value) in &self.stamps {
++            if db
++                .published_input(key)
++                .is_none_or(|(_, actual)| actual != *value)
++            {
++                return Err(fault("Type prelude current input differs"));
++            }
++        }
++        Ok(())
++    }
++    #[cfg(test)]
++    pub(crate) fn revalidate(
++        &self,
++        db: &Database,
++        owner: &SourceDeclarative,
++        scope: &ScopeKey,
++        key: &SealKey,
++        name: &str,
++        maximum: usize,
++    ) -> Result<(), Diagnostic> {
++        if self.revision != db.revision() {
++            return Err(fault("Type prelude publication barrier changed"));
++        };
++        for (key, value) in &self.stamps {
++            if db
++                .published_input(key)
++                .is_none_or(|(_, current)| current != *value)
++            {
++                return Err(fault("Type prelude current input differs"));
++            }
++        }
++        match Self::capture_current(
++            db,
++            owner,
++            scope,
++            key,
++            name,
++            maximum.checked_sub(self.bytes).ok_or_else(limit)?,
++        )? {
++            TypePreludeAbsenceOutcome::Absent(current) if self.identity() == current.identity() => {
++                Ok(())
++            }
++            _ => Err(fault("Type prelude source/policy/selection differs")),
++        }
++    }
++}
++
++#[cfg(test)]
++#[path = "type_prelude_admission_tests.rs"]
++mod tests;
+--- /dev/null
++++ b/crates/lrr/src/source/changes/crate_policy.rs
+@@ -0,0 +1,373 @@
++//! Retained owning-crate policy, separate from namespace/macro authority.
++use super::*;
++use crate::{
++    core::digest::{Digest, StableEncode, StableEncoder},
++    syntax::{macro_prelude::MacroPreludePolicy, parse::ParsedFile},
++};
++struct Row {
++    source: PreparedSourceView,
++    selection: SourceSelection,
++    origin: Digest,
++}
++pub(crate) struct PreparedCratePreludePolicy {
++    endpoint: PreparedSourceView,
++    root: PreparedSourceView,
++    rows: Vec<Row>,
++    standard: bool,
++    disabled: Vec<Vec<String>>,
++    retained_epoch: Option<u64>,
++    current_epoch: Option<u64>,
++    bytes: usize,
++}
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-CATALOG-INCOMPLETE", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new("LRR-E-METADATA-LIMIT", "owning crate policy budget".into())
++}
++fn charge(bytes: &mut usize, n: usize, maximum: usize) -> Result<(), Diagnostic> {
++    *bytes = bytes
++        .checked_add(n)
++        .filter(|n| *n <= maximum)
++        .ok_or_else(limit)?;
++    Ok(())
++}
++fn mapped_disabled(
++    out: &mut Vec<Vec<String>>,
++    policy: &MacroPreludePolicy,
++    base: &[String],
++    target: &[String],
++    bytes: &mut usize,
++    maximum: usize,
++) -> Result<(), Diagnostic> {
++    for relative in &policy.disabled {
++        let count = base
++            .len()
++            .checked_add(relative.len())
++            .filter(|n| *n <= 256)
++            .ok_or_else(limit)?;
++        let path = base.iter().chain(relative).collect::<Vec<_>>();
++        let inherited = path.len() <= target.len() && path.iter().zip(target).all(|(a, b)| *a == b);
++        let below = target.len() <= path.len() && path.iter().zip(target).all(|(a, b)| *a == b);
++        if !inherited && !below {
++            continue;
++        }
++        if out.len() >= 100_000 {
++            return Err(limit());
++        }
++        let suffix = if inherited {
++            &path[count..]
++        } else {
++            &path[target.len()..]
++        };
++        let n = suffix
++            .iter()
++            .try_fold(128usize, |n, s| {
++                n.checked_add(s.capacity())
++                    .and_then(|n| n.checked_add(std::mem::size_of::<String>()))
++            })
++            .ok_or_else(limit)?;
++        charge(bytes, n, maximum)?;
++        out.try_reserve(1).map_err(|_| limit())?;
++        out.push(suffix.iter().map(|s| (*s).clone()).collect());
++    }
++    Ok(())
++}
++impl PreparedCratePreludePolicy {
++    pub(crate) fn capture_retained(
++        view: &PreparedSourceView,
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        if byte_limit > 32 * 1024 * 1024 {
++            return Err(limit());
++        }
++        let mut bytes = std::mem::size_of::<Self>()
++            .checked_add(256)
++            .and_then(|n| n.checked_add(256 * std::mem::size_of::<&String>()))
++            .and_then(|n| n.checked_add(256 * std::mem::size_of::<(&PreparedSourceView, Digest)>()))
++            .filter(|n| *n <= byte_limit)
++            .ok_or_else(limit)?;
++        let target = &view.selection().outline.module_path;
++        let unit = view.selection().outline.crate_key;
++        let profile = &view.selection().outline.parse.profile;
++        let cfg = view.selection().outline.cfg;
++        let mut cursor = view;
++        let mut borrowed = Vec::<(&PreparedSourceView, Digest)>::new();
++        let mut disabled = Vec::new();
++        let mut retained_epoch = None;
++        loop {
++            if borrowed.len() >= 256
++                || borrowed.iter().any(|(old, _)| {
++                    old.same_publication(cursor) && old.selection() == cursor.selection()
++                })
++            {
++                return Err(fault("owning crate lineage absent/cyclic or over budget"));
++            }
++            cursor.require_declaration_syntax()?;
++            if cursor.selection().outline.crate_key != unit
++                || &cursor.selection().outline.parse.profile != profile
++                || cursor.selection().outline.cfg != cfg
++                || !target.starts_with(&cursor.selection().outline.module_path)
++            {
++                return Err(fault(
++                    "owning crate lineage unit/profile/cfg/module differs",
++                ));
++            }
++            let row_bytes = cursor
++                .selection()
++                .metadata_bytes()?
++                .checked_mul(3)
++                .and_then(|n| n.checked_add(std::mem::size_of::<Row>() + 128))
++                .ok_or_else(limit)?;
++            charge(&mut bytes, row_bytes, byte_limit)?;
++            borrowed.try_reserve(1).map_err(|_| limit())?;
++            let local = cursor.local_macro_prelude_policy()?;
++            mapped_disabled(
++                &mut disabled,
++                &local,
++                &cursor.selection().outline.module_path,
++                target,
++                &mut bytes,
++                byte_limit,
++            )?;
++            let mut e = StableEncoder::new("lrr/v1/crate-policy-lineage-row");
++            e.digest(cursor.selection().location_identity());
++            e.record(&cursor.selection().outline.parse);
++            e.digest(cfg);
++            match (
++                &cursor.state._module_origin,
++                &cursor.state._ordinary_module_origin,
++            ) {
++                (Some(origin), None) => {
++                    let demand = origin.declaration();
++                    let items = origin.parent();
++                    let parent = origin.caller();
++                    if items.epoch() == 0
++                        || retained_epoch.is_some_and(|epoch| epoch != items.epoch())
++                        || items
++                            .record()
++                            .key()
++                            .procedural_epoch
++                            .is_some_and(|epoch| epoch != items.epoch())
++                    {
++                        return Err(fault("owning crate generated lineage epoch differs"));
++                    }
++                    retained_epoch = Some(items.epoch());
++                    items.record().key().validate()?;
++                    if demand.scope() != &cursor.outline().root_scope
++                        || demand.header() != origin.parent_header()
++                        || demand.producer() != origin.producer()
++                        || !items.items().iter().any(|h| &h.key == demand.header())
++                    {
++                        return Err(fault(
++                            "owning crate generated declaration/header lineage differs",
++                        ));
++                    }
++                    let suffix = &demand.request().module_path;
++                    let base = demand
++                        .scope()
++                        .module_path
++                        .strip_suffix(suffix.as_slice())
++                        .filter(|base| {
++                            !suffix.is_empty()
++                                && base.starts_with(&parent.selection().outline.module_path)
++                        })
++                        .ok_or_else(|| {
++                            fault("owning crate generated module scope/request differs")
++                        })?;
++                    let selected = origin.capture().record().selected()?;
++                    if selected.location().unit != unit
++                        || selected.location().path != cursor.selection().path
++                        || selected.blob().content() != cursor.selection().outline.parse.content
++                    {
++                        return Err(fault("owning crate generated capture/source differs"));
++                    }
++                    let parsed = ParsedFile::from_generated_items(items)?;
++                    let generated = parsed.macro_prelude_policy(parent.captured_macro_cfg()?)?;
++                    if !generated.standard || generated.disabled.iter().any(Vec::is_empty) {
++                        return Err(fault(
++                            "generated crate-level policy requires an owning declaration contract",
++                        ));
++                    }
++                    mapped_disabled(
++                        &mut disabled,
++                        &generated,
++                        base,
++                        target,
++                        &mut bytes,
++                        byte_limit,
++                    )?;
++                    e.u8(1);
++                    e.record(items.record().key());
++                    e.digest(items.record().output());
++                    e.u64(items.epoch());
++                    e.record(demand.header());
++                    e.digest(demand.producer());
++                    e.bytes(&demand.site().0);
++                    e.digest(origin.capture().record().identity());
++                    borrowed.push((cursor, e.finish()));
++                    cursor = parent;
++                }
++                (None, Some(origin)) => {
++                    let declaration = origin.declaration();
++                    let parent = declaration.source();
++                    let selected = origin.capture().record().selected()?;
++                    if declaration.scope() != &cursor.outline().root_scope
++                        || selected.location().unit != unit
++                        || selected.location().path != cursor.selection().path
++                        || selected.blob().content() != cursor.selection().outline.parse.content
++                    {
++                        return Err(fault(
++                            "owning crate ordinary declaration/capture lineage differs",
++                        ));
++                    }
++                    e.u8(2);
++                    e.record(declaration);
++                    e.digest(origin.capture().record().identity());
++                    e.digest(origin.compile_environment());
++                    borrowed.push((cursor, e.finish()));
++                    cursor = parent;
++                }
++                (None, None) => {
++                    if !cursor.selection().outline.module_path.is_empty() {
++                        return Err(fault("owning crate root requires retained module origin"));
++                    }
++                    let file = cursor
++                        .state
++                        .files
++                        .get(&cursor.location)
++                        .ok_or_else(|| fault("owning crate original source absent"))?;
++                    if file.parsed.generated_origin.is_some() {
++                        return Err(fault("owning crate original root has generated origin"));
++                    }
++                    let graph = cursor.source_dependencies()?;
++                    if graph.root_for(unit) != Some(cursor.selection()) {
++                        return Err(fault(
++                            "owning crate root not selected by actual source dependency graph",
++                        ));
++                    }
++                    e.u8(0);
++                    e.digest(graph.fingerprint());
++                    borrowed.push((cursor, e.finish()));
++                    break;
++                }
++                _ => {
++                    return Err(fault(
++                        "owning crate source has conflicting retained origins",
++                    ));
++                }
++            }
++        }
++        charge(
++            &mut bytes,
++            view.selection()
++                .metadata_bytes()?
++                .checked_mul(2)
++                .ok_or_else(limit)?,
++            byte_limit,
++        )?;
++        charge(
++            &mut bytes,
++            cursor
++                .selection()
++                .metadata_bytes()?
++                .checked_mul(2)
++                .ok_or_else(limit)?,
++            byte_limit,
++        )?;
++        let standard = cursor.local_macro_prelude_policy()?.standard;
++        disabled.sort();
++        disabled.dedup();
++        let mut rows = Vec::new();
++        rows.try_reserve_exact(borrowed.len())
++            .map_err(|_| limit())?;
++        for (source, origin) in borrowed {
++            rows.push(Row {
++                source: source.share(),
++                selection: source.selection().clone(),
++                origin,
++            })
++        }
++        Ok(Self {
++            endpoint: view.share(),
++            root: cursor.share(),
++            rows,
++            standard,
++            disabled,
++            retained_epoch,
++            current_epoch: None,
++            bytes,
++        })
++    }
++    pub(crate) fn capture_current(
++        view: &PreparedSourceView,
++        epoch: u64,
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        if epoch == 0 {
++            return Err(fault("owning crate policy current epoch absent"));
++        }
++        let mut prepared = Self::capture_retained(view, byte_limit)?;
++        if prepared.retained_epoch.is_some_and(|e| e != epoch) {
++            return Err(fault("owning crate policy current generated epoch differs"));
++        }
++        prepared.current_epoch = Some(epoch);
++        Ok(prepared)
++    }
++    pub(crate) fn revalidate_current(
++        &self,
++        view: &PreparedSourceView,
++        epoch: u64,
++    ) -> Result<(), Diagnostic> {
++        let current = Self::capture_current(view, epoch, self.bytes)?;
++        if self.current_epoch != Some(epoch)
++            || !self.endpoint.same_publication(view)
++            || self.endpoint.selection() != view.selection()
++            || !self.root.same_publication(&current.root)
++            || self.root.selection() != current.root.selection()
++            || self.rows.len() != current.rows.len()
++            || !self.rows.iter().zip(&current.rows).all(|(a, b)| {
++                a.source.same_publication(&b.source)
++                    && a.selection == b.selection
++                    && a.origin == b.origin
++            })
++            || self.identity() != current.identity()
++        {
++            return Err(fault("owning crate policy source/current lineage changed"));
++        }
++        Ok(())
++    }
++    /// Actual captured lineage evidence, never a caller-supplied completeness list.
++    pub(crate) fn source_selections(&self) -> impl Iterator<Item = &SourceSelection> {
++        self.rows.iter().map(|row| &row.selection)
++    }
++    pub(crate) fn owning_root_selection(&self) -> &SourceSelection {
++        self.root.selection()
++    }
++    pub(crate) fn policy(&self) -> MacroPreludePolicy {
++        MacroPreludePolicy {
++            standard: self.standard,
++            disabled: self.disabled.clone(),
++        }
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/owning-crate-prelude-policy");
++        e.bool(self.standard);
++        e.sequence(&self.disabled, |e, path| {
++            e.sequence(path, |e, name| e.string(name))
++        });
++        e.option(&self.current_epoch, |e, n| e.u64(*n));
++        e.u64(self.rows.len() as u64);
++        for row in &self.rows {
++            e.digest(row.origin)
++        }
++        e.finish()
++    }
++}
++
++#[cfg(test)]
++#[path = "crate_policy_tests.rs"]
++mod tests;
+--- /dev/null
++++ b/crates/lrr/src/syntax/generated_type_site.rs
+@@ -0,0 +1,381 @@
++//! Exact generated type sites from pinned owned syntax, never printed-source reparsing.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    expand::{
++        generated_items::GeneratedItems, identity::GeneratedItemKey, record::ExpansionRecord,
++    },
++    source::snapshot::CfgSet,
++    syntax::{
++        ast_adapter::{range, semantic_name},
++        outline::ScopeKey,
++        parse::ParsedFile,
++        spans::SourceRange,
++        token_wire::{SpanRecord, TokenTree},
++    },
++};
++use ra_ap_syntax::{
++    AstNode,
++    ast::{self, HasGenericArgs},
++};
++use std::sync::Arc;
++const MAX_BYTES: usize = 32 * 1024 * 1024;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-GENERATED-TYPE-SITE", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "generated written type budget".into(),
++    )
++}
++fn charge(bytes: &mut usize, n: usize, maximum: usize) -> Result<(), Diagnostic> {
++    *bytes = bytes
++        .checked_add(n)
++        .filter(|n| *n <= maximum)
++        .ok_or_else(limit)?;
++    Ok(())
++}
++#[derive(Debug, Clone, Copy, Eq, PartialEq)]
++pub(crate) enum GeneratedTypeRole {
++    AliasTarget,
++}
++#[derive(Debug, Clone, Copy, Eq, PartialEq)]
++pub(crate) enum TypeKeyword {
++    Crate,
++    SelfModule,
++    SuperModule,
++    DollarCrate,
++}
++pub(crate) enum GeneratedTypeSegmentKind {
++    Name(String),
++    Keyword(TypeKeyword),
++}
++pub(crate) struct GeneratedTypeSegment {
++    kind: GeneratedTypeSegmentKind,
++    range: SourceRange,
++    span: SpanRecord,
++}
++impl GeneratedTypeSegment {
++    pub(crate) fn kind(&self) -> &GeneratedTypeSegmentKind {
++        &self.kind
++    }
++    pub(crate) fn span(&self) -> &SpanRecord {
++        &self.span
++    }
++}
++pub(crate) enum GeneratedTypeSyntax {
++    Unit,
++    Path(Vec<GeneratedTypeSegment>),
++    GenericOrProjection,
++    AbsolutePath,
++    Unsupported,
++}
++pub(crate) struct WrittenGeneratedType {
++    record: Arc<ExpansionRecord>,
++    member: GeneratedItemKey,
++    scope: ScopeKey,
++    role: GeneratedTypeRole,
++    declaration: SourceRange,
++    declaration_fingerprint: Digest,
++    header_fingerprint: Digest,
++    range: SourceRange,
++    shape: GeneratedTypeSyntax,
++    bytes: usize,
++}
++fn actual_dollar_token(
++    nodes: &[TokenTree],
++    wanted: crate::syntax::token_wire::Key,
++    depth: usize,
++) -> Result<bool, Diagnostic> {
++    if depth > 256 {
++        return Err(limit());
++    }
++    for node in nodes {
++        match node {
++            TokenTree::Ident { text, raw, span }
++                if *span == wanted && !*raw && text == "$crate" =>
++            {
++                return Ok(true);
++            }
++            TokenTree::Group { children, .. }
++                if actual_dollar_token(children, wanted, depth + 1)? =>
++            {
++                return Ok(true);
++            }
++            _ => {}
++        }
++    }
++    Ok(false)
++}
++impl WrittenGeneratedType {
++    pub(crate) fn capture(
++        items: &GeneratedItems,
++        owner: &ScopeKey,
++        cfg: &CfgSet,
++        member: &GeneratedItemKey,
++        role: GeneratedTypeRole,
++        maximum: usize,
++    ) -> Result<Self, Diagnostic> {
++        if maximum > MAX_BYTES || maximum < std::mem::size_of::<Self>() {
++            return Err(limit());
++        }
++        member.validate()?;
++        let header = items
++            .items()
++            .iter()
++            .find(|h| h.key == *member)
++            .ok_or_else(|| fault("written type actual generated member absent"))?;
++        let mut bytes = std::mem::size_of::<Self>();
++        charge(&mut bytes, items.metadata_bytes()?, maximum)?;
++        charge(&mut bytes, owner.heap_bytes(), maximum)?;
++        charge(
++            &mut bytes,
++            member
++                .structural_path
++                .len()
++                .checked_mul(4)
++                .ok_or_else(limit)?,
++            maximum,
++        )?;
++        let transient = items
++            .text()
++            .len()
++            .checked_mul(128)
++            .and_then(|n| n.checked_add(items.syntax_events().len().checked_mul(128)?))
++            .and_then(|n| n.checked_add(items.items().len().checked_mul(4096)?))
++            .ok_or_else(limit)?;
++        charge(&mut bytes, transient, maximum)?;
++        let parsed = ParsedFile::from_generated_items(items)?;
++        let outline = parsed.outline(owner.crate_key, owner.module_path.clone(), cfg)?;
++        if parsed
++            .estimated_bytes()
++            .checked_add(outline.estimated_bytes())
++            .is_none_or(|n| n > transient)
++        {
++            return Err(limit());
++        }
++        let item = outline
++            .items
++            .iter()
++            .find(|i| {
++                i.declaration_span.start == header.start && i.declaration_span.end == header.end
++            })
++            .ok_or_else(|| fault("written type exact generated declaration absent"))?;
++        let syntax = parsed
++            .parsed
++            .tree()
++            .syntax()
++            .descendants()
++            .find(|n| {
++                range(n.text_range()) == item.declaration_span && ast::TypeAlias::can_cast(n.kind())
++            })
++            .ok_or_else(|| fault("written type declaration syntax prerequisite"))?;
++        let generic_owner = syntax.children().any(|n| {
++            ast::GenericParamList::can_cast(n.kind()) || ast::WhereClause::can_cast(n.kind())
++        });
++        let ty = match role {
++            GeneratedTypeRole::AliasTarget => ast::TypeAlias::cast(syntax).and_then(|a| a.ty()),
++        }
++        .ok_or_else(|| fault("written type exact owning role absent"))?;
++        let site = range(ty.syntax().text_range());
++        if !item.declaration_span.contains(site) {
++            return Err(fault("written type escapes actual declaration"));
++        }
++        let shape = if generic_owner {
++            GeneratedTypeSyntax::GenericOrProjection
++        } else {
++            match ty {
++                ast::Type::TupleType(tuple) if tuple.fields().next().is_none() => {
++                    GeneratedTypeSyntax::Unit
++                }
++                ast::Type::PathType(path) => {
++                    let mut cursor = path
++                        .path()
++                        .ok_or_else(|| fault("written generated path absent"))?;
++                    let mut segments = Vec::new();
++                    let mut unsupported = false;
++                    let mut absolute = false;
++                    loop {
++                        if segments.len() == 256 {
++                            return Err(limit());
++                        }
++                        let part = cursor
++                            .segment()
++                            .ok_or_else(|| fault("written path segment absent"))?;
++                        if part.generic_arg_list().is_some()
++                            || part.parenthesized_arg_list().is_some()
++                            || part.ret_type().is_some()
++                            || matches!(
++                                part.kind(),
++                                Some(ast::PathSegmentKind::Type { .. })
++                                    | Some(ast::PathSegmentKind::SelfTypeKw)
++                                    | None
++                            )
++                        {
++                            unsupported = true;
++                            break;
++                        }
++                        let segment_range = range(part.syntax().text_range());
++                        charge(
++                            &mut bytes,
++                            std::mem::size_of::<GeneratedTypeSegment>()
++                                .checked_add(
++                                    64usize
++                                        .checked_mul(std::mem::size_of::<&SpanRecord>())
++                                        .ok_or_else(limit)?,
++                                )
++                                .ok_or_else(limit)?,
++                            maximum,
++                        )?;
++                        let projected = items.project_source_spans(segment_range)?;
++                        if projected.len() != 1 {
++                            return Err(fault(
++                                "generated path segment lacks one exact token origin",
++                            ));
++                        }
++                        let span = projected[0];
++                        charge(&mut bytes, span.source.path.capacity(), maximum)?;
++                        let kind = match part.kind() {
++                            Some(ast::PathSegmentKind::Name(name)) => {
++                                let raw = name.syntax().text().to_string();
++                                charge(&mut bytes, raw.capacity(), maximum)?;
++                                if raw == "$crate" {
++                                    if !actual_dollar_token(items.tokens().roots(), span.key(), 0)?
++                                    {
++                                        return Err(fault(
++                                            "printed dollar-crate segment lacks actual retained special token",
++                                        ));
++                                    }
++                                    GeneratedTypeSegmentKind::Keyword(TypeKeyword::DollarCrate)
++                                } else {
++                                    let normalized = semantic_name(&raw).ok_or_else(|| {
++                                        fault("written type semantic identifier absent")
++                                    })?;
++                                    charge(&mut bytes, normalized.capacity(), maximum)?;
++                                    GeneratedTypeSegmentKind::Name(normalized)
++                                }
++                            }
++                            Some(ast::PathSegmentKind::CrateKw) => {
++                                GeneratedTypeSegmentKind::Keyword(TypeKeyword::Crate)
++                            }
++                            Some(ast::PathSegmentKind::SelfKw) => {
++                                GeneratedTypeSegmentKind::Keyword(TypeKeyword::SelfModule)
++                            }
++                            Some(ast::PathSegmentKind::SuperKw) => {
++                                GeneratedTypeSegmentKind::Keyword(TypeKeyword::SuperModule)
++                            }
++                            _ => {
++                                unsupported = true;
++                                GeneratedTypeSegmentKind::Name(String::new())
++                            }
++                        };
++                        segments.try_reserve_exact(1).map_err(|_| limit())?;
++                        segments.push(GeneratedTypeSegment {
++                            kind,
++                            range: segment_range,
++                            span: span.clone(),
++                        });
++                        if let Some(parent) = cursor.qualifier() {
++                            cursor = parent;
++                        } else {
++                            absolute = cursor.colon_colon_token().is_some();
++                            break;
++                        }
++                    }
++                    segments.reverse();
++                    if unsupported {
++                        GeneratedTypeSyntax::GenericOrProjection
++                    } else if absolute {
++                        GeneratedTypeSyntax::AbsolutePath
++                    } else {
++                        GeneratedTypeSyntax::Path(segments)
++                    }
++                }
++                _ => GeneratedTypeSyntax::Unsupported,
++            }
++        };
++        charge(&mut bytes, item.scope.heap_bytes(), maximum)?;
++        Ok(Self {
++            record: items.record_input(),
++            member: member.clone(),
++            scope: item.scope.clone(),
++            role,
++            declaration: item.declaration_span,
++            declaration_fingerprint: item.def_key.fingerprint(),
++            header_fingerprint: item.header.fingerprint(),
++            range: site,
++            shape,
++            bytes,
++        })
++    }
++    pub(crate) fn shape(&self) -> &GeneratedTypeSyntax {
++        &self.shape
++    }
++    pub(crate) fn scope(&self) -> &ScopeKey {
++        &self.scope
++    }
++    #[cfg(test)]
++    pub(crate) fn record(&self) -> &ExpansionRecord {
++        &self.record
++    }
++    pub(crate) fn declaration(&self) -> SourceRange {
++        self.declaration
++    }
++    pub(crate) fn declaration_fingerprint(&self) -> Digest {
++        self.declaration_fingerprint
++    }
++    pub(crate) fn header_fingerprint(&self) -> Digest {
++        self.header_fingerprint
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/generated-written-type");
++        e.record(&self.record.descriptor());
++        e.record(&self.member);
++        e.record(&self.scope);
++        e.u8(match self.role {
++            GeneratedTypeRole::AliasTarget => 2,
++        });
++        e.u32(self.declaration.start);
++        e.u32(self.declaration.end);
++        e.digest(self.declaration_fingerprint);
++        e.digest(self.header_fingerprint);
++        e.u32(self.range.start);
++        e.u32(self.range.end);
++        match &self.shape {
++            GeneratedTypeSyntax::Unit => e.u8(0),
++            GeneratedTypeSyntax::GenericOrProjection => e.u8(2),
++            GeneratedTypeSyntax::Unsupported => e.u8(3),
++            GeneratedTypeSyntax::AbsolutePath => e.u8(4),
++            GeneratedTypeSyntax::Path(parts) => {
++                e.u8(1);
++                e.sequence(parts, |e, p| {
++                    match &p.kind {
++                        GeneratedTypeSegmentKind::Name(n) => {
++                            e.u8(0);
++                            e.string(n)
++                        }
++                        GeneratedTypeSegmentKind::Keyword(k) => {
++                            e.u8(1);
++                            e.u8(match k {
++                                TypeKeyword::Crate => 0,
++                                TypeKeyword::SelfModule => 1,
++                                TypeKeyword::SuperModule => 2,
++                                TypeKeyword::DollarCrate => 3,
++                            })
++                        }
++                    };
++                    e.u32(p.range.start);
++                    e.u32(p.range.end);
++                    e.digest(Digest(p.span.key().0));
++                });
++            }
++        }
++        e.finish()
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/syntax/type_prelude_sites.rs
+@@ -0,0 +1,249 @@
++//! Syntactic prelude-import sites only. Semantic Attribute/module selection is separate.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    source::{manifest::ItemKind, snapshot::CfgSet},
++    syntax::{
++        imports::{ImportKind, SourceImport},
++        outline::Outline,
++        parse::ParsedFile,
++        spans::SourceRange,
++    },
++};
++use ra_ap_syntax::{
++    AstNode,
++    ast::{self, HasAttrs},
++};
++const MAX_BYTES: usize = 32 * 1024 * 1024;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-TYPE-PRELUDE-SOURCE", message.into())
++}
++#[derive(Debug, Clone)]
++pub(crate) struct TypePreludeDirective {
++    source: SourceImport,
++    meta: SourceRange,
++    definition: Digest,
++    header: Digest,
++}
++impl TypePreludeDirective {
++    pub(crate) fn import(&self) -> &SourceImport {
++        &self.source
++    }
++    pub(crate) fn meta(&self) -> SourceRange {
++        self.meta
++    }
++    pub(crate) fn definition(&self) -> Digest {
++        self.definition
++    }
++    pub(crate) fn header(&self) -> Digest {
++        self.header
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        self.fingerprint()
++    }
++    pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
++        self.source.path.iter().try_fold(
++            std::mem::size_of::<Self>()
++                .checked_add(self.source.scope.heap_bytes())
++                .and_then(|n| n.checked_add(128))
++                .ok_or_else(|| fault("prelude directive metadata overflow"))?,
++            |n, part| {
++                n.checked_add(std::mem::size_of_val(part))
++                    .and_then(|n| {
++                        n.checked_add(match part {
++                            crate::syntax::imports::ImportSegment::Name(name) => name.capacity(),
++                            _ => 0,
++                        })
++                    })
++                    .ok_or_else(|| fault("prelude directive metadata overflow"))
++            },
++        )
++    }
++}
++impl StableEncode for TypePreludeDirective {
++    const DOMAIN: &'static str = "lrr/v1/type-prelude-written-directive";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.record(&self.source);
++        e.u32(self.meta.start);
++        e.u32(self.meta.end);
++        e.digest(self.definition);
++        e.digest(self.header)
++    }
++}
++pub(crate) enum TypePreludeSites {
++    Captured(Vec<TypePreludeDirective>),
++    NeedLocal(SourceRange),
++    NeedNonGlob(SourceRange),
++}
++impl ParsedFile {
++    /// Uses existing parsed declaration syntax and the exact cfg-owned outline.
++    /// This prepares no guest body/IR and evaluates no argument or attribute.
++    pub(crate) fn type_prelude_sites(
++        &self,
++        outline: &Outline,
++        cfg: &CfgSet,
++        maximum: usize,
++    ) -> Result<TypePreludeSites, Diagnostic> {
++        if self.key().content != outline.content
++            || self.key().profile != outline.profile
++            || cfg.fingerprint() != outline.cfg
++            || maximum > MAX_BYTES
++        {
++            return Err(fault("prelude directive parse/outline/cfg differs"));
++        }
++        let mut out = Vec::new();
++        let mut bytes = 0usize;
++        let mut visited = 0usize;
++        for import in self
++            .parsed
++            .tree()
++            .syntax()
++            .descendants()
++            .filter_map(ast::Use::cast)
++        {
++            visited = visited
++                .checked_add(1)
++                .filter(|n| *n <= 100_000)
++                .ok_or_else(|| fault("prelude directive count limit"))?;
++            let attribute_count = import.attrs().count();
++            bytes = bytes
++                .checked_add(
++                    attribute_count
++                        .checked_mul(
++                            std::mem::size_of::<ast::Meta>()
++                                .checked_add(128)
++                                .ok_or_else(|| fault("prelude attribute size overflow"))?,
++                        )
++                        .ok_or_else(|| fault("prelude attribute count overflow"))?,
++                )
++                .filter(|n| *n <= maximum)
++                .ok_or_else(|| fault("prelude attribute metadata limit"))?;
++            let mut metas = Vec::new();
++            metas
++                .try_reserve_exact(attribute_count)
++                .map_err(|_| fault("prelude attribute allocation"))?;
++            for attr in import.attrs() {
++                if let Some(meta) = attr.meta() {
++                    if metas.len() >= 100_000 {
++                        return Err(fault("prelude attribute count limit"));
++                    }
++                    metas
++                        .try_reserve(1)
++                        .map_err(|_| fault("prelude attribute allocation"))?;
++                    metas.push(meta)
++                }
++            }
++            let (enabled, metas) = crate::syntax::attributes::effective_metas(metas, cfg)?;
++            if !enabled {
++                continue;
++            };
++            let mut selected = None;
++            for meta in &metas {
++                if meta
++                    .simple_name()
++                    .is_some_and(|name| name.as_str().trim_start_matches("r#") == "prelude_import")
++                {
++                    if selected.replace(meta).is_some() {
++                        return Err(fault(
++                            "prelude import has multiple semantic marker candidates",
++                        ));
++                    }
++                }
++            }
++            let Some(selected) = selected else { continue };
++            let item_range = crate::syntax::ast_adapter::range(import.syntax().text_range());
++            let Some(item) = outline.items.iter().find(|row| {
++                row.def_key.item_kind == ItemKind::Import && row.declaration_span == item_range
++            }) else {
++                // A cfg-excluded containing item cannot produce a live prelude.
++                let mut excluded = false;
++                let mut depth = 0usize;
++                for node in import.syntax().ancestors().skip(1) {
++                    depth = depth
++                        .checked_add(1)
++                        .filter(|n| *n <= 256)
++                        .ok_or_else(|| fault("prelude containing declaration depth"))?;
++                    bytes = bytes
++                        .checked_add(
++                            node.children()
++                                .count()
++                                .checked_mul(256)
++                                .ok_or_else(|| fault("prelude containing metadata overflow"))?,
++                        )
++                        .filter(|n| *n <= maximum)
++                        .ok_or_else(|| fault("prelude containing metadata limit"))?;
++                    let attrs = if let Some(module) = ast::Module::cast(node.clone()) {
++                        Some(module.attrs().filter_map(|a| a.meta()).collect())
++                    } else if let Some(function) = ast::Fn::cast(node.clone()) {
++                        Some(function.attrs().filter_map(|a| a.meta()).collect())
++                    } else if let Some(value) = ast::Const::cast(node.clone()) {
++                        Some(value.attrs().filter_map(|a| a.meta()).collect())
++                    } else if let Some(value) = ast::Static::cast(node) {
++                        Some(value.attrs().filter_map(|a| a.meta()).collect())
++                    } else {
++                        None
++                    };
++                    if let Some(attrs) = attrs {
++                        if !crate::syntax::attributes::effective_metas(attrs, cfg)?.0 {
++                            excluded = true;
++                            break;
++                        }
++                    }
++                }
++                if excluded {
++                    continue;
++                };
++                return Ok(TypePreludeSites::NeedLocal(item_range));
++            };
++            let definition = item.def_key.fingerprint();
++            let mut leaves = outline
++                .imports
++                .iter()
++                .filter(|row| row.identity == definition);
++            let Some(leaf) = leaves.next() else {
++                return Err(fault("prelude directive exact import leaf absent"));
++            };
++            if leaves.next().is_some() || leaf.kind != ImportKind::Glob {
++                return Ok(TypePreludeSites::NeedNonGlob(item_range));
++            };
++            let meta = crate::syntax::ast_adapter::range(selected.syntax().text_range());
++            let charge = std::mem::size_of::<TypePreludeDirective>()
++                .checked_add(leaf.scope.heap_bytes())
++                .and_then(|n| n.checked_add(128))
++                .and_then(|n| n.checked_add(item.header.estimated_bytes()))
++                .ok_or_else(|| fault("prelude directive metadata overflow"))?;
++            bytes = bytes
++                .checked_add(charge)
++                .filter(|n| *n <= maximum)
++                .ok_or_else(|| fault("prelude directive metadata limit"))?;
++            // The exact source-owned import is copied only after bounded metadata reservation.
++            let extra = leaf
++                .path
++                .iter()
++                .try_fold(0usize, |n, part| {
++                    n.checked_add(std::mem::size_of_val(part)).and_then(|n| {
++                        n.checked_add(match part {
++                            crate::syntax::imports::ImportSegment::Name(name) => name.capacity(),
++                            _ => 0,
++                        })
++                    })
++                })
++                .ok_or_else(|| fault("prelude path metadata overflow"))?;
++            bytes = bytes
++                .checked_add(extra)
++                .filter(|n| *n <= maximum)
++                .ok_or_else(|| fault("prelude directive metadata limit"))?;
++            out.try_reserve(1)
++                .map_err(|_| fault("prelude directive allocation"))?;
++            out.push(TypePreludeDirective {
++                source: leaf.clone(),
++                meta,
++                definition,
++                header: item.header.fingerprint(),
++            });
++        }
++        Ok(TypePreludeSites::Captured(out))
++    }
++}

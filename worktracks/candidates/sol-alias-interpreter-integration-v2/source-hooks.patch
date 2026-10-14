@@ -1,0 +1,105 @@
+--- a/crates/lrr/src/frontend/generated_macros.rs
++++ b/crates/lrr/src/frontend/generated_macros.rs
+@@ -476,6 +476,9 @@
+         }
+         let parsed = ParsedFile::from_generated_items(&self.items)?;
+         crate::syntax::modules::inline_module_layout(&parsed.parsed.tree(), &self.cfg, suffix)
++    }
++    pub(crate) fn owning_cfg(&self) -> &CfgSet {
++        &self.cfg
+     }
+     pub(crate) fn captured_owner(
+         &self,
+--- a/crates/lrr/src/frontend/hygiene.rs
++++ b/crates/lrr/src/frontend/hygiene.rs
+@@ -226,4 +226,13 @@
+         }
+         Ok(record.defining_unit)
+     }
+-}
++    /// Exact retained semantic mark, not an owner-only/name-derived route.
++    pub(crate) fn dollar_crate_origin(&self, key: Key) -> Result<DollarCrateOrigin, Diagnostic> {
++        dollar_crate::select_origin(self, key)
++    }
++}
++
++#[path = "dollar_crate.rs"]
++mod dollar_crate;
++
++pub(crate) use dollar_crate::DollarCrateOrigin;
+--- a/crates/lrr/src/frontend/source_macros.rs
++++ b/crates/lrr/src/frontend/source_macros.rs
+@@ -442,6 +442,21 @@
+     pub(crate) fn hygiene_facts(&self) -> &HygieneFacts {
+         &self.facts
+     }
++    /// Borrow only the genuine captured original root/context facts.
++    pub(crate) fn original_root_hygiene(&self) -> Result<(Key, &HygieneFacts), Diagnostic> {
++        let root = self.facts.context(self.context)?;
++        if root.parent.is_some()
++            || root.expansion.is_some()
++            || root.transparency != crate::syntax::token_wire::Transparency::Opaque
++            || root.defining_unit.0 != self.root.crate_key.0
++            || edition(root.edition) != self.source_key.profile.edition
++        {
++            return Err(error(
++                "captured original root hygiene source/profile differs",
++            ));
++        }
++        Ok((self.context, &self.facts))
++    }
+     pub(crate) fn expansion_ancestry(&self) -> &ExpansionAncestry {
+         &self.ancestry
+     }
+--- a/crates/lrr/src/source/changes.rs
++++ b/crates/lrr/src/source/changes.rs
+@@ -2,6 +2,8 @@
+ use super::snapshot::{Snapshot, SourceBlob, SourcePath};
+ use crate::core::diagnostic::Diagnostic;
+ use std::collections::BTreeSet;
++#[path = "changes/crate_policy.rs"]
++pub(crate) mod crate_policy;
+ 
+ /// A complete source/module context selected by the immutable source resolver.
+ /// Includes used as bytes are not parsing contexts. Generated contexts join this
+@@ -504,7 +506,16 @@
+             .parsed
+             .macro_call_at(range)
+     }
++    /// Retained structural policy; current authority additionally needs epoch/seal replay.
+     pub(crate) fn macro_prelude_policy(
++        &self,
++    ) -> Result<crate::syntax::macro_prelude::MacroPreludePolicy, Diagnostic> {
++        Ok(
++            crate_policy::PreparedCratePreludePolicy::capture_retained(self, 32 * 1024 * 1024)?
++                .policy(),
++        )
++    }
++    pub(crate) fn local_macro_prelude_policy(
+         &self,
+     ) -> Result<crate::syntax::macro_prelude::MacroPreludePolicy, Diagnostic> {
+         let file = self
+--- a/crates/lrr/src/source/dependencies.rs
++++ b/crates/lrr/src/source/dependencies.rs
+@@ -99,6 +99,9 @@
+             .collect();
+         Ok(graph)
+     }
++    pub(crate) fn root_for(&self, unit: Digest) -> Option<&SourceSelection> {
++        self.roots.get(&unit)
++    }
+     pub(crate) fn aliases_for(
+         &self,
+         consumer: Digest,
+--- a/crates/lrr/src/source/module_view.rs
++++ b/crates/lrr/src/source/module_view.rs
+@@ -76,6 +76,9 @@
+     pub fn outline(&self) -> &Outline {
+         &self.outline
+     }
++    pub(crate) fn declaration(&self) -> &GeneratedModuleSource {
++        &self.demand
++    }
+     pub fn parent_header(&self) -> &GeneratedItemKey {
+         self.demand.header()
+     }

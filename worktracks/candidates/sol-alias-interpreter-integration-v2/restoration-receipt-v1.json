@@ -1,0 +1,22 @@
+{
+  "original_count": 52,
+  "restored_count": 19,
+  "source_paths_unchanged": 38,
+  "source_digest": "caf168227cdb14b5858110b12e08fc33a3dc43e7b54ff25a52b30852a06ec8d6",
+  "source_code_complete_patch_sha256": "0d2a9d9ffe0671857b450cf481e890c8d8fe08c3f9c53bf900efe374ad5d4538",
+  "original_restoration_patch_sha256": "e406d98818ad66d3c243ce43fd50caa65c77aaf148fbdd9f59143bffb91573fe",
+  "all52_post_format_git_validation": {
+    "session": 37014,
+    "chunk": "adb2f6",
+    "exit": 0
+  },
+  "formatter_exact_reproduction": {
+    "chunk": "9182b1",
+    "exit": 0,
+    "matching_quarantined_outputs": 19
+  },
+  "source_patch_exact_apply_reconstruction": true,
+  "fixture_restoration_patch_exact_apply_reconstruction": true,
+  "compiled_controls": 0,
+  "runtime_executions": 0
+}

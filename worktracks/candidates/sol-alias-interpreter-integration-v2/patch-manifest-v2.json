@@ -1,0 +1,141 @@
+[
+  {
+    "path": "production.patch",
+    "paths": [
+      "crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs",
+      "crates/lrr/src/frontend/compile_input_catalog/primitive_facet.rs",
+      "crates/lrr/src/frontend/compile_input_catalog/type_prelude_facet.rs",
+      "crates/lrr/src/frontend/dollar_crate.rs",
+      "crates/lrr/src/frontend/generated_alias_origin.rs",
+      "crates/lrr/src/frontend/source_type_alias_normalization/generated.rs",
+      "crates/lrr/src/frontend/source_type_alias_normalization/qualified.rs",
+      "crates/lrr/src/frontend/source_type_alias_normalization.rs",
+      "crates/lrr/src/frontend/source_type_alias_query.rs",
+      "crates/lrr/src/frontend/type_prelude_admission.rs",
+      "crates/lrr/src/source/changes/crate_policy.rs",
+      "crates/lrr/src/syntax/generated_type_site.rs",
+      "crates/lrr/src/syntax/type_prelude_sites.rs"
+    ],
+    "sha256": "28714b4bdde3b854c3535066f36fd469e47f2839d54f5c8d2f4b31966b8ed3b7",
+    "bytes": 185630
+  },
+  {
+    "path": "source-hooks.patch",
+    "paths": [
+      "crates/lrr/src/frontend/generated_macros.rs",
+      "crates/lrr/src/frontend/hygiene.rs",
+      "crates/lrr/src/frontend/source_macros.rs",
+      "crates/lrr/src/source/changes.rs",
+      "crates/lrr/src/source/dependencies.rs",
+      "crates/lrr/src/source/module_view.rs"
+    ],
+    "sha256": "bfad0e0e68bd65fb3aeb617bd33ee6046ea4ab7a287a15f343d8708673143ded",
+    "bytes": 3745
+  },
+  {
+    "path": "type-publication-hooks.patch",
+    "paths": [
+      "crates/lrr/src/db/seals.rs",
+      "crates/lrr/src/expand/source_discovery/type_prelude.rs",
+      "crates/lrr/src/expand/source_discovery.rs",
+      "crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs",
+      "crates/lrr/src/frontend/compile_input_catalog.rs"
+    ],
+    "sha256": "327fb906d4279f7937b35eb3c99ea726bcfad0eb33ce1bd2837a3486fc6b9999",
+    "bytes": 26693
+  },
+  {
+    "path": "memo-hook.patch",
+    "paths": [
+      "crates/lrr/src/db/memo.rs",
+      "crates/lrr/src/db/source_alias_inputs.rs"
+    ],
+    "sha256": "77dbca4d6054834095bedcf10256a89bb54948bf214f15e65f58f8a42849fe7c",
+    "bytes": 16371
+  },
+  {
+    "path": "consumer-hook.patch",
+    "paths": [
+      "crates/lrr/src/frontend/type_aliases/current_source.rs",
+      "crates/lrr/src/frontend/type_aliases.rs"
+    ],
+    "sha256": "8d6a1110af18a37783877332e6153dd301073552459ae30f079c29b7855ade90",
+    "bytes": 14162
+  },
+  {
+    "path": "attachment.patch",
+    "paths": [
+      "crates/lrr/src/frontend/mod.rs",
+      "crates/lrr/src/syntax/mod.rs"
+    ],
+    "sha256": "db2c5c99c3958269b9aa49a227482c54a4ec3223ce0de58cec34b0aa165b6818",
+    "bytes": 796
+  },
+  {
+    "path": "acceptance.patch",
+    "paths": [
+      "crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs",
+      "crates/lrr/src/frontend/source_type_alias_normalization_tests.rs",
+      "crates/lrr/src/frontend/type_prelude_admission_tests.rs",
+      "crates/lrr/src/source/changes/crate_policy_tests.rs"
+    ],
+    "sha256": "b5690ff6f1ada1ae397c52603a9202e9a7f4b828d0f46a7e979a9d028ab3744d",
+    "bytes": 97992
+  },
+  {
+    "path": "harness-adapters.patch",
+    "paths": [
+      "xtask/tests/call_contracts.rs",
+      "xtask/tests/generated_alias_runtime.rs",
+      "xtask/tests/source_run.rs",
+      "xtask/tests/type_aliases.rs"
+    ],
+    "sha256": "bf00c89ab335f73a33f63a3730cad3e430d992487d8ead11ee5051175f87f465",
+    "bytes": 13567
+  },
+  {
+    "path": "complete.patch",
+    "paths": [
+      "crates/lrr/src/db/memo.rs",
+      "crates/lrr/src/db/seals.rs",
+      "crates/lrr/src/db/source_alias_inputs.rs",
+      "crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs",
+      "crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs",
+      "crates/lrr/src/expand/source_discovery/type_prelude.rs",
+      "crates/lrr/src/expand/source_discovery.rs",
+      "crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs",
+      "crates/lrr/src/frontend/compile_input_catalog/primitive_facet.rs",
+      "crates/lrr/src/frontend/compile_input_catalog/type_prelude_facet.rs",
+      "crates/lrr/src/frontend/compile_input_catalog.rs",
+      "crates/lrr/src/frontend/dollar_crate.rs",
+      "crates/lrr/src/frontend/generated_alias_origin.rs",
+      "crates/lrr/src/frontend/generated_macros.rs",
+      "crates/lrr/src/frontend/hygiene.rs",
+      "crates/lrr/src/frontend/mod.rs",
+      "crates/lrr/src/frontend/source_macros.rs",
+      "crates/lrr/src/frontend/source_type_alias_normalization/generated.rs",
+      "crates/lrr/src/frontend/source_type_alias_normalization/qualified.rs",
+      "crates/lrr/src/frontend/source_type_alias_normalization.rs",
+      "crates/lrr/src/frontend/source_type_alias_normalization_tests.rs",
+      "crates/lrr/src/frontend/source_type_alias_query.rs",
+      "crates/lrr/src/frontend/type_aliases/current_source.rs",
+      "crates/lrr/src/frontend/type_aliases.rs",
+      "crates/lrr/src/frontend/type_prelude_admission.rs",
+      "crates/lrr/src/frontend/type_prelude_admission_tests.rs",
+      "crates/lrr/src/source/changes/crate_policy.rs",
+      "crates/lrr/src/source/changes/crate_policy_tests.rs",
+      "crates/lrr/src/source/changes.rs",
+      "crates/lrr/src/source/dependencies.rs",
+      "crates/lrr/src/source/module_view.rs",
+      "crates/lrr/src/syntax/generated_type_site.rs",
+      "crates/lrr/src/syntax/mod.rs",
+      "crates/lrr/src/syntax/type_prelude_sites.rs",
+      "xtask/tests/call_contracts.rs",
+      "xtask/tests/generated_alias_runtime.rs",
+      "xtask/tests/source_run.rs",
+      "xtask/tests/type_aliases.rs"
+    ],
+    "sha256": "0d2a9d9ffe0671857b450cf481e890c8d8fe08c3f9c53bf900efe374ad5d4538",
+    "bytes": 358956
+  }
+]

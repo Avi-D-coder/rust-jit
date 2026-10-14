@@ -18968,6 +18968,20 @@
           "original_files": 45,
           "full_stock_fixture_passes": 0,
           "scope": "After coherent39: canonical generated member/header query join, genuine Type preparation in old runtime positives, combined budget and all-retained-source replay/stamps."
+        },
+        {
+          "artifact": "worktracks/candidates/sol-alias-interpreter-integration-v2/HANDOFF.md",
+          "status": "source_only_originals_restored_uncompiled",
+          "source_member": "caf168227cdb14b5858110b12e08fc33a3dc43e7b54ff25a52b30852a06ec8d6",
+          "paths": 38,
+          "Rust_controls": 63,
+          "Rust_controls_executed": 0,
+          "original_cases": 22,
+          "original_files": 52,
+          "preserved_unregistered_prototype_files": 10,
+          "full_stock_fixture_passes": 0,
+          "withdrawn_original_provenance": "a38d0fff:19 formatted assets quarantined before publication; source38 code unchanged, all52 restored from pinned Git blobs after guarded formatting",
+          "scope": "Actual live Type/prelude/alias/query consumers; unconsumed future generated constant/full-role models retained as prototypes. Shared Type/Value proof merge and real qualified consumer Value/module export replay remain required. No task or runtime acceptance."
         }
       ]
     },

@@ -17,7 +17,14 @@ python3 tools/check_source_checkpoint.py
 
 The guard rejects staged build/cache paths and blobs larger than 5 MiB. It also
 checks that staged vendor and upstream input bytes match the working files without
-Git text conversion. Source handoff patches also retain exact bytes, including
+Git text conversion. For a changed upstream fixture directory, it also checks all
+indexed originals against the indexed import manifest's sizes, SHA256 hashes and
+Git blob IDs. A manifest-only change or deleted original cannot evade that check.
+The staged path scan treats renames as additions and deletions so moving an
+original out of its directory cannot hide the missing file.
+This catches accidental formatting even when Git itself preserves the bytes;
+the importer separately establishes that the manifest matches the pinned checkout.
+Source handoff patches also retain exact bytes, including
 upstream CRLF witnesses and the required blank context-line prefixes of unified
 diffs. Immutable upstream copies are exempt from Git whitespace normalization and
 linting; validate them against their pinned hashes instead of editing expected
@@ -35,6 +42,12 @@ git config --local core.hooksPath .githooks
 This replaces any existing `core.hooksPath` for this checkout. If you already use
 hooks, add the guard to that workflow instead. Hook installation is opt-in; the
 repository does not change your Git configuration automatically.
+
+Restrict formatting to explicit LRR source paths. Never pass copied upstream
+fixtures or compiler support sources to a mutating formatter, including through a
+recursive directory walk. Check their raw pinned bytes again after formatting
+before freezing a source manifest. Hashing the resulting files alone does not
+prove that they still match upstream.
 
 For a new checkout that needs to stage pinned vendor inputs, give byte preservation
 precedence over nested vendor attributes with this local override:

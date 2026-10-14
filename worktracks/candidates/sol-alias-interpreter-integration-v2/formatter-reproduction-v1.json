@@ -1,0 +1,164 @@
+{
+  "formatter": "/Users/avi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/bin/rustfmt",
+  "arguments": [
+    "--edition",
+    "2024",
+    "--config",
+    "skip_children=true"
+  ],
+  "scope": "disposable explicitly non-fixture copies only",
+  "rows": [
+    {
+      "original": "fixtures/upstream/rustc-checkout/compiler/rustc_builtin_macros/src/standard_library_imports.rs",
+      "probe": "forensic-format-probes/0/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "481a7768840b65d0ed7e99b3b7b51153cdb863cca7e99aa064ddf4e6fdc35dd9",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/compiler/rustc_hir/src/hir.rs",
+      "probe": "forensic-format-probes/1/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "ceb977512ea0ad6879c6b09da16f633efa391246321b0ce284f223a52cec9351",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/compiler/rustc_resolve/src/build_reduced_graph.rs",
+      "probe": "forensic-format-probes/2/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "8bb8381f91937479289259abda0995e240eea38127097cba7c6fe399494a7cda",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/compiler/rustc_resolve/src/ident.rs",
+      "probe": "forensic-format-probes/3/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "bb3be9247d6e9a44910e4abbcf3901b55e6a33a6c40e6fd9c773658fc6074406",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/compiler/rustc_resolve/src/late.rs",
+      "probe": "forensic-format-probes/4/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "131daa3333bbb235a5626a775e0da751e39fbbc6227ad0f77a64bd88e6f60262",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/compiler/rustc_resolve/src/lib.rs",
+      "probe": "forensic-format-probes/5/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "047967732bb917b0acfddbe7d5e2f0f3694e33a3daaf35abeb57ac22425f59f6",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/tests/ui/const-generics/early/const-param-shadowing.rs",
+      "probe": "forensic-format-probes/6/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "4a8c35881339ec4097e12d957dc460756e5a15a4121b71f43c790b8d000fadf8",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/tests/ui/dep-graph/dep-graph-type-alias.rs",
+      "probe": "forensic-format-probes/7/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "ef6032624bdf111d12f11edd3a46fc5326952af341ea0bf40e73996483a3268a",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/tests/ui/hygiene/auxiliary/intercrate.rs",
+      "probe": "forensic-format-probes/8/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "2e6e504dc822a885029e56e5494b8a946cbcc744e9b581bd638fbf0f18594f1a",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/tests/ui/hygiene/no_implicit_prelude.rs",
+      "probe": "forensic-format-probes/9/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "f3aaba572de385bb896cf3f07710ed5967070de2c1ea190d84c3538345a604bd",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/tests/ui/imports/reexport-from-multiple-namespaces.rs",
+      "probe": "forensic-format-probes/10/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "a5da8e64874940636a68a51fda14c3f2ebac72fa726d31b31182813db7812067",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/tests/ui/macros/macro-tt-matchers.rs",
+      "probe": "forensic-format-probes/11/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "369d1c269ae4bbefb7a0d2185bccb76d95e0208686d2058785e65ad4529edb09",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/tests/ui/parser/raw/raw-idents.rs",
+      "probe": "forensic-format-probes/12/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "61ca63b99126792db3fd6dace54e3fef54cdc37719fbe8186ccc22109db023ba",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/tests/ui/resolve/issue-107563-ambiguous-glob-reexports.rs",
+      "probe": "forensic-format-probes/13/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "68e088e51075ddfc4670331ed8b24a4c36f39734a5d722e2517376a42fed099f",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/tests/ui/resolve/no-implicit-prelude-nested.rs",
+      "probe": "forensic-format-probes/14/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "d4ff44d82de9c48fad7460526b335ed86fa785ace30a2e46eae9e15d0d4740c6",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/tests/ui/traits/trait-implementation-for-primitive-type-5280.rs",
+      "probe": "forensic-format-probes/15/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "86d23fc4e7865a64d2c95034d2dd142957bb9456ba51456d26953a46c35af6f3",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/tests/ui/type-alias/static-method-type-alias-11047.rs",
+      "probe": "forensic-format-probes/16/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "bedb746f609bf6ae61d08502b66a8e1a896f1a8a957b17fe4b319507491c1ef7",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/tests/ui/type/type-alias-bounds.rs",
+      "probe": "forensic-format-probes/17/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "a3f8b3088f5ac80c0021c3c4172726c4c59514fdb68d4bdc619efe7070fe0087",
+      "matches_quarantined_bytes": true
+    },
+    {
+      "original": "fixtures/upstream/rustc-checkout/tests/ui/unpretty/exhaustive.rs",
+      "probe": "forensic-format-probes/18/probe.rs",
+      "formatter_exit": 0,
+      "stderr": "",
+      "formatted_sha256": "9e1bd2b99120196030818e798556fbe945e65ed7bd92376289a953be1f82dd54",
+      "matches_quarantined_bytes": true
+    }
+  ]
+}

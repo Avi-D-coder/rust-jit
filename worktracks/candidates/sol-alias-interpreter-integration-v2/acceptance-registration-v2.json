@@ -1,0 +1,100 @@
+{
+  "status": "all uncompiled/unexecuted; no pass claim",
+  "new_live_controls": 63,
+  "live": [
+    {
+      "path": "crates/lrr/src/db/source_alias_inputs.rs",
+      "uncompiled_controls": [
+        "combined_alias_selection_budget_keeps_initial_source_footprint",
+        "genuine_alias_proof_stamps_every_retained_type_source",
+        "tampered_retained_foreign_source_refuses_new_capture_without_source_revision_change"
+      ]
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs",
+      "uncompiled_controls": [
+        "actual_child_wrong_catalogue_and_transient_quota_refuse_before_attachment",
+        "actual_retained_catalogue_cfg_cannot_be_replaced_by_caller_cfg",
+        "another_real_original_expansion_cannot_replay_the_retained_record",
+        "current_parent_copy_epoch_missing_catalogue_and_foreign_facet_refuse",
+        "genuine_captured_root_disabled_prelude_is_inherited_by_its_generated_child",
+        "genuine_generated_child_inherits_captured_no_std_root_before_facet_attachment",
+        "genuine_generated_declaration_local_disable_does_not_change_root_standard_policy",
+        "stale_owner_or_epoch_cannot_attach_an_old_certificate",
+        "transfer_budget_refuses_before_retaining_or_changing_the_owner",
+        "unchanged_cross_edition_generated_macro2_keeps_owner_facet_and_token_editions_distinct",
+        "unchanged_generated_module_adopted_source_uses_actual_second_owner_once"
+      ]
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_type_alias_normalization_tests.rs",
+      "uncompiled_controls": [
+        "actual_empty_custom_catalogue_cannot_replay_standalone_primitive_authority",
+        "actual_renamed_extern_alias_keeps_foreign_definition_edition_and_primitive_shadow",
+        "completed_generated_record_is_not_silently_removed_from_qualified_original_replay",
+        "current_epoch_publication_and_forged_terminal_dependencies_refuse_reuse",
+        "exact_qualified_target_seal_is_required_before_alias_target_header_query",
+        "existing_alias_consumer_reports_unprepared_type_source_instead_of_primitive_success",
+        "existing_alias_normalizer_consumes_real_type_publication_and_query_join",
+        "explicit_alias_generic_arguments_keep_the_exact_substitution_prerequisite",
+        "foreign_original_source_cannot_supply_generated_alias_invocation_owner",
+        "forged_canonical_member_cannot_reuse_equal_generated_primitive_recipe",
+        "generic_and_qualified_targets_stay_precise_prerequisites",
+        "genuine_generated_alias_keeps_canonical_member_separate_from_projected_header_identity",
+        "genuine_generated_alias_target_preserves_written_origin_and_source_member",
+        "genuine_original_alias_queries_match_source_headers_and_refuse_stale_reuse",
+        "metadata_and_foreign_scope_refusal_cannot_attach_a_partial_proof",
+        "opaque_module_macro2_alias_name_cannot_borrow_original_root_identity",
+        "ordered_alias_chain_and_symbolic_primitive_spelling_keep_namespace_authority",
+        "original_generated_original_chain_uses_actual_alias_members_and_exact_query_stamps",
+        "private_payload_tamper_cannot_recover_a_primitive_from_equal_descriptors",
+        "qualified_budget_and_epoch_refusal_cannot_attach_a_partial_alias_chain",
+        "qualified_nominal_generic_missing_and_cycle_cases_cannot_become_primitives",
+        "qualified_source_consumer_uses_current_source_primitive_join_instead_of_deferred_tokens",
+        "unchanged_ambiguous_glob_exports_keep_two_original_equal_primitive_members",
+        "unchanged_const_parameter_shadow_does_not_change_global_alias_type",
+        "unchanged_direct_self_alias_cycle_is_reached_and_bounded",
+        "unchanged_font_alias_keeps_exact_source_member_all_editions",
+        "unchanged_generated_generic_alias_keeps_actual_written_source_frontier",
+        "unchanged_generic_alias_header_preserves_substitution_frontier_without_a_seal",
+        "unchanged_incremental_alias_headers_keep_order_without_running_tool_contracts",
+        "unchanged_multi_namespace_local_aliases_keep_real_owner_context_and_original_qualified_syntax",
+        "unchanged_primitive_shadow_is_a_source_nominal_frontier",
+        "unchanged_static_aux_private_type_is_inaccessible_not_primitive_absence",
+        "unchanged_static_aux_qualified_public_reexport_retains_exact_foreign_alias_header",
+        "unchanged_static_method_alias_does_not_grant_associated_or_call_permissions",
+        "unchanged_visibility_matcher_alias_uses_real_module_and_captured_type_token",
+        "unsupported_absent_type_and_actual_long_alias_chain_do_not_default",
+        "written_crate_self_super_alias_chain_joins_target_type_scopes_and_ordered_queries"
+      ]
+    },
+    {
+      "path": "crates/lrr/src/frontend/type_prelude_admission_tests.rs",
+      "uncompiled_controls": [
+        "live_original_custom_prelude_requires_actual_target_type_seal_before_absence",
+        "live_original_shadowed_type_cannot_become_compiler_primitive_absence",
+        "live_original_type_absence_uses_actual_default_no_std_and_disabled_policy_all_editions",
+        "live_published_type_receipt_tamper_name_epoch_and_budget_refuse_reuse"
+      ]
+    },
+    {
+      "path": "crates/lrr/src/source/changes/crate_policy_tests.rs",
+      "uncompiled_controls": [
+        "changed_actual_cfg_profile_and_quota_do_not_copy_policy_authority",
+        "current_epoch_and_copied_publication_require_new_policy_mint",
+        "missing_actual_original_root_never_becomes_default_std_authority",
+        "unchanged_cfg_revision_source_selects_core_without_rewriting_original",
+        "unchanged_nested_module_actual_captures_retain_the_same_original_root",
+        "unchanged_no_std_original_keeps_actual_crate_root_all_owning_editions",
+        "unchanged_original_module_local_disabling_keeps_exact_source_scope"
+      ]
+    },
+    {
+      "path": "xtask/tests/source_run.rs",
+      "uncompiled_controls": [
+        "current_type_preparation_preserves_primitive_shadowed_alias_return_source"
+      ]
+    }
+  ],
+  "prototype_models": "unregistered exact source preserved separately; never counted as live generated const/query/layout acceptance"
+}

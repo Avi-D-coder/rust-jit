@@ -1,0 +1,42 @@
+{
+  "basis": "actual v68 scanner receipt; old v67 overlay not substituted",
+  "guards": [
+    "exact selected definition identity",
+    "defining unit",
+    "owning edition",
+    "source/body/no-item invocation",
+    "compiler/runtime catalogue ownership/currentness"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_catalog.rs",
+      "v68_sha256": "f3e71b73c39bbcda785208016904c50a6cceccb88780270a70a2a3d6fb6de588",
+      "not_touched": true,
+      "old_v67_overlay_hash": "f3e71b73c39bbcda785208016904c50a6cceccb88780270a70a2a3d6fb6de588"
+    },
+    {
+      "path": "crates/lrr/src/engine/standalone_macros.rs",
+      "v68_sha256": "d5d212a9a989ce472767038c4aa9a4f41454e1be0c7a07a4933b7e1ac79a8824",
+      "not_touched": true,
+      "old_v67_overlay_hash": "d5d212a9a989ce472767038c4aa9a4f41454e1be0c7a07a4933b7e1ac79a8824"
+    },
+    {
+      "path": "xtask/tests/stock_generic_runtime.rs",
+      "v68_sha256": "7acf7ef44791d43ec7ec3a971ceabf97e19401831f63342144d10037d3c7c8c6",
+      "not_touched": true,
+      "old_v67_overlay_hash": "7acf7ef44791d43ec7ec3a971ceabf97e19401831f63342144d10037d3c7c8c6"
+    },
+    {
+      "path": "xtask/tests/stock_generic_call_edgecases.rs",
+      "v68_sha256": "d783888f27999cae30d10bbf1bc6b1495d43f155af6f03a2befeb374c19f281a",
+      "not_touched": true,
+      "old_v67_overlay_hash": "d783888f27999cae30d10bbf1bc6b1495d43f155af6f03a2befeb374c19f281a"
+    },
+    {
+      "path": "crates/lrr/src/engine/runtime_macros.rs",
+      "v68_sha256": "0406de99695c656d72e8f6666697fc9bffb26cad20a536ec7d10763376d38bb7",
+      "not_touched": true,
+      "old_v67_overlay_hash": "0406de99695c656d72e8f6666697fc9bffb26cad20a536ec7d10763376d38bb7"
+    }
+  ]
+}

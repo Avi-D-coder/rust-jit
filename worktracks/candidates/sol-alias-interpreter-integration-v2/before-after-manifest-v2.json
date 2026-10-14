@@ -1,0 +1,272 @@
+{
+  "canonical": "actual frozen v68 c011cdae",
+  "source_receipt": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-query-v1/canonical-validation-v1/source-frozen-v68.json",
+  "paths": [
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "before_sha256": "1955e297b948df9a446770e61343c58bf7ed0aca970adabbbe437652dc330704",
+      "after_sha256": "c87ced1ba43d1def6649b25ce3145084c6de326b03d83f08e6cea533a8b84be9",
+      "bytes": 106828,
+      "component": "memo-hook"
+    },
+    {
+      "path": "crates/lrr/src/db/seals.rs",
+      "before_sha256": "62d4ec16299e6a479a0e22cff27246b902df2636528c0066b30d8ff4ff9ded16",
+      "after_sha256": "8145b3e52511049357c1f982c35d79bd6458cf9aee0bfd63f29a8a357d8045d3",
+      "bytes": 23826,
+      "component": "type-publication-hooks"
+    },
+    {
+      "path": "crates/lrr/src/db/source_alias_inputs.rs",
+      "before_sha256": null,
+      "after_sha256": "2b6673bbc2ffcdf3db466c1f4bb9d3c0ddab636703b67ec5ffe7e74d97c6b576",
+      "bytes": 15658,
+      "component": "memo-hook"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs",
+      "before_sha256": null,
+      "after_sha256": "b47d13b810c18aa8ebf02363fd40ad7399374f54fb59b1509222f04026f6bd79",
+      "bytes": 12554,
+      "component": "production"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "414de8a9e69808a4d63253793bbf7cee4b3fca9630c06f9fa5c5e2fb5577d618",
+      "bytes": 21287,
+      "component": "acceptance"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/type_prelude.rs",
+      "before_sha256": null,
+      "after_sha256": "41682a95c1fd3e74c2154646d6771155685afbaf4e2c68f429f1ecd36c12412c",
+      "bytes": 2471,
+      "component": "type-publication-hooks"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "before_sha256": "c1a9a9a5d50cd13bb47d0c29750b2eb06532b46da98b14c4374297b3ab90e325",
+      "after_sha256": "e0fbfaaaca2f1d2ebb4c612a9d3ddb79f3eb7e54e16aa8b9c29a0ae47287631c",
+      "bytes": 482177,
+      "component": "type-publication-hooks"
+    },
+    {
+      "path": "crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs",
+      "before_sha256": "f5f1d44d4b4966614c5d4beac30454cedcfc4fb87a3cde4c89e72958d8e0b65e",
+      "after_sha256": "236da745e44f47d2c49e5282cf34cb71e42dbc873c925cc968bdcca4edf21958",
+      "bytes": 4644,
+      "component": "type-publication-hooks"
+    },
+    {
+      "path": "crates/lrr/src/frontend/compile_input_catalog/primitive_facet.rs",
+      "before_sha256": null,
+      "after_sha256": "5bf7b96a1349ba01de25e372319870dbc24f73cf0b16a595d2259a47eb98aac8",
+      "bytes": 8155,
+      "component": "production"
+    },
+    {
+      "path": "crates/lrr/src/frontend/compile_input_catalog/type_prelude_facet.rs",
+      "before_sha256": null,
+      "after_sha256": "46cfa808b010d1688be6e742ee991d7d6feb5b4d757b9b24c17a1a47f76369c9",
+      "bytes": 6485,
+      "component": "production"
+    },
+    {
+      "path": "crates/lrr/src/frontend/compile_input_catalog.rs",
+      "before_sha256": "b958b2106020cd725138a29101105dc4edbd5f2d49afd2f0d71df4515517606a",
+      "after_sha256": "b1dfad699b116632c8c59c12c681b4749c80761fa354bec9f6b08dad818b9676",
+      "bytes": 16393,
+      "component": "type-publication-hooks"
+    },
+    {
+      "path": "crates/lrr/src/frontend/dollar_crate.rs",
+      "before_sha256": null,
+      "after_sha256": "178c6117be3055d875f3095e90e28e5e829952d4e4a37eb0f0e0d2187a905d51",
+      "bytes": 2476,
+      "component": "production"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_alias_origin.rs",
+      "before_sha256": null,
+      "after_sha256": "d3f250659683cb6d821bb1b1fd010491ace050437605a0fccf4d9a071ad0827c",
+      "bytes": 9959,
+      "component": "production"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_macros.rs",
+      "before_sha256": "549bd72f7a39ae0609069f942d4a9561299096c21854f4ee7fdb8a91599675ef",
+      "after_sha256": "182d062e463fec764c93199e4dd9a432f575377f401e65c9066fc033897b0522",
+      "bytes": 203454,
+      "component": "source-hooks"
+    },
+    {
+      "path": "crates/lrr/src/frontend/hygiene.rs",
+      "before_sha256": "94542cdfff519dc4657a3b97106990c97969a771bd60ed6dcb84228806210b8a",
+      "after_sha256": "26c5ca2fb13facee1b6e94ded65ea34b13b9379ac16d506881410c574d75a538",
+      "bytes": 9464,
+      "component": "source-hooks"
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "before_sha256": "fe1a1cfedf6c7e66c11cff3a67d6c84147c8dc5f6e4c099284fc29711949676a",
+      "after_sha256": "7e917ebbc2bb770ef13eeadc69acdcb3e6077b5eaaecfaa4326b0685a0e9738d",
+      "bytes": 1645,
+      "component": "attachment"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macros.rs",
+      "before_sha256": "afb63a0277124c3554a7de862a303ac7ca47b1cbce36b94be5d3b66167133fbc",
+      "after_sha256": "0c5a26d03a9e3568ea5e2c5b3c7c4fcb30a7052cbf08bca343c137317af8c28a",
+      "bytes": 79872,
+      "component": "source-hooks"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_type_alias_normalization/generated.rs",
+      "before_sha256": null,
+      "after_sha256": "352f3f29dbc1bcc41e5e431ba9048bdae5e7d244830349a567b2e34f8050bd57",
+      "bytes": 13390,
+      "component": "production"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_type_alias_normalization/qualified.rs",
+      "before_sha256": null,
+      "after_sha256": "4b4e7e55db3f8166b409d03f3ca8ae3d28a51990b6093b35e668cc0ba489ceeb",
+      "bytes": 12001,
+      "component": "production"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_type_alias_normalization.rs",
+      "before_sha256": null,
+      "after_sha256": "2b6aa59dcabbef55f0dceed634d3d53d16f98b5ec960334e582cff9609910544",
+      "bytes": 30656,
+      "component": "production"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_type_alias_normalization_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "370a2dd3bce62bddd148865d7f1250d63d0f8ffd7572444734ef5ad501f619a6",
+      "bytes": 55461,
+      "component": "acceptance"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_type_alias_query.rs",
+      "before_sha256": null,
+      "after_sha256": "39f72d5835f95dce64d9a060af0fed126ecd583676cfe5f0f88e718a4622e487",
+      "bytes": 4059,
+      "component": "production"
+    },
+    {
+      "path": "crates/lrr/src/frontend/type_aliases/current_source.rs",
+      "before_sha256": null,
+      "after_sha256": "6c7780db1f4b8bb5dfd5366b289773f0df025a6f273ec80193b0ebe506e2697b",
+      "bytes": 11363,
+      "component": "consumer-hook"
+    },
+    {
+      "path": "crates/lrr/src/frontend/type_aliases.rs",
+      "before_sha256": "3a240ac4e758cafb1879c58edbbdb535720479d80b616a1c6e2472a33c5cccdc",
+      "after_sha256": "0e94a8e0e3825c365eeb2586f5415a7c2f491927f11c63862c05b8b964a47442",
+      "bytes": 17373,
+      "component": "consumer-hook"
+    },
+    {
+      "path": "crates/lrr/src/frontend/type_prelude_admission.rs",
+      "before_sha256": null,
+      "after_sha256": "788167b38d96335518ef5deeac57b22d904251188f51aa68b0afa70e9cc78433",
+      "bytes": 40213,
+      "component": "production"
+    },
+    {
+      "path": "crates/lrr/src/frontend/type_prelude_admission_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "dbdda8e742d1206564a582942971102ce22316646c59721c3fc5363946480a0c",
+      "bytes": 7492,
+      "component": "acceptance"
+    },
+    {
+      "path": "crates/lrr/src/source/changes/crate_policy.rs",
+      "before_sha256": null,
+      "after_sha256": "4b3af2d074828accc4044a5b44fd4a4ca22c0d80b8d57c2d125ad7ccb54f8d1d",
+      "bytes": 14942,
+      "component": "production"
+    },
+    {
+      "path": "crates/lrr/src/source/changes/crate_policy_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "685c0ce5ac1ecc01c2b666307a3c4a588c2c4a4c6bed2828f75c5035ef3e631f",
+      "bytes": 10609,
+      "component": "acceptance"
+    },
+    {
+      "path": "crates/lrr/src/source/changes.rs",
+      "before_sha256": "65c1ec8487f8f49537cdcd7f17a69b7ec726147639dbf96ddb019f2014910cb2",
+      "after_sha256": "1d2c86e1f47e97cad2fd998b7af27efb303a7bfd5bb40bb030ba01316c85ad18",
+      "bytes": 54235,
+      "component": "source-hooks"
+    },
+    {
+      "path": "crates/lrr/src/source/dependencies.rs",
+      "before_sha256": "5f65881ca4301e0a99310b90b4a34c74a6472b8a70b5d32494fb9f8e0853bfa6",
+      "after_sha256": "2e3a5d5ca3e733c0e8dccc8c39640a604404fc88757a1436675e2df274aa0948",
+      "bytes": 7273,
+      "component": "source-hooks"
+    },
+    {
+      "path": "crates/lrr/src/source/module_view.rs",
+      "before_sha256": "fdd770d2fd61b68bbb74c1af766b5d0facec3a4ce6292a9678e689d22d91fa26",
+      "after_sha256": "2dcb4afe44cac026a20ac22baa4c627effc89ec4a83651db53a3814e867634c4",
+      "bytes": 3766,
+      "component": "source-hooks"
+    },
+    {
+      "path": "crates/lrr/src/syntax/generated_type_site.rs",
+      "before_sha256": null,
+      "after_sha256": "2ac7a5a9ef88587e348f1edef863fbde6e3546fe893a721005ae82f3e07aacab",
+      "bytes": 14460,
+      "component": "production"
+    },
+    {
+      "path": "crates/lrr/src/syntax/mod.rs",
+      "before_sha256": "12fab820d5ae5c445609ead5ec488f6e04864efc0522ffa1436678a2a18c010d",
+      "after_sha256": "1f3df5dc869c9c30551a044ad5de4dc8c8e29065f2edb0468083adb0bb1632ee",
+      "bytes": 1472,
+      "component": "attachment"
+    },
+    {
+      "path": "crates/lrr/src/syntax/type_prelude_sites.rs",
+      "before_sha256": null,
+      "after_sha256": "0f521963f734ffb3a2315ca38bcb5508a6088e9b1d5998fb265f69de26a5079e",
+      "bytes": 10176,
+      "component": "production"
+    },
+    {
+      "path": "xtask/tests/call_contracts.rs",
+      "before_sha256": "ee15640f3e34604dc04497bba49eebc38b177994290edc92444383e3409c882b",
+      "after_sha256": "971311e257801dd0a1bfdddc072502b6e831de15f067cc55f33a4b0a8e0fb3be",
+      "bytes": 27687,
+      "component": "harness-adapters"
+    },
+    {
+      "path": "xtask/tests/generated_alias_runtime.rs",
+      "before_sha256": "a0f00bbe45b83aa6fcc552d81854b19220d25e9901ed7ebc815fad94a61e1f10",
+      "after_sha256": "a5b257d25ae83bc52b575b89f838848fcfa6988ef0c4bb5599e775be4d9af6fc",
+      "bytes": 9085,
+      "component": "harness-adapters"
+    },
+    {
+      "path": "xtask/tests/source_run.rs",
+      "before_sha256": "619e4e43a1276fc94318b4ec81514e0b4f7b661c558931f5a8e5d5fa144c46a9",
+      "after_sha256": "8184580eec82dd65d6deaa1c1d1be39dd61ad4f8b28ad13732fd87f5cae3f1d0",
+      "bytes": 72765,
+      "component": "harness-adapters"
+    },
+    {
+      "path": "xtask/tests/type_aliases.rs",
+      "before_sha256": "15b9e5327e5c4c5878b16df571f9b1bf251758d22d5453821459bb37f8196284",
+      "after_sha256": "145bd99f63bd8733287d8c9a02b1bda49cfbdc7a31ddca0176dcfa79a01dae00",
+      "bytes": 11982,
+      "component": "harness-adapters"
+    }
+  ]
+}

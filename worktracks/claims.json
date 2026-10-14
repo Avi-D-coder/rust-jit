@@ -452,7 +452,7 @@
       "owner": "/root/generic_call_logic",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Frozen39+8+4 Type/prelude/alias source successors; new active minimal coherent alias interpreter integration against readonly v68, preserving genuine Type/compiler/currentness and shared runtime-world hooks. All new controls uncompiled, no source/call authority shortcuts.",
+      "scope": "Coherent38 alias source packet:19 formatted originals detected/quarantined before publication and all52 pinned bytes restored;63 live controls uncompiled. Active qualified consumer replay of genuine closed Value/module exports, after separate shared publication/module installer. No invented absence/source/runtime authority.",
       "paths": [
         "artifacts/macos-first/sol-constant-macro-admission-v1/",
         "artifacts/macos-first/sol-constant-path-selection-v1/",
@@ -477,11 +477,13 @@
         "artifacts/macos-first/sol-type-alias-prelude-integration-v1/",
         "artifacts/macos-first/sol-alias-runtime-prerequisites-v1/",
         "artifacts/macos-first/sol-qualified-source-alias-v1/",
-        "artifacts/macos-first/sol-alias-interpreter-integration-v2/"
+        "artifacts/macos-first/sol-alias-interpreter-integration-v2/",
+        "artifacts/macos-first/sol-alias-original-byte-restoration-v1/",
+        "artifacts/macos-first/sol-alias-consumer-replay-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T21:22:34.752284+00:00",
+      "updated_at": "2026-10-14T21:57:49.482819+00:00",
       "review_after": "2026-10-15T05:26:09.232158+00:00"
     },
     {
@@ -546,7 +548,7 @@
       "owner": "/root/stock_numeric_logic",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Source-only coherent interpreter closure integration: actual body/currentness, typed layout/capture/env/adoption/publication behind charged operation boundaries. Fn/Copy/ABI/activation/completion remain separate prerequisites; uncompiled.",
+      "scope": "Frozen116-path closure and12-path shared Type/Value source proposals uncompiled;17 shared originals independently verified post-format. Active genuine Value module/core-std reexport installer, owning-profile/membership/resource loop. No type/Fn/layout/ABI permission from namespace readiness.",
       "paths": [
         "artifacts/macos-first/sol-source-closures-v1/",
         "artifacts/macos-first/sol-closure-own-bindings-v1/",
@@ -561,11 +563,13 @@
         "artifacts/macos-first/sol-closure-enum-consumers-v1/",
         "artifacts/macos-first/sol-closure-lifecycle-transfer-v1/",
         "artifacts/macos-first/sol-closure-source-call-admission-v1/",
-        "artifacts/macos-first/sol-closure-interpreter-integration-v1/"
+        "artifacts/macos-first/sol-closure-interpreter-integration-v1/",
+        "artifacts/macos-first/sol-closure-type-value-publication-merge-v1/",
+        "artifacts/macos-first/sol-closure-value-module-installer-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T20:12:59.778783+00:00",
+      "updated_at": "2026-10-14T21:57:49.482819+00:00",
       "review_after": "2026-10-15T11:54:30.661821+00:00"
     },
     {

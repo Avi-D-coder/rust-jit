@@ -1,0 +1,65 @@
+{
+  "status": "preserved source-only unregistered prerequisites",
+  "files": [
+    {
+      "path": "prototypes/crates/lrr/src/frontend/generated_constant_provenance.rs",
+      "bytes": 35334,
+      "sha256": "69ac4d6f9acf642017702580a67f94a8c2333d26b50bf21ede9777e3b07c493c",
+      "live_registered": false
+    },
+    {
+      "path": "prototypes/crates/lrr/src/frontend/generated_constant_provenance_tests.rs",
+      "bytes": 16195,
+      "sha256": "04a393ca77bfaa7bc8e138651286ffcbd09bfbdec00f55b3f23f6a145cfb61c2",
+      "live_registered": false
+    },
+    {
+      "path": "prototypes/crates/lrr/src/frontend/generated_primitive_admission.rs",
+      "bytes": 20115,
+      "sha256": "1753a565419efc557b4f9d804b86234ba0f993061bdd7ee408789a95a2d35f58",
+      "live_registered": false
+    },
+    {
+      "path": "prototypes/crates/lrr/src/frontend/generated_primitive_admission_tests.rs",
+      "bytes": 22039,
+      "sha256": "6bd270a9263bf918ad8f58c4c90e18697f84183570df02f7ffbedae23b0c5b25",
+      "live_registered": false
+    },
+    {
+      "path": "prototypes/crates/lrr/src/frontend/generated_type_admission.rs",
+      "bytes": 43661,
+      "sha256": "e45d1883e0417f64c4fc2ef2e31e00e9389890384b23b6a43bd846da5c01a4d1",
+      "live_registered": false
+    },
+    {
+      "path": "prototypes/crates/lrr/src/frontend/generated_type_admission_tests.rs",
+      "bytes": 19245,
+      "sha256": "f86bd0a49f4e350e180c57b9a1be637e54230094dd677b227ce23445975cf7b9",
+      "live_registered": false
+    },
+    {
+      "path": "prototypes/crates/lrr/src/frontend/source_type_alias_normalization.rs",
+      "bytes": 39064,
+      "sha256": "ef30d2ca656d89e6f720a60502148be760b703aa1b526840135732934c01e2f4",
+      "live_registered": false
+    },
+    {
+      "path": "prototypes/crates/lrr/src/frontend/source_type_alias_normalization_tests.rs",
+      "bytes": 56637,
+      "sha256": "569959de5373b5498108793f9532c522070428ce8a32942dd26861067ae608bc",
+      "live_registered": false
+    },
+    {
+      "path": "prototypes/crates/lrr/src/frontend/type_prelude_admission_tests.rs",
+      "bytes": 19742,
+      "sha256": "f226cc7b17ec24e0dfdc113b7a822cc2b6280cca167566cfbc2e1ecf002a2ebd",
+      "live_registered": false
+    },
+    {
+      "path": "prototypes/crates/lrr/src/syntax/generated_type_site.rs",
+      "bytes": 15465,
+      "sha256": "07f25853891f8302dd0c04ca1814082bcfd58f265073f1a7a90e212446f9913a",
+      "live_registered": false
+    }
+  ]
+}
