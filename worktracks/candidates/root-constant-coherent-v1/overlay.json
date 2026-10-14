@@ -1,0 +1,520 @@
+{
+  "schema_version": 1,
+  "task": "T054",
+  "source_baseline": "e06102b76e38d5929c79ff5eee5333ba4b65866b0128a384b36e97a7fb311e2a",
+  "source_member": "ccf1653daf3b5934920c730275092d4fa0ca9b310f17ac88b510bbdd49ccbadf",
+  "status": "source_only_uncompiled",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/constant_literal_family_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "bf5196b6c4321e6ff7a53e8255df52b66cfd2a883df0daf3c4c5fe493d58ad42",
+      "bytes": 5141
+    },
+    {
+      "path": "crates/lrr/src/frontend/constant_locals.rs",
+      "before_sha256": null,
+      "after_sha256": "db20d4f3f912a2a5cb885871f5c0c7ca1fd034082cce8f88a29d572d268053dd",
+      "bytes": 8018
+    },
+    {
+      "path": "crates/lrr/src/frontend/constant_loop_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "3870ac15d44d15c5b9a2579f7ba814907fc8eb1618e1467cea54e12f7f0f3afa",
+      "bytes": 5659
+    },
+    {
+      "path": "crates/lrr/src/frontend/constants.rs",
+      "before_sha256": "598c0487e31cf96ab3eec24629d56041d08896d2a566dd97f0363723e149a1d4",
+      "after_sha256": "630034510e929cb6c4d1474072adbac8690dceac6383ba8cc183b15e69c57c97",
+      "bytes": 53129
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_constraint_work.rs",
+      "before_sha256": null,
+      "after_sha256": "003cb446a6d762aa2445f60619ac0a568600cb5c5b05fcafddd1a81412fc4960",
+      "bytes": 10223
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_labelled_block_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "92a1251bcb9f9955271343dd0c8f42336c3e05bf280f7ec92f46057a3abcdc77",
+      "bytes": 9178
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "9775f0aba77a3d63b4c962c276e42bef288236a18a448d61140d8d14dca3280b",
+      "bytes": 12896
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "before_sha256": null,
+      "after_sha256": "882ffbcef1549617e3d521ac0688f9f859d3ddbb094cd5e73c9582e5b8261d86",
+      "bytes": 42004
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_loops.rs",
+      "before_sha256": null,
+      "after_sha256": "989431d5a051da59f58fd590f713d0acb78ec193ed1e5ecc8e2d69d04f0f9fc1",
+      "bytes": 3857
+    },
+    {
+      "path": "crates/lrr/src/syntax/outline.rs",
+      "before_sha256": "a054004a73d919ce42bf8da82c8cbdfa8c49480b36deb0638a87071f5c36b948",
+      "after_sha256": "d336e8fdcea1346365d074fa8ee87ce22b7a2c6cf1df5e44189c6a4955a8749c",
+      "bytes": 55086
+    },
+    {
+      "path": "crates/lrr/src/syntax/pure_constants.rs",
+      "before_sha256": "798458213afe83fb5778cdb3281f7b833f3d18e5b5e9ace5f9105409f623ad64",
+      "after_sha256": "1e560fcfd3f45b03f0a7cc2fff18015ad71c1f89031b26c6771af4cfa3389f9f",
+      "bytes": 52835
+    }
+  ],
+  "patch_sha256": "7be83164f2153f4f63fa1f0008176e9b5a2ba77cdf04b25d733627d0b9f518fa",
+  "applied_successors": [
+    {
+      "patch": "artifacts/macos-first/root-constant-labelled-blocks-v1/complete.patch",
+      "sha256": "691c02193db29027360ef07de7cf48403c99e5e1f03b341c2d322ca7dd91ff53",
+      "check_apply_exit": 0
+    },
+    {
+      "patch": "artifacts/macos-first/sol-constant-family-context-review-v1/complete.patch",
+      "sha256": "6d0b9578d5399adf42e8fb406f1aaeb6399123ce6a5f30ab509271ea0f91de3d",
+      "check_apply_exit": 0
+    },
+    {
+      "patch": "artifacts/macos-first/sol-constant-literal-family-review-v1/complete.patch",
+      "sha256": "1cf2c48ee03b0a44ae2781ae253d48a3f9d05476712c7fd9583a6df6dda2464d",
+      "check_apply_exit": 0
+    }
+  ],
+  "controls": [
+    {
+      "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+      "name": "original_zero_iteration_while_array_length_keeps_source_and_editions",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+      "name": "original_infinite_const_function_spends_bounded_steps_in_its_actual_body",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+      "name": "loop_break_value_uses_owning_result_context_and_skips_the_suffix",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+      "name": "nested_labelled_break_reaches_its_exact_outer_loop",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+      "name": "break_in_while_condition_exits_the_selected_loop_without_body_demand",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+      "name": "return_inside_loop_uses_const_function_return_context",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+      "name": "continue_and_empty_loop_both_exhaust_the_same_step_budget",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+      "name": "while_break_value_and_wrong_loop_result_remain_reached_type_errors",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+      "name": "labelled_block_shadow_cannot_be_skipped_to_authorize_outer_loop_exit",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+      "name": "a_function_body_cannot_break_a_callers_loop",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_locals.rs",
+      "name": "original_mutable_parameter_and_nested_local_writes_keep_all_editions",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_locals.rs",
+      "name": "original_shared_reference_const_function_keeps_its_reached_frontier",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_locals.rs",
+      "name": "loop_scope_retains_outer_writes_and_pops_shadow_on_break_and_continue",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_locals.rs",
+      "name": "primitive_compound_assignment_reads_lhs_after_rhs_scope_writes",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_locals.rs",
+      "name": "local_replace_refuses_immutable_and_wrong_type_without_commit",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_locals.rs",
+      "name": "local_scope_stack_caps_activation_and_balances_failure_cleanup",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "unchanged_ctfe_scalar_loop_infers_mutable_index_from_real_parameter_all_editions",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "unchanged_const_while_and_loop_components_preserve_unsuffixed_bindings",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "source_scope_shadow_and_return_context_cannot_alias_other_numeric_bindings",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "connected_opaque_calls_do_not_mint_default_local_context",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "cold_item_body_is_not_a_constraint_on_its_enclosing_local",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "an_opaque_cold_use_cannot_erase_the_real_owning_return_context",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "header_and_namespace_probes_consume_the_callers_remaining_source_budget",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "a_cold_local_item_body_does_not_expand_the_source_constraint_work",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/outline.rs",
+      "name": "unchanged_anonymous_const_headers_are_distinct_unnamed_items_all_editions",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/outline.rs",
+      "name": "anonymous_body_edits_keep_headers_without_hiding_missing_identifiers",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "cold_type_disagreements_do_not_precheck_the_selected_constant_body",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "entered_type_disagreements_fail_at_the_actual_use_without_graph_diagnostics",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "unchanged_gcd_returns_entered_branch_values_with_actual_parameter_types",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "unchanged_prime_loop_infers_divisor_from_actual_source_parameter",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "name": "unchanged_array_alias_lengths_default_only_unconstrained_locals_all_editions",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "name": "unchanged_run_pass_array_component_requires_real_root_attribute_preparation",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "name": "repeat_length_locals_do_not_require_executing_the_ordinary_function",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "name": "length_context_replays_parameter_outer_local_generic_and_closure_refusals",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "name": "local_context_refuses_a_foreign_ast_and_charges_exact_length_admission",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "name": "cold_unresolved_exits_do_not_grant_targets_or_precheck_the_reached_scalar",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_labelled_block_tests.rs",
+      "name": "original_block_break_values_keep_actual_source_target_and_expression_ranges",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_labelled_block_tests.rs",
+      "name": "original_invalid_continues_preserve_three_exact_reached_target_refusals",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_labelled_block_tests.rs",
+      "name": "original_unlabelled_breaks_cannot_cross_a_block_to_an_outer_loop",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_labelled_block_tests.rs",
+      "name": "labelled_break_values_use_result_context_and_skip_the_unreached_suffix",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_labelled_block_tests.rs",
+      "name": "nested_same_spelling_blocks_unwind_only_the_selected_activation_and_local_scope",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_labelled_block_tests.rs",
+      "name": "loop_continue_can_cross_a_block_only_with_the_actual_outer_loop_label",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_labelled_block_tests.rs",
+      "name": "block_target_errors_stay_reached_and_keep_the_exact_source_range",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_labelled_block_tests.rs",
+      "name": "return_propagates_through_labelled_blocks_without_becoming_a_block_value",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_labelled_block_tests.rs",
+      "name": "labelled_activations_remain_bounded_and_preserve_reached_value_type_errors",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "compatible_owning_result_keeps_priority_over_later_compatible_cold_constraints",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "entered_incompatible_context_still_fails_at_the_actual_variable_use",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "incompatible_cold_context_cannot_suppress_a_later_actual_integer_constraint",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_literal_family_tests.rs",
+      "name": "reached_integer_rejects_bool_char_unit_and_float_context_at_its_source_literal",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_literal_family_tests.rs",
+      "name": "reached_float_rejects_bool_char_unit_and_integer_context_at_its_source_literal",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_literal_family_tests.rs",
+      "name": "while_break_value_unit_mismatch_is_a_reached_constant_type_error",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_literal_family_tests.rs",
+      "name": "correct_reached_scalar_literal_families_keep_their_exact_values",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_literal_family_tests.rs",
+      "name": "suffix_integer_validity_and_numeric_panic_keep_the_existing_reached_order",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/frontend/constant_literal_family_tests.rs",
+      "name": "cold_literal_family_errors_are_not_checked_before_the_selected_branch",
+      "status": "uncompiled"
+    }
+  ],
+  "controls_executed": 0,
+  "official_cases": 10,
+  "original_files": 17,
+  "original_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "raw_git_originals_verified": true,
+  "MAIN_integrated": false,
+  "canonical_installed": false,
+  "full_stock_fixture_passes_added": 0,
+  "all_source_files": [
+    {
+      "path": "crates/lrr/src/frontend/constant_literal_family_tests.rs",
+      "sha256": "bf5196b6c4321e6ff7a53e8255df52b66cfd2a883df0daf3c4c5fe493d58ad42",
+      "bytes": 5141
+    },
+    {
+      "path": "crates/lrr/src/frontend/constant_locals.rs",
+      "sha256": "db20d4f3f912a2a5cb885871f5c0c7ca1fd034082cce8f88a29d572d268053dd",
+      "bytes": 8018
+    },
+    {
+      "path": "crates/lrr/src/frontend/constant_loop_tests.rs",
+      "sha256": "3870ac15d44d15c5b9a2579f7ba814907fc8eb1618e1467cea54e12f7f0f3afa",
+      "bytes": 5659
+    },
+    {
+      "path": "crates/lrr/src/frontend/constants.rs",
+      "sha256": "630034510e929cb6c4d1474072adbac8690dceac6383ba8cc183b15e69c57c97",
+      "bytes": 53129
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_constraint_work.rs",
+      "sha256": "003cb446a6d762aa2445f60619ac0a568600cb5c5b05fcafddd1a81412fc4960",
+      "bytes": 10223
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_labelled_block_tests.rs",
+      "sha256": "92a1251bcb9f9955271343dd0c8f42336c3e05bf280f7ec92f46057a3abcdc77",
+      "bytes": 9178
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "sha256": "9775f0aba77a3d63b4c962c276e42bef288236a18a448d61140d8d14dca3280b",
+      "bytes": 12896
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "sha256": "882ffbcef1549617e3d521ac0688f9f859d3ddbb094cd5e73c9582e5b8261d86",
+      "bytes": 42004
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_loops.rs",
+      "sha256": "989431d5a051da59f58fd590f713d0acb78ec193ed1e5ecc8e2d69d04f0f9fc1",
+      "bytes": 3857
+    },
+    {
+      "path": "crates/lrr/src/syntax/outline.rs",
+      "sha256": "d336e8fdcea1346365d074fa8ee87ce22b7a2c6cf1df5e44189c6a4955a8749c",
+      "bytes": 55086
+    },
+    {
+      "path": "crates/lrr/src/syntax/pure_constants.rs",
+      "sha256": "1e560fcfd3f45b03f0a7cc2fff18015ad71c1f89031b26c6771af4cfa3389f9f",
+      "bytes": 52835
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/COPYRIGHT",
+      "sha256": "172020dbfd5b53a226dfde77616190a48dcff519b0bc0e6deb91a8450782c4af",
+      "bytes": 1571
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/LICENSE-APACHE",
+      "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "bytes": 9723
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/LICENSE-MIT",
+      "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "bytes": 1068
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/manifest.json",
+      "sha256": "96c328b3fcbe9ec783fceb12488a13c3993ab8e056ca3e98ab50b62b4e612b30",
+      "bytes": 6469
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const-block-non-item-statement-3.rs",
+      "sha256": "18e646b302b163217b37d10b66223e4eb9d885ac96317ba0903e7db10554a030",
+      "bytes": 128
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const-block-non-item-statement.rs",
+      "sha256": "98f1d402de3ff92a7ef26adc86c31c655746f0c13184001e893510fa273cc634",
+      "bytes": 327
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.allow.stderr",
+      "sha256": "4aa305eac6a01a82ce82b2e65e59cf52b60be18e9eb3a9c637f637a31372d4be",
+      "bytes": 381
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.rs",
+      "sha256": "5591b3fa000aff9105d382b71d3edc5d5154aaad2af6b463b7cf4b14f182e4a3",
+      "bytes": 546
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.warn.stderr",
+      "sha256": "bf55748e03ed9154e362d3cfa7158ec8ea3a680fcb6924ffe68f839a669b3f31",
+      "bytes": 1527
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const-labeled-break.rs",
+      "sha256": "07d3e298d10795e40866115b9b521cd8fce96a9f08bf0b709ca4e4edd8c7347f",
+      "bytes": 283
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/control-flow/basics.rs",
+      "sha256": "775b613d035b23f47c54406cc68034384ffb9f1d121acc7f5a1f85b4ff404655",
+      "bytes": 1371
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/control-flow/loop.rs",
+      "sha256": "2253f87458478482a2c038c94e6ed45d15430c434f71a8eb44d80bcba6b2cb4a",
+      "bytes": 1102
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/locals-in-const-fn.rs",
+      "sha256": "a79e76eb7fc939933782d0154d5c19baeb736d679e2e617e6ea9e2b65a3d8b59",
+      "bytes": 489
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/for-loop-while/label_break_value.rs",
+      "sha256": "d669bf983f16e4a4b0034919c0ae427cf23337111b081ebee52fdae73cb1cca9",
+      "bytes": 3636
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/label/label_break_value_continue.rs",
+      "sha256": "522c687b43315ca209d68ce88391b61aa2ab50d70a9eff2cc9556bcd8416b573",
+      "bytes": 649
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/label/label_break_value_continue.stderr",
+      "sha256": "2761e225ec15b71fa606e88678d9c96414da1f6fb78cb6e3102fb3cca36d49a4",
+      "bytes": 950
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/label/label_break_value_unlabeled_break.rs",
+      "sha256": "3d5f0a6b944a6970a436657b1b49d7e98dc611d84fd8dabc1d9cab4d9db97a0e",
+      "bytes": 438
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/label/label_break_value_unlabeled_break.stderr",
+      "sha256": "2d4a24fb0810770b79ca06fefdcef192cad65489e8ec7fe16f0974281800e8f9",
+      "bytes": 608
+    }
+  ]
+}

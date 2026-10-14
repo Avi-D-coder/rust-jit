@@ -1,0 +1,40 @@
+{
+  "source_member": "ccf1653daf3b5934920c730275092d4fa0ca9b310f17ac88b510bbdd49ccbadf",
+  "source_baseline": "e06102b76e38d5929c79ff5eee5333ba4b65866b0128a384b36e97a7fb311e2a",
+  "patch_sha256": "7be83164f2153f4f63fa1f0008176e9b5a2ba77cdf04b25d733627d0b9f518fa",
+  "direct11path_replay": true,
+  "original_files": 17,
+  "raw_git_verification": true,
+  "canonical_changed": false,
+  "current_inventory": {
+    "cases": 292,
+    "files": 470
+  },
+  "would_add": {
+    "files": [
+      "tests/ui/consts/const-block-non-item-statement-3.rs",
+      "tests/ui/consts/const-block-non-item-statement.rs",
+      "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.allow.stderr",
+      "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.rs",
+      "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.warn.stderr",
+      "tests/ui/consts/const-labeled-break.rs",
+      "tests/ui/consts/control-flow/loop.rs",
+      "tests/ui/for-loop-while/label_break_value.rs",
+      "tests/ui/label/label_break_value_continue.rs",
+      "tests/ui/label/label_break_value_continue.stderr",
+      "tests/ui/label/label_break_value_unlabeled_break.rs",
+      "tests/ui/label/label_break_value_unlabeled_break.stderr"
+    ],
+    "cases": [
+      "tests/ui/consts/const-block-non-item-statement-3.rs",
+      "tests/ui/consts/const-block-non-item-statement.rs",
+      "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.rs",
+      "tests/ui/consts/const-labeled-break.rs",
+      "tests/ui/consts/control-flow/loop.rs",
+      "tests/ui/for-loop-while/label_break_value.rs",
+      "tests/ui/label/label_break_value_continue.rs",
+      "tests/ui/label/label_break_value_unlabeled_break.rs"
+    ]
+  },
+  "Rust_executions": 0
+}

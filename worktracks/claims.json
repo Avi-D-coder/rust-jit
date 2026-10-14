@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Root T054 local/loop/anonymous/length source proposal plus active labelled-block targets; uncompiled. v68 fullgate2929/1/22 collected; v69 exact core inventory Vec7/0 and strict/audit/fmt passed, fresh fullgate21897 asynchronous. No MAIN/task/runtime/full-fixture acceptance.",
+      "scope": "Root T054 coherent11 local/loop/anonymous/length/labelled-block proposal frozen source-only:54uncompiled controls,10 officialcases/17originals, exact replay/format/rawGit checked. v69 Vec7/0 strict/audit/fmt; fullgate21897 asynchronous. No canonical/MAIN/task/runtime/full-fixture acceptance.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -413,11 +413,12 @@
         "artifacts/macos-first/root-runtime-macro-owning-worlds-v1/",
         "artifacts/macos-first/root-constant-local-length-context-v1/",
         "artifacts/macos-first/root-core-macro-inventory-v1/",
-        "artifacts/macos-first/root-constant-labelled-blocks-v1/"
+        "artifacts/macos-first/root-constant-labelled-blocks-v1/",
+        "artifacts/macos-first/root-constant-coherent-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T22:10:16.601547+00:00",
+      "updated_at": "2026-10-14T22:20:50.993759+00:00",
       "review_after": "2026-10-15T05:55:00.598518+00:00"
     },
     {
@@ -454,7 +455,7 @@
       "owner": "/root/generic_call_logic",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Corrected alias38 originals restored,63 controls uncompiled. Frozen family-compatible constant graph successor3controls uncompiled; active independent labelled-block source review. Consumer integration awaits genuine Value-module installer. No source/runtime authority fabricated.",
+      "scope": "Frozen alias38 and constant family/literal review successors uncompiled; root merged constant corrections into coherent11. Active unchanged upstream label_break_value normal main runtime adapter in new test leaf; no overlapping production edits. Full original runtime/main/assertion acceptance pending.",
       "paths": [
         "artifacts/macos-first/sol-constant-macro-admission-v1/",
         "artifacts/macos-first/sol-constant-path-selection-v1/",
@@ -482,11 +483,13 @@
         "artifacts/macos-first/sol-alias-interpreter-integration-v2/",
         "artifacts/macos-first/sol-alias-original-byte-restoration-v1/",
         "artifacts/macos-first/sol-alias-consumer-replay-v1/",
-        "artifacts/macos-first/sol-constant-family-context-review-v1/"
+        "artifacts/macos-first/sol-constant-family-context-review-v1/",
+        "artifacts/macos-first/sol-constant-literal-family-review-v1/",
+        "artifacts/macos-first/sol-stock-labelled-block-runtime-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T22:10:16.601547+00:00",
+      "updated_at": "2026-10-14T22:20:50.993759+00:00",
       "review_after": "2026-10-15T05:26:09.232158+00:00"
     },
     {
@@ -551,7 +554,7 @@
       "owner": "/root/stock_numeric_logic",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Frozen116-path closure and12-path shared Type/Value source proposals uncompiled;17 shared originals independently verified post-format. Active genuine Value module/core-std reexport installer, owning-profile/membership/resource loop. No type/Fn/layout/ABI permission from namespace readiness.",
+      "scope": "Frozen closure116/shared12/Value module installer12/consumer join2 source proposals uncompiled. Active coherent alias/closure/Value union with exact reviewed ordering and original-byte inventory. No canonical/MAIN/runtime/task acceptance.",
       "paths": [
         "artifacts/macos-first/sol-source-closures-v1/",
         "artifacts/macos-first/sol-closure-own-bindings-v1/",
@@ -568,11 +571,13 @@
         "artifacts/macos-first/sol-closure-source-call-admission-v1/",
         "artifacts/macos-first/sol-closure-interpreter-integration-v1/",
         "artifacts/macos-first/sol-closure-type-value-publication-merge-v1/",
-        "artifacts/macos-first/sol-closure-value-module-installer-v1/"
+        "artifacts/macos-first/sol-closure-value-module-installer-v1/",
+        "artifacts/macos-first/sol-closure-value-consumer-join-v1/",
+        "artifacts/macos-first/sol-alias-closure-coherent-integration-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T21:57:49.482819+00:00",
+      "updated_at": "2026-10-14T22:20:50.993759+00:00",
       "review_after": "2026-10-15T11:54:30.661821+00:00"
     },
     {

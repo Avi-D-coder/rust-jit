@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/rust-lang/rust",
+  "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "license": "MIT OR Apache-2.0",
+  "scope": "private exact union of already imported coherent9 and labelled-block review inputs; no execution claim",
+  "files": [
+    {
+      "path": "COPYRIGHT",
+      "git_blob": "4dad74f234eaaaa3c311ca031216e16fc9c4e940",
+      "sha256": "172020dbfd5b53a226dfde77616190a48dcff519b0bc0e6deb91a8450782c4af",
+      "bytes": 1571
+    },
+    {
+      "path": "LICENSE-APACHE",
+      "git_blob": "1b5ec8b78e237b5c3b3d812a7c0a6589d0f7161d",
+      "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "bytes": 9723
+    },
+    {
+      "path": "LICENSE-MIT",
+      "git_blob": "a2070c4be7acd5316f8d0357ca3c12419a2f3c62",
+      "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "bytes": 1068
+    },
+    {
+      "path": "tests/ui/consts/const-block-non-item-statement-3.rs",
+      "git_blob": "ba77e721c7f774d53549c3b48a809fafa2dd8f75",
+      "sha256": "18e646b302b163217b37d10b66223e4eb9d885ac96317ba0903e7db10554a030",
+      "bytes": 128
+    },
+    {
+      "path": "tests/ui/consts/const-block-non-item-statement.rs",
+      "git_blob": "4cb55e3bde6c5a228063ae03c48804bad6f61b88",
+      "sha256": "98f1d402de3ff92a7ef26adc86c31c655746f0c13184001e893510fa273cc634",
+      "bytes": 327
+    },
+    {
+      "path": "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.allow.stderr",
+      "git_blob": "dddd79a43838f625a56747bc711080a5e005d561",
+      "sha256": "4aa305eac6a01a82ce82b2e65e59cf52b60be18e9eb3a9c637f637a31372d4be",
+      "bytes": 381
+    },
+    {
+      "path": "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.rs",
+      "git_blob": "7fa338f025a7bf1f770901bf76ab70dcb9bd5170",
+      "sha256": "5591b3fa000aff9105d382b71d3edc5d5154aaad2af6b463b7cf4b14f182e4a3",
+      "bytes": 546
+    },
+    {
+      "path": "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.warn.stderr",
+      "git_blob": "44abf8be6bdfaf7e5fd160f562eb68a5f6a69abb",
+      "sha256": "bf55748e03ed9154e362d3cfa7158ec8ea3a680fcb6924ffe68f839a669b3f31",
+      "bytes": 1527
+    },
+    {
+      "path": "tests/ui/consts/const-labeled-break.rs",
+      "git_blob": "16444dfefe2b0c9370bffda39afa2295a30bc88b",
+      "sha256": "07d3e298d10795e40866115b9b521cd8fce96a9f08bf0b709ca4e4edd8c7347f",
+      "bytes": 283
+    },
+    {
+      "path": "tests/ui/consts/control-flow/basics.rs",
+      "git_blob": "c4e32e246f0d17f364df1b0640ba1b5ee419e3d3",
+      "sha256": "775b613d035b23f47c54406cc68034384ffb9f1d121acc7f5a1f85b4ff404655",
+      "bytes": 1371
+    },
+    {
+      "path": "tests/ui/consts/control-flow/loop.rs",
+      "git_blob": "7da88dfd2ac89c657e71a5872fa1abfbf4ee6367",
+      "sha256": "2253f87458478482a2c038c94e6ed45d15430c434f71a8eb44d80bcba6b2cb4a",
+      "bytes": 1102
+    },
+    {
+      "path": "tests/ui/consts/locals-in-const-fn.rs",
+      "git_blob": "98f230320f62c5d0bbd7da255d87b5be9400d47b",
+      "sha256": "a79e76eb7fc939933782d0154d5c19baeb736d679e2e617e6ea9e2b65a3d8b59",
+      "bytes": 489
+    },
+    {
+      "path": "tests/ui/for-loop-while/label_break_value.rs",
+      "git_blob": "92242c50f45a655d564a74a22b3aaa693861a823",
+      "sha256": "d669bf983f16e4a4b0034919c0ae427cf23337111b081ebee52fdae73cb1cca9",
+      "bytes": 3636
+    },
+    {
+      "path": "tests/ui/label/label_break_value_continue.rs",
+      "git_blob": "22172f4fd2e88e4edfe1bdb3db164c93b9bdf2ee",
+      "sha256": "522c687b43315ca209d68ce88391b61aa2ab50d70a9eff2cc9556bcd8416b573",
+      "bytes": 649
+    },
+    {
+      "path": "tests/ui/label/label_break_value_continue.stderr",
+      "git_blob": "284d213d65eaab32f007c46539055d63511f8c63",
+      "sha256": "2761e225ec15b71fa606e88678d9c96414da1f6fb78cb6e3102fb3cca36d49a4",
+      "bytes": 950
+    },
+    {
+      "path": "tests/ui/label/label_break_value_unlabeled_break.rs",
+      "git_blob": "2a4f5d57493e1887587278cd12c0f1f3e38adc9c",
+      "sha256": "3d5f0a6b944a6970a436657b1b49d7e98dc611d84fd8dabc1d9cab4d9db97a0e",
+      "bytes": 438
+    },
+    {
+      "path": "tests/ui/label/label_break_value_unlabeled_break.stderr",
+      "git_blob": "a2ccd27b83663a8e63432e6137812fd38765739e",
+      "sha256": "2d4a24fb0810770b79ca06fefdcef192cad65489e8ec7fe16f0974281800e8f9",
+      "bytes": 608
+    }
+  ],
+  "cases": [
+    {
+      "path": "tests/ui/consts/const-block-non-item-statement-3.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/const-block-non-item-statement.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ revisions: warn allow",
+        "//@ compile-flags: -Z tiny-const-eval-limit"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/const-labeled-break.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/control-flow/basics.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/control-flow/loop.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/locals-in-const-fn.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/for-loop-while/label_break_value.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/label/label_break_value_continue.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/label/label_break_value_unlabeled_break.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    }
+  ]
+}

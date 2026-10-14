@@ -5858,6 +5858,26 @@
             }
           ]
         }
+      },
+      "implementation": {
+        "current_coherent_local_control_successor": {
+          "artifact": "worktracks/candidates/root-constant-coherent-v1/README.md",
+          "status": "source_only_uncompiled",
+          "source_baseline": "e06102b76e38d5929c79ff5eee5333ba4b65866b0128a384b36e97a7fb311e2a",
+          "source_member": "ccf1653daf3b5934920c730275092d4fa0ca9b310f17ac88b510bbdd49ccbadf",
+          "source_paths": 11,
+          "Rust_controls": 54,
+          "Rust_controls_executed": 0,
+          "official_cases": 10,
+          "original_license_files": 17,
+          "patch_sha256": "7be83164f2153f4f63fa1f0008176e9b5a2ba77cdf04b25d733627d0b9f518fa",
+          "exact_replay": true,
+          "raw_git_originals_verified": true,
+          "canonical_installed": false,
+          "MAIN_integrated": false,
+          "task_complete": false,
+          "full_stock_fixture_passes": 0
+        }
       }
     },
     {

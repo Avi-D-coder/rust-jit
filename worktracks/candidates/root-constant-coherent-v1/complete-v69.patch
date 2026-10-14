@@ -1,0 +1,3730 @@
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_literal_family_tests.rs
+@@ -0,0 +1,132 @@
++//! Reached LRR family/ordering controls; original fixtures remain unchanged.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    source::snapshot::{CfgSet, SourceBlob},
++};
++fn result(text: &str, edition: u16) -> Result<ConstEvaluation, ConstFailure> {
++    let source = ConstantSource::parse(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        Digest([145; 32]),
++        CfgSet::guest_default(),
++    )
++    .unwrap();
++    let at = source
++        .declarations()
++        .iter()
++        .find(|d| d.name() == "A")
++        .unwrap()
++        .range();
++    evaluate(&source.constant(at).unwrap(), ConstLimits::default())
++}
++fn assert_type_at(text: &str, fragment: &str, edition: u16) {
++    let error = result(text, edition).unwrap_err();
++    let start = text.find(fragment).unwrap();
++    assert_eq!(error.diagnostic().code, "LRR-E-CONST-TYPE");
++    assert_eq!(
++        error.range(),
++        SourceRange {
++            start: start as u32,
++            end: (start + fragment.len()) as u32
++        }
++    );
++    assert_eq!(error.source(), Digest::of_bytes(text.as_bytes()));
++    assert!(error.numeric_panic().is_none());
++    assert!(error.panic().is_none());
++}
++#[test]
++fn reached_integer_rejects_bool_char_unit_and_float_context_at_its_source_literal() {
++    for edition in [2015, 2018, 2021, 2024] {
++        for ty in ["bool", "char", "()", "f32", "f64"] {
++            assert_type_at(&format!("const A:{ty}=1;"), "1", edition);
++        }
++    }
++}
++#[test]
++fn reached_float_rejects_bool_char_unit_and_integer_context_at_its_source_literal() {
++    for edition in [2015, 2018, 2021, 2024] {
++        for ty in ["bool", "char", "()", "i32", "u8", "usize"] {
++            for spelling in ["1.0", "1.0f32", "1e400f32"] {
++                assert_type_at(&format!("const A:{ty}={spelling};"), spelling, edition);
++            }
++        }
++    }
++}
++#[test]
++fn while_break_value_unit_mismatch_is_a_reached_constant_type_error() {
++    for edition in [2015, 2018, 2021, 2024] {
++        assert_type_at("const A:i32={while true{break 3;}5};", "3", edition);
++    }
++}
++#[test]
++fn correct_reached_scalar_literal_families_keep_their_exact_values() {
++    for edition in [2015, 2018, 2021, 2024] {
++        for (text, expected) in [
++            ("const A:u8=7;", ValueRepr::unsigned(TypeId(9), 7).unwrap()),
++            (
++                "const A:i32=-2147483648;",
++                ValueRepr::signed(TypeId(6), -2147483648).unwrap(),
++            ),
++            ("const A:f32=1.0;", ValueRepr::f32(1.0)),
++            ("const A:f64=1.0;", ValueRepr::f64(1.0)),
++            ("const A:bool=true;", ValueRepr::boolean(true)),
++            ("const A:char='x';", ValueRepr::character('x')),
++            ("const A:()=();", ValueRepr::unit()),
++        ] {
++            let value = result(text, edition).unwrap();
++            assert_eq!(value.value().scalar().unwrap(), expected);
++            assert_eq!(value.source(), Digest::of_bytes(text.as_bytes()));
++        }
++    }
++}
++#[test]
++fn suffix_integer_validity_and_numeric_panic_keep_the_existing_reached_order() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let error = result("const A:bool=1u8;", edition).unwrap_err();
++        assert_eq!(error.diagnostic().code, "LRR-E-CONST-TYPE");
++        assert_eq!(
++            error.diagnostic().message,
++            "constant integer suffix conflicts with context"
++        );
++        assert_type_at("const A:bool=1u8;", "1u8", edition);
++        let invalid = result("const A:bool=1bad;", edition).unwrap_err();
++        assert_eq!(invalid.diagnostic().code, "LRR-E-CONST-TYPE");
++        assert_eq!(
++            invalid.diagnostic().message,
++            "invalid constant integer spelling"
++        );
++        assert_type_at("const A:bool=1bad;", "1bad", edition);
++        let float_invalid = result("const A:f32=1e400f32;", edition).unwrap_err();
++        assert_eq!(float_invalid.diagnostic().code, "LRR-E-VALUE-REPR");
++        let overflow = result("const A:u8=256;", edition).unwrap_err();
++        assert_eq!(overflow.diagnostic().code, "LRR-E-VALUE-REPR");
++        assert!(overflow.numeric_panic().is_none());
++        let unsigned = result("const A:u8=-0u8;", edition).unwrap_err();
++        assert_eq!(unsigned.diagnostic().code, "LRR-E-OP-TYPE");
++        let panic = result("const A:i32=1/0;", edition).unwrap_err();
++        assert_eq!(panic.diagnostic().code, "LRR-E-CONST-PANIC");
++        assert_eq!(
++            panic.numeric_panic(),
++            Some(crate::vm::numeric::PanicKind::DivisionByZero)
++        );
++        assert_type_at("const A:bool=1/0;", "1", edition);
++    }
++}
++#[test]
++fn cold_literal_family_errors_are_not_checked_before_the_selected_branch() {
++    for edition in [2015, 2018, 2021, 2024] {
++        for text in [
++            "const A:i32=if false{let bad:bool=1;0}else{9};",
++            "const A:i32=if false{let bad:()=1.0;0}else{9};",
++        ] {
++            assert_eq!(
++                result(text, edition).unwrap().value().scalar().unwrap(),
++                ValueRepr::signed(TypeId(6), 9).unwrap()
++            );
++        }
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_locals.rs
+@@ -0,0 +1,235 @@
++//! Private evaluator activations; no guest handles or persistent type authority.
++use super::*;
++
++struct LocalCell {
++    value: ConstValue,
++    mutable: bool,
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::{
++        core::profile::ProfileIdentity,
++        source::snapshot::{CfgSet, SourceBlob},
++    };
++    const ORIGINAL: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/locals-in-const-fn.rs"
++    );
++    fn source(text: &str, edition: u16) -> ConstantSource {
++        ConstantSource::parse(
++            &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++            ProfileIdentity {
++                edition,
++                ..ProfileIdentity::current()
++            },
++            Digest([217; 32]),
++            CfgSet::guest_default(),
++        )
++        .unwrap()
++    }
++    fn call(source: &ConstantSource, name: &str) -> ConstantPlan {
++        let at = source
++            .declarations()
++            .iter()
++            .find(|d| d.name() == name)
++            .unwrap()
++            .range();
++        source
++            .const_call(
++                at,
++                vec![
++                    ConstValue::from_scalar(ValueRepr::unsigned(TypeId(13), 42).unwrap()).unwrap(),
++                ],
++            )
++            .unwrap()
++    }
++    #[test]
++    fn original_mutable_parameter_and_nested_local_writes_keep_all_editions() {
++        for edition in [2015, 2018, 2021, 2024] {
++            let source = source(ORIGINAL, edition);
++            for (name, expected) in [("foo", 42), ("boo", 52)] {
++                let plan = call(&source, name);
++                let value = evaluate(&plan, ConstLimits::default()).unwrap();
++                assert_eq!(value.source(), Digest::of_bytes(ORIGINAL.as_bytes()));
++                assert_eq!(
++                    value.value().scalar().unwrap(),
++                    ValueRepr::unsigned(TypeId(13), expected).unwrap()
++                );
++                assert_eq!(plan.profile().edition, edition);
++            }
++        }
++    }
++    #[test]
++    fn original_shared_reference_const_function_keeps_its_reached_frontier() {
++        let source = source(ORIGINAL, 2024);
++        let error = evaluate(&call(&source, "bar"), ConstLimits::default()).unwrap_err();
++        assert_eq!(error.diagnostic().code, "LRR-E-CONST-UNSUPPORTED");
++        assert_eq!(error.source(), Digest::of_bytes(ORIGINAL.as_bytes()));
++    }
++    fn number(text: &str) -> ValueRepr {
++        let source = source(text, 2024);
++        let at = source
++            .declarations()
++            .iter()
++            .find(|d| d.name() == "A")
++            .unwrap()
++            .range();
++        evaluate(&source.constant(at).unwrap(), ConstLimits::default())
++            .unwrap()
++            .value()
++            .scalar()
++            .unwrap()
++    }
++    #[test]
++    fn loop_scope_retains_outer_writes_and_pops_shadow_on_break_and_continue() {
++        assert_eq!(
++            number(
++                "const A:i32={let mut x:i32=0; while x<4 {x+=1; let x:i32=99; if x==99 {continue;} missing();} x};"
++            ),
++            ValueRepr::signed(TypeId(6), 4).unwrap()
++        );
++        assert_eq!(
++            number(
++                "const A:i32={let mut x:i32=0; loop {x+=1; let x:i32=99; if x==99 {break;} missing();} x};"
++            ),
++            ValueRepr::signed(TypeId(6), 1).unwrap()
++        );
++    }
++    #[test]
++    fn primitive_compound_assignment_reads_lhs_after_rhs_scope_writes() {
++        assert_eq!(
++            number("const A:i32={let mut x:i32=1; x += {x=10; 2}; x};"),
++            ValueRepr::signed(TypeId(6), 12).unwrap()
++        );
++    }
++    #[test]
++    fn local_replace_refuses_immutable_and_wrong_type_without_commit() {
++        let mut locals = LocalScopes::default();
++        locals.push().unwrap();
++        let old = ConstValue::from_scalar(ValueRepr::signed(TypeId(6), 7).unwrap()).unwrap();
++        locals.insert("x".into(), false, old.clone()).unwrap();
++        let next = ConstValue::from_scalar(ValueRepr::signed(TypeId(6), 8).unwrap()).unwrap();
++        assert_eq!(
++            locals.replace("x", next).unwrap_err().code,
++            "LRR-E-CONST-TYPE"
++        );
++        assert_eq!(locals.get("x"), Some(&old));
++        locals.insert("x".into(), true, old.clone()).unwrap();
++        assert!(
++            locals
++                .replace(
++                    "x",
++                    ConstValue::from_scalar(ValueRepr::boolean(true)).unwrap()
++                )
++                .is_err()
++        );
++        assert_eq!(locals.get("x"), Some(&old));
++        locals.pop().unwrap();
++        assert!(locals.get("x").is_none());
++    }
++    #[test]
++    fn local_scope_stack_caps_activation_and_balances_failure_cleanup() {
++        let mut locals = LocalScopes::default();
++        for _ in 0..128 {
++            locals.push().unwrap();
++        }
++        assert_eq!(locals.push().unwrap_err().code, "LRR-E-CONST-LIMIT");
++        for _ in 0..128 {
++            locals.pop().unwrap();
++        }
++        assert!(locals.scopes.is_empty());
++        assert_eq!(locals.bindings, 0);
++    }
++}
++#[derive(Default)]
++pub(super) struct LocalScopes {
++    scopes: Vec<BTreeMap<String, LocalCell>>,
++    bindings: usize,
++}
++impl LocalScopes {
++    pub(super) fn push(&mut self) -> Result<(), Diagnostic> {
++        if self.scopes.len() >= 128 {
++            return Err(fault("LRR-E-CONST-LIMIT", "constant local scope limit"));
++        }
++        self.scopes
++            .try_reserve(1)
++            .map_err(|_| fault("LRR-E-CONST-LIMIT", "constant local scope allocation"))?;
++        self.scopes.push(BTreeMap::new());
++        Ok(())
++    }
++    pub(super) fn pop(&mut self) -> Result<(), Diagnostic> {
++        let scope = self
++            .scopes
++            .pop()
++            .ok_or_else(|| fault("LRR-E-CONST-SOURCE", "constant local scope is absent"))?;
++        self.bindings = self.bindings.checked_sub(scope.len()).ok_or_else(|| {
++            fault(
++                "LRR-E-CONST-SOURCE",
++                "constant local scope accounting differs",
++            )
++        })?;
++        Ok(())
++    }
++    pub(super) fn get(&self, name: &str) -> Option<&ConstValue> {
++        self.scopes
++            .iter()
++            .rev()
++            .find_map(|scope| scope.get(name))
++            .map(|cell| &cell.value)
++    }
++    pub(super) fn contains_key(&self, name: &str) -> bool {
++        self.get(name).is_some()
++    }
++    pub(super) fn insert(
++        &mut self,
++        name: String,
++        mutable: bool,
++        value: ConstValue,
++    ) -> Result<(), Diagnostic> {
++        let scope = self.scopes.last_mut().ok_or_else(|| {
++            fault(
++                "LRR-E-CONST-SOURCE",
++                "constant binding activation is absent",
++            )
++        })?;
++        if !scope.contains_key(&name) {
++            self.bindings = self
++                .bindings
++                .checked_add(1)
++                .filter(|n| *n <= 256)
++                .ok_or_else(|| fault("LRR-E-CONST-LIMIT", "constant local binding limit"))?;
++        }
++        scope.insert(name, LocalCell { value, mutable });
++        Ok(())
++    }
++    pub(super) fn replace(&mut self, name: &str, value: ConstValue) -> Result<(), Diagnostic> {
++        let cell = self
++            .scopes
++            .iter_mut()
++            .rev()
++            .find_map(|scope| scope.get_mut(name))
++            .ok_or_else(|| {
++                fault(
++                    "LRR-E-CONST-SOURCE",
++                    "assignment has no local source binding",
++                )
++            })?;
++        if !cell.mutable {
++            return Err(fault(
++                "LRR-E-CONST-TYPE",
++                "assignment requires a mutable constant local",
++            ));
++        }
++        if cell.value.scalar().map(|v| v.type_id) != value.scalar().map(|v| v.type_id)
++            || value.scalar().is_none()
++        {
++            return Err(fault(
++                "LRR-E-CONST-TYPE",
++                "constant local assignment type differs",
++            ));
++        }
++        cell.value = value;
++        Ok(())
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_loop_tests.rs
+@@ -0,0 +1,161 @@
++//! Upstream source selections plus LRR control/budget regressions, not fixture passes.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    source::snapshot::{CfgSet, SourceBlob},
++};
++const ORIGINAL: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/control-flow/loop.rs"
++);
++fn source(text: &str, edition: u16) -> ConstantSource {
++    ConstantSource::parse(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        Digest([213; 32]),
++        CfgSet::guest_default(),
++    )
++    .unwrap()
++}
++fn constant(text: &str, name: &str, edition: u16) -> ConstantPlan {
++    let source = source(text, edition);
++    let at = source
++        .declarations()
++        .iter()
++        .find(|d| d.name() == name)
++        .unwrap()
++        .range();
++    source.constant(at).unwrap()
++}
++#[test]
++fn original_zero_iteration_while_array_length_keeps_source_and_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let source = source(ORIGINAL, edition);
++        let sites = crate::syntax::pure_constants::fixture_length_sites(ORIGINAL, "main", edition);
++        assert_eq!(sites.len(), 1);
++        let plan = source.array_length(sites[0]).unwrap();
++        let result = evaluate(&plan, ConstLimits::default()).unwrap();
++        assert_eq!(
++            result.value().scalar().unwrap(),
++            ValueRepr::unsigned(TypeId(13), 4).unwrap()
++        );
++        assert_eq!(result.source(), Digest::of_bytes(ORIGINAL.as_bytes()));
++        assert_eq!(plan.profile().edition, edition);
++    }
++}
++#[test]
++fn original_infinite_const_function_spends_bounded_steps_in_its_actual_body() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let source = source(ORIGINAL, edition);
++        let at = source
++            .declarations()
++            .iter()
++            .find(|d| d.name() == "foo")
++            .unwrap()
++            .range();
++        let plan = source.const_call(at, vec![]).unwrap();
++        let error = evaluate(&plan, ConstLimits::new(32, 4, 128).unwrap()).unwrap_err();
++        assert_eq!(error.diagnostic().code, "LRR-E-CONST-LIMIT");
++        assert_eq!(error.source(), Digest::of_bytes(ORIGINAL.as_bytes()));
++        assert_eq!(error.requested_plan(), Some(plan.identity()));
++        assert!(at.contains(error.range()));
++        assert_eq!(error.evaluation_steps(), 32);
++    }
++}
++#[test]
++fn loop_break_value_uses_owning_result_context_and_skips_the_suffix() {
++    let text = "const A:u8=loop { break 7; missing(); };";
++    for edition in [2015, 2018, 2021, 2024] {
++        let result = evaluate(&constant(text, "A", edition), ConstLimits::default()).unwrap();
++        assert_eq!(
++            result.value().scalar().unwrap(),
++            ValueRepr::unsigned(TypeId(9), 7).unwrap()
++        );
++    }
++}
++#[test]
++fn nested_labelled_break_reaches_its_exact_outer_loop() {
++    let text = "const A:i32='outer: loop { loop { break 'outer 9; } };";
++    assert_eq!(
++        evaluate(&constant(text, "A", 2024), ConstLimits::default())
++            .unwrap()
++            .value()
++            .scalar()
++            .unwrap(),
++        ValueRepr::signed(TypeId(6), 9).unwrap()
++    );
++}
++#[test]
++fn break_in_while_condition_exits_the_selected_loop_without_body_demand() {
++    let text = "const A:i32={ 'a: while break 'a {} 5 };";
++    assert_eq!(
++        evaluate(&constant(text, "A", 2024), ConstLimits::default())
++            .unwrap()
++            .value()
++            .scalar()
++            .unwrap(),
++        ValueRepr::signed(TypeId(6), 5).unwrap()
++    );
++}
++#[test]
++fn return_inside_loop_uses_const_function_return_context() {
++    let text = "const fn f()->u8 { loop { return 17; } } const A:u8=f();";
++    assert_eq!(
++        evaluate(&constant(text, "A", 2024), ConstLimits::default())
++            .unwrap()
++            .value()
++            .scalar()
++            .unwrap(),
++        ValueRepr::unsigned(TypeId(9), 17).unwrap()
++    );
++}
++#[test]
++fn continue_and_empty_loop_both_exhaust_the_same_step_budget() {
++    for text in [
++        "const A:i32=loop {};",
++        "const A:i32='a: loop { continue 'a; missing(); };",
++    ] {
++        let error = evaluate(
++            &constant(text, "A", 2024),
++            ConstLimits::new(24, 4, 128).unwrap(),
++        )
++        .unwrap_err();
++        assert_eq!(error.diagnostic().code, "LRR-E-CONST-LIMIT");
++        assert_eq!(error.evaluation_steps(), 24);
++        assert!(error.panic().is_none());
++    }
++}
++#[test]
++fn while_break_value_and_wrong_loop_result_remain_reached_type_errors() {
++    for text in [
++        "const A:i32={ while true { break 3; } 5 };",
++        "const A:u8=loop { break true; };",
++    ] {
++        assert_eq!(
++            evaluate(&constant(text, "A", 2024), ConstLimits::default())
++                .unwrap_err()
++                .diagnostic()
++                .code,
++            "LRR-E-CONST-TYPE"
++        );
++    }
++}
++#[test]
++fn labelled_block_shadow_cannot_be_skipped_to_authorize_outer_loop_exit() {
++    let text = "const A:i32='a: loop { 'a: { break 'a; } break 'a 3; };";
++    for edition in [2015, 2018, 2021, 2024] {
++        let result = evaluate(&constant(text, "A", edition), ConstLimits::default()).unwrap();
++        assert_eq!(
++            result.value().scalar().unwrap(),
++            ValueRepr::signed(TypeId(6), 3).unwrap()
++        );
++    }
++}
++#[test]
++fn a_function_body_cannot_break_a_callers_loop() {
++    let text = "const fn f()->i32 { break 'a 3; } const A:i32='a: loop { f(); };";
++    let error = evaluate(&constant(text, "A", 2024), ConstLimits::default()).unwrap_err();
++    assert_eq!(error.diagnostic().code, "LRR-E-CONST-SOURCE");
++}
+--- a/crates/lrr/src/frontend/constants.rs
++++ b/crates/lrr/src/frontend/constants.rs
+@@ -12,7 +12,8 @@
+     },
+     syntax::{
+         pure_constants::{
+-            ConstType, Constant, ConstantPlan, ConstantSource, ExprRef, Function, Node, Statement,
++            ConstType, Constant, ConstantPlan, ConstantSource, ControlTarget, ExprRef, Function,
++            Node, Statement, StatementRef,
+         },
+         spans::SourceRange,
+     },
+@@ -26,6 +27,9 @@
+     Diagnostic::new(code, message.into())
+ }
+ pub use crate::ir::constant_data::ConstValue;
++#[path = "constant_locals.rs"]
++mod locals;
++use locals::LocalScopes;
+ 
+ #[derive(Debug, Clone, Copy)]
+ pub struct ConstLimits {
+@@ -222,11 +226,17 @@
+ enum Flow {
+     Value(ConstValue),
+     Return(ConstValue),
++    Break(ControlTarget, ConstValue),
++    Continue(ControlTarget),
+ }
+ impl Flow {
+-    fn into_value(self) -> ConstValue {
++    fn into_value(self) -> Result<ConstValue, Diagnostic> {
+         match self {
+-            Self::Value(v) | Self::Return(v) => v,
++            Self::Value(v) | Self::Return(v) => Ok(v),
++            Self::Break(..) | Self::Continue(..) => Err(fault(
++                "LRR-E-CONST-SOURCE",
++                "constant loop exit escaped its source activation",
++            )),
+         }
+     }
+ }
+@@ -242,11 +252,14 @@
+     frames: u16,
+     depth: u16,
+     returns: Vec<Expected>,
++    loops: Vec<(ControlTarget, Option<Expected>)>,
+     metadata_bytes: usize,
+     active: BTreeSet<Digest>,
+     active_calls: BTreeSet<Digest>,
+     dependencies: BTreeMap<Digest, ConstDependency>,
+     nodes: BTreeMap<(u32, u32), Node>,
++    local_contexts: BTreeMap<(u32, u32), PrimitiveType>,
++    local_context_work: usize,
+ }
+ macro_rules! take {
+     ($this:ident,$expr:expr,$hint:expr,$locals:expr,$allow:expr) => {
+@@ -340,10 +353,11 @@
+                     .expr(
+                         len,
+                         Some(Expected::Scalar(PrimitiveType::Usize)),
+-                        &mut BTreeMap::new(),
++                        &mut LocalScopes::default(),
+                         false,
+                     )?
+-                    .into_value();
++                    .into_value()
++                    .map_err(|d| self.failure(d, at))?;
+                 let count = self.length(value, at)?;
+                 Ok(Expected::Array(*p, count))
+             }
+@@ -409,15 +423,18 @@
+         self.frames += 1;
+         self.dependency(&c.declaration, &[], at)?;
+         let previous_depth = std::mem::replace(&mut self.depth, 0);
++        let previous_loops = std::mem::take(&mut self.loops);
+         let value = (|| {
+             let expected = self.ty(&c.ty, at)?;
+             let value = self
+-                .expr(&c.body, Some(expected), &mut BTreeMap::new(), false)?
+-                .into_value();
++                .expr(&c.body, Some(expected), &mut LocalScopes::default(), false)?
++                .into_value()
++                .map_err(|d| self.failure(d, at))?;
+             self.check_expected(&value, expected, at)?;
+             Ok((value, expected))
+         })();
+         self.depth = previous_depth;
++        self.loops = previous_loops;
+         self.frames -= 1;
+         self.active.remove(&c.declaration.definition());
+         value
+@@ -443,20 +460,28 @@
+         let bytes = f
+             .params
+             .iter()
+-            .try_fold(0usize, |n, (name, _)| {
++            .try_fold(0usize, |n, (name, _, _)| {
+                 n.checked_add(name.len())?.checked_add(192)
+             })
+             .ok_or_else(|| self.limit(at))?;
+-        self.admit_metadata(bytes, at)?;
+-        let mut locals = BTreeMap::new();
+-        for ((name, ty), value) in f.params.iter().zip(&args) {
++        self.admit_metadata(
++            bytes
++                .checked_add(std::mem::size_of::<LocalScopes>() + 64)
++                .ok_or_else(|| self.limit(at))?,
++            at,
++        )?;
++        let mut locals = LocalScopes::default();
++        locals.push().map_err(|d| self.failure(d, at))?;
++        for ((name, ty, mutable), value) in f.params.iter().zip(&args) {
+             if !value.matches_scalar(*ty).map_err(|d| self.failure(d, at))? {
+                 return Err(self.failure(
+                     fault("LRR-E-CONST-TYPE", "const-call argument type differs"),
+                     at,
+                 ));
+             }
+-            locals.insert(name.clone(), value.clone());
++            locals
++                .insert(name.clone(), *mutable, value.clone())
++                .map_err(|d| self.failure(d, at))?;
+         }
+         let mut encoder = StableEncoder::new("lrr/v1/active-pure-const-call");
+         encoder.digest(f.declaration.definition());
+@@ -475,16 +500,18 @@
+         self.frames += 1;
+         self.dependency(&f.declaration, &args, at)?;
+         let previous_depth = std::mem::replace(&mut self.depth, 0);
++        let previous_loops = std::mem::take(&mut self.loops);
+         let value = (|| {
+             let expected = self.ty(&f.result, at)?;
+             self.returns.push(expected);
+             let value = self.expr(&f.body, Some(expected), &mut locals, true);
+             self.returns.pop();
+-            let value = value?.into_value();
++            let value = value?.into_value().map_err(|d| self.failure(d, at))?;
+             self.check_expected(&value, expected, at)?;
+             Ok((value, expected))
+         })();
+         self.depth = previous_depth;
++        self.loops = previous_loops;
+         self.frames -= 1;
+         self.active_calls.remove(&call_key);
+         value
+@@ -492,7 +519,7 @@
+     fn hint(
+         &mut self,
+         e: &ExprRef,
+-        locals: &BTreeMap<String, ConstValue>,
++        locals: &LocalScopes,
+         depth: u16,
+     ) -> Result<Option<PrimitiveType>, ConstFailure> {
+         if depth >= 128 {
+@@ -536,7 +563,7 @@
+         &mut self,
+         e: &ExprRef,
+         hint: Option<Expected>,
+-        locals: &mut BTreeMap<String, ConstValue>,
++        locals: &mut LocalScopes,
+         allow_return: bool,
+     ) -> Result<Flow, ConstFailure> {
+         self.steps = self
+@@ -556,7 +583,7 @@
+         &mut self,
+         e: &ExprRef,
+         hint: Option<Expected>,
+-        locals: &mut BTreeMap<String, ConstValue>,
++        locals: &mut LocalScopes,
+         allow_return: bool,
+     ) -> Result<Flow, ConstFailure> {
+         let at = e.range();
+@@ -581,6 +608,33 @@
+                         at,
+                     ));
+                 }
++                // A reached source context must belong to the literal's
++                // family before it reaches descriptor/payload construction.
++                // Keep 128-bit recipes on their existing unsupported-width
++                // admission path, rather than reclassifying integer validity.
++                if !matches!(
++                    ty,
++                    PrimitiveType::I8
++                        | PrimitiveType::I16
++                        | PrimitiveType::I32
++                        | PrimitiveType::I64
++                        | PrimitiveType::I128
++                        | PrimitiveType::Isize
++                        | PrimitiveType::U8
++                        | PrimitiveType::U16
++                        | PrimitiveType::U32
++                        | PrimitiveType::U64
++                        | PrimitiveType::U128
++                        | PrimitiveType::Usize
++                ) {
++                    return Err(self.failure(
++                        fault(
++                            "LRR-E-CONST-TYPE",
++                            "constant integer requires an integer source context",
++                        ),
++                        at,
++                    ));
++                }
+                 let id = primitive_id(ty).map_err(|d| self.failure(d, at))?;
+                 ConstValue::from_scalar(
+                     GuestStore::preview_integer(negative, magnitude, id)
+@@ -609,6 +663,18 @@
+             }
+             Node::Float(text, suffix) => {
+                 let p = suffix.or(scalar_hint).unwrap_or(PrimitiveType::F64);
++                if scalar_hint
++                    .is_some_and(|hint| !matches!(hint, PrimitiveType::F32 | PrimitiveType::F64))
++                    || !matches!(p, PrimitiveType::F32 | PrimitiveType::F64)
++                {
++                    return Err(self.failure(
++                        fault(
++                            "LRR-E-CONST-TYPE",
++                            "constant float requires a floating source context",
++                        ),
++                        at,
++                    ));
++                }
+                 ConstValue::from_scalar(
+                     GuestStore::preview_float(
+                         &text,
+@@ -652,6 +718,50 @@
+                     ),
+                     at,
+                 )?
++            }
++            Node::Assign(name, op, rhs) => {
++                let primitive = primitive_for_value(locals.get(&name).and_then(ConstValue::scalar))
++                    .ok_or_else(|| {
++                        self.failure(
++                            fault(
++                                "LRR-E-CONST-UNSUPPORTED",
++                                "assignment requires a current scalar local",
++                            ),
++                            at,
++                        )
++                    })?;
++                let rhs_hint = if matches!(op, Some(NumericBinary::Shl | NumericBinary::Shr)) {
++                    None
++                } else {
++                    Some(Expected::Scalar(primitive))
++                };
++                // Primitive assignment evaluates the RHS before reading the
++                // LHS. Nested RHS blocks may update this same source binding.
++                let rhs_value = take!(self, &rhs, rhs_hint, locals, allow_return);
++                let value = if let Some(op) = op {
++                    let lhs = locals.get(&name).cloned().ok_or_else(|| {
++                        self.failure(
++                            fault("LRR-E-CONST-SOURCE", "assignment binding disappeared"),
++                            at,
++                        )
++                    })?;
++                    self.numeric(
++                        numeric::binary(
++                            op,
++                            scalar(lhs).map_err(|d| self.failure(d, at))?,
++                            scalar(rhs_value).map_err(|d| self.failure(d, at))?,
++                        ),
++                        at,
++                    )?
++                } else {
++                    rhs_value
++                };
++                self.check_expected(&value, Expected::Scalar(primitive), at)?;
++                let value = self.checked_value(value, at)?;
++                locals
++                    .replace(&name, value)
++                    .map_err(|d| self.failure(d, at))?;
++                ConstValue::from_scalar(ValueRepr::unit()).map_err(|d| self.failure(d, at))?
+             }
+             Node::Logic(and, a, b) => {
+                 let av = take!(
+@@ -727,68 +837,63 @@
+                 }
+                 ConstValue::from_scalar(ValueRepr::unit()).map_err(|d| self.failure(d, at))?
+             }
+-            Node::Block(statements, tail) => {
+-                let bytes = locals
+-                    .keys()
+-                    .try_fold(0usize, |n, name| {
+-                        n.checked_add(name.len())?.checked_add(192)
+-                    })
+-                    .ok_or_else(|| self.limit(at))?;
+-                self.admit_metadata(bytes, at)?;
+-                let mut block = locals.clone();
+-                for statement in statements {
+-                    self.steps = self
+-                        .steps
+-                        .checked_add(1)
+-                        .filter(|s| *s <= self.limits.steps)
+-                        .ok_or_else(|| self.limit(statement.range()))?;
+-                    match self
+-                        .source
+-                        .statement(&statement)
+-                        .map_err(|d| self.failure(d, statement.range()))?
+-                    {
+-                        Statement::Let(name, p, initializer) => {
+-                            if p.is_none() && self.hint(&initializer, &block, 0)?.is_none() {
+-                                return Err(self.failure(fault("LRR-E-CONST-UNSUPPORTED","unannotated numeric local requires source constraint integration"),initializer.range()));
+-                            }
+-                            let v = take!(
+-                                self,
+-                                &initializer,
+-                                p.map(Expected::Scalar),
+-                                &mut block,
+-                                allow_return
+-                            );
+-                            if !block.contains_key(&name) {
+-                                if block.len() >= 256 {
+-                                    return Err(self.limit(initializer.range()));
+-                                }
+-                                self.admit_metadata(
+-                                    name.len()
+-                                        .checked_add(192)
+-                                        .ok_or_else(|| self.limit(initializer.range()))?,
+-                                    initializer.range(),
+-                                )?;
+-                            }
+-                            block.insert(name, v);
++            Node::Block(statements, tail, target) => {
++                let Some(target) = target else {
++                    return self.run_block(statements, tail, hint, locals, allow_return, at);
++                };
++                self.activate_control(target, hint, at)?;
++                let result = self.run_block(statements, tail, hint, locals, allow_return, at);
++                self.loops.pop();
++                return match result {
++                    Ok(Flow::Break(current, value)) if current == target => {
++                        if let Some(expected) = hint {
++                            self.check_expected(&value, expected, at)?;
+                         }
+-                        Statement::Expression(child) => {
+-                            take!(self, &child, None, &mut block, allow_return);
+-                        }
+-                        Statement::Unsupported(at) => {
+-                            return Err(self.failure(
+-                                fault(
+-                                    "LRR-E-CONST-UNSUPPORTED",
+-                                    "reached constant statement requires a later pure slice",
+-                                ),
+-                                at,
+-                            ));
+-                        }
++                        Ok(Flow::Value(self.checked_value(value, at)?))
+                     }
+-                }
+-                if let Some(tail) = tail {
+-                    return self.expr(&tail, hint, &mut block, allow_return);
+-                }
+-                ConstValue::from_scalar(ValueRepr::unit()).map_err(|d| self.failure(d, at))?
++                    other => other,
++                };
++            }
++            Node::Loop(target, condition, body) => {
++                return self.run_loop(target, condition, body, hint, locals, allow_return);
++            }
++            Node::Break(target, child) => {
++                let target_hint = self
++                    .loops
++                    .iter()
++                    .rev()
++                    .find(|(current, _)| *current == target)
++                    .map(|(_, hint)| *hint)
++                    .ok_or_else(|| {
++                        self.failure(
++                            fault(
++                                "LRR-E-CONST-SOURCE",
++                                "constant break target has no current control activation",
++                            ),
++                            at,
++                        )
++                    })?;
++                let value = if let Some(child) = child {
++                    take!(self, &child, target_hint, locals, allow_return)
++                } else {
++                    ConstValue::from_scalar(ValueRepr::unit()).map_err(|d| self.failure(d, at))?
++                };
++                if let Some(expected) = target_hint {
++                    self.check_expected(&value, expected, at)?;
++                }
++                return Ok(Flow::Break(target, value));
++            }
++            Node::Continue(target) => {
++                if !target.is_loop() || !self.loops.iter().any(|(current, _)| *current == target) {
++                    return Err(self.failure(
++                        fault(
++                            "LRR-E-CONST-SOURCE",
++                            "constant continue target has no current loop activation",
++                        ),
++                        at,
++                    ));
++                }
++                return Ok(Flow::Continue(target));
+             }
+             Node::Return(child) => {
+                 if !allow_return {
+@@ -833,7 +938,7 @@
+                     );
+                 }
+                 let mut values = Vec::new();
+-                for (arg, (_, ty)) in args.iter().zip(&f.params) {
++                for (arg, (_, ty, _)) in args.iter().zip(&f.params) {
+                     values.push(take!(
+                         self,
+                         arg,
+@@ -971,6 +1076,209 @@
+         }
+         Ok(Flow::Value(value))
+     }
++    fn local_context(&mut self, statement: &StatementRef) -> Result<PrimitiveType, ConstFailure> {
++        let at = statement.range();
++        let key = (at.start, at.end);
++        if let Some(primitive) = self.local_contexts.get(&key) {
++            return Ok(*primitive);
++        }
++        let remaining_work = (MAX_STEPS as usize)
++            .checked_sub(self.local_context_work)
++            .filter(|n| *n > 0)
++            .ok_or_else(|| self.limit(at))?;
++        let remaining_bytes = (32usize * 1024 * 1024)
++            .checked_sub(self.metadata_bytes)
++            .and_then(|n| n.checked_sub(128))
++            .filter(|n| *n >= 128)
++            .ok_or_else(|| self.limit(at))?;
++        let context = self
++            .source
++            .numeric_local_context(statement, remaining_work, remaining_bytes)
++            .map_err(|d| self.failure(d, at))?;
++        self.local_context_work = self
++            .local_context_work
++            .checked_add(context.work())
++            .filter(|n| *n <= MAX_STEPS as usize)
++            .ok_or_else(|| self.limit(at))?;
++        self.admit_metadata(
++            context
++                .metadata_bytes()
++                .checked_add(128)
++                .ok_or_else(|| self.limit(at))?,
++            at,
++        )?;
++        let primitive = context.primitive();
++        self.local_contexts.insert(key, primitive);
++        Ok(primitive)
++    }
++    fn run_block(
++        &mut self,
++        statements: Vec<StatementRef>,
++        tail: Option<ExprRef>,
++        hint: Option<Expected>,
++        locals: &mut LocalScopes,
++        allow_return: bool,
++        at: SourceRange,
++    ) -> Result<Flow, ConstFailure> {
++        self.admit_metadata(std::mem::size_of::<LocalScopes>() + 64, at)?;
++        locals.push().map_err(|d| self.failure(d, at))?;
++        let result = (|| {
++            for statement in statements {
++                self.steps = self
++                    .steps
++                    .checked_add(1)
++                    .filter(|s| *s <= self.limits.steps)
++                    .ok_or_else(|| self.limit(statement.range()))?;
++                match self
++                    .source
++                    .statement(&statement)
++                    .map_err(|d| self.failure(d, statement.range()))?
++                {
++                    Statement::Let(name, mutable, ty, initializer) => {
++                        let ty = match ty {
++                            Some(ty) => Some(ty),
++                            None if self.hint(&initializer, locals, 0)?.is_some() => None,
++                            None => Some(self.local_context(&statement)?),
++                        };
++                        let value = take!(
++                            self,
++                            &initializer,
++                            ty.map(Expected::Scalar),
++                            locals,
++                            allow_return
++                        );
++                        self.admit_metadata(
++                            name.len()
++                                .checked_add(192)
++                                .ok_or_else(|| self.limit(initializer.range()))?,
++                            initializer.range(),
++                        )?;
++                        locals
++                            .insert(name, mutable, value)
++                            .map_err(|d| self.failure(d, initializer.range()))?;
++                    }
++                    Statement::Expression(child) => {
++                        take!(self, &child, None, locals, allow_return);
++                    }
++                    Statement::Declaration => {}
++                    Statement::Unsupported(at) => {
++                        return Err(self.failure(
++                            fault(
++                                "LRR-E-CONST-UNSUPPORTED",
++                                "reached constant statement requires a later pure slice",
++                            ),
++                            at,
++                        ));
++                    }
++                }
++            }
++            if let Some(tail) = tail {
++                self.expr(&tail, hint, locals, allow_return)
++            } else {
++                Ok(Flow::Value(
++                    ConstValue::from_scalar(ValueRepr::unit()).map_err(|d| self.failure(d, at))?,
++                ))
++            }
++        })();
++        // Pop on all flow outcomes and failures. Writes in older scopes were
++        // made in place and survive; this scope's shadow bindings disappear.
++        locals.pop().map_err(|d| self.failure(d, at))?;
++        match result {
++            Ok(Flow::Value(value)) => {
++                if let Some(expected) = hint {
++                    self.check_expected(&value, expected, at)?;
++                }
++                Ok(Flow::Value(self.checked_value(value, at)?))
++            }
++            other => other,
++        }
++    }
++    fn activate_control(
++        &mut self,
++        target: ControlTarget,
++        expected: Option<Expected>,
++        at: SourceRange,
++    ) -> Result<(), ConstFailure> {
++        if self.loops.len() >= 128 {
++            return Err(self.limit(at));
++        }
++        self.admit_metadata(
++            std::mem::size_of::<(ControlTarget, Option<Expected>)>() + 64,
++            at,
++        )?;
++        self.loops.try_reserve(1).map_err(|_| self.limit(at))?;
++        self.loops.push((target, expected));
++        Ok(())
++    }
++    fn run_loop(
++        &mut self,
++        target: ControlTarget,
++        condition: Option<ExprRef>,
++        body: ExprRef,
++        hint: Option<Expected>,
++        locals: &mut LocalScopes,
++        allow_return: bool,
++    ) -> Result<Flow, ConstFailure> {
++        let unit = Some(Expected::Scalar(PrimitiveType::Unit));
++        let expected = if condition.is_some() { unit } else { hint };
++        self.activate_control(target, expected, body.range())?;
++        let result = (|| loop {
++            if let Some(condition) = &condition {
++                match self.expr(
++                    condition,
++                    Some(Expected::Scalar(PrimitiveType::Bool)),
++                    locals,
++                    allow_return,
++                )? {
++                    Flow::Value(value) => {
++                        let value =
++                            scalar(value).map_err(|d| self.failure(d, condition.range()))?;
++                        if value.type_id != 2 {
++                            return Err(self.failure(
++                                fault("LRR-E-CONST-TYPE", "constant while condition requires bool"),
++                                condition.range(),
++                            ));
++                        }
++                        if value.payload == 0 {
++                            return Ok(Flow::Value(
++                                ConstValue::from_scalar(ValueRepr::unit())
++                                    .map_err(|d| self.failure(d, condition.range()))?,
++                            ));
++                        }
++                    }
++                    Flow::Continue(current) if current == target => continue,
++                    Flow::Break(current, value) if current == target => {
++                        if let Some(expected) = expected {
++                            self.check_expected(&value, expected, condition.range())?;
++                        }
++                        return Ok(Flow::Value(value));
++                    }
++                    other => return Ok(other),
++                }
++            }
++            match self.expr(&body, unit, locals, allow_return)? {
++                Flow::Value(_) => {}
++                Flow::Continue(current) if current == target => {}
++                Flow::Break(current, value) if current == target => {
++                    if let Some(expected) = expected {
++                        self.check_expected(&value, expected, body.range())?;
++                    }
++                    return Ok(Flow::Value(value));
++                }
++                other => return Ok(other),
++            }
++        })();
++        self.loops.pop();
++        match result {
++            Ok(Flow::Value(value)) => {
++                if let Some(expected) = hint {
++                    self.check_expected(&value, expected, body.range())?;
++                }
++                Ok(Flow::Value(self.checked_value(value, body.range())?))
++            }
++            other => other,
++        }
++    }
+     fn check_expected(
+         &self,
+         value: &ConstValue,
+@@ -1064,11 +1372,14 @@
+         frames: 0,
+         depth: 0,
+         returns: Vec::new(),
++        loops: Vec::new(),
+         metadata_bytes: 0,
+         active: BTreeSet::new(),
+         active_calls: BTreeSet::new(),
+         dependencies: BTreeMap::new(),
+         nodes: BTreeMap::new(),
++        local_contexts: BTreeMap::new(),
++        local_context_work: 0,
+     };
+     let (constant, call, length) = plan
+         .entry()
+@@ -1082,10 +1393,11 @@
+             .expr(
+                 &length,
+                 Some(Expected::Scalar(PrimitiveType::Usize)),
+-                &mut BTreeMap::new(),
++                &mut LocalScopes::default(),
+                 false,
+             )?
+-            .into_value();
++            .into_value()
++            .map_err(|d| evaluator.failure(d, length.range()))?;
+         evaluator.length(value.clone(), length.range())?;
+         (value, Expected::Scalar(PrimitiveType::Usize))
+     } else {
+@@ -1122,3 +1434,11 @@
+ 
+ pub mod query_failure;
+ pub mod query_macro_demand;
++
++#[cfg(test)]
++#[path = "constant_loop_tests.rs"]
++mod loop_tests;
++
++#[cfg(test)]
++#[path = "constant_literal_family_tests.rs"]
++mod literal_family_tests;
+--- /dev/null
++++ b/crates/lrr/src/syntax/constant_constraint_work.rs
+@@ -0,0 +1,271 @@
++//! Charge the actual source surfaces used by subordinate namespace/header probes.
++//! Conservative charges cover structural scans required by length admission.
++//! Cold bodies are never typechecked or executed by these probes.
++use super::*;
++
++fn source_fact<T>(result: Result<T, Diagnostic>) -> Result<Option<T>, Diagnostic> {
++    match result {
++        Ok(value) => Ok(Some(value)),
++        Err(error)
++            if matches!(
++                error.code,
++                "LRR-E-CONST-LIMIT" | "LRR-E-METADATA-LIMIT" | "LRR-E-SOURCE-LIMIT"
++            ) =>
++        {
++            Err(error)
++        }
++        // Missing source semantics make a connected component opaque. They
++        // cannot supply a primitive context or certify constant execution.
++        Err(_) => Ok(None),
++    }
++}
++impl Graph<'_> {
++    pub(super) fn checked_target_source(
++        &mut self,
++        target: &StatementRef,
++    ) -> Result<(), Diagnostic> {
++        let mut root = None;
++        for (depth, ancestor) in target.0.syntax().ancestors().enumerate() {
++            if depth >= 128 {
++                return Err(limit());
++            }
++            self.source_units(1)?;
++            root = Some(ancestor);
++        }
++        let root = root.ok_or_else(incomplete)?;
++        // Parse::tree creates a fresh red root over the retained immutable green
++        // tree. Red-node pointer equality would reject even our own selections.
++        // This ephemeral identity check never becomes a query/cache encoding.
++        let captured = self.source.0.parsed.parsed.tree();
++        if !std::ptr::eq(root.green(), captured.syntax().green()) {
++            return Err(fault(
++                "constant local demand is not from this captured source syntax",
++            ));
++        }
++        Ok(())
++    }
++    pub(super) fn checked_array_length(
++        &mut self,
++        expression: ExprRef,
++    ) -> Result<ExprRef, Diagnostic> {
++        let source = self.source;
++        let root = source.0.parsed.parsed.tree();
++        let width = usize::from(root.syntax().text_range().len());
++        // array_length performs a structural source-index scan and owning
++        // syntax checks. Charge those surfaces before calling it; do not
++        // treat it as a free type/namespace probe or enter any cold body.
++        self.source_units(width.checked_mul(4).ok_or_else(limit)?)?;
++        for _ in root.syntax().descendants_with_tokens() {
++            self.source_units(1)?;
++        }
++        self.charge(
++            width
++                .checked_mul(16)
++                .and_then(|n| n.checked_add(std::mem::size_of::<ConstantPlan>() + 1024))
++                .ok_or_else(limit)?,
++        )?;
++        self.charge(source.metadata_bytes()?)?;
++        let plan = source.array_length(expression.range())?;
++        let Entry::Length(actual) = plan.entry else {
++            return Err(fault(
++                "selected source context is not an actual array length",
++            ));
++        };
++        if actual.range() != expression.range()
++            || !std::ptr::eq(actual.0.syntax().green(), expression.0.syntax().green())
++        {
++            return Err(fault(
++                "selected array length differs from the retained syntax",
++            ));
++        }
++        Ok(actual)
++    }
++    fn source_units(&mut self, count: usize) -> Result<(), Diagnostic> {
++        self.work = self
++            .work
++            .checked_add(count)
++            .filter(|n| *n <= self.work_limit)
++            .ok_or_else(limit)?;
++        Ok(())
++    }
++    fn source_text(&mut self, node: &ra_ap_syntax::SyntaxNode) -> Result<(), Diagnostic> {
++        let width = usize::from(node.text_range().len());
++        if width > 64 * 1024 {
++            return Err(limit());
++        }
++        self.source_units(width.checked_add(1).ok_or_else(limit)?)?;
++        // Charge bounded copied syntax conservatively as metadata as well.
++        self.charge(width.checked_mul(4).ok_or_else(limit)?)
++    }
++    fn source_attributes(&mut self, node: &ra_ap_syntax::SyntaxNode) -> Result<(), Diagnostic> {
++        for child in node.children() {
++            self.source_units(1)?;
++            if ast::Attr::can_cast(child.kind()) {
++                self.source_text(&child)?;
++            }
++        }
++        Ok(())
++    }
++    fn source_surface(
++        &mut self,
++        node: &ra_ap_syntax::SyntaxNode,
++        type_namespace: bool,
++    ) -> Result<(), Diagnostic> {
++        for scope in node.ancestors() {
++            self.source_units(1)?;
++            if !type_namespace && !ast::StmtList::can_cast(scope.kind()) {
++                continue;
++            }
++            for child in scope.children() {
++                self.source_units(1)?;
++                if ast::Item::can_cast(child.kind()) {
++                    self.source_attributes(&child)?;
++                    // Item names and generic parameter lists are header
++                    // surfaces. Function/constant bodies remain untouched.
++                    for part in child.children() {
++                        self.source_units(1)?;
++                        if ast::Name::can_cast(part.kind()) {
++                            self.source_text(&part)?;
++                        }
++                    }
++                } else if type_namespace && ast::GenericParamList::can_cast(child.kind()) {
++                    self.source_text(&child)?;
++                }
++            }
++        }
++        Ok(())
++    }
++    fn source_type(&mut self, ty: &ast::Type) -> Result<(), Diagnostic> {
++        self.source_text(ty.syntax())?;
++        self.source_surface(ty.syntax(), true)
++    }
++    fn source_declaration(&mut self) -> Result<(), Diagnostic> {
++        self.source_units(
++            self.source
++                .0
++                .declarations
++                .len()
++                .checked_mul(2)
++                .ok_or_else(limit)?,
++        )
++    }
++    fn source_function(&mut self, function: &ast::Fn) -> Result<(), Diagnostic> {
++        self.source_attributes(function.syntax())?;
++        self.source_declaration()?;
++        let params = required(function.param_list())?;
++        for (index, param) in params.params().enumerate() {
++            if index >= 256 {
++                return Err(limit());
++            }
++            self.source_units(index.checked_add(1).ok_or_else(limit)?)?;
++            self.source_text(required(param.pat())?.syntax())?;
++            self.source_type(&required(param.ty())?)?;
++        }
++        if let Some(result) = function.ret_type() {
++            self.source_type(&required(result.ty())?)?;
++        }
++        Ok(())
++    }
++    fn source_constant(&mut self, constant: &ast::Const) -> Result<(), Diagnostic> {
++        self.source_attributes(constant.syntax())?;
++        self.source_declaration()?;
++        self.source_type(&required(constant.ty())?)
++    }
++    fn source_name(&mut self) -> Result<(), Diagnostic> {
++        let source = self.source;
++        for item in &source.0.module_items {
++            self.source_units(1)?;
++            self.source_attributes(item.syntax())?;
++        }
++        Ok(())
++    }
++    pub(super) fn checked_function_header(
++        &mut self,
++        function: &ast::Fn,
++    ) -> Result<Function, Diagnostic> {
++        self.source_function(function)?;
++        self.source.function_header(function)
++    }
++    pub(super) fn checked_constant_header(
++        &mut self,
++        constant: &ast::Const,
++    ) -> Result<Constant, Diagnostic> {
++        self.source_constant(constant)?;
++        self.source.constant_header(constant)
++    }
++    pub(super) fn checked_attributes(
++        &mut self,
++        node: &ra_ap_syntax::SyntaxNode,
++    ) -> Result<bool, Diagnostic> {
++        self.source_attributes(node)?;
++        Ok(source_fact(self.source.attributes_clear(node))?.is_some())
++    }
++    pub(super) fn checked_primitive(
++        &mut self,
++        ty: ast::Type,
++    ) -> Result<Option<PrimitiveType>, Diagnostic> {
++        self.source_type(&ty)?;
++        source_fact(self.source.primitive(ty))
++    }
++    pub(super) fn checked_path(&mut self, path: ast::Path) -> Result<Option<String>, Diagnostic> {
++        self.source_text(path.syntax())?;
++        source_fact(bare(path))
++    }
++    pub(super) fn checked_lexical_value(
++        &mut self,
++        node: &ra_ap_syntax::SyntaxNode,
++        name: &str,
++    ) -> Result<bool, Diagnostic> {
++        self.source_surface(node, false)?;
++        Ok(source_fact(self.source.lexical_value_clear(node, name))?.is_some())
++    }
++    pub(super) fn checked_named_constant(
++        &mut self,
++        name: &str,
++    ) -> Result<Option<Constant>, Diagnostic> {
++        self.source_name()?;
++        let Some(ast::Item::Const(constant)) = source_fact(self.source.named(name))? else {
++            return Ok(None);
++        };
++        self.source_constant(&constant)?;
++        source_fact(self.source.constant_header(&constant))
++    }
++    pub(super) fn checked_named_function(
++        &mut self,
++        name: &str,
++    ) -> Result<Option<Function>, Diagnostic> {
++        self.source_name()?;
++        let Some(ast::Item::Fn(function)) = source_fact(self.source.named(name))? else {
++            return Ok(None);
++        };
++        self.source_function(&function)?;
++        source_fact(self.source.function_header(&function))
++    }
++    pub(super) fn checked_literal(&mut self, expr: ast::Expr) -> Result<Option<Node>, Diagnostic> {
++        self.source_text(expr.syntax())?;
++        self.source_attributes(expr.syntax())?;
++        source_fact(self.source.node(&ExprRef(expr)))
++    }
++    pub(super) fn checked_loop_target(
++        &mut self,
++        node: &ra_ap_syntax::SyntaxNode,
++        label: Option<ast::Lifetime>,
++    ) -> Result<Option<ControlTarget>, Diagnostic> {
++        if let Some(label) = &label {
++            self.source_text(label.syntax())?;
++        }
++        for parent in node.ancestors() {
++            self.source_units(1)?;
++            for child in parent.children() {
++                self.source_units(1)?;
++                if ast::Label::can_cast(child.kind()) {
++                    self.source_text(&child)?;
++                }
++            }
++            if ast::Fn::can_cast(parent.kind()) || ast::Const::can_cast(parent.kind()) {
++                break;
++            }
++        }
++        source_fact(loops::reached_target(node, label))
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/syntax/constant_labelled_block_tests.rs
+@@ -0,0 +1,264 @@
++//! Unchanged upstream control-target observations; supplementary constant execution.
++//! Ordinary upstream mains and rustc diagnostic snapshots remain unexecuted here.
++use super::*;
++use crate::{
++    frontend::constants::{ConstLimits, evaluate},
++    runtime::{shape::TypeId, value::ValueRepr},
++};
++const RUN: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/for-loop-while/label_break_value.rs"
++);
++const CONTINUE: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/label/label_break_value_continue.rs"
++);
++const BREAK: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/label/label_break_value_unlabeled_break.rs"
++);
++fn source(text: &str, edition: u16) -> ConstantSource {
++    ConstantSource::parse(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        Digest([220; 32]),
++        CfgSet::guest_default(),
++    )
++    .unwrap()
++}
++fn plan(text: &str, edition: u16) -> ConstantPlan {
++    let source = source(text, edition);
++    let at = source
++        .declarations()
++        .iter()
++        .find(|d| d.name() == "A")
++        .unwrap()
++        .range();
++    source.constant(at).unwrap()
++}
++fn number(text: &str, edition: u16) -> ValueRepr {
++    evaluate(&plan(text, edition), ConstLimits::default())
++        .unwrap()
++        .value()
++        .scalar()
++        .unwrap()
++}
++#[test]
++fn original_block_break_values_keep_actual_source_target_and_expression_ranges() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let source = source(RUN, edition);
++        let function = source
++            .0
++            .parsed
++            .parsed
++            .tree()
++            .syntax()
++            .descendants()
++            .filter_map(ast::Fn::cast)
++            .find(|f| f.name().is_some_and(|n| n.text() == "break_value"))
++            .unwrap();
++        let block = function
++            .syntax()
++            .descendants()
++            .filter_map(ast::BlockExpr::cast)
++            .find(|b| b.label().is_some())
++            .unwrap();
++        let Node::Block(_, _, Some(target)) = source
++            .node(&ExprRef(ast::Expr::BlockExpr(block.clone())))
++            .unwrap()
++        else {
++            panic!("original labelled block did not retain its source target")
++        };
++        assert!(!target.is_loop());
++        assert_eq!(target.range(), range(block.syntax().text_range()));
++        let exits = block
++            .syntax()
++            .descendants()
++            .filter_map(ast::BreakExpr::cast)
++            .collect::<Vec<_>>();
++        assert_eq!(exits.len(), 2);
++        for exit in exits {
++            let original = exit.expr().unwrap();
++            let Node::Break(actual, Some(value)) =
++                source.node(&ExprRef(ast::Expr::BreakExpr(exit))).unwrap()
++            else {
++                panic!("original break lost its value")
++            };
++            assert_eq!(actual, target);
++            assert_eq!(value.range(), range(original.syntax().text_range()));
++        }
++        assert_eq!(source.source(), Digest::of_bytes(RUN.as_bytes()));
++    }
++}
++#[test]
++fn original_invalid_continues_preserve_three_exact_reached_target_refusals() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let source = source(CONTINUE, edition);
++        let exits = source
++            .0
++            .parsed
++            .parsed
++            .tree()
++            .syntax()
++            .descendants()
++            .filter_map(ast::ContinueExpr::cast)
++            .collect::<Vec<_>>();
++        assert_eq!(exits.len(), 3);
++        for (exit, message) in exits.into_iter().zip([
++            "unlabelled constant exit crosses a labelled block",
++            "constant continue targets a labelled block",
++            "unlabelled constant exit crosses a labelled block",
++        ]) {
++            let error = source
++                .node(&ExprRef(ast::Expr::ContinueExpr(exit)))
++                .unwrap_err();
++            assert_eq!(error.code, "LRR-E-CONST-SOURCE");
++            assert_eq!(error.message, message);
++        }
++    }
++}
++#[test]
++fn original_unlabelled_breaks_cannot_cross_a_block_to_an_outer_loop() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let source = source(BREAK, edition);
++        let exits = source
++            .0
++            .parsed
++            .parsed
++            .tree()
++            .syntax()
++            .descendants()
++            .filter_map(ast::BreakExpr::cast)
++            .collect::<Vec<_>>();
++        assert_eq!(exits.len(), 2);
++        for exit in exits {
++            let error = source
++                .node(&ExprRef(ast::Expr::BreakExpr(exit)))
++                .unwrap_err();
++            assert_eq!(error.code, "LRR-E-CONST-SOURCE");
++            assert_eq!(
++                error.message,
++                "unlabelled constant exit crosses a labelled block"
++            );
++        }
++    }
++}
++#[test]
++fn labelled_break_values_use_result_context_and_skip_the_unreached_suffix() {
++    for edition in [2015, 2018, 2021, 2024] {
++        assert_eq!(
++            number("const A:u8='b:{break 'b 7; missing()};", edition),
++            ValueRepr::unsigned(TypeId(9), 7).unwrap()
++        );
++        assert_eq!(
++            number("const A:u8='b:{9};", edition),
++            ValueRepr::unsigned(TypeId(9), 9).unwrap()
++        );
++        assert_eq!(
++            number(
++                "const A:u8={let x='b:{if true {break 'b 7;} 9}; let y:u8=x; y};",
++                edition
++            ),
++            ValueRepr::unsigned(TypeId(9), 7).unwrap()
++        );
++    }
++}
++#[test]
++fn nested_same_spelling_blocks_unwind_only_the_selected_activation_and_local_scope() {
++    let text = "const A:i32={let mut x:i32=1; let y:i32='b:{let x:i32=99; let z:i32='b:{break 'b 3;}; break 'b z;}; x+=y; x};";
++    for edition in [2015, 2018, 2021, 2024] {
++        assert_eq!(
++            number(text, edition),
++            ValueRepr::signed(TypeId(6), 4).unwrap()
++        );
++        assert_eq!(
++            number(
++                "const A:i32='outer:{let mut x:i32=0; loop {x+=1; 'inner:{break 'outer x;}}};",
++                edition
++            ),
++            ValueRepr::signed(TypeId(6), 1).unwrap()
++        );
++    }
++}
++#[test]
++fn loop_continue_can_cross_a_block_only_with_the_actual_outer_loop_label() {
++    let text = "const A:i32={let mut x:i32=0; 'outer:while x<3 {'block:{x+=1; continue 'outer;} missing();} x};";
++    for edition in [2015, 2018, 2021, 2024] {
++        assert_eq!(
++            number(text, edition),
++            ValueRepr::signed(TypeId(6), 3).unwrap()
++        );
++        assert_eq!(
++            number("const A:i32='block:{loop {break;} 5};", edition),
++            ValueRepr::signed(TypeId(6), 5).unwrap()
++        );
++    }
++}
++#[test]
++fn block_target_errors_stay_reached_and_keep_the_exact_source_range() {
++    for edition in [2015, 2018, 2021, 2024] {
++        assert_eq!(
++            number(
++                "const A:i32={let x=9; if false {'b:{continue 'b;}} x};",
++                edition
++            ),
++            ValueRepr::signed(TypeId(6), 9).unwrap()
++        );
++        for (text, fragment, message) in [
++            (
++                "const A:i32='b:{continue 'b; 9};",
++                "continue 'b",
++                "constant continue targets a labelled block",
++            ),
++            (
++                "const A:i32=loop {'b:{break;} };",
++                "break",
++                "unlabelled constant exit crosses a labelled block",
++            ),
++        ] {
++            let error = evaluate(&plan(text, edition), ConstLimits::default()).unwrap_err();
++            assert_eq!(error.diagnostic().code, "LRR-E-CONST-SOURCE");
++            assert_eq!(error.diagnostic().message, message);
++            let start = u32::try_from(text.find(fragment).unwrap()).unwrap();
++            assert_eq!(
++                error.range(),
++                SourceRange {
++                    start,
++                    end: start + u32::try_from(fragment.len()).unwrap()
++                }
++            );
++            assert_eq!(error.source(), Digest::of_bytes(text.as_bytes()));
++        }
++    }
++}
++#[test]
++fn return_propagates_through_labelled_blocks_without_becoming_a_block_value() {
++    let text = "const fn f()->i32{'b:{return 11;} missing()} const A:i32=f();";
++    for edition in [2015, 2018, 2021, 2024] {
++        assert_eq!(
++            number(text, edition),
++            ValueRepr::signed(TypeId(6), 11).unwrap()
++        );
++    }
++}
++#[test]
++fn labelled_activations_remain_bounded_and_preserve_reached_value_type_errors() {
++    for text in [
++        "const A:u8='b:{break 'b true;};",
++        "const A:i32='a: loop { 'a: { break 'a 3; } };",
++    ] {
++        let error = evaluate(&plan(text, 2024), ConstLimits::default()).unwrap_err();
++        assert_eq!(error.diagnostic().code, "LRR-E-CONST-TYPE");
++    }
++    let mut text = String::from("const A:i32=");
++    for _ in 0..130 {
++        text.push_str("'b:{");
++    }
++    text.push('1');
++    for _ in 0..130 {
++        text.push('}');
++    }
++    text.push(';');
++    let error = evaluate(&plan(&text, 2024), ConstLimits::default()).unwrap_err();
++    assert_eq!(error.diagnostic().code, "LRR-E-CONST-LIMIT");
++}
+--- /dev/null
++++ b/crates/lrr/src/syntax/constant_length_context_tests.rs
+@@ -0,0 +1,359 @@
++//! Actual length components plus source-isolation controls, not whole-fixture passes.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    db::{dependency::InputKey, key::OutlineKey, memo::Database},
++    expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    frontend::{
++        constant_source_admission::{ConstantRequest, ConstantSourceAdmission},
++        constants::{ConstLimits, evaluate},
++    },
++    source::{
++        changes::{PreparedSourceInputs, SourceSelection, SourceSelectionOutcome, SourceUnitInput},
++        manifest::Namespace,
++        snapshot::SourcePath,
++    },
++    syntax::parse::ParseKey,
++};
++use std::sync::Arc;
++const CHECK: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-block-non-item-statement.rs"
++);
++const RUN: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-block-non-item-statement-3.rs"
++);
++fn source(text: &str, edition: u16) -> ConstantSource {
++    ConstantSource::parse(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        Digest([218; 32]),
++        CfgSet::guest_default(),
++    )
++    .unwrap()
++}
++fn alias_length(source: &ConstantSource, name: &str) -> SourceRange {
++    let alias = source
++        .0
++        .parsed
++        .parsed
++        .tree()
++        .syntax()
++        .descendants()
++        .filter_map(ast::TypeAlias::cast)
++        .find(|a| a.name().is_some_and(|n| n.text() == name))
++        .unwrap();
++    let ast::Type::ArrayType(array) = alias.ty().unwrap() else {
++        panic!("original alias is not an array")
++    };
++    let expression = array
++        .const_arg()
++        .unwrap()
++        .syntax()
++        .children()
++        .find_map(ast::Expr::cast)
++        .unwrap();
++    range(expression.syntax().text_range())
++}
++fn binding(source: &ConstantSource) -> StatementRef {
++    StatementRef(ast::Stmt::LetStmt(
++        source
++            .0
++            .parsed
++            .parsed
++            .tree()
++            .syntax()
++            .descendants()
++            .find_map(ast::LetStmt::cast)
++            .unwrap(),
++    ))
++}
++#[test]
++fn unchanged_array_alias_lengths_default_only_unconstrained_locals_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let source = source(CHECK, edition);
++        for (name, expected) in [("Array", 5), ("Array2", 3)] {
++            let plan = source.array_length(alias_length(&source, name)).unwrap();
++            let result = evaluate(&plan, ConstLimits::default()).unwrap();
++            assert_eq!(
++                result.value().scalar().unwrap(),
++                crate::runtime::value::ValueRepr::unsigned(
++                    crate::runtime::shape::TypeId(13),
++                    expected,
++                )
++                .unwrap()
++            );
++            assert_eq!(result.source(), Digest::of_bytes(CHECK.as_bytes()));
++            assert_eq!(plan.profile().edition, edition);
++        }
++    }
++}
++// Genuine current preparation mints the root allow-attribute evidence. No test
++// constructor issues an inert-attribute, primitive, body or completion proof.
++fn prepared_source(text: &str, edition: u16) -> (Database, ConstantSource) {
++    let profile = ProfileIdentity {
++        edition,
++        ..ProfileIdentity::current()
++    };
++    let cfg = CfgSet::guest_default();
++    let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++    let path = SourcePath::new("original-array-length.rs").unwrap();
++    let unit = Digest([219; 32]);
++    let selection = SourceSelection {
++        path: path.clone(),
++        outline: OutlineKey {
++            parse: ParseKey {
++                content: blob.content(),
++                profile: profile.clone(),
++            },
++            crate_key: unit,
++            module_path: vec![],
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let inputs = PreparedSourceInputs::refresh(
++        None,
++        vec![SourceUnitInput {
++            path,
++            crate_key: unit,
++            module_path: vec![],
++            profile: profile.clone(),
++            cfg,
++            blob,
++        }],
++        Default::default(),
++    )
++    .unwrap();
++    let SourceSelectionOutcome::Selected(view) = inputs.select(&selection).unwrap() else {
++        panic!("original source missing")
++    };
++    let item = view
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "main")
++        .unwrap();
++    let definition = item.def_key.fingerprint();
++    let scope = item.scope.clone();
++    let mut db = Database::default();
++    inputs.publish(&mut db).unwrap();
++    db.begin_expansion_epoch(1).unwrap();
++    for namespace in [Namespace::Value, Namespace::Type] {
++        let mut discovery = SourceDiscovery::new(
++            vec![view.share()],
++            scope.clone(),
++            namespace,
++            Digest::of_bytes(b"LRR actual array-length original preparation"),
++            1,
++        )
++        .unwrap()
++        .with_declarative_compiler(
++            Digest::of_bytes(b"array original declarative"),
++            Digest::of_bytes(b"array original compiler"),
++            Arc::new(
++                crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(&profile)
++                    .unwrap(),
++            ),
++        )
++        .unwrap();
++        loop {
++            match discovery.poll().unwrap() {
++                SourceDiscoveryStep::Sealed(_) => break,
++                SourceDiscoveryStep::NeedExpansion { request } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                SourceDiscoveryStep::Incomplete { diagnostic, .. } => {
++                    panic!("{} {}", diagnostic.code, diagnostic.message)
++                }
++                _ => panic!("unestablished original array-length authority"),
++            }
++        }
++        discovery.publish(&mut db).unwrap();
++    }
++    let at = crate::syntax::pure_constants::fixture_length_sites(text, "main", edition)[0];
++    let admission = ConstantSourceAdmission::capture_current(
++        &db,
++        &view,
++        definition,
++        ConstantRequest::ArrayLength(at),
++        32 * 1024 * 1024,
++    )
++    .unwrap();
++    admission.revalidate(&db, &view).unwrap();
++    assert!(
++        admission
++            .dependencies()
++            .contains_key(&InputKey::DefinitionBody(definition))
++    );
++    let source = admission.plan().source().clone();
++    (db, source)
++}
++#[test]
++fn unchanged_run_pass_array_component_requires_real_root_attribute_preparation() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let unprepared = source(RUN, edition);
++        assert_eq!(
++            unprepared
++                .array_length(alias_length(&unprepared, "Array"))
++                .unwrap_err()
++                .code,
++            "LRR-E-CONST-SOURCE"
++        );
++        let (_db, prepared) = prepared_source(RUN, edition);
++        let plan = prepared
++            .array_length(alias_length(&prepared, "Array"))
++            .unwrap();
++        let result = evaluate(&plan, ConstLimits::default()).unwrap();
++        assert_eq!(
++            result.value().scalar().unwrap(),
++            crate::runtime::value::ValueRepr::unsigned(crate::runtime::shape::TypeId(13), 5)
++                .unwrap()
++        );
++        assert_eq!(result.source(), Digest::of_bytes(RUN.as_bytes()));
++        assert_eq!(plan.profile().edition, edition);
++        // No claim that main's Array alias, storage or runtime contract executed.
++    }
++}
++#[test]
++fn repeat_length_locals_do_not_require_executing_the_ordinary_function() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let text = "fn main(){let a=[0;{let mut n=1;while n<5{n+=1;}n}];missing(a);}";
++        let source = source(text, edition);
++        let at = crate::syntax::pure_constants::fixture_length_sites(text, "main", edition)[0];
++        let plan = source.array_length(at).unwrap();
++        let result = evaluate(&plan, ConstLimits::default()).unwrap();
++        assert_eq!(
++            result.value().scalar().unwrap(),
++            crate::runtime::value::ValueRepr::unsigned(crate::runtime::shape::TypeId(13), 5)
++                .unwrap()
++        );
++        assert_eq!(result.source(), Digest::of_bytes(text.as_bytes()));
++    }
++}
++#[test]
++fn length_context_replays_parameter_outer_local_generic_and_closure_refusals() {
++    for edition in [2015, 2018, 2021, 2024] {
++        for (text, code, reason) in [
++            (
++                "fn main(n:usize){let _=[0;{let x=n;x}];}",
++                "LRR-E-CONST-LENGTH-SOURCE",
++                "length expression requires additional source local/control context",
++            ),
++            (
++                "fn main(){let n=5;let _=[0;{let x=n;x}];}",
++                "LRR-E-CONST-SOURCE",
++                "anonymous array length requires captured preceding local bindings",
++            ),
++            (
++                "fn main<T>(){let _=[0;{let x=5;x}];}",
++                "LRR-E-CONST-SOURCE",
++                "anonymous array length requires captured function binding context",
++            ),
++            (
++                "fn main(){let _=||[0;{let x=5;x}];}",
++                "LRR-E-CONST-SOURCE",
++                "anonymous array length requires nested source namespace preparation",
++            ),
++        ] {
++            let source = source(text, edition);
++            let at = crate::syntax::pure_constants::fixture_length_sites(text, "main", edition)[0];
++            let error = source.array_length(at).unwrap_err();
++            assert_eq!(error.code, code);
++            assert_eq!(error.message, reason);
++        }
++    }
++}
++#[test]
++fn local_context_refuses_a_foreign_ast_and_charges_exact_length_admission() {
++    let source = source("type Array=[u32;{let x=5;x}];fn main(){}", 2024);
++    let own = binding(&source);
++    let context = source
++        .numeric_local_context(&own, 100_000, 32 * 1024 * 1024)
++        .unwrap();
++    assert_eq!(context.primitive(), PrimitiveType::Usize);
++    assert_eq!(
++        source
++            .numeric_local_context(&own, context.work() - 1, 32 * 1024 * 1024)
++            .unwrap_err()
++            .code,
++        "LRR-E-CONST-LIMIT"
++    );
++    assert_eq!(
++        source
++            .numeric_local_context(&own, 100_000, 128)
++            .unwrap_err()
++            .code,
++        "LRR-E-CONST-LIMIT"
++    );
++    let foreign = ConstantSource::parse(
++        &SourceBlob::new(b"type Array=[u32;{let x=7;x}];fn main(){}".to_vec()).unwrap(),
++        ProfileIdentity::current(),
++        Digest([218; 32]),
++        CfgSet::guest_default(),
++    )
++    .unwrap();
++    assert_eq!(
++        source
++            .numeric_local_context(&binding(&foreign), 100_000, 32 * 1024 * 1024)
++            .unwrap_err()
++            .code,
++        "LRR-E-CONST-SOURCE"
++    );
++}
++
++#[test]
++fn cold_unresolved_exits_do_not_grant_targets_or_precheck_the_reached_scalar() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let text = "const A:u8={let x=7;if false{break 'absent;}x};";
++        let source = source(text, edition);
++        let at = source
++            .declarations()
++            .iter()
++            .find(|d| d.name() == "A")
++            .unwrap()
++            .range();
++        let result = evaluate(&source.constant(at).unwrap(), ConstLimits::default()).unwrap();
++        assert_eq!(
++            result.value().scalar().unwrap(),
++            crate::runtime::value::ValueRepr::unsigned(crate::runtime::shape::TypeId(9), 7)
++                .unwrap()
++        );
++        let entered = "const A:u8={let x=7;if true{break 'absent;}x};";
++        let source = ConstantSource::parse(
++            &SourceBlob::new(entered.as_bytes().to_vec()).unwrap(),
++            ProfileIdentity {
++                edition,
++                ..ProfileIdentity::current()
++            },
++            Digest([218; 32]),
++            CfgSet::guest_default(),
++        )
++        .unwrap();
++        let at = source
++            .declarations()
++            .iter()
++            .find(|d| d.name() == "A")
++            .unwrap()
++            .range();
++        let error = evaluate(&source.constant(at).unwrap(), ConstLimits::default()).unwrap_err();
++        assert_eq!(error.diagnostic().code, "LRR-E-CONST-SOURCE");
++        assert_eq!(
++            error.diagnostic().message,
++            "constant exit has no lexical loop target in its source body"
++        );
++        let start = entered.find("break 'absent").unwrap();
++        assert_eq!(
++            error.range(),
++            SourceRange {
++                start: start as u32,
++                end: (start + "break 'absent".len()) as u32
++            }
++        );
++        assert!(error.panic().is_none());
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/syntax/constant_local_constraints.rs
+@@ -0,0 +1,1094 @@
++//! Bounded scalar equations for one source-owned constant-local demand.
++//! AST handles, lexical binding IDs and graph nodes never leave this adapter.
++use super::*;
++#[path = "constant_constraint_work.rs"]
++mod source_work;
++
++#[derive(Clone, Copy, PartialEq, Eq)]
++enum Family {
++    Integer,
++    Float,
++}
++fn family(ty: PrimitiveType) -> Option<Family> {
++    use PrimitiveType as P;
++    match ty {
++        P::I8
++        | P::I16
++        | P::I32
++        | P::I64
++        | P::Isize
++        | P::U8
++        | P::U16
++        | P::U32
++        | P::U64
++        | P::Usize => Some(Family::Integer),
++        P::F32 | P::F64 => Some(Family::Float),
++        _ => None,
++    }
++}
++// Source contexts are hints, not eager type errors. Preserve the first
++// compatible context (including an earlier owning result), while retaining an
++// incompatible fact only when neither source supplies a compatible one. The
++// final family filter and actual reached evaluator checks remain authoritative.
++fn preferred_context(
++    first: Option<PrimitiveType>,
++    next: Option<PrimitiveType>,
++    expected: Option<Family>,
++) -> Option<PrimitiveType> {
++    let compatible = |ty: &PrimitiveType| expected.is_none_or(|f| family(*ty) == Some(f));
++    first
++        .filter(compatible)
++        .or(next.filter(compatible))
++        .or(first)
++        .or(next)
++}
++#[derive(Clone, Copy)]
++struct Constraint {
++    parent: usize,
++    concrete: Option<PrimitiveType>,
++    family: Option<Family>,
++    opaque: bool,
++}
++struct Graph<'a> {
++    source: &'a ConstantSource,
++    nodes: Vec<Constraint>,
++    scopes: Vec<BTreeMap<String, usize>>,
++    loops: Vec<(ControlTarget, usize)>,
++    result: usize,
++    target: SourceRange,
++    selected: Option<usize>,
++    work: usize,
++    bytes: usize,
++    work_limit: usize,
++    byte_limit: usize,
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-CONST-LIMIT",
++        "constant local constraint budget".into(),
++    )
++}
++fn incomplete() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-CONST-UNSUPPORTED",
++        "constant local has unresolved source type constraints".into(),
++    )
++}
++impl Graph<'_> {
++    fn charge(&mut self, bytes: usize) -> Result<(), Diagnostic> {
++        self.work = self
++            .work
++            .checked_add(1)
++            .filter(|n| *n <= self.work_limit)
++            .ok_or_else(limit)?;
++        self.bytes = self
++            .bytes
++            .checked_add(bytes)
++            .filter(|n| *n <= self.byte_limit)
++            .ok_or_else(limit)?;
++        Ok(())
++    }
++    fn fresh(&mut self) -> Result<usize, Diagnostic> {
++        self.charge(std::mem::size_of::<Constraint>() + 64)?;
++        self.nodes.try_reserve(1).map_err(|_| limit())?;
++        let id = self.nodes.len();
++        self.nodes.push(Constraint {
++            parent: id,
++            concrete: None,
++            family: None,
++            opaque: false,
++        });
++        Ok(id)
++    }
++    fn root(&mut self, id: usize) -> Result<usize, Diagnostic> {
++        let mut at = id;
++        loop {
++            self.charge(0)?;
++            let node = self.nodes.get(at).ok_or_else(incomplete)?;
++            if node.parent == at {
++                break;
++            }
++            at = node.parent;
++        }
++        let root = at;
++        at = id;
++        while self.nodes[at].parent != at {
++            self.charge(0)?;
++            let next = self.nodes[at].parent;
++            self.nodes[at].parent = root;
++            at = next;
++        }
++        Ok(root)
++    }
++    fn combine(&mut self, a: usize, b: usize) -> Result<usize, Diagnostic> {
++        let a = self.root(a)?;
++        let b = self.root(b)?;
++        if a == b {
++            return Ok(a);
++        }
++        let (keep, remove) = if a < b { (a, b) } else { (b, a) };
++        let x = self.nodes[keep];
++        let y = self.nodes[remove];
++        let family = x.family.or(y.family);
++        let concrete = preferred_context(x.concrete, y.concrete, family);
++        self.nodes[keep] = Constraint {
++            parent: keep,
++            concrete,
++            family,
++            opaque: x.opaque || y.opaque,
++        };
++        self.nodes[remove].parent = keep;
++        Ok(keep)
++    }
++    fn known(&mut self, id: usize, ty: PrimitiveType) -> Result<(), Diagnostic> {
++        let id = self.root(id)?;
++        let node = &mut self.nodes[id];
++        // These are source-derived contextual hints, not acceptance of every
++        // expression in the owner. Keep the first family-compatible context on
++        // this deterministic representative; the earlier owning result retains
++        // priority. An incompatible cold hint cannot suppress that context.
++        node.concrete = preferred_context(node.concrete, Some(ty), node.family);
++        Ok(())
++    }
++    fn numeric(&mut self, id: usize, f: Family) -> Result<(), Diagnostic> {
++        let id = self.root(id)?;
++        let node = &mut self.nodes[id];
++        node.family.get_or_insert(f);
++        Ok(())
++    }
++    fn opaque(&mut self, id: usize) -> Result<(), Diagnostic> {
++        let id = self.root(id)?;
++        self.nodes[id].opaque = true;
++        Ok(())
++    }
++    fn opaque_scope(&mut self) -> Result<(), Diagnostic> {
++        let count = self
++            .scopes
++            .iter()
++            .try_fold(0usize, |n, scope| n.checked_add(scope.len()))
++            .ok_or_else(limit)?;
++        self.charge(
++            count
++                .checked_mul(std::mem::size_of::<usize>())
++                .ok_or_else(limit)?,
++        )?;
++        let mut ids = Vec::new();
++        ids.try_reserve_exact(count).map_err(|_| limit())?;
++        for scope in &self.scopes {
++            ids.extend(scope.values().copied());
++        }
++        for id in ids {
++            self.opaque(id)?;
++        }
++        Ok(())
++    }
++    fn push(&mut self) -> Result<(), Diagnostic> {
++        if self.scopes.len() >= 128 {
++            return Err(limit());
++        }
++        self.charge(64)?;
++        self.scopes.try_reserve(1).map_err(|_| limit())?;
++        self.scopes.push(BTreeMap::new());
++        Ok(())
++    }
++    fn name(&mut self, text: &str) -> Result<String, Diagnostic> {
++        if text.len() > 64 * 1024 {
++            return Err(limit());
++        }
++        self.charge(
++            text.len()
++                .checked_mul(4)
++                .and_then(|n| n.checked_add(64))
++                .ok_or_else(limit)?,
++        )?;
++        semantic(text)
++    }
++    fn bind(&mut self, name: String, id: usize) -> Result<(), Diagnostic> {
++        self.charge(name.capacity().checked_add(64).ok_or_else(limit)?)?;
++        self.scopes
++            .last_mut()
++            .ok_or_else(incomplete)?
++            .insert(name, id);
++        Ok(())
++    }
++    fn local(&mut self, name: &str) -> Result<Option<usize>, Diagnostic> {
++        for index in (0..self.scopes.len()).rev() {
++            self.charge(0)?;
++            if let Some(id) = self.scopes[index].get(name).copied() {
++                return Ok(Some(id));
++            }
++        }
++        Ok(None)
++    }
++    fn block(&mut self, block: ast::BlockExpr, depth: usize) -> Result<Option<usize>, Diagnostic> {
++        if block.async_token().is_some()
++            || block.const_token().is_some()
++            || block.gen_token().is_some()
++            || block.unsafe_token().is_some()
++            || block.try_block_modifier().is_some()
++        {
++            self.opaque_scope()?;
++            let id = self.fresh()?;
++            self.opaque(id)?;
++            return Ok(Some(id));
++        }
++        let list = required(block.stmt_list())?;
++        let labelled = if block.label().is_some() {
++            self.charge(std::mem::size_of::<(ControlTarget, usize)>() + 64)?;
++            let id = self.fresh()?;
++            self.loops.try_reserve(1).map_err(|_| limit())?;
++            self.loops
++                .push((ControlTarget::block_expression(&block), id));
++            Some(id)
++        } else {
++            None
++        };
++        self.push()?;
++        let result = (|| {
++            let mut diverges = false;
++            for statement in list.statements() {
++                self.charge(0)?;
++                match statement {
++                    ast::Stmt::LetStmt(binding) => {
++                        let ast::Pat::IdentPat(pattern) = required(binding.pat())? else {
++                            self.opaque_scope()?;
++                            continue;
++                        };
++                        let id = self.fresh()?;
++                        if !self.checked_attributes(binding.syntax())?
++                            || binding.let_else().is_some()
++                            || pattern.ref_token().is_some()
++                            || pattern.at_token().is_some()
++                        {
++                            self.opaque(id)?;
++                            self.opaque_scope()?;
++                        }
++                        let initializer = match binding.initializer() {
++                            Some(expr) => self.expr(expr, depth + 1)?,
++                            None => {
++                                self.opaque(id)?;
++                                None
++                            }
++                        };
++                        if let Some(initializer) = initializer {
++                            self.combine(id, initializer)?;
++                        } else if binding.initializer().is_some() {
++                            diverges = true;
++                        }
++                        if let Some(ty) = binding.ty() {
++                            match self.checked_primitive(ty)? {
++                                Some(ty) => self.known(id, ty)?,
++                                None => self.opaque(id)?,
++                            }
++                        }
++                        let name = self.name(required(pattern.name())?.text())?;
++                        self.bind(name, id)?;
++                        if range(binding.syntax().text_range()) == self.target {
++                            self.selected = Some(id);
++                        }
++                    }
++                    ast::Stmt::ExprStmt(statement) => {
++                        if let Some(expr) = statement.expr() {
++                            diverges |= self.expr(expr, depth + 1)?.is_none();
++                        }
++                    }
++                    // A local item body cannot capture these function locals.
++                    ast::Stmt::Item(ast::Item::MacroCall(_) | ast::Item::Use(_)) => {
++                        self.opaque_scope()?
++                    }
++                    ast::Stmt::Item(_) => {}
++                }
++            }
++            let tail = match list.tail_expr() {
++                Some(tail) => self.expr(tail, depth + 1)?,
++                None => {
++                    let id = self.fresh()?;
++                    self.known(id, PrimitiveType::Unit)?;
++                    Some(id)
++                }
++            };
++            Ok(if diverges { None } else { tail })
++        })();
++        self.scopes.pop().ok_or_else(incomplete)?;
++        if let Some(id) = labelled {
++            self.loops.pop().ok_or_else(incomplete)?;
++            if let Some(tail) = result? {
++                self.combine(id, tail)?;
++            }
++            Ok(Some(id))
++        } else {
++            result
++        }
++    }
++    fn expr(&mut self, expr: ast::Expr, depth: usize) -> Result<Option<usize>, Diagnostic> {
++        self.charge(0)?;
++        if depth >= 128 {
++            return Err(limit());
++        }
++        let id = self.fresh()?;
++        if !self.checked_attributes(expr.syntax())? {
++            self.opaque_scope()?;
++            self.opaque(id)?;
++        }
++        use ast::Expr as E;
++        match expr.clone() {
++            E::Literal(_) | E::TupleExpr(_) => match self.checked_literal(expr)? {
++                Some(Node::Integer(DecodedLiteral::Integer { suffix, .. })) => {
++                    self.numeric(id, Family::Integer)?;
++                    if let Some(ty) = suffix {
++                        self.known(id, ty)?;
++                    }
++                }
++                Some(Node::Float(_, suffix)) => {
++                    self.numeric(id, Family::Float)?;
++                    if let Some(ty) = suffix {
++                        self.known(id, ty)?;
++                    }
++                }
++                Some(Node::Bool(_)) => self.known(id, PrimitiveType::Bool)?,
++                Some(Node::Char(_)) => self.known(id, PrimitiveType::Char)?,
++                Some(Node::Byte(_)) => self.known(id, PrimitiveType::U8)?,
++                Some(Node::Unit) => self.known(id, PrimitiveType::Unit)?,
++                _ => self.opaque(id)?,
++            },
++            E::PathExpr(path) => {
++                let name = match path.path() {
++                    Some(path) => self.checked_path(path)?,
++                    None => None,
++                };
++                let name = match name {
++                    Some(n) => n,
++                    None => {
++                        self.opaque(id)?;
++                        return Ok(Some(id));
++                    }
++                };
++                if !self.checked_lexical_value(path.syntax(), &name)? {
++                    self.opaque(id)?;
++                }
++                if let Some(local) = self.local(&name)? {
++                    self.combine(id, local)?;
++                } else {
++                    match self.checked_named_constant(&name)?.map(|c| c.ty) {
++                        Some(ConstType::Scalar(ty)) => self.known(id, ty)?,
++                        _ => self.opaque(id)?,
++                    }
++                }
++            }
++            E::ParenExpr(group) => return self.expr(required(group.expr())?, depth + 1),
++            E::BlockExpr(block) => return self.block(block, depth + 1),
++            E::PrefixExpr(prefix) => {
++                if !matches!(
++                    prefix.op_kind(),
++                    Some(ast::UnaryOp::Neg | ast::UnaryOp::Not)
++                ) {
++                    self.opaque_scope()?;
++                    self.opaque(id)?;
++                } else if let Some(child) = self.expr(required(prefix.expr())?, depth + 1)? {
++                    self.combine(id, child)?;
++                } else {
++                    return Ok(None);
++                }
++            }
++            E::CastExpr(cast) => {
++                self.expr(required(cast.expr())?, depth + 1)?;
++                match self.checked_primitive(required(cast.ty())?)? {
++                    Some(ty) => self.known(id, ty)?,
++                    None => self.opaque(id)?,
++                }
++            }
++            E::BinExpr(binary) => {
++                let lhs = self.expr(required(binary.lhs())?, depth + 1)?;
++                let rhs = self.expr(required(binary.rhs())?, depth + 1)?;
++                match required(binary.op_kind())? {
++                    ast::BinaryOp::LogicOp(_) => {
++                        self.known(id, PrimitiveType::Bool)?;
++                        for child in [lhs, rhs].into_iter().flatten() {
++                            self.known(child, PrimitiveType::Bool)?;
++                        }
++                    }
++                    ast::BinaryOp::Assignment { op } => {
++                        self.known(id, PrimitiveType::Unit)?;
++                        if let (Some(a), Some(b)) = (lhs, rhs) {
++                            if matches!(op, Some(ast::ArithOp::Shl | ast::ArithOp::Shr)) {
++                                self.numeric(b, Family::Integer)?;
++                            } else {
++                                self.combine(a, b)?;
++                            }
++                        }
++                    }
++                    ast::BinaryOp::CmpOp(_) => {
++                        self.known(id, PrimitiveType::Bool)?;
++                        if let (Some(a), Some(b)) = (lhs, rhs) {
++                            self.combine(a, b)?;
++                        }
++                    }
++                    ast::BinaryOp::ArithOp(op) => {
++                        if let Some(a) = lhs {
++                            self.combine(id, a)?;
++                        }
++                        if let Some(b) = rhs {
++                            if matches!(op, ast::ArithOp::Shl | ast::ArithOp::Shr) {
++                                self.numeric(b, Family::Integer)?;
++                            } else {
++                                self.combine(id, b)?;
++                            }
++                        }
++                    }
++                }
++                if lhs.is_none() || rhs.is_none() {
++                    return Ok(None);
++                }
++            }
++            E::IfExpr(branch) => {
++                if let Some(condition) = self.expr(required(branch.condition())?, depth + 1)? {
++                    self.known(condition, PrimitiveType::Bool)?;
++                }
++                let yes = self.block(required(branch.then_branch())?, depth + 1)?;
++                let no = match branch.else_branch() {
++                    Some(ast::ElseBranch::Block(b)) => self.block(b, depth + 1)?,
++                    Some(ast::ElseBranch::IfExpr(i)) => self.expr(E::IfExpr(i), depth + 1)?,
++                    None => {
++                        let unit = self.fresh()?;
++                        self.known(unit, PrimitiveType::Unit)?;
++                        Some(unit)
++                    }
++                };
++                for child in [yes, no].into_iter().flatten() {
++                    self.combine(id, child)?;
++                }
++                if yes.is_none() && no.is_none() {
++                    return Ok(None);
++                }
++            }
++            E::LoopExpr(loop_expr) => {
++                self.loops.try_reserve(1).map_err(|_| limit())?;
++                self.loops
++                    .push((ControlTarget::loop_expression(&ExprRef(expr)), id));
++                self.block(required(loop_expr.loop_body())?, depth + 1)?;
++                self.loops.pop().ok_or_else(incomplete)?;
++            }
++            E::WhileExpr(loop_expr) => {
++                self.known(id, PrimitiveType::Unit)?;
++                self.loops.try_reserve(1).map_err(|_| limit())?;
++                self.loops
++                    .push((ControlTarget::loop_expression(&ExprRef(expr)), id));
++                if let Some(condition) = self.expr(required(loop_expr.condition())?, depth + 1)? {
++                    self.known(condition, PrimitiveType::Bool)?;
++                }
++                self.block(required(loop_expr.loop_body())?, depth + 1)?;
++                self.loops.pop().ok_or_else(incomplete)?;
++            }
++            E::BreakExpr(exit) => {
++                let Some(target) = self.checked_loop_target(exit.syntax(), exit.lifetime())? else {
++                    // This source-context walk cannot validate a cold exit or
++                    // invent a target. The actual evaluator still resolves the
++                    // real exit if entered, before producing a control effect.
++                    self.opaque_scope()?;
++                    return Ok(None);
++                };
++                let destination = self
++                    .loops
++                    .iter()
++                    .rev()
++                    .find(|(t, _)| *t == target)
++                    .map(|(_, id)| *id)
++                    .ok_or_else(incomplete)?;
++                if let Some(value) = exit.expr() {
++                    if let Some(child) = self.expr(value, depth + 1)? {
++                        self.combine(destination, child)?;
++                    }
++                } else {
++                    self.known(destination, PrimitiveType::Unit)?;
++                }
++                return Ok(None);
++            }
++            E::ContinueExpr(_) => return Ok(None),
++            E::ReturnExpr(exit) => {
++                if let Some(value) = exit.expr() {
++                    if let Some(child) = self.expr(value, depth + 1)? {
++                        self.combine(self.result, child)?;
++                    }
++                } else {
++                    self.known(self.result, PrimitiveType::Unit)?;
++                }
++                return Ok(None);
++            }
++            E::CallExpr(call) => {
++                let function = if let Some(E::PathExpr(path)) = call.expr() {
++                    let name = match path.path() {
++                        Some(path) => self.checked_path(path)?,
++                        None => None,
++                    };
++                    match name {
++                        Some(name)
++                            if self.local(&name)?.is_none()
++                                && self.checked_lexical_value(call.syntax(), &name)? =>
++                        {
++                            self.checked_named_function(&name)?
++                        }
++                        _ => None,
++                    }
++                } else {
++                    None
++                };
++                let arguments = required(call.arg_list())?;
++                let mut count = 0usize;
++                for argument in arguments.args() {
++                    self.charge(0)?;
++                    let child = self.expr(argument, depth + 1)?;
++                    if let Some(child) = child {
++                        match function.as_ref().and_then(|f| f.params.get(count)) {
++                            Some((_, ty, _)) => self.known(child, *ty)?,
++                            None => self.opaque(child)?,
++                        }
++                    }
++                    count = count.checked_add(1).ok_or_else(limit)?;
++                }
++                match function {
++                    Some(function) if function.params.len() == count => match function.result {
++                        ConstType::Scalar(ty) => self.known(id, ty)?,
++                        _ => self.opaque(id)?,
++                    },
++                    _ => self.opaque(id)?,
++                }
++            }
++            _ => {
++                self.opaque_scope()?;
++                self.opaque(id)?;
++            }
++        }
++        Ok(Some(id))
++    }
++}
++pub(super) fn select(
++    source: &ConstantSource,
++    target: &StatementRef,
++    work_limit: usize,
++    byte_limit: usize,
++) -> Result<LocalNumericContext, Diagnostic> {
++    if !(1..=100_000).contains(&work_limit) || !(128..=32 * 1024 * 1024).contains(&byte_limit) {
++        return Err(limit());
++    }
++    let mut graph = Graph {
++        source,
++        nodes: Vec::new(),
++        scopes: Vec::new(),
++        loops: Vec::new(),
++        result: 0,
++        target: target.range(),
++        selected: None,
++        work: 0,
++        bytes: 0,
++        work_limit,
++        byte_limit,
++    };
++    graph.checked_target_source(target)?;
++    let mut owner = None;
++    let mut length = None;
++    for node in target.0.syntax().ancestors() {
++        graph.charge(0)?;
++        let candidate = if let Some(array) = ast::ArrayType::cast(node.clone()) {
++            array
++                .const_arg()
++                .and_then(|argument| argument.syntax().children().find_map(ast::Expr::cast))
++        } else if let Some(array) = ast::ArrayExpr::cast(node.clone()) {
++            match array.kind() {
++                ast::ArrayExprKind::Repeat { repeat, .. } => repeat,
++                _ => None,
++            }
++        } else {
++            None
++        };
++        if let Some(expression) = candidate
++            && range(expression.syntax().text_range()).contains(target.range())
++        {
++            length = Some(ExprRef(expression));
++            break;
++        }
++        if ast::Fn::can_cast(node.kind())
++            || ast::Const::can_cast(node.kind())
++            || ast::ClosureExpr::can_cast(node.kind())
++        {
++            owner = Some(node);
++            break;
++        }
++    }
++    let (body, params, result) = if let Some(length) = length {
++        // usize belongs to the exact admitted length, never to all locals in
++        // the surrounding function. The graph starts a fresh lexical scope.
++        (
++            graph.checked_array_length(length)?,
++            Vec::new(),
++            ConstType::Scalar(PrimitiveType::Usize),
++        )
++    } else if let Some(function) = owner.clone().and_then(ast::Fn::cast) {
++        let function = graph.checked_function_header(&function)?;
++        (function.body, function.params, function.result)
++    } else if let Some(constant) = owner.and_then(ast::Const::cast) {
++        let constant = graph.checked_constant_header(&constant)?;
++        (constant.body, Vec::new(), constant.ty)
++    } else {
++        return Err(incomplete());
++    };
++    graph.result = graph.fresh()?;
++    if let ConstType::Scalar(ty) = result {
++        graph.known(graph.result, ty)?;
++    } else {
++        graph.opaque(graph.result)?;
++    }
++    graph.push()?;
++    for (name, ty, _) in params {
++        let id = graph.fresh()?;
++        graph.known(id, ty)?;
++        graph.bind(name, id)?;
++    }
++    if let Some(body) = graph.expr(body.0, 0)? {
++        graph.combine(graph.result, body)?;
++    }
++    let selected = graph.selected.ok_or_else(incomplete)?;
++    let selected = graph.root(selected)?;
++    let node = graph.nodes[selected];
++    // An unknown use cannot establish a default type. It also cannot erase
++    // an independent concrete context (for example the actual owning return
++    // type). The evaluator still checks every reached call/effect separately.
++    // A boolean or floating cold use is not a numeric context for an integer
++    // initializer. It must not turn the graph into a static type checker. The
++    // real evaluator checks the initializer and each use only when entered.
++    let concrete = node.concrete.filter(|ty| {
++        node.family
++            .is_none_or(|expected| family(*ty) == Some(expected))
++    });
++    if node.opaque && concrete.is_none() {
++        return Err(incomplete());
++    }
++    let primitive = concrete
++        .or_else(|| match node.family {
++            Some(Family::Integer) => Some(PrimitiveType::I32),
++            Some(Family::Float) => Some(PrimitiveType::F64),
++            None => None,
++        })
++        .ok_or_else(incomplete)?;
++    Ok(LocalNumericContext {
++        primitive,
++        work: graph.work,
++        metadata: graph.bytes,
++    })
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::{
++        core::profile::ProfileIdentity,
++        frontend::constants::{ConstLimits, evaluate},
++        runtime::{shape::TypeId, value::ValueRepr},
++    };
++    const LOOP: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.rs"
++    );
++    const CONTROL: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/control-flow/loop.rs"
++    );
++    const BASICS: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/control-flow/basics.rs"
++    );
++    fn source(text: &str, edition: u16) -> ConstantSource {
++        ConstantSource::parse(
++            &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++            ProfileIdentity {
++                edition,
++                ..ProfileIdentity::current()
++            },
++            Digest([221; 32]),
++            CfgSet::guest_default(),
++        )
++        .unwrap()
++    }
++    #[test]
++    fn unchanged_ctfe_scalar_loop_infers_mutable_index_from_real_parameter_all_editions() {
++        for edition in [2015, 2018, 2021, 2024] {
++            let source = source(LOOP, edition);
++            let at = source
++                .declarations()
++                .iter()
++                .find(|d| d.name() == "simple_loop")
++                .unwrap()
++                .range();
++            for n in [0, 19, 35] {
++                let plan = source
++                    .const_call(
++                        at,
++                        vec![
++                            ConstValue::from_scalar(ValueRepr::unsigned(TypeId(11), n).unwrap())
++                                .unwrap(),
++                        ],
++                    )
++                    .unwrap();
++                let value = evaluate(&plan, ConstLimits::default()).unwrap();
++                assert_eq!(
++                    value.value().scalar().unwrap(),
++                    ValueRepr::unsigned(TypeId(11), 0).unwrap()
++                );
++                assert_eq!(value.source(), Digest::of_bytes(LOOP.as_bytes()));
++                assert_eq!(plan.profile().edition, edition);
++            }
++        }
++    }
++    #[test]
++    fn unchanged_const_while_and_loop_components_preserve_unsuffixed_bindings() {
++        for edition in [2015, 2018, 2021, 2024] {
++            let source = source(CONTROL, edition);
++            assert_eq!(
++                source
++                    .declarations()
++                    .iter()
++                    .filter(|d| d.is_anonymous())
++                    .count(),
++                5
++            );
++            assert!(source.named_constant("").is_err());
++            assert!(source.named_constant("_").is_err());
++            for marker in ["while x < 4", "if x == 4"] {
++                let at = source
++                    .declarations()
++                    .iter()
++                    .find(|d| {
++                        CONTROL
++                            .get(d.range().start as usize..d.range().end as usize)
++                            .is_some_and(|text| text.contains(marker))
++                    })
++                    .unwrap()
++                    .range();
++                let plan = source.constant(at).unwrap();
++                let result = evaluate(&plan, ConstLimits::default()).unwrap();
++                assert_eq!(
++                    result.value().scalar().unwrap(),
++                    ValueRepr::signed(TypeId(6), 8).unwrap()
++                );
++                assert_eq!(result.source(), Digest::of_bytes(CONTROL.as_bytes()));
++            }
++        }
++    }
++    #[test]
++    fn unchanged_gcd_returns_entered_branch_values_with_actual_parameter_types() {
++        for edition in [2015, 2018, 2021, 2024] {
++            let source = source(BASICS, edition);
++            let at = source
++                .declarations()
++                .iter()
++                .find(|d| d.name() == "gcd")
++                .unwrap()
++                .range();
++            for (a, b) in [(48, 18), (18, 48)] {
++                let arguments = [a, b]
++                    .into_iter()
++                    .map(|n| {
++                        ConstValue::from_scalar(ValueRepr::unsigned(TypeId(11), n).unwrap())
++                            .unwrap()
++                    })
++                    .collect();
++                let plan = source.const_call(at, arguments).unwrap();
++                let result = evaluate(&plan, ConstLimits::default()).unwrap();
++                assert_eq!(
++                    result.value().scalar().unwrap(),
++                    ValueRepr::unsigned(TypeId(11), 6).unwrap()
++                );
++                assert_eq!(result.source(), Digest::of_bytes(BASICS.as_bytes()));
++                assert_eq!(plan.profile().edition, edition);
++            }
++        }
++    }
++    #[test]
++    fn unchanged_prime_loop_infers_divisor_from_actual_source_parameter() {
++        for edition in [2015, 2018, 2021, 2024] {
++            let source = source(BASICS, edition);
++            let at = source
++                .declarations()
++                .iter()
++                .find(|d| d.name() == "is_prime")
++                .unwrap()
++                .range();
++            for (n, expected) in [(113, true), (117, false)] {
++                let plan = source
++                    .const_call(
++                        at,
++                        vec![
++                            ConstValue::from_scalar(ValueRepr::unsigned(TypeId(12), n).unwrap())
++                                .unwrap(),
++                        ],
++                    )
++                    .unwrap();
++                let result = evaluate(&plan, ConstLimits::default()).unwrap();
++                assert_eq!(
++                    result.value().scalar().unwrap(),
++                    ValueRepr::boolean(expected)
++                );
++                assert_eq!(result.source(), Digest::of_bytes(BASICS.as_bytes()));
++                assert_eq!(plan.profile().edition, edition);
++            }
++        }
++    }
++    fn result(
++        text: &str,
++    ) -> Result<crate::frontend::constants::ConstEvaluation, crate::frontend::constants::ConstFailure>
++    {
++        let source = source(text, 2024);
++        let at = source
++            .declarations()
++            .iter()
++            .find(|d| d.name() == "A")
++            .unwrap()
++            .range();
++        evaluate(&source.constant(at).unwrap(), ConstLimits::default())
++    }
++    #[test]
++    fn source_scope_shadow_and_return_context_cannot_alias_other_numeric_bindings() {
++        let value = result("const A:u8={let x=7; {let x=false; x;} x};").unwrap();
++        assert_eq!(
++            value.value().scalar().unwrap(),
++            ValueRepr::unsigned(TypeId(9), 7).unwrap()
++        );
++        let value = result("const fn f()->u8{let x=9;return x;} const A:u8=f();").unwrap();
++        assert_eq!(
++            value.value().scalar().unwrap(),
++            ValueRepr::unsigned(TypeId(9), 9).unwrap()
++        );
++    }
++    #[test]
++    fn connected_opaque_calls_do_not_mint_default_local_context() {
++        let error = result("const A:i32={let x=0; missing(x); 1};").unwrap_err();
++        assert_eq!(error.diagnostic().code, "LRR-E-CONST-UNSUPPORTED");
++        assert!(error.panic().is_none());
++    }
++    #[test]
++    fn cold_item_body_is_not_a_constraint_on_its_enclosing_local() {
++        let value =
++            result("const A:i32={let x=5; const fn cold()->bool{let x=\"wrong\";x} x};").unwrap();
++        assert_eq!(
++            value.value().scalar().unwrap(),
++            ValueRepr::signed(TypeId(6), 5).unwrap()
++        );
++    }
++    #[test]
++    fn an_opaque_cold_use_cannot_erase_the_real_owning_return_context() {
++        let value = result("const A:i32={let x=5;if false{missing(x);}x};").unwrap();
++        assert_eq!(
++            value.value().scalar().unwrap(),
++            ValueRepr::signed(TypeId(6), 5).unwrap()
++        );
++        let value = result("const A:u8={let x=7;if false{missing(x);}x};").unwrap();
++        assert_eq!(
++            value.value().scalar().unwrap(),
++            ValueRepr::unsigned(TypeId(9), 7).unwrap()
++        );
++        let error = result("const A:u8={let x=7;if true{missing(x);}x};").unwrap_err();
++        assert_eq!(error.diagnostic().code, "LRR-E-CONST-SOURCE");
++        assert!(error.panic().is_none());
++    }
++    #[test]
++    fn cold_type_disagreements_do_not_precheck_the_selected_constant_body() {
++        for edition in [2015, 2018, 2021, 2024] {
++            for (text, expected) in [
++                (
++                    "const A:u8={let x=9;if false{let y:bool=x;}x};",
++                    ValueRepr::unsigned(TypeId(9), 9).unwrap(),
++                ),
++                (
++                    "const fn f()->u8{let x=7;return x;let y:bool=x;}const A:u8=f();",
++                    ValueRepr::unsigned(TypeId(9), 7).unwrap(),
++                ),
++                (
++                    "const A:i32={let x=9;if false{let y:bool=x;}1};",
++                    ValueRepr::signed(TypeId(6), 1).unwrap(),
++                ),
++                (
++                    "const A:i32={let x=9;if false{let y:f64=x;}1};",
++                    ValueRepr::signed(TypeId(6), 1).unwrap(),
++                ),
++            ] {
++                let source = source(text, edition);
++                let at = source
++                    .declarations()
++                    .iter()
++                    .find(|d| d.name() == "A")
++                    .unwrap()
++                    .range();
++                let evaluation =
++                    evaluate(&source.constant(at).unwrap(), ConstLimits::default()).unwrap();
++                assert_eq!(evaluation.value().scalar().unwrap(), expected);
++                assert_eq!(evaluation.source(), Digest::of_bytes(text.as_bytes()));
++            }
++        }
++    }
++    #[test]
++    fn entered_type_disagreements_fail_at_the_actual_use_without_graph_diagnostics() {
++        for edition in [2015, 2018, 2021, 2024] {
++            let text = "const A:u8={let x=9;if true{let y:bool=x;}x};";
++            let source = source(text, edition);
++            let at = source
++                .declarations()
++                .iter()
++                .find(|d| d.name() == "A")
++                .unwrap()
++                .range();
++            let error =
++                evaluate(&source.constant(at).unwrap(), ConstLimits::default()).unwrap_err();
++            assert_eq!(error.diagnostic().code, "LRR-E-CONST-TYPE");
++            let use_at = text.find("=x;").unwrap() + 1;
++            assert_eq!(
++                error.range(),
++                SourceRange {
++                    start: use_at as u32,
++                    end: (use_at + 1) as u32
++                }
++            );
++            assert!(error.panic().is_none());
++        }
++    }
++    fn first_binding(source: &ConstantSource) -> StatementRef {
++        let binding = source
++            .0
++            .parsed
++            .parsed
++            .tree()
++            .syntax()
++            .descendants()
++            .find_map(ast::LetStmt::cast)
++            .unwrap();
++        StatementRef(ast::Stmt::LetStmt(binding))
++    }
++    #[test]
++    fn header_and_namespace_probes_consume_the_callers_remaining_source_budget() {
++        let source = source("const A:i32={let x=3;x};", 2024);
++        let binding = first_binding(&source);
++        assert_eq!(
++            source
++                .numeric_local_context(&binding, 1, 32 * 1024 * 1024)
++                .unwrap_err()
++                .code,
++            "LRR-E-CONST-LIMIT"
++        );
++        assert_eq!(
++            source
++                .numeric_local_context(&binding, 100_000, 128)
++                .unwrap_err()
++                .code,
++            "LRR-E-CONST-LIMIT"
++        );
++        let context = source
++            .numeric_local_context(&binding, 100_000, 32 * 1024 * 1024)
++            .unwrap();
++        assert_eq!(context.primitive(), PrimitiveType::I32);
++        assert!(context.work() > 1);
++        assert!(context.metadata_bytes() > 128);
++        let error = source
++            .numeric_local_context(&binding, context.work() - 1, 32 * 1024 * 1024)
++            .unwrap_err();
++        assert_eq!(error.code, "LRR-E-CONST-LIMIT");
++    }
++    #[test]
++    fn a_cold_local_item_body_does_not_expand_the_source_constraint_work() {
++        let before = source("const A:i32={let x=5;const fn cold()->bool{true}x};", 2024);
++        let text = format!(
++            "const A:i32={{let x=5;const fn cold()->bool{{{}true}}x}};",
++            "unknown();".repeat(500)
++        );
++        let after = source(&text, 2024);
++        let a = before
++            .numeric_local_context(&first_binding(&before), 100_000, 32 * 1024 * 1024)
++            .unwrap();
++        let b = after
++            .numeric_local_context(&first_binding(&after), 100_000, 32 * 1024 * 1024)
++            .unwrap();
++        assert_eq!(a.primitive(), b.primitive());
++        assert_eq!(a.work(), b.work());
++        assert_eq!(a.metadata_bytes(), b.metadata_bytes());
++    }
++}
++
++#[cfg(test)]
++#[path = "constant_length_context_tests.rs"]
++mod length_context_tests;
++
++#[cfg(test)]
++mod family_priority_review_tests {
++    use super::*;
++    use crate::{
++        core::profile::ProfileIdentity,
++        frontend::constants::{ConstLimits, evaluate},
++        runtime::{shape::TypeId, value::ValueRepr},
++    };
++    fn evaluate_a(
++        text: &str,
++        edition: u16,
++    ) -> Result<crate::frontend::constants::ConstEvaluation, crate::frontend::constants::ConstFailure>
++    {
++        let source = ConstantSource::parse(
++            &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++            ProfileIdentity {
++                edition,
++                ..ProfileIdentity::current()
++            },
++            Digest([146; 32]),
++            CfgSet::guest_default(),
++        )
++        .unwrap();
++        let at = source
++            .declarations()
++            .iter()
++            .find(|d| d.name() == "A")
++            .unwrap()
++            .range();
++        evaluate(&source.constant(at).unwrap(), ConstLimits::default())
++    }
++    #[test]
++    fn incompatible_cold_context_cannot_suppress_a_later_actual_integer_constraint() {
++        for edition in [2015, 2018, 2021, 2024] {
++            for incompatible in ["bool", "f64"] {
++                let text = format!(
++                    "const A:i32={{let x=9;if false{{let bad:{incompatible}=x;}}let y:u8=x;y as i32}};"
++                );
++                let result = evaluate_a(&text, edition).unwrap();
++                assert_eq!(
++                    result.value().scalar().unwrap(),
++                    ValueRepr::signed(TypeId(6), 9).unwrap()
++                );
++                assert_eq!(result.source(), Digest::of_bytes(text.as_bytes()));
++            }
++        }
++    }
++    #[test]
++    fn entered_incompatible_context_still_fails_at_the_actual_variable_use() {
++        for edition in [2015, 2018, 2021, 2024] {
++            for incompatible in ["bool", "f64"] {
++                let text = format!(
++                    "const A:i32={{let x=9;if true{{let bad:{incompatible}=x;}}let y:u8=x;y as i32}};"
++                );
++                let failure = evaluate_a(&text, edition).unwrap_err();
++                let at = text.find("=x;").unwrap() + 1;
++                assert_eq!(failure.diagnostic().code, "LRR-E-CONST-TYPE");
++                assert_eq!(
++                    failure.range(),
++                    SourceRange {
++                        start: at as u32,
++                        end: (at + 1) as u32
++                    }
++                );
++                assert_eq!(failure.source(), Digest::of_bytes(text.as_bytes()));
++                assert!(failure.panic().is_none());
++            }
++        }
++    }
++    #[test]
++    fn compatible_owning_result_keeps_priority_over_later_compatible_cold_constraints() {
++        for edition in [2015, 2018, 2021, 2024] {
++            let text = "const A:u8={let x=9;if false{let bad:bool=x;let other:u16=x;}x};";
++            let result = evaluate_a(text, edition).unwrap();
++            assert_eq!(
++                result.value().scalar().unwrap(),
++                ValueRepr::unsigned(TypeId(9), 9).unwrap()
++            );
++        }
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/syntax/constant_loops.rs
+@@ -0,0 +1,108 @@
++//! Reached lexical control targets, privately derived from the retained pinned AST.
++use super::*;
++use ra_ap_syntax::ast::HasLoopBody;
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++enum TargetKind {
++    Loop,
++    Block,
++}
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub(crate) struct ControlTarget(SourceRange, TargetKind);
++impl ControlTarget {
++    pub(super) fn loop_expression(expression: &ExprRef) -> Self {
++        Self(expression.range(), TargetKind::Loop)
++    }
++    pub(super) fn block_expression(expression: &ast::BlockExpr) -> Self {
++        Self(range(expression.syntax().text_range()), TargetKind::Block)
++    }
++    pub(crate) fn is_loop(self) -> bool {
++        self.1 == TargetKind::Loop
++    }
++    #[cfg(test)]
++    pub(super) fn range(self) -> SourceRange {
++        self.0
++    }
++}
++fn label_name(label: &ast::Lifetime) -> Result<String, Diagnostic> {
++    let token = required(label.lifetime_ident_token())?;
++    if token.text().len() > 64 * 1024 {
++        return Err(fault("constant loop label metadata limit"));
++    }
++    semantic(required(token.text().strip_prefix('\''))?)
++}
++pub(super) fn reached_target(
++    syntax: &ra_ap_syntax::SyntaxNode,
++    label: Option<ast::Lifetime>,
++) -> Result<ControlTarget, Diagnostic> {
++    resolve(syntax, label, false)
++}
++pub(super) fn reached_continue_target(
++    syntax: &ra_ap_syntax::SyntaxNode,
++    label: Option<ast::Lifetime>,
++) -> Result<ControlTarget, Diagnostic> {
++    resolve(syntax, label, true)
++}
++fn resolve(
++    syntax: &ra_ap_syntax::SyntaxNode,
++    label: Option<ast::Lifetime>,
++    is_continue: bool,
++) -> Result<ControlTarget, Diagnostic> {
++    let wanted = label.as_ref().map(label_name).transpose()?;
++    for (work, parent) in syntax.ancestors().skip(1).enumerate() {
++        if work >= 100_000 {
++            return Err(fault("constant loop target work limit"));
++        }
++        if ast::Fn::can_cast(parent.kind())
++            || ast::ClosureExpr::can_cast(parent.kind())
++            || ast::Const::can_cast(parent.kind())
++            || ast::Static::can_cast(parent.kind())
++        {
++            break;
++        }
++        if let Some(block) = ast::BlockExpr::cast(parent.clone()) {
++            if block.const_token().is_some()
++                || block.async_token().is_some()
++                || block.gen_token().is_some()
++            {
++                break;
++            }
++            if let Some(label) = block.label() {
++                let declared = label_name(&required(label.lifetime())?)?;
++                let Some(wanted) = &wanted else {
++                    return Err(fault("unlabelled constant exit crosses a labelled block"));
++                };
++                if &declared == wanted {
++                    if is_continue {
++                        return Err(fault("constant continue targets a labelled block"));
++                    }
++                    return Ok(ControlTarget::block_expression(&block));
++                }
++            }
++        }
++        let (is_loop, declared) = if let Some(expression) = ast::LoopExpr::cast(parent.clone()) {
++            (true, expression.label())
++        } else if let Some(expression) = ast::WhileExpr::cast(parent.clone()) {
++            (true, expression.label())
++        } else if let Some(expression) = ast::ForExpr::cast(parent.clone()) {
++            (true, expression.label())
++        } else {
++            (false, None)
++        };
++        if !is_loop {
++            continue;
++        }
++        if let Some(wanted) = &wanted {
++            let Some(declared) = declared.and_then(|label| label.lifetime()) else {
++                continue;
++            };
++            if label_name(&declared)? != *wanted {
++                continue;
++            }
++        }
++        return Ok(ControlTarget(range(parent.text_range()), TargetKind::Loop));
++    }
++    Err(fault(
++        "constant exit has no lexical loop target in its source body",
++    ))
++}
+--- a/crates/lrr/src/syntax/outline.rs
++++ b/crates/lrr/src/syntax/outline.rs
+@@ -661,7 +661,10 @@
+                         ItemKind::Constant,
+                         Namespace::Value,
+                         i.name().map(|n| n.text().to_string()),
+-                        true,
++                        // `const _` is an actual unnamed item, not a missing
++                        // identifier or a member callable as `_`. Retain its
++                        // header/body/ordinal without publishing a name.
++                        i.underscore_token().is_none(),
+                     )
+                 }
+                 ast::Item::Static(i) => {
+@@ -1353,4 +1356,77 @@
+         let o = outline("fn cold() { let x=1_i64;");
+         assert!(o.items[0].body.as_ref().unwrap().require_entry().is_err());
+     }
+-}
++    #[test]
++    fn unchanged_anonymous_const_headers_are_distinct_unnamed_items_all_editions() {
++        const SOURCE: &str = include_str!(
++            "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/control-flow/loop.rs"
++        );
++        for edition in [2015, 2018, 2021, 2024] {
++            let parsed = ParsedFile::parse(
++                &crate::source::snapshot::SourceBlob::new(SOURCE.as_bytes().to_vec()).unwrap(),
++                ProfileIdentity {
++                    edition,
++                    ..ProfileIdentity::current()
++                },
++            )
++            .unwrap();
++            let outline = parsed
++                .outline(Digest([225; 32]), Vec::new(), &CfgSet::guest_default())
++                .unwrap();
++            let anonymous = outline
++                .items
++                .iter()
++                .filter(|item| {
++                    item.def_key.item_kind == ItemKind::Constant
++                        && item.def_key.declared_name.is_empty()
++                })
++                .collect::<Vec<_>>();
++            assert_eq!(anonymous.len(), 5);
++            let definitions = anonymous
++                .iter()
++                .map(|item| item.def_key.fingerprint())
++                .collect::<std::collections::BTreeSet<_>>();
++            assert_eq!(definitions.len(), 5);
++            let members = outline.scopes.get(&outline.root_scope).unwrap();
++            assert!(members.blockers.is_empty());
++            assert!(
++                !members
++                    .candidates
++                    .contains_key(&(Namespace::Value, String::new()))
++            );
++            assert!(
++                !members
++                    .candidates
++                    .contains_key(&(Namespace::Value, "_".into()))
++            );
++            for item in anonymous {
++                assert!(item.body.as_ref().is_some_and(|body| !body.entry_blocked));
++                assert!(
++                    SOURCE
++                        [item.declaration_span.start as usize..item.declaration_span.end as usize]
++                        .starts_with("const _:")
++                );
++            }
++        }
++    }
++    #[test]
++    fn anonymous_body_edits_keep_headers_without_hiding_missing_identifiers() {
++        let before = outline("const _:i32=1; const _:i32=2; fn f(){}");
++        let after = outline("const _:i32=9; const _:i32=8; fn f(){}");
++        for (before, after) in before.items.iter().zip(&after.items) {
++            assert_eq!(before.def_key, after.def_key);
++            assert_eq!(before.header, after.header);
++        }
++        assert_ne!(
++            before.items[0].body.as_ref().unwrap().key(),
++            after.items[0].body.as_ref().unwrap().key()
++        );
++        let malformed = outline("const :i32=1; fn f(){}");
++        assert!(malformed.scopes.values().any(|scope| {
++            scope
++                .blockers
++                .iter()
++                .any(|blocker| blocker.kind == BlockerKind::ParseBoundary)
++        }));
++    }
++}
+--- a/crates/lrr/src/syntax/pure_constants.rs
++++ b/crates/lrr/src/syntax/pure_constants.rs
+@@ -24,12 +24,37 @@
+ };
+ use ra_ap_syntax::{
+     AstNode, AstToken,
+-    ast::{self, HasArgList, HasAttrs, HasGenericArgs, HasGenericParams, HasModuleItem, HasName},
++    ast::{
++        self, HasArgList, HasAttrs, HasGenericArgs, HasGenericParams, HasLoopBody, HasModuleItem,
++        HasName,
++    },
+ };
+ use std::{collections::BTreeMap, rc::Rc};
+ #[path = "constant_parameter_lengths.rs"]
+ mod parameter_lengths;
+ use parameter_lengths::ParameterIndependentLength;
++#[path = "constant_loops.rs"]
++mod loops;
++pub(crate) use loops::ControlTarget;
++#[path = "constant_local_constraints.rs"]
++mod local_constraints;
++#[derive(Debug)]
++pub(crate) struct LocalNumericContext {
++    primitive: PrimitiveType,
++    work: usize,
++    metadata: usize,
++}
++impl LocalNumericContext {
++    pub(crate) fn primitive(&self) -> PrimitiveType {
++        self.primitive
++    }
++    pub(crate) fn work(&self) -> usize {
++        self.work
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.metadata
++    }
++}
+ fn fault(message: &str) -> Diagnostic {
+     Diagnostic::new("LRR-E-CONST-SOURCE", message.into())
+ }
+@@ -49,6 +74,9 @@
+ impl ConstantDeclaration {
+     pub fn name(&self) -> &str {
+         &self.name
++    }
++    pub fn is_anonymous(&self) -> bool {
++        self.name.is_empty()
+     }
+     pub fn range(&self) -> SourceRange {
+         self.range
+@@ -116,7 +144,7 @@
+ #[derive(Debug, Clone)]
+ pub(crate) struct Function {
+     pub(crate) declaration: ConstantDeclaration,
+-    pub(crate) params: Vec<(String, PrimitiveType)>,
++    pub(crate) params: Vec<(String, PrimitiveType, bool)>,
+     pub(crate) result: ConstType,
+     pub(crate) body: ExprRef,
+ }
+@@ -135,8 +163,9 @@
+ }
+ #[derive(Debug, Clone)]
+ pub(crate) enum Statement {
+-    Let(String, Option<PrimitiveType>, ExprRef),
++    Let(String, bool, Option<PrimitiveType>, ExprRef),
+     Expression(ExprRef),
++    Declaration,
+     Unsupported(SourceRange),
+ }
+ /// Source-owned syntax data for an actually reached macro, never authority.
+@@ -169,11 +198,15 @@
+     Parentheses(ExprRef),
+     Unary(NumericUnary, ExprRef),
+     Binary(NumericBinary, ExprRef, ExprRef),
++    Assign(String, Option<NumericBinary>, ExprRef),
+     Logic(bool, ExprRef, ExprRef),
+     Cast(ExprRef, PrimitiveType),
+     If(ExprRef, ExprRef, Option<ExprRef>),
+-    Block(Vec<StatementRef>, Option<ExprRef>),
++    Block(Vec<StatementRef>, Option<ExprRef>, Option<ControlTarget>),
+     Return(Option<ExprRef>),
++    Loop(ControlTarget, Option<ExprRef>, ExprRef),
++    Break(ControlTarget, Option<ExprRef>),
++    Continue(ControlTarget),
+     Call(String, Vec<ExprRef>),
+     Array(Vec<ExprRef>),
+     Repeat(ExprRef, ExprRef),
+@@ -183,6 +216,14 @@
+     Unsupported,
+ }
+ impl ConstantSource {
++    pub(crate) fn numeric_local_context(
++        &self,
++        statement: &StatementRef,
++        work_limit: usize,
++        byte_limit: usize,
++    ) -> Result<LocalNumericContext, Diagnostic> {
++        local_constraints::select(self, statement, work_limit, byte_limit)
++    }
+     /// Captures source bytes/profile/cfg privately. Never accepts caller-built outline/body proofs.
+     pub fn parse(
+         blob: &SourceBlob,
+@@ -301,12 +342,12 @@
+             else {
+                 continue;
+             };
+-            let name = match &item {
+-                ast::Item::Const(c) => c.name(),
+-                ast::Item::Fn(f) => f.name(),
+-                _ => None,
++            let name = match item {
++                ast::Item::Const(c) if c.underscore_token().is_some() => String::new(),
++                ast::Item::Const(c) => semantic(required(c.name())?.text())?,
++                ast::Item::Fn(f) => semantic(required(f.name())?.text())?,
++                _ => continue,
+             };
+-            let Some(name) = name else { continue };
+             let Some(body) = header.body.as_ref() else {
+                 continue;
+             };
+@@ -317,7 +358,7 @@
+                 .try_reserve(1)
+                 .map_err(|_| fault("constant declaration allocation"))?;
+             declarations.push(ConstantDeclaration {
+-                name: semantic(name.text())?,
++                name: name.clone(),
+                 range: at,
+                 definition: header.def_key.fingerprint(),
+                 body: body.key(),
+@@ -328,10 +369,9 @@
+                 },
+                 handle: body.clone(),
+             });
+-            items
+-                .entry(semantic(name.text())?)
+-                .or_default()
+-                .push(item.clone());
++            if !name.is_empty() {
++                items.entry(name).or_default().push(item.clone());
++            }
+         }
+         Ok(Self(Rc::new(Captured {
+             parsed,
+@@ -479,9 +519,9 @@
+             ));
+         }
+         self.0
+-            .items
+-            .get(&d.name)
+-            .and_then(|items| items.iter().find(|i| range(i.syntax().text_range()) == at))
++            .module_items
++            .iter()
++            .find(|i| range(i.syntax().text_range()) == at)
+             .cloned()
+             .ok_or_else(|| fault("captured declaration absent"))
+     }
+@@ -504,7 +544,7 @@
+         if header.params.len() != args.len() {
+             return Err(fault("pure const argument cardinality differs"));
+         }
+-        for ((_, ty), arg) in header.params.iter().zip(&args) {
++        for ((_, ty, _), arg) in header.params.iter().zip(&args) {
+             if !arg.matches_scalar(*ty)? {
+                 return Err(fault("pure const argument type differs"));
+             }
+@@ -855,12 +895,12 @@
+             if params.len() >= 256 {
+                 return Err(fault("constant parameter limit"));
+             }
+-            let name = local_name(required(p.pat())?)?;
++            let (name, mutable) = local_binding(required(p.pat())?)?;
+             let ty = self.primitive(required(p.ty())?)?;
+-            if params.iter().any(|(n, _)| n == &name) {
++            if params.iter().any(|(n, _, _)| n == &name) {
+                 return Err(fault("duplicate constant parameter"));
+             }
+-            params.push((name, ty));
++            params.push((name, ty, mutable));
+         }
+         let result = match f.ret_type() {
+             Some(r) => self.ty(required(r.ty())?)?,
+@@ -888,6 +928,9 @@
+         self.function_header(&f)
+     }
+     fn named(&self, name: &str) -> Result<ast::Item, Diagnostic> {
++        if name.is_empty() {
++            return Err(fault("anonymous constants have no named lookup identity"));
++        }
+         // Generated declarations/import routing is a separate provider integration.
+         for item in &self.0.module_items {
+             let metas = item
+@@ -916,14 +959,24 @@
+                 if l.let_else().is_some() {
+                     Statement::Unsupported(s.range())
+                 } else {
++                    let (name, mutable) = local_binding(required(l.pat())?)?;
+                     Statement::Let(
+-                        local_name(required(l.pat())?)?,
++                        name,
++                        mutable,
+                         l.ty().map(|t| self.primitive(t)).transpose()?,
+                         ExprRef(required(l.initializer())?),
+                     )
+                 }
+             }
+             ast::Stmt::ExprStmt(s) => Statement::Expression(ExprRef(required(s.expr())?)),
++            ast::Stmt::Item(item)
++                if !matches!(item, ast::Item::MacroCall(_) | ast::Item::Use(_)) =>
++            {
++                self.attributes_clear(item.syntax())?;
++                // Declarations perform no block-time evaluation. A later
++                // lookup still requires the actual local source member.
++                Statement::Declaration
++            }
+             _ => Statement::Unsupported(s.range()),
+         })
+     }
+@@ -1036,7 +1089,27 @@
+                 let right = ExprRef(required(b.rhs())?);
+                 match required(b.op_kind())? {
+                     ast::BinaryOp::LogicOp(op) => Node::Logic(op == ast::LogicOp::And, left, right),
+-                    ast::BinaryOp::Assignment { .. } => Node::Unsupported,
++                    ast::BinaryOp::Assignment { op } => {
++                        let ast::Expr::PathExpr(path) = &left.0 else {
++                            return Ok(Node::Unsupported);
++                        };
++                        self.attributes_clear(path.syntax())?;
++                        let name = bare(required(path.path())?)?;
++                        self.lexical_value_clear(path.syntax(), &name)?;
++                        let op = op.map(|op| match op {
++                            ast::ArithOp::Add => NumericBinary::Add,
++                            ast::ArithOp::Sub => NumericBinary::Sub,
++                            ast::ArithOp::Mul => NumericBinary::Mul,
++                            ast::ArithOp::Div => NumericBinary::Div,
++                            ast::ArithOp::Rem => NumericBinary::Rem,
++                            ast::ArithOp::Shl => NumericBinary::Shl,
++                            ast::ArithOp::Shr => NumericBinary::Shr,
++                            ast::ArithOp::BitAnd => NumericBinary::BitAnd,
++                            ast::ArithOp::BitOr => NumericBinary::BitOr,
++                            ast::ArithOp::BitXor => NumericBinary::BitXor,
++                        });
++                        Node::Assign(name, op, right)
++                    }
+                     op => {
+                         use NumericBinary as B;
+                         let op = match op.to_string().as_str() {
+@@ -1082,7 +1155,6 @@
+                     || b.const_token().is_some()
+                     || b.gen_token().is_some()
+                     || b.try_block_modifier().is_some()
+-                    || b.label().is_some()
+                 {
+                     return Ok(Node::Unsupported);
+                 }
+@@ -1094,8 +1166,30 @@
+                     }
+                     stmts.push(StatementRef(s));
+                 }
+-                Node::Block(stmts, list.tail_expr().map(ExprRef))
+-            }
++                Node::Block(
++                    stmts,
++                    list.tail_expr().map(ExprRef),
++                    b.label().map(|_| ControlTarget::block_expression(b)),
++                )
++            }
++            E::LoopExpr(loop_expression) => Node::Loop(
++                ControlTarget::loop_expression(e),
++                None,
++                ExprRef(E::BlockExpr(required(loop_expression.loop_body())?)),
++            ),
++            E::WhileExpr(loop_expression) => Node::Loop(
++                ControlTarget::loop_expression(e),
++                Some(ExprRef(required(loop_expression.condition())?)),
++                ExprRef(E::BlockExpr(required(loop_expression.loop_body())?)),
++            ),
++            E::BreakExpr(exit) => Node::Break(
++                loops::reached_target(exit.syntax(), exit.lifetime())?,
++                exit.expr().map(ExprRef),
++            ),
++            E::ContinueExpr(exit) => Node::Continue(loops::reached_continue_target(
++                exit.syntax(),
++                exit.lifetime(),
++            )?),
+             E::ReturnExpr(r) => Node::Return(r.expr().map(ExprRef)),
+             E::CallExpr(c) => {
+                 let E::PathExpr(p) = required(c.expr())? else {
+@@ -1161,14 +1255,17 @@
+         })
+     }
+ }
+-fn local_name(pat: ast::Pat) -> Result<String, Diagnostic> {
++fn local_binding(pat: ast::Pat) -> Result<(String, bool), Diagnostic> {
+     let ast::Pat::IdentPat(p) = pat else {
+         return Err(fault("constant local requires a scalar identifier"));
+     };
+     if p.ref_token().is_some() || p.pat().is_some() {
+         return Err(fault("constant local binding mode unsupported"));
+     }
+-    semantic(required(p.name())?.text())
++    Ok((
++        semantic(required(p.name())?.text())?,
++        p.mut_token().is_some(),
++    ))
+ }
+ fn bare(path: ast::Path) -> Result<String, Diagnostic> {
+     let segment = required(path.segment())?;
+@@ -1230,9 +1327,9 @@
+ impl Node {
+     pub(crate) fn owned_bytes(&self) -> Option<usize> {
+         let extra = match self {
+-            Self::Path(s) | Self::Float(s, _) => s.capacity(),
++            Self::Path(s) | Self::Float(s, _) | Self::Assign(s, _, _) => s.capacity(),
+             Self::RequiredMacro(_) => std::mem::size_of::<RequiredConstantMacro>(),
+-            Self::Block(s, _) => s
++            Self::Block(s, _, _) => s
+                 .capacity()
+                 .checked_mul(std::mem::size_of::<StatementRef>())?,
+             Self::Array(es) => es.capacity().checked_mul(std::mem::size_of::<ExprRef>())?,
+@@ -1257,3 +1354,7 @@
+ mod length_fixture;
+ #[cfg(test)]
+ pub(crate) use length_fixture::length_sites as fixture_length_sites;
++
++#[cfg(test)]
++#[path = "constant_labelled_block_tests.rs"]
++mod labelled_block_tests;
