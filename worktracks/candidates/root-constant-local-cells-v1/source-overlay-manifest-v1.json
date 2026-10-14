@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "task": "T054",
+  "source_baseline": "f572b7e060bc01e0b08af466e2ed8b2dc1b9dda296dafb4f8b1881342d474258",
+  "status": "source_only_uncompiled",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/constant_locals.rs",
+      "before_sha256": null,
+      "after_sha256": "db20d4f3f912a2a5cb885871f5c0c7ca1fd034082cce8f88a29d572d268053dd",
+      "draft": "draft/crates/lrr/src/frontend/constant_locals.rs"
+    },
+    {
+      "path": "crates/lrr/src/frontend/constant_loop_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "c5da1b266981794539b0bdfaf6bedbf65daa6b9b7bdee417da1cd2b686b07991",
+      "draft": "draft/crates/lrr/src/frontend/constant_loop_tests.rs"
+    },
+    {
+      "path": "crates/lrr/src/frontend/constants.rs",
+      "before_sha256": "598c0487e31cf96ab3eec24629d56041d08896d2a566dd97f0363723e149a1d4",
+      "after_sha256": "871bfed23561f8d55cae50dd384a078c922eae88b4a9e254c488d5539f89c612",
+      "draft": "draft/crates/lrr/src/frontend/constants.rs"
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_loops.rs",
+      "before_sha256": null,
+      "after_sha256": "121888436b564c93dadad08218383bacdeaf9a5095d95fc75d23b2a84bdb2c03",
+      "draft": "draft/crates/lrr/src/syntax/constant_loops.rs"
+    },
+    {
+      "path": "crates/lrr/src/syntax/pure_constants.rs",
+      "before_sha256": "798458213afe83fb5778cdb3281f7b833f3d18e5b5e9ace5f9105409f623ad64",
+      "after_sha256": "7010152a26098b74357ef15ddaceea3bb6d35ec10c9dd754f1c2246fed19fed3",
+      "draft": "draft/crates/lrr/src/syntax/pure_constants.rs"
+    }
+  ],
+  "patch_sha256": "2da3c733fa4f04f4c735d504fcb43a46e2fc8bbb96fcf2777eb4b924471c1b87",
+  "upstream_case_count": 4,
+  "upstream_original_file_count": 9,
+  "Rust_controls": 16,
+  "Rust_controls_executed": 0,
+  "MAIN_integrated": false,
+  "full_stock_fixture_passes": 0,
+  "source_only_replay": "/var/folders/54/vchw6yzd347216x5xgdbmn680000gn/T/lrr-constant-locals-final-replay-cqg2kre9"
+}

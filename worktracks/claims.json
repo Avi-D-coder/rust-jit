@@ -403,11 +403,15 @@
         "artifacts/macos-first/root-constant-candidate-harness-repair-v1/",
         "artifacts/macos-first/root-constant-cold-world-bound-v1/",
         "artifacts/macos-first/root-constant-loop-control-v1/",
-        "artifacts/macos-first/root-constant-generic-route-v1/"
+        "artifacts/macos-first/root-constant-generic-route-v1/",
+        "artifacts/macos-first/root-enabled-cfg-catalog-v1/",
+        "artifacts/macos-first/root-constant-local-cells-v1/",
+        "artifacts/macos-first/root-dependency-compiler-preparation-v1/",
+        "artifacts/macos-first/root-stock-edition-compiler-preparation-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T18:04:14.998555+00:00",
+      "updated_at": "2026-10-14T18:53:55.136702+00:00",
       "review_after": "2026-10-15T05:55:00.598518+00:00"
     },
     {

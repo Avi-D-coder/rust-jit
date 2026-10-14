@@ -2733,7 +2733,8 @@
         "component_cold_return_type_error_does_not_supply_upstream_e0308_contract",
         "component_cold_local_reference_error_does_not_supply_upstream_e0515_contract",
         "component_cold_parameter_reference_error_does_not_supply_upstream_e0515_contract",
-        "component_empty_main_does_not_supply_compiler_private_mir_graphviz_contract"
+        "component_empty_main_does_not_supply_compiler_private_mir_graphviz_contract",
+        "rustc_original_test_listing_retains_sorted_names_and_ignore_metadata"
       ],
       "acceptance_contract": "one selected test passes despite another broken body; exact/substr/no-match behavior works; should_panic cannot accept an unsupported-feature fault. Add the fixture manifest/harness format from Section 28. CA037 additionally tracks the complete upstream inventory, per-contract classification and runtime-semantics prerequisite; subset/component success does not open the JIT gate.",
       "commands": [
@@ -3617,6 +3618,31 @@
           "integration and fresh milestone",
           "configured run-fail banner/subprocess contracts"
         ]
+      },
+      "current_enabled_cfg_catalog": {
+        "source_member": "f572b7e060bc01e0b08af466e2ed8b2dc1b9dda296dafb4f8b1881342d474258",
+        "status": "scoped_pass_complete_gate_pending",
+        "test_cli_passed": 29,
+        "test_cli_failed": 0,
+        "test_cli_filtered": 0,
+        "terminal": "artifacts/macos-first/sol-canonical-validation-agent-v3/test-cli/actual-terminal.json",
+        "strict_terminal": "artifacts/macos-first/sol-canonical-validation-agent-v3/strict-lrr/actual-terminal.json",
+        "architecture_terminal": "artifacts/macos-first/sol-canonical-validation-agent-v3/architecture/actual-terminal.json",
+        "format_terminal": "artifacts/macos-first/sol-canonical-validation-agent-v3/format/actual-terminal.json",
+        "gate03_session": 46818,
+        "gate03_status": "failed_collected",
+        "scope": "Exact pinned CfgMeta keyword naming in scan/cold lookup preserves actual compiler Attribute proof checks. Unchanged stock listing control executes all4 editions. v62 28/1 helper duplicate-edition failure preserved; corrected helper retains existing caller argv. No MAIN/task/runtime/full-fixture acceptance.",
+        "gate03_terminal": {
+          "session": 46818,
+          "chunk": "081291",
+          "exit_code": 1,
+          "passed": 1524,
+          "failed": 2,
+          "unexecuted": 1424,
+          "listed": 2950,
+          "source_unchanged": true,
+          "infrastructure": "corrected Python bootstrap/capability passed; host bank failed; downstream gates remain false"
+        }
       }
     },
     {
@@ -5206,7 +5232,7 @@
         "task_complete": false
       },
       "current_private_typed_query_draft": {
-        "status": "source_components_passed_complete_milestone_catalog_and_runner_repair_required",
+        "status": "source_components_passed_complete_milestone_v65_pending",
         "artifact": "artifacts/macos-first/root-constant-production-consolidation-v1/HANDOFF.md",
         "last_collected_source": "b970ab41775fa782bcc802542b33f856764e6937be6af5b65b0f651686b91fd7",
         "last_collected_library_passed": 840,
@@ -5355,6 +5381,67 @@
           "original_files": 8,
           "canonical_installed": false,
           "full_stock_fixture_passes": 0
+        },
+        "current_enabled_cfg_catalog": {
+          "source_member": "f572b7e060bc01e0b08af466e2ed8b2dc1b9dda296dafb4f8b1881342d474258",
+          "status": "scoped_pass_complete_gate_pending",
+          "test_cli_passed": 29,
+          "test_cli_failed": 0,
+          "test_cli_filtered": 0,
+          "terminal": "artifacts/macos-first/sol-canonical-validation-agent-v3/test-cli/actual-terminal.json",
+          "strict_terminal": "artifacts/macos-first/sol-canonical-validation-agent-v3/strict-lrr/actual-terminal.json",
+          "architecture_terminal": "artifacts/macos-first/sol-canonical-validation-agent-v3/architecture/actual-terminal.json",
+          "format_terminal": "artifacts/macos-first/sol-canonical-validation-agent-v3/format/actual-terminal.json",
+          "gate03_session": 46818,
+          "gate03_status": "failed_collected",
+          "scope": "Exact pinned CfgMeta keyword naming in scan/cold lookup preserves actual compiler Attribute proof checks. Unchanged stock listing control executes all4 editions. v62 28/1 helper duplicate-edition failure preserved; corrected helper retains existing caller argv. No MAIN/task/runtime/full-fixture acceptance.",
+          "gate03_terminal": {
+            "session": 46818,
+            "chunk": "081291",
+            "exit_code": 1,
+            "passed": 1524,
+            "failed": 2,
+            "unexecuted": 1424,
+            "listed": 2950,
+            "source_unchanged": true,
+            "infrastructure": "corrected Python bootstrap/capability passed; host bank failed; downstream gates remain false"
+          }
+        },
+        "current_lexical_local_loop_draft": {
+          "artifact": "artifacts/macos-first/root-constant-local-cells-v1/REVIEW.md",
+          "status": "source_only_uncompiled",
+          "files": 5,
+          "upstream_cases": 4,
+          "original_license_files": 9,
+          "Rust_controls": 16,
+          "Rust_controls_executed": 0,
+          "MAIN_integrated": false,
+          "full_stock_fixture_passes": 0,
+          "scope": "Lexical stack retains outer writes across loop/nested scope completion; mutable source params/simple locals, scalar primitive assignment and balanced scope cleanup. Original locals-in-const-fn foo/boo components and bar frontier preregistered. Unsuffixed local constraints, aggregate places/references, for/while-let, labelled blocks and current query/live joins still required."
+        },
+        "current_dependency_compiler_preparation": {
+          "source_member": "b5377983dce1f84617dccba2cfdc9fddc08edfb83af7fa05bbfa4ffd5e161ab9",
+          "unfiltered_passed": 79,
+          "failed": 0,
+          "missing_compiler_facet_refusal_passed": 1,
+          "artifact": "artifacts/macos-first/sol-canonical-validation-agent-v4/HANDOFF.md",
+          "strict_audit_fmt": "passed",
+          "complete_gate03": "held_unexecuted_for_following_scope",
+          "MAIN_integrated": false
+        },
+        "current_stock_edition_preparation": {
+          "source_member": "2ce1bf0ad479315b3124b2aa54005125de650992190a20fe8e570ea4b00a890e",
+          "status": "scoped_pass_full_gate_running",
+          "artifact": "artifacts/macos-first/root-stock-edition-compiler-preparation-v1/source-overlay-manifest-v1.json",
+          "files": 5,
+          "scope": "Positive fixture helpers use actual captured compiler profiles for unchanged2015/2018 roots and2015 auxiliary; no negative guard/producer skips or original source changes. No acceptance until actual terminals.",
+          "unfiltered_named_bodies_passed": 15,
+          "failed": 0,
+          "filtered": 0,
+          "test_terminal": "artifacts/macos-first/sol-canonical-validation-agent-v5/edition-banks/actual-terminal.json",
+          "strict_audit_fmt": "passed",
+          "complete_gate03_session": 26518,
+          "complete_gate03_status": "running_last_verified_by_test_agent"
         }
       }
     },

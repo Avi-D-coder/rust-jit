@@ -1,0 +1,1187 @@
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_locals.rs
+@@ -0,0 +1,235 @@
++//! Private evaluator activations; no guest handles or persistent type authority.
++use super::*;
++
++struct LocalCell {
++    value: ConstValue,
++    mutable: bool,
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::{
++        core::profile::ProfileIdentity,
++        source::snapshot::{CfgSet, SourceBlob},
++    };
++    const ORIGINAL: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/locals-in-const-fn.rs"
++    );
++    fn source(text: &str, edition: u16) -> ConstantSource {
++        ConstantSource::parse(
++            &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++            ProfileIdentity {
++                edition,
++                ..ProfileIdentity::current()
++            },
++            Digest([217; 32]),
++            CfgSet::guest_default(),
++        )
++        .unwrap()
++    }
++    fn call(source: &ConstantSource, name: &str) -> ConstantPlan {
++        let at = source
++            .declarations()
++            .iter()
++            .find(|d| d.name() == name)
++            .unwrap()
++            .range();
++        source
++            .const_call(
++                at,
++                vec![
++                    ConstValue::from_scalar(ValueRepr::unsigned(TypeId(13), 42).unwrap()).unwrap(),
++                ],
++            )
++            .unwrap()
++    }
++    #[test]
++    fn original_mutable_parameter_and_nested_local_writes_keep_all_editions() {
++        for edition in [2015, 2018, 2021, 2024] {
++            let source = source(ORIGINAL, edition);
++            for (name, expected) in [("foo", 42), ("boo", 52)] {
++                let plan = call(&source, name);
++                let value = evaluate(&plan, ConstLimits::default()).unwrap();
++                assert_eq!(value.source(), Digest::of_bytes(ORIGINAL.as_bytes()));
++                assert_eq!(
++                    value.value().scalar().unwrap(),
++                    ValueRepr::unsigned(TypeId(13), expected).unwrap()
++                );
++                assert_eq!(plan.profile().edition, edition);
++            }
++        }
++    }
++    #[test]
++    fn original_shared_reference_const_function_keeps_its_reached_frontier() {
++        let source = source(ORIGINAL, 2024);
++        let error = evaluate(&call(&source, "bar"), ConstLimits::default()).unwrap_err();
++        assert_eq!(error.diagnostic().code, "LRR-E-CONST-UNSUPPORTED");
++        assert_eq!(error.source(), Digest::of_bytes(ORIGINAL.as_bytes()));
++    }
++    fn number(text: &str) -> ValueRepr {
++        let source = source(text, 2024);
++        let at = source
++            .declarations()
++            .iter()
++            .find(|d| d.name() == "A")
++            .unwrap()
++            .range();
++        evaluate(&source.constant(at).unwrap(), ConstLimits::default())
++            .unwrap()
++            .value()
++            .scalar()
++            .unwrap()
++    }
++    #[test]
++    fn loop_scope_retains_outer_writes_and_pops_shadow_on_break_and_continue() {
++        assert_eq!(
++            number(
++                "const A:i32={let mut x:i32=0; while x<4 {x+=1; let x:i32=99; if x==99 {continue;} missing();} x};"
++            ),
++            ValueRepr::signed(TypeId(6), 4).unwrap()
++        );
++        assert_eq!(
++            number(
++                "const A:i32={let mut x:i32=0; loop {x+=1; let x:i32=99; if x==99 {break;} missing();} x};"
++            ),
++            ValueRepr::signed(TypeId(6), 1).unwrap()
++        );
++    }
++    #[test]
++    fn primitive_compound_assignment_reads_lhs_after_rhs_scope_writes() {
++        assert_eq!(
++            number("const A:i32={let mut x:i32=1; x += {x=10; 2}; x};"),
++            ValueRepr::signed(TypeId(6), 12).unwrap()
++        );
++    }
++    #[test]
++    fn local_replace_refuses_immutable_and_wrong_type_without_commit() {
++        let mut locals = LocalScopes::default();
++        locals.push().unwrap();
++        let old = ConstValue::from_scalar(ValueRepr::signed(TypeId(6), 7).unwrap()).unwrap();
++        locals.insert("x".into(), false, old.clone()).unwrap();
++        let next = ConstValue::from_scalar(ValueRepr::signed(TypeId(6), 8).unwrap()).unwrap();
++        assert_eq!(
++            locals.replace("x", next).unwrap_err().code,
++            "LRR-E-CONST-TYPE"
++        );
++        assert_eq!(locals.get("x"), Some(&old));
++        locals.insert("x".into(), true, old.clone()).unwrap();
++        assert!(
++            locals
++                .replace(
++                    "x",
++                    ConstValue::from_scalar(ValueRepr::boolean(true)).unwrap()
++                )
++                .is_err()
++        );
++        assert_eq!(locals.get("x"), Some(&old));
++        locals.pop().unwrap();
++        assert!(locals.get("x").is_none());
++    }
++    #[test]
++    fn local_scope_stack_caps_activation_and_balances_failure_cleanup() {
++        let mut locals = LocalScopes::default();
++        for _ in 0..128 {
++            locals.push().unwrap();
++        }
++        assert_eq!(locals.push().unwrap_err().code, "LRR-E-CONST-LIMIT");
++        for _ in 0..128 {
++            locals.pop().unwrap();
++        }
++        assert!(locals.scopes.is_empty());
++        assert_eq!(locals.bindings, 0);
++    }
++}
++#[derive(Default)]
++pub(super) struct LocalScopes {
++    scopes: Vec<BTreeMap<String, LocalCell>>,
++    bindings: usize,
++}
++impl LocalScopes {
++    pub(super) fn push(&mut self) -> Result<(), Diagnostic> {
++        if self.scopes.len() >= 128 {
++            return Err(fault("LRR-E-CONST-LIMIT", "constant local scope limit"));
++        }
++        self.scopes
++            .try_reserve(1)
++            .map_err(|_| fault("LRR-E-CONST-LIMIT", "constant local scope allocation"))?;
++        self.scopes.push(BTreeMap::new());
++        Ok(())
++    }
++    pub(super) fn pop(&mut self) -> Result<(), Diagnostic> {
++        let scope = self
++            .scopes
++            .pop()
++            .ok_or_else(|| fault("LRR-E-CONST-SOURCE", "constant local scope is absent"))?;
++        self.bindings = self.bindings.checked_sub(scope.len()).ok_or_else(|| {
++            fault(
++                "LRR-E-CONST-SOURCE",
++                "constant local scope accounting differs",
++            )
++        })?;
++        Ok(())
++    }
++    pub(super) fn get(&self, name: &str) -> Option<&ConstValue> {
++        self.scopes
++            .iter()
++            .rev()
++            .find_map(|scope| scope.get(name))
++            .map(|cell| &cell.value)
++    }
++    pub(super) fn contains_key(&self, name: &str) -> bool {
++        self.get(name).is_some()
++    }
++    pub(super) fn insert(
++        &mut self,
++        name: String,
++        mutable: bool,
++        value: ConstValue,
++    ) -> Result<(), Diagnostic> {
++        let scope = self.scopes.last_mut().ok_or_else(|| {
++            fault(
++                "LRR-E-CONST-SOURCE",
++                "constant binding activation is absent",
++            )
++        })?;
++        if !scope.contains_key(&name) {
++            self.bindings = self
++                .bindings
++                .checked_add(1)
++                .filter(|n| *n <= 256)
++                .ok_or_else(|| fault("LRR-E-CONST-LIMIT", "constant local binding limit"))?;
++        }
++        scope.insert(name, LocalCell { value, mutable });
++        Ok(())
++    }
++    pub(super) fn replace(&mut self, name: &str, value: ConstValue) -> Result<(), Diagnostic> {
++        let cell = self
++            .scopes
++            .iter_mut()
++            .rev()
++            .find_map(|scope| scope.get_mut(name))
++            .ok_or_else(|| {
++                fault(
++                    "LRR-E-CONST-SOURCE",
++                    "assignment has no local source binding",
++                )
++            })?;
++        if !cell.mutable {
++            return Err(fault(
++                "LRR-E-CONST-TYPE",
++                "assignment requires a mutable constant local",
++            ));
++        }
++        if cell.value.scalar().map(|v| v.type_id) != value.scalar().map(|v| v.type_id)
++            || value.scalar().is_none()
++        {
++            return Err(fault(
++                "LRR-E-CONST-TYPE",
++                "constant local assignment type differs",
++            ));
++        }
++        cell.value = value;
++        Ok(())
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_loop_tests.rs
+@@ -0,0 +1,156 @@
++//! Upstream source selections plus LRR control/budget regressions, not fixture passes.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    source::snapshot::{CfgSet, SourceBlob},
++};
++const ORIGINAL: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/control-flow/loop.rs"
++);
++fn source(text: &str, edition: u16) -> ConstantSource {
++    ConstantSource::parse(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        Digest([213; 32]),
++        CfgSet::guest_default(),
++    )
++    .unwrap()
++}
++fn constant(text: &str, name: &str, edition: u16) -> ConstantPlan {
++    let source = source(text, edition);
++    let at = source
++        .declarations()
++        .iter()
++        .find(|d| d.name() == name)
++        .unwrap()
++        .range();
++    source.constant(at).unwrap()
++}
++#[test]
++fn original_zero_iteration_while_array_length_keeps_source_and_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let source = source(ORIGINAL, edition);
++        let sites = crate::syntax::pure_constants::fixture_length_sites(ORIGINAL, "main", edition);
++        assert_eq!(sites.len(), 1);
++        let plan = source.array_length(sites[0]).unwrap();
++        let result = evaluate(&plan, ConstLimits::default()).unwrap();
++        assert_eq!(
++            result.value().scalar().unwrap(),
++            ValueRepr::unsigned(TypeId(13), 4).unwrap()
++        );
++        assert_eq!(result.source(), Digest::of_bytes(ORIGINAL.as_bytes()));
++        assert_eq!(plan.profile().edition, edition);
++    }
++}
++#[test]
++fn original_infinite_const_function_spends_bounded_steps_in_its_actual_body() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let source = source(ORIGINAL, edition);
++        let at = source
++            .declarations()
++            .iter()
++            .find(|d| d.name() == "foo")
++            .unwrap()
++            .range();
++        let plan = source.const_call(at, vec![]).unwrap();
++        let error = evaluate(&plan, ConstLimits::new(32, 4, 128).unwrap()).unwrap_err();
++        assert_eq!(error.diagnostic().code, "LRR-E-CONST-LIMIT");
++        assert_eq!(error.source(), Digest::of_bytes(ORIGINAL.as_bytes()));
++        assert_eq!(error.requested_plan(), Some(plan.identity()));
++        assert!(at.contains(error.range()));
++        assert_eq!(error.evaluation_steps(), 32);
++    }
++}
++#[test]
++fn loop_break_value_uses_owning_result_context_and_skips_the_suffix() {
++    let text = "const A:u8=loop { break 7; missing(); };";
++    for edition in [2015, 2018, 2021, 2024] {
++        let result = evaluate(&constant(text, "A", edition), ConstLimits::default()).unwrap();
++        assert_eq!(
++            result.value().scalar().unwrap(),
++            ValueRepr::unsigned(TypeId(9), 7).unwrap()
++        );
++    }
++}
++#[test]
++fn nested_labelled_break_reaches_its_exact_outer_loop() {
++    let text = "const A:i32='outer: loop { loop { break 'outer 9; } };";
++    assert_eq!(
++        evaluate(&constant(text, "A", 2024), ConstLimits::default())
++            .unwrap()
++            .value()
++            .scalar()
++            .unwrap(),
++        ValueRepr::signed(TypeId(6), 9).unwrap()
++    );
++}
++#[test]
++fn break_in_while_condition_exits_the_selected_loop_without_body_demand() {
++    let text = "const A:i32={ 'a: while break 'a {} 5 };";
++    assert_eq!(
++        evaluate(&constant(text, "A", 2024), ConstLimits::default())
++            .unwrap()
++            .value()
++            .scalar()
++            .unwrap(),
++        ValueRepr::signed(TypeId(6), 5).unwrap()
++    );
++}
++#[test]
++fn return_inside_loop_uses_const_function_return_context() {
++    let text = "const fn f()->u8 { loop { return 17; } } const A:u8=f();";
++    assert_eq!(
++        evaluate(&constant(text, "A", 2024), ConstLimits::default())
++            .unwrap()
++            .value()
++            .scalar()
++            .unwrap(),
++        ValueRepr::unsigned(TypeId(9), 17).unwrap()
++    );
++}
++#[test]
++fn continue_and_empty_loop_both_exhaust_the_same_step_budget() {
++    for text in [
++        "const A:i32=loop {};",
++        "const A:i32='a: loop { continue 'a; missing(); };",
++    ] {
++        let error = evaluate(
++            &constant(text, "A", 2024),
++            ConstLimits::new(24, 4, 128).unwrap(),
++        )
++        .unwrap_err();
++        assert_eq!(error.diagnostic().code, "LRR-E-CONST-LIMIT");
++        assert_eq!(error.evaluation_steps(), 24);
++        assert!(error.panic().is_none());
++    }
++}
++#[test]
++fn while_break_value_and_wrong_loop_result_remain_reached_type_errors() {
++    for text in [
++        "const A:i32={ while true { break 3; } 5 };",
++        "const A:u8=loop { break true; };",
++    ] {
++        assert_eq!(
++            evaluate(&constant(text, "A", 2024), ConstLimits::default())
++                .unwrap_err()
++                .diagnostic()
++                .code,
++            "LRR-E-CONST-TYPE"
++        );
++    }
++}
++#[test]
++fn labelled_block_shadow_cannot_be_skipped_to_authorize_outer_loop_exit() {
++    let text = "const A:i32='a: loop { 'a: { break 'a 3; } };";
++    let error = evaluate(&constant(text, "A", 2024), ConstLimits::default()).unwrap_err();
++    assert_eq!(error.diagnostic().code, "LRR-E-CONST-UNSUPPORTED");
++}
++#[test]
++fn a_function_body_cannot_break_a_callers_loop() {
++    let text = "const fn f()->i32 { break 'a 3; } const A:i32='a: loop { f(); };";
++    let error = evaluate(&constant(text, "A", 2024), ConstLimits::default()).unwrap_err();
++    assert_eq!(error.diagnostic().code, "LRR-E-CONST-SOURCE");
++}
+--- a/crates/lrr/src/frontend/constants.rs
++++ b/crates/lrr/src/frontend/constants.rs
+@@ -12,7 +12,8 @@
+     },
+     syntax::{
+         pure_constants::{
+-            ConstType, Constant, ConstantPlan, ConstantSource, ExprRef, Function, Node, Statement,
++            ConstType, Constant, ConstantPlan, ConstantSource, ControlTarget, ExprRef, Function,
++            Node, Statement, StatementRef,
+         },
+         spans::SourceRange,
+     },
+@@ -26,6 +27,9 @@
+     Diagnostic::new(code, message.into())
+ }
+ pub use crate::ir::constant_data::ConstValue;
++#[path = "constant_locals.rs"]
++mod locals;
++use locals::LocalScopes;
+ 
+ #[derive(Debug, Clone, Copy)]
+ pub struct ConstLimits {
+@@ -222,11 +226,17 @@
+ enum Flow {
+     Value(ConstValue),
+     Return(ConstValue),
++    Break(ControlTarget, ConstValue),
++    Continue(ControlTarget),
+ }
+ impl Flow {
+-    fn into_value(self) -> ConstValue {
++    fn into_value(self) -> Result<ConstValue, Diagnostic> {
+         match self {
+-            Self::Value(v) | Self::Return(v) => v,
++            Self::Value(v) | Self::Return(v) => Ok(v),
++            Self::Break(..) | Self::Continue(..) => Err(fault(
++                "LRR-E-CONST-SOURCE",
++                "constant loop exit escaped its source activation",
++            )),
+         }
+     }
+ }
+@@ -242,6 +252,7 @@
+     frames: u16,
+     depth: u16,
+     returns: Vec<Expected>,
++    loops: Vec<(ControlTarget, Option<Expected>)>,
+     metadata_bytes: usize,
+     active: BTreeSet<Digest>,
+     active_calls: BTreeSet<Digest>,
+@@ -340,10 +351,11 @@
+                     .expr(
+                         len,
+                         Some(Expected::Scalar(PrimitiveType::Usize)),
+-                        &mut BTreeMap::new(),
++                        &mut LocalScopes::default(),
+                         false,
+                     )?
+-                    .into_value();
++                    .into_value()
++                    .map_err(|d| self.failure(d, at))?;
+                 let count = self.length(value, at)?;
+                 Ok(Expected::Array(*p, count))
+             }
+@@ -409,15 +421,18 @@
+         self.frames += 1;
+         self.dependency(&c.declaration, &[], at)?;
+         let previous_depth = std::mem::replace(&mut self.depth, 0);
++        let previous_loops = std::mem::take(&mut self.loops);
+         let value = (|| {
+             let expected = self.ty(&c.ty, at)?;
+             let value = self
+-                .expr(&c.body, Some(expected), &mut BTreeMap::new(), false)?
+-                .into_value();
++                .expr(&c.body, Some(expected), &mut LocalScopes::default(), false)?
++                .into_value()
++                .map_err(|d| self.failure(d, at))?;
+             self.check_expected(&value, expected, at)?;
+             Ok((value, expected))
+         })();
+         self.depth = previous_depth;
++        self.loops = previous_loops;
+         self.frames -= 1;
+         self.active.remove(&c.declaration.definition());
+         value
+@@ -443,20 +458,28 @@
+         let bytes = f
+             .params
+             .iter()
+-            .try_fold(0usize, |n, (name, _)| {
++            .try_fold(0usize, |n, (name, _, _)| {
+                 n.checked_add(name.len())?.checked_add(192)
+             })
+             .ok_or_else(|| self.limit(at))?;
+-        self.admit_metadata(bytes, at)?;
+-        let mut locals = BTreeMap::new();
+-        for ((name, ty), value) in f.params.iter().zip(&args) {
++        self.admit_metadata(
++            bytes
++                .checked_add(std::mem::size_of::<LocalScopes>() + 64)
++                .ok_or_else(|| self.limit(at))?,
++            at,
++        )?;
++        let mut locals = LocalScopes::default();
++        locals.push().map_err(|d| self.failure(d, at))?;
++        for ((name, ty, mutable), value) in f.params.iter().zip(&args) {
+             if !value.matches_scalar(*ty).map_err(|d| self.failure(d, at))? {
+                 return Err(self.failure(
+                     fault("LRR-E-CONST-TYPE", "const-call argument type differs"),
+                     at,
+                 ));
+             }
+-            locals.insert(name.clone(), value.clone());
++            locals
++                .insert(name.clone(), *mutable, value.clone())
++                .map_err(|d| self.failure(d, at))?;
+         }
+         let mut encoder = StableEncoder::new("lrr/v1/active-pure-const-call");
+         encoder.digest(f.declaration.definition());
+@@ -475,16 +498,18 @@
+         self.frames += 1;
+         self.dependency(&f.declaration, &args, at)?;
+         let previous_depth = std::mem::replace(&mut self.depth, 0);
++        let previous_loops = std::mem::take(&mut self.loops);
+         let value = (|| {
+             let expected = self.ty(&f.result, at)?;
+             self.returns.push(expected);
+             let value = self.expr(&f.body, Some(expected), &mut locals, true);
+             self.returns.pop();
+-            let value = value?.into_value();
++            let value = value?.into_value().map_err(|d| self.failure(d, at))?;
+             self.check_expected(&value, expected, at)?;
+             Ok((value, expected))
+         })();
+         self.depth = previous_depth;
++        self.loops = previous_loops;
+         self.frames -= 1;
+         self.active_calls.remove(&call_key);
+         value
+@@ -492,7 +517,7 @@
+     fn hint(
+         &mut self,
+         e: &ExprRef,
+-        locals: &BTreeMap<String, ConstValue>,
++        locals: &LocalScopes,
+         depth: u16,
+     ) -> Result<Option<PrimitiveType>, ConstFailure> {
+         if depth >= 128 {
+@@ -536,7 +561,7 @@
+         &mut self,
+         e: &ExprRef,
+         hint: Option<Expected>,
+-        locals: &mut BTreeMap<String, ConstValue>,
++        locals: &mut LocalScopes,
+         allow_return: bool,
+     ) -> Result<Flow, ConstFailure> {
+         self.steps = self
+@@ -556,7 +581,7 @@
+         &mut self,
+         e: &ExprRef,
+         hint: Option<Expected>,
+-        locals: &mut BTreeMap<String, ConstValue>,
++        locals: &mut LocalScopes,
+         allow_return: bool,
+     ) -> Result<Flow, ConstFailure> {
+         let at = e.range();
+@@ -652,6 +677,50 @@
+                     ),
+                     at,
+                 )?
++            }
++            Node::Assign(name, op, rhs) => {
++                let primitive = primitive_for_value(locals.get(&name).and_then(ConstValue::scalar))
++                    .ok_or_else(|| {
++                        self.failure(
++                            fault(
++                                "LRR-E-CONST-UNSUPPORTED",
++                                "assignment requires a current scalar local",
++                            ),
++                            at,
++                        )
++                    })?;
++                let rhs_hint = if matches!(op, Some(NumericBinary::Shl | NumericBinary::Shr)) {
++                    None
++                } else {
++                    Some(Expected::Scalar(primitive))
++                };
++                // Primitive assignment evaluates the RHS before reading the
++                // LHS. Nested RHS blocks may update this same source binding.
++                let rhs_value = take!(self, &rhs, rhs_hint, locals, allow_return);
++                let value = if let Some(op) = op {
++                    let lhs = locals.get(&name).cloned().ok_or_else(|| {
++                        self.failure(
++                            fault("LRR-E-CONST-SOURCE", "assignment binding disappeared"),
++                            at,
++                        )
++                    })?;
++                    self.numeric(
++                        numeric::binary(
++                            op,
++                            scalar(lhs).map_err(|d| self.failure(d, at))?,
++                            scalar(rhs_value).map_err(|d| self.failure(d, at))?,
++                        ),
++                        at,
++                    )?
++                } else {
++                    rhs_value
++                };
++                self.check_expected(&value, Expected::Scalar(primitive), at)?;
++                let value = self.checked_value(value, at)?;
++                locals
++                    .replace(&name, value)
++                    .map_err(|d| self.failure(d, at))?;
++                ConstValue::from_scalar(ValueRepr::unit()).map_err(|d| self.failure(d, at))?
+             }
+             Node::Logic(and, a, b) => {
+                 let av = take!(
+@@ -728,67 +797,48 @@
+                 ConstValue::from_scalar(ValueRepr::unit()).map_err(|d| self.failure(d, at))?
+             }
+             Node::Block(statements, tail) => {
+-                let bytes = locals
+-                    .keys()
+-                    .try_fold(0usize, |n, name| {
+-                        n.checked_add(name.len())?.checked_add(192)
+-                    })
+-                    .ok_or_else(|| self.limit(at))?;
+-                self.admit_metadata(bytes, at)?;
+-                let mut block = locals.clone();
+-                for statement in statements {
+-                    self.steps = self
+-                        .steps
+-                        .checked_add(1)
+-                        .filter(|s| *s <= self.limits.steps)
+-                        .ok_or_else(|| self.limit(statement.range()))?;
+-                    match self
+-                        .source
+-                        .statement(&statement)
+-                        .map_err(|d| self.failure(d, statement.range()))?
+-                    {
+-                        Statement::Let(name, p, initializer) => {
+-                            if p.is_none() && self.hint(&initializer, &block, 0)?.is_none() {
+-                                return Err(self.failure(fault("LRR-E-CONST-UNSUPPORTED","unannotated numeric local requires source constraint integration"),initializer.range()));
+-                            }
+-                            let v = take!(
+-                                self,
+-                                &initializer,
+-                                p.map(Expected::Scalar),
+-                                &mut block,
+-                                allow_return
+-                            );
+-                            if !block.contains_key(&name) {
+-                                if block.len() >= 256 {
+-                                    return Err(self.limit(initializer.range()));
+-                                }
+-                                self.admit_metadata(
+-                                    name.len()
+-                                        .checked_add(192)
+-                                        .ok_or_else(|| self.limit(initializer.range()))?,
+-                                    initializer.range(),
+-                                )?;
+-                            }
+-                            block.insert(name, v);
+-                        }
+-                        Statement::Expression(child) => {
+-                            take!(self, &child, None, &mut block, allow_return);
+-                        }
+-                        Statement::Unsupported(at) => {
+-                            return Err(self.failure(
+-                                fault(
+-                                    "LRR-E-CONST-UNSUPPORTED",
+-                                    "reached constant statement requires a later pure slice",
+-                                ),
+-                                at,
+-                            ));
+-                        }
+-                    }
+-                }
+-                if let Some(tail) = tail {
+-                    return self.expr(&tail, hint, &mut block, allow_return);
+-                }
+-                ConstValue::from_scalar(ValueRepr::unit()).map_err(|d| self.failure(d, at))?
++                return self.run_block(statements, tail, hint, locals, allow_return, at);
++            }
++            Node::Loop(target, condition, body) => {
++                return self.run_loop(target, condition, body, hint, locals, allow_return);
++            }
++            Node::Break(target, child) => {
++                let target_hint = self
++                    .loops
++                    .iter()
++                    .rev()
++                    .find(|(current, _)| *current == target)
++                    .map(|(_, hint)| *hint)
++                    .ok_or_else(|| {
++                        self.failure(
++                            fault(
++                                "LRR-E-CONST-SOURCE",
++                                "constant break target has no current loop activation",
++                            ),
++                            at,
++                        )
++                    })?;
++                let value = if let Some(child) = child {
++                    take!(self, &child, target_hint, locals, allow_return)
++                } else {
++                    ConstValue::from_scalar(ValueRepr::unit()).map_err(|d| self.failure(d, at))?
++                };
++                if let Some(expected) = target_hint {
++                    self.check_expected(&value, expected, at)?;
++                }
++                return Ok(Flow::Break(target, value));
++            }
++            Node::Continue(target) => {
++                if !self.loops.iter().any(|(current, _)| *current == target) {
++                    return Err(self.failure(
++                        fault(
++                            "LRR-E-CONST-SOURCE",
++                            "constant continue target has no current loop activation",
++                        ),
++                        at,
++                    ));
++                }
++                return Ok(Flow::Continue(target));
+             }
+             Node::Return(child) => {
+                 if !allow_return {
+@@ -833,7 +883,7 @@
+                     );
+                 }
+                 let mut values = Vec::new();
+-                for (arg, (_, ty)) in args.iter().zip(&f.params) {
++                for (arg, (_, ty, _)) in args.iter().zip(&f.params) {
+                     values.push(take!(
+                         self,
+                         arg,
+@@ -971,6 +1021,167 @@
+         }
+         Ok(Flow::Value(value))
+     }
++    fn run_block(
++        &mut self,
++        statements: Vec<StatementRef>,
++        tail: Option<ExprRef>,
++        hint: Option<Expected>,
++        locals: &mut LocalScopes,
++        allow_return: bool,
++        at: SourceRange,
++    ) -> Result<Flow, ConstFailure> {
++        self.admit_metadata(std::mem::size_of::<LocalScopes>() + 64, at)?;
++        locals.push().map_err(|d| self.failure(d, at))?;
++        let result = (|| {
++            for statement in statements {
++                self.steps = self
++                    .steps
++                    .checked_add(1)
++                    .filter(|s| *s <= self.limits.steps)
++                    .ok_or_else(|| self.limit(statement.range()))?;
++                match self
++                    .source
++                    .statement(&statement)
++                    .map_err(|d| self.failure(d, statement.range()))?
++                {
++                    Statement::Let(name, mutable, ty, initializer) => {
++                        if ty.is_none() && self.hint(&initializer, locals, 0)?.is_none() {
++                            return Err(self.failure(
++                                fault("LRR-E-CONST-UNSUPPORTED", "unannotated numeric local requires source constraint integration"),
++                                initializer.range(),
++                            ));
++                        }
++                        let value = take!(
++                            self,
++                            &initializer,
++                            ty.map(Expected::Scalar),
++                            locals,
++                            allow_return
++                        );
++                        self.admit_metadata(
++                            name.len()
++                                .checked_add(192)
++                                .ok_or_else(|| self.limit(initializer.range()))?,
++                            initializer.range(),
++                        )?;
++                        locals
++                            .insert(name, mutable, value)
++                            .map_err(|d| self.failure(d, initializer.range()))?;
++                    }
++                    Statement::Expression(child) => {
++                        take!(self, &child, None, locals, allow_return);
++                    }
++                    Statement::Unsupported(at) => {
++                        return Err(self.failure(
++                            fault(
++                                "LRR-E-CONST-UNSUPPORTED",
++                                "reached constant statement requires a later pure slice",
++                            ),
++                            at,
++                        ));
++                    }
++                }
++            }
++            if let Some(tail) = tail {
++                self.expr(&tail, hint, locals, allow_return)
++            } else {
++                Ok(Flow::Value(
++                    ConstValue::from_scalar(ValueRepr::unit()).map_err(|d| self.failure(d, at))?,
++                ))
++            }
++        })();
++        // Pop on all flow outcomes and failures. Writes in older scopes were
++        // made in place and survive; this scope's shadow bindings disappear.
++        locals.pop().map_err(|d| self.failure(d, at))?;
++        match result {
++            Ok(Flow::Value(value)) => {
++                if let Some(expected) = hint {
++                    self.check_expected(&value, expected, at)?;
++                }
++                Ok(Flow::Value(self.checked_value(value, at)?))
++            }
++            other => other,
++        }
++    }
++    fn run_loop(
++        &mut self,
++        target: ControlTarget,
++        condition: Option<ExprRef>,
++        body: ExprRef,
++        hint: Option<Expected>,
++        locals: &mut LocalScopes,
++        allow_return: bool,
++    ) -> Result<Flow, ConstFailure> {
++        let unit = Some(Expected::Scalar(PrimitiveType::Unit));
++        let expected = if condition.is_some() { unit } else { hint };
++        if self.loops.len() >= 128 {
++            return Err(self.limit(body.range()));
++        }
++        self.admit_metadata(
++            std::mem::size_of::<(ControlTarget, Option<Expected>)>() + 64,
++            body.range(),
++        )?;
++        self.loops
++            .try_reserve(1)
++            .map_err(|_| self.limit(body.range()))?;
++        self.loops.push((target, expected));
++        let result = (|| loop {
++            if let Some(condition) = &condition {
++                match self.expr(
++                    condition,
++                    Some(Expected::Scalar(PrimitiveType::Bool)),
++                    locals,
++                    allow_return,
++                )? {
++                    Flow::Value(value) => {
++                        let value =
++                            scalar(value).map_err(|d| self.failure(d, condition.range()))?;
++                        if value.type_id != 2 {
++                            return Err(self.failure(
++                                fault("LRR-E-CONST-TYPE", "constant while condition requires bool"),
++                                condition.range(),
++                            ));
++                        }
++                        if value.payload == 0 {
++                            return Ok(Flow::Value(
++                                ConstValue::from_scalar(ValueRepr::unit())
++                                    .map_err(|d| self.failure(d, condition.range()))?,
++                            ));
++                        }
++                    }
++                    Flow::Continue(current) if current == target => continue,
++                    Flow::Break(current, value) if current == target => {
++                        if let Some(expected) = expected {
++                            self.check_expected(&value, expected, condition.range())?;
++                        }
++                        return Ok(Flow::Value(value));
++                    }
++                    other => return Ok(other),
++                }
++            }
++            match self.expr(&body, unit, locals, allow_return)? {
++                Flow::Value(_) => {}
++                Flow::Continue(current) if current == target => {}
++                Flow::Break(current, value) if current == target => {
++                    if let Some(expected) = expected {
++                        self.check_expected(&value, expected, body.range())?;
++                    }
++                    return Ok(Flow::Value(value));
++                }
++                other => return Ok(other),
++            }
++        })();
++        self.loops.pop();
++        match result {
++            Ok(Flow::Value(value)) => {
++                if let Some(expected) = hint {
++                    self.check_expected(&value, expected, body.range())?;
++                }
++                Ok(Flow::Value(self.checked_value(value, body.range())?))
++            }
++            other => other,
++        }
++    }
+     fn check_expected(
+         &self,
+         value: &ConstValue,
+@@ -1064,6 +1275,7 @@
+         frames: 0,
+         depth: 0,
+         returns: Vec::new(),
++        loops: Vec::new(),
+         metadata_bytes: 0,
+         active: BTreeSet::new(),
+         active_calls: BTreeSet::new(),
+@@ -1082,10 +1294,11 @@
+             .expr(
+                 &length,
+                 Some(Expected::Scalar(PrimitiveType::Usize)),
+-                &mut BTreeMap::new(),
++                &mut LocalScopes::default(),
+                 false,
+             )?
+-            .into_value();
++            .into_value()
++            .map_err(|d| evaluator.failure(d, length.range()))?;
+         evaluator.length(value.clone(), length.range())?;
+         (value, Expected::Scalar(PrimitiveType::Usize))
+     } else {
+@@ -1122,3 +1335,7 @@
+ 
+ pub mod query_failure;
+ pub mod query_macro_demand;
++
++#[cfg(test)]
++#[path = "constant_loop_tests.rs"]
++mod loop_tests;
+--- /dev/null
++++ b/crates/lrr/src/syntax/constant_loops.rs
+@@ -0,0 +1,78 @@
++//! Reached lexical loop targets, privately derived from the retained pinned AST.
++use super::*;
++use ra_ap_syntax::ast::HasLoopBody;
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub(crate) struct ControlTarget(SourceRange);
++impl ControlTarget {
++    pub(super) fn loop_expression(expression: &ExprRef) -> Self {
++        Self(expression.range())
++    }
++}
++fn label_name(label: &ast::Lifetime) -> Result<String, Diagnostic> {
++    let token = required(label.lifetime_ident_token())?;
++    if token.text().len() > 64 * 1024 {
++        return Err(fault("constant loop label metadata limit"));
++    }
++    semantic(required(token.text().strip_prefix('\''))?)
++}
++pub(super) fn reached_target(
++    syntax: &ra_ap_syntax::SyntaxNode,
++    label: Option<ast::Lifetime>,
++) -> Result<ControlTarget, Diagnostic> {
++    let wanted = label.as_ref().map(label_name).transpose()?;
++    for (work, parent) in syntax.ancestors().skip(1).enumerate() {
++        if work >= 100_000 {
++            return Err(fault("constant loop target work limit"));
++        }
++        if ast::Fn::can_cast(parent.kind())
++            || ast::ClosureExpr::can_cast(parent.kind())
++            || ast::Const::can_cast(parent.kind())
++            || ast::Static::can_cast(parent.kind())
++        {
++            break;
++        }
++        if let Some(block) = ast::BlockExpr::cast(parent.clone()) {
++            if block.const_token().is_some()
++                || block.async_token().is_some()
++                || block.gen_token().is_some()
++            {
++                break;
++            }
++            if let Some(label) = block.label()
++                && let Some(wanted) = &wanted
++            {
++                let declared = label_name(&required(label.lifetime())?)?;
++                if &declared == wanted {
++                    return Err(fault(
++                        "constant labelled block requires a distinct source control slice",
++                    ));
++                }
++            }
++        }
++        let (is_loop, declared) = if let Some(expression) = ast::LoopExpr::cast(parent.clone()) {
++            (true, expression.label())
++        } else if let Some(expression) = ast::WhileExpr::cast(parent.clone()) {
++            (true, expression.label())
++        } else if let Some(expression) = ast::ForExpr::cast(parent.clone()) {
++            (true, expression.label())
++        } else {
++            (false, None)
++        };
++        if !is_loop {
++            continue;
++        }
++        if let Some(wanted) = &wanted {
++            let Some(declared) = declared.and_then(|label| label.lifetime()) else {
++                continue;
++            };
++            if label_name(&declared)? != *wanted {
++                continue;
++            }
++        }
++        return Ok(ControlTarget(range(parent.text_range())));
++    }
++    Err(fault(
++        "constant exit has no lexical loop target in its source body",
++    ))
++}
+--- a/crates/lrr/src/syntax/pure_constants.rs
++++ b/crates/lrr/src/syntax/pure_constants.rs
+@@ -24,12 +24,18 @@
+ };
+ use ra_ap_syntax::{
+     AstNode, AstToken,
+-    ast::{self, HasArgList, HasAttrs, HasGenericArgs, HasGenericParams, HasModuleItem, HasName},
++    ast::{
++        self, HasArgList, HasAttrs, HasGenericArgs, HasGenericParams, HasLoopBody, HasModuleItem,
++        HasName,
++    },
+ };
+ use std::{collections::BTreeMap, rc::Rc};
+ #[path = "constant_parameter_lengths.rs"]
+ mod parameter_lengths;
+ use parameter_lengths::ParameterIndependentLength;
++#[path = "constant_loops.rs"]
++mod loops;
++pub(crate) use loops::ControlTarget;
+ fn fault(message: &str) -> Diagnostic {
+     Diagnostic::new("LRR-E-CONST-SOURCE", message.into())
+ }
+@@ -116,7 +122,7 @@
+ #[derive(Debug, Clone)]
+ pub(crate) struct Function {
+     pub(crate) declaration: ConstantDeclaration,
+-    pub(crate) params: Vec<(String, PrimitiveType)>,
++    pub(crate) params: Vec<(String, PrimitiveType, bool)>,
+     pub(crate) result: ConstType,
+     pub(crate) body: ExprRef,
+ }
+@@ -135,7 +141,7 @@
+ }
+ #[derive(Debug, Clone)]
+ pub(crate) enum Statement {
+-    Let(String, Option<PrimitiveType>, ExprRef),
++    Let(String, bool, Option<PrimitiveType>, ExprRef),
+     Expression(ExprRef),
+     Unsupported(SourceRange),
+ }
+@@ -169,11 +175,15 @@
+     Parentheses(ExprRef),
+     Unary(NumericUnary, ExprRef),
+     Binary(NumericBinary, ExprRef, ExprRef),
++    Assign(String, Option<NumericBinary>, ExprRef),
+     Logic(bool, ExprRef, ExprRef),
+     Cast(ExprRef, PrimitiveType),
+     If(ExprRef, ExprRef, Option<ExprRef>),
+     Block(Vec<StatementRef>, Option<ExprRef>),
+     Return(Option<ExprRef>),
++    Loop(ControlTarget, Option<ExprRef>, ExprRef),
++    Break(ControlTarget, Option<ExprRef>),
++    Continue(ControlTarget),
+     Call(String, Vec<ExprRef>),
+     Array(Vec<ExprRef>),
+     Repeat(ExprRef, ExprRef),
+@@ -504,7 +514,7 @@
+         if header.params.len() != args.len() {
+             return Err(fault("pure const argument cardinality differs"));
+         }
+-        for ((_, ty), arg) in header.params.iter().zip(&args) {
++        for ((_, ty, _), arg) in header.params.iter().zip(&args) {
+             if !arg.matches_scalar(*ty)? {
+                 return Err(fault("pure const argument type differs"));
+             }
+@@ -855,12 +865,12 @@
+             if params.len() >= 256 {
+                 return Err(fault("constant parameter limit"));
+             }
+-            let name = local_name(required(p.pat())?)?;
++            let (name, mutable) = local_binding(required(p.pat())?)?;
+             let ty = self.primitive(required(p.ty())?)?;
+-            if params.iter().any(|(n, _)| n == &name) {
++            if params.iter().any(|(n, _, _)| n == &name) {
+                 return Err(fault("duplicate constant parameter"));
+             }
+-            params.push((name, ty));
++            params.push((name, ty, mutable));
+         }
+         let result = match f.ret_type() {
+             Some(r) => self.ty(required(r.ty())?)?,
+@@ -916,8 +926,10 @@
+                 if l.let_else().is_some() {
+                     Statement::Unsupported(s.range())
+                 } else {
++                    let (name, mutable) = local_binding(required(l.pat())?)?;
+                     Statement::Let(
+-                        local_name(required(l.pat())?)?,
++                        name,
++                        mutable,
+                         l.ty().map(|t| self.primitive(t)).transpose()?,
+                         ExprRef(required(l.initializer())?),
+                     )
+@@ -1036,7 +1048,27 @@
+                 let right = ExprRef(required(b.rhs())?);
+                 match required(b.op_kind())? {
+                     ast::BinaryOp::LogicOp(op) => Node::Logic(op == ast::LogicOp::And, left, right),
+-                    ast::BinaryOp::Assignment { .. } => Node::Unsupported,
++                    ast::BinaryOp::Assignment { op } => {
++                        let ast::Expr::PathExpr(path) = &left.0 else {
++                            return Ok(Node::Unsupported);
++                        };
++                        self.attributes_clear(path.syntax())?;
++                        let name = bare(required(path.path())?)?;
++                        self.lexical_value_clear(path.syntax(), &name)?;
++                        let op = op.map(|op| match op {
++                            ast::ArithOp::Add => NumericBinary::Add,
++                            ast::ArithOp::Sub => NumericBinary::Sub,
++                            ast::ArithOp::Mul => NumericBinary::Mul,
++                            ast::ArithOp::Div => NumericBinary::Div,
++                            ast::ArithOp::Rem => NumericBinary::Rem,
++                            ast::ArithOp::Shl => NumericBinary::Shl,
++                            ast::ArithOp::Shr => NumericBinary::Shr,
++                            ast::ArithOp::BitAnd => NumericBinary::BitAnd,
++                            ast::ArithOp::BitOr => NumericBinary::BitOr,
++                            ast::ArithOp::BitXor => NumericBinary::BitXor,
++                        });
++                        Node::Assign(name, op, right)
++                    }
+                     op => {
+                         use NumericBinary as B;
+                         let op = match op.to_string().as_str() {
+@@ -1095,6 +1127,23 @@
+                     stmts.push(StatementRef(s));
+                 }
+                 Node::Block(stmts, list.tail_expr().map(ExprRef))
++            }
++            E::LoopExpr(loop_expression) => Node::Loop(
++                ControlTarget::loop_expression(e),
++                None,
++                ExprRef(E::BlockExpr(required(loop_expression.loop_body())?)),
++            ),
++            E::WhileExpr(loop_expression) => Node::Loop(
++                ControlTarget::loop_expression(e),
++                Some(ExprRef(required(loop_expression.condition())?)),
++                ExprRef(E::BlockExpr(required(loop_expression.loop_body())?)),
++            ),
++            E::BreakExpr(exit) => Node::Break(
++                loops::reached_target(exit.syntax(), exit.lifetime())?,
++                exit.expr().map(ExprRef),
++            ),
++            E::ContinueExpr(exit) => {
++                Node::Continue(loops::reached_target(exit.syntax(), exit.lifetime())?)
+             }
+             E::ReturnExpr(r) => Node::Return(r.expr().map(ExprRef)),
+             E::CallExpr(c) => {
+@@ -1161,14 +1210,17 @@
+         })
+     }
+ }
+-fn local_name(pat: ast::Pat) -> Result<String, Diagnostic> {
++fn local_binding(pat: ast::Pat) -> Result<(String, bool), Diagnostic> {
+     let ast::Pat::IdentPat(p) = pat else {
+         return Err(fault("constant local requires a scalar identifier"));
+     };
+     if p.ref_token().is_some() || p.pat().is_some() {
+         return Err(fault("constant local binding mode unsupported"));
+     }
+-    semantic(required(p.name())?.text())
++    Ok((
++        semantic(required(p.name())?.text())?,
++        p.mut_token().is_some(),
++    ))
+ }
+ fn bare(path: ast::Path) -> Result<String, Diagnostic> {
+     let segment = required(path.segment())?;
+@@ -1230,7 +1282,7 @@
+ impl Node {
+     pub(crate) fn owned_bytes(&self) -> Option<usize> {
+         let extra = match self {
+-            Self::Path(s) | Self::Float(s, _) => s.capacity(),
++            Self::Path(s) | Self::Float(s, _) | Self::Assign(s, _, _) => s.capacity(),
+             Self::RequiredMacro(_) => std::mem::size_of::<RequiredConstantMacro>(),
+             Self::Block(s, _) => s
+                 .capacity()
