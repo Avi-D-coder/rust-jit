@@ -1,0 +1,5 @@
+# Actual alias runtime Type prerequisites — source-only successor
+
+Apply this eight-path complete.patch after the coherent39 source Type/prelude/alias packet in ../sol-type-alias-prelude-integration-v1, verifying every before hash. The complete patch already includes its component patches; do not apply both. The unchanged original/license inputs are retained in that predecessor (18cases/45files). Merge its inventory through tools/import_rustc_tests.py rather than replacing the canonical manifest with a subset.
+
+This successor carries combined metadata accounting, checks/stamps every actual retained source, joins canonical generated member identity to its separate projected header/query identity, and supplies genuine Type preparation to the existing generated_alias_runtime/source_run positive adapters. Eleven new controls are uncompiled. HANDOFF.md records exact implementation limits, source hashes and static reconstruction receipts. No target, raw validation log or complete source checkout is included. The separately running v68 interpreter candidate excludes this proposal; no MAIN/task/runtime/full-fixture/JIT/Linux acceptance is claimed.

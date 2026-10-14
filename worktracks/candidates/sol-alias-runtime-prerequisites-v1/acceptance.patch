@@ -1,0 +1,554 @@
+--- a/crates/lrr/src/db/source_alias_inputs.rs
++++ b/crates/lrr/src/db/source_alias_inputs.rs
+@@ -173,3 +173,203 @@
+         Ok(selected)
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::{
++        core::profile::ProfileIdentity,
++        db::key::OutlineKey,
++        expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++        source::{
++            changes::{
++                PreparedSourceInputs, PreparedSourceView, SourceSelection, SourceSelectionOutcome,
++                SourceUnitInput,
++            },
++            snapshot::{CfgSet, SourceBlob, SourcePath},
++        },
++        syntax::parse::ParseKey,
++    };
++    fn prepared() -> (Database, Vec<PreparedSourceView>) {
++        let units = (0..2)
++            .map(|i| SourceUnitInput {
++                path: SourcePath::new(&format!("unit{i}.rs")).unwrap(),
++                crate_key: Digest([170 + i; 32]),
++                module_path: vec![],
++                profile: ProfileIdentity::current(),
++                cfg: CfgSet::guest_default(),
++                blob: SourceBlob::new(if i == 0 {
++                    b"type A=i32;fn main(){}".to_vec()
++                } else {
++                    b"pub type Unused=u64;".to_vec()
++                })
++                .unwrap(),
++            })
++            .collect::<Vec<_>>();
++        let selections = units
++            .iter()
++            .map(|s| SourceSelection {
++                path: s.path.clone(),
++                outline: OutlineKey {
++                    parse: ParseKey {
++                        content: s.blob.content(),
++                        profile: s.profile.clone(),
++                    },
++                    crate_key: s.crate_key,
++                    module_path: vec![],
++                    cfg: s.cfg.fingerprint(),
++                },
++            })
++            .collect::<Vec<_>>();
++        let inputs = PreparedSourceInputs::refresh(None, units, Default::default()).unwrap();
++        let views = selections
++            .iter()
++            .map(|s| {
++                let SourceSelectionOutcome::Selected(v) = inputs.select(s).unwrap() else {
++                    panic!()
++                };
++                v
++            })
++            .collect::<Vec<_>>();
++        let mut db = Database::default();
++        inputs.publish(&mut db).unwrap();
++        db.begin_expansion_epoch(1).unwrap();
++        let compiler = Arc::new(
++            crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                &views[0].selection().outline.parse.profile,
++            )
++            .unwrap(),
++        );
++        let mut discovery = SourceDiscovery::new(
++            views.iter().map(PreparedSourceView::share).collect(),
++            views[0].outline().root_scope.clone(),
++            Namespace::Type,
++            Digest::of_bytes(b"all-source alias Type world"),
++            1,
++        )
++        .unwrap()
++        .with_declarative_compiler(
++            Digest::of_bytes(b"all-source alias compile environment"),
++            crate::expand::source_declarative::engine_version(),
++            compiler,
++        )
++        .unwrap();
++        assert!(matches!(
++            discovery.poll().unwrap(),
++            SourceDiscoveryStep::Sealed(_)
++        ));
++        discovery.publish(&mut db).unwrap();
++        (db, views)
++    }
++    #[test]
++    fn combined_alias_selection_budget_keeps_initial_source_footprint() {
++        let (db, views) = prepared();
++        let source = views[0].selection();
++        let scope = &views[0].outline().root_scope;
++        let row = db
++            .source_alias_type_certificate(source, scope, 32 * 1024 * 1024)
++            .unwrap()
++            .unwrap();
++        let InputValue::DiscoverySeal(input) = row.as_ref() else {
++            panic!()
++        };
++        assert_eq!(input.sources.len(), 2);
++        let initial = scope.heap_bytes()
++            + source.metadata_bytes().unwrap()
++            + std::mem::size_of::<Option<Arc<InputValue>>>();
++        let rest = input
++            .sources
++            .iter()
++            .map(|s| s.metadata_bytes().unwrap() + 3 * std::mem::size_of::<InputKey>())
++            .sum::<usize>()
++            + input
++                .compiler_inputs
++                .iter()
++                .map(|(k, _)| std::mem::size_of::<(InputKey, Digest)>() + k.heap_bytes())
++                .sum::<usize>()
++            + input.records.len() * 128;
++        assert!(rest > 0);
++        let e = db
++            .source_alias_type_certificate(source, scope, initial + rest - 1)
++            .unwrap_err();
++        assert_eq!(e.code, "LRR-E-METADATA-LIMIT");
++        assert!(
++            db.source_alias_type_certificate(source, scope, initial + rest)
++                .unwrap()
++                .is_some()
++        );
++    }
++    #[test]
++    fn genuine_alias_proof_stamps_every_retained_type_source() {
++        let (db, views) = prepared();
++        let mut owner =
++            crate::expand::source_declarative::SourceDeclarative::new(views[0].share()).unwrap();
++        owner.compiler = Some(Arc::new(
++            crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                owner.profile(),
++            )
++            .unwrap(),
++        ));
++        let key = crate::db::seals::SealKey {
++            domain: crate::db::seals::SealDomain::Scope {
++                id: views[0].outline().root_scope.fingerprint(),
++                namespace: Namespace::Type,
++            },
++            unit_graph: Digest::of_bytes(b"all-source alias Type world"),
++            epoch: 1,
++        };
++        let crate::frontend::source_type_alias_normalization::SourceAliasOutcome::Ready(proof)=crate::frontend::source_type_alias_normalization::CurrentSourcePrimitiveAlias::capture_original_current(&db,&owner,&views[0].outline().root_scope,&key,"A",&[],32*1024*1024).unwrap()else{panic!("genuine original Type source proof")};
++        for view in &views {
++            for key in [
++                InputKey::CapturedSource(view.selection().location_identity()),
++                InputKey::SourceBlob(view.selection().outline.parse.content),
++                InputKey::CrateCfg(view.selection().outline.crate_key),
++            ] {
++                assert_eq!(
++                    proof.dependencies().get(&key),
++                    Some(&db.published_input(&key).unwrap().1)
++                );
++            }
++        }
++        proof.revalidate_inputs(&db).unwrap();
++    }
++    #[test]
++    fn tampered_retained_foreign_source_refuses_new_capture_without_source_revision_change() {
++        let (mut db, views) = prepared();
++        let revision = db.source_revision();
++        // A negative authority injection deliberately bypasses public publishers.
++        // It must not become a new valid Type proof even if the primary source is unchanged.
++        let old = views[1].selection();
++        let mut tampered = old.clone();
++        tampered.outline.parse.content = Digest([168; 32]);
++        let value = InputValue::CapturedSource(tampered);
++        db.inputs.insert(
++            InputKey::CapturedSource(old.location_identity()),
++            InputRecord {
++                fingerprint: value.fingerprint(),
++                value: Arc::new(value),
++            },
++        );
++        assert_eq!(db.source_revision(), revision);
++        let e = db
++            .source_alias_type_certificate(
++                views[0].selection(),
++                &views[0].outline().root_scope,
++                32 * 1024 * 1024,
++            )
++            .unwrap_err();
++        assert_eq!(e.code, "LRR-E-SOURCE-ALIAS");
++        let owner =
++            crate::expand::source_declarative::SourceDeclarative::new(views[0].share()).unwrap();
++        let key = crate::db::seals::SealKey {
++            domain: crate::db::seals::SealDomain::Scope {
++                id: views[0].outline().root_scope.fingerprint(),
++                namespace: Namespace::Type,
++            },
++            unit_graph: Digest::of_bytes(b"all-source alias Type world"),
++            epoch: 1,
++        };
++        let e=crate::frontend::source_type_alias_normalization::CurrentSourcePrimitiveAlias::capture_original_current(&db,&owner,&views[0].outline().root_scope,&key,"A",&[],32*1024*1024).err().unwrap();
++        assert_eq!(e.code, "LRR-E-SOURCE-ALIAS");
++    }
++}
+--- a/crates/lrr/src/frontend/source_type_alias_normalization_tests.rs
++++ b/crates/lrr/src/frontend/source_type_alias_normalization_tests.rs
+@@ -137,6 +137,74 @@
+     };
+     (db, owner, scope, key)
+ }
++fn current_module(
++    text: &str,
++    edition: u16,
++    module: &str,
++) -> (Database, SourceDeclarative, ScopeKey, SealKey) {
++    let (mut db, views, mut owners) = prepare(
++        vec![input(
++            text,
++            "module-alias-original.rs",
++            Digest([180; 32]),
++            edition,
++        )],
++        vec![],
++    );
++    let mut owner = owners.remove(0);
++    owner.compiler = Some(Arc::new(
++        crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(owner.profile())
++            .unwrap(),
++    ));
++    let scope = views[0]
++        .outline()
++        .scopes
++        .keys()
++        .find(|s| s.owner.is_none() && s.module_path == [module])
++        .unwrap()
++        .clone();
++    let mut discovery = SourceDiscovery::new(
++        vec![views[0].share()],
++        scope.clone(),
++        Namespace::Type,
++        Digest::of_bytes(b"original module alias world"),
++        1,
++    )
++    .unwrap()
++    .with_declarative_compiler(
++        Digest::of_bytes(b"original module alias compile environment"),
++        crate::expand::source_declarative::engine_version(),
++        owner.compiler.clone().unwrap(),
++    )
++    .unwrap();
++    loop {
++        match discovery.poll().unwrap() {
++            SourceDiscoveryStep::Sealed(_) => break,
++            SourceDiscoveryStep::NeedExpansion { request } => discovery
++                .admit_expansion(Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                .admit_expansion(Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::Incomplete { diagnostic, .. } => panic!(
++                "original module preparation prerequisite: {} {}",
++                diagnostic.code, diagnostic.message
++            ),
++            _ => panic!("original module requires unadmitted effectful producer"),
++        }
++    }
++    discovery.publish(&mut db).unwrap();
++    let key = SealKey {
++        domain: SealDomain::Scope {
++            id: scope.fingerprint(),
++            namespace: Namespace::Type,
++        },
++        unit_graph: Digest::of_bytes(b"original module alias world"),
++        epoch: 1,
++    };
++    (db, owner, scope, key)
++}
++
+ fn resolve(
+     db: &Database,
+     owner: &SourceDeclarative,
+@@ -706,3 +774,270 @@
+         ))
+     ));
+ }
++
++#[test]
++fn genuine_generated_alias_keeps_canonical_member_separate_from_projected_header_identity() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, owner, scope, key) = current(
++            "macro_rules! make{()=>{type Word=i64;}}make!();fn main(){}",
++            edition,
++        );
++        let SourceAliasOutcome::Ready(source) = resolve(&db, &owner, &scope, &key, "Word") else {
++            panic!("actual original invocation plus generated Type source proof required")
++        };
++        let canonical = source.selected_definition();
++        let projected = source.alias_definitions().next().unwrap().fingerprint();
++        assert_ne!(canonical, projected);
++        assert_eq!(source.alias_members().collect::<Vec<_>>(), [canonical]);
++        let crate::db::poll::QueryPoll::Ready(Ok(join)) =
++            crate::frontend::source_type_alias_query::QueriedSourcePrimitiveAlias::capture_current(
++                &mut db, source, MAX_BYTES,
++            )
++        else {
++            panic!("canonical generated TypeAlias query must match actual retained recipe")
++        };
++        assert_eq!(join.source().primitive(), PrimitiveType::I64);
++        assert_eq!(
++            join.query_dependencies()[0].0,
++            crate::db::key::QueryKey::TypeAlias(canonical)
++        );
++        assert!(
++            db.memo(&crate::db::key::QueryKey::TypeAlias(projected))
++                .is_none()
++        );
++    }
++}
++#[test]
++fn original_generated_original_chain_uses_actual_alias_members_and_exact_query_stamps() {
++    let (mut db, owner, scope, key) = current(
++        "type Start=Middle;type End=i64;macro_rules! make{()=>{type Middle=End;}}make!();fn main(){}",
++        2024,
++    );
++    let SourceAliasOutcome::Ready(source) = resolve(&db, &owner, &scope, &key, "Start") else {
++        panic!("actual retained generated hop required")
++    };
++    assert_eq!(
++        source
++            .alias_definitions()
++            .map(|d| d.declared_name.as_str())
++            .collect::<Vec<_>>(),
++        ["Start", "Middle", "End"]
++    );
++    assert!(source.steps[0].written.is_none());
++    assert!(source.steps[1].written.is_some());
++    assert!(source.steps[2].written.is_none());
++    let members = source.alias_members().collect::<Vec<_>>();
++    let crate::db::poll::QueryPoll::Ready(Ok(join)) =
++        crate::frontend::source_type_alias_query::QueriedSourcePrimitiveAlias::capture_current(
++            &mut db, source, MAX_BYTES,
++        )
++    else {
++        panic!("actual three-header query join required")
++    };
++    assert_eq!(
++        join.query_dependencies()
++            .iter()
++            .map(|(q, _)| q.clone())
++            .collect::<Vec<_>>(),
++        members
++            .into_iter()
++            .map(crate::db::key::QueryKey::TypeAlias)
++            .collect::<Vec<_>>()
++    );
++    let cold = owner
++        .module_source()
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap()
++        .key();
++    assert!(
++        db.memo(&crate::db::key::QueryKey::BodyStructure(cold))
++            .is_none()
++    );
++}
++#[test]
++fn forged_canonical_member_cannot_reuse_equal_generated_primitive_recipe() {
++    let (db, owner, scope, key) = current(
++        "macro_rules! make{()=>{type A=i64;type B=i64;}}make!();fn main(){}",
++        2024,
++    );
++    let SourceAliasOutcome::Ready(mut a) = resolve(&db, &owner, &scope, &key, "A") else {
++        panic!()
++    };
++    let SourceAliasOutcome::Ready(b) = resolve(&db, &owner, &scope, &key, "B") else {
++        panic!()
++    };
++    a.steps[0].member = b.selected_definition();
++    assert_eq!(
++        a.revalidate_inputs(&db).unwrap_err().code,
++        "LRR-E-SOURCE-ALIAS"
++    );
++}
++#[test]
++fn foreign_original_source_cannot_supply_generated_alias_invocation_owner() {
++    let (db, owner, _, _) = current(
++        "macro_rules! make{()=>{type A=i64;}}make!();fn main(){}",
++        2024,
++    );
++    let initial = db
++        .published_input(&InputKey::DiscoverySeal(SealKey {
++            domain: SealDomain::Scope {
++                id: owner.module_source().outline().root_scope.fingerprint(),
++                namespace: Namespace::Type,
++            },
++            unit_graph: Digest::of_bytes(b"alias current world"),
++            epoch: 1,
++        }))
++        .unwrap();
++    let InputValue::DiscoverySeal(input) = initial.0 else {
++        panic!()
++    };
++    let NameLookup::Defined(a) = input
++        .scope
++        .as_ref()
++        .unwrap()
++        .lookup(&BucketKey {
++            scope: owner.module_source().outline().root_scope.clone(),
++            namespace: Namespace::Type,
++            name: "A".into(),
++        })
++        .unwrap()
++    else {
++        panic!()
++    };
++    let (_, views, _) = prepare(vec![input_unit_foreign()], vec![]);
++    assert!(
++        CurrentSourcePrimitiveAlias::original_owner_for_generated(
++            &db,
++            a.identity,
++            &[&views[0]],
++            MAX_BYTES
++        )
++        .unwrap()
++        .is_none()
++    );
++    assert_eq!(
++        CurrentSourcePrimitiveAlias::original_owner_for_generated(
++            &db,
++            a.identity,
++            &[owner.module_source()],
++            0
++        )
++        .unwrap_err()
++        .code,
++        "LRR-E-METADATA-LIMIT"
++    );
++}
++fn input_unit_foreign() -> SourceUnitInput {
++    input("fn main(){}", "foreign.rs", Digest([181; 32]), 2024)
++}
++
++#[test]
++fn opaque_module_macro2_alias_name_cannot_borrow_original_root_identity() {
++    let (db, owner, scope, key) = current(
++        "#![feature(decl_macro)] macro make(){type A=i32;}make!();fn main(){}",
++        2024,
++    );
++    assert!(matches!(
++        resolve(&db, &owner, &scope, &key, "A"),
++        SourceAliasOutcome::Need(SourceAliasPrerequisite::Origin(
++            GeneratedTypePrerequisite::DefinitionSiteSource
++        )) | SourceAliasOutcome::Need(SourceAliasPrerequisite::Name(NameLookup::Absent))
++    ));
++}
++
++#[test]
++fn unchanged_visibility_matcher_alias_uses_real_module_and_captured_type_token() {
++    let original = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-pub-matcher.rs"
++    );
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, owner, scope, key) = current_module(original, edition, "with_pub");
++        let SourceAliasOutcome::Ready(source) = resolve(&db, &owner, &scope, &key, "H") else {
++            panic!("unchanged original module generated alias component")
++        };
++        assert_eq!(
++            source.alias_definitions().next().unwrap().module_path,
++            ["with_pub"]
++        );
++        assert_eq!(source.primitive(), PrimitiveType::I32);
++        assert!(source.steps[0].written.is_some());
++        let crate::db::poll::QueryPoll::Ready(Ok(join)) =
++            crate::frontend::source_type_alias_query::QueriedSourcePrimitiveAlias::capture_current(
++                &mut db, source, MAX_BYTES,
++            )
++        else {
++            panic!("genuine original generated-header/query component")
++        };
++        join.source().revalidate_inputs(&db).unwrap();
++        assert!(db.trace.events.iter().all(|e| !matches!(
++            e.key,
++            crate::db::key::QueryKey::BodyStructure(_) | crate::db::key::QueryKey::Thunk(_)
++        )));
++    }
++    // Original check-pass/compiler contract and unchanged main are not executed here.
++}
++
++#[test]
++fn actual_empty_custom_catalogue_cannot_replay_standalone_primitive_authority() {
++    let (mut db, views, _) = prepare(
++        vec![input(
++            "type A=i32;fn main(){}",
++            "custom-alias.rs",
++            Digest([179; 32]),
++            2024,
++        )],
++        vec![],
++    );
++    let view = &views[0];
++    let catalog = crate::frontend::compile_input_catalog::CompileInputCatalog::new(
++        crate::facade::unit(&view.selection().outline.parse.profile, "core"),
++        2024,
++        [],
++    )
++    .unwrap();
++    let mut discovery = SourceDiscovery::new(
++        vec![view.share()],
++        view.outline().root_scope.clone(),
++        Namespace::Type,
++        Digest::of_bytes(b"custom alias world"),
++        1,
++    )
++    .unwrap()
++    .with_declarative_compiler(
++        Digest::of_bytes(b"custom alias environment"),
++        crate::expand::source_declarative::engine_version(),
++        Arc::new(catalog),
++    )
++    .unwrap();
++    assert!(matches!(
++        discovery.poll().unwrap(),
++        SourceDiscoveryStep::Sealed(_)
++    ));
++    discovery.publish(&mut db).unwrap();
++    let graph = crate::frontend::names::NameNamespaces::from_outlines(&[view.outline()]).unwrap();
++    let sources = [view];
++    let normalizer = crate::frontend::type_aliases::AliasNormalizer::new(&graph, &sources).unwrap();
++    let initial = view
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "A")
++        .unwrap()
++        .def_key
++        .fingerprint();
++    assert!(matches!(
++        normalizer.normalize(&mut db, initial),
++        crate::db::poll::QueryPoll::Ready(Ok(
++            crate::frontend::type_aliases::AliasTarget::NeedCurrentSource {
++                missing: crate::frontend::type_aliases::CurrentAliasPrerequisite::CompilerReceipt,
++                ..
++            }
++        ))
++    ));
++}

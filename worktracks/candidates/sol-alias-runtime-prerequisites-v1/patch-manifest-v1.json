@@ -1,0 +1,27 @@
+[
+  {
+    "path": "production.patch",
+    "sha256": "d165e3f5e704659fdd426b601c4152dd1dd6ac930a2a59ca0e49184d1b6d813f",
+    "bytes": 26403
+  },
+  {
+    "path": "consumer-hook.patch",
+    "sha256": "a8180cd8d2dd865418671ff64e77eca7bf5e4bb18ab5feefe9a347cce664579c",
+    "bytes": 5717
+  },
+  {
+    "path": "acceptance.patch",
+    "sha256": "20fa3380bc9ca27b834f0d4003a8057cad4d32cee2ed632ae0e1b20e33d0f32f",
+    "bytes": 20507
+  },
+  {
+    "path": "harness-adapters.patch",
+    "sha256": "a45e5f2c5fa6fb75dad5f21316060f55a598624fea8311f9821116fde45cc1d7",
+    "bytes": 8203
+  },
+  {
+    "path": "complete.patch",
+    "sha256": "a0d1ebfeed43f45b558de068b9885bc0f97510fee149a7b910cf44288edb93d8",
+    "bytes": 60830
+  }
+]

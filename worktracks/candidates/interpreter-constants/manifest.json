@@ -1,6 +1,6 @@
 {
   "scope": "private source candidate, not integrated or release accepted",
-  "canonical_source_member": "5c330972fa27d030e2ff852336a32796584283481dcd4e428bbf5aaebb31a15e",
+  "canonical_source_member": "c011cdae8b862ae4f7eee9bc4e40fe1edc09b6798dd703e0e277b64e3833d14a",
   "files": [
     {
       "path": "compat/fixtures.toml",
@@ -95,7 +95,7 @@
     {
       "path": "crates/lrr/src/engine/runtime_macros.rs",
       "before_sha256": "4a8274bc470de9d3ffe609a923c25cab46346a9d0990aae004da3752c1f037b2",
-      "after_sha256": "6742675bda12f05b1eacc07aae4a8206c38312734d12c49f480cbda3d5963d82"
+      "after_sha256": "0406de99695c656d72e8f6666697fc9bffb26cad20a536ec7d10763376d38bb7"
     },
     {
       "path": "crates/lrr/src/engine/scalar_constant_use.rs",
@@ -106,6 +106,11 @@
       "path": "crates/lrr/src/engine/scalar_constant_use_tests.rs",
       "before_sha256": null,
       "after_sha256": "cd382f32e5a84ba79e6e2adc897ce85528e28b0df0265df722401be7b01fd446"
+    },
+    {
+      "path": "crates/lrr/src/engine/standalone_macros.rs",
+      "before_sha256": "cfd046656c5c4d1c7dc4de5644b07025243c3b82137817c32fdec8a41c95e188",
+      "after_sha256": "d5d212a9a989ce472767038c4aa9a4f41454e1be0c7a07a4933b7e1ac79a8824"
     },
     {
       "path": "crates/lrr/src/expand/declaration_fragment.rs",
@@ -370,7 +375,7 @@
     {
       "path": "crates/lrr/src/frontend/runtime_macro_catalog.rs",
       "before_sha256": "68bf93c5ad47e4875d39879e7352b14d4d202ad9ebbc5be074e0f815ca57e9a8",
-      "after_sha256": "719c5fc8a057df7fe77597a0016f89b7dae0e137d2249c616c633dbe23f5b377"
+      "after_sha256": "f3e71b73c39bbcda785208016904c50a6cceccb88780270a70a2a3d6fb6de588"
     },
     {
       "path": "crates/lrr/src/frontend/runtime_macro_plan.rs",
@@ -998,6 +1003,16 @@
       "after_sha256": "088461cb205bf8ba40daf223f91e4a4fdfb44d987d259f27f24b490b9c3d90a1"
     },
     {
+      "path": "xtask/tests/stock_generic_call_edgecases.rs",
+      "before_sha256": "9bce7cebc06d41ab2ec703a4d34ef87c7488334337b1caa72bba45e3acf1c0b4",
+      "after_sha256": "d783888f27999cae30d10bbf1bc6b1495d43f155af6f03a2befeb374c19f281a"
+    },
+    {
+      "path": "xtask/tests/stock_generic_runtime.rs",
+      "before_sha256": "8c7e22ac05cdc65078c23c25b835d5413807886537f9f17f8ac0daf737860f76",
+      "after_sha256": "7acf7ef44791d43ec7ec3a971ceabf97e19401831f63342144d10037d3c7c8c6"
+    },
+    {
       "path": "xtask/tests/stock_keyword_body_readiness.rs",
       "before_sha256": "b4e3e80aa3338cb8f6f8172c4d3aecaf2e8a11579c9182df56b67528aec58134",
       "after_sha256": "306a71b6e4f9898fb21128eb81b688cf1414cf0a80f5e627130053e7bb8f189c"
@@ -1018,6 +1033,6 @@
       "after_sha256": "c7ffec0509a58999ed4ffe289b45aa3bec2de568b4ae8f95dd27ec3aed754e37"
     }
   ],
-  "code_patch_sha256": "d984a999da5b488927764d440753777ee9fd6daa19ec60846aad4aa5bd4311d1",
+  "code_patch_sha256": "5df2e1be0b026dd3f41e02207df0fade9a10249c3f9609ef233becf9a447cdcf",
   "full_stock_fixture_passes": 0
 }

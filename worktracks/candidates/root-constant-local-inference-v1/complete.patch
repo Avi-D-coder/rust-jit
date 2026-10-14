@@ -1193,7 +1193,7 @@
 +}
 --- /dev/null
 +++ b/crates/lrr/src/syntax/constant_local_constraints.rs
-@@ -0,0 +1,829 @@
+@@ -0,0 +1,942 @@
 +//! Bounded scalar equations for one source-owned constant-local demand.
 +//! AST handles, lexical binding IDs and graph nodes never leave this adapter.
 +use super::*;
@@ -1228,7 +1228,6 @@
 +    concrete: Option<PrimitiveType>,
 +    family: Option<Family>,
 +    opaque: bool,
-+    conflict: bool,
 +}
 +struct Graph<'a> {
 +    source: &'a ConstantSource,
@@ -1278,7 +1277,6 @@
 +            concrete: None,
 +            family: None,
 +            opaque: false,
-+            conflict: false,
 +        });
 +        Ok(id)
 +    }
@@ -1318,13 +1316,6 @@
 +            concrete,
 +            family,
 +            opaque: x.opaque || y.opaque,
-+            conflict: x.conflict
-+                || y.conflict
-+                || x.concrete.zip(y.concrete).is_some_and(|(x, y)| x != y)
-+                || x.family.zip(y.family).is_some_and(|(x, y)| x != y)
-+                || concrete
-+                    .zip(family)
-+                    .is_some_and(|(ty, f)| self::family(ty) != Some(f)),
 +        };
 +        self.nodes[remove].parent = keep;
 +        Ok(keep)
@@ -1332,17 +1323,17 @@
 +    fn known(&mut self, id: usize, ty: PrimitiveType) -> Result<(), Diagnostic> {
 +        let id = self.root(id)?;
 +        let node = &mut self.nodes[id];
-+        node.conflict |= node.concrete.is_some_and(|old| old != ty)
-+            || node.family.is_some_and(|f| family(ty) != Some(f));
-+        node.concrete = Some(ty);
++        // These are source-derived contextual hints, not acceptance of every
++        // expression in the owner. Keep the first context on this deterministic
++        // representative; combining with the earlier owning result preserves its
++        // actual declared type. A later cold use cannot replace that context.
++        node.concrete.get_or_insert(ty);
 +        Ok(())
 +    }
 +    fn numeric(&mut self, id: usize, f: Family) -> Result<(), Diagnostic> {
 +        let id = self.root(id)?;
 +        let node = &mut self.nodes[id];
-+        node.conflict |= node.family.is_some_and(|old| old != f)
-+            || node.concrete.is_some_and(|ty| family(ty) != Some(f));
-+        node.family = Some(f);
++        node.family.get_or_insert(f);
 +        Ok(())
 +    }
 +    fn opaque(&mut self, id: usize) -> Result<(), Diagnostic> {
@@ -1791,17 +1782,17 @@
 +    // An unknown use cannot establish a default type. It also cannot erase
 +    // an independent concrete context (for example the actual owning return
 +    // type). The evaluator still checks every reached call/effect separately.
-+    if node.opaque && node.concrete.is_none() {
++    // A boolean or floating cold use is not a numeric context for an integer
++    // initializer. It must not turn the graph into a static type checker. The
++    // real evaluator checks the initializer and each use only when entered.
++    let concrete = node.concrete.filter(|ty| {
++        node.family
++            .is_none_or(|expected| family(*ty) == Some(expected))
++    });
++    if node.opaque && concrete.is_none() {
 +        return Err(incomplete());
 +    }
-+    if node.conflict {
-+        return Err(Diagnostic::new(
-+            "LRR-E-CONST-TYPE",
-+            "constant local source constraints conflict".into(),
-+        ));
-+    }
-+    let primitive = node
-+        .concrete
++    let primitive = concrete
 +        .or_else(|| match node.family {
 +            Some(Family::Integer) => Some(PrimitiveType::I32),
 +            Some(Family::Float) => Some(PrimitiveType::F64),
@@ -1828,6 +1819,9 @@
 +    );
 +    const CONTROL: &str = include_str!(
 +        "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/control-flow/loop.rs"
++    );
++    const BASICS: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/control-flow/basics.rs"
 +    );
 +    fn source(text: &str, edition: u16) -> ConstantSource {
 +        ConstantSource::parse(
@@ -1906,6 +1900,65 @@
 +            }
 +        }
 +    }
++    #[test]
++    fn unchanged_gcd_returns_entered_branch_values_with_actual_parameter_types() {
++        for edition in [2015, 2018, 2021, 2024] {
++            let source = source(BASICS, edition);
++            let at = source
++                .declarations()
++                .iter()
++                .find(|d| d.name() == "gcd")
++                .unwrap()
++                .range();
++            for (a, b) in [(48, 18), (18, 48)] {
++                let arguments = [a, b]
++                    .into_iter()
++                    .map(|n| {
++                        ConstValue::from_scalar(ValueRepr::unsigned(TypeId(11), n).unwrap())
++                            .unwrap()
++                    })
++                    .collect();
++                let plan = source.const_call(at, arguments).unwrap();
++                let result = evaluate(&plan, ConstLimits::default()).unwrap();
++                assert_eq!(
++                    result.value().scalar().unwrap(),
++                    ValueRepr::unsigned(TypeId(11), 6).unwrap()
++                );
++                assert_eq!(result.source(), Digest::of_bytes(BASICS.as_bytes()));
++                assert_eq!(plan.profile().edition, edition);
++            }
++        }
++    }
++    #[test]
++    fn unchanged_prime_loop_infers_divisor_from_actual_source_parameter() {
++        for edition in [2015, 2018, 2021, 2024] {
++            let source = source(BASICS, edition);
++            let at = source
++                .declarations()
++                .iter()
++                .find(|d| d.name() == "is_prime")
++                .unwrap()
++                .range();
++            for (n, expected) in [(113, true), (117, false)] {
++                let plan = source
++                    .const_call(
++                        at,
++                        vec![
++                            ConstValue::from_scalar(ValueRepr::unsigned(TypeId(12), n).unwrap())
++                                .unwrap(),
++                        ],
++                    )
++                    .unwrap();
++                let result = evaluate(&plan, ConstLimits::default()).unwrap();
++                assert_eq!(
++                    result.value().scalar().unwrap(),
++                    ValueRepr::boolean(expected)
++                );
++                assert_eq!(result.source(), Digest::of_bytes(BASICS.as_bytes()));
++                assert_eq!(plan.profile().edition, edition);
++            }
++        }
++    }
 +    fn result(
 +        text: &str,
 +    ) -> Result<crate::frontend::constants::ConstEvaluation, crate::frontend::constants::ConstFailure>
@@ -1962,6 +2015,66 @@
 +        let error = result("const A:u8={let x=7;if true{missing(x);}x};").unwrap_err();
 +        assert_eq!(error.diagnostic().code, "LRR-E-CONST-SOURCE");
 +        assert!(error.panic().is_none());
++    }
++    #[test]
++    fn cold_type_disagreements_do_not_precheck_the_selected_constant_body() {
++        for edition in [2015, 2018, 2021, 2024] {
++            for (text, expected) in [
++                (
++                    "const A:u8={let x=9;if false{let y:bool=x;}x};",
++                    ValueRepr::unsigned(TypeId(9), 9).unwrap(),
++                ),
++                (
++                    "const fn f()->u8{let x=7;return x;let y:bool=x;}const A:u8=f();",
++                    ValueRepr::unsigned(TypeId(9), 7).unwrap(),
++                ),
++                (
++                    "const A:i32={let x=9;if false{let y:bool=x;}1};",
++                    ValueRepr::signed(TypeId(6), 1).unwrap(),
++                ),
++                (
++                    "const A:i32={let x=9;if false{let y:f64=x;}1};",
++                    ValueRepr::signed(TypeId(6), 1).unwrap(),
++                ),
++            ] {
++                let source = source(text, edition);
++                let at = source
++                    .declarations()
++                    .iter()
++                    .find(|d| d.name() == "A")
++                    .unwrap()
++                    .range();
++                let evaluation =
++                    evaluate(&source.constant(at).unwrap(), ConstLimits::default()).unwrap();
++                assert_eq!(evaluation.value().scalar().unwrap(), expected);
++                assert_eq!(evaluation.source(), Digest::of_bytes(text.as_bytes()));
++            }
++        }
++    }
++    #[test]
++    fn entered_type_disagreements_fail_at_the_actual_use_without_graph_diagnostics() {
++        for edition in [2015, 2018, 2021, 2024] {
++            let text = "const A:u8={let x=9;if true{let y:bool=x;}x};";
++            let source = source(text, edition);
++            let at = source
++                .declarations()
++                .iter()
++                .find(|d| d.name() == "A")
++                .unwrap()
++                .range();
++            let error =
++                evaluate(&source.constant(at).unwrap(), ConstLimits::default()).unwrap_err();
++            assert_eq!(error.diagnostic().code, "LRR-E-CONST-TYPE");
++            let use_at = text.find("=x;").unwrap() + 1;
++            assert_eq!(
++                error.range(),
++                SourceRange {
++                    start: use_at as u32,
++                    end: (use_at + 1) as u32
++                }
++            );
++            assert!(error.panic().is_none());
++        }
 +    }
 +    fn first_binding(source: &ConstantSource) -> StatementRef {
 +        let binding = source

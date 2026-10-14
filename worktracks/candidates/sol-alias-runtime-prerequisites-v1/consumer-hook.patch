@@ -1,0 +1,131 @@
+--- a/crates/lrr/src/frontend/type_aliases/current_source.rs
++++ b/crates/lrr/src/frontend/type_aliases/current_source.rs
+@@ -108,20 +108,50 @@
+     ) -> QueryPoll<AliasTarget> {
+         let result = (|| -> Result<QueryPoll<AliasTarget>, Diagnostic> {
+             db.require_coordinator()?;
+-            let Some((ordinal, source, item)) =
++            let mut bytes = std::mem::size_of::<Vec<SourceDeclarative>>();
++            let (ordinal, scope, declared_name) = if let Some((i, item)) =
+                 self.sources.iter().enumerate().find_map(|(i, s)| {
+                     s.outline()
+                         .items
+                         .iter()
+                         .find(|item| item.def_key.fingerprint() == initial)
+-                        .map(|item| (i, *s, item))
+-                })
+-            else {
++                        .map(|item| (i, item))
++                }) {
++                if item.def_key.item_kind != ItemKind::TypeAlias {
++                    return Err(fault("alias current initial source member differs"));
++                }
++                charge(
++                    &mut bytes,
++                    item.scope
++                        .heap_bytes()
++                        .checked_mul(2)
++                        .and_then(|n| n.checked_add(item.def_key.declared_name.capacity()))
++                        .ok_or_else(limit)?,
++                )?;
++                (i, item.scope.clone(), item.def_key.declared_name.clone())
++            } else if let Some(owner) = CurrentSourcePrimitiveAlias::original_owner_for_generated(
++                db,
++                initial,
++                self.sources,
++                MAX.checked_sub(bytes).ok_or_else(limit)?,
++            )? {
++                charge(
++                    &mut bytes,
++                    owner
++                        .1
++                        .heap_bytes()
++                        .checked_mul(2)
++                        .and_then(|n| n.checked_add(owner.2.capacity()))
++                        .ok_or_else(limit)?,
++                )?;
++                owner
++            } else {
+                 let scope = match db.published_input(&InputKey::DeclarationContext(initial)) {
+                     Some((InputValue::DeclarationContext(c), _)) => {
+-                        if c.scope.heap_bytes().checked_mul(2).is_none_or(|n| n > MAX) {
+-                            return Err(limit());
+-                        };
++                        charge(
++                            &mut bytes,
++                            c.scope.heap_bytes().checked_mul(2).ok_or_else(limit)?,
++                        )?;
+                         c.scope.clone()
+                     }
+                     _ => return Err(fault("alias current initial context absent")),
+@@ -132,14 +162,7 @@
+                     CurrentAliasPrerequisite::GeneratedOrigin,
+                 ))));
+             };
+-            if item.def_key.item_kind != ItemKind::TypeAlias {
+-                return Err(fault("alias current initial source member differs"));
+-            };
+-            let mut bytes = std::mem::size_of::<Vec<SourceDeclarative>>();
+-            charge(
+-                &mut bytes,
+-                item.scope.heap_bytes().checked_mul(2).ok_or_else(limit)?,
+-            )?;
++            let source = self.sources[ordinal];
+             charge(
+                 &mut bytes,
+                 self.sources
+@@ -147,25 +170,21 @@
+                     .checked_mul(std::mem::size_of::<SourceDeclarative>())
+                     .ok_or_else(limit)?,
+             )?;
+-            let Some((key, initial_catalog)) = replay_catalog(db, source, &item.scope, &mut bytes)?
++            let Some((key, initial_catalog)) = replay_catalog(db, source, &scope, &mut bytes)?
+             else {
+                 let missing_kind = if db
+                     .source_alias_type_certificate(
+                         source.selection(),
+-                        &item.scope,
++                        &scope,
+                         MAX.checked_sub(bytes).ok_or_else(limit)?,
+                     )?
+                     .is_some()
+                 {
+                     CurrentAliasPrerequisite::CompilerReceipt
+                 } else {
+-                    CurrentAliasPrerequisite::TypeNamespace(item.scope.clone())
++                    CurrentAliasPrerequisite::TypeNamespace(scope.clone())
+                 };
+-                return Ok(QueryPoll::Ready(Ok(missing(
+-                    initial,
+-                    &item.scope,
+-                    missing_kind,
+-                ))));
++                return Ok(QueryPoll::Ready(Ok(missing(initial, &scope, missing_kind))));
+             };
+             let mut providers = Vec::new();
+             providers
+@@ -205,9 +224,9 @@
+             let source = match CurrentSourcePrimitiveAlias::capture_original_current(
+                 db,
+                 owner,
+-                &item.scope,
++                &scope,
+                 &key,
+-                &item.def_key.declared_name,
++                &declared_name,
+                 &refs,
+                 MAX.checked_sub(bytes)
+                     .ok_or_else(limit)?
+@@ -216,11 +235,7 @@
+             )? {
+                 SourceAliasOutcome::Ready(source) => source,
+                 SourceAliasOutcome::Need(n) => {
+-                    return Ok(QueryPoll::Ready(Ok(missing(
+-                        initial,
+-                        &item.scope,
+-                        map_need(n),
+-                    ))));
++                    return Ok(QueryPoll::Ready(Ok(missing(initial, &scope, map_need(n)))));
+                 }
+             };
+             if source.selected_definition() != initial {

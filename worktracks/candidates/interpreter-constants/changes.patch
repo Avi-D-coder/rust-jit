@@ -2538,6 +2538,15 @@
 +}
 --- a/crates/lrr/src/engine/runtime_macros.rs
 +++ b/crates/lrr/src/engine/runtime_macros.rs
+@@ -116,7 +116,7 @@
+                 graph.declare_module(
+                     *unit,
+                     &path.iter().map(|name| name.as_str()).collect::<Vec<_>>(),
+-                    self.catalog.edition(),
++                    routes.edition,
+                     VisibilityScope::Public,
+                 )?;
+             }
 @@ -208,7 +208,9 @@
                              "reached println requires pending formatter and managed output integration",
                          ));
@@ -3584,6 +3593,105 @@
 +        assert_eq!(frame.source_view_ref(site.destination).unwrap(), None);
 +    }
 +}
+--- a/crates/lrr/src/engine/standalone_macros.rs
++++ b/crates/lrr/src/engine/standalone_macros.rs
+@@ -134,7 +134,7 @@
+ pub struct CompletedStandaloneRuntimeMacros {
+     sources: Vec<(PreparedSourceView, PublishedMacroIndex)>,
+     namespaces: MacroNamespaces,
+-    catalog: RuntimeMacroCatalog,
++    catalogs: BTreeMap<crate::core::profile::ProfileIdentity, RuntimeMacroCatalog>,
+     exports: Vec<SourceMacroRoutes>,
+ }
+ impl CompletedStandaloneRuntimeMacros {
+@@ -156,21 +156,52 @@
+                 "completed runtime macro root is absent from sealed sources".into(),
+             ));
+         }
+-        // Discovery already captured ordinary extern-crate aliases and their
+-        // exact source worlds. Rebuilding standalone-only routes would erase
+-        // that closure. Only the standard compiler facets are reconstructed.
+-        let profile = &root.selection().outline.parse.profile;
+-        let compiler =
+-            crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(profile)?;
+-        let standard = crate::facade::unit(profile, "std");
++        // Keep discovery's actual namespace closure. Each retained source uses
++        // its owning compiler profile; a root catalogue must not reclassify a
++        // dependency's no-item proof. Foreign standard worlds are select-only
++        // unless the ordinary namespace actually resolves their definitions.
++        let mut profiles = std::collections::BTreeSet::new();
++        profiles.insert(root.selection().outline.parse.profile.clone());
++        for (source, _) in &sources {
++            profiles.insert(source.selection().outline.parse.profile.clone());
++        }
++        if profiles.len() > 4 {
++            return Err(Diagnostic::new(
++                "LRR-E-METADATA-LIMIT",
++                "completed runtime macro profile count limit".into(),
++            ));
++        }
++        let mut catalogs = BTreeMap::new();
++        let mut exports = Vec::new();
++        exports
++            .try_reserve_exact(profiles.len().checked_mul(2).ok_or_else(|| {
++                Diagnostic::new(
++                    "LRR-E-METADATA-LIMIT",
++                    "runtime macro export count overflow".into(),
++                )
++            })?)
++            .map_err(|_| {
++                Diagnostic::new(
++                    "LRR-E-METADATA-LIMIT",
++                    "runtime macro exports allocation".into(),
++                )
++            })?;
++        for profile in &profiles {
++            let compiler =
++                crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(profile)?;
++            let standard = crate::facade::unit(profile, "std");
++            exports.push(compiler.source_routes()?);
++            exports.push(compiler.source_exports(standard)?);
++            catalogs.insert(
++                profile.clone(),
++                RuntimeMacroCatalog::standard_for_profiles(profile, &profiles)?,
++            );
++        }
+         Ok(Self {
+             sources,
+             namespaces: discovery.completed_runtime_macro_namespace()?,
+-            catalog: RuntimeMacroCatalog::standard(profile)?,
+-            exports: vec![
+-                compiler.source_routes()?,
+-                compiler.source_exports(standard)?,
+-            ],
++            catalogs,
++            exports,
+         })
+     }
+     pub fn contexts(
+@@ -184,12 +215,21 @@
+             )
+         })?;
+         for (source, index) in &self.sources {
++            let catalog = self
++                .catalogs
++                .get(&source.selection().outline.parse.profile)
++                .ok_or_else(|| {
++                    Diagnostic::new(
++                        "LRR-E-INTERNAL-SNAPSHOT",
++                        "owning runtime macro catalogue absent".into(),
++                    )
++                })?;
+             result.push(
+                 super::runtime_macros::RuntimeMacroContext::new(
+                     source,
+                     index,
+                     &self.namespaces,
+-                    &self.catalog,
++                    catalog,
+                 )?
+                 .with_compiler_exports(&self.exports),
+             );
 --- a/crates/lrr/src/expand/declaration_fragment.rs
 +++ b/crates/lrr/src/expand/declaration_fragment.rs
 @@ -2169,3 +2169,6 @@
@@ -17814,7 +17922,61 @@
          };
 --- a/crates/lrr/src/frontend/runtime_macro_catalog.rs
 +++ b/crates/lrr/src/frontend/runtime_macro_catalog.rs
-@@ -59,6 +59,8 @@
+@@ -24,6 +24,9 @@
+     standard: Option<Digest>,
+     allocation: Option<Digest>,
+     definitions: BTreeMap<Digest, (MacroDefinition, RuntimeMacroKind)>,
++    // Selection-only standard facets from actual other participating source
++    // profiles. They are never exposed as this catalogue's local exports.
++    foreign_definitions: BTreeMap<Digest, (MacroDefinition, RuntimeMacroKind)>,
+ }
+ impl RuntimeMacroCatalog {
+     /// The pinned standard inventory used both during source preparation and
+@@ -34,6 +37,43 @@
+         Self::new(crate::facade::unit(profile, "core"), profile.edition)?
+             .with_standard_unit(crate::facade::unit(profile, "std"))?
+             .with_alloc_unit(crate::facade::unit(profile, "alloc"))
++    }
++    pub(crate) fn standard_for_profiles(
++        owning: &crate::core::profile::ProfileIdentity,
++        profiles: &BTreeSet<crate::core::profile::ProfileIdentity>,
++    ) -> Result<Self, Diagnostic> {
++        if profiles.len() > 4 {
++            return Err(Diagnostic::new(
++                "LRR-E-METADATA-LIMIT",
++                "runtime macro owning-profile count limit".into(),
++            ));
++        }
++        if !profiles.contains(owning) {
++            return Err(fault("runtime macro owning profile is absent"));
++        }
++        let mut result = Self::standard(owning)?;
++        for profile in profiles {
++            profile.validate_source()?;
++            if profile.semantics != owning.semantics {
++                return Err(fault("runtime macro source semantics differ"));
++            }
++            if profile == owning {
++                continue;
++            }
++            // No API admits a caller-built definition or arbitrary unit here.
++            // Canonical IDs still encode the actual unit and defining edition.
++            for (identity, member) in Self::standard(profile)?.definitions {
++                if result.definitions.contains_key(&identity)
++                    || result
++                        .foreign_definitions
++                        .insert(identity, member)
++                        .is_some()
++                {
++                    return Err(fault("runtime macro standard-world identity collision"));
++                }
++            }
++        }
++        Ok(result)
+     }
+     /// Reconstruct only the pinned standard facet in a resolved definition's
+     /// world. Invocation syntax keeps its own profile; select still checks the
+@@ -59,6 +99,8 @@
              RuntimeMacroKind::Assert,
              RuntimeMacroKind::AssertEq,
              RuntimeMacroKind::AssertNe,
@@ -17823,6 +17985,123 @@
          ] {
              let mut e = StableEncoder::new("lrr/v2/runtime-macro-definition");
              e.digest(unit);
+@@ -83,6 +125,7 @@
+             standard: None,
+             allocation: None,
+             definitions,
++            foreign_definitions: BTreeMap::new(),
+         })
+     }
+     /// Std-owned definitions remain distinct from the core runtime facet. This
+@@ -176,9 +219,6 @@
+         }
+         Ok(routes)
+     }
+-    pub(crate) fn edition(&self) -> u16 {
+-        self.edition
+-    }
+     pub fn definitions(&self) -> impl Iterator<Item = &MacroDefinition> {
+         self.definitions.values().map(|(definition, _)| definition)
+     }
+@@ -189,7 +229,11 @@
+         definition: &MacroDefinition,
+     ) -> Result<Option<RuntimeMacroKind>, Diagnostic> {
+         definition.validate()?;
+-        let Some((expected, kind)) = self.definitions.get(&definition.identity) else {
++        let Some((expected, kind)) = self
++            .definitions
++            .get(&definition.identity)
++            .or_else(|| self.foreign_definitions.get(&definition.identity))
++        else {
+             return Ok(None);
+         };
+         if definition != expected {
+@@ -232,3 +276,85 @@
+         Ok(routes)
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::core::profile::ProfileIdentity;
++    fn profile(edition: u16) -> ProfileIdentity {
++        ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        }
++    }
++    #[test]
++    fn owning_runtime_worlds_select_exact_foreign_facets_without_exporting_them_locally() {
++        let profiles = [2015, 2018, 2021, 2024]
++            .into_iter()
++            .map(profile)
++            .collect::<BTreeSet<_>>();
++        for owning in &profiles {
++            let catalog = RuntimeMacroCatalog::standard_for_profiles(owning, &profiles).unwrap();
++            let own = RuntimeMacroCatalog::standard(owning).unwrap();
++            assert_eq!(
++                catalog.definitions().collect::<Vec<_>>(),
++                own.definitions().collect::<Vec<_>>()
++            );
++            assert_eq!(
++                catalog.source_routes().unwrap().definitions().len(),
++                own.source_routes().unwrap().definitions().len()
++            );
++            let standard = crate::facade::unit(owning, "std");
++            let exports = catalog.source_exports(standard).unwrap();
++            assert_eq!(
++                exports.definitions().len(),
++                own.source_exports(standard).unwrap().definitions().len()
++            );
++            for foreign in &profiles {
++                let exact = RuntimeMacroCatalog::standard(foreign).unwrap();
++                for definition in exact.definitions() {
++                    assert_eq!(
++                        catalog.select(definition).unwrap(),
++                        exact.select(definition).unwrap()
++                    );
++                    let mut forged = definition.clone();
++                    forged.defining_unit = Digest([226; 32]);
++                    assert_eq!(
++                        catalog.select(&forged).unwrap_err().code,
++                        "LRR-E-RUNTIME-MACRO"
++                    );
++                }
++            }
++            let user = MacroDefinition {
++                identity: Digest([227; 32]),
++                defining_unit: catalog.unit,
++                definition_edition: owning.edition,
++            };
++            assert!(catalog.select(&user).unwrap().is_none());
++        }
++    }
++    #[test]
++    fn unrepresented_runtime_worlds_and_missing_owners_never_gain_intrinsic_identity() {
++        let own = profile(2024);
++        let profiles = BTreeSet::from([own.clone()]);
++        let catalog = RuntimeMacroCatalog::standard_for_profiles(&own, &profiles).unwrap();
++        for definition in RuntimeMacroCatalog::standard(&profile(2015))
++            .unwrap()
++            .definitions()
++        {
++            assert!(catalog.select(definition).unwrap().is_none());
++        }
++        assert!(RuntimeMacroCatalog::standard_for_profiles(&profile(2015), &profiles).is_err());
++        let mut too_many = profiles.clone();
++        for edition in [2015, 2018, 2021, 2099] {
++            too_many.insert(profile(edition));
++        }
++        assert_eq!(
++            RuntimeMacroCatalog::standard_for_profiles(&own, &too_many)
++                .err()
++                .unwrap()
++                .code,
++            "LRR-E-METADATA-LIMIT"
++        );
++    }
++}
 --- a/crates/lrr/src/frontend/runtime_macro_plan.rs
 +++ b/crates/lrr/src/frontend/runtime_macro_plan.rs
 @@ -105,32 +105,56 @@
@@ -29492,6 +29771,42 @@
      for other in [
          RuntimeMacroCatalog::new(Digest([185; 32]), 2024).unwrap(),
          RuntimeMacroCatalog::new(unit, 2021).unwrap(),
+--- a/xtask/tests/stock_generic_call_edgecases.rs
++++ b/xtask/tests/stock_generic_call_edgecases.rs
+@@ -22,10 +22,11 @@
+ 
+ #[test]
+ fn original_repeated_explicit_generic_program_runs_in_its_recorded_dependency_edition() {
+-    for edition in [2015, 2018, 2021, 2024] {
+-        run_original(edition, true, 2024);
+-    }
+-    run_original(2024, true, 2015);
++    for root_edition in [2015, 2018, 2021, 2024] {
++        for edition in [2015, 2018, 2021, 2024] {
++            run_original(edition, true, root_edition);
++        }
++    }
+ }
+ 
+ #[test]
+--- a/xtask/tests/stock_generic_runtime.rs
++++ b/xtask/tests/stock_generic_runtime.rs
+@@ -22,10 +22,11 @@
+ 
+ #[test]
+ fn original_generic_inference_program_runs_in_its_recorded_dependency_edition() {
+-    for edition in [2015, 2018, 2021, 2024] {
+-        run_original(edition, true, 2024);
+-    }
+-    run_original(2024, true, 2015);
++    for root_edition in [2015, 2018, 2021, 2024] {
++        for edition in [2015, 2018, 2021, 2024] {
++            run_original(edition, true, root_edition);
++        }
++    }
+ }
+ 
+ #[test]
 --- a/xtask/tests/stock_keyword_body_readiness.rs
 +++ b/xtask/tests/stock_keyword_body_readiness.rs
 @@ -96,9 +96,15 @@

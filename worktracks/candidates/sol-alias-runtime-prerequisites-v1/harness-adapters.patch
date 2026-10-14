@@ -1,0 +1,219 @@
+--- a/xtask/tests/generated_alias_runtime.rs
++++ b/xtask/tests/generated_alias_runtime.rs
+@@ -51,16 +51,28 @@
+     (view, inputs)
+ }
+ 
+-fn discover(v: &PreparedSourceView) -> SourceDiscovery {
++fn discover(
++    v: &PreparedSourceView,
++    namespace: lrr::source::manifest::Namespace,
++) -> SourceDiscovery {
+     SourceDiscovery::new(
+         vec![v.share()],
+         v.outline().root_scope.clone(),
+-        lrr::source::manifest::Namespace::Value,
++        namespace,
+         Digest([245; 32]),
+         1,
+     )
+     .unwrap()
+-    .with_declarative(Digest([243; 32]), Digest([244; 32]))
++    .with_declarative_compiler(
++        Digest([243; 32]),
++        lrr::expand::source_declarative::engine_version(),
++        std::sync::Arc::new(
++            lrr::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                &v.selection().outline.parse.profile,
++            )
++            .unwrap(),
++        ),
++    )
+     .unwrap()
+ }
+ 
+@@ -89,9 +101,49 @@
+         }
+     }
+ }
++// Type discovery consumes the same actual already-expanded records. It does not
++// execute a producer while normalizing a reached alias or entering guest code.
++fn publish_type(v: &PreparedSourceView, value: &SourceDiscovery, db: &mut lrr::db::memo::Database) {
++    db.begin_expansion_epoch(1).unwrap();
++    let records = value
++        .sealed_expansions()
++        .unwrap()
++        .cloned()
++        .collect::<Vec<_>>();
++    let mut types = discover(v, lrr::source::manifest::Namespace::Type);
++    loop {
++        match types.poll().unwrap() {
++            SourceDiscoveryStep::Sealed(_) => break,
++            SourceDiscoveryStep::NeedExpansion { request } => {
++                let record = records
++                    .iter()
++                    .find(|r| r.key() == request.key())
++                    .expect("actual matching source expansion");
++                types
++                    .admit_expansion(std::sync::Arc::clone(record))
++                    .unwrap();
++            }
++            SourceDiscoveryStep::NeedGeneratedExpansion { request } => {
++                let record = records
++                    .iter()
++                    .find(|r| r.key() == request.key())
++                    .expect("actual matching generated expansion");
++                types
++                    .admit_expansion(std::sync::Arc::clone(record))
++                    .unwrap();
++            }
++            SourceDiscoveryStep::Incomplete { diagnostic, .. } => panic!(
++                "Type preparation prerequisite: {} {}",
++                diagnostic.code, diagnostic.message
++            ),
++            _ => panic!("Type preparation needs an unadmitted producer"),
++        }
++    }
++    types.publish(db).unwrap();
++}
+ fn run_original(text: &str) -> (lrr::engine::run::RunReport, lrr::db::memo::Database) {
+     let (v, inputs) = source(text);
+-    let mut work = discover(&v);
++    let mut work = discover(&v, lrr::source::manifest::Namespace::Value);
+     finish(&mut work);
+     let body = v
+         .outline()
+@@ -106,6 +158,7 @@
+     let mut db = lrr::db::memo::Database::default();
+     db.trace.detailed = true;
+     inputs.publish(&mut db).unwrap();
++    publish_type(&v, &work, &mut db);
+     let lrr::db::poll::QueryPoll::Ready(Ok(mut run)) =
+         lrr::engine::run::RunMachine::start_with_discovery(&mut db, body, 10_000, work)
+     else {
+@@ -160,7 +213,7 @@
+     let (v, inputs) = source(
+         "macro_rules! make{()=>{pub type A=B;pub type B=A;pub fn made(x:A)->i64{1_i64}}}make!();fn side()->i64{7_i64}fn main()->i64{made(side())}",
+     );
+-    let mut work = discover(&v);
++    let mut work = discover(&v, lrr::source::manifest::Namespace::Value);
+     finish(&mut work);
+     let key = |name: &str| {
+         v.outline()
+@@ -176,6 +229,7 @@
+     let mut db = lrr::db::memo::Database::default();
+     db.trace.detailed = true;
+     inputs.publish(&mut db).unwrap();
++    publish_type(&v, &work, &mut db);
+     let lrr::db::poll::QueryPoll::Ready(Ok(mut run)) =
+         lrr::engine::run::RunMachine::start_with_discovery(&mut db, key("main"), 10_000, work)
+     else {
+--- a/xtask/tests/source_run.rs
++++ b/xtask/tests/source_run.rs
+@@ -16,6 +16,17 @@
+     syntax::parse::ParseKey,
+ };
+ fn start(source: &str, name: &str, steps: u64) -> (Database, RunMachine, Digest) {
++    start_prepared(source, name, steps, false)
++}
++fn start_with_type(source: &str, name: &str, steps: u64) -> (Database, RunMachine, Digest) {
++    start_prepared(source, name, steps, true)
++}
++fn start_prepared(
++    source: &str,
++    name: &str,
++    steps: u64,
++    prepare_type: bool,
++) -> (Database, RunMachine, Digest) {
+     let profile = ProfileIdentity::current();
+     let cfg = CfgSet::guest_default();
+     let blob = SourceBlob::new(source.as_bytes().to_vec()).unwrap();
+@@ -68,6 +79,39 @@
+     let mut db = Database::default();
+     db.trace.detailed = true;
+     prepared.publish(&mut db).unwrap();
++    if prepare_type {
++        use lrr::expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep};
++        db.begin_expansion_epoch(1).unwrap();
++        let compiler = lrr::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++            &view.selection().outline.parse.profile,
++        )
++        .unwrap();
++        let mut types = SourceDiscovery::new(
++            vec![view.share()],
++            view.outline().root_scope.clone(),
++            lrr::source::manifest::Namespace::Type,
++            Digest::of_bytes(b"source-run alias Type world"),
++            1,
++        )
++        .unwrap()
++        .with_declarative_compiler(
++            Digest::of_bytes(b"source-run alias compile environment"),
++            lrr::expand::source_declarative::engine_version(),
++            std::sync::Arc::new(compiler),
++        )
++        .unwrap();
++        loop {
++            match types.poll().unwrap() {
++                SourceDiscoveryStep::Sealed(_) => break,
++                SourceDiscoveryStep::Incomplete { diagnostic, .. } => panic!(
++                    "alias-only Type preparation prerequisite: {} {}",
++                    diagnostic.code, diagnostic.message
++                ),
++                _ => panic!("alias-only Type preparation needs an unadmitted producer"),
++            }
++        }
++        types.publish(&mut db).unwrap();
++    }
+     db.begin_run().unwrap();
+     let run = match RunMachine::start_with_sources(&mut db, body, steps, vec![view]) {
+         QueryPoll::Ready(Ok(run)) => run,
+@@ -1135,7 +1179,8 @@
+             "42",
+         ),
+     ] {
+-        let (mut db, mut run, _) = start(source, "main", 1000);
++        let (mut db, mut run, _) =
++            start_prepared(source, "main", 1000, source.starts_with("type Word="));
+         assert!(
+             matches!(completed(run.poll(&mut db)).value, ValueSummary::Signed(n) if n==expected)
+         );
+@@ -1296,13 +1341,13 @@
+ }
+ #[test]
+ fn explicit_type_aliases_resolve_in_the_caller_scope_before_primitive_fallback() {
+-    let (mut db, mut run, _) = start(
++    let (mut db, mut run, _) = start_with_type(
+         "type Chosen=i64;mod inner{type Chosen=u64;pub fn identity<T:Missing>(x:T)->T{x}}use inner::identity;fn main()->i64{identity::<Chosen>(42)}fn cold(){}",
+         "main",
+         1000,
+     );
+     assert!(matches!(completed(run.poll(&mut db)).value,ValueSummary::Signed(n) if n=="42"));
+-    let (mut db, mut run, _) = start(
++    let (mut db, mut run, _) = start_with_type(
+         "type i64=bool;fn main()->bool{identity::<i64>(true)}fn identity<T:Missing>(x:T)->T{x}fn cold(){}",
+         "main",
+         1000,
+@@ -1770,3 +1815,22 @@
+         report.opcode_counters.started_by_opcode
+     );
+ }
++
++#[test]
++fn current_type_preparation_preserves_primitive_shadowed_alias_return_source() {
++    let (mut db, mut run, _) = start_with_type(
++        "type i64=bool;fn main(){chosen();}fn chosen()->i64{let x=true;x}fn cold(){}",
++        "main",
++        1000,
++    );
++    assert!(matches!(
++        completed(run.poll(&mut db)).value,
++        ValueSummary::Unit
++    ));
++    assert!(
++        db.trace
++            .events
++            .iter()
++            .any(|e| matches!(e.key, QueryKey::TypeAlias(_)))
++    );
++}

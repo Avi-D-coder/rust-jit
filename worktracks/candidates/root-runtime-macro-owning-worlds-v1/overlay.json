@@ -1,0 +1,80 @@
+{
+  "status": "private scoped passed; complete milestone pending",
+  "source_member": "c011cdae8b862ae4f7eee9bc4e40fe1edc09b6798dd703e0e277b64e3833d14a",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_catalog.rs",
+      "before_sha256": "719c5fc8a057df7fe77597a0016f89b7dae0e137d2249c616c633dbe23f5b377",
+      "after_sha256": "f3e71b73c39bbcda785208016904c50a6cceccb88780270a70a2a3d6fb6de588"
+    },
+    {
+      "path": "crates/lrr/src/engine/standalone_macros.rs",
+      "before_sha256": "cfd046656c5c4d1c7dc4de5644b07025243c3b82137817c32fdec8a41c95e188",
+      "after_sha256": "d5d212a9a989ce472767038c4aa9a4f41454e1be0c7a07a4933b7e1ac79a8824"
+    },
+    {
+      "path": "xtask/tests/stock_generic_runtime.rs",
+      "before_sha256": "8c7e22ac05cdc65078c23c25b835d5413807886537f9f17f8ac0daf737860f76",
+      "after_sha256": "7acf7ef44791d43ec7ec3a971ceabf97e19401831f63342144d10037d3c7c8c6"
+    },
+    {
+      "path": "xtask/tests/stock_generic_call_edgecases.rs",
+      "before_sha256": "9bce7cebc06d41ab2ec703a4d34ef87c7488334337b1caa72bba45e3acf1c0b4",
+      "after_sha256": "d783888f27999cae30d10bbf1bc6b1495d43f155af6f03a2befeb374c19f281a"
+    },
+    {
+      "path": "crates/lrr/src/engine/runtime_macros.rs",
+      "before_sha256": "6742675bda12f05b1eacc07aae4a8206c38312734d12c49f480cbda3d5963d82",
+      "after_sha256": "0406de99695c656d72e8f6666697fc9bffb26cad20a536ec7d10763376d38bb7"
+    }
+  ],
+  "patch_sha256": "26e7d63e4b2caa86bdb59dbb1fede42a7a9d877d62acaa5af4a5a03f055dc023",
+  "stock_programs_unchanged": true,
+  "edition_root_dependency_pairs": 16,
+  "new_catalog_authority_controls": 2,
+  "guard_checks_unchanged": [
+    "source",
+    "body",
+    "no-item-invocation",
+    "full definition identity/unit/edition"
+  ],
+  "MAIN_integrated": false,
+  "full_stock_passes_added": 0,
+  "source_baseline": "5c330972fa27d030e2ff852336a32796584283481dcd4e428bbf5aaebb31a15e",
+  "evidence": {
+    "v66_full_milestone": {
+      "passed": 2774,
+      "failed": 1,
+      "unexecuted": 175,
+      "listed": 2950,
+      "terminal": "99020/e63b9f/1"
+    },
+    "v67_stock_scope": {
+      "passed": 8,
+      "failed": 0,
+      "filtered": 0,
+      "terminal": "27783/49fc4e/0"
+    },
+    "v67_library_compile_failure": {
+      "unit_bodies_executed": 0,
+      "compile_errors": 4,
+      "terminal": "5046/1185a1/1",
+      "reason": "SourceMacroRoutes definitions slice uses len, not iterator count"
+    },
+    "v68_library": {
+      "passed": 843,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "terminal": "52568/2ca6fd/0"
+    },
+    "v68_strict_library": "32872/b6b274/0",
+    "v68_strict_stock": "29551/f0ef68/0",
+    "v68_architecture": "89044/0b2a40/0",
+    "v68_format": "95427/aeb62d/0",
+    "v68_full_milestone": {
+      "status": "running",
+      "actual_session": 19223
+    }
+  }
+}

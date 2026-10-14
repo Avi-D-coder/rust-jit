@@ -1,0 +1,53 @@
+{
+  "base": "frozen coherent39 alias6512908d plus exact read-only canonical v66 test adapters",
+  "paths": [
+    {
+      "path": "crates/lrr/src/db/source_alias_inputs.rs",
+      "before_sha256": "d97a2af7c4d2497aa66f7e9b11adae8feb4187f6398e2fffd761a37e40ae40c2",
+      "after_sha256": "2b6673bbc2ffcdf3db466c1f4bb9d3c0ddab636703b67ec5ffe7e74d97c6b576",
+      "bytes": 15658
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_type_alias_normalization/generated.rs",
+      "before_sha256": null,
+      "after_sha256": "bcbb9a88f1eddc8367c113bde42f81c6834ede8575fcf7c114bc7e31587582d8",
+      "bytes": 13376
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_type_alias_normalization.rs",
+      "before_sha256": "efc767e43401ef92e720c65595fcc86adffc6d4641aed42a8d33e03a01e12d1b",
+      "after_sha256": "7ff903a17bc4a3d575b638b57176d030a61ff2695ba00a0418c1415e9fb41635",
+      "bytes": 35113
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_type_alias_normalization_tests.rs",
+      "before_sha256": "aa234146a36daf6a9cfe94257e17ce98c7931e2f98cfccf82fb7a3968fffc18d",
+      "after_sha256": "2d7f5c381dbcd5dd67a3f27b9d8f93c3a6962f1bf53f9236bb709be03862002b",
+      "bytes": 34836
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_type_alias_query.rs",
+      "before_sha256": "b2b06cf84db94a5c7caef0941c258f2693933ea869fbc59571f93b39f7339f91",
+      "after_sha256": "67d360afee96cbbda797408cd6972d1764a2f847630c0bfeb8e15080121b4b25",
+      "bytes": 4420
+    },
+    {
+      "path": "crates/lrr/src/frontend/type_aliases/current_source.rs",
+      "before_sha256": "bfe9fb4f118a18eb4fac0a69f38ddd2bebeddc9e4204313604783fe273730a20",
+      "after_sha256": "fb0090d2dfd4b60071283f74bbcd1fd7e06a97634e5461c9c2cb95da7ba87d45",
+      "bytes": 11346
+    },
+    {
+      "path": "xtask/tests/generated_alias_runtime.rs",
+      "before_sha256": "a0f00bbe45b83aa6fcc552d81854b19220d25e9901ed7ebc815fad94a61e1f10",
+      "after_sha256": "a5b257d25ae83bc52b575b89f838848fcfa6988ef0c4bb5599e775be4d9af6fc",
+      "bytes": 9085
+    },
+    {
+      "path": "xtask/tests/source_run.rs",
+      "before_sha256": "619e4e43a1276fc94318b4ec81514e0b4f7b661c558931f5a8e5d5fa144c46a9",
+      "after_sha256": "8184580eec82dd65d6deaa1c1d1be39dd61ad4f8b28ad13732fd87f5cae3f1d0",
+      "bytes": 72765
+    }
+  ]
+}

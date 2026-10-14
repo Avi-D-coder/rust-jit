@@ -1,0 +1,26 @@
+{
+  "status": "source-only; compilation and execution unperformed",
+  "source_digest": "d0595014754d121c1f63b71997774d50283233e8011201436b8da7cf4d30a21a",
+  "terminals": [
+    {
+      "chunk": "bedb83",
+      "exit": 0,
+      "scope": "unchanged official importer18cases45files"
+    },
+    {
+      "chunk": "55dada",
+      "exit": 0,
+      "scope": "seven exact before bytes; new suppression/API audit"
+    },
+    {
+      "chunk": "32735c",
+      "exit": 0,
+      "scope": "eight path apply/check/exact reconstruction and pinned fmt"
+    }
+  ],
+  "new_controls_uncompiled": 11,
+  "no_cargo": true,
+  "no_canonical_writes": true,
+  "touched_paths": 8,
+  "production_paths": 5
+}

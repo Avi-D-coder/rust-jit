@@ -1,0 +1,674 @@
+--- a/crates/lrr/src/db/source_alias_inputs.rs
++++ b/crates/lrr/src/db/source_alias_inputs.rs
+@@ -13,19 +13,23 @@
+         byte_limit: usize,
+     ) -> Result<Option<Arc<InputValue>>, Diagnostic> {
+         self.require_coordinator()?;
+-        if byte_limit > 32 * 1024 * 1024
+-            || self.inputs.len() > 100_000
+-            || scope
+-                .heap_bytes()
+-                .checked_add(source.metadata_bytes()?)
+-                .and_then(|n| n.checked_add(std::mem::size_of::<Option<Arc<InputValue>>>()))
+-                .is_none_or(|n| n > byte_limit)
+-        {
++        let mut bytes = scope
++            .heap_bytes()
++            .checked_add(source.metadata_bytes()?)
++            .and_then(|n| n.checked_add(std::mem::size_of::<Option<Arc<InputValue>>>()))
++            .filter(|n| byte_limit <= 32 * 1024 * 1024 && *n <= byte_limit)
++            .ok_or_else(|| {
++                fault(
++                    "LRR-E-METADATA-LIMIT",
++                    "alias Type universe selection budget",
++                )
++            })?;
++        if self.inputs.len() > 100_000 {
+             return Err(fault(
+                 "LRR-E-METADATA-LIMIT",
+-                "alias Type universe selection budget",
++                "alias Type universe selection count",
+             ));
+-        };
++        }
+         if scope.owner.is_some()
+             || source.outline.crate_key != scope.crate_key
+             || !scope.module_path.starts_with(&source.outline.module_path)
+@@ -54,7 +58,6 @@
+             return Ok(None);
+         };
+         let mut selected: Option<Arc<InputValue>> = None;
+-        let mut bytes = std::mem::size_of::<Option<Arc<InputValue>>>();
+         for (key, row) in &self.inputs {
+             let InputKey::DiscoverySeal(key) = key else {
+                 continue;
+@@ -98,12 +101,36 @@
+             };
+             input.validate_compiler_primitive_receipts()?;
+             input.validate_type_prelude_receipts()?;
+-            if input.compiler_inputs.len() > 100_000 || input.records.len() > 100_000 {
++            if input.sources.is_empty()
++                || input.sources.len() > 100_000
++                || input.compiler_inputs.len() > 100_000
++                || input.records.len() > 100_000
++            {
+                 return Err(fault(
+                     "LRR-E-METADATA-LIMIT",
+                     "alias Type dependencies budget",
+                 ));
+             };
++            // All retained sources belong to this Type universe, including foreign
++            // sources which are not on the reached alias chain. Replay each actual row.
++            for retained in &input.sources {
++                bytes = bytes
++                    .checked_add(retained.metadata_bytes()?)
++                    .and_then(|n| n.checked_add(3 * std::mem::size_of::<InputKey>()))
++                    .filter(|n| *n <= byte_limit)
++                    .ok_or_else(|| {
++                        fault("LRR-E-METADATA-LIMIT", "alias Type retained-source budget")
++                    })?;
++                if !matches!(self.inputs.get(&InputKey::CapturedSource(retained.location_identity())).map(|r|r.value.as_ref()), Some(InputValue::CapturedSource(actual)) if actual == retained)
++                    || !matches!(self.inputs.get(&InputKey::SourceBlob(retained.outline.parse.content)).map(|r|r.value.as_ref()), Some(InputValue::SourceBlob(actual)) if actual.content() == retained.outline.parse.content)
++                    || !matches!(self.inputs.get(&InputKey::CrateCfg(retained.outline.crate_key)).map(|r|r.value.as_ref()), Some(InputValue::CrateCfg(actual)) if actual.fingerprint() == retained.outline.cfg)
++                {
++                    return Err(fault(
++                        "LRR-E-SOURCE-ALIAS",
++                        "alias Type retained source/content/cfg changed",
++                    ));
++                }
++            }
+             for (dependency, fingerprint) in &input.compiler_inputs {
+                 bytes = bytes
+                     .checked_add(std::mem::size_of::<(InputKey, Digest)>())
+--- /dev/null
++++ b/crates/lrr/src/frontend/source_type_alias_normalization/generated.rs
+@@ -0,0 +1,390 @@
++//! Original-module generated alias replay. Names alone never establish item hygiene.
++use super::*;
++use crate::{expand::generated_syntax::GeneratedSyntaxInput, syntax::token_wire::NameContextKey};
++fn owner<'a>(
++    unit: &GeneratedSyntaxInput,
++    owners: &[&'a SourceDeclarative],
++) -> Result<Option<&'a SourceDeclarative>, Diagnostic> {
++    let mut found: Option<&SourceDeclarative> = None;
++    for candidate in owners {
++        let source = candidate.module_source();
++        let matches = source
++            .outline()
++            .item_invocations
++            .iter()
++            .filter(|c| {
++                c.item_input == unit.items.record().key().invocation
++                    && c.attribute_input.is_none()
++                    && c.scope == unit.scope
++            })
++            .count();
++        if matches == 0 {
++            continue;
++        };
++        if matches != 1
++            || unit.scope.owner.is_some()
++            || unit.scope.crate_key != source.selection().outline.crate_key
++        {
++            return Err(fault("generated alias original caller is ambiguous"));
++        };
++        if let Some(old) = found {
++            if !old.module_source().same_publication(source) {
++                return Err(fault("generated alias actual original owners differ"));
++            }
++        } else {
++            found = Some(*candidate)
++        };
++    }
++    Ok(found)
++}
++/// Exact original invocation-owner data, not a type/visibility/completeness certificate.
++pub(super) fn original_owner_data(
++    db: &Database,
++    identity: Digest,
++    sources: &[&crate::source::changes::PreparedSourceView],
++    max: usize,
++) -> Result<Option<(usize, ScopeKey, String)>, Diagnostic> {
++    db.require_coordinator()?;
++    if sources.len() > 100_000 || max > MAX_BYTES {
++        return Err(limit());
++    };
++    let Some((InputValue::DefinitionSource(parse), _)) =
++        db.published_input(&InputKey::DefinitionSource(identity))
++    else {
++        return Ok(None);
++    };
++    let Some((InputValue::GeneratedSyntax(unit), _)) =
++        db.published_input(&InputKey::GeneratedSyntax(parse.content))
++    else {
++        return Ok(None);
++    };
++    if unit.key != *parse {
++        return Err(fault("generated alias selected parse differs"));
++    };
++    let Some(definition) = unit.definitions.get(&identity) else {
++        return Ok(None);
++    };
++    if definition.item_kind != ItemKind::TypeAlias {
++        return Ok(None);
++    };
++    let bytes = unit
++        .scope
++        .heap_bytes()
++        .checked_add(definition.declared_name.capacity())
++        .and_then(|n| n.checked_add(128))
++        .filter(|n| *n <= max)
++        .ok_or_else(limit)?;
++    let _ = bytes;
++    let mut found = None;
++    for (i, s) in sources.iter().enumerate() {
++        if s.outline().item_invocations.iter().any(|c| {
++            c.item_input == unit.items.record().key().invocation
++                && c.attribute_input.is_none()
++                && c.scope == unit.scope
++        }) {
++            if found.is_some() {
++                return Err(fault("generated alias original source catalogue ambiguous"));
++            };
++            found = Some(i);
++        }
++    }
++    Ok(found.map(|i| (i, unit.scope.clone(), definition.declared_name.clone())))
++}
++fn same_class(
++    db: &Database,
++    next: &NameDefinition,
++    comparison: NameContextKey,
++    owners: &[&SourceDeclarative],
++) -> Result<bool, Diagnostic> {
++    if let Some(source) = provider_for(db, next.identity, owners)? {
++        let (k, f) = source.macro_index().original_root_hygiene()?;
++        return Ok(f.name_item(k)? == comparison);
++    };
++    let Some((InputValue::DefinitionSource(parse), _)) =
++        db.published_input(&InputKey::DefinitionSource(next.identity))
++    else {
++        return Ok(false);
++    };
++    let Some((InputValue::GeneratedSyntax(unit), _)) =
++        db.published_input(&InputKey::GeneratedSyntax(parse.content))
++    else {
++        return Ok(false);
++    };
++    if unit.key != *parse {
++        return Err(fault("generated alias next parse differs"));
++    };
++    let Some(header) = unit
++        .items
++        .items()
++        .iter()
++        .find(|h| h.key.fingerprint() == next.identity)
++    else {
++        return Ok(false);
++    };
++    let Some(name) = &header.name else {
++        return Ok(false);
++    };
++    let Some(span) = unit
++        .items
++        .tokens()
++        .spans()
++        .iter()
++        .find(|s| s.key() == name.span)
++    else {
++        return Err(fault("generated alias next marked name missing"));
++    };
++    Ok(unit.items.item_class(span.context)? == comparison)
++}
++pub(super) fn walk_generated(
++    db: &Database,
++    selected: NameDefinition,
++    seed: Digest,
++    world: &SealKey,
++    owners: &[&SourceDeclarative],
++    mut capture: Capture,
++) -> Result<SourceAliasOutcome, Diagnostic> {
++    let Some((InputValue::DefinitionSource(parse), _)) =
++        db.published_input(&InputKey::DefinitionSource(selected.identity))
++    else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::RetainedDeclaration(selected.identity),
++        ));
++    };
++    let Some((InputValue::GeneratedSyntax(unit), _)) =
++        db.published_input(&InputKey::GeneratedSyntax(parse.content))
++    else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::RetainedDeclaration(selected.identity),
++        ));
++    };
++    if unit.key != *parse
++        || unit.scope.crate_key != selected.defining_unit
++        || unit.key.profile.edition != selected.definition_edition
++        || unit.seal.epoch != world.epoch
++        || unit.seal.unit_graph != world.unit_graph
++        || unit.items.epoch() != world.epoch
++    {
++        return Err(fault(
++            "generated alias owning parse/edition/epoch/world differs",
++        ));
++    };
++    let Some(owner) = owner(unit, owners)? else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::GeneratedOwner(selected.identity),
++        ));
++    };
++    let key = seal_for(&unit.scope, world);
++    let Some(input) = capture.scope(db, owner, &unit.scope, &key)? else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::TypeNamespace(unit.scope.clone()),
++        ));
++    };
++    let descriptor = unit.items.record().descriptor();
++    if input
++        .records
++        .iter()
++        .filter(|r| r.fingerprint() == descriptor.fingerprint())
++        .count()
++        != 1
++        || input
++            .seal
++            .input_dependencies()
++            .binary_search(&(
++                unit.items.record().key().fingerprint(),
++                descriptor.fingerprint(),
++            ))
++            .is_err()
++    {
++        return Err(fault(
++            "generated alias record absent from actual current Type universe",
++        ));
++    };
++    let record_key = InputKey::ExpansionRecord(unit.items.record().key().fingerprint());
++    if !matches!(db.published_input(&record_key),Some((InputValue::ExpansionRecord(actual),_))if actual.same_record(unit.items.record()))
++    {
++        return Err(fault("generated alias actual retained record differs"));
++    };
++    let definition = unit
++        .definitions
++        .get(&selected.identity)
++        .ok_or_else(|| fault("generated alias canonical definition absent"))?;
++    if definition.item_kind != ItemKind::TypeAlias {
++        return Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Name(
++            NameLookup::Defined(selected),
++        )));
++    };
++    let header = unit
++        .items
++        .items()
++        .iter()
++        .find(|h| h.key.fingerprint() == selected.identity)
++        .ok_or_else(|| fault("generated alias exact structural member absent"))?;
++    let name = header
++        .name
++        .as_ref()
++        .ok_or_else(|| fault("generated alias actual name token absent"))?;
++    let span = unit
++        .items
++        .tokens()
++        .spans()
++        .iter()
++        .find(|s| s.key() == name.span)
++        .ok_or_else(|| fault("generated alias actual name span absent"))?;
++    let (root, facts) = owner.macro_index().original_root_hygiene()?;
++    // This producer supports original-root visible item declarations. Opaque use sites need their actual written-site producer.
++    if unit.items.item_class(span.context)? != facts.name_item(root)? {
++        return Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Origin(
++            GeneratedTypePrerequisite::DefinitionSiteSource,
++        )));
++    };
++    let actual = input
++        .scope
++        .as_ref()
++        .ok_or_else(|| fault("generated alias Type scope missing"))?
++        .lookup(&BucketKey {
++            scope: unit.scope.clone(),
++            namespace: Namespace::Type,
++            name: definition.declared_name.clone(),
++        })?;
++    if actual != NameLookup::Defined(selected.clone()) {
++        return Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Name(
++            actual,
++        )));
++    };
++    let Some((InputValue::DefinitionHeader(h), _)) =
++        db.published_input(&InputKey::DefinitionHeader(selected.identity))
++    else {
++        return Err(fault("generated alias header absent"));
++    };
++    let Some((InputValue::DeclarationContext(context), _)) =
++        db.published_input(&InputKey::DeclarationContext(selected.identity))
++    else {
++        return Err(fault("generated alias context absent"));
++    };
++    let site = WrittenGeneratedType::capture(
++        &unit.items,
++        &unit.scope,
++        &unit.cfg,
++        &header.key,
++        GeneratedTypeRole::AliasTarget,
++        capture.residual()?,
++    )?;
++    if definition.fingerprint() != site.declaration_fingerprint()
++        || h.fingerprint() != site.header_fingerprint()
++        || context.scope != *site.scope()
++        || context.range != site.declaration()
++    {
++        return Err(fault(
++            "generated alias selected header/context/site differs",
++        ));
++    };
++    charge(
++        &mut capture.bytes,
++        site.metadata_bytes().checked_mul(2).ok_or_else(limit)?,
++        capture.max,
++    )?;
++    charge(
++        &mut capture.bytes,
++        unit.items
++            .text()
++            .len()
++            .checked_mul(128)
++            .and_then(|n| n.checked_add(unit.items.syntax_events().len().checked_mul(128)?))
++            .ok_or_else(limit)?,
++        capture.max,
++    )?;
++    let parsed = ParsedFile::from_generated_items(&unit.items)?;
++    let recipe = parsed.type_alias_recipe(selected.identity, h, context)?;
++    capture.push(
++        selected.identity,
++        definition,
++        parse,
++        context,
++        &recipe,
++        Some(site.identity()),
++    )?;
++    for k in [
++        record_key,
++        InputKey::GeneratedSyntax(parse.content),
++        InputKey::DefinitionSource(selected.identity),
++        InputKey::DefinitionHeader(selected.identity),
++        InputKey::DeclarationContext(selected.identity),
++        InputKey::DiscoverySeal(unit.seal.clone()),
++    ] {
++        capture.stamp(db, k)?;
++    }
++    if !recipe.generics.is_empty() || requires_substitution(&parsed, context)? {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::GenericSubstitution(selected.identity),
++        ));
++    };
++    let GeneratedTypeSyntax::Path(parts) = site.shape() else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::WrittenTarget(selected.identity),
++        ));
++    };
++    let [part] = parts.as_slice() else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::WrittenTarget(selected.identity),
++        ));
++    };
++    let GeneratedTypeSegmentKind::Name(target) = part.kind() else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::WrittenTarget(selected.identity),
++        ));
++    };
++    let origin = match primitive_origin(
++        db,
++        owner,
++        owners,
++        unit,
++        &site,
++        part,
++        &mut capture.stamps,
++        &mut capture.bytes,
++        capture.max,
++    )? {
++        Ok(o) => o,
++        Err(n) => return Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Origin(n))),
++    };
++    let target_key = seal_for(&origin.scope, world);
++    let Some(input) = capture.scope(db, origin.provider, &origin.scope, &target_key)? else {
++        return Ok(SourceAliasOutcome::Need(
++            SourceAliasPrerequisite::TypeNamespace(origin.scope),
++        ));
++    };
++    match input
++        .scope
++        .as_ref()
++        .ok_or_else(|| fault("generated alias target Type certificate absent"))?
++        .lookup(&BucketKey {
++            scope: origin.scope.clone(),
++            namespace: Namespace::Type,
++            name: target.clone(),
++        })? {
++        NameLookup::Absent => capture.finish(
++            db,
++            seed,
++            origin.provider,
++            &origin.scope,
++            &target_key,
++            target,
++        ),
++        NameLookup::Defined(next) => {
++            if !same_class(
++                db,
++                &next,
++                unit.items.item_class(part.span().context)?,
++                owners,
++            )? {
++                return Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Origin(
++                    GeneratedTypePrerequisite::AliasTargetHygiene,
++                )));
++            };
++            CurrentSourcePrimitiveAlias::walk_original(db, next, seed, world, owners, capture)
++        }
++        other => Ok(SourceAliasOutcome::Need(SourceAliasPrerequisite::Name(
++            other,
++        ))),
++    }
++}
+--- a/crates/lrr/src/frontend/source_type_alias_normalization.rs
++++ b/crates/lrr/src/frontend/source_type_alias_normalization.rs
+@@ -73,6 +73,7 @@
+ }
+ /// Each step names its actual immutable source member, never an inferred runtime identity.
+ struct AliasStep {
++    member: Digest,
+     definition: DefKey,
+     parse: ParseKey,
+     context: DeclarationContext,
+@@ -188,9 +189,29 @@
+         {
+             return Err(fault("alias current source/edition/cfg/world differs"));
+         };
+-        if input.compiler_inputs.len() > 100_000 || input.records.len() > 100_000 {
++        if input.sources.is_empty()
++            || input.sources.len() > 100_000
++            || input.compiler_inputs.len() > 100_000
++            || input.records.len() > 100_000
++        {
+             return Err(limit());
+         };
++        for retained in &input.sources {
++            charge(&mut self.bytes, retained.metadata_bytes()?, self.max)?;
++            if !matches!(db.published_input(&InputKey::CapturedSource(retained.location_identity())), Some((InputValue::CapturedSource(actual), _)) if actual == retained)
++                || !matches!(db.published_input(&InputKey::SourceBlob(retained.outline.parse.content)), Some((InputValue::SourceBlob(actual), _)) if actual.content() == retained.outline.parse.content)
++                || !matches!(db.published_input(&InputKey::CrateCfg(retained.outline.crate_key)), Some((InputValue::CrateCfg(actual), _)) if actual.fingerprint() == retained.outline.cfg)
++            {
++                return Err(fault("alias Type retained source/content/cfg changed"));
++            }
++            for k in [
++                InputKey::CapturedSource(retained.location_identity()),
++                InputKey::SourceBlob(retained.outline.parse.content),
++                InputKey::CrateCfg(retained.outline.crate_key),
++            ] {
++                self.stamp(db, k)?;
++            }
++        }
+         for (k, v) in &input.compiler_inputs {
+             if db.published_input(k).is_none_or(|(_, a)| a != *v) {
+                 return Err(fault("alias compiler selection changed"));
+@@ -219,17 +240,14 @@
+     }
+     fn push(
+         &mut self,
++        member: Digest,
+         definition: &DefKey,
+         parse: &ParseKey,
+         context: &DeclarationContext,
+         recipe: &TypeAliasRecipe,
+         written: Option<Digest>,
+     ) -> Result<(), Diagnostic> {
+-        if self
+-            .steps
+-            .iter()
+-            .any(|s| s.definition.fingerprint() == definition.fingerprint())
+-        {
++        if self.steps.iter().any(|s| s.member == member) {
+             return Err(Diagnostic::new(
+                 "LRR-E-TYPE-ALIAS-CYCLE",
+                 "reached source alias identity repeats".into(),
+@@ -260,6 +278,7 @@
+             .try_reserve_exact(1)
+             .map_err(|_| crate::runtime::arena::resource())?;
+         self.steps.push(AliasStep {
++            member,
+             definition: definition.clone(),
+             parse: parse.clone(),
+             context: context.clone(),
+@@ -424,6 +443,16 @@
+     Ok(actual)
+ }
+ impl CurrentSourcePrimitiveAlias {
++    /// Readonly owner data for a genuinely retained original module invocation.
++    /// Positive admission still requires capture_original_current and its current Type proof.
++    pub(crate) fn original_owner_for_generated(
++        db: &Database,
++        identity: Digest,
++        sources: &[&crate::source::changes::PreparedSourceView],
++        max: usize,
++    ) -> Result<Option<(usize, ScopeKey, String)>, Diagnostic> {
++        generated::original_owner_data(db, identity, sources, max)
++    }
+     /// The caller name is a lookup demand, never a selected definition or primitive identity.
+     pub(crate) fn capture_original_current(
+         db: &Database,
+@@ -494,9 +523,7 @@
+     ) -> Result<SourceAliasOutcome, Diagnostic> {
+         loop {
+             let Some(owner) = provider_for(db, selected.identity, owners)? else {
+-                return Ok(SourceAliasOutcome::Need(
+-                    SourceAliasPrerequisite::RetainedDeclaration(selected.identity),
+-                ));
++                return generated::walk_generated(db, selected, seed, world, owners, capture);
+             };
+             let source = owner.module_source();
+             let item = source
+@@ -558,6 +585,7 @@
+                 capture.stamp(db, k)?;
+             }
+             capture.push(
++                selected.identity,
+                 &item.def_key,
+                 &source.selection().outline.parse,
+                 &context,
+@@ -737,7 +765,14 @@
+         )?;
+         let parsed = ParsedFile::from_generated_items(&unit.items)?;
+         let recipe = parsed.type_alias_recipe(found.identity, h, context)?;
+-        capture.push(definition, parse, context, &recipe, Some(site.identity()))?;
++        capture.push(
++            found.identity,
++            definition,
++            parse,
++            context,
++            &recipe,
++            Some(site.identity()),
++        )?;
+         for k in [
+             InputKey::GeneratedSyntax(parse.content),
+             InputKey::DefinitionSource(found.identity),
+@@ -819,11 +854,13 @@
+         self.steps
+             .first()
+             .expect("private nonempty admitted alias chain")
+-            .definition
+-            .fingerprint()
++            .member
+     }
+     pub(crate) fn compiler_member(&self) -> Digest {
+         self.compiler_member
++    }
++    pub(crate) fn alias_members(&self) -> impl Iterator<Item = Digest> {
++        self.steps.iter().map(|s| s.member)
+     }
+     pub(crate) fn alias_definitions(&self) -> impl Iterator<Item = &DefKey> {
+         self.steps.iter().map(|s| &s.definition)
+@@ -837,7 +874,7 @@
+     /// Root's actual TypeAlias query consumer can compare its immutable recipe without guessing an alias row.
+     pub(crate) fn matches_query_recipe(&self, recipe: &TypeAliasRecipe) -> bool {
+         self.steps.iter().any(|s| {
+-            s.definition.fingerprint() == recipe.definition
++            s.member == recipe.definition
+                 && s.recipe == recipe.fingerprint()
+                 && s.header == recipe.header.fingerprint()
+                 && s.context.scope == recipe.scope
+@@ -859,9 +896,10 @@
+         Ok(())
+     }
+     pub(crate) fn identity(&self) -> Digest {
+-        let mut e = StableEncoder::new("lrr/v1/current-source-primitive-alias");
++        let mut e = StableEncoder::new("lrr/v2/current-source-primitive-alias/canonical-member-v1");
+         e.digest(self.seed);
+         e.sequence(&self.steps, |e, s| {
++            e.digest(s.member);
+             e.record(&s.definition);
+             e.record(&s.parse);
+             e.record(&s.context.scope);
+@@ -885,6 +923,9 @@
+     }
+ }
+ 
++#[path = "source_type_alias_normalization/generated.rs"]
++mod generated;
++
+ #[cfg(test)]
+ #[path = "source_type_alias_normalization_tests.rs"]
+ mod tests;
+--- a/crates/lrr/src/frontend/source_type_alias_query.rs
++++ b/crates/lrr/src/frontend/source_type_alias_query.rs
+@@ -36,7 +36,7 @@
+         if let Err(e) = source.revalidate_inputs(db) {
+             return QueryPoll::Ready(Err(e));
+         };
+-        let count = source.alias_definitions().count();
++        let count = source.alias_members().count();
+         let Some(bytes) = count
+             .checked_mul(std::mem::size_of::<(QueryKey, Digest)>())
+             .and_then(|n| n.checked_add(source.metadata_bytes().checked_mul(2)?))
+@@ -49,8 +49,8 @@
+         if queries.try_reserve_exact(count).is_err() {
+             return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
+         };
+-        for definition in source.alias_definitions() {
+-            let key = QueryKey::TypeAlias(definition.fingerprint());
++        for member in source.alias_members() {
++            let key = QueryKey::TypeAlias(member);
+             let outcome = match db.fetch(&SyntaxProvider, key.clone()) {
+                 QueryPoll::Ready(Ok(v)) => v,
+                 QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
+@@ -83,7 +83,7 @@
+         self.bytes
+     }
+     pub(crate) fn identity(&self) -> Digest {
+-        let mut e = StableEncoder::new("lrr/v1/queried-source-primitive-alias");
++        let mut e = StableEncoder::new("lrr/v2/queried-source-primitive-alias/canonical-member-v1");
+         e.digest(self.source.identity());
+         e.sequence(&self.queries, |e, (k, v)| {
+             e.record(k);

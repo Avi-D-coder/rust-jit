@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Root T054 const/local/anonymous source logic; v66 pure bank11/0 strict/audit/fmt passed; full gate99020 running.8-file inference/loop/local successor26uncompiled controls. No MAIN/task/runtime/full-fixture acceptance.",
+      "scope": "Root T054 const/local/anonymous logic and T034/M013 owning runtime macro worlds. v68 library843/0 plus v67 stock8/0 and strict/audit/fmt pass; full gate19223 active. Separate8-file constant successor30uncompiled controls/5 unchanged cases. No MAIN/task/runtime/full-fixture acceptance.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -409,11 +409,12 @@
         "artifacts/macos-first/root-dependency-compiler-preparation-v1/",
         "artifacts/macos-first/root-stock-edition-compiler-preparation-v1/",
         "artifacts/macos-first/root-constant-local-inference-v1/",
-        "artifacts/macos-first/root-constant-length-refusal-v1/"
+        "artifacts/macos-first/root-constant-length-refusal-v1/",
+        "artifacts/macos-first/root-runtime-macro-owning-worlds-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T20:12:59.778783+00:00",
+      "updated_at": "2026-10-14T21:22:34.752284+00:00",
       "review_after": "2026-10-15T05:55:00.598518+00:00"
     },
     {
@@ -450,7 +451,7 @@
       "owner": "/root/generic_call_logic",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Frozen39-path Type/prelude/alias source integration published uncompiled; active actual generated alias runtime preparation plus combined-budget/all-retained-source currentness repair. No invented primitive/source/call authority.",
+      "scope": "Frozen39+8+4 Type/prelude/alias source successors; new active minimal coherent alias interpreter integration against readonly v68, preserving genuine Type/compiler/currentness and shared runtime-world hooks. All new controls uncompiled, no source/call authority shortcuts.",
       "paths": [
         "artifacts/macos-first/sol-constant-macro-admission-v1/",
         "artifacts/macos-first/sol-constant-path-selection-v1/",
@@ -473,11 +474,13 @@
         "artifacts/macos-first/sol-generated-type-prelude-admission-v1/",
         "artifacts/macos-first/sol-source-type-alias-normalization-v1/",
         "artifacts/macos-first/sol-type-alias-prelude-integration-v1/",
-        "artifacts/macos-first/sol-alias-runtime-prerequisites-v1/"
+        "artifacts/macos-first/sol-alias-runtime-prerequisites-v1/",
+        "artifacts/macos-first/sol-qualified-source-alias-v1/",
+        "artifacts/macos-first/sol-alias-interpreter-integration-v2/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T20:37:03.378152+00:00",
+      "updated_at": "2026-10-14T21:22:34.752284+00:00",
       "review_after": "2026-10-15T05:26:09.232158+00:00"
     },
     {

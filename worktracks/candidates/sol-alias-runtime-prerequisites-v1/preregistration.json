@@ -1,0 +1,24 @@
+{
+  "task": "WT04/M018/T054 actual generated alias runtime and original alias return Type prerequisites",
+  "base": "coherent alias integration6512908d, complete6f506968; runtime adapters canonicalv66 read-only",
+  "invariant": "Canonical generated member identity and actual marked target are joined to real published Type/source/record/compiler evidence and exact original invocation owner; no artificial parent constant, unit-name shortcut or opaque-context substitution.",
+  "desired_controls": [
+    "existing generated_parameter_alias_uses_canonical_import_identity returns8 unchanged",
+    "existing alias_chain_crosses_original_and_generated_declarations returns7 unchanged",
+    "existing generated_alias_is_resolved_in_explicit_generic_arguments returns7 unchanged",
+    "existing cold_generated_alias_cycle_is_not_normalized retains no alias queries",
+    "existing reached_generated_alias_cycle_refuses_before_argument_body_entry typedcycle and cold side()",
+    "existing source_run explicit Type aliases and primitive-looking shadow return controls actualTypeprep without changedassertions",
+    "LRR canonical generated-key query matches projected DefKey separately",
+    "LRR original->generated->original chain source/template mismatch/current epoch refusal",
+    "LRR opaque generated name lacking actual use-site stays precise prerequisite",
+    "LRR wrong original owning unit/record/header/hygiene replay and custom missingcompiler receipts fail closed",
+    "LRR aggregate source/scope/Arc+retained sources+compiler/record budget at exact boundary",
+    "LRR genuine all-retained-source dependency stamps",
+    "LRR negative foreign CapturedSource row tamper with unchanged source_revision refuses fresh selector and capture",
+    "unchanged macro-pub-matcher.rs with_pub::H exact source/visibility/marked target/header query component all editions",
+    "LRR empty actual custom compiler catalogue keeps CompilerReceipt prerequisite",
+    "LRR primitive-shadowed alias return from actual unannotated bool local after genuine Type preparation"
+  ],
+  "status": "source-only; no compilation/execution"
+}

@@ -2734,7 +2734,9 @@
         "component_cold_local_reference_error_does_not_supply_upstream_e0515_contract",
         "component_cold_parameter_reference_error_does_not_supply_upstream_e0515_contract",
         "component_empty_main_does_not_supply_compiler_private_mir_graphviz_contract",
-        "rustc_original_test_listing_retains_sorted_names_and_ignore_metadata"
+        "rustc_original_test_listing_retains_sorted_names_and_ignore_metadata",
+        "owning_runtime_worlds_select_exact_foreign_facets_without_exporting_them_locally",
+        "unrepresented_runtime_worlds_and_missing_owners_never_gain_intrinsic_identity"
       ],
       "acceptance_contract": "one selected test passes despite another broken body; exact/substr/no-match behavior works; should_panic cannot accept an unsupported-feature fault. Add the fixture manifest/harness format from Section 28. CA037 additionally tracks the complete upstream inventory, per-contract classification and runtime-semantics prerequisite; subset/component success does not open the JIT gate.",
       "commands": [
@@ -3145,7 +3147,9 @@
         "artifacts/macos-first/root-stock-configured-matrix-v2/generated-v1/prepared-contracts.json",
         "artifacts/macos-first/root-interpreter-capture-constants-validation-v1/independent-collection-v1.json",
         "artifacts/macos-first/root-assert-predicate-result-context-v1/independent-collection-v1.json",
-        "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-isolated-milestone-v10/independent-collection-v1.json"
+        "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-isolated-milestone-v10/independent-collection-v1.json",
+        "worktracks/candidates/root-runtime-macro-owning-worlds-v1/README.md",
+        "artifacts/macos-first/sol-canonical-validation-agent-v8/SCOPED-HANDOFF.json"
       ],
       "release_complete": false,
       "validation_scope": "T034 original-source minimal test/assertion component accepted under Section57/E-57-001 with 863 actual macOS host/doc tests and all 93 registered controls. Gate00/01/02 and provisional Gate03 component, strict code audits pass. Final manifest audit passes. Full Gate03, general/comparison/generated operands, formatting, output/drop/native fixture observations and complete revision4 integration remain mandatory through named later tasks and pending acceptance. release_complete=false. Collected scalar assertion integration v3: four unchanged whole arithmetic programs execute 29 original assertions under disclosed edition2024 adaptation; a fifth isize program retains specified unresolved-source-width refusal and is not a stock pass. V2 affected suites477 passed; production-identical v3 passed format, strictClippy, fresharchitecture and27 standaloneCLI tests including both new exact-once acceptance controls. Production integrated; fresh MAIN milestone pending. No full compiletest, complete T034 release, guest JIT or Linux acceptance follows. Fresh integrated MAIN milestone actual64776/0 and independent collection verify all10 checks,2228 project host/doc passes,95 registered T034 controls and the direct four-stock CLI control/29 assertions, with3680 source/include inputs unchanged. Six later imports require a new combined milestone; release/full fixtures remain pending. E-NUM-001 changes T034-STOCK-CAST-SOURCE-WIDTH from a strict refusal to complete unchanged isize-base.rs execution and all original assertions. The actual first integrated milestone failed only its old refusal expectation; corrected V15 milestone passed all17 checks,2393 project bodies/179 executables,493 library tests and the unchanged isize control once. Component acceptance is restored; historical source-width refusal is superseded by E-NUM-001. No full fixture pass is claimed.",
@@ -3642,6 +3646,53 @@
           "listed": 2950,
           "source_unchanged": true,
           "infrastructure": "corrected Python bootstrap/capability passed; host bank failed; downstream gates remain false"
+        }
+      },
+      "current_owning_runtime_macro_worlds": {
+        "artifact": "worktracks/candidates/root-runtime-macro-owning-worlds-v1/README.md",
+        "source_member": "c011cdae8b862ae4f7eee9bc4e40fe1edc09b6798dd703e0e277b64e3833d14a",
+        "status": "private_scoped_pass_milestone_pending",
+        "files": 5,
+        "new_authority_controls": 2,
+        "edition_pairs_per_original": 16,
+        "MAIN_integrated": false,
+        "task_complete": false,
+        "full_stock_fixture_passes": 0,
+        "evidence": {
+          "v66_full_milestone": {
+            "passed": 2774,
+            "failed": 1,
+            "unexecuted": 175,
+            "listed": 2950,
+            "terminal": "99020/e63b9f/1"
+          },
+          "v67_stock_scope": {
+            "passed": 8,
+            "failed": 0,
+            "filtered": 0,
+            "terminal": "27783/49fc4e/0"
+          },
+          "v67_library_compile_failure": {
+            "unit_bodies_executed": 0,
+            "compile_errors": 4,
+            "terminal": "5046/1185a1/1",
+            "reason": "SourceMacroRoutes definitions slice uses len, not iterator count"
+          },
+          "v68_library": {
+            "passed": 843,
+            "failed": 0,
+            "ignored": 0,
+            "filtered": 0,
+            "terminal": "52568/2ca6fd/0"
+          },
+          "v68_strict_library": "32872/b6b274/0",
+          "v68_strict_stock": "29551/f0ef68/0",
+          "v68_architecture": "89044/0b2a40/0",
+          "v68_format": "95427/aeb62d/0",
+          "v68_full_milestone": {
+            "status": "running",
+            "actual_session": 19223
+          }
         }
       }
     },
@@ -5190,7 +5241,11 @@
         "a_cold_local_item_body_does_not_expand_the_source_constraint_work",
         "unchanged_anonymous_const_headers_are_distinct_unnamed_items_all_editions",
         "anonymous_body_edits_keep_headers_without_hiding_missing_identifiers",
-        "an_opaque_cold_use_cannot_erase_the_real_owning_return_context"
+        "an_opaque_cold_use_cannot_erase_the_real_owning_return_context",
+        "cold_type_disagreements_do_not_precheck_the_selected_constant_body",
+        "entered_type_disagreements_fail_at_the_actual_use_without_graph_diagnostics",
+        "unchanged_gcd_returns_entered_branch_values_with_actual_parameter_types",
+        "unchanged_prime_loop_infers_divisor_from_actual_source_parameter"
       ],
       "acceptance_contract": "array length constant, recursive bounded const fn, cycle, cold effect branch, reached forbidden effect, and two uses with independently mutable guest arrays. Constant memo contains no guest handles.",
       "commands": [],
@@ -5261,7 +5316,7 @@
         "task_complete": false
       },
       "current_private_typed_query_draft": {
-        "status": "source_components_passed_complete_milestone_v66_running",
+        "status": "scoped_v68_passed_complete_milestone_running",
         "artifact": "artifacts/macos-first/root-constant-production-consolidation-v1/HANDOFF.md",
         "last_collected_source": "b970ab41775fa782bcc802542b33f856764e6937be6af5b65b0f651686b91fd7",
         "last_collected_library_passed": 840,
@@ -5362,74 +5417,120 @@
           "guest_JIT_started": false
         },
         "current_candidate_milestone": {
-          "source_member": "5c330972fa27d030e2ff852336a32796584283481dcd4e428bbf5aaebb31a15e",
+          "source_member": "c011cdae8b862ae4f7eee9bc4e40fe1edc09b6798dd703e0e277b64e3833d14a",
           "status": "scoped_pass_full_gate_running",
-          "artifact": "artifacts/macos-first/sol-canonical-validation-agent-v6/",
+          "artifact": "artifacts/macos-first/sol-canonical-validation-agent-v8/",
           "validation_actor": "/root/edition_macro_logic",
-          "actual_session_id": 99020,
+          "actual_session_id": 19223,
           "source_editable": false,
           "collected_scopes": {
-            "pure_source_constants": "11passed/0failed/0filtered;84680/662fef/0",
-            "strict_changed_target": "5ae036/0",
-            "architecture": "10299/ceba79/0",
-            "format": "55792/81535e/0"
+            "unfiltered_library": {
+              "passed": 843,
+              "failed": 0,
+              "ignored": 0,
+              "filtered": 0,
+              "terminal": "52568/2ca6fd/0"
+            },
+            "unfiltered_stock_prior_v67": {
+              "passed": 8,
+              "failed": 0,
+              "filtered": 0,
+              "terminal": "27783/49fc4e/0",
+              "repeated_after_test_only_len_fix": false
+            },
+            "strict_library": "32872/b6b274/0",
+            "strict_stock": "29551/f0ef68/0",
+            "architecture": "89044/0b2a40/0",
+            "format": "95427/aeb62d/0"
+          },
+          "previous_library_compile_failure": {
+            "source_member": "60bd58f1c4f27dca77b6920d63c929244a5c807bc7de7c770aebd3f70a2fe188",
+            "terminal": "5046/1185a1/1",
+            "unit_bodies_executed": 0,
+            "errors": 4,
+            "cause": "test-only definitions slice count calls corrected to len in v68"
           },
           "previous_failed_milestone": {
-            "source_member": "2ce1bf0ad479315b3124b2aa54005125de650992190a20fe8e570ea4b00a890e",
-            "actual_terminal": "26518/3ec316/1",
-            "listed": 2950,
-            "passed": 2518,
-            "failed": 1,
-            "unexecuted": 431,
-            "library_passed": 841,
-            "proc_sessions_passed": 158,
-            "artifact": "artifacts/macos-first/sol-canonical-validation-agent-v5/HANDOFF.md",
-            "failure": "pure_anonymous_lengths_refuse_foreign_lexical_capture expected generic source diagnostic instead of parameter-length diagnostic",
-            "source_unchanged": true,
-            "original_files_exact": 470
-          },
-          "earlier_candidate_history": {
-            "source_member": "09ccfac2d7f040109418ac6b46b5f4f9950277ca025fc36d9e54f51bbb014c73",
+            "source_member": "5c330972fa27d030e2ff852336a32796584283481dcd4e428bbf5aaebb31a15e",
             "status": "failed_source_unchanged_collected",
-            "artifact": "artifacts/macos-first/sol-canonical-validation-agent-v1/",
+            "artifact": "artifacts/macos-first/sol-canonical-validation-agent-v6/",
             "validation_actor": "/root/edition_macro_logic",
-            "actual_session_id": 35195,
-            "target_clone": "cp -Rc; actual31932/5b0c8b/0; revision5-validation-agent-target-v1",
+            "actual_session_id": 99020,
+            "source_editable": false,
             "collected_scopes": {
-              "strict_lrr_library": "45918/559ec9/0",
-              "new_authority_control": "92857/68adff/0;1passed,840filtered",
-              "unfiltered_CLI": "44899/7db503/0;module64,standalone28;zero filtered",
-              "architecture": "21991/c41424/0",
-              "format": "50634/0eebf4/0"
+              "pure_source_constants": "11passed/0failed/0filtered;84680/662fef/0",
+              "strict_changed_target": "5ae036/0",
+              "architecture": "10299/ceba79/0",
+              "format": "55792/81535e/0"
             },
             "previous_failed_milestone": {
-              "passed": 1216,
-              "failed": 5,
-              "summaries": 39,
-              "remaining_bank_unexecuted": true,
-              "large_module_regression_passed": true,
-              "artifact": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-constant-candidate-milestone-v3/actual-terminal-v1.json"
+              "source_member": "2ce1bf0ad479315b3124b2aa54005125de650992190a20fe8e570ea4b00a890e",
+              "actual_terminal": "26518/3ec316/1",
+              "listed": 2950,
+              "passed": 2518,
+              "failed": 1,
+              "unexecuted": 431,
+              "library_passed": 841,
+              "proc_sessions_passed": 158,
+              "artifact": "artifacts/macos-first/sol-canonical-validation-agent-v5/HANDOFF.md",
+              "failure": "pure_anonymous_lengths_refuse_foreign_lexical_capture expected generic source diagnostic instead of parameter-length diagnostic",
+              "source_unchanged": true,
+              "original_files_exact": 470
             },
-            "repair": "opaque structural path route preserves context prerequisite; strict ConstantPathSite still refuses generic ParamEnv before constant admission",
+            "earlier_candidate_history": {
+              "source_member": "09ccfac2d7f040109418ac6b46b5f4f9950277ca025fc36d9e54f51bbb014c73",
+              "status": "failed_source_unchanged_collected",
+              "artifact": "artifacts/macos-first/sol-canonical-validation-agent-v1/",
+              "validation_actor": "/root/edition_macro_logic",
+              "actual_session_id": 35195,
+              "target_clone": "cp -Rc; actual31932/5b0c8b/0; revision5-validation-agent-target-v1",
+              "collected_scopes": {
+                "strict_lrr_library": "45918/559ec9/0",
+                "new_authority_control": "92857/68adff/0;1passed,840filtered",
+                "unfiltered_CLI": "44899/7db503/0;module64,standalone28;zero filtered",
+                "architecture": "21991/c41424/0",
+                "format": "50634/0eebf4/0"
+              },
+              "previous_failed_milestone": {
+                "passed": 1216,
+                "failed": 5,
+                "summaries": 39,
+                "remaining_bank_unexecuted": true,
+                "large_module_regression_passed": true,
+                "artifact": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-constant-candidate-milestone-v3/actual-terminal-v1.json"
+              },
+              "repair": "opaque structural path route preserves context prerequisite; strict ConstantPathSite still refuses generic ParamEnv before constant admission",
+              "MAIN_integrated": false,
+              "task_complete": false,
+              "full_stock_fixture_passes": 0,
+              "actual_terminal": "35195/57eb0b/1",
+              "project_bank": {
+                "listed": 2950,
+                "passed": 1250,
+                "failed": 1,
+                "unexecuted": 1699,
+                "library_passed": 841,
+                "ignored": 0,
+                "filtered": 0
+              },
+              "host_failure": "test_cli::rustc_original_test_listing_retains_sorted_names_and_ignore_metadata: LRR-E-CATALOG-INCOMPLETE",
+              "runner_failure": "unversioned Python resolved3.9.6; corrected3.14 libexec required for next validation, no production claim from bootstrap failure",
+              "current_source_editable": true
+            },
             "MAIN_integrated": false,
             "task_complete": false,
             "full_stock_fixture_passes": 0,
-            "actual_terminal": "35195/57eb0b/1",
-            "project_bank": {
-              "listed": 2950,
-              "passed": 1250,
-              "failed": 1,
-              "unexecuted": 1699,
-              "library_passed": 841,
-              "ignored": 0,
-              "filtered": 0
-            },
-            "host_failure": "test_cli::rustc_original_test_listing_retains_sorted_names_and_ignore_metadata: LRR-E-CATALOG-INCOMPLETE",
-            "runner_failure": "unversioned Python resolved3.9.6; corrected3.14 libexec required for next validation, no production claim from bootstrap failure",
-            "current_source_editable": true
+            "actual_terminal": "99020/e63b9f/1",
+            "listed": 2950,
+            "passed": 2774,
+            "failed": 1,
+            "unexecuted": 175,
+            "library_passed": 841,
+            "proc_sessions_passed": 158,
+            "original_files_exact": 470,
+            "failure": "original_generic_inference_program_runs_in_its_recorded_dependency_edition: no-item proof source/body/compiler identity differs for dependency edition2015 under root2024"
           },
           "MAIN_integrated": false,
-          "task_complete": false,
           "full_stock_fixture_passes": 0
         },
         "current_loop_control_draft": {
@@ -5509,14 +5610,14 @@
           "status": "source_only_uncompiled",
           "source_baseline": "5c330972fa27d030e2ff852336a32796584283481dcd4e428bbf5aaebb31a15e",
           "files": 8,
-          "Rust_controls": 26,
+          "Rust_controls": 30,
           "Rust_controls_executed": 0,
-          "upstream_cases": 4,
-          "original_license_files": 9,
+          "upstream_cases": 5,
+          "original_license_files": 10,
           "canonical_installed": false,
           "MAIN_integrated": false,
           "full_stock_fixture_passes": 0,
-          "scope": "Source-owned local scalar equations/defaults, charged subordinate source probes, lexical mutable cells/loops and actual non-indexed anonymous const identities; no cold body typing/query/compiler/guest execution. for/while-let, labelled blocks, aggregate/borrowed places and complete query/live/generated contexts remain required.",
+          "scope": "Source-owned bounded local scalar hints/defaults, lexical mutable cells/loops and actual unnamed const identities. Cold source conflicts do not emit graph diagnostics; actual entered uses still check their types/ranges. Unchanged basics.rs GCD/prime component adapters preserve full original source; whole main and remaining aggregate/borrowed/for/while-let/generated/query contracts remain unexecuted or prerequisites.",
           "controls": [
             {
               "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
@@ -5647,8 +5748,30 @@
               "file": "crates/lrr/src/syntax/outline.rs",
               "name": "anonymous_body_edits_keep_headers_without_hiding_missing_identifiers",
               "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+              "name": "cold_type_disagreements_do_not_precheck_the_selected_constant_body",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+              "name": "entered_type_disagreements_fail_at_the_actual_use_without_graph_diagnostics",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+              "name": "unchanged_gcd_returns_entered_branch_values_with_actual_parameter_types",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+              "name": "unchanged_prime_loop_infers_divisor_from_actual_source_parameter",
+              "status": "uncompiled"
             }
-          ]
+          ],
+          "complete_patch_sha256": "c93ea2653c7462d7ee910f02da5137122956ac80b21c658d6872f7d058f0f8a1",
+          "before_bytes_also_match": "v68 c011cdae"
         }
       }
     },
@@ -10625,7 +10748,9 @@
         "validation_source_accepts_the_compiled_checkout_and_canonical_alias",
         "validation_source_refuses_a_different_existing_checkout_before_dispatch",
         "validation_source_refuses_an_unresolvable_expected_root",
-        "validation_source_preserves_ordinary_invocation_without_an_expected_root"
+        "validation_source_preserves_ordinary_invocation_without_an_expected_root",
+        "owning_runtime_worlds_select_exact_foreign_facets_without_exporting_them_locally",
+        "unrepresented_runtime_worlds_and_missing_owners_never_gain_intrinsic_identity"
       ],
       "commands": [
         "CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo +1.99.0 run -p xtask --locked --offline -- gate 03",
@@ -17393,7 +17518,9 @@
         "artifacts/macos-first/m013-prepared-tool-target-coherence-v1/root-repair-validation-v1.json",
         "docs/m013-prepared-tool-target-coherence.md",
         "artifacts/macos-first/m013-prepared-tool-target-coherence-v1/owned-main-milestone-v2/root-terminal-review-v1.json",
-        "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-isolated-milestone-v4/independent-collection-v1.json"
+        "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-isolated-milestone-v4/independent-collection-v1.json",
+        "worktracks/candidates/root-runtime-macro-owning-worlds-v1/README.md",
+        "artifacts/macos-first/sol-canonical-validation-agent-v8/SCOPED-HANDOFF.json"
       ],
       "title": "Discovery worklist and seals",
       "acceptance_contract": "MX027/MX028 and generated import/macro cycles. Depends: T034,M012.",
@@ -17423,7 +17550,54 @@
           "status": "pending",
           "evidence_paths": []
         }
-      ]
+      ],
+      "current_owning_runtime_macro_worlds": {
+        "artifact": "worktracks/candidates/root-runtime-macro-owning-worlds-v1/README.md",
+        "source_member": "c011cdae8b862ae4f7eee9bc4e40fe1edc09b6798dd703e0e277b64e3833d14a",
+        "status": "private_scoped_pass_milestone_pending",
+        "files": 5,
+        "new_authority_controls": 2,
+        "edition_pairs_per_original": 16,
+        "MAIN_integrated": false,
+        "task_complete": false,
+        "full_stock_fixture_passes": 0,
+        "evidence": {
+          "v66_full_milestone": {
+            "passed": 2774,
+            "failed": 1,
+            "unexecuted": 175,
+            "listed": 2950,
+            "terminal": "99020/e63b9f/1"
+          },
+          "v67_stock_scope": {
+            "passed": 8,
+            "failed": 0,
+            "filtered": 0,
+            "terminal": "27783/49fc4e/0"
+          },
+          "v67_library_compile_failure": {
+            "unit_bodies_executed": 0,
+            "compile_errors": 4,
+            "terminal": "5046/1185a1/1",
+            "reason": "SourceMacroRoutes definitions slice uses len, not iterator count"
+          },
+          "v68_library": {
+            "passed": 843,
+            "failed": 0,
+            "ignored": 0,
+            "filtered": 0,
+            "terminal": "52568/2ca6fd/0"
+          },
+          "v68_strict_library": "32872/b6b274/0",
+          "v68_strict_stock": "29551/f0ef68/0",
+          "v68_architecture": "89044/0b2a40/0",
+          "v68_format": "95427/aeb62d/0",
+          "v68_full_milestone": {
+            "status": "running",
+            "actual_session": 19223
+          }
+        }
+      }
     },
     {
       "id": "M014",
@@ -18726,7 +18900,18 @@
           "original_cases": 18,
           "original_files": 45,
           "full_stock_fixture_passes": 0,
-          "scope": "Actual SourceDiscovery Type/compiler/prelude receipts and reached source/query scalar alias consumer. Generated use-site/runtime authority, combined budget and all-retained-source currentness require successor evidence."
+          "scope": "Actual SourceDiscovery Type/compiler/prelude receipts and reached source/query scalar alias consumer. The exact eight-path source successor adds combined budget/all-retained-source currentness repair and genuine generated runtime Type preparation; all controls remain uncompiled."
+        },
+        {
+          "artifact": "worktracks/candidates/sol-alias-runtime-prerequisites-v1/HANDOFF.md",
+          "status": "uncompiled_unintegrated",
+          "paths": 8,
+          "Rust_controls": 11,
+          "Rust_controls_executed": 0,
+          "original_cases": 18,
+          "original_files": 45,
+          "full_stock_fixture_passes": 0,
+          "scope": "After coherent39: canonical generated member/header query join, genuine Type preparation in old runtime positives, combined budget and all-retained-source replay/stamps."
         }
       ]
     },

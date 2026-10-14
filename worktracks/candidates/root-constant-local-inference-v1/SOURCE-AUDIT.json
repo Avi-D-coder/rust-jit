@@ -35,8 +35,8 @@
     {
       "path": "crates/lrr/src/syntax/constant_local_constraints.rs",
       "before_sha256": null,
-      "after_sha256": "e163f6a2afce50369626b3b517e8335bf6a3177201f2cbf7bba02e934d840086",
-      "bytes": 31312,
+      "after_sha256": "9763c6bfae63e4dfc93aca776cf57e9ee0e2d1ba75dabe08a50dbe9409a726b7",
+      "bytes": 36113,
       "before_exists": false
     },
     {
@@ -61,7 +61,7 @@
       "before_exists": true
     }
   ],
-  "complete_patch_sha256": "8cee33cfdc2007e4e1300807200e0fc33ed052603a51059f97191ec0cf1288af",
+  "complete_patch_sha256": "c93ea2653c7462d7ee910f02da5137122956ac80b21c658d6872f7d058f0f8a1",
   "mechanical_exact_patch_replay": true,
   "rust_compilation_executed": false,
   "rust_tests_executed": false,
@@ -195,9 +195,29 @@
       "file": "crates/lrr/src/syntax/outline.rs",
       "name": "anonymous_body_edits_keep_headers_without_hiding_missing_identifiers",
       "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "cold_type_disagreements_do_not_precheck_the_selected_constant_body",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "entered_type_disagreements_fail_at_the_actual_use_without_graph_diagnostics",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "unchanged_gcd_returns_entered_branch_values_with_actual_parameter_types",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "name": "unchanged_prime_loop_infers_divisor_from_actual_source_parameter",
+      "status": "uncompiled"
     }
   ],
-  "official_cases": 4,
+  "official_cases": 5,
   "original_files": [
     {
       "path": "COPYRIGHT",
@@ -233,6 +253,11 @@
       "path": "tests/ui/consts/const-labeled-break.rs",
       "sha256": "07d3e298d10795e40866115b9b521cd8fce96a9f08bf0b709ca4e4edd8c7347f",
       "bytes": 283
+    },
+    {
+      "path": "tests/ui/consts/control-flow/basics.rs",
+      "sha256": "775b613d035b23f47c54406cc68034384ffb9f1d121acc7f5a1f85b4ff404655",
+      "bytes": 1371
     },
     {
       "path": "tests/ui/consts/control-flow/loop.rs",
