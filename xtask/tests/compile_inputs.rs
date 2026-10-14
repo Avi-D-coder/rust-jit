@@ -1013,7 +1013,7 @@ fn nested_include_paths_resume_only_exact_adopted_expansion_and_preserve_origina
     use lrr::{
         core::{digest::StableEncode, profile::ProfileIdentity},
         db::{
-            key::{ConstantKey, QueryKey},
+            key::QueryKey,
             memo::Database,
             poll::{ExpansionRequest, InputRequest, QueryPoll},
         },
@@ -1107,12 +1107,12 @@ fn nested_include_paths_resume_only_exact_adopted_expansion_and_preserve_origina
         compile_environment: key.consumer_compile_env,
     };
     let mut coordinator = ExpansionCoordinator::new(context.clone());
-    let query = QueryKey::Constant(ConstantKey {
-        definition: Digest([99; 32]),
-        arguments: vec![],
-        cfg: Digest::default(),
-        profile: ProfileIdentity::current(),
-    });
+    let query = QueryKey::Constant(fixture_key(
+        Digest([99; 32]),
+        vec![],
+        Digest::default(),
+        ProfileIdentity::current(),
+    ));
     let phase = PhaseIdentity {
         frame: Digest([100; 32]),
         body: BodyKey {
@@ -1887,11 +1887,10 @@ fn concat_join_fixture(emit_parent: bool) {
         core::{digest::StableEncode, profile::ProfileIdentity},
         db::{
             dependency::{DependencyStamp, InputKey},
-            key::{ConstantKey, QueryKey},
+            key::QueryKey,
             memo::Database,
             poll::{ExpansionRequest, InputRequest, QueryPoll},
             provider::{Provided, Provider},
-            value::QueryValue,
         },
         expand::{
             compile_input_identity::descriptor,
@@ -2028,12 +2027,12 @@ fn concat_join_fixture(emit_parent: bool) {
         compile_environment: frozen.fingerprint(),
     };
     let mut coordinator = ExpansionCoordinator::new(context.clone());
-    let query = QueryKey::Constant(ConstantKey {
-        definition: Digest([188; 32]),
-        arguments: vec![],
-        cfg: Digest::default(),
-        profile: ProfileIdentity::current(),
-    });
+    let query = QueryKey::Constant(fixture_key(
+        Digest([188; 32]),
+        vec![],
+        Digest::default(),
+        ProfileIdentity::current(),
+    ));
     let phase = PhaseIdentity {
         frame: Digest([189; 32]),
         body: BodyKey {
@@ -2189,7 +2188,7 @@ fn concat_join_fixture(emit_parent: bool) {
         selections: &'a BTreeMap<usize, ExpansionKey>,
     }
     impl Provider for Joined<'_> {
-        fn execute(&self, db: &mut Database, _: &QueryKey) -> QueryPoll<Provided> {
+        fn execute(&self, db: &mut Database, requested: &QueryKey) -> QueryPoll<Provided> {
             match self.plan.materialize_adopted(
                 db,
                 self.descriptor,
@@ -2211,7 +2210,8 @@ fn concat_join_fixture(emit_parent: bool) {
                         32 * 1024 * 1024,
                     )
                     .unwrap();
-                    Provided::pure(QueryValue::Constant(
+                    Provided::pure(fixture_value(
+                        requested,
                         i128::try_from(value.value().len()).unwrap(),
                     ))
                 }
@@ -2247,7 +2247,7 @@ fn actual_environment_adopted_nested_operands_preserve_order_keys_and_native_res
     use lrr::{
         core::{digest::StableEncode, profile::ProfileIdentity},
         db::{
-            key::{ConstantKey, QueryKey},
+            key::QueryKey,
             memo::Database,
             poll::{ExpansionRequest, InputRequest},
         },
@@ -2274,12 +2274,12 @@ fn actual_environment_adopted_nested_operands_preserve_order_keys_and_native_res
     ) {
         let token = coordinator
             .issue(
-                QueryKey::Constant(ConstantKey {
-                    definition: Digest([212; 32]),
-                    arguments: vec![],
-                    cfg: Digest::default(),
-                    profile: ProfileIdentity::current(),
-                }),
+                QueryKey::Constant(fixture_key(
+                    Digest([212; 32]),
+                    vec![],
+                    Digest::default(),
+                    ProfileIdentity::current(),
+                )),
                 PhaseIdentity {
                     frame: Digest([213; 32]),
                     body: BodyKey {
@@ -2310,9 +2310,9 @@ fn actual_environment_adopted_nested_operands_preserve_order_keys_and_native_res
         fn execute(
             &self,
             db: &mut Database,
-            _: &QueryKey,
+            requested: &QueryKey,
         ) -> lrr::db::poll::QueryPoll<lrr::db::provider::Provided> {
-            use lrr::db::{poll::QueryPoll, provider::Provided, value::QueryValue};
+            use lrr::db::{poll::QueryPoll, provider::Provided};
             match self.plan.materialize_adopted(
                 db,
                 self.descriptor,
@@ -2332,7 +2332,10 @@ fn actual_environment_adopted_nested_operands_preserve_order_keys_and_native_res
                     else {
                         panic!("name not materialized")
                     };
-                    Provided::pure(QueryValue::Constant(i128::try_from(value.len()).unwrap()))
+                    Provided::pure(fixture_value(
+                        requested,
+                        i128::try_from(value.len()).unwrap(),
+                    ))
                 }
             }
         }
@@ -2493,12 +2496,12 @@ fn actual_environment_adopted_nested_operands_preserve_order_keys_and_native_res
             environment: frozen.fingerprint(),
             selections: &selections,
         };
-        let query = QueryKey::Constant(ConstantKey {
-            definition: Digest([221; 32]),
-            arguments: vec![],
-            cfg: Digest::default(),
-            profile: ProfileIdentity::current(),
-        });
+        let query = QueryKey::Constant(fixture_key(
+            Digest([221; 32]),
+            vec![],
+            Digest::default(),
+            ProfileIdentity::current(),
+        ));
         db.fetch(&provider, query.clone())
             .into_ready()
             .unwrap()
@@ -2608,7 +2611,7 @@ fn actual_eager_compiler_worklist_drives_nested_calls_only_after_adoption_and_ma
     use lrr::{
         core::{digest::StableEncode, profile::ProfileIdentity},
         db::{
-            key::{ConstantKey, QueryKey},
+            key::QueryKey,
             memo::Database,
             poll::{ExpansionRequest, InputRequest},
         },
@@ -2913,12 +2916,12 @@ fn actual_eager_compiler_worklist_drives_nested_calls_only_after_adoption_and_ma
                     }
                     let token = coordinator
                         .issue(
-                            QueryKey::Constant(ConstantKey {
-                                definition: Digest([237; 32]),
-                                arguments: vec![],
-                                cfg: Digest::default(),
-                                profile: ProfileIdentity::current(),
-                            }),
+                            QueryKey::Constant(fixture_key(
+                                Digest([237; 32]),
+                                vec![],
+                                Digest::default(),
+                                ProfileIdentity::current(),
+                            )),
                             PhaseIdentity {
                                 frame: Digest([238; 32]),
                                 body: BodyKey {
@@ -3114,11 +3117,10 @@ fn prepared_unit_environment_inputs_invalidate_value_absence_and_missing_queries
         core::{digest::StableEncode, profile::ProfileIdentity},
         db::{
             dependency::{DependencyStamp, InputKey, InputValue},
-            key::{ConstantKey, QueryKey},
+            key::QueryKey,
             memo::Database,
             poll::{InputRequest, QueryPoll},
             provider::{Provided, Provider, SyntaxProvider},
-            value::QueryValue,
         },
         expand::compile_input_identity::descriptor,
         service::expansion::{DemandContext, ExpansionCoordinator, PhaseIdentity},
@@ -3130,7 +3132,7 @@ fn prepared_unit_environment_inputs_invalidate_value_absence_and_missing_queries
         calls: Cell<usize>,
     }
     impl Provider for Reader {
-        fn execute(&self, db: &mut Database, _: &QueryKey) -> QueryPoll<Provided> {
+        fn execute(&self, db: &mut Database, requested: &QueryKey) -> QueryPoll<Provided> {
             self.calls.set(self.calls.get() + 1);
             let env = match SyntaxProvider::compile_environment(db, self.unit) {
                 QueryPoll::Ready(Ok(value)) => value,
@@ -3142,7 +3144,7 @@ fn prepared_unit_environment_inputs_invalidate_value_absence_and_missing_queries
                 .unwrap()
             {
                 CompileStringPoll::Ready(Ok(value)) => {
-                    Provided::pure(QueryValue::Constant(i128::from(value.is_some())))
+                    Provided::pure(fixture_value(requested, i128::from(value.is_some())))
                 }
                 CompileStringPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
                 CompileStringPoll::NeedCapture { .. } => Provided::error(
@@ -3163,12 +3165,12 @@ fn prepared_unit_environment_inputs_invalidate_value_absence_and_missing_queries
         unit,
         calls: Cell::new(0),
     };
-    let key = QueryKey::Constant(ConstantKey {
-        definition: Digest([63; 32]),
-        arguments: vec![],
-        cfg: Digest::default(),
-        profile: ProfileIdentity::current(),
-    });
+    let key = QueryKey::Constant(fixture_key(
+        Digest([63; 32]),
+        vec![],
+        Digest::default(),
+        ProfileIdentity::current(),
+    ));
     let mut db = Database::default();
     let request = InputRequest::CaptureCompileEnvironment { unit };
     request.validate().unwrap();
@@ -3199,7 +3201,7 @@ fn prepared_unit_environment_inputs_invalidate_value_absence_and_missing_queries
         .into_ready()
         .unwrap()
         .unwrap();
-    assert!(matches!(value.value.as_ref(), QueryValue::Constant(1)));
+    assert_eq!(fixture_number(value.value.as_ref()), 1);
     assert!(db.memo(&key).unwrap().dependencies.iter().any(
         |d| matches!(d,DependencyStamp::Input{key:InputKey::UnitCompileEnv(id),..} if *id==unit)
     ));
@@ -3232,7 +3234,7 @@ fn prepared_unit_environment_inputs_invalidate_value_absence_and_missing_queries
         .into_ready()
         .unwrap()
         .unwrap();
-    assert!(matches!(value.value.as_ref(), QueryValue::Constant(0)));
+    assert_eq!(fixture_number(value.value.as_ref()), 0);
     assert!(reader.calls.get() > calls);
     assert_eq!(
         first.lookup("LRR_PREPARED").unwrap(),
@@ -3272,3 +3274,8 @@ fn prepared_unit_environment_inputs_invalidate_value_absence_and_missing_queries
     );
     coordinator.issue(key, phase, request).unwrap();
 }
+
+include!("support/constant_key.rs");
+include!("support/constant_value.rs");
+
+include!("support/constant_number.rs");

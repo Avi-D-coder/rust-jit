@@ -673,13 +673,23 @@ impl ParsedFile {
                 budget.charge(std::mem::size_of::<DeclarationProducer>() + 64)?;
                 let selected = range(meta.syntax().text_range());
                 let path = budget.tokens(meta.syntax(), None)?;
-                let unqualified_attribute = meta
-                    .path()
-                    .filter(|path| path.qualifier().is_none() && path.coloncolon_token().is_none())
-                    .and_then(|path| path.segment())
-                    .filter(|segment| segment.coloncolon_token().is_none())
-                    .and_then(|segment| segment.name_ref())
-                    .and_then(|name| super::ast_adapter::semantic_name(name.text()));
+                // The pinned parser represents cfg as its own AST node, with
+                // no Path. Retain the actual keyword as a syntax fact so that
+                // compiler Attribute selection can still prove it inert.
+                let unqualified_attribute = match &meta {
+                    ast::Meta::CfgMeta(cfg) => cfg
+                        .cfg_token()
+                        .and_then(|token| super::ast_adapter::semantic_name(token.text())),
+                    _ => meta
+                        .path()
+                        .filter(|path| {
+                            path.qualifier().is_none() && path.coloncolon_token().is_none()
+                        })
+                        .and_then(|path| path.segment())
+                        .filter(|segment| segment.coloncolon_token().is_none())
+                        .and_then(|segment| segment.name_ref())
+                        .and_then(|name| super::ast_adapter::semantic_name(name.text())),
+                };
                 if let Some(name) = &unqualified_attribute {
                     budget.charge(name.capacity().checked_add(32).ok_or_else(limit)?)?;
                 }

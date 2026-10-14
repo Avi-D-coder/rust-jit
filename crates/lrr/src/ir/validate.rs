@@ -309,16 +309,30 @@ pub fn verify(mut draft: RecipeDraft, body: &BodyIndex) -> Result<VerifiedRecipe
             } => {
                 slot(body, *source, SlotKind::Value)?;
                 slot(body, *destination, SlotKind::Place)?;
-                let operand = reference_initializer
-                    .or_else(|| {
+                let own_path = node.role
+                    == crate::syntax::body_index::NodeRole::Expression(
+                        crate::syntax::body_index::ExpressionKind::Path,
+                    )
+                    && draft.key.phase == Phase::Exit.code()?;
+                let operand = if own_path {
+                    if !matches!(draft.operations.as_slice(), [Op::ValuePlace { .. }]) {
+                        return Err(invalid(
+                            "path result place must be its separate indexed exit",
+                        ));
+                    }
+                    Some(node)
+                } else {
+                    reference_initializer.or_else(|| {
                         node.operands
                             .first()
                             .and_then(|id| body.nodes().get(id.0 as usize))
                     })
-                    .ok_or_else(|| invalid("temporary place receiver absent"))?;
+                }
+                .ok_or_else(|| invalid("temporary place receiver absent"))?;
                 if operand.value != Some(*source)
                     || operand.place != Some(*destination)
-                    || (reference_initializer.is_none()
+                    || (!own_path
+                        && reference_initializer.is_none()
                         && draft.key.phase != Phase::Operand(0).code()?)
                 {
                     return Err(invalid(
@@ -426,6 +440,33 @@ pub fn verify(mut draft: RecipeDraft, body: &BodyIndex) -> Result<VerifiedRecipe
                 {
                     return Err(invalid("constructor finish guard/result identity mismatch"));
                 }
+                Some(*destination)
+            }
+            Op::SourceConstant {
+                constant,
+                destination,
+            } => {
+                use crate::syntax::body_index::{ExpressionKind, NodeRole};
+                slot(body, *destination, SlotKind::Value)?;
+                let operations = match draft.operations.as_slice() {
+                    [Op::ScopeEnter { scope }, tail @ ..]
+                        if Some(*scope) == node.boolean_scope.or(node.statement_scope) =>
+                    {
+                        tail
+                    }
+                    ops => ops,
+                };
+                if draft.key.phase != Phase::Entry.code()?
+                    || node.role != NodeRole::Expression(ExpressionKind::Path)
+                    || node.value != Some(*destination)
+                    || !matches!(operations, [Op::SourceConstant { .. }])
+                    || !constant.matches(body, &draft, *destination)?
+                {
+                    return Err(invalid(
+                        "source constant instruction PC/path/result/exit/dependencies differs",
+                    ));
+                }
+                charge(&mut bytes, constant.metadata_bytes())?;
                 Some(*destination)
             }
             Op::PrimitiveFloatingConstant {

@@ -135,7 +135,7 @@ pub(crate) fn prepare(
         let SourceDeclarativeDemand::Ready(request) = provider.demand(
             call.item_input,
             env.fingerprint(),
-            Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+            crate::expand::source_declarative::engine_version(),
         )?
         else {
             return Ok(None);

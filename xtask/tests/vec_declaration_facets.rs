@@ -154,13 +154,29 @@ fn vec_alloc_definition_std_reexport_preserves_world_and_user_identity() {
             definition_edition: edition,
         };
         assert_eq!(catalog.select(&user).unwrap(), None);
-        assert_eq!(
-            RuntimeMacroCatalog::new(core, edition)
-                .unwrap()
-                .definitions()
-                .count(),
-            4
-        );
+        let core_only = RuntimeMacroCatalog::new(core, edition).unwrap();
+        let actual = core_only
+            .definitions()
+            .map(|member| {
+                assert_eq!(member.defining_unit, core);
+                assert_eq!(member.definition_edition, edition);
+                let kind = core_only.select(member).unwrap().unwrap();
+                (kind.name(), member.clone())
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let expected = [
+            RuntimeMacroKind::Panic,
+            RuntimeMacroKind::Assert,
+            RuntimeMacroKind::AssertEq,
+            RuntimeMacroKind::AssertNe,
+            RuntimeMacroKind::Unreachable,
+            RuntimeMacroKind::Unimplemented,
+        ]
+        .into_iter()
+        .map(|kind| (kind.name(), definition(&catalog, kind)))
+        .collect::<std::collections::BTreeMap<_, _>>();
+        assert_eq!(core_only.definitions().count(), expected.len());
+        assert_eq!(actual, expected);
     }
 }
 #[test]

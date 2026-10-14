@@ -38,7 +38,9 @@ pub enum QueryValue {
     TypeAlias(Box<crate::syntax::type_aliases::TypeAliasRecipe>),
     TypeSchema(Box<crate::frontend::types::NominalSchema>),
     ConstructorPlan(Box<crate::syntax::constructors::ConstructorPlan>),
-    Constant(i128),
+    Constant(Box<crate::frontend::constants::query_value::ConstantQueryValue>),
+    ConstantFailure(Box<crate::frontend::constants::query_failure::ConstantQueryFailure>),
+    ConstantMacroDemand(Box<crate::frontend::constants::query_macro_demand::ConstantMacroDemand>),
     Error(Diagnostic),
 }
 impl QueryValue {
@@ -98,6 +100,15 @@ impl QueryValue {
         {
             return descriptor.key == **key;
         }
+        if let (Self::Constant(value), QueryKey::Constant(key)) = (self, key) {
+            return value.key() == key;
+        }
+        if let (Self::ConstantFailure(value), QueryKey::Constant(key)) = (self, key) {
+            return value.key() == key;
+        }
+        if let (Self::ConstantMacroDemand(value), QueryKey::Constant(key)) = (self, key) {
+            return value.key() == key;
+        }
         matches!(self, Self::Error(_))
             || matches!(
                 (self, key),
@@ -105,7 +116,6 @@ impl QueryValue {
                     | (Self::Outline(_), QueryKey::Outline(_))
                     | (Self::ScopeBucket(_), QueryKey::ScopeBucket(_))
                     | (Self::Signature(_), QueryKey::Signature(_))
-                    | (Self::Constant(_), QueryKey::Constant(_))
             )
     }
     pub fn fingerprint(&self) -> Digest {
@@ -177,7 +187,15 @@ impl QueryValue {
             }
             Self::Constant(v) => {
                 e.u32(10);
-                e.bytes(&v.to_le_bytes());
+                e.record(v.as_ref());
+            }
+            Self::ConstantFailure(value) => {
+                e.u32(29);
+                e.record(value.as_ref());
+            }
+            Self::ConstantMacroDemand(value) => {
+                e.u32(30);
+                e.record(value.as_ref());
             }
             Self::Error(v) => {
                 e.u32(255);
@@ -214,7 +232,9 @@ impl QueryValue {
                     + v.blockers.capacity() * std::mem::size_of::<ScopeBlocker>()
             }
             Self::Error(v) => v.heap_bytes().unwrap_or(usize::MAX),
-            Self::Constant(_) => 0,
+            Self::Constant(value) => value.metadata_bytes().unwrap_or(usize::MAX),
+            Self::ConstantFailure(value) => value.metadata_bytes().unwrap_or(usize::MAX),
+            Self::ConstantMacroDemand(value) => value.metadata_bytes().unwrap_or(usize::MAX),
         })
     }
 }

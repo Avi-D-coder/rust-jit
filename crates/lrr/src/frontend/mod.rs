@@ -63,4 +63,15 @@ pub mod source_view;
 
 pub mod primitive_constants;
 
+pub(crate) mod constant_macro_admission;
+pub(crate) mod constant_source_admission;
 pub mod constants;
+
+pub(crate) mod constant_result_type;
+
+pub(crate) mod constant_path_selection;
+
+pub(crate) mod constant_construction;
+
+#[cfg(test)]
+mod constant_foreign_path_tests;

@@ -66,22 +66,34 @@ fn rustc_original_test_listing_retains_sorted_names_and_ignore_metadata() {
     let source = include_str!(
         "../../../fixtures/upstream/rustc-checkout/tests/ui/test-attrs/tests-listing-format-default.rs"
     );
-    let output = test(source, &["--include-ignored", "--list"]);
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        json(&output)["listed"],
-        serde_json::json!(["a_test", "m_test", "z_test"])
-    );
-    let output = test(source, &["--ignored", "--list"]);
-    assert!(output.status.success());
-    assert_eq!(json(&output)["listed"], serde_json::json!(["z_test"]));
+    for edition in ["2015", "2018", "2021", "2024"] {
+        let output = test_edition(source, &["--include-ignored", "--list"], edition);
+        assert!(
+            output.status.success(),
+            "edition {edition}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            json(&output)["listed"],
+            serde_json::json!(["a_test", "m_test", "z_test"])
+        );
+        let output = test_edition(source, &["--ignored", "--list"], edition);
+        assert!(
+            output.status.success(),
+            "edition {edition}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(json(&output)["listed"], serde_json::json!(["z_test"]));
+    }
 }
 
 fn test(source: &str, args: &[&str]) -> Output {
+    test_with_edition(source, args, None)
+}
+fn test_edition(source: &str, args: &[&str], edition: &str) -> Output {
+    test_with_edition(source, args, Some(edition))
+}
+fn test_with_edition(source: &str, args: &[&str], edition: Option<&str>) -> Output {
     let directory = std::env::temp_dir().join(format!(
         "lrr-test-cli-{}-{}",
         std::process::id(),
@@ -90,12 +102,12 @@ fn test(source: &str, args: &[&str]) -> Output {
     fs::create_dir_all(&directory).unwrap();
     let file = directory.join("tests.rs");
     fs::write(&file, source).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_lrr"))
-        .arg("test")
-        .arg(file)
-        .args(args)
-        .output()
-        .unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_lrr"));
+    command.arg("test").arg(file);
+    if let Some(edition) = edition {
+        command.arg("--edition").arg(edition);
+    }
+    let output = command.args(args).output().unwrap();
     fs::remove_dir_all(directory).unwrap();
     output
 }

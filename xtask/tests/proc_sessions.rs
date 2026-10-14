@@ -7708,12 +7708,12 @@ fn procedural_source_worklist_case_with_impls(
         manifest: &manifest,
         plan: &invalid_plan,
     };
-    let pure_key = QueryKey::Constant(lrr::db::key::ConstantKey {
-        definition: Digest([201; 32]),
-        arguments: vec![],
-        cfg: Digest([202; 32]),
-        profile: ProfileIdentity::current(),
-    });
+    let pure_key = QueryKey::Constant(fixture_key(
+        Digest([201; 32]),
+        vec![],
+        Digest([202; 32]),
+        ProfileIdentity::current(),
+    ));
     let lrr::db::poll::QueryPoll::Ready(Err(error)) = db.fetch(&pure, pure_key) else {
         panic!("pure coordinator guard absent")
     };
@@ -9473,12 +9473,12 @@ fn procedural_source_worklist_case_with_impls(
                                     run: std::cell::RefCell::new(&mut probe),
                                     request: &first,
                                 };
-                                let key = QueryKey::Constant(lrr::db::key::ConstantKey {
-                                    definition: Digest([231; 32]),
-                                    arguments: vec![],
-                                    cfg: Digest([232; 32]),
-                                    profile: ProfileIdentity::current(),
-                                });
+                                let key = QueryKey::Constant(fixture_key(
+                                    Digest([231; 32]),
+                                    vec![],
+                                    Digest([232; 32]),
+                                    ProfileIdentity::current(),
+                                ));
                                 assert!(
                                     matches!(db.fetch(&pure,key),lrr::db::poll::QueryPoll::Ready(Err(error)) if error.code=="LRR-E-INTERNAL-SNAPSHOT")
                                 );
@@ -9905,10 +9905,7 @@ fn adopt_procedural_worklist_module(
     use lrr::{
         core::digest::{Digest, StableEncode},
         core::profile::ProfileIdentity,
-        db::{
-            key::{ConstantKey, QueryKey},
-            poll::InputRequest,
-        },
+        db::{key::QueryKey, poll::InputRequest},
         service::{
             expansion::{ExpansionCoordinator, PhaseIdentity},
             source_capture::SourceCapture,
@@ -9925,12 +9922,12 @@ fn adopt_procedural_worklist_module(
     let mut coordinator = ExpansionCoordinator::new(context.clone());
     let token = coordinator
         .issue(
-            QueryKey::Constant(ConstantKey {
-                definition: Digest([204; 32]),
-                arguments: vec![],
-                cfg: Digest::default(),
-                profile: ProfileIdentity::current(),
-            }),
+            QueryKey::Constant(fixture_key(
+                Digest([204; 32]),
+                vec![],
+                Digest::default(),
+                ProfileIdentity::current(),
+            )),
             PhaseIdentity {
                 frame: Digest([205; 32]),
                 body: BodyKey {
@@ -10828,12 +10825,12 @@ fn rustc_original_derive_worklist_component(add_impl: bool) {
                 .expect_err("query provider read mutable helper diagnostics")))
         }
     }
-    let denied_key = QueryKey::Constant(lrr::db::key::ConstantKey {
-        definition: Digest([193; 32]),
-        arguments: vec![],
-        cfg: Digest([194; 32]),
-        profile: ProfileIdentity::current(),
-    });
+    let denied_key = QueryKey::Constant(fixture_key(
+        Digest([193; 32]),
+        vec![],
+        Digest([194; 32]),
+        ProfileIdentity::current(),
+    ));
     let QueryPoll::Ready(Err(error)) = db.fetch(&DiagnosticQuery { run: &run, unit }, denied_key)
     else {
         panic!("query diagnostic access was not refused")
@@ -12812,3 +12809,5 @@ fn procedural_test_catalog_variant_with_selected_async(
     db.begin_expansion_epoch(2).unwrap();
     assert!(catalog.require_current(&mut db).is_err());
 }
+
+include!("support/constant_key.rs");

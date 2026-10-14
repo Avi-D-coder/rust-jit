@@ -407,6 +407,8 @@ pub struct MacroNamespaces {
     pub(super) glob_reexports: BTreeMap<MacroPath, BTreeMap<MacroPath, BTreeSet<VisibilityScope>>>,
     pub(crate) module_paths: super::module_paths::ModulePaths,
     dependencies: BTreeMap<(Digest, MacroName), Digest>,
+    compiler_imports: BTreeMap<(Digest, MacroName), Digest>,
+    compiler_import_bytes: usize,
     prelude_bytes: usize,
     preludes: BTreeMap<ScopeKey, Digest>,
     compiler_globals: BTreeMap<(Digest, MacroName), MacroDefinition>,
@@ -1377,6 +1379,51 @@ impl MacroNamespaces {
         self.edges = count;
         Ok(())
     }
+    /// Admitted only by the private compiler catalog after checking the actual
+    /// selected source policy. This is not a Cargo dependency/prelude grant.
+    pub(super) fn compiler_injected_import(
+        &mut self,
+        consumer: Digest,
+        alias: MacroName,
+        provider: Digest,
+    ) -> Result<(), Diagnostic> {
+        if !matches!(alias.as_str(), "core" | "std") {
+            return Err(error("compiler-injected import is not a fixed facade"));
+        }
+        let key = (consumer, alias);
+        // A differently owned captured dependency cannot borrow compiler status.
+        if self.dependencies.get(&key) != Some(&provider) {
+            return Ok(());
+        }
+        if let Some(existing) = self.compiler_imports.get(&key) {
+            return if *existing == provider {
+                Ok(())
+            } else {
+                Err(error("conflicting compiler-injected import owner"))
+            };
+        }
+        if self.compiler_imports.len() >= 100_000 {
+            return Err(error("compiler-injected import count limit"));
+        }
+        let bytes = self
+            .compiler_import_bytes
+            .checked_add(128)
+            .and_then(|n| n.checked_add(key.1.as_str().len()))
+            .filter(|n| *n <= 32 * 1024 * 1024)
+            .ok_or_else(|| error("compiler-injected import metadata limit"))?;
+        self.compiler_imports.insert(key, provider);
+        self.compiler_import_bytes = bytes;
+        Ok(())
+    }
+    pub(super) fn encode_compiler_imports(&self, e: &mut StableEncoder) {
+        let mut state = StableEncoder::new("lrr/v1/compiler-injected-imports");
+        state.map(&self.compiler_imports, |e, (consumer, name), provider| {
+            e.digest(*consumer);
+            e.string(name.as_str());
+            e.digest(*provider);
+        });
+        e.digest(state.finish());
+    }
     /// Commit one producer's complete result only after validating every
     /// definition. An empty result completes its demand; it is not an error.
     pub fn publish(
@@ -1517,9 +1564,7 @@ impl MacroNamespaces {
         let mut unit = scope.crate_key;
         let mut names = super::source_macro_routes::module_names(&scope.module_path, edition)?;
         let mut segments = parts.iter().peekable();
-        if absolute && edition == 2015 {
-            names.clear();
-        } else if absolute {
+        if absolute && edition >= 2018 {
             let Some(ImportSegment::Name(first)) = segments.next() else {
                 return Err(error("absolute macro path requires a dependency alias"));
             };
@@ -1533,6 +1578,9 @@ impl MacroNamespaces {
             unit = *provider;
             names.clear();
         } else {
+            if absolute {
+                names.clear();
+            }
             match segments.peek() {
                 Some(ImportSegment::Crate) => {
                     names.clear();
@@ -1548,7 +1596,9 @@ impl MacroNamespaces {
                     if matches!(
                         self.lookup_module_from(unit, &local, scope)?,
                         ModuleLookup::Absent
-                    ) && (!import || edition >= 2018)
+                    ) && ((!import && !absolute)
+                        || edition >= 2018
+                        || self.compiler_imports.contains_key(&(unit, first.clone())))
                         && self.implicit_enabled(scope)
                         && let Some(provider) = self.dependencies.get(&(unit, first))
                     {

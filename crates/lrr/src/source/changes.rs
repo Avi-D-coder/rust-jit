@@ -921,6 +921,17 @@ impl PreparedSourceView {
             .parsed
             .macro_token_group(selected, definition)
     }
+    pub(crate) fn macro_definition_shape_at(
+        &self,
+        range: crate::syntax::spans::SourceRange,
+    ) -> Result<crate::syntax::macro_calls::MacroDefinitionShape, Diagnostic> {
+        self.state
+            .files
+            .get(&self.location)
+            .ok_or_else(|| publication_fault("captured macro definition parse absent"))?
+            .parsed
+            .macro_definition_shape_at(range)
+    }
     pub(crate) fn macro_definition_header_at(
         &self,
         range: crate::syntax::spans::SourceRange,

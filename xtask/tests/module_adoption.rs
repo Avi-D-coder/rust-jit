@@ -6,7 +6,7 @@ use lrr::{
     },
     db::{
         dependency::{InputKey, InputValue},
-        key::{ConstantKey, QueryKey},
+        key::QueryKey,
         memo::Database,
         poll::{InputRequest, QueryPoll},
         provider::SyntaxProvider,
@@ -108,12 +108,12 @@ fn fixture(two_files: bool) -> Fixture {
         compile_environment: Digest([7; 32]),
     };
     let mut coordinator = ExpansionCoordinator::new(context.clone());
-    let query = QueryKey::Constant(ConstantKey {
-        definition: Digest([10; 32]),
-        arguments: vec![],
-        cfg: Digest::default(),
-        profile: ProfileIdentity::current(),
-    });
+    let query = QueryKey::Constant(fixture_key(
+        Digest([10; 32]),
+        vec![],
+        Digest::default(),
+        ProfileIdentity::current(),
+    ));
     let phase = PhaseIdentity {
         frame: Digest([11; 32]),
         body: BodyKey {
@@ -280,12 +280,12 @@ fn module_adoption_immutable_conflict_cannot_replace_first_captured_bytes() {
     let changed = f.capture.capture_module(&f.request).unwrap();
     assert_ne!(changed.identity(), f.record.identity());
     let mut other = ExpansionCoordinator::new(f.context.clone());
-    let query = QueryKey::Constant(ConstantKey {
-        definition: Digest([17; 32]),
-        arguments: vec![],
-        cfg: Digest::default(),
-        profile: ProfileIdentity::current(),
-    });
+    let query = QueryKey::Constant(fixture_key(
+        Digest([17; 32]),
+        vec![],
+        Digest::default(),
+        ProfileIdentity::current(),
+    ));
     let token = other
         .issue(query, f.token.phase().clone(), f.input.clone())
         .unwrap();
@@ -341,12 +341,12 @@ fn module_adoption_request_identity_binds_environment_producer_unit_and_generati
         QueryPoll::NeedInput(_)
     ));
     let query = || {
-        QueryKey::Constant(ConstantKey {
-            definition: Digest([19; 32]),
-            arguments: vec![],
-            cfg: Digest::default(),
-            profile: ProfileIdentity::current(),
-        })
+        QueryKey::Constant(fixture_key(
+            Digest([19; 32]),
+            vec![],
+            Digest::default(),
+            ProfileIdentity::current(),
+        ))
     };
     assert!(
         f.coordinator
@@ -499,3 +499,5 @@ fn module_adoption_pure_lookup_retains_snapshot_when_the_original_file_disappear
         "LRR-E-SNAPSHOT-RACE"
     );
 }
+
+include!("support/constant_key.rs");

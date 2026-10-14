@@ -224,7 +224,11 @@ impl ParsedFile {
             .arg_list()
             .ok_or_else(|| fault("runtime argument list is missing"))?;
         let required = match kind {
-            RuntimeMacroKind::Panic | RuntimeMacroKind::Println | RuntimeMacroKind::Vec => 0,
+            RuntimeMacroKind::Panic
+            | RuntimeMacroKind::Println
+            | RuntimeMacroKind::Vec
+            | RuntimeMacroKind::Unreachable
+            | RuntimeMacroKind::Unimplemented => 0,
             RuntimeMacroKind::Assert => 1,
             RuntimeMacroKind::AssertEq | RuntimeMacroKind::AssertNe => 2,
         };
@@ -336,7 +340,11 @@ impl ParsedFile {
             });
         }
         let count = match kind {
-            RuntimeMacroKind::Panic | RuntimeMacroKind::Println | RuntimeMacroKind::Vec => 0,
+            RuntimeMacroKind::Panic
+            | RuntimeMacroKind::Println
+            | RuntimeMacroKind::Vec
+            | RuntimeMacroKind::Unreachable
+            | RuntimeMacroKind::Unimplemented => 0,
             RuntimeMacroKind::Assert => 1,
             RuntimeMacroKind::AssertEq | RuntimeMacroKind::AssertNe => 2,
         };

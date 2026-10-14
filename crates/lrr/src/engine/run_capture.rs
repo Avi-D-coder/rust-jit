@@ -76,7 +76,8 @@ impl RunCapture {
         )?;
         for op in operations {
             match op {
-                Op::PrimitiveFloatingConstant { .. }
+                Op::SourceConstant { .. }
+                | Op::PrimitiveFloatingConstant { .. }
                 | Op::ProjectField { .. }
                 | Op::ProjectTuple { .. }
                 | Op::ProjectIndex { .. }

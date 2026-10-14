@@ -5,7 +5,7 @@ use lrr::{
     },
     db::{
         dependency::{InputKey, InputValue},
-        key::{ConstantKey, QueryKey},
+        key::QueryKey,
         memo::Database,
         poll::{ExpansionRequest, InputRequest, QueryPoll},
         provider::{Provided, Provider, SyntaxProvider},
@@ -206,7 +206,7 @@ fn record_adoption_refuses_changed_base_revision_and_pure_provider_publication()
     assert!(coordinator.adopt(&c, &token, &mut db, output).is_err());
     struct Bad;
     impl Provider for Bad {
-        fn execute(&self, db: &mut Database, _: &QueryKey) -> QueryPoll<Provided> {
+        fn execute(&self, db: &mut Database, requested: &QueryKey) -> QueryPoll<Provided> {
             let c = context(db);
             let mut coordinator = ExpansionCoordinator::new(c.clone());
             let token = coordinator
@@ -225,15 +225,15 @@ fn record_adoption_refuses_changed_base_revision_and_pure_provider_publication()
                 coordinator.adopt(&c, &token, db, output).unwrap_err().code,
                 "LRR-E-INTERNAL-SNAPSHOT"
             );
-            Provided::pure(lrr::db::value::QueryValue::Constant(17))
+            Provided::pure(fixture_value(requested, 17))
         }
     }
-    let q = QueryKey::Constant(ConstantKey {
-        definition: Digest([16; 32]),
-        arguments: vec![],
-        cfg: Digest::default(),
-        profile: ProfileIdentity::current(),
-    });
+    let q = QueryKey::Constant(fixture_key(
+        Digest([16; 32]),
+        vec![],
+        Digest::default(),
+        ProfileIdentity::current(),
+    ));
     db.fetch(&Bad, q).into_ready().unwrap().unwrap();
     assert!(matches!(
         db.fetch(&SyntaxProvider, QueryKey::ExpansionInput(Box::new(key()))),
@@ -340,3 +340,6 @@ fn derived_record_adoption_obeys_active_run_metadata_budget_without_partial_rele
         .unwrap();
     assert!(coordinator.take_ready(&c, &token).unwrap().is_some());
 }
+
+include!("../../../xtask/tests/support/constant_key.rs");
+include!("../../../xtask/tests/support/constant_value.rs");

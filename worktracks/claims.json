@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Root T054 coherent11 local/loop/anonymous/length/labelled-block proposal frozen source-only:54uncompiled controls,10 officialcases/17originals, exact replay/format/rawGit checked. v69 Vec7/0 strict/audit/fmt; fullgate21897 asynchronous. No canonical/MAIN/task/runtime/full-fixture acceptance.",
+      "scope": "Root promoted exact accepted v69 source206paths after2952/0 complete configured macOS gate; fresh MAIN milestone pending. Constant successor library899/0; private T034 assertion-call integration scoped sixenginecontrols passed, actualstockmain and remaining13-control coverage pending. Zero new complete stock cases; no task/JIT/Linux/release acceptance.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -414,11 +414,20 @@
         "artifacts/macos-first/root-constant-local-length-context-v1/",
         "artifacts/macos-first/root-core-macro-inventory-v1/",
         "artifacts/macos-first/root-constant-labelled-blocks-v1/",
-        "artifacts/macos-first/root-constant-coherent-v1/"
+        "artifacts/macos-first/root-constant-coherent-v1/",
+        "artifacts/macos-first/root-v69-main-integration-v1/",
+        "artifacts/macos-first/root-constant-next-validation-v1/",
+        "artifacts/macos-first/root-constant-next-repair-v1/",
+        "artifacts/macos-first/root-anonymous-const-admission-repair-v1/",
+        "artifacts/macos-first/root-constant-clippy-repair-v1/",
+        "artifacts/macos-first/root-assertion-call-dispatch-v1/",
+        "artifacts/macos-first/root-assertion-call-validation-v1/",
+        "artifacts/macos-first/root-assertion-call-compile-repair-v1/",
+        "artifacts/macos-first/root-assertion-call-legacy-regression-repair-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T22:20:50.993759+00:00",
+      "updated_at": "2026-10-14T23:04:24.070803+00:00",
       "review_after": "2026-10-15T05:55:00.598518+00:00"
     },
     {

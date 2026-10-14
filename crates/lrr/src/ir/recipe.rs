@@ -129,12 +129,20 @@ fn hint(e: &mut StableEncoder, h: &HintRecipe) {
     }
 }
 impl StableEncode for Recipe {
-    const DOMAIN: &'static str = "lrr/v5/lrir-recipe";
+    const DOMAIN: &'static str = "lrr/v6/lrir-recipe";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         span(e, &self.origin.span);
         e.sequence(&self.origin.expansion_ancestry, |e, d| e.digest(*d));
         e.sequence(&self.operations, |e, op| match op {
+            Op::SourceConstant {
+                constant,
+                destination,
+            } => {
+                e.u32(u32::from(super::op::SOURCE_CONSTANT_OPCODE));
+                e.record(constant.as_ref());
+                e.u32(destination.0);
+            }
             Op::ValuePlace {
                 source,
                 destination,

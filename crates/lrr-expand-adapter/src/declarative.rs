@@ -41,6 +41,7 @@ pub struct DeclarativeMacro {
     parsed: mbe::DeclarativeMacro,
     parse_error: Option<MacroFailure>,
     spans: SpanStore,
+    transparency: crate::token_wire::Transparency,
 }
 #[derive(Debug, Clone, Copy, Default, Serialize)]
 pub struct TranscriptionStats {
@@ -76,6 +77,53 @@ impl DeclarativeMacro {
             parsed,
             parse_error,
             spans,
+            transparency: crate::token_wire::Transparency::SemiTransparent,
+        })
+    }
+    /// Component parser for actual macro2 argument/body groups. This grants no
+    /// source or runtime authority; original source producers select both groups.
+    pub fn new_macro2(
+        arguments: Option<TokenForest>,
+        definition: TokenForest,
+    ) -> Result<Self, AdapterError> {
+        definition.validate()?;
+        let body_bytes = definition.encoded_len()?;
+        let argument_bytes = arguments
+            .as_ref()
+            .map(TokenForest::encoded_len)
+            .transpose()?
+            .unwrap_or(0);
+        body_bytes
+            .checked_add(argument_bytes)
+            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+            .ok_or_else(|| AdapterError {
+                code: "LRR-E-MACRO-OUTPUT",
+                message: "macro2 definition groups exceed metadata limit".into(),
+            })?;
+        let mut spans = SpanStore::default();
+        let arguments = arguments
+            .as_ref()
+            .map(|args| {
+                args.validate()?;
+                spans.import(args)
+            })
+            .transpose()?;
+        let tree = spans.import(&definition)?;
+        let parsed = mbe::DeclarativeMacro::parse_macro2(arguments.as_ref(), &tree, |context| {
+            context.edition(spans.database())
+        });
+        let parse_span = spans.key(tree.top_subtree().delimiter.open)?;
+        let parse_error = parsed.err().map(|error| MacroFailure {
+            kind: FailureKind::DefinitionSyntax,
+            span: Some(parse_span),
+            message: error.to_string(),
+        });
+        Ok(Self {
+            definition,
+            parsed,
+            parse_error,
+            spans,
+            transparency: crate::token_wire::Transparency::Opaque,
         })
     }
     pub fn definition(&self) -> &TokenForest {
@@ -145,7 +193,7 @@ impl DeclarativeMacro {
         let mut spans = self.spans.clone();
         let input = spans.import(input)?;
         let marked = site
-            .map(|site| spans.prepare_marks(&self.definition, call_site, site))
+            .map(|site| spans.prepare_marks(&self.definition, call_site, site, self.transparency))
             .transpose()?;
         let call_site = spans.span(call_site)?;
         let wire_error = std::cell::RefCell::new(None);

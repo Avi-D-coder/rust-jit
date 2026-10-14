@@ -260,13 +260,12 @@ impl SourceAttributeSelection {
             source.captured_macro_blob()?,
             source.outline().profile.clone(),
         )?;
-        let path = parsed.attribute_path_at(row.range)?;
-        crate::frontend::declaration_imports::DeclarationImportIndex::new(scan)?.lookup(
-            producer,
-            path.segments(),
-            path.absolute(),
-            namespaces,
-        )
+        // Namespace selection is independent of a target item's eligibility.
+        // Root inert attributes have an exact source/scope attachment without
+        // an ast::Item owner. Effectful selection still validates its target.
+        let (segments, absolute) = parsed.attribute_lookup_path_at(row.range)?;
+        crate::frontend::declaration_imports::DeclarationImportIndex::new(scan)?
+            .lookup(producer, &segments, absolute, namespaces)
     }
     pub(crate) fn select_cold(
         source: &PreparedSourceView,

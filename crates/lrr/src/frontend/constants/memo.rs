@@ -12,7 +12,6 @@ use crate::{
     },
     syntax::pure_constants::ConstantPlan,
 };
-use std::sync::Arc;
 const MAX_PAYLOAD: usize = 1 << 20;
 const MAX_METADATA: usize = 32 << 20;
 fn invalid(message: &str) -> Diagnostic {
@@ -31,9 +30,50 @@ pub struct ConstMemoPayload {
     value_type: ConstantWireType,
     type_identity: Digest,
     dependencies: Digest,
-    bytes: Arc<[u8]>,
+    // Cloning a payload makes an independent bounded byte allocation. Only the
+    // outer cached QueryValue is shared, so raw inner clones cannot evade cache
+    // retirement accounting by keeping an unregistered Arc byte allocation alive.
+    bytes: Box<[u8]>,
 }
 impl ConstMemoPayload {
+    /// Canonical content construction for trusted pure providers. Identity data
+    /// is never a current source, macro, native or execution admission proof.
+    pub fn capture_content(
+        identity: &super::query_identity::ConstQueryIdentity,
+        value: &ConstValue,
+        value_type: &ConstantWireType,
+        dependencies: Digest,
+        byte_limit: usize,
+    ) -> Result<Self, Diagnostic> {
+        identity.validate()?;
+        let type_identity = value_type.fingerprint_checked()?;
+        if type_identity != identity.result_type() {
+            return Err(Diagnostic::new(
+                "LRR-E-CONST-TYPE",
+                "constant content type differs from query".into(),
+            ));
+        }
+        let type_bytes = value_type.metadata_bytes()?;
+        byte_limit
+            .checked_mul(2)
+            .and_then(|n| n.checked_add(type_bytes))
+            .and_then(|n| n.checked_add(identity.profile().semantics.len()))
+            .and_then(|n| n.checked_add(std::mem::size_of::<Self>() + 128))
+            .filter(|n| *n <= MAX_METADATA)
+            .ok_or_else(|| invalid("constant content transient metadata budget"))?;
+        let bytes = wire::encode(value, value_type, byte_limit)?;
+        Ok(Self {
+            definition: identity.definition(),
+            selection: identity.selection(),
+            source: identity.source(),
+            cfg: identity.cfg(),
+            profile: identity.profile().clone(),
+            value_type: value_type.clone(),
+            type_identity,
+            dependencies,
+            bytes: bytes.into(),
+        })
+    }
     pub fn capture(
         plan: &ConstantPlan,
         evaluation: &ConstEvaluation,

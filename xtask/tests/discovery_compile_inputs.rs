@@ -4,7 +4,7 @@ use lrr::{
         profile::ProfileIdentity,
     },
     db::{
-        key::{ConstantKey, OutlineKey, QueryKey},
+        key::{OutlineKey, QueryKey},
         memo::Database,
         poll::{InputRequest, QueryPoll},
         provider::SyntaxProvider,
@@ -195,12 +195,12 @@ fn try_complete_verifying(
         compile_environment: env.fingerprint(),
     };
     let mut coordinator = ExpansionCoordinator::new(context.clone());
-    let query = QueryKey::Constant(ConstantKey {
-        definition: Digest([239; 32]),
-        arguments: vec![],
-        cfg: Digest::default(),
-        profile: ProfileIdentity::current(),
-    });
+    let query = QueryKey::Constant(fixture_key(
+        Digest([239; 32]),
+        vec![],
+        Digest::default(),
+        ProfileIdentity::current(),
+    ));
     let mut captured = 0;
     for index in 0..32 {
         let phase = PhaseIdentity {
@@ -1101,12 +1101,12 @@ fn generated_module_source_view_requires_adoption_and_keeps_the_frontier_open() 
     let mut coordinator = ExpansionCoordinator::new(context.clone());
     let token = coordinator
         .issue(
-            QueryKey::Constant(ConstantKey {
-                definition: Digest([251; 32]),
-                arguments: vec![],
-                cfg: Digest::default(),
-                profile: ProfileIdentity::current(),
-            }),
+            QueryKey::Constant(fixture_key(
+                Digest([251; 32]),
+                vec![],
+                Digest::default(),
+                ProfileIdentity::current(),
+            )),
             PhaseIdentity {
                 frame: Digest([252; 32]),
                 body: lrr::source::manifest::BodyKey {
@@ -1349,12 +1349,12 @@ fn generated_module_view_enters_nested_scope_and_preserves_missing_or_ambiguous_
         let mut coordinator = ExpansionCoordinator::new(context.clone());
         let token = coordinator
             .issue(
-                QueryKey::Constant(ConstantKey {
-                    definition: Digest([251; 32]),
-                    arguments: vec![],
-                    cfg: Digest::default(),
-                    profile: ProfileIdentity::current(),
-                }),
+                QueryKey::Constant(fixture_key(
+                    Digest([251; 32]),
+                    vec![],
+                    Digest::default(),
+                    ProfileIdentity::current(),
+                )),
                 PhaseIdentity {
                     frame: Digest([252; 32]),
                     body: lrr::source::manifest::BodyKey {
@@ -1453,12 +1453,12 @@ fn adopted_module_parent_lookup_joins_generated_cutoff_and_original_source_conte
     let mut coordinator = ExpansionCoordinator::new(context.clone());
     let token = coordinator
         .issue(
-            QueryKey::Constant(ConstantKey {
-                definition: Digest([251; 32]),
-                arguments: vec![],
-                cfg: Digest::default(),
-                profile: ProfileIdentity::current(),
-            }),
+            QueryKey::Constant(fixture_key(
+                Digest([251; 32]),
+                vec![],
+                Digest::default(),
+                ProfileIdentity::current(),
+            )),
             PhaseIdentity {
                 frame: Digest([252; 32]),
                 body: lrr::source::manifest::BodyKey {
@@ -1588,12 +1588,12 @@ fn recursive_generated_module_demand_retains_records_and_adopted_ancestor_contex
     let mut coordinator = ExpansionCoordinator::new(context.clone());
     let token = coordinator
         .issue(
-            QueryKey::Constant(ConstantKey {
-                definition: Digest([251; 32]),
-                arguments: vec![],
-                cfg: Digest::default(),
-                profile: ProfileIdentity::current(),
-            }),
+            QueryKey::Constant(fixture_key(
+                Digest([251; 32]),
+                vec![],
+                Digest::default(),
+                ProfileIdentity::current(),
+            )),
             PhaseIdentity {
                 frame: Digest([252; 32]),
                 body: lrr::source::manifest::BodyKey {
@@ -1671,12 +1671,12 @@ fn adopt_fixture_module(
     let mut coordinator = ExpansionCoordinator::new(context.clone());
     let token = coordinator
         .issue(
-            QueryKey::Constant(ConstantKey {
-                definition: Digest([251; 32]),
-                arguments: vec![],
-                cfg: Digest::default(),
-                profile: ProfileIdentity::current(),
-            }),
+            QueryKey::Constant(fixture_key(
+                Digest([251; 32]),
+                vec![],
+                Digest::default(),
+                ProfileIdentity::current(),
+            )),
             PhaseIdentity {
                 frame: Digest([252; 32]),
                 body: lrr::source::manifest::BodyKey {
@@ -4033,3 +4033,5 @@ fn ordinary_module_readiness_rejects_changed_environment_after_positive_result()
     assert_eq!(db.revision(), revision);
     assert!(work.sealed_expansions().is_err());
 }
+
+include!("support/constant_key.rs");

@@ -2169,3 +2169,6 @@ mod module_fact_masks {
         );
     }
 }
+
+#[path = "declaration_fragment/empty_original.rs"]
+mod empty_original;

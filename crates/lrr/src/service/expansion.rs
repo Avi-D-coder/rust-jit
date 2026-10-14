@@ -190,16 +190,7 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
                 std::mem::size_of_val(k.as_ref()) + crate::expand::record::key_heap_bytes(k),
             )?
         }
-        QueryKey::Constant(k) => {
-            bytes = add(
-                bytes,
-                k.arguments
-                    .capacity()
-                    .checked_mul(std::mem::size_of::<Digest>())
-                    .ok_or_else(|| error("argument size overflow"))?,
-            )?;
-            bytes = add(bytes, k.profile.semantics.capacity())?
-        }
+        QueryKey::Constant(k) => bytes = add(bytes, k.heap_bytes()?)?,
     }
     Ok(bytes)
 }

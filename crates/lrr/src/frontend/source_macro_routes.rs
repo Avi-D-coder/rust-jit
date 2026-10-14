@@ -339,7 +339,9 @@ impl SourceMacroRoutes {
             charge(crate::syntax::imports::visibility_bytes(&import.visibility))?;
         }
         for event in &outline.textual_events {
-            if let TextualEventKind::Definition { source_name, .. } = &event.kind {
+            if let TextualEventKind::Definition { source_name, .. }
+            | TextualEventKind::ModuleDefinition { source_name, .. } = &event.kind
+            {
                 charge(source_name.len())?;
                 charge(std::mem::size_of::<DefinitionRoute>())?;
             }
@@ -460,16 +462,35 @@ impl SourceMacroRoutes {
                 .insert((scope.crate_key, module_names(&scope.module_path, edition)?));
         }
         for event in &outline.textual_events {
-            let TextualEventKind::Definition {
+            let (TextualEventKind::Definition {
                 identity,
                 source_name,
-            } = &event.kind
+            }
+            | TextualEventKind::ModuleDefinition {
+                identity,
+                source_name,
+            }) = &event.kind
             else {
                 continue;
             };
             let item = items
                 .get(identity)
                 .ok_or_else(|| error("export header is missing"))?;
+            if matches!(event.kind, TextualEventKind::ModuleDefinition { .. }) {
+                let mut path = module_names(&item.scope.module_path, edition)?;
+                path.push(MacroName::parse(source_name, edition)?);
+                result
+                    .definitions
+                    .try_reserve(1)
+                    .map_err(|_| error("module macro route allocation"))?;
+                result.definitions.push(DefinitionRoute {
+                    path: MacroPath::new(item.scope.crate_key, path)?,
+                    definition: definition(*identity)
+                        .ok_or_else(|| error("module macro definition missing"))?,
+                    visibility: item.header.visibility.clone(),
+                });
+                continue;
+            }
             if item
                 .header
                 .attributes
@@ -916,6 +937,20 @@ impl SourceMacroRoutes {
             PathLookup::Defined(destination) if destination == target => Some(target),
             _ => None,
         })
+    }
+    pub(crate) fn discovery_graph_with_compiler_imports(
+        catalogs: &[std::sync::Arc<Self>],
+        imports: &[super::compile_input_catalog::CompilerInjectedImport],
+    ) -> Result<MacroNamespaces, Diagnostic> {
+        if catalogs.len() > 100_000 {
+            return Err(error("source catalog count exceeded"));
+        }
+        let mut borrowed = Vec::new();
+        borrowed
+            .try_reserve_exact(catalogs.len())
+            .map_err(|_| error("source catalogue borrow allocation failed"))?;
+        borrowed.extend(catalogs.iter().map(|catalog| catalog.as_ref()));
+        super::module_aliases::graph_with_compiler_imports(&borrowed, true, imports)
     }
     /// Partial candidate graph retains exact textual producer demands as pending buckets.
     pub(crate) fn discovery_graph(

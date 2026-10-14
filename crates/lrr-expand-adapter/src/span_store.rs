@@ -161,6 +161,7 @@ impl SpanStore {
         definition: &TokenForest,
         call_site: Key,
         site: DeclarativeSite,
+        transparency: crate::token_wire::Transparency,
     ) -> Result<HashMap<Span, Span>, AdapterError> {
         let call_context = self
             .records
@@ -178,7 +179,7 @@ impl SpanStore {
                 defining_unit: site.defining_unit,
                 definition_edition: site.definition_edition,
                 call_site: call_context,
-                transparency: crate::token_wire::Transparency::SemiTransparent,
+                transparency,
             })?;
             marked_contexts.insert(record.context, context);
         }

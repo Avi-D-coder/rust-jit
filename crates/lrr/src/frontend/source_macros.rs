@@ -223,6 +223,10 @@ impl SourceMacroIndex {
                 TextualEventKind::Definition {
                     identity,
                     source_name,
+                }
+                | TextualEventKind::ModuleDefinition {
+                    identity,
+                    source_name,
                 } => {
                     let item = items
                         .get(identity)
@@ -239,12 +243,14 @@ impl SourceMacroIndex {
                         &index.facts,
                         &index.ancestry,
                     )?;
-                    index.scopes.define(
-                        scope,
-                        event.at,
-                        MacroName::parse(source_name, outline.profile.edition)?,
-                        definition.clone(),
-                    )?;
+                    if matches!(event.kind, TextualEventKind::Definition { .. }) {
+                        index.scopes.define(
+                            scope,
+                            event.at,
+                            MacroName::parse(source_name, outline.profile.edition)?,
+                            definition.clone(),
+                        )?;
+                    }
                     index.definitions.insert(*identity, definition);
                 }
             }

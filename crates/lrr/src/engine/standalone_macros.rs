@@ -134,7 +134,7 @@ impl StandaloneRuntimeMacros {
 pub struct CompletedStandaloneRuntimeMacros {
     sources: Vec<(PreparedSourceView, PublishedMacroIndex)>,
     namespaces: MacroNamespaces,
-    catalog: RuntimeMacroCatalog,
+    catalogs: BTreeMap<crate::core::profile::ProfileIdentity, RuntimeMacroCatalog>,
     exports: Vec<SourceMacroRoutes>,
 }
 impl CompletedStandaloneRuntimeMacros {
@@ -156,21 +156,52 @@ impl CompletedStandaloneRuntimeMacros {
                 "completed runtime macro root is absent from sealed sources".into(),
             ));
         }
-        // Discovery already captured ordinary extern-crate aliases and their
-        // exact source worlds. Rebuilding standalone-only routes would erase
-        // that closure. Only the standard compiler facets are reconstructed.
-        let profile = &root.selection().outline.parse.profile;
-        let compiler =
-            crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(profile)?;
-        let standard = crate::facade::unit(profile, "std");
+        // Keep discovery's actual namespace closure. Each retained source uses
+        // its owning compiler profile; a root catalogue must not reclassify a
+        // dependency's no-item proof. Foreign standard worlds are select-only
+        // unless the ordinary namespace actually resolves their definitions.
+        let mut profiles = std::collections::BTreeSet::new();
+        profiles.insert(root.selection().outline.parse.profile.clone());
+        for (source, _) in &sources {
+            profiles.insert(source.selection().outline.parse.profile.clone());
+        }
+        if profiles.len() > 4 {
+            return Err(Diagnostic::new(
+                "LRR-E-METADATA-LIMIT",
+                "completed runtime macro profile count limit".into(),
+            ));
+        }
+        let mut catalogs = BTreeMap::new();
+        let mut exports = Vec::new();
+        exports
+            .try_reserve_exact(profiles.len().checked_mul(2).ok_or_else(|| {
+                Diagnostic::new(
+                    "LRR-E-METADATA-LIMIT",
+                    "runtime macro export count overflow".into(),
+                )
+            })?)
+            .map_err(|_| {
+                Diagnostic::new(
+                    "LRR-E-METADATA-LIMIT",
+                    "runtime macro exports allocation".into(),
+                )
+            })?;
+        for profile in &profiles {
+            let compiler =
+                crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(profile)?;
+            let standard = crate::facade::unit(profile, "std");
+            exports.push(compiler.source_routes()?);
+            exports.push(compiler.source_exports(standard)?);
+            catalogs.insert(
+                profile.clone(),
+                RuntimeMacroCatalog::standard_for_profiles(profile, &profiles)?,
+            );
+        }
         Ok(Self {
             sources,
             namespaces: discovery.completed_runtime_macro_namespace()?,
-            catalog: RuntimeMacroCatalog::standard(profile)?,
-            exports: vec![
-                compiler.source_routes()?,
-                compiler.source_exports(standard)?,
-            ],
+            catalogs,
+            exports,
         })
     }
     pub fn contexts(
@@ -184,12 +215,21 @@ impl CompletedStandaloneRuntimeMacros {
             )
         })?;
         for (source, index) in &self.sources {
+            let catalog = self
+                .catalogs
+                .get(&source.selection().outline.parse.profile)
+                .ok_or_else(|| {
+                    Diagnostic::new(
+                        "LRR-E-INTERNAL-SNAPSHOT",
+                        "owning runtime macro catalogue absent".into(),
+                    )
+                })?;
             result.push(
                 super::runtime_macros::RuntimeMacroContext::new(
                     source,
                     index,
                     &self.namespaces,
-                    &self.catalog,
+                    catalog,
                 )?
                 .with_compiler_exports(&self.exports),
             );

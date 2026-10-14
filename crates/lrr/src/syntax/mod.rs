@@ -72,3 +72,7 @@ pub(crate) mod literal_decode;
 pub(crate) mod lexical_numeric_callees;
 
 pub mod pure_constants;
+
+pub(crate) mod constant_paths;
+
+pub(crate) mod original_inert;

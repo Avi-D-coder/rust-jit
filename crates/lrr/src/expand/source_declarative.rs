@@ -335,6 +335,11 @@ struct OwnedCompilerOuter {
     before: u64,
 }
 enum DeclarativeBody {
+    /// Original source-owned dialect/groups; never a rules-body rewrite.
+    Macro2 {
+        arguments: Option<TokenForest>,
+        body: TokenForest,
+    },
     Procedural(std::sync::Arc<crate::service::function_macro_requests::PreparedFunctionRequest>),
     OwnedGenerated(
         std::sync::Arc<super::generated_items::GeneratedItems>,
@@ -346,6 +351,15 @@ enum DeclarativeBody {
         catalog: std::sync::Arc<crate::frontend::generated_macros::GeneratedMacroCatalog>,
         definition: Digest,
     },
+}
+/// Actual source producer generation includes the pinned backend and the
+/// source declaration/dialect/hygiene implementation, not only its dependency.
+/// This is identity data; it does not grant expansion or runtime authority.
+pub fn engine_version() -> Digest {
+    let mut e = crate::core::digest::StableEncoder::new("lrr/v1/source-declarative-engine");
+    e.string(lrr_expand_adapter::UPSTREAM_COMMIT);
+    e.u32(2); // Original module macro2 capture plus opaque expansion marks.
+    e.finish()
 }
 fn fault(code: &'static str, message: &str) -> Diagnostic {
     Diagnostic::new(code, message.into())
@@ -532,6 +546,40 @@ pub(crate) fn tokens_for_source_range(
     )
     .map_err(adapter)
 }
+
+fn original_definition_body(
+    source: &PreparedSourceView,
+    selected: SourceRange,
+    forest: &TokenForest,
+) -> Result<DeclarativeBody, Diagnostic> {
+    let shape = source.macro_definition_shape_at(selected)?;
+    if shape.dialect() == crate::syntax::macro_calls::MacroDefinitionDialect::Macro2
+        && shape.arguments().is_some()
+    {
+        // Each selected group keeps the owning forest's complete source tables.
+        // Reserve a conservative combined ceiling before cloning either group.
+        forest
+            .encoded_len()
+            .map_err(adapter)?
+            .checked_mul(2)
+            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+            .ok_or_else(|| {
+                fault(
+                    "LRR-E-METADATA-LIMIT",
+                    "macro2 original definition groups exceed retained metadata budget",
+                )
+            })?;
+    }
+    let body = group(forest, shape.body())?;
+    Ok(match shape.dialect() {
+        crate::syntax::macro_calls::MacroDefinitionDialect::Rules => DeclarativeBody::Source(body),
+        crate::syntax::macro_calls::MacroDefinitionDialect::Macro2 => DeclarativeBody::Macro2 {
+            arguments: shape.arguments().map(|r| group(forest, r)).transpose()?,
+            body,
+        },
+    })
+}
+
 impl SourceDeclarative {
     pub(crate) fn item_name_context(
         &self,
@@ -1376,33 +1424,7 @@ impl SourceDeclarative {
                         "captured enclosing macro body absent",
                     )
                 })?;
-            let range = self.source.macro_token_group(item.declaration_span, true)?;
-            let selection = self.source.selection();
-            let source = wire::SourceIdentity {
-                unit: Key(selection.outline.crate_key.0),
-                content: Key(selection.outline.parse.content.0),
-                path: selection.path.as_str().into(),
-            };
-            let context = wire::ContextRecord {
-                parent: None,
-                expansion: None,
-                transparency: wire::Transparency::Opaque,
-                defining_unit: source.unit,
-                edition: edition(selection.outline.parse.profile.edition)?,
-            };
-            let forest = wire::parse_source(
-                self.source.captured_macro_blob()?.text()?,
-                source,
-                context,
-                Key(crate::db::key::QueryKey::Outline(selection.outline.clone())
-                    .fingerprint()
-                    .0),
-            )
-            .map_err(adapter)?;
-            forest
-                .encoded_len_with_limit(32 * 1024 * 1024)
-                .map_err(adapter)?;
-            DeclarativeBody::Source(group(&forest, range)?)
+            self.original_definition_body(item.declaration_span)?
         };
         let wire = input.encode().map_err(|e| fault(e.code, &e.message))?;
         if wire.len() > 32 * 1024 * 1024 {
@@ -2112,20 +2134,22 @@ impl SourceDeclarative {
             crate::frontend::impl_index::DeclarationBodyOwner::Source(source) => {
                 let header = source.definition(definition.identity)?;
                 definition_range = Some(header.range);
-                let range = self.source.macro_token_group(header.range, true)?;
+                let range = self.source.macro_definition_shape_at(header.range)?.body();
                 if range != header.body {
                     return Err(fault(
                         "LRR-E-EXPANSION-INPUT",
                         "cold macro body attachment differs",
                     ));
                 }
-                group(&forest, range)?
+                self.original_definition_body(header.range)?
             }
             crate::frontend::impl_index::DeclarationBodyOwner::Argument(argument) => {
-                argument.macro_definition(definition.identity)?.body.clone()
+                DeclarativeBody::Source(
+                    argument.macro_definition(definition.identity)?.body.clone(),
+                )
             }
             crate::frontend::impl_index::DeclarationBodyOwner::Generated(output) => {
-                output.macro_definition(definition.identity)?.body.clone()
+                DeclarativeBody::Source(output.macro_definition(definition.identity)?.body.clone())
             }
         };
         let input = group(
@@ -2182,7 +2206,7 @@ impl SourceDeclarative {
         Ok(SourceDeclarativeDemand::Ready(Box::new(
             SourceDeclarativeRequest {
                 key,
-                body: DeclarativeBody::Source(body),
+                body,
                 input,
                 site,
                 origin: Some(origin),
@@ -2220,14 +2244,14 @@ impl SourceDeclarative {
         if producer.kind != crate::syntax::declaration_scan::DeclarationProducerKind::Macro {
             return Ok(SourceDeclarativeDemand::NeedInput(invocation));
         }
-        match index.lookup(invocation)? {
-            HygienicLookup::Selection(MacroSelection::Absent) => {}
-            HygienicLookup::NeedInput(input) if input == invocation && producer.path.len() > 1 => {}
+        let require_module_macro2 = match index.lookup(invocation)? {
+            HygienicLookup::Selection(MacroSelection::Absent) => false,
+            HygienicLookup::NeedInput(input) if input == invocation => producer.path.len() == 1,
             HygienicLookup::NeedInput(input) => {
                 return Ok(SourceDeclarativeDemand::NeedInput(input));
             }
             _ => return Ok(SourceDeclarativeDemand::NeedInput(invocation)),
-        }
+        };
         let syntax = self.source.macro_call_at(producer.range)?;
         // Captured module/prelude routes cannot settle an unentered body's
         // relevant lexical import; unrelated/sibling imports do not block it.
@@ -2280,15 +2304,24 @@ impl SourceDeclarative {
             .find(|item| {
                 item.def_key.item_kind == ItemKind::Macro
                     && item.def_key.fingerprint() == definition.identity
+                    && (!require_module_macro2 || item.scope.owner.is_none())
             })
-            .map(|item| owner.source.macro_token_group(item.declaration_span, true))
-            .transpose()?;
+            .map(|item| item.declaration_span);
         // This fallback admits only a captured source declaration. Generated and
         // compiler/procedural owners retain their existing separate request paths.
         let Some(range) = range else {
             return Ok(SourceDeclarativeDemand::NeedInput(invocation));
         };
-        let body = DeclarativeBody::Source(group(&owner.owned_forest()?, range)?);
+        if require_module_macro2
+            && owner.source.macro_definition_shape_at(range)?.dialect()
+                != crate::syntax::macro_calls::MacroDefinitionDialect::Macro2
+        {
+            // The current invocation's own unresolved index slot is not a
+            // general lexical/import completion certificate. Only an actual
+            // original module Macro2 route can settle this distinct producer.
+            return Ok(SourceDeclarativeDemand::NeedInput(invocation));
+        }
+        let body = owner.original_definition_body(range)?;
         let input = group(
             &self.owned_forest()?,
             self.source.macro_token_group(producer.range, false)?,
@@ -2468,19 +2501,16 @@ impl SourceDeclarative {
         };
         let mut definition_range = None;
         let body = match index.body_owner(definition.identity)? {
-            DeclarationBodyOwner::Argument(argument) => {
-                argument.macro_definition(definition.identity)?.body.clone()
-            }
+            DeclarationBodyOwner::Argument(argument) => DeclarativeBody::Source(
+                argument.macro_definition(definition.identity)?.body.clone(),
+            ),
             DeclarationBodyOwner::Generated(output) => {
-                output.macro_definition(definition.identity)?.body.clone()
+                DeclarativeBody::Source(output.macro_definition(definition.identity)?.body.clone())
             }
             DeclarationBodyOwner::Source(source) => {
                 let header = source.definition(definition.identity)?;
                 definition_range = Some(header.range);
-                group(
-                    &self.owned_forest()?,
-                    self.source.macro_token_group(header.range, true)?,
-                )?
+                self.original_definition_body(header.range)?
             }
         };
         let call = index.argument().macro_call(invocation)?;
@@ -2538,7 +2568,7 @@ impl SourceDeclarative {
         Ok(SourceDeclarativeDemand::Ready(Box::new(
             SourceDeclarativeRequest {
                 key,
-                body: DeclarativeBody::Source(body),
+                body,
                 input: call.input.clone(),
                 site: call.site,
                 origin: Some(origin),
@@ -2711,18 +2741,15 @@ impl SourceDeclarative {
             HygienicLookup::Selection(MacroSelection::Defined(definition)) => definition,
         };
         let body = match index.body_owner(definition.identity)? {
-            DeclarationBodyOwner::Argument(argument) => {
-                argument.macro_definition(definition.identity)?.body.clone()
-            }
+            DeclarationBodyOwner::Argument(argument) => DeclarativeBody::Source(
+                argument.macro_definition(definition.identity)?.body.clone(),
+            ),
             DeclarationBodyOwner::Generated(output) => {
-                output.macro_definition(definition.identity)?.body.clone()
+                DeclarativeBody::Source(output.macro_definition(definition.identity)?.body.clone())
             }
             DeclarationBodyOwner::Source(source) => {
                 let header = source.definition(definition.identity)?;
-                group(
-                    &self.owned_forest()?,
-                    self.source.macro_token_group(header.range, true)?,
-                )?
+                self.original_definition_body(header.range)?
             }
         };
         let output = index.output();
@@ -2768,7 +2795,7 @@ impl SourceDeclarative {
         Ok(SourceDeclarativeDemand::Ready(Box::new(
             SourceDeclarativeRequest {
                 key,
-                body: DeclarativeBody::Source(body),
+                body,
                 input: call.input.clone(),
                 site: call.site,
                 origin: None,
@@ -3177,8 +3204,7 @@ impl SourceDeclarative {
                 i.def_key.item_kind == ItemKind::Macro
                     && i.def_key.fingerprint() == definition.identity
             })
-            .map(|i| owner.source.macro_token_group(i.declaration_span, true))
-            .transpose()?;
+            .map(|i| i.declaration_span);
         if body_range.is_none() && generated.is_none() {
             return Err(fault("LRR-E-EXPANSION-INPUT", "resolved macro body absent"));
         }
@@ -3194,7 +3220,7 @@ impl SourceDeclarative {
             .0,
         );
         let body = match body_range {
-            Some(range) => DeclarativeBody::Source(group(&owner.owned_forest()?, range)?),
+            Some(range) => owner.original_definition_body(range)?,
             None => DeclarativeBody::Generated {
                 catalog: generated.expect("validated generated definition"),
                 definition: definition.identity,
@@ -3239,6 +3265,13 @@ impl SourceDeclarative {
             },
         )))
     }
+    fn original_definition_body(
+        &self,
+        selected: SourceRange,
+    ) -> Result<DeclarativeBody, Diagnostic> {
+        original_definition_body(&self.source, selected, &self.owned_forest()?)
+    }
+
     pub(crate) fn owned_forest(&self) -> Result<TokenForest, Diagnostic> {
         let selection = self.source.selection();
         let source = wire::SourceIdentity {
@@ -3704,7 +3737,7 @@ impl SourceDeclarativeRequest {
                     ));
                 }
                 let header = index.definition(selected.identity)?;
-                let range = source.macro_token_group(header.range, true)?;
+                let range = source.macro_definition_shape_at(header.range)?.body();
                 if range != header.body {
                     return Err(fault(
                         "LRR-E-EXPANSION-INPUT",
@@ -3717,7 +3750,7 @@ impl SourceDeclarativeRequest {
                 )?;
                 let (location, name) = source.macro_definition_header_at(header.range)?;
                 (
-                    group(&forest, range)?,
+                    original_definition_body(source, header.range, &forest)?,
                     DefinitionOrigin {
                         identity: selected.identity,
                         name,
@@ -3752,7 +3785,7 @@ impl SourceDeclarativeRequest {
                         )
                     })?;
                 (
-                    capture.body.clone(),
+                    DeclarativeBody::Source(capture.body.clone()),
                     captured_definition(
                         capture,
                         &header.name,
@@ -3799,7 +3832,7 @@ impl SourceDeclarativeRequest {
                     range: SourceRange::checked(span.start, span.end)?,
                 };
                 (
-                    capture.body.clone(),
+                    DeclarativeBody::Source(capture.body.clone()),
                     captured_definition(capture, &header.name, location)?,
                 )
             }
@@ -3863,7 +3896,7 @@ impl SourceDeclarativeRequest {
         }
         let request = Self {
             key: key.clone(),
-            body: DeclarativeBody::Source(body),
+            body,
             input,
             site: Key(request.site().0),
             owner: selected.defining_unit,
@@ -3873,7 +3906,8 @@ impl SourceDeclarativeRequest {
     }
 
     pub fn expand(&self) -> Result<ExpansionRecord, Diagnostic> {
-        let body = match &self.body {
+        let (body, arguments) = match &self.body {
+            DeclarativeBody::Macro2 { arguments, body } => (body, Some(arguments)),
             DeclarativeBody::Procedural(_) => {
                 return Err(fault(
                     "LRR-E-MACRO-PERMISSION",
@@ -3899,7 +3933,7 @@ impl SourceDeclarativeRequest {
                     crate::syntax::token_wire::Key(self.site.0),
                 );
             }
-            DeclarativeBody::Source(body) => body,
+            DeclarativeBody::Source(body) => (body, None),
             DeclarativeBody::Generated {
                 catalog,
                 definition,
@@ -3916,7 +3950,11 @@ impl SourceDeclarativeRequest {
                 );
             }
         };
-        let definition = DeclarativeMacro::new(body.clone()).map_err(adapter)?;
+        let definition = match arguments {
+            None => DeclarativeMacro::new(body.clone()),
+            Some(arguments) => DeclarativeMacro::new_macro2(arguments.clone(), body.clone()),
+        }
+        .map_err(adapter)?;
         let (result, _) = definition
             .expand_hygienic_with_limits(
                 &self.input,
@@ -4213,3 +4251,7 @@ mod generated_runtime_tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "source_declarative/macro2_tests.rs"]
+mod macro2_tests;

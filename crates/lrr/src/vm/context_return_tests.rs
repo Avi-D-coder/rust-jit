@@ -240,7 +240,7 @@ fn official_shadowed_nominal_and_named_primitive_controls_are_not_normalized_ali
         .unwrap()
         .with_declarative_compiler(
             Digest::of_bytes(b"original nominal shadow macro indexes"),
-            Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+            crate::expand::source_declarative::engine_version(),
             std::sync::Arc::new(
                 crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
                     &view.selection().outline.parse.profile,

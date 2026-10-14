@@ -4,6 +4,11 @@ mod aggregate_copy_frame;
 #[cfg(test)]
 #[path = "frame_call_scope_tests.rs"]
 mod call_scope_tests;
+#[path = "frame_constant_arrays.rs"]
+mod constant_array_frame;
+#[path = "frame_source_constant.rs"]
+mod source_constant_frame;
+pub(crate) use constant_array_frame::{ConstantPublicationActivation, ConstantPublicationChunk};
 #[cfg(test)]
 #[path = "integer_literal_decode_tests.rs"]
 mod integer_literal_decode_tests;
@@ -190,6 +195,7 @@ pub struct Frame {
     source_field: Option<PreparedSourceField>,
     constructor_mapping_bytes: usize,
     projection_bytes: usize,
+    constant_activation: Option<source_constant_frame::BoundSourceConstant>,
     copy_activation: Option<aggregate_copy_frame::OpActivation>,
     cleanup_activation: Option<scope_cleanup_frame::Activation>,
     call_progress: std::collections::BTreeMap<u32, (u32, u32)>,
@@ -203,12 +209,23 @@ pub struct Frame {
     parameter_sources: Vec<crate::traits::term::TyTerm>,
     binding_sources: Vec<Option<crate::traits::term::TyTerm>>,
     pub(crate) return_source: Option<crate::traits::term::TyTerm>,
+    store_session: crate::runtime::cell::StoreSession,
     anchor: FrameId,
     slots: Vec<Slot>,
     active_scopes: Vec<ScopeId>,
     bindings: Vec<Option<CellId>>,
 }
 impl Frame {
+    #[cfg(test)]
+    pub(crate) fn store_session(&self) -> crate::runtime::cell::StoreSession {
+        self.store_session
+    }
+    pub(crate) fn require_store(&self, store: &GuestStore) -> Result<(), Diagnostic> {
+        if self.store_session != store.pattern_binding_session() {
+            return Err(crate::runtime::arena::stale());
+        }
+        store.require_frame(self.anchor)
+    }
     pub(crate) fn metadata_bytes(body: &BodyIndex, parameters: usize) -> Option<usize> {
         // supported_source admits at most two owned boxed nodes: & [primitive; N].
         // Reserve that complete heap bound for each retained slot/binding view
@@ -248,8 +265,10 @@ impl Frame {
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<(PcKey, SlotId)>>()))
             .and_then(|bytes| bytes.checked_add(source_heap))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<super::call::CallStartFacts>>()))
+            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<source_constant_frame::BoundSourceConstant>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<aggregate_copy_frame::OpActivation>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<scope_cleanup_frame::Activation>>()))
+            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<crate::runtime::cell::StoreSession>()))
     }
     pub fn new(body: BodyIndex, entry: PcKey, store: &mut GuestStore) -> Result<Self, Diagnostic> {
         if entry.body != *body.body() {
@@ -381,6 +400,7 @@ impl Frame {
             source_field: None,
             constructor_mapping_bytes: 0,
             projection_bytes: 0,
+            constant_activation: None,
             copy_activation: None,
             cleanup_activation: None,
             call_progress: Default::default(),
@@ -394,6 +414,7 @@ impl Frame {
             parameter_sources: Vec::new(),
             binding_sources: vec![None; bindings.len()],
             return_source: None,
+            store_session: store.pattern_binding_session(),
             anchor,
             slots,
             active_scopes,
@@ -415,7 +436,7 @@ impl Frame {
         {
             return Err(invalid("callee creation requires a running caller"));
         }
-        store.require_frame(caller.anchor)?;
+        caller.require_store(store)?;
         caller.fuel.require_credit()?;
         let mut frame = Self::new(body, entry, store)?;
         frame.fuel = caller.fuel.share();

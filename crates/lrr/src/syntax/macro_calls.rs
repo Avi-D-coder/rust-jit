@@ -75,6 +75,9 @@ impl SourceMacroCall {
         self.executable
     }
 }
+#[path = "macro_definition_capture.rs"]
+mod definition_capture;
+pub(crate) use definition_capture::{MacroDefinitionDialect, MacroDefinitionShape};
 impl ParsedFile {
     /// Exact captured definition label, separate from the item's leading trivia.
     /// This supplies syntax facts only, never a macro or source authority.
@@ -82,49 +85,8 @@ impl ParsedFile {
         &self,
         selected: SourceRange,
     ) -> Result<(SourceRange, String), Diagnostic> {
-        let root = self.parsed.tree();
-        if selected.is_empty()
-            || selected.start > selected.end
-            || !range(root.syntax().text_range()).contains(selected)
-        {
-            return Err(error("selected macro definition range is outside source"));
-        }
-        let element = root.syntax().covering_element(TextRange::new(
-            TextSize::from(selected.start),
-            TextSize::from(selected.end),
-        ));
-        let node = element
-            .into_node()
-            .ok_or_else(|| error("selected macro definition is not a node"))?;
-        let definition = node
-            .ancestors()
-            .take(257)
-            .find_map(|node| {
-                let definition = ast::MacroRules::cast(node)?;
-                (range(definition.syntax().text_range()) == selected).then_some(definition)
-            })
-            .ok_or_else(|| error("selected range is not an exact macro definition"))?;
-        if self.errors.iter().any(|diagnostic| {
-            selected.contains(diagnostic.range) || diagnostic.range.contains(selected)
-        }) {
-            return Err(error("selected macro definition has parse errors"));
-        }
-        let keyword = definition
-            .macro_rules_token()
-            .ok_or_else(|| error("captured macro definition keyword absent"))?;
-        let name = definition
-            .name()
-            .ok_or_else(|| error("captured macro definition name absent"))?;
-        let label = SourceRange::checked(
-            u32::from(keyword.text_range().start()),
-            u32::from(name.syntax().text_range().end()),
-        )?;
-        if !selected.contains(label) || label.is_empty() {
-            return Err(error("macro definition label exceeds its captured owner"));
-        }
-        let name = semantic_name(&name.syntax().text().to_string())
-            .ok_or_else(|| error("invalid captured macro definition name"))?;
-        Ok((label, name))
+        let shape = self.macro_definition_shape_at(selected)?;
+        Ok((shape.label(), shape.name().into()))
     }
 
     /// Attach a captured opening delimiter to its actual source macro call.
@@ -354,6 +316,21 @@ impl ParsedFile {
         selected: SourceRange,
     ) -> Result<(Vec<ImportSegment>, bool), Diagnostic> {
         let meta = self.attribute_meta_at(selected)?;
+        // CfgMeta has no Path in the pinned AST. The exact attached keyword
+        // supplies its unqualified lookup name, not compiler facet authority.
+        if let ast::Meta::CfgMeta(cfg) = &meta {
+            let token = cfg
+                .cfg_token()
+                .ok_or_else(|| error("cfg attribute keyword is absent"))?;
+            let name = semantic_name(token.text())
+                .ok_or_else(|| error("cfg attribute keyword allocation failed"))?;
+            let mut segments = Vec::new();
+            segments
+                .try_reserve_exact(1)
+                .map_err(|_| error("cfg attribute path allocation failed"))?;
+            segments.push(ImportSegment::Name(name));
+            return Ok((segments, false));
+        }
         let path = meta
             .path()
             .ok_or_else(|| error("attribute meta has no module path"))?;

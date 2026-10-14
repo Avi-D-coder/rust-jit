@@ -102,7 +102,7 @@ impl LiteralKind {
     }
 }
 /// Explicit recipe/cache compatibility, independent of host enum layout.
-pub const LRIR_RECIPE_SCHEMA: u32 = 5;
+pub const LRIR_RECIPE_SCHEMA: u32 = 6;
 pub const DECODED_INTEGER_SCHEMA: u32 = 1;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum IntegerLexicalError {
@@ -216,7 +216,9 @@ pub enum BorrowAccess {
     Mutable,
 }
 /// Stable opcode inventory. Runtime counter storage must use this bound.
-pub const OPCODE_COUNT: usize = 42;
+// Tag42 remains reserved for the separately frozen managed Vec instruction.
+pub const SOURCE_CONSTANT_OPCODE: u8 = 43;
+pub const OPCODE_COUNT: usize = 44;
 pub type OpcodeCounters = [u64; OPCODE_COUNT];
 
 /// Closed source-bound floating value. Public callers can inspect or clone a
@@ -383,6 +385,10 @@ impl crate::core::digest::StableEncode for PrimitiveFloatingConstant {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Op {
+    SourceConstant {
+        constant: Box<super::source_constant::SourceConstantInstruction>,
+        destination: SlotId,
+    },
     PrimitiveFloatingConstant {
         constant: Box<PrimitiveFloatingConstant>,
         destination: SlotId,
@@ -575,6 +581,7 @@ impl Op {
     /// Stable opcode IDs shared by execution counters and redacted failure records.
     pub(crate) fn opcode_tag(&self) -> u8 {
         match self {
+            Self::SourceConstant { .. } => SOURCE_CONSTANT_OPCODE,
             Self::CompoundHint { .. } => 40,
             Self::ProjectTuple { .. } => 35,
             Self::ProjectIndex { .. } => 36,
@@ -653,7 +660,8 @@ impl Op {
             | Self::BranchHint { .. }
             | Self::CheckParameters { .. }
             | Self::CheckUnit { .. } => EffectClass::Primitive,
-            Self::Borrow { .. }
+            Self::SourceConstant { .. }
+            | Self::Borrow { .. }
             | Self::ReadPlace { .. }
             | Self::AssignPlace { .. }
             | Self::CallPrepare { .. }

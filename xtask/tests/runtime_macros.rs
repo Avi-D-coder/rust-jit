@@ -12,7 +12,7 @@ fn path(unit: Digest, name: &str) -> MacroPath {
     MacroPath::new(unit, vec![MacroName::parse(name, 2024).unwrap()]).unwrap()
 }
 #[test]
-fn runtime_macro_facet_has_four_stable_unit_and_edition_bound_definitions() {
+fn runtime_macro_facet_has_six_stable_unit_and_edition_bound_definitions() {
     let unit = Digest([184; 32]);
     let catalog = RuntimeMacroCatalog::new(unit, 2024).unwrap();
     let rebuilt = RuntimeMacroCatalog::new(unit, 2024).unwrap();
@@ -25,7 +25,17 @@ fn runtime_macro_facet_has_four_stable_unit_and_edition_bound_definitions() {
         .map(|d| catalog.select(d).unwrap().unwrap().name())
         .collect::<Vec<_>>();
     names.sort();
-    assert_eq!(names, ["assert", "assert_eq", "assert_ne", "panic"]);
+    assert_eq!(
+        names,
+        [
+            "assert",
+            "assert_eq",
+            "assert_ne",
+            "panic",
+            "unimplemented",
+            "unreachable"
+        ]
+    );
     for other in [
         RuntimeMacroCatalog::new(Digest([185; 32]), 2024).unwrap(),
         RuntimeMacroCatalog::new(unit, 2021).unwrap(),

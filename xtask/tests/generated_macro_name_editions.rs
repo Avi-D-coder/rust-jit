@@ -153,7 +153,7 @@ fn expand(
         definition_edition: 2015,
         call_edition: year,
         grammar: GrammarSlot::Items,
-        engine_version: Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+        engine_version: lrr::expand::source_declarative::engine_version(),
         procedural_epoch: None,
     };
     let (result, stats) = rules

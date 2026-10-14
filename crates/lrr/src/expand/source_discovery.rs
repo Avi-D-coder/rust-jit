@@ -14,6 +14,10 @@ use crate::{
     syntax::outline::{ScopeKey, TextualEventKind},
 };
 use std::collections::{BTreeMap, BTreeSet};
+#[path = "source_discovery/compiler_profiles.rs"]
+mod compiler_profiles;
+#[path = "source_discovery/original_inert.rs"]
+mod original_inert;
 pub enum SourceDiscoveryStep {
     NeedSourceDeriveSelection {
         selection: std::sync::Arc<crate::service::source_derive_requests::SourceDeriveSelection>,
@@ -427,6 +431,7 @@ pub struct SourceDiscovery {
         Digest,
         Vec<super::source_declarative::SourceDeclarative>,
     )>,
+    compiler_profiles: Option<compiler_profiles::PreparedSourceCompilerFacets>,
     calls: BTreeMap<Digest, (usize, crate::syntax::outline::ItemInvocation)>,
     frontier_producers: BTreeMap<(ScopeKey, Digest), BTreeSet<Digest>>,
     nested_argument_summaries: BTreeMap<
@@ -446,6 +451,7 @@ pub struct SourceDiscovery {
     nested_sources:
         BTreeMap<usize, std::sync::Arc<crate::frontend::impl_index::DeclarationMacroIndex>>,
     nested_jobs: BTreeMap<Digest, usize>,
+    original_prefix_jobs: BTreeSet<Digest>,
     source_replacements:
         BTreeMap<Digest, std::sync::Arc<super::source_replacement::SourceReplacementProof>>,
     replaced_source_producers:
@@ -822,11 +828,36 @@ impl SourceDiscovery {
         }
         let mut nested_sources = BTreeMap::new();
         let mut nested_jobs = BTreeMap::new();
+        let mut original_prefix_jobs = BTreeSet::new();
         let mut nested_bytes = 0usize;
         for (ordinal, source) in sources.iter().enumerate() {
             let scan = source.declaration_inventory(
                 crate::syntax::declaration_scan::DeclarationScanLimits::default(),
             )?;
+            let prefixes = if scan.generated_origin().is_none() {
+                original_inert::capture(source, &scan, 32 * 1024 * 1024)?
+            } else {
+                // This lane supplies no original-source authority to generated
+                // roots; their existing producer/context admission is separate.
+                BTreeSet::new()
+            };
+            nested_bytes = nested_bytes
+                .checked_add(
+                    prefixes
+                        .len()
+                        .checked_mul(128)
+                        .ok_or_else(|| fault("original root annotation metadata overflow"))?,
+                )
+                .filter(|n| *n <= 512 * 1024 * 1024)
+                .ok_or_else(|| fault("original root annotation metadata limit"))?;
+            if original_prefix_jobs
+                .len()
+                .checked_add(prefixes.len())
+                .is_none_or(|n| n > 100_000)
+            {
+                return Err(fault("original root annotation count limit"));
+            }
+            original_prefix_jobs.extend(prefixes.iter().copied());
             let mut index = crate::frontend::impl_index::DeclarationMacroIndex::new(scan)?;
             // The runtime outline owns module items, not associated items.
             // An associated header can have no executable owner; that does not
@@ -867,12 +898,13 @@ impl SourceDiscovery {
                 .producers()
                 .iter()
                 .filter(|p| {
-                    ordinary_ranges.contains(&(ordinal, p.range.start, p.range.end))
+                    !prefixes.contains(&p.identity)
+                        && (ordinary_ranges.contains(&(ordinal, p.range.start, p.range.end))
                         || (p.kind
                             == crate::syntax::declaration_scan::DeclarationProducerKind::Attribute
                             && p.scope.owner.is_none()
                             && !associated_scopes.contains(&p.lexical_scope)
-                            && !cold_test_targets.contains(&p.identity))
+                            && !cold_test_targets.contains(&p.identity)))
                 })
                 .map(|p| p.identity)
                 .collect::<BTreeSet<_>>();
@@ -925,6 +957,7 @@ impl SourceDiscovery {
             epoch,
             started: false,
             declarative: None,
+            compiler_profiles: None,
             calls,
             frontier_producers,
             nested_argument_summaries: BTreeMap::new(),
@@ -935,6 +968,7 @@ impl SourceDiscovery {
             nested_runtime_proofs: BTreeMap::new(),
             nested_sources,
             nested_jobs,
+            original_prefix_jobs,
             source_replacements: BTreeMap::new(),
             replaced_source_producers: BTreeMap::new(),
             item_impl_jobs: BTreeMap::new(),
@@ -1177,9 +1211,19 @@ impl SourceDiscovery {
             if catalog.definitions().next().is_none() {
                 return Err(fault("compiler facet is empty"));
             }
-            for provider in &mut providers {
-                provider.compiler = Some(catalog.clone());
-            }
+            let prepared = compiler_profiles::PreparedSourceCompilerFacets::prepare(
+                &providers,
+                catalog,
+                64 * 1024 * 1024,
+            )?;
+            let retained = self
+                .nested_bytes
+                .checked_add(prepared.metadata_bytes())
+                .filter(|n| *n <= 512 * 1024 * 1024)
+                .ok_or_else(|| fault("owning compiler facet metadata limit"))?;
+            prepared.install(&mut providers)?;
+            self.nested_bytes = retained;
+            self.compiler_profiles = Some(prepared);
         }
         super::source_declarative::SourceDeclarative::configure_captured_modules(&mut providers)?;
         Self::install_macro_routes_with_modules(
@@ -1212,12 +1256,19 @@ impl SourceDiscovery {
             .as_mut()
             .ok_or_else(|| fault("compiler discovery requires captured declarative indexes"))?
             .2;
-        for provider in providers.iter_mut() {
-            if provider.compiler.is_some() {
-                return Err(fault("compiler discovery configuration is already frozen"));
-            }
-            provider.compiler = Some(catalog.clone());
-        }
+        let prepared = compiler_profiles::PreparedSourceCompilerFacets::prepare(
+            providers,
+            catalog,
+            64 * 1024 * 1024,
+        )?;
+        let retained = self
+            .nested_bytes
+            .checked_add(prepared.metadata_bytes())
+            .filter(|n| *n <= 512 * 1024 * 1024)
+            .ok_or_else(|| fault("owning compiler facet metadata limit"))?;
+        prepared.install(providers)?;
+        self.nested_bytes = retained;
+        self.compiler_profiles = Some(prepared);
         Self::install_macro_routes_with_modules(
             &mut self.graph,
             providers,
@@ -3699,50 +3750,91 @@ impl SourceDiscovery {
                 routes.push(route.clone());
             }
         }
-        if let Some(catalog) = providers.first().and_then(|p| p.compiler.as_ref()) {
-            routes.push(std::sync::Arc::new(catalog.source_routes()?));
+        let mut compiler_catalogues = BTreeSet::new();
+        for provider in providers {
+            let Some(catalog) = &provider.compiler else {
+                continue;
+            };
+            if !compiler_catalogues.insert(catalog.owning_profile_identity()?) {
+                continue;
+            }
             let core = catalog
                 .definitions()
                 .next()
                 .ok_or_else(|| fault("compiler facet is empty"))?
                 .defining_unit;
+            let mut exports = vec![catalog.source_routes()?];
             for (_, unit) in catalog.facade_aliases() {
                 if unit != core {
-                    routes.push(std::sync::Arc::new(catalog.source_exports(unit)?));
+                    exports.push(catalog.source_exports(unit)?);
                 }
+            }
+            for export in exports {
+                route_bytes = route_bytes
+                    .checked_add(export.metadata_bytes()?)
+                    .filter(|n| *n <= 64 * 1024 * 1024)
+                    .ok_or_else(|| fault("owning compiler route metadata limit"))?;
+                routes
+                    .try_reserve_exact(1)
+                    .map_err(|_| fault("owning compiler route allocation failed"))?;
+                routes.push(std::sync::Arc::new(export));
             }
         }
         Ok(routes)
+    }
+    fn compiler_import_graph(
+        routes: &[std::sync::Arc<crate::frontend::source_macro_routes::SourceMacroRoutes>],
+        providers: &[super::source_declarative::SourceDeclarative],
+    ) -> Result<crate::frontend::macro_names::MacroNamespaces, Diagnostic> {
+        let mut imports = Vec::new();
+        for provider in providers {
+            if let Some(catalog) = &provider.compiler
+                && let Some(import) = catalog.injected_import(provider.module_source())?
+            {
+                if imports.len() >= 100_000 {
+                    return Err(fault("compiler injected import count limit"));
+                }
+                imports
+                    .try_reserve(1)
+                    .map_err(|_| fault("compiler injected import allocation"))?;
+                imports.push(import);
+            }
+        }
+        crate::frontend::source_macro_routes::SourceMacroRoutes::discovery_graph_with_compiler_imports(routes, &imports)
     }
     fn runtime_preludes<'a>(
         namespaces: &mut crate::frontend::macro_names::MacroNamespaces,
         providers: impl Iterator<Item = &'a super::source_declarative::SourceDeclarative>,
     ) -> Result<(), Diagnostic> {
-        let mut providers = providers;
-        let Some(first) = providers.next() else {
-            return Ok(());
-        };
-        if let Some(catalog) = first.compiler.as_ref() {
+        let mut installed: BTreeMap<ScopeKey, Digest> = BTreeMap::new();
+        let mut scope_bytes = 0usize;
+        for provider in providers {
+            let Some(catalog) = provider.compiler.as_ref() else {
+                continue;
+            };
+            catalog.install_injected_import(namespaces, provider.module_source())?;
             let unit = catalog
-                .runtime_prelude_unit(first.module_source().macro_prelude_policy()?.standard);
-            let mut scopes = BTreeSet::new();
-            let mut scope_bytes = 0usize;
-            for provider in std::iter::once(first).chain(providers) {
-                for scope in provider.compiler_scopes() {
-                    if scope.owner.is_none() {
-                        if !scopes.contains(scope) {
-                            scope_bytes = scope_bytes
-                                .checked_add(scope.heap_bytes())
-                                .and_then(|n| n.checked_add(128))
-                                .filter(|n| *n <= 32 * 1024 * 1024)
-                                .ok_or_else(|| fault("compiler prelude scope metadata limit"))?;
-                        }
-                        scopes.insert(scope.clone());
-                    }
-                }
-            }
+                .runtime_prelude_unit(provider.module_source().macro_prelude_policy()?.standard);
+            let identity = catalog.owning_profile_identity()?;
             let globals = catalog.compiler_globals()?;
-            for scope in scopes {
+            for scope in provider
+                .compiler_scopes()
+                .filter(|scope| scope.owner.is_none())
+            {
+                if let Some(old) = installed.get(scope) {
+                    if *old != identity {
+                        return Err(fault(
+                            "one source scope has conflicting owning compiler facets",
+                        ));
+                    }
+                    continue;
+                }
+                scope_bytes = scope_bytes
+                    .checked_add(scope.heap_bytes())
+                    .and_then(|n| n.checked_add(128))
+                    .filter(|n| *n <= 32 * 1024 * 1024)
+                    .ok_or_else(|| fault("compiler prelude scope metadata limit"))?;
+                installed.insert(scope.clone(), identity);
                 for (name, definition) in &globals {
                     namespaces.compiler_global(
                         scope.crate_key,
@@ -3750,7 +3842,7 @@ impl SourceDiscovery {
                         definition.clone(),
                     )?;
                 }
-                namespaces.set_prelude(scope, unit)?;
+                namespaces.set_prelude(scope.clone(), unit)?;
             }
         }
         Ok(())
@@ -3773,8 +3865,7 @@ impl SourceDiscovery {
             .ok_or_else(|| fault("runtime declarative providers absent"))?
             .2;
         let routes = Self::completed_macro_routes(providers, &self.module_routes)?;
-        let mut namespaces =
-            crate::frontend::source_macro_routes::SourceMacroRoutes::discovery_graph(&routes)?;
+        let mut namespaces = Self::compiler_import_graph(&routes, providers)?;
 
         Self::install_original_module_bindings(
             &mut namespaces,
@@ -3905,8 +3996,7 @@ impl SourceDiscovery {
         inert: &BTreeMap<Digest, super::nested_inert::NestedInertProof>,
     ) -> Result<crate::frontend::macro_names::MacroNamespaces, Diagnostic> {
         let routes = Self::completed_macro_routes(providers, modules)?;
-        let mut namespaces =
-            crate::frontend::source_macro_routes::SourceMacroRoutes::discovery_graph(&routes)?;
+        let mut namespaces = Self::compiler_import_graph(&routes, providers)?;
         Self::install_original_module_bindings(
             &mut namespaces,
             sources.values().map(|index| index.scan()),
@@ -3931,6 +4021,11 @@ impl SourceDiscovery {
                         provider.module_source().outline().profile.edition,
                     )?;
                 }
+            }
+        }
+        for provider in providers {
+            if let Some(catalog) = &provider.compiler {
+                catalog.install_ordinary_module_facets(graph)?;
             }
         }
         if providers.first().is_some_and(|p| p.compiler.is_some()) {
@@ -3958,6 +4053,11 @@ impl SourceDiscovery {
             }
         }
 
+        for provider in providers {
+            if let Some(catalog) = &provider.compiler {
+                graph.install_compiler_injection(catalog, provider.module_source())?;
+            }
+        }
         Self::runtime_preludes(&mut namespaces, providers.iter())?;
         for route in &routes {
             for row in &route.extern_aliases {
@@ -6306,8 +6406,14 @@ impl SourceDiscovery {
                 return Err(fault("module readiness metadata limit"));
             }
             let macros = staged.provider.completed_published_index()?;
-            let mut key = crate::core::digest::StableEncoder::new("lrr/v2/module-source-readiness");
+            let mut key = crate::core::digest::StableEncoder::new("lrr/v3/module-source-readiness");
             key.record(&self.key);
+            if let Some(prepared) = &self.compiler_profiles {
+                key.bool(true);
+                key.digest(prepared.identity());
+            } else {
+                key.bool(false);
+            }
             key.digest(syntax.identity());
             key.u32(self.namespace.tag());
             key.u64(
@@ -8246,6 +8352,13 @@ impl SourceDiscovery {
         let provider = providers
             .get(ordinal)
             .ok_or_else(|| fault("nested provider absent"))?;
+        if self.original_prefix_jobs.contains(&identity)
+            && original_inert::matched_attribute_facet(&self.sources[ordinal], provider)?.is_none()
+        {
+            self.work.block(ticket, vec![identity])?;
+            self.pending_nested = None;
+            return Ok(None);
+        }
         if self.argument_discoveries.contains_key(&identity) {
             return self.poll_argument_declarations(ticket, ordinal);
         }
@@ -8367,14 +8480,14 @@ impl SourceDiscovery {
                     };
                     proof = proof.with_attribute_facet(binding);
                 }
-                let mut parent = (*parent).clone();
-                parent.accept_inert_attribute(identity, proof.name()?)?;
                 let retained = self
                     .nested_bytes
                     .checked_add(proof.metadata_bytes()?)
                     .and_then(|n| n.checked_add(parent.retained_metadata_bytes()))
                     .filter(|n| *n <= 512 * 1024 * 1024)
                     .ok_or_else(|| fault("nested inert attribute metadata limit"))?;
+                let mut parent = (*parent).clone();
+                parent.accept_inert_attribute(identity, proof.name()?)?;
                 let fingerprint = proof.fingerprint();
                 let mut update = DiscoveryUpdate {
                     members: vec![identity, fingerprint],
@@ -9516,6 +9629,9 @@ impl SourceDiscovery {
         let Some((compile_env, engine, providers)) = &self.declarative else {
             return Ok(());
         };
+        if let Some(prepared) = &self.compiler_profiles {
+            prepared.revalidate(providers)?;
+        }
         let mut records = Vec::new();
         self.calls
             .len()
@@ -9720,6 +9836,19 @@ impl SourceDiscovery {
             }
         }
         for (identity, proof) in &self.nested_inert_proofs {
+            if self.original_prefix_jobs.contains(identity) {
+                let ordinal = *self
+                    .nested_jobs
+                    .get(identity)
+                    .ok_or_else(|| fault("original inert prefix source owner absent"))?;
+                original_inert::revalidate(
+                    &self.sources[ordinal],
+                    &providers[ordinal],
+                    proof,
+                    namespaces,
+                )?;
+                continue;
+            }
             if let Some(expected) = proof.attribute_facet() {
                 let ordinal = *self
                     .nested_jobs
@@ -10693,3 +10822,11 @@ mod required_item_admission_tests {
         )));
     }
 }
+
+#[cfg(test)]
+#[path = "source_discovery/original_inert_tests.rs"]
+mod original_inert_tests;
+
+#[cfg(test)]
+#[path = "source_discovery/compiler_profiles_tests.rs"]
+mod compiler_profiles_tests;

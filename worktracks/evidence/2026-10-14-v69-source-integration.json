@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "task_scope": [
+    "T054 constant source query/dispatcher components",
+    "T034 owning-edition macro catalogue and stock adapter components"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "source_member": "e06102b76e38d5929c79ff5eee5333ba4b65866b0128a384b36e97a7fb311e2a",
+  "gate_terminal": {
+    "session_id": 21897,
+    "actual_chunk_id": "cc6067",
+    "wrapper_exit_code": 0,
+    "gate_exit_code": 0
+  },
+  "gate_reports_passed": {
+    "00": true,
+    "01": true,
+    "02": true,
+    "03": true
+  },
+  "listed_bodies": 2952,
+  "passed_bodies": 2952,
+  "failed": 0,
+  "ignored": 0,
+  "filtered": 0,
+  "unexecuted": 0,
+  "original_files": 470,
+  "inventory_cases_pending": 292,
+  "source_paths_promoted": 206,
+  "main_integration_terminal": "a65c91/exit0",
+  "fresh_main_milestone": "pending; required after promotion",
+  "new_full_stock_cases": 0,
+  "guest_jit_gate": "closed",
+  "linux_acceptance": "unexecuted",
+  "receipt_sha256": "c1648a7044e150d5f9bd479073d58ae159c38a4261195d140aeb80413d191d69",
+  "evidence_hashes_sha256": "decd3080d8784877c82e0079991b72c639f2f7e983567a9668de2269f9cb4077",
+  "raw_evidence_local": "artifacts/macos-first/sol-canonical-validation-agent-v9/",
+  "gate_command": {
+    "argv": [
+      "cargo",
+      "+1.99.0",
+      "run",
+      "--offline",
+      "--locked",
+      "-p",
+      "xtask",
+      "--",
+      "gate",
+      "03"
+    ],
+    "cwd": "/Users/avi/Code/rust-jit/artifacts/macos-first/parallel-interpreter-followups-v2/revision5-milestone-source-v2",
+    "fixed_environment": {
+      "CARGO_TARGET_DIR": "/Users/avi/Code/rust-jit/artifacts/macos-first/parallel-interpreter-followups-v2/revision5-validation-agent-target-v1",
+      "CARGO_BUILD_JOBS": "2",
+      "CARGO_INCREMENTAL": "0",
+      "RUST_TEST_THREADS": "1",
+      "RUSTUP_TOOLCHAIN": "1.99.0",
+      "LRR_VALIDATION_SOURCE_ROOT": "/Users/avi/Code/rust-jit/artifacts/macos-first/parallel-interpreter-followups-v2/revision5-milestone-source-v2",
+      "LRR_RUSTC_CHECKOUT": "/Users/avi/Code/rust-jit/rustc/rust",
+      "CARGO_PROFILE_DEV_OPT_LEVEL": "0",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_PROFILE_DEV_DEBUG_ASSERTIONS": "true",
+      "CARGO_PROFILE_DEV_INCREMENTAL": "false",
+      "CARGO_PROFILE_TEST_OPT_LEVEL": "0",
+      "CARGO_PROFILE_TEST_DEBUG": "0",
+      "CARGO_PROFILE_TEST_DEBUG_ASSERTIONS": "true",
+      "CARGO_PROFILE_TEST_INCREMENTAL": "false"
+    },
+    "PATH": "/opt/homebrew/opt/python@3.14/libexec/bin:/opt/homebrew/bin:/Users/avi/.cargo/bin:/Applications/ChatGPT.app/Contents/Resources/codex-cli/codex-path:/Users/avi/.local/bin:/Users/avi/.nvm/versions/node/v22.21.1/bin:/Users/avi/.bun/bin:/Users/avi/Library/Caches/zr/zsh-users/zsh-autosuggestions.git:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Users/avi/.cargo/bin:/Users/avi/.codex/tmp/arg0/codex-arg0iNF7uJ:/Applications/ChatGPT.app/Contents/Resources/codex-cli/codex-path:/Users/avi/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/avi/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources:/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS:/Users/avi/.sp1/bin:/Users/avi/.foundry/bin:/Users/avi/.cargo/bin:/Users/avi/.sp1/bin:/Users/avi/.foundry/bin",
+    "python_version": "Python 3.14.8",
+    "removed_flags_wrappers_stack": [
+      "RUST_MIN_STACK",
+      "RUSTFLAGS",
+      "CARGO_ENCODED_RUSTFLAGS",
+      "RUSTDOCFLAGS",
+      "CARGO_ENCODED_RUSTDOCFLAGS",
+      "RUSTC_WRAPPER",
+      "RUSTC_WORKSPACE_WRAPPER",
+      "RUSTC",
+      "RUSTDOC"
+    ],
+    "source_member": "e06102b76e38d5929c79ff5eee5333ba4b65866b0128a384b36e97a7fb311e2a",
+    "owner": {
+      "schema": 1,
+      "canonical_source_root": "/Users/avi/Code/rust-jit/artifacts/macos-first/parallel-interpreter-followups-v2/revision5-milestone-source-v2",
+      "target_created_fresh": true,
+      "compiler": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: aarch64-apple-darwin\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+      "profile": {
+        "opt_level": 0,
+        "debug_info": 0,
+        "debug_assertions": true,
+        "test_assertions": true,
+        "incremental": false
+      },
+      "validation_actor": "/root/edition_macro_logic",
+      "cloned_from": "/Users/avi/Code/rust-jit/artifacts/macos-first/parallel-interpreter-followups-v2/revision5-milestone-owned-target-v2",
+      "clone_command": "cp -Rc",
+      "clone_actual_session": 31932,
+      "clone_actual_terminal_chunk": "5b0c8b",
+      "clone_actual_exit_code": 0,
+      "cloned_at": "2026-10-14T17:52:24.675270+00:00"
+    },
+    "started_at": "2026-10-14T22:07:07.282618+00:00"
+  }
+}

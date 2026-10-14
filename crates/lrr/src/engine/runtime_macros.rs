@@ -116,7 +116,7 @@ impl<'a> RuntimeMacroContext<'a> {
                 graph.declare_module(
                     *unit,
                     &path.iter().map(|name| name.as_str()).collect::<Vec<_>>(),
-                    self.catalog.edition(),
+                    routes.edition,
                     VisibilityScope::Public,
                 )?;
             }
@@ -208,7 +208,9 @@ impl<'a> RuntimeMacroContext<'a> {
                             "reached println requires pending formatter and managed output integration",
                         ));
                     }
-                    RuntimeMacroKind::Panic => plan.lower_static_panic_recipe(
+                    RuntimeMacroKind::Panic
+                    | RuntimeMacroKind::Unreachable
+                    | RuntimeMacroKind::Unimplemented => plan.lower_static_panic_recipe(
                         self.source,
                         body,
                         pc,
@@ -369,8 +371,7 @@ pub fn prepare_declarative_expression(
             )
             || expected.key.grammar != GrammarSlot::Expression
             || expected.key.call_edition != source.selection().outline.parse.profile.edition
-            || expected.key.engine_version
-                != Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes())
+            || expected.key.engine_version != crate::expand::source_declarative::engine_version()
             || body.body() != &pc.body
             || pc.phase != Phase::Entry.code()?
         {

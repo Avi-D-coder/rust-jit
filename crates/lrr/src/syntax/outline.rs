@@ -287,6 +287,11 @@ pub enum ProducerKind {
 }
 #[derive(Debug, Clone)]
 pub enum TextualEventKind {
+    /// Module-scoped macro2 membership; never a textual macro_rules binding.
+    ModuleDefinition {
+        identity: Digest,
+        source_name: String,
+    },
     Definition {
         identity: Digest,
         source_name: String,
@@ -335,7 +340,7 @@ impl ItemOutline {
     }
 }
 impl StableEncode for Outline {
-    const DOMAIN: &'static str = "lrr/v2/outline";
+    const DOMAIN: &'static str = "lrr/v3/outline";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.cfg);
         e.record(&self.profile);
@@ -369,7 +374,8 @@ impl Outline {
                     event.scope.heap_bytes()
                         + match &event.kind {
                             TextualEventKind::OpenScope { child, .. } => child.heap_bytes(),
-                            TextualEventKind::Definition { source_name, .. } => {
+                            TextualEventKind::Definition { source_name, .. }
+                            | TextualEventKind::ModuleDefinition { source_name, .. } => {
                                 source_name.capacity()
                             }
                             _ => 0,
@@ -624,227 +630,234 @@ impl ParsedFile {
             let mut executable: Option<SyntaxNode> = None;
             let mut blocked = false;
             let mut add_value_constructor = false;
-            let (kind, namespace, name, index_name) =
-                match &item {
-                    ast::Item::Fn(i) => {
-                        executable = node
-                            .children()
-                            .find_map(ast::BlockExpr::cast)
-                            .map(|b| b.syntax().clone());
-                        if let Some(body) = &executable {
-                            let ends: Vec<_> = body
-                                .descendants_with_tokens()
-                                .filter_map(|e| e.into_token())
-                                .filter(|t| !t.kind().is_trivia())
-                                .collect();
-                            blocked = !ends.first().is_some_and(|t| t.text() == "{")
-                                || !ends.last().is_some_and(|t| t.text() == "}");
-                        }
-                        (
-                            ItemKind::Function,
-                            Namespace::Value,
-                            i.name().map(|n| n.text().to_string()),
-                            true,
-                        )
+            let (kind, namespace, name, index_name) = match &item {
+                ast::Item::Fn(i) => {
+                    executable = node
+                        .children()
+                        .find_map(ast::BlockExpr::cast)
+                        .map(|b| b.syntax().clone());
+                    if let Some(body) = &executable {
+                        let ends: Vec<_> = body
+                            .descendants_with_tokens()
+                            .filter_map(|e| e.into_token())
+                            .filter(|t| !t.kind().is_trivia())
+                            .collect();
+                        blocked = !ends.first().is_some_and(|t| t.text() == "{")
+                            || !ends.last().is_some_and(|t| t.text() == "}");
                     }
-                    ast::Item::Const(i) => {
-                        executable = node
-                            .children()
-                            .find_map(ast::Expr::cast)
-                            .map(|e| e.syntax().clone());
-                        (
-                            ItemKind::Constant,
-                            Namespace::Value,
-                            i.name().map(|n| n.text().to_string()),
-                            true,
-                        )
-                    }
-                    ast::Item::Static(i) => {
-                        executable = node
-                            .children()
-                            .find_map(ast::Expr::cast)
-                            .map(|e| e.syntax().clone());
-                        (
-                            ItemKind::Static,
-                            Namespace::Value,
-                            i.name().map(|n| n.text().to_string()),
-                            true,
-                        )
-                    }
-                    ast::Item::Struct(i) => {
-                        add_value_constructor = node
-                            .children()
-                            .any(|n| ast::TupleFieldList::can_cast(n.kind()))
-                            || i.semicolon_token().is_some()
-                                && !node
-                                    .children()
-                                    .any(|n| ast::RecordFieldList::can_cast(n.kind()));
-                        (
-                            ItemKind::Struct,
-                            Namespace::Type,
-                            i.name().map(|n| n.text().to_string()),
-                            true,
-                        )
-                    }
-                    ast::Item::Union(i) => (
-                        ItemKind::Union,
+                    (
+                        ItemKind::Function,
+                        Namespace::Value,
+                        i.name().map(|n| n.text().to_string()),
+                        true,
+                    )
+                }
+                ast::Item::Const(i) => {
+                    executable = node
+                        .children()
+                        .find_map(ast::Expr::cast)
+                        .map(|e| e.syntax().clone());
+                    (
+                        ItemKind::Constant,
+                        Namespace::Value,
+                        i.name().map(|n| n.text().to_string()),
+                        true,
+                    )
+                }
+                ast::Item::Static(i) => {
+                    executable = node
+                        .children()
+                        .find_map(ast::Expr::cast)
+                        .map(|e| e.syntax().clone());
+                    (
+                        ItemKind::Static,
+                        Namespace::Value,
+                        i.name().map(|n| n.text().to_string()),
+                        true,
+                    )
+                }
+                ast::Item::Struct(i) => {
+                    add_value_constructor = node
+                        .children()
+                        .any(|n| ast::TupleFieldList::can_cast(n.kind()))
+                        || i.semicolon_token().is_some()
+                            && !node
+                                .children()
+                                .any(|n| ast::RecordFieldList::can_cast(n.kind()));
+                    (
+                        ItemKind::Struct,
                         Namespace::Type,
                         i.name().map(|n| n.text().to_string()),
                         true,
-                    ),
-                    ast::Item::Enum(i) => (
-                        ItemKind::Enum,
+                    )
+                }
+                ast::Item::Union(i) => (
+                    ItemKind::Union,
+                    Namespace::Type,
+                    i.name().map(|n| n.text().to_string()),
+                    true,
+                ),
+                ast::Item::Enum(i) => (
+                    ItemKind::Enum,
+                    Namespace::Type,
+                    i.name().map(|n| n.text().to_string()),
+                    true,
+                ),
+                ast::Item::TypeAlias(i) => (
+                    ItemKind::TypeAlias,
+                    Namespace::Type,
+                    i.name().map(|n| n.text().to_string()),
+                    true,
+                ),
+                ast::Item::Module(i) => {
+                    container = i.item_list().map(|n| n.syntax().clone());
+                    (
+                        ItemKind::Module,
                         Namespace::Type,
                         i.name().map(|n| n.text().to_string()),
                         true,
-                    ),
-                    ast::Item::TypeAlias(i) => (
-                        ItemKind::TypeAlias,
+                    )
+                }
+                ast::Item::Trait(i) => {
+                    container = i.assoc_item_list().map(|n| n.syntax().clone());
+                    (
+                        ItemKind::Trait,
                         Namespace::Type,
                         i.name().map(|n| n.text().to_string()),
                         true,
-                    ),
-                    ast::Item::Module(i) => {
-                        container = i.item_list().map(|n| n.syntax().clone());
-                        (
-                            ItemKind::Module,
-                            Namespace::Type,
-                            i.name().map(|n| n.text().to_string()),
-                            true,
-                        )
+                    )
+                }
+                ast::Item::Impl(i) => {
+                    container = i.assoc_item_list().map(|n| n.syntax().clone());
+                    (ItemKind::Impl, Namespace::Type, None, false)
+                }
+                ast::Item::MacroRules(i) => {
+                    container = i.token_tree().map(|n| n.syntax().clone());
+                    (
+                        ItemKind::Macro,
+                        Namespace::Macro,
+                        i.name().map(|n| n.text().to_string()),
+                        true,
+                    )
+                }
+                ast::Item::MacroDef(i) => {
+                    if self.generated_origin.is_some() || scope.owner.is_some() {
+                        return Err(fault(
+                            "LRR-E-MACRO2-SOURCE",
+                            "non-original-module macro2 declaration dialect admission is not established",
+                        ));
                     }
-                    ast::Item::Trait(i) => {
-                        container = i.assoc_item_list().map(|n| n.syntax().clone());
-                        (
-                            ItemKind::Trait,
-                            Namespace::Type,
-                            i.name().map(|n| n.text().to_string()),
-                            true,
-                        )
-                    }
-                    ast::Item::Impl(i) => {
-                        container = i.assoc_item_list().map(|n| n.syntax().clone());
-                        (ItemKind::Impl, Namespace::Type, None, false)
-                    }
-                    ast::Item::MacroRules(i) => {
-                        container = i.token_tree().map(|n| n.syntax().clone());
-                        (
-                            ItemKind::Macro,
-                            Namespace::Macro,
-                            i.name().map(|n| n.text().to_string()),
-                            true,
-                        )
-                    }
-                    ast::Item::MacroDef(i) => {
-                        container = i
-                            .syntax()
-                            .children()
-                            .filter_map(ast::TokenTree::cast)
-                            .last()
-                            .map(|n| n.syntax().clone());
-                        (
-                            ItemKind::Macro,
-                            Namespace::Macro,
-                            i.name().map(|n| n.text().to_string()),
-                            true,
-                        )
-                    }
-                    ast::Item::Use(_) => (ItemKind::Import, Namespace::Type, None, false),
-                    ast::Item::ExternCrate(i) => {
-                        let anonymous = i
-                            .rename()
-                            .is_some_and(|rename| rename.underscore_token().is_some());
-                        (
-                            ItemKind::Module,
-                            Namespace::Type,
-                            if anonymous {
-                                None
-                            } else {
-                                i.rename()
-                                    .and_then(|r| r.name())
-                                    .map(|n| n.text().to_string())
-                                    .or_else(|| i.name_ref().map(|n| n.text().to_string()))
-                            },
-                            !anonymous,
-                        )
-                    }
-                    ast::Item::ExternBlock(i) => {
-                        container = i.extern_item_list().map(|n| n.syntax().clone());
-                        (ItemKind::ExternBlock, Namespace::Type, None, false)
-                    }
-                    ast::Item::MacroCall(_) | ast::Item::AsmExpr(_) => {
-                        // Associated invocation slots belong to the retained
-                        // declaration scan, never the module-item publisher.
-                        if scope.owner.is_some() {
-                            continue;
-                        }
-                        let ts = tokens(node, None);
-                        let mut e = StableEncoder::new("lrr/v2/item-scope-blocker");
-                        e.sequence(&ts, |e, t| e.record(t));
-                        let syntax = e.finish();
-                        let mut invocation = StableEncoder::new("lrr/v2/source-item-producer");
-                        invocation.record(&scope);
-                        invocation.digest(syntax);
-                        // The local occurrence ordinal disambiguates repeated identical
-                        // invocations without making a byte offset their identity.
-                        invocation.u64(u64::try_from(outline.textual_events.len()).map_err(
-                            |_| fault("LRR-E-SOURCE-LIMIT", "producer ordinal overflow"),
-                        )?);
-                        let identity = invocation.finish();
-                        let transforming = attributes.iter().any(|attribute| {
-                            matches!(
-                                attribute.class,
-                                AttributeClass::TransformUnsupported | AttributeClass::Derive
-                            )
-                        });
-                        let attribute_input = if transforming {
-                            let mut e = StableEncoder::new("lrr/v2/source-item-attribute-producer");
-                            e.record(&scope);
-                            e.digest(identity);
-                            Some(e.finish())
-                        } else {
+                    container = i
+                        .syntax()
+                        .children()
+                        .filter_map(ast::TokenTree::cast)
+                        .last()
+                        .map(|n| n.syntax().clone());
+                    (
+                        ItemKind::Macro,
+                        Namespace::Macro,
+                        i.name().map(|n| n.text().to_string()),
+                        true,
+                    )
+                }
+                ast::Item::Use(_) => (ItemKind::Import, Namespace::Type, None, false),
+                ast::Item::ExternCrate(i) => {
+                    let anonymous = i
+                        .rename()
+                        .is_some_and(|rename| rename.underscore_token().is_some());
+                    (
+                        ItemKind::Module,
+                        Namespace::Type,
+                        if anonymous {
                             None
-                        };
-                        if matches!(item, ast::Item::MacroCall(_)) {
-                            outline.item_invocations.try_reserve(1).map_err(|_| {
-                                fault("LRR-E-SOURCE-LIMIT", "item invocation allocation failed")
-                            })?;
-                            outline.item_invocations.push(ItemInvocation {
-                                scope: scope.clone(),
-                                range: range(node.text_range()),
-                                item_input: identity,
-                                frontier: syntax,
-                                attribute_input,
-                            });
-                        }
-                        outline.textual_events.push(TextualEvent {
-                            scope: scope.clone(),
-                            at: u64::from(range(node.text_range()).start),
-                            kind: TextualEventKind::Producer {
-                                identity: attribute_input.unwrap_or(identity),
-                                kind: if attribute_input.is_some() {
-                                    ProducerKind::Attribute
-                                } else {
-                                    ProducerKind::ItemMacro
-                                },
-                            },
-                        });
-                        outline
-                            .scopes
-                            .entry(scope)
-                            .or_default()
-                            .blockers
-                            .push(ScopeBlocker {
-                                kind: if attribute_input.is_some() {
-                                    BlockerKind::Attribute
-                                } else {
-                                    BlockerKind::ItemMacro
-                                },
-                                syntax,
-                            });
+                        } else {
+                            i.rename()
+                                .and_then(|r| r.name())
+                                .map(|n| n.text().to_string())
+                                .or_else(|| i.name_ref().map(|n| n.text().to_string()))
+                        },
+                        !anonymous,
+                    )
+                }
+                ast::Item::ExternBlock(i) => {
+                    container = i.extern_item_list().map(|n| n.syntax().clone());
+                    (ItemKind::ExternBlock, Namespace::Type, None, false)
+                }
+                ast::Item::MacroCall(_) | ast::Item::AsmExpr(_) => {
+                    // Associated invocation slots belong to the retained
+                    // declaration scan, never the module-item publisher.
+                    if scope.owner.is_some() {
                         continue;
                     }
-                };
+                    let ts = tokens(node, None);
+                    let mut e = StableEncoder::new("lrr/v2/item-scope-blocker");
+                    e.sequence(&ts, |e, t| e.record(t));
+                    let syntax = e.finish();
+                    let mut invocation = StableEncoder::new("lrr/v2/source-item-producer");
+                    invocation.record(&scope);
+                    invocation.digest(syntax);
+                    // The local occurrence ordinal disambiguates repeated identical
+                    // invocations without making a byte offset their identity.
+                    invocation.u64(
+                        u64::try_from(outline.textual_events.len()).map_err(|_| {
+                            fault("LRR-E-SOURCE-LIMIT", "producer ordinal overflow")
+                        })?,
+                    );
+                    let identity = invocation.finish();
+                    let transforming = attributes.iter().any(|attribute| {
+                        matches!(
+                            attribute.class,
+                            AttributeClass::TransformUnsupported | AttributeClass::Derive
+                        )
+                    });
+                    let attribute_input = if transforming {
+                        let mut e = StableEncoder::new("lrr/v2/source-item-attribute-producer");
+                        e.record(&scope);
+                        e.digest(identity);
+                        Some(e.finish())
+                    } else {
+                        None
+                    };
+                    if matches!(item, ast::Item::MacroCall(_)) {
+                        outline.item_invocations.try_reserve(1).map_err(|_| {
+                            fault("LRR-E-SOURCE-LIMIT", "item invocation allocation failed")
+                        })?;
+                        outline.item_invocations.push(ItemInvocation {
+                            scope: scope.clone(),
+                            range: range(node.text_range()),
+                            item_input: identity,
+                            frontier: syntax,
+                            attribute_input,
+                        });
+                    }
+                    outline.textual_events.push(TextualEvent {
+                        scope: scope.clone(),
+                        at: u64::from(range(node.text_range()).start),
+                        kind: TextualEventKind::Producer {
+                            identity: attribute_input.unwrap_or(identity),
+                            kind: if attribute_input.is_some() {
+                                ProducerKind::Attribute
+                            } else {
+                                ProducerKind::ItemMacro
+                            },
+                        },
+                    });
+                    outline
+                        .scopes
+                        .entry(scope)
+                        .or_default()
+                        .blockers
+                        .push(ScopeBlocker {
+                            kind: if attribute_input.is_some() {
+                                BlockerKind::Attribute
+                            } else {
+                                BlockerKind::ItemMacro
+                            },
+                            syntax,
+                        });
+                    continue;
+                }
+            };
             let name = match name {
                 Some(n) => super::ast_adapter::semantic_name(&n).ok_or_else(|| {
                     fault(
@@ -1031,6 +1044,22 @@ impl ParsedFile {
                             .name()
                             .ok_or_else(|| {
                                 fault("LRR-E-PARSE-BLOCKS-ENTRY", "macro name is missing")
+                            })?
+                            .syntax()
+                            .text()
+                            .to_string(),
+                    },
+                });
+            } else if let ast::Item::MacroDef(macro_definition) = &item {
+                outline.textual_events.push(TextualEvent {
+                    scope: scope.clone(),
+                    at: u64::from(span.start),
+                    kind: TextualEventKind::ModuleDefinition {
+                        identity: definition,
+                        source_name: macro_definition
+                            .name()
+                            .ok_or_else(|| {
+                                fault("LRR-E-PARSE-BLOCKS-ENTRY", "module macro name missing")
                             })?
                             .syntax()
                             .text()

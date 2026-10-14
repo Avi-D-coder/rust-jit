@@ -367,11 +367,7 @@ fn actual_nested_concat_include_output_revalidates_adopted_producers_before_capt
 fn include_data_emission_fixture(binary: Option<&[u8]>, nested_path: bool) {
     use lrr::{
         core::profile::ProfileIdentity,
-        db::{
-            key::{ConstantKey, QueryKey},
-            memo::Database,
-            poll::InputRequest,
-        },
+        db::{key::QueryKey, memo::Database, poll::InputRequest},
         expand::{
             identity::{ExpansionKey, GrammarSlot, MacroIdentity},
             include_string::{IncludeStringExpansion, IncludeStringPoll},
@@ -475,12 +471,12 @@ fn include_data_emission_fixture(binary: Option<&[u8]>, nested_path: bool) {
         compile_environment: key.consumer_compile_env,
     };
     let mut coordinator = ExpansionCoordinator::new(context.clone());
-    let query = QueryKey::Constant(ConstantKey {
-        definition: Digest([160; 32]),
-        arguments: vec![],
-        cfg: Digest::default(),
-        profile: ProfileIdentity::current(),
-    });
+    let query = QueryKey::Constant(fixture_key(
+        Digest([160; 32]),
+        vec![],
+        Digest::default(),
+        ProfileIdentity::current(),
+    ));
     let phase = PhaseIdentity {
         frame: Digest([161; 32]),
         body: BodyKey {
@@ -691,7 +687,7 @@ fn actual_eager_include_data_driver_captures_only_after_path_adoption_and_matche
     use lrr::{
         core::profile::ProfileIdentity,
         db::{
-            key::{ConstantKey, QueryKey},
+            key::QueryKey,
             memo::Database,
             poll::{ExpansionRequest, InputRequest},
         },
@@ -926,12 +922,12 @@ fn actual_eager_include_data_driver_captures_only_after_path_adoption_and_matche
         let mut coordinator = ExpansionCoordinator::new(context.clone());
         let capture =
             SourceCapture::open(source_authority(&path, generation), BTreeMap::new()).unwrap();
-        let query = QueryKey::Constant(ConstantKey {
-            definition: Digest([42; 32]),
-            arguments: vec![],
-            cfg: Digest::default(),
-            profile: ProfileIdentity::current(),
-        });
+        let query = QueryKey::Constant(fixture_key(
+            Digest([42; 32]),
+            vec![],
+            Digest::default(),
+            ProfileIdentity::current(),
+        ));
         let phase = |index| PhaseIdentity {
             frame: Digest([43; 32]),
             body: BodyKey {
@@ -1102,7 +1098,7 @@ fn syntax_include_driver_edition_fixture(
     use lrr::{
         core::profile::ProfileIdentity,
         db::{
-            key::{ConstantKey, QueryKey},
+            key::QueryKey,
             memo::Database,
             poll::{ExpansionRequest, InputRequest},
         },
@@ -1422,15 +1418,15 @@ fn syntax_include_driver_edition_fixture(
         let mut coordinator = ExpansionCoordinator::new(context.clone());
         let capture =
             SourceCapture::open(source_authority(&path, generation), BTreeMap::new()).unwrap();
-        let query = QueryKey::Constant(ConstantKey {
-            definition: Digest([98; 32]),
-            arguments: vec![],
-            cfg: Digest::default(),
-            profile: ProfileIdentity {
+        let query = QueryKey::Constant(fixture_key(
+            Digest([98; 32]),
+            vec![],
+            Digest::default(),
+            ProfileIdentity {
                 edition,
                 ..ProfileIdentity::current()
             },
-        });
+        ));
         let phase = |index| PhaseIdentity {
             frame: Digest([99; 32]),
             body: BodyKey {
@@ -2720,7 +2716,7 @@ fn module_capture_acceptance_requires_explicit_adoption_before_pure_input_resume
     use lrr::{
         core::profile::ProfileIdentity,
         db::{
-            key::{ConstantKey, QueryKey},
+            key::QueryKey,
             memo::Database,
             poll::{InputRequest, QueryPoll},
             provider::SyntaxProvider,
@@ -2749,12 +2745,12 @@ fn module_capture_acceptance_requires_explicit_adoption_before_pure_input_resume
         compile_environment: Digest([231; 32]),
     };
     let mut coordinator = ExpansionCoordinator::new(context.clone());
-    let query = QueryKey::Constant(ConstantKey {
-        definition: Digest([234; 32]),
-        arguments: vec![],
-        cfg: Digest::default(),
-        profile: ProfileIdentity::current(),
-    });
+    let query = QueryKey::Constant(fixture_key(
+        Digest([234; 32]),
+        vec![],
+        Digest::default(),
+        ProfileIdentity::current(),
+    ));
     let phase = PhaseIdentity {
         frame: Digest([235; 32]),
         body: BodyKey {
@@ -2797,3 +2793,5 @@ fn module_capture_acceptance_requires_explicit_adoption_before_pure_input_resume
     assert!(coordinator.take_ready(&context, &token).unwrap().is_some());
     assert!(coordinator.take_ready(&context, &token).is_err());
 }
+
+include!("support/constant_key.rs");

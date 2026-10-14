@@ -105,32 +105,56 @@ impl RuntimeIntrinsicPlan {
     /// Static, brace-free messages can directly use the existing guest panic op.
     /// Formatting/implicit captures remain a typed demand, never a guessed message.
     pub fn lower_static_panic(&self) -> Result<StaticPanicLowering, Diagnostic> {
-        if self.arguments.kind() != RuntimeMacroKind::Panic {
-            return Err(Diagnostic::new(
-                "LRR-E-RUNTIME-MACRO",
-                "static panic lowering requires its resolved panic definition".into(),
-            ));
-        }
-        let message = if self.arguments.message_argument_count() == 0 {
-            "explicit panic"
-        } else if self.arguments.message_argument_count() == 1 {
-            match self.arguments.literal_message() {
-                Some(value) if !value.contains(['{', '}']) => value,
-                _ => return Ok(StaticPanicLowering::NeedsFormatting),
+        let kind = self.arguments.kind();
+        let default = match kind {
+            RuntimeMacroKind::Panic => "explicit panic",
+            RuntimeMacroKind::Unreachable => "internal error: entered unreachable code",
+            RuntimeMacroKind::Unimplemented => "not implemented",
+            _ => {
+                return Err(Diagnostic::new(
+                    "LRR-E-RUNTIME-MACRO",
+                    "static panic lowering requires its resolved panic-family definition".into(),
+                ));
             }
-        } else {
-            return Ok(StaticPanicLowering::NeedsFormatting);
         };
-        if message.len() > 65_536 {
-            return Err(Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "static guest panic message exceeds its owned limit".into(),
-            ));
-        }
-        Ok(StaticPanicLowering::Operation(Box::new(
-            crate::ir::op::Op::Panic {
-                message: message.to_owned(),
+        let literal = match self.arguments.message_argument_count() {
+            0 => None,
+            1 => match self.arguments.literal_message() {
+                Some(value) if !value.contains(['{', '}']) => Some(value),
+                _ => return Ok(StaticPanicLowering::NeedsFormatting),
             },
+            _ => return Ok(StaticPanicLowering::NeedsFormatting),
+        };
+        let prefix = if kind == RuntimeMacroKind::Panic || literal.is_none() {
+            ""
+        } else {
+            default
+        };
+        let payload = literal.unwrap_or(default);
+        let separator = if prefix.is_empty() { "" } else { ": " };
+        let bytes = prefix
+            .len()
+            .checked_add(separator.len())
+            .and_then(|n| n.checked_add(payload.len()))
+            .filter(|n| *n <= 65_536)
+            .ok_or_else(|| {
+                Diagnostic::new(
+                    "LRR-E-METADATA-LIMIT",
+                    "static guest panic message exceeds its owned limit".into(),
+                )
+            })?;
+        let mut message = String::new();
+        message.try_reserve_exact(bytes).map_err(|_| {
+            Diagnostic::new(
+                "LRR-E-METADATA-LIMIT",
+                "static guest panic message allocation".into(),
+            )
+        })?;
+        message.push_str(prefix);
+        message.push_str(separator);
+        message.push_str(payload);
+        Ok(StaticPanicLowering::Operation(Box::new(
+            crate::ir::op::Op::Panic { message },
         )))
     }
     pub fn lower_static_panic_recipe(
@@ -608,9 +632,11 @@ pub fn prepare_runtime_macro(
     };
     let arguments = parsed.runtime_macro_arguments(&invocation, kind)?;
     let (operand_use, message_timing) = match kind {
-        RuntimeMacroKind::Panic | RuntimeMacroKind::Println | RuntimeMacroKind::Vec => {
-            (None, MessageTiming::Always)
-        }
+        RuntimeMacroKind::Panic
+        | RuntimeMacroKind::Println
+        | RuntimeMacroKind::Vec
+        | RuntimeMacroKind::Unreachable
+        | RuntimeMacroKind::Unimplemented => (None, MessageTiming::Always),
         RuntimeMacroKind::Assert => (
             Some(OperandUse::Predicate),
             MessageTiming::OnAssertionFailure,

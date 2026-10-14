@@ -278,6 +278,8 @@ pub struct NameNamespaces {
     manual_glob_bytes: usize,
     generated_frontier_bytes: usize,
     extern_alias_bytes: usize,
+    named_module_bytes: usize,
+    named_module_routes: usize,
     source_proofs: std::collections::BTreeMap<crate::db::key::OutlineKey, Digest>,
     values: MacroNamespaces,
     types: MacroNamespaces,
@@ -289,6 +291,10 @@ pub struct NameNamespaces {
     modules: std::collections::BTreeSet<Digest>,
     deferred_imports: std::collections::BTreeSet<Digest>,
     module_aliases: std::collections::BTreeMap<NamePath, super::module_paths::ModulePath>,
+    named_module_links: std::collections::BTreeMap<
+        NamePath,
+        std::collections::BTreeSet<super::module_paths::ModulePath>,
+    >,
     candidate_globs: std::collections::BTreeSet<Digest>,
     macro_import_facets: std::collections::BTreeMap<Digest, NameDefinition>,
     glob_module_links: std::collections::BTreeMap<NamePath, std::collections::BTreeSet<NamePath>>,
@@ -697,6 +703,16 @@ impl NameNamespaces {
         }
         Ok(())
     }
+    pub(crate) fn install_compiler_injection(
+        &mut self,
+        catalog: &super::compile_input_catalog::CompileInputCatalog,
+        source: &crate::source::changes::PreparedSourceView,
+    ) -> Result<(), Diagnostic> {
+        for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
+            catalog.install_injected_import(self.table_mut(namespace), source)?;
+        }
+        Ok(())
+    }
     pub(crate) fn disable_compiler_prelude(&mut self, scope: ScopeKey) -> Result<(), Diagnostic> {
         for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
             self.table_mut(namespace).disable_implicit(scope.clone())?;
@@ -984,6 +1000,50 @@ impl NameNamespaces {
         self.macro_import_facets.insert(id, definition);
         Ok(())
     }
+    fn retain_named_module_route(
+        &mut self,
+        destination: NamePath,
+        target: super::module_paths::ModulePath,
+    ) -> Result<(), Diagnostic> {
+        if self
+            .named_module_links
+            .get(&destination)
+            .is_some_and(|old| old.contains(&target))
+        {
+            return Ok(());
+        }
+        let fail = || {
+            Diagnostic::new(
+                "LRR-E-SOURCE-LIMIT",
+                "ordinary named module route budget".into(),
+            )
+        };
+        let routes = self
+            .named_module_routes
+            .checked_add(1)
+            .filter(|n| *n <= 100_000)
+            .ok_or_else(fail)?;
+        let added = [destination.components(), &target.names]
+            .into_iter()
+            .flatten()
+            .try_fold(256usize, |n, name| {
+                n.checked_add(std::mem::size_of::<MacroName>())?
+                    .checked_add(name.as_str().len())
+            })
+            .ok_or_else(fail)?;
+        let bytes = self
+            .named_module_bytes
+            .checked_add(added)
+            .filter(|n| *n <= 32 * 1024 * 1024)
+            .ok_or_else(fail)?;
+        self.named_module_links
+            .entry(destination)
+            .or_default()
+            .insert(target);
+        self.named_module_routes = routes;
+        self.named_module_bytes = bytes;
+        Ok(())
+    }
     /// Resolve named item and disclosed module imports. Other forms retain a frontier.
     pub fn resolve_named_imports(&mut self) -> Result<ImportResolution, Diagnostic> {
         use crate::syntax::imports::ImportKind;
@@ -1033,7 +1093,7 @@ impl NameNamespaces {
                         *edition,
                     )?;
                     for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
-                        self.table_mut(namespace).module_paths.alias(
+                        self.table_mut(namespace).module_paths.imported_alias(
                             super::module_paths::ModulePath {
                                 unit: destination.unit,
                                 names: names.clone(),
@@ -1042,7 +1102,7 @@ impl NameNamespaces {
                             visibility.clone(),
                         )?;
                     }
-                    self.module_aliases.insert(destination, root);
+                    self.retain_named_module_route(destination, root)?;
                     root_imports.insert(*identity);
                 }
                 continue;
@@ -1147,14 +1207,13 @@ impl NameNamespaces {
                         names: destination.components().to_vec(),
                     };
                     for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
-                        self.table_mut(namespace).module_paths.alias(
+                        self.table_mut(namespace).module_paths.imported_alias(
                             destination_module.clone(),
                             target_module.clone(),
                             visibility.clone(),
                         )?;
                     }
-                    self.module_aliases
-                        .insert(destination.clone(), target_module);
+                    self.retain_named_module_route(destination.clone(), target_module)?;
                     installed.insert(*identity);
                 }
             }
@@ -1218,6 +1277,7 @@ impl NameNamespaces {
             let mut pending = false;
             let mut denied = module_denied.contains(&identity);
             let mut ambiguous = false;
+            let mut settled_destination_ambiguity = false;
             for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
                 if namespace == Namespace::Macro && self.macro_import_facets.contains_key(&identity)
                 {
@@ -1252,7 +1312,10 @@ impl NameNamespaces {
                             {
                                 PathLookup::Defined(_) => ready = true,
                                 PathLookup::Inaccessible(_) => denied = true,
-                                PathLookup::Ambiguous(_) => ambiguous = true,
+                                PathLookup::Ambiguous(_) => {
+                                    ambiguous = true;
+                                    settled_destination_ambiguity = true;
+                                }
                                 PathLookup::NeedInput(_) => pending = true,
                                 PathLookup::Absent => pending = true,
                             }
@@ -1269,6 +1332,14 @@ impl NameNamespaces {
                 result.pending.push(identity);
             } else if ambiguous {
                 result.ambiguous.push(identity);
+                // Only a completed collision of individually selected current
+                // source imports discharges the destination producer. Unsettled
+                // target ambiguity and unknown producers retain their frontier.
+                if settled_destination_ambiguity
+                    && let Some(frontier) = self.frontiers.get_mut(&import.scope)
+                {
+                    frontier.remove(&identity);
+                }
             } else if denied && !ready {
                 result.inaccessible.push(identity);
             } else if !ready {
@@ -1366,7 +1437,11 @@ impl NameNamespaces {
             e.digest(path.unit);
             e.sequence(path.components(), |e, n| e.string(n.as_str()));
         }
-        let mut e = StableEncoder::new("lrr/v2/ordinary-import-convergence");
+        let mut e = StableEncoder::new("lrr/v4/ordinary-import-convergence");
+        for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
+            e.u32(namespace.tag());
+            self.table(namespace).encode_compiler_imports(&mut e);
+        }
         e.map(&self.module_frontier_scopes, |e, id, child| {
             e.digest(*id);
             e.record(child);
@@ -1396,6 +1471,16 @@ impl NameNamespaces {
                 path(e, from);
                 e.digest(to.unit);
                 e.sequence(&to.names, |e, n| e.string(n.as_str()));
+            },
+        );
+        e.sequence(
+            &self.named_module_links.iter().collect::<Vec<_>>(),
+            |e, (from, targets)| {
+                path(e, from);
+                e.sequence(&targets.iter().collect::<Vec<_>>(), |e, to| {
+                    e.digest(to.unit);
+                    e.sequence(&to.names, |e, n| e.string(n.as_str()));
+                });
             },
         );
         e.sequence(
@@ -1922,7 +2007,12 @@ impl NameNamespaces {
                         stack.push(NamePath::new(target.unit, names)?);
                     }
                 }
-                if let Some(target) = self.module_aliases.get(&alias) {
+                for target in self.module_aliases.get(&alias).into_iter().chain(
+                    self.named_module_links
+                        .get(&alias)
+                        .into_iter()
+                        .flat_map(|targets| targets.iter()),
+                ) {
                     let mut names = target.names.clone();
                     names.extend_from_slice(&path.components()[length..]);
                     if names.is_empty() {
@@ -2458,3 +2548,7 @@ mod module_frontier_tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "names_import_ambiguity_tests.rs"]
+mod names_import_ambiguity_tests;

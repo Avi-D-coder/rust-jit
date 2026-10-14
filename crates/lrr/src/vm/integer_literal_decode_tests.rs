@@ -188,6 +188,37 @@ fn draft(p: &Prepared) -> RecipeDraft {
         dependencies: r.dependencies.to_vec(),
     }
 }
+
+#[test]
+fn store_session_normal_dispatch_refuses_same_bit_foreign_store_before_opcode_entry() {
+    for edition in [2015, 2018, 2021, 2024] {
+        let p = prepare(RADIX, edition, "let a = 0xBEEF_isize;", "0xBEEF_isize");
+        let mut sa = GuestStore::new(1, 10000, 4 << 20).unwrap();
+        let mut sb = GuestStore::new(1, 10000, 4 << 20).unwrap();
+        let mut a = frame(&p, &mut sa, 100);
+        let b = frame(&p, &mut sb, 100);
+        assert_eq!(a.constant_frame_anchor(), b.constant_frame_anchor());
+        let pc = a.pc().clone();
+        let before = (sb.budget().handles(), sb.budget().bytes());
+        assert_eq!(
+            step(&mut a, &mut sb, &p.recipe).unwrap_err().code,
+            "LRR-E-STALE-HANDLE"
+        );
+        assert_eq!(a.status, FrameStatus::Running);
+        assert_eq!(a.pc(), &pc);
+        assert_eq!(a.fuel.snapshot().used, 0);
+        assert_eq!(a.counters.operations_started, 0);
+        assert_eq!(before, (sb.budget().handles(), sb.budget().bytes()));
+        assert!(a.cell(p.destination).is_err());
+        assert!(step(&mut a, &mut sa, &p.recipe).is_ok());
+        let crate::runtime::cell::CellState::Live(value) =
+            sa.state(a.cell(p.destination).unwrap()).unwrap()
+        else {
+            panic!("original literal did not publish in its owning store")
+        };
+        assert_eq!(value.payload, 48879);
+    }
+}
 #[test]
 fn official_radices_separators_suffixes_and_signed_minima_have_exact_immutable_payload_all_editions()
  {

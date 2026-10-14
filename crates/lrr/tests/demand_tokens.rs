@@ -1,7 +1,7 @@
 use lrr::{
     core::{digest::Digest, profile::ProfileIdentity},
     db::{
-        key::{ConstantKey, QueryKey},
+        key::QueryKey,
         poll::{ExpansionRequest, InputRequest},
     },
     engine::dispatch::{ResumePoll, SavedPhase},
@@ -24,12 +24,12 @@ fn context() -> DemandContext {
     }
 }
 fn query() -> QueryKey {
-    QueryKey::Constant(ConstantKey {
-        definition: Digest([6; 32]),
-        arguments: vec![],
-        cfg: Digest::default(),
-        profile: ProfileIdentity::current(),
-    })
+    QueryKey::Constant(fixture_key(
+        Digest([6; 32]),
+        vec![],
+        Digest::default(),
+        ProfileIdentity::current(),
+    ))
 }
 fn phase(index: u32) -> PhaseIdentity {
     PhaseIdentity {
@@ -269,15 +269,11 @@ fn issue_rejects_wrong_environment_epoch_unit_and_excess_metadata_atomically() {
         expected_content: None,
     });
     assert!(coordinator.issue(query(), phase(3), wrong).is_err());
-    let QueryKey::Constant(mut excessive) = query() else {
-        panic!("wrong query")
-    };
-    excessive.arguments = Vec::with_capacity(1_048_577);
-    assert!(
-        coordinator
-            .issue(QueryKey::Constant(excessive), phase(3), input())
-            .is_err()
-    );
+    let mut encoded = serde_json::to_value(query()).unwrap();
+    encoded["Constant"]["profile"]["semantics"] =
+        serde_json::Value::String("x".repeat(32 * 1024 * 1024 + 1));
+    let excessive: QueryKey = serde_json::from_value(encoded).unwrap();
+    assert!(coordinator.issue(excessive, phase(3), input()).is_err());
     let good = coordinator.issue(query(), phase(3), input()).unwrap();
     assert_eq!(good, coordinator.issue(query(), phase(3), input()).unwrap());
     coordinator.start(&c, &good).unwrap();
@@ -458,21 +454,20 @@ fn include_capture_fixture(adopt: bool) {
                 memo::Database,
                 poll::QueryPoll,
                 provider::{Provided, Provider},
-                value::QueryValue,
             },
         };
         struct ReadInclude {
             input: InputRequest,
         }
         impl Provider for ReadInclude {
-            fn execute(&self, db: &mut Database, _: &QueryKey) -> QueryPoll<Provided> {
+            fn execute(&self, db: &mut Database, requested: &QueryKey) -> QueryPoll<Provided> {
                 match db
                     .input(&InputKey::IncludeRecord(self.input.fingerprint()))
                     .as_deref()
                 {
                     Some(InputValue::IncludeRecord { captured, .. }) => {
                         let text = std::str::from_utf8(captured.blob().bytes()).unwrap();
-                        Provided::pure(QueryValue::Constant(text.parse().unwrap()))
+                        Provided::pure(fixture_value(requested, text.parse().unwrap()))
                     }
                     None => QueryPoll::NeedInput(self.input.clone()),
                     _ => Provided::error("LRR-E-INTERNAL-SNAPSHOT", "wrong include record"),
@@ -534,7 +529,7 @@ fn include_capture_fixture(adopt: bool) {
         assert_eq!(db.cache_usage().unwrap().source_input_bytes, 2);
         std::fs::write(temp.join("one.rs"), b"999").unwrap();
         let result = db.fetch(&provider, query()).into_ready().unwrap().unwrap();
-        assert!(matches!(result.value.as_ref(), QueryValue::Constant(31)));
+        assert_eq!(fixture_number(result.value.as_ref()), 31);
         assert!(db.memo(&query()).unwrap().dependencies.iter().any(|dep| matches!(dep, lrr::db::dependency::DependencyStamp::Input {key:InputKey::IncludeRecord(key),..} if *key==token.input().fingerprint())));
         let lease = db
             .input(&InputKey::IncludeRecord(token.input().fingerprint()))
@@ -729,3 +724,8 @@ fn adopted_item_include_edition_fixture(edition: u16) {
     }
     std::fs::remove_dir_all(temp).unwrap();
 }
+
+include!("../../../xtask/tests/support/constant_key.rs");
+include!("../../../xtask/tests/support/constant_value.rs");
+
+include!("../../../xtask/tests/support/constant_number.rs");

@@ -95,9 +95,15 @@ fn prepare(
         1,
     )
     .unwrap()
-    .with_declarative(
+    .with_declarative_compiler(
         Digest([6; 32]),
-        Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+        lrr::expand::source_declarative::engine_version(),
+        std::sync::Arc::new(
+            lrr::frontend::compile_input_catalog::CompileInputCatalog::standalone(
+                &views[0].selection().outline.parse.profile,
+            )
+            .unwrap(),
+        ),
     )
     .unwrap();
     (views, discovery, inputs)

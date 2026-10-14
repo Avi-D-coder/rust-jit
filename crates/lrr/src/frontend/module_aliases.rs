@@ -54,6 +54,7 @@ struct Modules {
     known: BTreeSet<ModuleKey>,
     aliases: BTreeMap<ModuleKey, ModuleKey>,
     externs: BTreeMap<ModuleKey, (Digest, ModuleKey)>,
+    injections: BTreeMap<ModuleKey, (Digest, ModuleKey)>,
     weak: WeakModules,
     budget: Budget,
 }
@@ -237,6 +238,16 @@ pub(super) fn graph_with_producers(
     catalogs: &[&SourceMacroRoutes],
     pending: bool,
 ) -> Result<MacroNamespaces, Diagnostic> {
+    graph_with_compiler_imports(catalogs, pending, &[])
+}
+pub(super) fn graph_with_compiler_imports(
+    catalogs: &[&SourceMacroRoutes],
+    pending: bool,
+    imports: &[super::compile_input_catalog::CompilerInjectedImport],
+) -> Result<MacroNamespaces, Diagnostic> {
+    if imports.len() > 100_000 {
+        return Err(error("compiler import count limit"));
+    }
     if catalogs.len() > 100_000 {
         return Err(error("source catalog count exceeded"));
     }
@@ -255,6 +266,7 @@ pub(super) fn graph_with_producers(
         known: BTreeSet::new(),
         aliases: BTreeMap::new(),
         externs: BTreeMap::new(),
+        injections: BTreeMap::new(),
         weak: BTreeMap::new(),
         budget: Budget::default(),
     };
@@ -265,6 +277,33 @@ pub(super) fn graph_with_producers(
                 modules.known.insert(key.clone());
             }
         }
+    }
+    for import in imports {
+        let (consumer, alias, provider) = import.parts();
+        // A captured dependency with this spelling must have the exact facade
+        // owner, and a disclosed source module retains lexical precedence.
+        if !catalogs.iter().any(|catalog| {
+            catalog.modules.contains(&(consumer, vec![]))
+                && catalog.dependencies.get(alias) == Some(&provider)
+        }) {
+            continue;
+        }
+        let destination = (consumer, vec![alias.clone()]);
+        if modules.known.contains(&destination) {
+            continue;
+        }
+        let target = (provider, vec![]);
+        if let Some((_, previous)) = modules.injections.get(&destination) {
+            if previous != &target {
+                return Err(error("conflicting compiler import targets"));
+            }
+            continue;
+        }
+        modules.budget.key(&destination)?;
+        modules.budget.key(&target)?;
+        modules
+            .injections
+            .insert(destination, (import.identity(), target));
     }
     for catalog in catalogs {
         for row in &catalog.extern_aliases {
@@ -322,6 +361,11 @@ pub(super) fn graph_with_producers(
     let mut seen = BTreeSet::new();
     let (completed, mut graph) = loop {
         modules.aliases.clear();
+        for (destination, (_, target)) in &modules.injections {
+            modules.budget.key(destination)?;
+            modules.budget.key(target)?;
+            modules.aliases.insert(destination.clone(), target.clone());
+        }
         for (destination, (_, target)) in &modules.externs {
             modules.budget.key(destination)?;
             modules.budget.key(target)?;
@@ -618,6 +662,25 @@ fn module_registry(
                     scope,
                     catalog.edition,
                 )?,
+            )?;
+        }
+    }
+    for ((unit, names), (_, (provider, target_names))) in &modules.injections {
+        let path = super::module_paths::ModulePath {
+            unit: *unit,
+            names: names.clone(),
+        };
+        if !graph.module_paths.contains(&path) {
+            graph.module_paths.alias(
+                path,
+                super::module_paths::ModulePath {
+                    unit: *provider,
+                    names: target_names.clone(),
+                },
+                crate::syntax::visibility::VisibilityScope::Within {
+                    unit: *unit,
+                    module_path: vec![],
+                },
             )?;
         }
     }

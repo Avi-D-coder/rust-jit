@@ -6,27 +6,26 @@ use lrr::{
     },
     db::{
         dependency::{InputKey, InputValue},
-        key::{ConstantKey, QueryKey},
+        key::QueryKey,
         memo::Database,
         provider::{Provided, Provider, SyntaxProvider},
-        value::QueryValue,
     },
 };
 use std::{cell::RefCell, collections::BTreeMap};
 fn key(n: u8) -> QueryKey {
-    QueryKey::Constant(ConstantKey {
-        definition: Digest::of_bytes(&[n]),
-        arguments: vec![],
-        cfg: Digest::default(),
-        profile: ProfileIdentity::current(),
-    })
+    QueryKey::Constant(fixture_key(
+        Digest::of_bytes(&[n]),
+        vec![],
+        Digest::default(),
+        ProfileIdentity::current(),
+    ))
 }
 struct Graph {
     counts: RefCell<BTreeMap<u8, u32>>,
 }
 impl Provider for Graph {
-    fn execute(&self, db: &mut Database, k: &QueryKey) -> QueryPoll<Provided> {
-        let n = (0..4).find(|n| key(*n) == *k).unwrap();
+    fn execute(&self, db: &mut Database, requested: &QueryKey) -> QueryPoll<Provided> {
+        let n = (0..4).find(|n| key(*n) == *requested).unwrap();
         *self.counts.borrow_mut().entry(n).or_default() += 1;
         let route = db.input(&InputKey::CompileEnv(format!("route{n}")));
         let Some(InputValue::CompileEnv(route)) = route.as_deref() else {
@@ -39,10 +38,7 @@ impl Provider for Graph {
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
             };
-            let QueryValue::Constant(value) = result.value.as_ref() else {
-                panic!("wrong typed result")
-            };
-            values.push(*value);
+            values.push(fixture_number(result.value.as_ref()));
         }
         let value = if n == 0 {
             match db.input(&InputKey::CompileEnv("value".into())).as_deref() {
@@ -54,7 +50,7 @@ impl Provider for Graph {
         } else {
             values[0] % 2
         };
-        Provided::pure(QueryValue::Constant(value))
+        Provided::pure(fixture_value(requested, value))
     }
 }
 fn inputs(value: &str, route1: &str) -> BTreeMap<InputKey, InputValue> {
@@ -75,18 +71,16 @@ fn inputs(value: &str, route1: &str) -> BTreeMap<InputKey, InputValue> {
     .collect()
 }
 fn number(db: &mut Database, g: &Graph, n: u8) -> i128 {
-    match db
-        .fetch(g, key(n))
-        .into_ready()
-        .unwrap()
-        .unwrap()
-        .value
-        .as_ref()
-    {
-        QueryValue::Constant(v) => *v,
-        v => panic!("{v:?}"),
-    }
+    fixture_number(
+        db.fetch(g, key(n))
+            .into_ready()
+            .unwrap()
+            .unwrap()
+            .value
+            .as_ref(),
+    )
 }
+
 #[test]
 fn diamond_recomputes_once_and_unchanged_output_reuses_downstream() {
     let g = Graph {
@@ -162,8 +156,8 @@ fn deterministic_missing_error_is_cached_and_new_input_invalidates_it() {
 fn result_variant_mismatch_is_non_cacheable_and_stack_is_cleaned() {
     struct Bad;
     impl Provider for Bad {
-        fn execute(&self, _: &mut Database, _: &QueryKey) -> QueryPoll<Provided> {
-            Provided::pure(QueryValue::Constant(0))
+        fn execute(&self, _: &mut Database, requested: &QueryKey) -> QueryPoll<Provided> {
+            Provided::pure(fixture_value(requested, 0))
         }
     }
     let mut db = Database::default();
@@ -173,3 +167,7 @@ fn result_variant_mismatch_is_non_cacheable_and_stack_is_cleaned() {
     assert!(db.memo(&k).is_none());
     assert!(db.publish_inputs(BTreeMap::new()).is_ok());
 }
+
+include!("../../../xtask/tests/support/constant_key.rs");
+include!("../../../xtask/tests/support/constant_value.rs");
+include!("../../../xtask/tests/support/constant_number.rs");

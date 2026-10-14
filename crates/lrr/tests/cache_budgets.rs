@@ -3,7 +3,7 @@ use lrr::{
     core::{digest::Digest, profile::ProfileIdentity},
     db::{
         dependency::{InputKey, InputValue},
-        key::{ConstantKey, QueryKey},
+        key::QueryKey,
         memo::Database,
         provider::{Provided, Provider, SyntaxProvider},
         value::QueryValue,
@@ -14,17 +14,17 @@ use lrr::{
 };
 use std::collections::BTreeMap;
 fn key(n: u8) -> QueryKey {
-    QueryKey::Constant(ConstantKey {
-        definition: Digest::of_bytes(&[n]),
-        arguments: vec![],
-        cfg: Digest::default(),
-        profile: ProfileIdentity::current(),
-    })
+    QueryKey::Constant(fixture_key(
+        Digest::of_bytes(&[n]),
+        vec![],
+        Digest::default(),
+        ProfileIdentity::current(),
+    ))
 }
 struct Fixture;
 impl Provider for Fixture {
-    fn execute(&self, _db: &mut Database, _key: &QueryKey) -> QueryPoll<Provided> {
-        Provided::pure(QueryValue::Constant(1))
+    fn execute(&self, _db: &mut Database, requested: &QueryKey) -> QueryPoll<Provided> {
+        Provided::pure(fixture_value(requested, 1))
     }
 }
 
@@ -118,11 +118,11 @@ fn live_inner_parse_handle_is_pinned_until_released() {
 fn retired_outer_error_and_raw_inner_parse_remain_charged() {
     struct ErrorFixture;
     impl Provider for ErrorFixture {
-        fn execute(&self, db: &mut Database, _: &QueryKey) -> QueryPoll<Provided> {
+        fn execute(&self, db: &mut Database, requested: &QueryKey) -> QueryPoll<Provided> {
             if db.input(&InputKey::CompileEnv("error".into())).is_some() {
                 Provided::error("LRR-E-NAME-MISSING", "retained error ".repeat(1024))
             } else {
-                Provided::pure(QueryValue::Constant(1))
+                Provided::pure(fixture_value(requested, 1))
             }
         }
     }
@@ -282,3 +282,6 @@ fn eviction_and_publication_are_rejected_during_run_and_source_cap_prevents_star
     db.begin_run().unwrap();
     db.finish_run().unwrap();
 }
+
+include!("../../../xtask/tests/support/constant_key.rs");
+include!("../../../xtask/tests/support/constant_value.rs");

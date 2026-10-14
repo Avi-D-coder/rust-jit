@@ -1,14 +1,23 @@
 //! Pure, sealed constant source plans. Pinned AST identities never cross into frontend.
-use super::{ast_adapter::range, outline::BodyHandle, parse::ParsedFile, spans::SourceRange};
+use super::{
+    ast_adapter::range,
+    outline::{BodyHandle, DeclarationContext, ScopeKey},
+    parse::ParsedFile,
+    spans::SourceRange,
+};
 use crate::{
     core::{
         diagnostic::Diagnostic,
         digest::{Digest, StableEncode, StableEncoder},
         profile::ProfileIdentity,
     },
-    frontend::constants::ConstValue,
+    frontend::{
+        constant_macro_admission::AdmittedConstantPanic,
+        constant_source_admission::CurrentConstantTypeCertificate, constants::ConstValue,
+    },
     ir::op::{DecodedLiteral, NumericBinary, NumericUnary, PrimitiveType},
     source::{
+        changes::{PreparedSourceView, SourceSelection},
         manifest::BodyKey,
         snapshot::{CfgSet, SourceBlob},
     },
@@ -18,6 +27,9 @@ use ra_ap_syntax::{
     ast::{self, HasArgList, HasAttrs, HasGenericArgs, HasGenericParams, HasModuleItem, HasName},
 };
 use std::{collections::BTreeMap, rc::Rc};
+#[path = "constant_parameter_lengths.rs"]
+mod parameter_lengths;
+use parameter_lengths::ParameterIndependentLength;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CONST-SOURCE", message.into())
 }
@@ -31,6 +43,8 @@ pub struct ConstantDeclaration {
     definition: Digest,
     body: BodyKey,
     blocked: bool,
+    context: DeclarationContext,
+    handle: BodyHandle,
 }
 impl ConstantDeclaration {
     pub fn name(&self) -> &str {
@@ -42,6 +56,12 @@ impl ConstantDeclaration {
     pub fn definition(&self) -> Digest {
         self.definition
     }
+    pub fn context(&self) -> &DeclarationContext {
+        &self.context
+    }
+    pub fn body_handle(&self) -> &BodyHandle {
+        &self.handle
+    }
     pub(crate) fn body(&self) -> &BodyKey {
         &self.body
     }
@@ -51,6 +71,11 @@ struct Captured {
     parsed: ParsedFile,
     cfg: CfgSet,
     crate_key: Digest,
+    scope: ScopeKey,
+    selection: Option<SourceSelection>,
+    module_items: Vec<ast::Item>,
+    type_certificate: Option<CurrentConstantTypeCertificate>,
+    macro_proofs: BTreeMap<(u32, u32), AdmittedConstantPanic>,
     declarations: Vec<ConstantDeclaration>,
     items: BTreeMap<String, Vec<ast::Item>>,
     owners: Vec<(SourceRange, Digest, Option<BodyHandle>)>,
@@ -63,6 +88,8 @@ pub struct ConstantPlan {
     entry: Entry,
     identity: Digest,
     owner_definition: Digest,
+    owner_context: DeclarationContext,
+    owner_body: Option<BodyHandle>,
 }
 #[derive(Debug, Clone)]
 enum Entry {
@@ -112,6 +139,24 @@ pub(crate) enum Statement {
     Expression(ExprRef),
     Unsupported(SourceRange),
 }
+/// Source-owned syntax data for an actually reached macro, never authority.
+#[derive(Debug, Clone)]
+pub(crate) struct RequiredConstantMacro {
+    source: Digest,
+    body: BodyKey,
+    range: SourceRange,
+}
+impl RequiredConstantMacro {
+    pub(crate) fn source(&self) -> Digest {
+        self.source
+    }
+    pub(crate) fn body(&self) -> &BodyKey {
+        &self.body
+    }
+    pub(crate) fn range(&self) -> SourceRange {
+        self.range
+    }
+}
 #[derive(Debug, Clone)]
 pub(crate) enum Node {
     Integer(DecodedLiteral),
@@ -133,6 +178,8 @@ pub(crate) enum Node {
     Array(Vec<ExprRef>),
     Repeat(ExprRef, ExprRef),
     Panic,
+    AdmittedPanic(AdmittedConstantPanic),
+    RequiredMacro(Box<RequiredConstantMacro>),
     Unsupported,
 }
 impl ConstantSource {
@@ -145,9 +192,96 @@ impl ConstantSource {
     ) -> Result<Self, Diagnostic> {
         let parsed = ParsedFile::parse(blob, profile)?;
         let outline = parsed.outline(crate_key, vec![], &cfg)?;
+        let scope = outline.root_scope.clone();
+        let items = parsed.parsed.tree().items().collect();
+        Self::capture_scope(parsed, cfg, crate_key, outline, scope, None, items)
+    }
+    /// Capture one actual original module, not a caller-issued namespace proof.
+    /// Header inventory is structural; bodies are not typechecked or evaluated.
+    pub(crate) fn capture_prepared(
+        view: &PreparedSourceView,
+        definition: Digest,
+    ) -> Result<Self, Diagnostic> {
+        view.require_original_hygiene()?;
+        view.require_declaration_syntax()?;
+        let selected = view.selection();
+        let cfg = view.captured_macro_cfg()?.clone();
+        let parsed = ParsedFile::parse(
+            view.captured_macro_blob()?,
+            selected.outline.parse.profile.clone(),
+        )?;
+        let outline = parsed.outline(
+            selected.outline.crate_key,
+            selected.outline.module_path.clone(),
+            &cfg,
+        )?;
+        if parsed.key() != selected.outline.parse
+            || outline.fingerprint() != view.outline().fingerprint()
+        {
+            return Err(fault("prepared constant parse/outline differs"));
+        }
+        let item = outline
+            .items
+            .iter()
+            .find(|i| i.def_key.fingerprint() == definition)
+            .ok_or_else(|| fault("prepared constant declaration absent"))?;
+        if item.scope.owner.is_some() {
+            return Err(fault(
+                "lexical/associated constant owner requires separate preparation",
+            ));
+        }
+        let scope = item.scope.clone();
+        view.captured_inline_module_layout(&scope)?;
+        let syntax = parsed
+            .parsed
+            .tree()
+            .syntax()
+            .descendants()
+            .filter_map(ast::Item::cast)
+            .find(|i| range(i.syntax().text_range()) == item.declaration_span)
+            .ok_or_else(|| fault("prepared constant declaration syntax absent"))?;
+        if !matches!(syntax, ast::Item::Const(_) | ast::Item::Fn(_)) {
+            return Err(fault(
+                "constant plan requires a direct const/function body owner",
+            ));
+        }
+        if syntax
+            .syntax()
+            .ancestors()
+            .any(|a| ast::Impl::can_cast(a.kind()) || ast::Trait::can_cast(a.kind()))
+        {
+            return Err(fault(
+                "associated constant needs an owning member certificate",
+            ));
+        }
+        let parent = required(syntax.syntax().parent())?;
+        if !ast::SourceFile::can_cast(parent.kind()) && !ast::ItemList::can_cast(parent.kind()) {
+            return Err(fault("constant owner is not a captured module"));
+        }
+        let items = parent.children().filter_map(ast::Item::cast).collect();
+        Self::capture_scope(
+            parsed,
+            cfg,
+            selected.outline.crate_key,
+            outline,
+            scope,
+            Some(selected.clone()),
+            items,
+        )
+    }
+    fn capture_scope(
+        parsed: ParsedFile,
+        cfg: CfgSet,
+        crate_key: Digest,
+        outline: super::outline::Outline,
+        scope: ScopeKey,
+        selection: Option<SourceSelection>,
+        module_items: Vec<ast::Item>,
+    ) -> Result<Self, Diagnostic> {
         let owners = outline
             .items
             .iter()
+            .filter(|item| item.scope == scope)
             .map(|item| {
                 (
                     item.declaration_span,
@@ -156,12 +290,15 @@ impl ConstantSource {
                 )
             })
             .collect();
-        let tree = parsed.parsed.tree();
         let mut declarations = Vec::new();
         let mut items: BTreeMap<String, Vec<ast::Item>> = BTreeMap::new();
-        for item in tree.items() {
+        for item in &module_items {
             let at = range(item.syntax().text_range());
-            let Some(header) = outline.items.iter().find(|h| h.declaration_span == at) else {
+            let Some(header) = outline
+                .items
+                .iter()
+                .find(|h| h.declaration_span == at && h.scope == scope)
+            else {
                 continue;
             };
             let name = match &item {
@@ -185,17 +322,146 @@ impl ConstantSource {
                 definition: header.def_key.fingerprint(),
                 body: body.key(),
                 blocked: body.entry_blocked,
+                context: DeclarationContext {
+                    scope: header.scope.clone(),
+                    range: at,
+                },
+                handle: body.clone(),
             });
-            items.entry(semantic(name.text())?).or_default().push(item);
+            items
+                .entry(semantic(name.text())?)
+                .or_default()
+                .push(item.clone());
         }
         Ok(Self(Rc::new(Captured {
             parsed,
             cfg,
             crate_key,
+            scope,
+            selection,
+            module_items,
+            type_certificate: None,
+            macro_proofs: BTreeMap::new(),
             declarations,
             items,
             owners,
         })))
+    }
+    pub(crate) fn scope(&self) -> &ScopeKey {
+        &self.0.scope
+    }
+    pub(crate) fn selection(&self) -> Option<&SourceSelection> {
+        self.0.selection.as_ref()
+    }
+    pub(crate) fn with_type_certificate(
+        mut self,
+        certificate: CurrentConstantTypeCertificate,
+    ) -> Result<Self, Diagnostic> {
+        if !self
+            .0
+            .selection
+            .as_ref()
+            .is_some_and(|selection| certificate.matches(selection, &self.0.scope))
+        {
+            return Err(fault("constant primitive certificate source/scope differs"));
+        }
+        certificate.metadata_bytes()?;
+        let captured = Rc::get_mut(&mut self.0)
+            .ok_or_else(|| fault("constant source certificate requires a fresh capture"))?;
+        if captured.type_certificate.is_some() {
+            return Err(fault("constant source certificate already attached"));
+        }
+        captured.type_certificate = Some(certificate);
+        Ok(self)
+    }
+    pub(crate) fn with_macro_proof(
+        mut self,
+        proof: AdmittedConstantPanic,
+    ) -> Result<Self, Diagnostic> {
+        let selection =
+            self.0.selection.as_ref().ok_or_else(|| {
+                fault("content-only constants cannot attach current macro authority")
+            })?;
+        let range = proof.range();
+        let body = self
+            .0
+            .owners
+            .iter()
+            .filter(|(owner, _, _)| owner.contains(range))
+            .min_by_key(|(owner, _, _)| owner.end - owner.start)
+            .and_then(|(_, _, body)| body.as_ref())
+            .ok_or_else(|| fault("constant macro proof owning body absent"))?;
+        if !proof.matches(selection, body, range) {
+            return Err(fault("constant macro proof source/body/range differs"));
+        }
+        if self.0.macro_proofs.len() >= 256 {
+            return Err(fault("constant macro proof count limit"));
+        }
+        let total = self
+            .metadata_bytes()?
+            .checked_add(proof.metadata_bytes())
+            .filter(|n| *n <= 32 * 1024 * 1024)
+            .ok_or_else(|| fault("constant macro proof metadata limit"))?;
+        let _ = total;
+        let captured = Rc::get_mut(&mut self.0)
+            .ok_or_else(|| fault("constant macro proof requires a fresh capture"))?;
+        if captured
+            .macro_proofs
+            .insert((range.start, range.end), proof)
+            .is_some()
+        {
+            return Err(fault("constant macro proof range was already attached"));
+        }
+        Ok(self)
+    }
+    pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
+        let nodes = self
+            .0
+            .parsed
+            .parsed
+            .tree()
+            .syntax()
+            .descendants_with_tokens()
+            .take(100_001)
+            .count();
+        if nodes > 100_000 {
+            return Err(fault("constant source node count limit"));
+        }
+        let mut bytes = nodes
+            .checked_mul(128)
+            .and_then(|n| n.checked_add(std::mem::size_of::<Captured>()))
+            .and_then(|n| n.checked_add(self.0.scope.heap_bytes()))
+            .ok_or_else(|| fault("constant source metadata overflow"))?;
+        for declaration in &self.0.declarations {
+            bytes = bytes
+                .checked_add(std::mem::size_of::<ConstantDeclaration>() + 256)
+                .and_then(|n| n.checked_add(declaration.name.capacity()))
+                .and_then(|n| n.checked_add(declaration.context.scope.heap_bytes()))
+                .ok_or_else(|| fault("constant source declaration metadata overflow"))?;
+        }
+        for proof in self.0.macro_proofs.values() {
+            bytes = bytes
+                .checked_add(proof.metadata_bytes())
+                .and_then(|n| n.checked_add(128))
+                .ok_or_else(|| fault("constant macro metadata overflow"))?;
+        }
+        bytes = bytes
+            .checked_add(
+                self.0
+                    .type_certificate
+                    .as_ref()
+                    .map_or(Ok(0), CurrentConstantTypeCertificate::metadata_bytes)?,
+            )
+            .ok_or_else(|| fault("constant type certificate metadata overflow"))?;
+        bytes
+            .checked_add(
+                self.0
+                    .selection
+                    .as_ref()
+                    .map_or(Ok(0), SourceSelection::metadata_bytes)?,
+            )
+            .filter(|n| *n <= 32 * 1024 * 1024)
+            .ok_or_else(|| fault("constant source metadata limit"))
     }
     pub fn declarations(&self) -> &[ConstantDeclaration] {
         &self.0.declarations
@@ -268,8 +534,9 @@ impl ConstantSource {
                 )? {
                     return Err(fault("array length owning root is cfg-disabled"));
                 }
+                let mut parameter_length = None;
                 for ancestor in expr.syntax().ancestors() {
-                    if ast::Module::can_cast(ancestor.kind())
+                    if (ast::Module::can_cast(ancestor.kind()) && self.0.selection.is_none())
                         || ast::Impl::can_cast(ancestor.kind())
                         || ast::Trait::can_cast(ancestor.kind())
                         || ast::ClosureExpr::can_cast(ancestor.kind())
@@ -278,17 +545,27 @@ impl ConstantSource {
                             "anonymous array length requires nested source namespace preparation",
                         ));
                     }
-                    if let Some(function) = ast::Fn::cast(ancestor.clone())
-                        && (function.param_list().is_none_or(|p| {
-                            p.self_param().is_some() || p.params().next().is_some()
-                        }) || function.generic_param_list().is_some()
-                            || ancestor
-                                .parent()
-                                .is_none_or(|p| !ast::SourceFile::can_cast(p.kind())))
-                    {
-                        return Err(fault(
-                            "anonymous array length requires captured function binding context",
-                        ));
+                    if let Some(function) = ast::Fn::cast(ancestor.clone()) {
+                        let params = required(function.param_list())?;
+                        if params.self_param().is_some()
+                            || function.generic_param_list().is_some()
+                            || function.where_clause().is_some()
+                            || ancestor.parent().is_none_or(|p| {
+                                !ast::SourceFile::can_cast(p.kind())
+                                    && !(self.0.selection.is_some()
+                                        && ast::ItemList::can_cast(p.kind()))
+                            })
+                        {
+                            return Err(fault(
+                                "anonymous array length requires captured function binding context",
+                            ));
+                        }
+                        if params.params().next().is_some() {
+                            if parameter_length.is_some() {
+                                return Err(fault("nested parameter length owner is ambiguous"));
+                            }
+                            parameter_length = Some(self.prove_parameter_length(&function, &expr)?);
+                        }
                     }
                     if let Some(statements) = ast::StmtList::cast(ancestor.clone()) {
                         for statement in statements.statements() {
@@ -313,6 +590,14 @@ impl ConstantSource {
                         .collect::<Result<Vec<_>, _>>()?;
                     let (enabled, remaining) =
                         super::attributes::effective_metas(metas, &self.0.cfg)?;
+                    let remaining = remaining
+                        .into_iter()
+                        .filter(|meta| {
+                            !self.0.type_certificate.as_ref().is_some_and(|proof| {
+                                proof.permits_inert_attribute(range(meta.syntax().text_range()))
+                            })
+                        })
+                        .collect::<Vec<_>>();
                     if !enabled
                         || remaining
                             .iter()
@@ -323,7 +608,11 @@ impl ConstantSource {
                         ));
                     }
                 }
-                return self.plan(Entry::Length(ExprRef(expr)), at);
+                return self.plan_with_parameter_length(
+                    Entry::Length(ExprRef(expr)),
+                    at,
+                    parameter_length,
+                );
             }
         }
         Err(fault(
@@ -331,6 +620,14 @@ impl ConstantSource {
         ))
     }
     fn plan(&self, entry: Entry, at: SourceRange) -> Result<ConstantPlan, Diagnostic> {
+        self.plan_with_parameter_length(entry, at, None)
+    }
+    fn plan_with_parameter_length(
+        &self,
+        entry: Entry,
+        at: SourceRange,
+        parameter_length: Option<ParameterIndependentLength>,
+    ) -> Result<ConstantPlan, Diagnostic> {
         if self
             .0
             .parsed
@@ -340,7 +637,7 @@ impl ConstantSource {
         {
             return Err(fault("selected constant syntax is malformed"));
         }
-        let (_, owner_definition, owner_body) = self
+        let (owner_range, owner_definition, owner_body) = self
             .0
             .owners
             .iter()
@@ -350,8 +647,26 @@ impl ConstantSource {
         if let Some(body) = owner_body {
             body.require_entry()?;
         }
-        let mut e = StableEncoder::new("lrr/v1/pure-constant-source-plan");
+        let mut e = StableEncoder::new("lrr/v5/pure-constant-source-plan");
         e.digest(self.0.crate_key);
+        e.option(&self.0.type_certificate, |e, proof| {
+            proof.encode_inert_attributes(e)
+        });
+        e.option(&parameter_length, |e, proof| e.digest(proof.identity()));
+        e.u64(self.0.macro_proofs.len() as u64);
+        for ((start, end), proof) in &self.0.macro_proofs {
+            e.u32(*start);
+            e.u32(*end);
+            e.digest(proof.identity());
+        }
+        e.record(&self.0.scope);
+        e.option(&self.0.selection, |e, selection| {
+            e.string(selection.path.as_str());
+            e.digest(selection.location_identity());
+            e.digest(selection.outline.parse.content);
+            e.record(&selection.outline.parse.profile);
+            e.digest(selection.outline.cfg);
+        });
         e.digest(*owner_definition);
         e.option(owner_body, |e, body| e.record(body));
         e.digest(self.0.parsed.content);
@@ -376,6 +691,11 @@ impl ConstantSource {
             entry,
             identity: e.finish(),
             owner_definition: *owner_definition,
+            owner_context: DeclarationContext {
+                scope: self.0.scope.clone(),
+                range: *owner_range,
+            },
+            owner_body: owner_body.clone(),
         })
     }
     pub(crate) fn source(&self) -> Digest {
@@ -477,6 +797,17 @@ impl ConstantSource {
                 }
             }
         }
+        if self.0.selection.is_some()
+            && !self
+                .0
+                .type_certificate
+                .as_ref()
+                .is_some_and(|proof| proof.permits(&name))
+        {
+            return Err(fault(
+                "reached constant primitive requires current Type source identity",
+            ));
+        }
         Ok(primitive)
     }
     fn ty(&self, ty: ast::Type) -> Result<ConstType, Diagnostic> {
@@ -558,7 +889,7 @@ impl ConstantSource {
     }
     fn named(&self, name: &str) -> Result<ast::Item, Diagnostic> {
         // Generated declarations/import routing is a separate provider integration.
-        for item in self.0.parsed.parsed.tree().items() {
+        for item in &self.0.module_items {
             let metas = item
                 .attrs()
                 .map(|a| required(a.meta()))
@@ -783,6 +1114,32 @@ impl ConstantSource {
                 ast::ArrayExprKind::ElementList(es) => Node::Array(es.map(ExprRef).collect()),
             },
             E::MacroExpr(m) => {
+                if let Some(selection) = &self.0.selection {
+                    let at = e.range();
+                    let body = self
+                        .0
+                        .owners
+                        .iter()
+                        .filter(|(owner, _, _)| owner.contains(at))
+                        .min_by_key(|(owner, _, _)| owner.end - owner.start)
+                        .and_then(|(_, _, body)| body.as_ref())
+                        .ok_or_else(|| fault("reached constant macro body identity absent"))?;
+                    let Some(proof) = self.0.macro_proofs.get(&(at.start, at.end)) else {
+                        return Ok(Node::RequiredMacro(Box::new(RequiredConstantMacro {
+                            source: self.source(),
+                            body: body.key(),
+                            range: at,
+                        })));
+                    };
+                    if !proof.matches(selection, body, at) {
+                        return Err(fault(
+                            "reached constant macro proof owner/source/range differs",
+                        ));
+                    }
+                    return Ok(Node::AdmittedPanic(proof.clone()));
+                }
+                // Legacy content-only parsing retains its old syntactic classification;
+                // this branch never authorizes current publication or reached Rust semantics.
                 let call = required(m.macro_call())?;
                 if bare(required(call.path())?)? == "panic"
                     && call.token_tree().is_some_and(|t| {
@@ -838,6 +1195,12 @@ impl ConstantPlan {
     pub fn owner_definition(&self) -> Digest {
         self.owner_definition
     }
+    pub fn owner_context(&self) -> &DeclarationContext {
+        &self.owner_context
+    }
+    pub fn owner_body(&self) -> Option<&BodyHandle> {
+        self.owner_body.as_ref()
+    }
     pub fn profile(&self) -> &ProfileIdentity {
         self.source.profile()
     }
@@ -868,6 +1231,7 @@ impl Node {
     pub(crate) fn owned_bytes(&self) -> Option<usize> {
         let extra = match self {
             Self::Path(s) | Self::Float(s, _) => s.capacity(),
+            Self::RequiredMacro(_) => std::mem::size_of::<RequiredConstantMacro>(),
             Self::Block(s, _) => s
                 .capacity()
                 .checked_mul(std::mem::size_of::<StatementRef>())?,
@@ -887,3 +1251,9 @@ impl Node {
 fn semantic(text: &str) -> Result<String, Diagnostic> {
     super::ast_adapter::semantic_name(text).ok_or_else(|| fault("invalid captured constant name"))
 }
+
+#[cfg(test)]
+#[path = "constant_length_fixture.rs"]
+mod length_fixture;
+#[cfg(test)]
+pub(crate) use length_fixture::length_sites as fixture_length_sites;

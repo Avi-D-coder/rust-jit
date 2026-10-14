@@ -72,6 +72,11 @@ mod returning;
 #[path = "run_shift_fallback_tests.rs"]
 mod shift_fallback_tests;
 #[cfg(test)]
+#[path = "run_source_constant_tests.rs"]
+mod source_constant_tests;
+#[path = "run_source_constants.rs"]
+mod source_constants;
+#[cfg(test)]
 #[path = "run_temporaries.rs"]
 mod temporaries;
 #[path = "run_panic.rs"]
@@ -258,6 +263,8 @@ pub struct RunMachine {
     runtime_no_item_bytes: usize,
     floating_plans: BTreeMap<PcKey, crate::frontend::primitive_constants::FloatingConstantRecipe>,
     floating_plan_bytes: usize,
+    constant_plans: BTreeMap<PcKey, source_constants::SourceConstantPlan>,
+    constant_plan_bytes: usize,
     declarative_runtime: super::declarative_runtime::DeclarativeRuntimePlans,
     prepared_call: Option<PreparedSourceCall>,
     returning: Option<returning::ReturnContinuation>,
@@ -321,6 +328,8 @@ impl RunMachine {
                 runtime_no_item_bytes: 0,
                 floating_plans: BTreeMap::new(),
                 floating_plan_bytes: 0,
+                constant_plans: BTreeMap::new(),
+                constant_plan_bytes: 0,
                 declarative_runtime: Default::default(),
                 prepared_call: None,
                 returning: None,
@@ -1054,9 +1063,9 @@ impl RunMachine {
                 "static panic plans require an unexecuted current run",
             ));
         }
-        if plan.arguments().kind() != crate::facade::macros::RuntimeMacroKind::Panic {
+        if !plan.arguments().kind().is_static_panic() {
             return Err(call_fault(
-                "static panic queue requires its resolved panic definition",
+                "static panic queue requires its resolved panic-family definition",
             ));
         }
         if !self
@@ -1521,6 +1530,12 @@ impl RunMachine {
         contexts: &[super::runtime_macros::RuntimeMacroContext<'_>],
     ) -> RunPoll {
         if db.source_revision() != self.installed.source_revision() {
+            if self.frame.has_source_constant_activation() {
+                return self.fail_source_constant(Diagnostic::new(
+                    "LRR-E-INTERNAL-SNAPSHOT",
+                    "runtime macro dispatch source publication is stale".into(),
+                ));
+            }
             self.terminal = true;
             return RunPoll::Fault(Diagnostic::new(
                 "LRR-E-INTERNAL-SNAPSHOT",
@@ -1593,7 +1608,27 @@ impl RunMachine {
                     }
                 }
             }
+            // Rollback is bounded physical work and gets priority over a
+            // depleted/cancelled run; it can never publish a source value.
+            if self.frame.source_constant_cleaning() {
+                match self.frame.drain_source_constant_op(&mut self.store) {
+                    Ok(false) => continue,
+                    Ok(true) => {
+                        self.terminal = true;
+                        return RunPoll::Fault(call_fault(
+                            "constant rollback completed without its retained failure",
+                        ));
+                    }
+                    Err(error) => {
+                        self.terminal = true;
+                        return RunPoll::Fault(error);
+                    }
+                }
+            }
             if let Err(error) = self.frame.fuel.require_credit() {
+                if self.frame.has_source_constant_activation() {
+                    return self.fail_source_constant(error);
+                }
                 self.terminal = true;
                 return RunPoll::Fault(error);
             }
@@ -1672,8 +1707,8 @@ impl RunMachine {
             } else {
                 None
             };
-            let prepared_floating = if !self.installed.contains_pc(&pc) {
-                match self.prepare_floating_recipe(db, contexts) {
+            let prepared_constant = if !self.installed.contains_pc(&pc) {
+                match self.prepare_source_constant_recipe(db) {
                     QueryPoll::Ready(Ok(recipe)) => recipe,
                     QueryPoll::Ready(Err(error)) => {
                         self.terminal = true;
@@ -1684,7 +1719,22 @@ impl RunMachine {
             } else {
                 None
             };
-            let resolution = if let Some(recipe) = prepared_floating {
+            let prepared_floating =
+                if prepared_constant.is_none() && !self.installed.contains_pc(&pc) {
+                    match self.prepare_floating_recipe(db, contexts) {
+                        QueryPoll::Ready(Ok(recipe)) => recipe,
+                        QueryPoll::Ready(Err(error)) => {
+                            self.terminal = true;
+                            return RunPoll::Fault(error);
+                        }
+                        QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                    }
+                } else {
+                    None
+                };
+            let resolution = if let Some(recipe) = prepared_constant {
+                QueryPoll::Ready(self.installed.install_prepared(db, pc, &recipe))
+            } else if let Some(recipe) = prepared_floating {
                 QueryPoll::Ready(self.installed.install_prepared(db, pc, &recipe))
             } else if let Some(recipe) = reached_recipe {
                 QueryPoll::Ready(self.installed.install_prepared(db, pc, &recipe))
@@ -2072,7 +2122,33 @@ impl RunMachine {
                 if let Some(capture) = &mut self.runtime_capture {
                     capture.before_vm_dispatch(recipe)?;
                 }
-                let outcome = step::step(&mut self.frame, &mut self.store, recipe)?;
+                let outcome = if recipe
+                    .recipe()
+                    .operations
+                    .iter()
+                    .any(|op| matches!(op, Op::SourceConstant { .. }))
+                {
+                    let plan = self.constant_plans.get(self.frame.pc()).ok_or_else(|| {
+                        call_fault("source constant installed without its source plan")
+                    })?;
+                    let construction = plan.construction(db, &self.sources)?;
+                    let views = self.sources.iter().collect::<Vec<_>>();
+                    let proof = plan.proof(
+                        &construction,
+                        &self.frame,
+                        &mut self.store,
+                        &self.sources,
+                        &views,
+                    )?;
+                    step::step_with_constant(
+                        &mut self.frame,
+                        &mut self.store,
+                        recipe,
+                        Some(&proof),
+                    )?
+                } else {
+                    step::step(&mut self.frame, &mut self.store, recipe)?
+                };
                 if let Some(capture) = &mut self.runtime_capture {
                     capture.after_vm_dispatch(&outcome)?;
                 }
@@ -2080,6 +2156,9 @@ impl RunMachine {
             }) {
                 Ok(outcome) => outcome,
                 Err(error) => {
+                    if self.frame.has_source_constant_activation() {
+                        return self.fail_source_constant(error);
+                    }
                     self.terminal = true;
                     return RunPoll::Fault(error);
                 }

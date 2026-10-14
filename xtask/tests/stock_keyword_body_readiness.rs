@@ -96,9 +96,15 @@ fn prepare(
         1,
     )
     .unwrap()
-    .with_declarative(
+    .with_declarative_compiler(
         Digest([6; 32]),
-        Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+        lrr::expand::source_declarative::engine_version(),
+        std::sync::Arc::new(
+            lrr::frontend::compile_input_catalog::CompileInputCatalog::standalone(
+                &views[0].selection().outline.parse.profile,
+            )
+            .unwrap(),
+        ),
     )
     .unwrap();
     (views, discovery)
@@ -232,7 +238,7 @@ fn unchanged_keyword_header_keeps_caller_profile_and_definition_token_context_se
             definition_edition: 2015,
             call_edition: 2024,
             grammar: GrammarSlot::Items,
-            engine_version: Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+            engine_version: lrr::expand::source_declarative::engine_version(),
             procedural_epoch: None,
         };
         let (output, _) = definition

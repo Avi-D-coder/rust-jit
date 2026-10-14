@@ -6,7 +6,7 @@ use lrr::{
     },
     db::{
         dependency::{InputKey, InputValue},
-        key::{ConstantKey, QueryKey},
+        key::QueryKey,
         memo::Database,
         poll::QueryPoll,
         provider::{Provided, Provider, SyntaxProvider},
@@ -39,7 +39,7 @@ struct Lookup {
     runs: Cell<usize>,
 }
 impl Provider for Lookup {
-    fn execute(&self, db: &mut Database, _: &QueryKey) -> QueryPoll<Provided> {
+    fn execute(&self, db: &mut Database, requested: &QueryKey) -> QueryPoll<Provided> {
         self.runs.set(self.runs.get() + 1);
         match db.fetch(
             &SyntaxProvider,
@@ -70,7 +70,7 @@ impl Provider for Lookup {
                     }
                 }
                 assert_eq!(values.len(), 1);
-                Provided::pure(QueryValue::Constant(values[0]))
+                Provided::pure(fixture_value(requested, values[0]))
             }
         }
     }
@@ -138,12 +138,12 @@ fn mx013_actual_expansion_suspends_and_reenters_without_duplicate_invocation() {
         key: key.clone(),
         runs: Cell::new(0),
     };
-    let query = QueryKey::Constant(ConstantKey {
-        definition: Digest([5; 32]),
-        arguments: vec![],
-        cfg: Digest::default(),
-        profile: ProfileIdentity::current(),
-    });
+    let query = QueryKey::Constant(fixture_key(
+        Digest([5; 32]),
+        vec![],
+        Digest::default(),
+        ProfileIdentity::current(),
+    ));
     let mut db = Database::default();
     let c = DemandContext {
         request: Digest([6; 32]),
@@ -198,10 +198,8 @@ fn mx013_actual_expansion_suspends_and_reenters_without_duplicate_invocation() {
         .into_ready()
         .unwrap()
         .unwrap();
-    let QueryValue::Constant(observed) = value.value.as_ref() else {
-        panic!("lookup did not resolve")
-    };
-    assert_eq!(*observed, native);
+    let observed = fixture_number(value.value.as_ref());
+    assert_eq!(observed, native);
     let runs = lookup.runs.get();
     db.fetch(&lookup, query.clone())
         .into_ready()
@@ -216,3 +214,7 @@ fn mx013_actual_expansion_suspends_and_reenters_without_duplicate_invocation() {
     assert_eq!(output, output_digest);
     fs::write(work.join("report.json"),serde_json::to_vec_pretty(&serde_json::json!({"task":"M008","fixture":"MX013","passed":true,"native":native,"observed":observed,"macro_invocations":macro_invocations.get(),"pure_lookup_runs":lookup.runs.get(),"scope":"actual pinned declarative expansion outside SourceDb, token-checked immutable record adoption, pure lookup suspension/reentry/cache reuse and owned saved payload versus native macOS; procedural helper execution and concrete guest VM effects remain later integration"})).unwrap()).unwrap();
 }
+
+include!("support/constant_key.rs");
+include!("support/constant_value.rs");
+include!("support/constant_number.rs");

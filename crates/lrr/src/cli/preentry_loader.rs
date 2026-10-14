@@ -190,7 +190,7 @@ impl Packet {
         )?
         .with_declarative_compiler(
             compiler.environment_identity(),
-            Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+            crate::expand::source_declarative::engine_version(),
             compiler.catalog.clone(),
         )?;
         // poll performs structural discovery only. Never service any expansion or effect demand.

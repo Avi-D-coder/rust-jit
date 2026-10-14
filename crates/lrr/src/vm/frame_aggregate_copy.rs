@@ -27,9 +27,14 @@ fn place_error(error: PlaceFailure) -> Diagnostic {
 }
 impl Frame {
     pub(crate) fn resume_operation_index(&self) -> usize {
-        self.copy_activation
+        self.constant_activation
             .as_ref()
-            .map(|activation| activation.operation_index as usize)
+            .map(|_| self.source_constant_operation_index().unwrap_or(0))
+            .or_else(|| {
+                self.copy_activation
+                    .as_ref()
+                    .map(|activation| activation.operation_index as usize)
+            })
             .or_else(|| {
                 self.cleanup_activation
                     .as_ref()

@@ -18,83 +18,15 @@ use crate::{
     },
     vm::numeric::{self, NumericFailure},
 };
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, BTreeSet};
 const MAX_STEPS: u32 = 100_000;
 const MAX_FRAMES: u16 = 128;
 const MAX_BYTES: usize = 1 << 20;
 fn fault(code: &'static str, message: &str) -> Diagnostic {
     Diagnostic::new(code, message.into())
 }
-#[derive(Debug, Clone)]
-enum Immutable {
-    Scalar(ValueRepr),
-    Array(Arc<[ConstValue]>),
-}
-/// Fields are private: no guest/object/reference/function handle can enter a constant value.
-#[derive(Debug, Clone)]
-pub struct ConstValue(Immutable);
-impl ConstValue {
-    pub fn from_scalar(value: ValueRepr) -> Result<Self, Diagnostic> {
-        if !matches!(value.kind, 1..=7) {
-            return Err(fault(
-                "LRR-E-CONST-TYPE",
-                "constant scalar cannot contain a guest handle",
-            ));
-        }
-        value.validate_scalar()?;
-        Ok(Self(Immutable::Scalar(value)))
-    }
-    pub fn scalar(&self) -> Option<ValueRepr> {
-        match &self.0 {
-            Immutable::Scalar(v) => Some(*v),
-            _ => None,
-        }
-    }
-    pub fn elements(&self) -> Option<&[ConstValue]> {
-        match &self.0 {
-            Immutable::Array(es) => Some(es),
-            _ => None,
-        }
-    }
-    pub(crate) fn matches_scalar(&self, ty: PrimitiveType) -> Result<bool, Diagnostic> {
-        Ok(self.scalar().is_some_and(|v| {
-            Some(v.type_id) == PrimitiveIdentity::from_recipe(ty).ok().map(|id| id.id().0)
-        }))
-    }
-    fn field_bytes(&self) -> Option<usize> {
-        match &self.0 {
-            Immutable::Scalar(_) => Some(17),
-            Immutable::Array(es) => es
-                .iter()
-                .try_fold(9usize, |n, e| n.checked_add(e.field_bytes()?)),
-        }
-    }
-    fn serialized_bytes(&self) -> Option<usize> {
-        self.field_bytes()?
-            .checked_add(8)?
-            .checked_add(Self::DOMAIN.len())
-    }
-}
-impl StableEncode for ConstValue {
-    const DOMAIN: &'static str = "lrr/v1/immutable-constant-value";
-    fn encode_fields(&self, e: &mut StableEncoder) {
-        match &self.0 {
-            Immutable::Scalar(v) => {
-                e.u8(1);
-                e.u32(v.kind);
-                e.u32(v.type_id);
-                e.u64(v.payload)
-            }
-            Immutable::Array(es) => {
-                e.u8(2);
-                e.sequence(es, |e, v| v.encode_fields(e))
-            }
-        }
-    }
-}
+pub use crate::ir::constant_data::ConstValue;
+
 #[derive(Debug, Clone, Copy)]
 pub struct ConstLimits {
     steps: u32,
@@ -111,6 +43,15 @@ impl Default for ConstLimits {
     }
 }
 impl ConstLimits {
+    /// Retried evaluation uses the same total host-step budget.
+    pub(crate) fn after_steps(self, spent: u32) -> Result<Self, Diagnostic> {
+        let steps = self
+            .steps
+            .checked_sub(spent)
+            .filter(|n| *n > 0)
+            .ok_or_else(|| fault("LRR-E-CONST-LIMIT", "constant retry step budget exhausted"))?;
+        Ok(Self { steps, ..self })
+    }
     pub fn new(steps: u32, frames: u16, result_bytes: usize) -> Result<Self, Diagnostic> {
         if steps == 0
             || steps > MAX_STEPS
@@ -221,11 +162,33 @@ impl ConstEvaluation {
         Ok(count)
     }
 }
+#[derive(Debug, Clone)]
+pub struct ConstPanic {
+    message: String,
+    definition: Digest,
+    proof: Digest,
+}
+impl ConstPanic {
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+    pub fn definition(&self) -> Digest {
+        self.definition
+    }
+    pub fn proof(&self) -> Digest {
+        self.proof
+    }
+}
 #[derive(Debug)]
 pub struct ConstFailure {
     diagnostic: Box<Diagnostic>,
     source: Digest,
     range: SourceRange,
+    panic: Option<Box<ConstPanic>>,
+    numeric_panic: Option<crate::vm::numeric::PanicKind>,
+    requested_plan: Option<Digest>,
+    required_macro: Option<Box<crate::syntax::pure_constants::RequiredConstantMacro>>,
+    evaluation_steps: u32,
 }
 impl ConstFailure {
     pub fn diagnostic(&self) -> &Diagnostic {
@@ -236,6 +199,23 @@ impl ConstFailure {
     }
     pub fn range(&self) -> SourceRange {
         self.range
+    }
+    pub fn requested_plan(&self) -> Option<Digest> {
+        self.requested_plan
+    }
+    pub(crate) fn required_macro(
+        &self,
+    ) -> Option<&crate::syntax::pure_constants::RequiredConstantMacro> {
+        self.required_macro.as_deref()
+    }
+    pub(crate) fn evaluation_steps(&self) -> u32 {
+        self.evaluation_steps
+    }
+    pub fn numeric_panic(&self) -> Option<crate::vm::numeric::PanicKind> {
+        self.numeric_panic
+    }
+    pub fn panic(&self) -> Option<&ConstPanic> {
+        self.panic.as_deref()
     }
 }
 #[derive(Debug)]
@@ -289,6 +269,11 @@ impl Evaluator<'_> {
             diagnostic: Box::new(diagnostic),
             source: self.source.source(),
             range,
+            panic: None,
+            numeric_panic: None,
+            requested_plan: None,
+            required_macro: None,
+            evaluation_steps: self.steps,
         }
     }
     fn limit(&self, at: SourceRange) -> ConstFailure {
@@ -337,14 +322,13 @@ impl Evaluator<'_> {
         result: Result<ValueRepr, NumericFailure>,
         at: SourceRange,
     ) -> Result<ConstValue, ConstFailure> {
-        let v = result.map_err(|e| {
-            self.failure(
-                match e {
-                    NumericFailure::GuestPanic(p) => fault("LRR-E-CONST-PANIC", p.description()),
-                    NumericFailure::RuntimeFault(d) => d,
-                },
-                at,
-            )
+        let v = result.map_err(|error| match error {
+            NumericFailure::GuestPanic(kind) => {
+                let mut failure = self.failure(fault("LRR-E-CONST-PANIC", kind.description()), at);
+                failure.numeric_panic = Some(kind);
+                failure
+            }
+            NumericFailure::RuntimeFault(diagnostic) => self.failure(diagnostic, at),
         })?;
         ConstValue::from_scalar(v).map_err(|d| self.failure(d, at))
     }
@@ -888,7 +872,7 @@ impl Evaluator<'_> {
                         allow_return
                     ));
                 }
-                ConstValue(Immutable::Array(values.into()))
+                ConstValue::from_elements(values).map_err(|_| self.limit(at))?
             }
             Node::Repeat(initializer, len) => {
                 let Some(Expected::Array(p, expected)) = hint else {
@@ -927,7 +911,43 @@ impl Evaluator<'_> {
                     .try_reserve_exact(count)
                     .map_err(|_| self.limit(at))?;
                 values.resize(count, value);
-                ConstValue(Immutable::Array(values.into()))
+                ConstValue::from_elements(values).map_err(|_| self.limit(at))?
+            }
+            Node::RequiredMacro(site) => {
+                let mut failure = self.failure(
+                    fault(
+                        "LRR-E-CONST-MACRO-SOURCE",
+                        "reached constant macro requires current source/operand admission",
+                    ),
+                    at,
+                );
+                failure.required_macro = Some(site);
+                return Err(failure);
+            }
+            Node::AdmittedPanic(plan) => {
+                if plan.range() != at {
+                    return Err(self.failure(
+                        fault(
+                            "LRR-E-CONST-MACRO-SOURCE",
+                            "constant panic proof range differs",
+                        ),
+                        at,
+                    ));
+                }
+                let bytes = plan
+                    .message()
+                    .len()
+                    .checked_mul(2)
+                    .and_then(|n| n.checked_add(std::mem::size_of::<ConstPanic>() + 128))
+                    .ok_or_else(|| self.limit(at))?;
+                self.admit_metadata(bytes, at)?;
+                let mut failure = self.failure(fault("LRR-E-CONST-PANIC", plan.message()), at);
+                failure.panic = Some(Box::new(ConstPanic {
+                    message: plan.message().into(),
+                    definition: plan.definition(),
+                    proof: plan.identity(),
+                }));
+                return Err(failure);
             }
             Node::Panic => {
                 return Err(self.failure(
@@ -1028,6 +1048,15 @@ fn primitive_for_value(v: Option<ValueRepr>) -> Option<PrimitiveType> {
 }
 /// Returns an immutable result or an attributed typed refusal. This is not query publication.
 pub fn evaluate(plan: &ConstantPlan, limits: ConstLimits) -> Result<ConstEvaluation, ConstFailure> {
+    evaluate_inner(plan, limits).map_err(|mut failure| {
+        failure.requested_plan = Some(plan.identity());
+        failure
+    })
+}
+fn evaluate_inner(
+    plan: &ConstantPlan,
+    limits: ConstLimits,
+) -> Result<ConstEvaluation, ConstFailure> {
     let mut evaluator = Evaluator {
         source: plan.source(),
         limits,
@@ -1085,4 +1114,11 @@ pub fn evaluate(plan: &ConstantPlan, limits: ConstLimits) -> Result<ConstEvaluat
 }
 
 pub mod memo;
+pub mod query_identity;
 pub mod wire;
+
+pub mod query;
+pub mod query_value;
+
+pub mod query_failure;
+pub mod query_macro_demand;

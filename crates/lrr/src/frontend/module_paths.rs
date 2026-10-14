@@ -133,6 +133,8 @@ struct Alias {
 enum Binding {
     Declared(VisibilityScope),
     Alias(Alias),
+    // Only the ordinary source-import lane can collect competing routes.
+    ImportedAliases(Vec<Alias>),
 }
 #[derive(Clone, Default)]
 pub(crate) struct ModulePaths {
@@ -140,6 +142,7 @@ pub(crate) struct ModulePaths {
     weak: BTreeMap<ModulePath, BTreeMap<ModulePath, BTreeSet<VisibilityScope>>>,
     bytes: usize,
     weak_bytes: usize,
+    imported_aliases: usize,
 }
 pub(crate) enum Resolution {
     Known(MacroPath),
@@ -290,6 +293,95 @@ impl ModulePaths {
                 origin,
             }),
         );
+        Ok(())
+    }
+    /// Retain actual ordinary import routes without relaxing compiler aliases.
+    /// The caller has already selected each source module and checked reexport
+    /// width. The original route/origin remains necessary for subsequent walks.
+    pub(crate) fn imported_alias(
+        &mut self,
+        path: ModulePath,
+        target: ModulePath,
+        visibility: VisibilityScope,
+    ) -> Result<(), Diagnostic> {
+        ModulePath::validate_components(&path.names)?;
+        ModulePath::validate_components(&target.names)?;
+        if path.names.is_empty() {
+            return Err(error("imported module alias has no binding name"));
+        }
+        let owner = origin(&path);
+        visibility.validate_for_declaration(&owner)?;
+        match self.bindings.get(&path) {
+            Some(Binding::Declared(_)) | Some(Binding::Alias(_)) => {
+                // Extern/compiler/source declaration corruption remains strict.
+                return self.alias(path, target, visibility);
+            }
+            Some(Binding::ImportedAliases(aliases)) => {
+                if aliases.iter().any(|old| {
+                    old.target == target && old.visibility == visibility && old.origin == owner
+                }) {
+                    return Ok(());
+                }
+                if aliases.iter().any(|old| old.target == target) {
+                    return Err(error("conflicting imported module alias provenance"));
+                }
+            }
+            None => {
+                if self.bindings.len() >= 1_000_000 {
+                    return Err(error("module header limit exceeded"));
+                }
+            }
+        }
+        let count = self
+            .imported_aliases
+            .checked_add(1)
+            .filter(|n| *n <= 100_000)
+            .ok_or_else(|| error("imported module alias count exceeded"))?;
+        let mut budget = Self::default();
+        budget.charge(&path)?;
+        budget.charge(&target)?;
+        budget.charge_visibility(&visibility)?;
+        let mut added = budget
+            .bytes
+            .checked_add(std::mem::size_of::<Alias>() + std::mem::size_of::<ScopeKey>() + 128)
+            .ok_or_else(|| error("imported module alias metadata overflow"))?;
+        for name in &owner.module_path {
+            added = added
+                .checked_add(name.len())
+                .and_then(|n| n.checked_add(std::mem::size_of::<String>()))
+                .ok_or_else(|| error("imported module origin metadata overflow"))?;
+        }
+        let bytes = self
+            .bytes
+            .checked_add(added)
+            .filter(|n| *n <= 32 * 1024 * 1024)
+            .ok_or_else(|| error("imported module alias metadata budget exceeded"))?;
+        let alias = Alias {
+            target,
+            visibility,
+            origin: owner,
+        };
+        match self.bindings.get_mut(&path) {
+            Some(Binding::ImportedAliases(aliases)) => {
+                aliases
+                    .try_reserve_exact(1)
+                    .map_err(|_| error("imported module alias allocation failed"))?;
+                aliases.push(alias);
+                aliases.sort_by(|a, b| a.target.cmp(&b.target));
+            }
+            None => {
+                let mut aliases = Vec::new();
+                aliases
+                    .try_reserve_exact(1)
+                    .map_err(|_| error("imported module alias allocation failed"))?;
+                aliases.push(alias);
+                self.bindings
+                    .insert(path, Binding::ImportedAliases(aliases));
+            }
+            _ => return Err(error("imported module alias changed during admission")),
+        }
+        self.bytes = bytes;
+        self.imported_aliases = count;
         Ok(())
     }
     pub(crate) fn member_candidates(
@@ -519,7 +611,7 @@ impl ModulePaths {
                 frame.final_visibility = visibility;
                 continue;
             };
-            match binding {
+            let alias = match binding {
                 Binding::Declared(visibility) => {
                     if let Some(caller) = frame.caller
                         && !visibility.allows(caller)?
@@ -527,44 +619,73 @@ impl ModulePaths {
                         return Ok(ModuleResolution::Denied(key.clone()));
                     }
                     frame.final_visibility = visibility;
+                    continue;
                 }
-                Binding::Alias(alias) => {
-                    if let Some(caller) = frame.caller
-                        && !alias.visibility.allows(caller)?
-                    {
+                Binding::Alias(alias) => alias,
+                Binding::ImportedAliases(aliases) => {
+                    let mut selected = None;
+                    let mut visible = Vec::new();
+                    let mut budget = Self::default();
+                    for alias in aliases {
+                        if let Some(caller) = frame.caller
+                            && !alias.visibility.allows(caller)?
+                        {
+                            continue;
+                        }
+                        budget.charge(&alias.target)?;
+                        visible.try_reserve_exact(1).map_err(|_| {
+                            error("ambiguous imported module path allocation failed")
+                        })?;
+                        visible.push(alias.target.clone());
+                        selected = Some(alias);
+                    }
+                    if visible.len() > 1 {
+                        return Ok(ModuleResolution::Ambiguous(visible));
+                    }
+                    let Some(alias) = selected else {
                         return Ok(ModuleResolution::Denied(key.clone()));
-                    }
-                    if !active.insert(key) {
-                        return Err(error("module path alias cycle"));
-                    }
-                    if !self.bindings.contains_key(&ModulePath {
-                        unit: alias.target.unit,
-                        names: vec![],
-                    }) {
-                        return Ok(ModuleResolution::Absent);
-                    }
-                    frame.final_visibility = &alias.visibility;
-                    let checked = frame.caller.is_some();
-                    if frames.len() >= 100_000 {
-                        return Err(error("module path frame limit exceeded"));
-                    }
-                    frames
-                        .try_reserve(1)
-                        .map_err(|_| error("module path frame allocation failed"))?;
-                    frames.push(Frame {
-                        names: &alias.target.names,
-                        position: 0,
-                        current: ModulePath {
-                            unit: alias.target.unit,
-                            names: vec![],
-                        },
-                        caller: checked.then_some(&alias.origin),
-                        required: checked.then_some(&alias.visibility),
-                        final_visibility: &PUBLIC,
-                        active: Some(key),
-                    });
+                    };
+                    alias
                 }
+            };
+            if let Some(caller) = frame.caller
+                && !alias.visibility.allows(caller)?
+            {
+                return Ok(ModuleResolution::Denied(key.clone()));
             }
+            if !active.insert(key) {
+                return Err(error("module path alias cycle"));
+            }
+            if !self.bindings.contains_key(&ModulePath {
+                unit: alias.target.unit,
+                names: vec![],
+            }) {
+                return Ok(ModuleResolution::Absent);
+            }
+            frame.final_visibility = &alias.visibility;
+            let checked = frame.caller.is_some();
+            if frames.len() >= 100_000 {
+                return Err(error("module path frame limit exceeded"));
+            }
+            frames
+                .try_reserve(1)
+                .map_err(|_| error("module path frame allocation failed"))?;
+            frames.push(Frame {
+                names: &alias.target.names,
+                position: 0,
+                current: ModulePath {
+                    unit: alias.target.unit,
+                    names: vec![],
+                },
+                caller: checked.then_some(&alias.origin),
+                required: checked.then_some(&alias.visibility),
+                final_visibility: &PUBLIC,
+                active: Some(key),
+            });
         }
     }
 }
+
+#[cfg(test)]
+#[path = "module_paths_import_tests.rs"]
+mod module_paths_import_tests;

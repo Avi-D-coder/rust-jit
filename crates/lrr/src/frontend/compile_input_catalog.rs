@@ -15,6 +15,11 @@ use crate::{
     syntax::{outline::Visibility, visibility::VisibilityScope},
 };
 use std::collections::{BTreeMap, BTreeSet};
+#[path = "compile_input_modules.rs"]
+mod ordinary_modules;
+#[path = "compile_input_catalog/owning_profiles.rs"]
+mod owning_profiles;
+pub(crate) use ordinary_modules::CompilerInjectedImport;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-COMPILE-INPUT", message.into())
 }

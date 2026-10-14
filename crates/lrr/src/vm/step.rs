@@ -462,6 +462,9 @@ fn place_panic_outcome(
 }
 fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Diagnostic> {
     match op {
+        Op::SourceConstant { .. } => Err(invalid(
+            "source constant bypassed its current-proof opcode boundary",
+        )),
         Op::PrimitiveFloatingConstant {
             constant,
             destination,
@@ -841,6 +844,9 @@ fn execute(
     prepared: Option<PreparedLiteral>,
 ) -> Result<(), Diagnostic> {
     match op {
+        Op::SourceConstant { .. } => Err(invalid(
+            "source constant bypassed its current-proof opcode boundary",
+        )),
         Op::PrimitiveFloatingConstant {
             constant,
             destination,
@@ -1065,13 +1071,40 @@ pub fn step(
     store: &mut GuestStore,
     verified: &VerifiedRecipe,
 ) -> Result<StepOutcome, Diagnostic> {
+    step_with_constant(frame, store, verified, None)
+}
+pub(crate) fn step_with_constant(
+    frame: &mut Frame,
+    store: &mut GuestStore,
+    verified: &VerifiedRecipe,
+    constant: Option<&crate::engine::constant_array_publication::AdmittedConstantUse<'_>>,
+) -> Result<StepOutcome, Diagnostic> {
     if frame.status != FrameStatus::Running {
         return Err(invalid("terminal frame cannot execute again"));
     }
+    frame.require_store(store)?;
     let result = (|| {
         let recipe = verified.recipe();
         if recipe.key != frame.pc {
             return Err(invalid("installed recipe does not match frame PC"));
+        }
+        // A recipe is data. Refuse a missing/foreign source use before even
+        // its ordinary ScopeEnter prefix can execute.
+        for op in &recipe.operations {
+            if let Op::SourceConstant {
+                constant: instruction,
+                ..
+            } = op
+            {
+                let proof = constant
+                    .ok_or_else(|| invalid("source constant lacks a current admitted use"))?;
+                if !proof.matches_instruction(instruction) {
+                    return Err(invalid(
+                        "source constant current use differs from immutable instruction",
+                    ));
+                }
+                frame.preflight_constant_source(proof, store)?;
+            }
         }
         frame.preflight_temporary_scope_entry()?;
         let resume = frame.resume_operation_index();
@@ -1090,6 +1123,25 @@ pub fn step(
             frame.check_cleanup_activation(resume, op)?;
         }
         for (index, op) in recipe.operations.iter().enumerate().skip(resume) {
+            if let Op::SourceConstant {
+                constant: instruction,
+                ..
+            } = op
+            {
+                let proof =
+                    constant.ok_or_else(|| invalid("source constant current use disappeared"))?;
+                if !frame.has_source_constant_activation() {
+                    frame.start_source_constant_op(index, instruction, proof, store)?;
+                }
+                if !frame.advance_source_constant_op(index, op, proof, store)? {
+                    return Ok(StepOutcome::Dispatch);
+                }
+                increment(&mut frame.counters.operations_completed)?;
+                continue;
+            }
+            if frame.has_source_constant_activation() {
+                return Err(invalid("source constant resumed into another operation"));
+            }
             if frame.has_copy_activation() {
                 frame.check_copy_activation(index, op)?;
                 if !frame.advance_aggregate_copy(store)? {

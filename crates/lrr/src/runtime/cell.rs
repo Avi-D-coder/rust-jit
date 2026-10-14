@@ -1,8 +1,17 @@
 //! Validate/reserve/commit guest storage. No guest callbacks during mutation.
+#[cfg(test)]
+#[path = "cell_test_owners.rs"]
+mod test_owners;
+#[cfg(test)]
+pub(crate) use test_owners::OwnerInventory;
 #[path = "cell_aggregate_copy.rs"]
 pub(crate) mod aggregate_copy;
+#[path = "cell_constant_instantiation.rs"]
+pub mod constant_instantiation;
 #[path = "cell_construction_cleanup.rs"]
 mod construction_cleanup;
+#[path = "cell_run_session.rs"]
+mod run_session;
 use super::{
     arena::{GuestArena, Handle, RunBudget, resource, stale},
     object::{
@@ -19,6 +28,7 @@ use super::{
 };
 use crate::core::diagnostic::Diagnostic;
 pub use construction_cleanup::ConstructionCleanupTransfer;
+pub(crate) use run_session::StoreSession;
 fn ownership() -> Diagnostic {
     Diagnostic::new(
         "LRR-E-OWNERSHIP",
@@ -190,6 +200,7 @@ pub struct LiteralRecord {
     binding: Option<TypeId>,
 }
 pub struct GuestStore {
+    pattern_binding_session: StoreSession,
     budget: RunBudget,
     types: TypeRegistry,
     cells: GuestArena<Cell>,
@@ -204,6 +215,7 @@ pub struct GuestStore {
 impl GuestStore {
     pub fn new(epoch: u32, max_handles: u32, max_bytes: usize) -> Result<Self, Diagnostic> {
         Ok(Self {
+            pattern_binding_session: StoreSession::mint()?,
             budget: RunBudget::new(epoch, max_handles, max_bytes)?,
             types: TypeRegistry::default(),
             cells: GuestArena::new(epoch)?,
@@ -215,6 +227,9 @@ impl GuestStore {
             constructions: GuestArena::new(epoch)?,
             references: GuestArena::new(epoch)?,
         })
+    }
+    pub(crate) fn pattern_binding_session(&self) -> StoreSession {
+        self.pattern_binding_session
     }
     pub fn budget(&self) -> &RunBudget {
         &self.budget
@@ -518,6 +533,14 @@ impl GuestStore {
         guard: ConstructionId,
         ty: TypeId,
     ) -> Result<TicketId, Diagnostic> {
+        self.commit_construction_with_storage(guard, ty, None)
+    }
+    fn commit_construction_with_storage(
+        &mut self,
+        guard: ConstructionId,
+        ty: TypeId,
+        reserved: Option<constant_instantiation::ReservedArrayStorage>,
+    ) -> Result<TicketId, Diagnostic> {
         let record = self.constructions.get(guard)?;
         if record.state != ConstructionState::Building
             || record.completed.len() != record.fields.len()
@@ -584,9 +607,11 @@ impl GuestStore {
         self.objects.reserve(1, &mut self.budget)?;
         self.cells.reserve(count, &mut self.budget)?;
         self.tickets.reserve(1, &mut self.budget)?;
-        let mut fields = Vec::new();
-        fields.try_reserve_exact(count).map_err(|_| resource())?;
-        let initialized = InitializedFields::complete(count)?;
+        let reserved = match reserved {
+            Some(reserved) => reserved,
+            None => constant_instantiation::ReservedArrayStorage::new(count)?,
+        };
+        let (mut fields, initialized) = reserved.into_parts(count)?;
         let owned = fields
             .capacity()
             .checked_mul(std::mem::size_of::<CellId>())

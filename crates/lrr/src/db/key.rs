@@ -1,8 +1,5 @@
 use crate::{
-    core::{
-        digest::{Digest, StableEncode, StableEncoder},
-        profile::ProfileIdentity,
-    },
+    core::digest::{Digest, StableEncode, StableEncoder},
     source::manifest::Namespace,
     syntax::{outline::ScopeKey, parse::ParseKey},
 };
@@ -14,6 +11,15 @@ pub struct OutlineKey {
     pub crate_key: Digest,
     pub module_path: Vec<String>,
     pub cfg: Digest,
+}
+impl StableEncode for OutlineKey {
+    const DOMAIN: &'static str = "lrr/v1/outline-key";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.record(&self.parse);
+        e.digest(self.crate_key);
+        e.sequence(&self.module_path, |e, part| e.string(part));
+        e.digest(self.cfg);
+    }
 }
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct BucketKey {
@@ -41,13 +47,7 @@ impl StableEncode for SealedNameKey {
         e.record(&self.bucket);
     }
 }
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
-pub struct ConstantKey {
-    pub definition: Digest,
-    pub arguments: Vec<Digest>,
-    pub cfg: Digest,
-    pub profile: ProfileIdentity,
-}
+pub use crate::frontend::constants::query_identity::ConstQueryIdentity as ConstantKey;
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum QueryKey {
     SealedName(Box<SealedNameKey>),
@@ -93,10 +93,7 @@ impl QueryKey {
             | Self::Signature(_)
             | Self::BodyStructure(_)
             | Self::Thunk(_) => 0,
-            Self::Constant(k) => {
-                k.arguments.capacity() * std::mem::size_of::<Digest>()
-                    + k.profile.semantics.capacity()
-            }
+            Self::Constant(k) => k.heap_bytes().unwrap_or(usize::MAX),
         }
     }
     pub fn kind(&self) -> &'static str {
@@ -193,10 +190,7 @@ impl StableEncode for QueryKey {
             }
             Self::Constant(k) => {
                 e.u32(10);
-                e.digest(k.definition);
-                e.sequence(&k.arguments, |e, d| e.digest(*d));
-                e.digest(k.cfg);
-                e.record(&k.profile);
+                e.record(k);
             }
         }
     }

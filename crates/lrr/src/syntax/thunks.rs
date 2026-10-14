@@ -3723,6 +3723,32 @@ impl ParsedFile {
                     _ => unsupported("invalid group phase"),
                 }
             }
+            // SourceConstant publishes at the path's own Exit PC. Continue
+            // through the same original AST parent/operand relation as other
+            // path reads; this phase performs no name lookup or value synthesis.
+            (SyntaxKind::PATH_EXPR, Phase::Exit) => {
+                let operations = if place_context(&syntax) {
+                    // The source constant already owns a fresh ordinary value
+                    // cell. Form its location without reading/copying/moving it;
+                    // indexing/borrowing retains the original cleanup owner.
+                    vec![Op::ValuePlace {
+                        source: node
+                            .value
+                            .ok_or_else(|| error("constant receiver value absent"))?,
+                        destination: node
+                            .place
+                            .ok_or_else(|| error("constant receiver place absent"))?,
+                    }]
+                } else {
+                    Vec::new()
+                };
+                draft(
+                    index,
+                    key,
+                    operations,
+                    RecipeExit::Next(return_pc(index, body, &syntax)?),
+                )
+            }
             (SyntaxKind::PATH_EXPR, Phase::Entry) => {
                 let path = ast::PathExpr::cast(syntax).expect("checked path");
                 let binding = local_binding(self, index, body, &path)?;

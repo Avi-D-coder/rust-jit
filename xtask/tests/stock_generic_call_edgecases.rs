@@ -22,10 +22,11 @@ const ORIGINAL: &str =
 
 #[test]
 fn original_repeated_explicit_generic_program_runs_in_its_recorded_dependency_edition() {
-    for edition in [2015, 2018, 2021, 2024] {
-        run_original(edition, true, 2024);
+    for root_edition in [2015, 2018, 2021, 2024] {
+        for edition in [2015, 2018, 2021, 2024] {
+            run_original(edition, true, root_edition);
+        }
     }
-    run_original(2024, true, 2015);
 }
 
 #[test]

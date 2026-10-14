@@ -820,7 +820,9 @@ impl GeneratedDeclarations {
         let minimum = match kind {
             crate::facade::macros::RuntimeMacroKind::Panic
             | crate::facade::macros::RuntimeMacroKind::Println
-            | crate::facade::macros::RuntimeMacroKind::Vec => 0,
+            | crate::facade::macros::RuntimeMacroKind::Vec
+            | crate::facade::macros::RuntimeMacroKind::Unreachable
+            | crate::facade::macros::RuntimeMacroKind::Unimplemented => 0,
             crate::facade::macros::RuntimeMacroKind::Assert => 1,
             crate::facade::macros::RuntimeMacroKind::AssertEq
             | crate::facade::macros::RuntimeMacroKind::AssertNe => 2,

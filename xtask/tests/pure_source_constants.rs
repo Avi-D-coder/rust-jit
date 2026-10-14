@@ -325,21 +325,34 @@ fn pure_const_call_cycle_key_includes_immutable_arguments() {
 
 #[test]
 fn pure_anonymous_lengths_refuse_foreign_lexical_capture() {
-    for text in [
-        "const N:usize=4;fn live(N:usize){let _=[0;N];}",
-        "const N:usize=4;fn live(){let N=2usize;let _=[0;N];}",
-        "const N:usize=4;mod inner{const N:usize=2;type A=[u8;N];}",
+    for (text, code, reason) in [
+        (
+            "const N:usize=4;fn live(N:usize){let _=[0;N];}",
+            "LRR-E-CONST-LENGTH-SOURCE",
+            "owning function parameter",
+        ),
+        (
+            "const N:usize=4;fn live(){let N=2usize;let _=[0;N];}",
+            "LRR-E-CONST-SOURCE",
+            "preceding local bindings",
+        ),
+        (
+            "const N:usize=4;mod inner{const N:usize=2;type A=[u8;N];}",
+            "LRR-E-CONST-SOURCE",
+            "nested source namespace",
+        ),
     ] {
-        let src = source(text, 2024);
-        let start = u32::try_from(text.rfind(";N]").unwrap() + 1).unwrap();
-        assert_eq!(
-            src.array_length(SourceRange {
-                start,
-                end: start + 1
-            })
-            .unwrap_err()
-            .code,
-            "LRR-E-CONST-SOURCE"
-        );
+        for edition in [2015, 2018, 2021, 2024] {
+            let src = source(text, edition);
+            let start = u32::try_from(text.rfind(";N]").unwrap() + 1).unwrap();
+            let error = src
+                .array_length(SourceRange {
+                    start,
+                    end: start + 1,
+                })
+                .unwrap_err();
+            assert_eq!(error.code, code, "edition {edition}: {text}");
+            assert!(error.message.contains(reason), "{error:?}");
+        }
     }
 }

@@ -4,6 +4,8 @@ mod compile_inputs;
 mod explain;
 #[cfg(test)]
 mod nested_operand_prefix;
+#[cfg(test)]
+mod panic_family_stock_tests;
 mod preentry_loader;
 #[cfg(test)]
 mod preentry_loader_tests;
@@ -321,7 +323,7 @@ fn standalone_captured(
     )?
     .with_declarative_compiler(
         compiler.environment_identity(),
-        crate::core::digest::Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+        crate::expand::source_declarative::engine_version(),
         compiler.catalog.clone(),
     )?;
     compiler.discover_diagnostic(&mut discovery, &mut db, snapshot)?;
@@ -492,7 +494,7 @@ fn test_source_captured(
     )?
     .with_declarative_compiler(
         compiler.environment_identity(),
-        crate::core::digest::Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+        crate::expand::source_declarative::engine_version(),
         compiler.catalog.clone(),
     )?;
     compiler.discover_diagnostic(&mut discovery, &mut db, snapshot)?;
@@ -866,7 +868,6 @@ mod tests {
     fn rustc_original_nested_concat_expands_source_operand_from_argument_owner() {
         require_current_validation_source();
         use crate::{
-            core::digest::Digest,
             db::memo::Database,
             expand::include_arguments::{IncludeArguments, IncludeOperand},
         };
@@ -940,7 +941,7 @@ mod tests {
         .unwrap()
         .with_declarative_compiler(
             compiler.environment_identity(),
-            Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+            crate::expand::source_declarative::engine_version(),
             compiler.catalog.clone(),
         )
         .unwrap();
@@ -978,7 +979,6 @@ mod tests {
     fn rustc_include_discovery_failure_keeps_admitted_parent_capture_and_primary_fault() {
         require_current_validation_source();
         use crate::{
-            core::digest::Digest,
             db::memo::Database,
             source::snapshot::{Snapshot, SourceBlob, SourcePath},
         };
@@ -1073,7 +1073,7 @@ mod tests {
         .unwrap()
         .with_declarative_compiler(
             compiler.environment_identity(),
-            Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+            crate::expand::source_declarative::engine_version(),
             compiler.catalog.clone(),
         )
         .unwrap();
@@ -1199,7 +1199,7 @@ mod tests {
                 .unwrap()
                 .with_declarative_compiler(
                     compiler.environment_identity(),
-                    Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+                    crate::expand::source_declarative::engine_version(),
                     compiler.catalog.clone(),
                 )
                 .unwrap();
@@ -1381,7 +1381,6 @@ mod tests {
     fn rustc_generated_module_function_executes_and_resource_fault_preserves_origins() {
         require_current_validation_source();
         use crate::{
-            core::digest::Digest,
             db::{memo::Database, poll::QueryPoll},
             engine::run::{RunMachine, RunPoll},
             frontend::callables::CallSelection,
@@ -1410,7 +1409,7 @@ mod tests {
             .unwrap()
             .with_declarative_compiler(
                 compiler.environment_identity(),
-                Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+                crate::expand::source_declarative::engine_version(),
                 compiler.catalog.clone(),
             )
             .unwrap();
@@ -1523,7 +1522,6 @@ mod tests {
     fn rustc_generated_module_fuel_boundaries_preserve_entered_guest_stack() {
         require_current_validation_source();
         use crate::{
-            core::digest::Digest,
             db::{memo::Database, poll::QueryPoll},
             engine::run::{RunMachine, RunPoll},
             frontend::callables::CallSelection,
@@ -1560,7 +1558,7 @@ mod tests {
             .unwrap()
             .with_declarative_compiler(
                 compiler.environment_identity(),
-                Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+                crate::expand::source_declarative::engine_version(),
                 compiler.catalog.clone(),
             )
             .unwrap();
@@ -1827,7 +1825,7 @@ mod tests {
                     &index,
                     producer.identity,
                     compiler.environment_identity(),
-                    Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+                    crate::expand::source_declarative::engine_version(),
                 )
                 .unwrap();
             assert!(
@@ -1852,7 +1850,7 @@ mod tests {
         .unwrap()
         .with_declarative_compiler(
             compiler.environment_identity(),
-            Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+            crate::expand::source_declarative::engine_version(),
             std::sync::Arc::new(
                 crate::frontend::compile_input_catalog::CompileInputCatalog::new(
                     crate::facade::unit(&view.selection().outline.parse.profile, "core"),
@@ -1947,7 +1945,7 @@ mod runtime_alias_acceptance {
         .unwrap()
         .with_declarative_compiler(
             compiler.environment_identity(),
-            crate::core::digest::Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+            crate::expand::source_declarative::engine_version(),
             compiler.catalog.clone(),
         )
         .unwrap();

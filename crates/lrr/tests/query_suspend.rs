@@ -2,22 +2,21 @@ use lrr::{
     core::{digest::Digest, profile::ProfileIdentity},
     db::{
         dependency::{InputKey, InputValue},
-        key::{ConstantKey, QueryKey},
+        key::QueryKey,
         memo::Database,
         poll::{ExpansionRequest, InputRequest, QueryPoll},
         provider::{Provided, Provider},
-        value::QueryValue,
     },
     expand::identity::{ExpansionKey, GrammarSlot, MacroIdentity},
 };
 use std::{cell::Cell, collections::BTreeMap};
 fn key(n: u8) -> QueryKey {
-    QueryKey::Constant(ConstantKey {
-        definition: Digest([n; 32]),
-        arguments: vec![],
-        cfg: Digest::default(),
-        profile: ProfileIdentity::current(),
-    })
+    QueryKey::Constant(fixture_key(
+        Digest([n; 32]),
+        vec![],
+        Digest::default(),
+        ProfileIdentity::current(),
+    ))
 }
 fn request() -> InputRequest {
     InputRequest::Expand(Box::new(ExpansionRequest {
@@ -42,15 +41,15 @@ struct Missing {
     ignore_child: bool,
 }
 impl Provider for Missing {
-    fn execute(&self, db: &mut Database, k: &QueryKey) -> QueryPoll<Provided> {
+    fn execute(&self, db: &mut Database, requested: &QueryKey) -> QueryPoll<Provided> {
         self.runs.set(self.runs.get() + 1);
-        if *k == key(2) {
+        if *requested == key(2) {
             let child = db.fetch(self, key(1));
             if self.ignore_child {
-                return Provided::pure(QueryValue::Constant(-1));
+                return Provided::pure(fixture_value(requested, -1));
             }
             return child.map(|o| Provided {
-                value: o.value.as_ref().clone(),
+                value: fixture_value(requested, fixture_number(o.value.as_ref())),
                 cacheable: o.cacheable,
             });
         }
@@ -59,7 +58,7 @@ impl Provider for Missing {
             .as_deref()
         {
             Some(InputValue::CompileEnv(v)) => {
-                Provided::pure(QueryValue::Constant(v.parse().unwrap()))
+                Provided::pure(fixture_value(requested, v.parse().unwrap()))
             }
             _ => {
                 let _ = db.input(&InputKey::CompileEnv("incomplete-only".into()));
@@ -79,18 +78,15 @@ fn inputs(v: Option<&str>) -> BTreeMap<InputKey, InputValue> {
         .collect()
 }
 fn number(p: QueryPoll<lrr::db::memo::Outcome>) -> i128 {
-    let QueryValue::Constant(v) = p
-        .into_ready()
-        .expect("completed fixture query")
-        .unwrap()
-        .value
-        .as_ref()
-        .clone()
-    else {
-        panic!("wrong result")
-    };
-    v
+    fixture_number(
+        p.into_ready()
+            .expect("completed fixture query")
+            .unwrap()
+            .value
+            .as_ref(),
+    )
 }
+
 #[test]
 fn missing_input_unwinds_nested_collectors_without_memoizing_absence() {
     let provider = Missing {
@@ -158,12 +154,12 @@ fn memo_revalidation_suspends_and_rejects_old_value_until_new_input_is_published
 fn invalid_input_request_is_a_completed_protocol_error_and_leaves_no_memo() {
     struct Invalid;
     impl Provider for Invalid {
-        fn execute(&self, db: &mut Database, _: &QueryKey) -> QueryPoll<Provided> {
+        fn execute(&self, db: &mut Database, requested: &QueryKey) -> QueryPoll<Provided> {
             if db
                 .input(&InputKey::CompileEnv("expansion".into()))
                 .is_some()
             {
-                return Provided::pure(QueryValue::Constant(41));
+                return Provided::pure(fixture_value(requested, 41));
             }
             let InputRequest::Expand(mut r) = request() else {
                 panic!("wrong fixture request")
@@ -225,3 +221,7 @@ fn input_request_encoding_binds_compile_context_and_capture_expectation() {
     );
     assert_ne!(request.fingerprint(), original.fingerprint());
 }
+
+include!("../../../xtask/tests/support/constant_key.rs");
+include!("../../../xtask/tests/support/constant_value.rs");
+include!("../../../xtask/tests/support/constant_number.rs");

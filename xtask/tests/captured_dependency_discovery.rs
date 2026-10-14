@@ -89,6 +89,12 @@ fn capture_using(
     Ok((views, inputs))
 }
 fn discovery(views: &[PreparedSourceView]) -> SourceDiscovery {
+    let compiler = std::sync::Arc::new(
+        lrr::frontend::compile_input_catalog::CompileInputCatalog::standalone(
+            &views[0].selection().outline.parse.profile,
+        )
+        .unwrap(),
+    );
     SourceDiscovery::new(
         views.iter().map(PreparedSourceView::share).collect(),
         views[0].outline().root_scope.clone(),
@@ -97,7 +103,7 @@ fn discovery(views: &[PreparedSourceView]) -> SourceDiscovery {
         1,
     )
     .unwrap()
-    .with_declarative(Digest([222; 32]), Digest([223; 32]))
+    .with_declarative_compiler(Digest([222; 32]), Digest([223; 32]), compiler)
     .unwrap()
 }
 fn finish(work: &mut SourceDiscovery) {

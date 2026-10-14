@@ -128,7 +128,7 @@ fn exercise(ancestor: &str) {
         definition_edition: 2021,
         call_edition: 2024,
         grammar: GrammarSlot::Items,
-        engine_version: Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+        engine_version: lrr::expand::source_declarative::engine_version(),
         procedural_epoch: None,
     };
     let (actual, stats) = rules

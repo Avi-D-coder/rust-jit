@@ -237,7 +237,7 @@ fn discovery_publication_budget_refusal_has_no_partial_inputs() {
 #[test]
 fn pure_provider_cannot_publish_completed_discovery() {
     use lrr::db::{
-        key::{ConstantKey, QueryKey},
+        key::QueryKey,
         memo::Database,
         poll::QueryPoll,
         provider::{Provided, Provider},
@@ -254,12 +254,12 @@ fn pure_provider_cannot_publish_completed_discovery() {
     let mut db = Database::default();
     inputs.publish(&mut db).unwrap();
     let before = db.revision();
-    let key = QueryKey::Constant(ConstantKey {
-        definition: Digest([250; 32]),
-        arguments: vec![],
-        cfg: Digest([251; 32]),
-        profile: ProfileIdentity::current(),
-    });
+    let key = QueryKey::Constant(fixture_key(
+        Digest([250; 32]),
+        vec![],
+        Digest([251; 32]),
+        ProfileIdentity::current(),
+    ));
     let QueryPoll::Ready(Err(error)) = db.fetch(&Mutator(&w), key) else {
         panic!("pure provider mutated inputs")
     };
@@ -386,3 +386,5 @@ fn deleted_capture_cannot_reuse_identical_content_from_another_location() {
             .is_none()
     );
 }
+
+include!("support/constant_key.rs");

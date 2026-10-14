@@ -13,6 +13,12 @@ pub const MAX_QUERY_DEPTH: usize = 256;
 #[path = "lexical_inputs.rs"]
 mod lexical_inputs;
 
+#[path = "constant_inputs.rs"]
+mod constant_inputs;
+
+#[path = "source_view_inputs.rs"]
+mod source_view_inputs;
+
 #[derive(Debug, Clone)]
 pub struct MemoEntry {
     pub value: Arc<QueryValue>,
@@ -2214,10 +2220,12 @@ impl Database {
         } else {
             self.uncacheable();
         }
-        if let QueryValue::Error(error) = outcome.value.as_ref() {
-            QueryPoll::Ready(Err(error.clone()))
-        } else {
-            QueryPoll::Ready(Ok(outcome))
+        match outcome.value.as_ref() {
+            QueryValue::Error(error) => QueryPoll::Ready(Err(error.clone())),
+            QueryValue::ConstantFailure(failure) => {
+                QueryPoll::Ready(Err(failure.diagnostic().clone()))
+            }
+            _ => QueryPoll::Ready(Ok(outcome)),
         }
     }
     fn failed(
@@ -2260,6 +2268,12 @@ impl Database {
         QueryPoll::NeedInput(request)
     }
     pub fn fetch(&mut self, provider: &impl Provider, key: QueryKey) -> QueryPoll<Outcome> {
+        if let QueryKey::Constant(selected) = &key
+            && let Err(error) = self.verify_constant_key(selected)
+        {
+            self.memos.remove(&key);
+            return self.failed(&key, error.code, error.message);
+        }
         self.use_counter = match self.use_counter.checked_add(1) {
             Some(n) => n,
             None => return self.failed(&key, "LRR-E-ID-EXHAUSTED", "query use counter exhausted"),
@@ -2452,10 +2466,10 @@ impl Database {
                 false,
             )
         } else {
-            (
-                provided.value,
-                provided.cacheable && !collected.non_cacheable,
-            )
+            let cacheable = provided.cacheable
+                && !collected.non_cacheable
+                && !matches!(provided.value, QueryValue::ConstantMacroDemand(_));
+            (provided.value, cacheable)
         };
         let value = Arc::new(value);
         let fingerprint = value.fingerprint();
@@ -2526,24 +2540,25 @@ fn input_metadata_bytes(key: &InputKey, value: &InputValue) -> Result<usize, Dia
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate as lrr;
+    include!("../../../../xtask/tests/support/constant_key.rs");
+    include!("../../../../xtask/tests/support/constant_value.rs");
     use crate::{
-        core::profile::ProfileIdentity,
-        db::{key::ConstantKey, provider::Provided},
-        engine::telemetry::CacheBudgets,
+        core::profile::ProfileIdentity, db::provider::Provided, engine::telemetry::CacheBudgets,
     };
     struct ConstantFixture;
     impl Provider for ConstantFixture {
-        fn execute(&self, _: &mut Database, _: &QueryKey) -> QueryPoll<Provided> {
-            Provided::pure(QueryValue::Constant(1))
+        fn execute(&self, _: &mut Database, requested: &QueryKey) -> QueryPoll<Provided> {
+            Provided::pure(fixture_value(requested, 1))
         }
     }
     fn key(n: u8) -> QueryKey {
-        QueryKey::Constant(ConstantKey {
-            definition: Digest::of_bytes(&[n]),
-            arguments: vec![],
-            cfg: Digest::default(),
-            profile: ProfileIdentity::current(),
-        })
+        QueryKey::Constant(fixture_key(
+            Digest::of_bytes(&[n]),
+            vec![],
+            Digest::default(),
+            ProfileIdentity::current(),
+        ))
     }
     #[test]
     fn equal_use_counters_evict_in_stable_key_order() {

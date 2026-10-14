@@ -52,7 +52,7 @@ fn discovery(text: &str, edition: u16) -> (SourceDiscovery, PreparedSourceInputs
     .unwrap()
     .with_declarative(
         Digest([243; 32]),
-        Digest::of_bytes(lrr_expand_adapter::UPSTREAM_COMMIT.as_bytes()),
+        lrr::expand::source_declarative::engine_version(),
     )
     .unwrap()
     .with_compiler(std::sync::Arc::new(
