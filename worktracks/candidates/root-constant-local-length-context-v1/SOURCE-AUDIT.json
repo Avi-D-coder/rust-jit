@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "task": "T054",
+  "status": "source-only; compilation and execution unperformed",
+  "predecessor_patch": "c93ea2653c7462d7ee910f02da5137122956ac80b21c658d6872f7d058f0f8a1",
+  "files": [
+    {
+      "path": "crates/lrr/src/syntax/constant_constraint_work.rs",
+      "before_sha256": "1b2d2d2da55b602571cb4665bdb36a7cac9cdb2b10444e46670e043b1de9eab9",
+      "after_sha256": "003cb446a6d762aa2445f60619ac0a568600cb5c5b05fcafddd1a81412fc4960",
+      "bytes": 10223
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "9775f0aba77a3d63b4c962c276e42bef288236a18a448d61140d8d14dca3280b",
+      "bytes": 12896
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "before_sha256": "9763c6bfae63e4dfc93aca776cf57e9ee0e2d1ba75dabe08a50dbe9409a726b7",
+      "after_sha256": "cdcd642953b02c4cca0f63680731346409c9301a84fd2f3d23af8b013dba12aa",
+      "bytes": 37624
+    }
+  ],
+  "patch_sha256": "07d22f6a97503786f75c228b61e0b6541c47a9a1eb5bf53a7482f5cbceafdde7",
+  "controls": [
+    {
+      "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "name": "unchanged_array_alias_lengths_default_only_unconstrained_locals_all_editions",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "name": "unchanged_run_pass_array_component_requires_real_root_attribute_preparation",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "name": "repeat_length_locals_do_not_require_executing_the_ordinary_function",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "name": "length_context_replays_parameter_outer_local_generic_and_closure_refusals",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "name": "local_context_refuses_a_foreign_ast_and_charges_exact_length_admission",
+      "status": "uncompiled"
+    },
+    {
+      "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "name": "cold_unresolved_exits_do_not_grant_targets_or_precheck_the_reached_scalar",
+      "status": "uncompiled"
+    }
+  ],
+  "official_cases": 2,
+  "original_files": [
+    {
+      "path": "COPYRIGHT",
+      "git_blob": "4dad74f234eaaaa3c311ca031216e16fc9c4e940",
+      "sha256": "172020dbfd5b53a226dfde77616190a48dcff519b0bc0e6deb91a8450782c4af",
+      "bytes": 1571
+    },
+    {
+      "path": "LICENSE-APACHE",
+      "git_blob": "1b5ec8b78e237b5c3b3d812a7c0a6589d0f7161d",
+      "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "bytes": 9723
+    },
+    {
+      "path": "LICENSE-MIT",
+      "git_blob": "a2070c4be7acd5316f8d0357ca3c12419a2f3c62",
+      "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "bytes": 1068
+    },
+    {
+      "path": "tests/ui/consts/const-block-non-item-statement-3.rs",
+      "git_blob": "ba77e721c7f774d53549c3b48a809fafa2dd8f75",
+      "sha256": "18e646b302b163217b37d10b66223e4eb9d885ac96317ba0903e7db10554a030",
+      "bytes": 128
+    },
+    {
+      "path": "tests/ui/consts/const-block-non-item-statement.rs",
+      "git_blob": "4cb55e3bde6c5a228063ae03c48804bad6f61b88",
+      "sha256": "98f1d402de3ff92a7ef26adc86c31c655746f0c13184001e893510fa273cc634",
+      "bytes": 327
+    }
+  ],
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "exact_patch_replay": true,
+  "full_stock_fixture_passes_added": 0,
+  "upstream_runtime_acceptance_added": 0,
+  "canonical_installed": false,
+  "MAIN_integrated": false
+}

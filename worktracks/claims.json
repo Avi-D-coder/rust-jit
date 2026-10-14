@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Root T054 const/local/anonymous logic and T034/M013 owning runtime macro worlds. v68 library843/0 plus v67 stock8/0 and strict/audit/fmt pass; full gate19223 active. Separate8-file constant successor30uncompiled controls/5 unchanged cases. No MAIN/task/runtime/full-fixture acceptance.",
+      "scope": "Root T054 local/loop/anonymous and exact array-length/source context; coherent9 paths/36 uncompiled controls/7 unchanged official cases. v68 library843/0 plus v67stock8/0 strict/audit/fmt pass; fullgate19223 still owned asynchronously. T034/M013 macro-world repair preserved. No MAIN/task/runtime/full-fixture acceptance.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -410,11 +410,12 @@
         "artifacts/macos-first/root-stock-edition-compiler-preparation-v1/",
         "artifacts/macos-first/root-constant-local-inference-v1/",
         "artifacts/macos-first/root-constant-length-refusal-v1/",
-        "artifacts/macos-first/root-runtime-macro-owning-worlds-v1/"
+        "artifacts/macos-first/root-runtime-macro-owning-worlds-v1/",
+        "artifacts/macos-first/root-constant-local-length-context-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T21:22:34.752284+00:00",
+      "updated_at": "2026-10-14T21:43:23.632048+00:00",
       "review_after": "2026-10-15T05:55:00.598518+00:00"
     },
     {

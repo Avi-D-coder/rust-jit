@@ -5245,7 +5245,13 @@
         "cold_type_disagreements_do_not_precheck_the_selected_constant_body",
         "entered_type_disagreements_fail_at_the_actual_use_without_graph_diagnostics",
         "unchanged_gcd_returns_entered_branch_values_with_actual_parameter_types",
-        "unchanged_prime_loop_infers_divisor_from_actual_source_parameter"
+        "unchanged_prime_loop_infers_divisor_from_actual_source_parameter",
+        "unchanged_array_alias_lengths_default_only_unconstrained_locals_all_editions",
+        "unchanged_run_pass_array_component_requires_real_root_attribute_preparation",
+        "repeat_length_locals_do_not_require_executing_the_ordinary_function",
+        "length_context_replays_parameter_outer_local_generic_and_closure_refusals",
+        "local_context_refuses_a_foreign_ast_and_charges_exact_length_admission",
+        "cold_unresolved_exits_do_not_grant_targets_or_precheck_the_reached_scalar"
       ],
       "acceptance_contract": "array length constant, recursive bounded const fn, cycle, cold effect branch, reached forbidden effect, and two uses with independently mutable guest arrays. Constant memo contains no guest handles.",
       "commands": [],
@@ -5304,7 +5310,8 @@
         "artifacts/macos-first/root-constant-loop-control-v1/REVIEW.md",
         "artifacts/macos-first/sol-canonical-validation-agent-v5/HANDOFF.md",
         "artifacts/macos-first/root-constant-length-refusal-v1/task-invariant.txt",
-        "worktracks/candidates/root-constant-local-inference-v1/REVIEW.md"
+        "worktracks/candidates/root-constant-local-inference-v1/REVIEW.md",
+        "worktracks/candidates/root-constant-local-length-context-v1/REVIEW.md"
       ],
       "release_complete": false,
       "validation_scope": "Pure scalar/array evaluator, declared result shape, checked wire/memo payload now component tested/integrated. Existing ConstantKey/i128 query value/provider and current-source/type/macro/foreign/generic admission remain incomplete; fresh guest instantiation, loops/tuples/strings and full runtime contracts pending.",
@@ -5772,6 +5779,55 @@
           ],
           "complete_patch_sha256": "c93ea2653c7462d7ee910f02da5137122956ac80b21c658d6872f7d058f0f8a1",
           "before_bytes_also_match": "v68 c011cdae"
+        },
+        "current_source_local_length_context_successor": {
+          "artifact": "worktracks/candidates/root-constant-local-length-context-v1/REVIEW.md",
+          "status": "source_only_uncompiled",
+          "source_baseline": "c011cdae8b862ae4f7eee9bc4e40fe1edc09b6798dd703e0e277b64e3833d14a",
+          "standalone_successor_paths": 3,
+          "coherent_paths": 9,
+          "Rust_controls": 36,
+          "new_Rust_controls": 6,
+          "Rust_controls_executed": 0,
+          "upstream_cases": 7,
+          "original_license_files": 12,
+          "coherent_patch_sha256": "74512fe0f90a6831eb44f2541ce4c0d4ae43f1fb3d31e73eb7cb27437916f07b",
+          "canonical_installed": false,
+          "MAIN_integrated": false,
+          "full_stock_fixture_passes": 0,
+          "scope": "Closest actual array length, replayed existing exact cfg/attribute/parameter/local isolation and source green identity; source probes charged before admission. Root attributes in unchanged run-pass component get real SourceDiscovery Value/Type/compiler preparation. A cold unresolved exit grants no graph target; actual entered resolver still fails at exact range. Whole mains/type-alias/runtime joins remain pending.",
+          "new_controls": [
+            {
+              "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+              "name": "unchanged_array_alias_lengths_default_only_unconstrained_locals_all_editions",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+              "name": "unchanged_run_pass_array_component_requires_real_root_attribute_preparation",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+              "name": "repeat_length_locals_do_not_require_executing_the_ordinary_function",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+              "name": "length_context_replays_parameter_outer_local_generic_and_closure_refusals",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+              "name": "local_context_refuses_a_foreign_ast_and_charges_exact_length_admission",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+              "name": "cold_unresolved_exits_do_not_grant_targets_or_precheck_the_reached_scalar",
+              "status": "uncompiled"
+            }
+          ]
         }
       }
     },
