@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "task_ids": [
+    "T034",
+    "M013"
+  ],
+  "source_baseline": "c011cdae8b862ae4f7eee9bc4e40fe1edc09b6798dd703e0e277b64e3833d14a",
+  "source_member": "e06102b76e38d5929c79ff5eee5333ba4b65866b0128a384b36e97a7fb311e2a",
+  "path": "xtask/tests/vec_declaration_facets.rs",
+  "before_sha256": "25919b5e32e6c8ae6ca2c239021f770f00359ba9eb328928167a411a157250c8",
+  "after_sha256": "fd643874724d937ab349089a1e17345cc10fac2d30fa96140303c832873977a3",
+  "patch_sha256": "dc877b337ccb0e23a657c59542e9bf80adb8d9b1f1f5ad50f9a10cf70a9ef3f4",
+  "v68_milestone": {
+    "status": "failed_collected",
+    "listed": 2952,
+    "passed": 2929,
+    "failed": 1,
+    "unexecuted": 22,
+    "ignored": 0,
+    "filtered": 0,
+    "terminal": "19223/972d99/1",
+    "source_unchanged": true,
+    "original_files_verified": 470,
+    "reason": "old test expected four core macros; actual core inventory has six"
+  },
+  "v69_scope": {
+    "bank": "vec_declaration_facets",
+    "passed": 7,
+    "failed": 0,
+    "filtered": 0,
+    "terminal": "67709/9c1334/0",
+    "strict": "54681/46c9d1/0",
+    "architecture": "89996/59a0da/0",
+    "format": "93269/5473d2/0"
+  },
+  "v69_milestone": {
+    "status": "running",
+    "actual_session": 21897
+  },
+  "MAIN_integrated": false,
+  "task_complete": false,
+  "full_stock_fixture_passes": 0
+}

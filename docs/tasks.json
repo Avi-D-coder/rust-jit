@@ -3651,7 +3651,7 @@
       "current_owning_runtime_macro_worlds": {
         "artifact": "worktracks/candidates/root-runtime-macro-owning-worlds-v1/README.md",
         "source_member": "c011cdae8b862ae4f7eee9bc4e40fe1edc09b6798dd703e0e277b64e3833d14a",
-        "status": "private_scoped_pass_milestone_pending",
+        "status": "private_v69_scoped_pass_fresh_milestone_pending",
         "files": 5,
         "new_authority_controls": 2,
         "edition_pairs_per_original": 16,
@@ -3690,9 +3690,38 @@
           "v68_architecture": "89044/0b2a40/0",
           "v68_format": "95427/aeb62d/0",
           "v68_full_milestone": {
-            "status": "running",
-            "actual_session": 19223
+            "status": "failed_collected",
+            "listed": 2952,
+            "passed": 2929,
+            "failed": 1,
+            "unexecuted": 22,
+            "ignored": 0,
+            "filtered": 0,
+            "terminal": "19223/972d99/1",
+            "source_unchanged": true,
+            "original_files_verified": 470,
+            "reason": "old test expected four core macros; actual core inventory has six"
           }
+        },
+        "current_inventory_regression_successor": {
+          "artifact": "worktracks/candidates/root-core-macro-inventory-v1/README.md",
+          "source_member": "e06102b76e38d5929c79ff5eee5333ba4b65866b0128a384b36e97a7fb311e2a",
+          "scope": {
+            "bank": "vec_declaration_facets",
+            "passed": 7,
+            "failed": 0,
+            "filtered": 0,
+            "terminal": "67709/9c1334/0",
+            "strict": "54681/46c9d1/0",
+            "architecture": "89996/59a0da/0",
+            "format": "93269/5473d2/0"
+          },
+          "milestone": {
+            "status": "running",
+            "actual_session": 21897
+          },
+          "MAIN_integrated": false,
+          "task_complete": false
         }
       }
     },
@@ -17610,7 +17639,7 @@
       "current_owning_runtime_macro_worlds": {
         "artifact": "worktracks/candidates/root-runtime-macro-owning-worlds-v1/README.md",
         "source_member": "c011cdae8b862ae4f7eee9bc4e40fe1edc09b6798dd703e0e277b64e3833d14a",
-        "status": "private_scoped_pass_milestone_pending",
+        "status": "private_v69_scoped_pass_fresh_milestone_pending",
         "files": 5,
         "new_authority_controls": 2,
         "edition_pairs_per_original": 16,
@@ -17649,9 +17678,38 @@
           "v68_architecture": "89044/0b2a40/0",
           "v68_format": "95427/aeb62d/0",
           "v68_full_milestone": {
-            "status": "running",
-            "actual_session": 19223
+            "status": "failed_collected",
+            "listed": 2952,
+            "passed": 2929,
+            "failed": 1,
+            "unexecuted": 22,
+            "ignored": 0,
+            "filtered": 0,
+            "terminal": "19223/972d99/1",
+            "source_unchanged": true,
+            "original_files_verified": 470,
+            "reason": "old test expected four core macros; actual core inventory has six"
           }
+        },
+        "current_inventory_regression_successor": {
+          "artifact": "worktracks/candidates/root-core-macro-inventory-v1/README.md",
+          "source_member": "e06102b76e38d5929c79ff5eee5333ba4b65866b0128a384b36e97a7fb311e2a",
+          "scope": {
+            "bank": "vec_declaration_facets",
+            "passed": 7,
+            "failed": 0,
+            "filtered": 0,
+            "terminal": "67709/9c1334/0",
+            "strict": "54681/46c9d1/0",
+            "architecture": "89996/59a0da/0",
+            "format": "93269/5473d2/0"
+          },
+          "milestone": {
+            "status": "running",
+            "actual_session": 21897
+          },
+          "MAIN_integrated": false,
+          "task_complete": false
         }
       }
     },

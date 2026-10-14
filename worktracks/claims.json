@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Root T054 local/loop/anonymous and exact array-length/source context; coherent9 paths/36 uncompiled controls/7 unchanged official cases. v68 library843/0 plus v67stock8/0 strict/audit/fmt pass; fullgate19223 still owned asynchronously. T034/M013 macro-world repair preserved. No MAIN/task/runtime/full-fixture acceptance.",
+      "scope": "Root T054 local/loop/anonymous/length source proposal plus active labelled-block targets; uncompiled. v68 fullgate2929/1/22 collected; v69 exact core inventory Vec7/0 and strict/audit/fmt passed, fresh fullgate21897 asynchronous. No MAIN/task/runtime/full-fixture acceptance.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -411,11 +411,13 @@
         "artifacts/macos-first/root-constant-local-inference-v1/",
         "artifacts/macos-first/root-constant-length-refusal-v1/",
         "artifacts/macos-first/root-runtime-macro-owning-worlds-v1/",
-        "artifacts/macos-first/root-constant-local-length-context-v1/"
+        "artifacts/macos-first/root-constant-local-length-context-v1/",
+        "artifacts/macos-first/root-core-macro-inventory-v1/",
+        "artifacts/macos-first/root-constant-labelled-blocks-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T21:43:23.632048+00:00",
+      "updated_at": "2026-10-14T22:10:16.601547+00:00",
       "review_after": "2026-10-15T05:55:00.598518+00:00"
     },
     {
@@ -452,7 +454,7 @@
       "owner": "/root/generic_call_logic",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Coherent38 alias source packet:19 formatted originals detected/quarantined before publication and all52 pinned bytes restored;63 live controls uncompiled. Active qualified consumer replay of genuine closed Value/module exports, after separate shared publication/module installer. No invented absence/source/runtime authority.",
+      "scope": "Corrected alias38 originals restored,63 controls uncompiled. Frozen family-compatible constant graph successor3controls uncompiled; active independent labelled-block source review. Consumer integration awaits genuine Value-module installer. No source/runtime authority fabricated.",
       "paths": [
         "artifacts/macos-first/sol-constant-macro-admission-v1/",
         "artifacts/macos-first/sol-constant-path-selection-v1/",
@@ -479,11 +481,12 @@
         "artifacts/macos-first/sol-qualified-source-alias-v1/",
         "artifacts/macos-first/sol-alias-interpreter-integration-v2/",
         "artifacts/macos-first/sol-alias-original-byte-restoration-v1/",
-        "artifacts/macos-first/sol-alias-consumer-replay-v1/"
+        "artifacts/macos-first/sol-alias-consumer-replay-v1/",
+        "artifacts/macos-first/sol-constant-family-context-review-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T21:57:49.482819+00:00",
+      "updated_at": "2026-10-14T22:10:16.601547+00:00",
       "review_after": "2026-10-15T05:26:09.232158+00:00"
     },
     {

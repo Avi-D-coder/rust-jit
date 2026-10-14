@@ -1,5 +1,5 @@
 {
-  "status": "private scoped passed; complete milestone pending",
+  "status": "v68 complete failed and collected; exact v69 inventory successor scoped pass; fresh milestone pending",
   "source_member": "c011cdae8b862ae4f7eee9bc4e40fe1edc09b6798dd703e0e277b64e3833d14a",
   "files": [
     {
@@ -73,8 +73,18 @@
     "v68_architecture": "89044/0b2a40/0",
     "v68_format": "95427/aeb62d/0",
     "v68_full_milestone": {
-      "status": "running",
-      "actual_session": 19223
+      "status": "failed_collected",
+      "listed": 2952,
+      "passed": 2929,
+      "failed": 1,
+      "unexecuted": 22,
+      "ignored": 0,
+      "filtered": 0,
+      "terminal": "19223/972d99/1",
+      "source_unchanged": true,
+      "original_files_verified": 470,
+      "reason": "old test expected four core macros; actual core inventory has six"
     }
-  }
+  },
+  "inventory_successor": "../root-core-macro-inventory-v1/overlay.json"
 }
