@@ -1,0 +1,13 @@
+schema_version=1
+id="E2405-RELAXED"
+category="relaxed"
+source="relaxed-main.rs"
+entry="case"
+modes=["off","auto","force"]
+oracle=false
+[expect]
+status="passed"
+stdout="else_entered\nafter_if\n"
+stderr=""
+[laziness]
+no_marker_preparation=["later_clause"]

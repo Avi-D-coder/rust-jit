@@ -1,0 +1,1 @@
+macro_rules! choose{()=>{29};} macro_rules! generate{($n:ident)=>{macro_rules! $n{()=>{41};}};} fn main(){generate!(choose);println!("{}",choose!());}

@@ -1,0 +1,11 @@
+schema_version=1
+id="E2405"
+category="strict"
+source="main.rs"
+entry="case"
+modes=["off","auto","force"]
+oracle=true
+[expect]
+status="passed"
+stdout="else_entered\nafter_if\n"
+stderr=""

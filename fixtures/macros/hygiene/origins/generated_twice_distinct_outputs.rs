@@ -1,0 +1,1 @@
+macro_rules! generate{($v:literal)=>{macro_rules! choose{()=>{$v};}};} fn main(){generate!(41);generate!(43);println!("{}",choose!());}

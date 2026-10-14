@@ -1,0 +1,1306 @@
+--- a/crates/lrr/src/frontend/source_view.rs
++++ b/crates/lrr/src/frontend/source_view.rs
+@@ -22,3 +22,7 @@
+ // Source-only M018 planner; not yet installed in VM/portable SourceView tables.
+ #[allow(dead_code)]
+ pub(crate) mod source_view_propagation;
++
++// Admission mints a private current-source certificate; it is still distinct
++// from actual VM value/slot admission and the runtime-local SourceViewId table.
++pub(crate) use source_view_propagation::admission::SourceViewAdmission;
+--- a/crates/lrr/src/frontend/source_view_propagation.rs
++++ b/crates/lrr/src/frontend/source_view_propagation.rs
+@@ -154,7 +154,8 @@
+         }
+         for (key, fingerprint) in &self.dependencies {
+             if db
+-                .input(key)
++                .published_input(key)
++                .map(|(input, _)| input)
+                 .is_none_or(|input| input.fingerprint() != *fingerprint)
+             {
+                 return Err(source_fault("source view owning input changed"));
+@@ -230,7 +231,8 @@
+         ),
+     ] {
+         let actual = db
+-            .input(&key)
++            .published_input(&key)
++            .map(|(input, _)| input)
+             .ok_or_else(|| source_fault("source view owning publication absent"))?;
+         if actual.fingerprint() != expected.fingerprint() {
+             return Err(source_fault("source view owning publication differs"));
+@@ -241,8 +243,8 @@
+         InputKey::CrateCfg(definition.context.scope.crate_key),
+         InputKey::ExpansionEpoch,
+     ] {
+-        if let Some(input) = db.input(&key) {
+-            if matches!((&key,input.as_ref()),(InputKey::CrateCfg(_),InputValue::CrateCfg(cfg)) if cfg.fingerprint()!=source.selection().outline.cfg)
++        if let Some(input) = db.published_input(&key).map(|(input, _)| input) {
++            if matches!((&key,input),(InputKey::CrateCfg(_),InputValue::CrateCfg(cfg)) if cfg.fingerprint()!=source.selection().outline.cfg)
+             {
+                 return Err(source_fault("source view owning cfg changed"));
+             }
+@@ -785,3 +787,6 @@
+ #[cfg(test)]
+ #[path = "source_view_propagation_tests.rs"]
+ mod propagation_tests;
++
++#[path = "source_view_admission.rs"]
++pub(crate) mod admission;
+--- /dev/null
++++ b/crates/lrr/src/frontend/source_view_admission.rs
+@@ -0,0 +1,575 @@
++//! Pure original-source currentness admission, distinct from guest slot/value admission.
++use super::*;
++use crate::db::seals::{SealDomain, SealKey};
++
++/// Private-mintable, immutable owning certificate. No raw SourceViewId or
++/// caller-selected dependency list is accepted. Revalidate before VM admission.
++#[derive(Debug)]
++pub(crate) struct SourceViewAdmission {
++    view: SourceViewPairPlan,
++    environment: Option<Digest>,
++    seal: SealKey,
++    seal_fingerprint: Digest,
++    stamps: BTreeMap<InputKey, Digest>,
++    bytes: usize,
++}
++fn environment_identity(
++    owner: &DefinitionSourcePlan,
++    env: Option<&GenericEnv>,
++) -> Result<Option<Digest>, Diagnostic> {
++    let Some(env) = env else {
++        return Ok(None);
++    };
++    if env.definition() != owner.signature()
++        || env.signature_key() != owner.signature().fingerprint()
++    {
++        return Err(source_fault("source-view ParamEnv or owning bounds differ"));
++    }
++    let mut encoded = StableEncoder::new("lrr/v1/source-view-current-param-env");
++    encoded.record(env.definition());
++    for generic in &owner.signature().generics {
++        if generic.kind != GenericKind::Type {
++            return Err(source_fault(
++                "source-view currentness needs complete const/region admission",
++            ));
++        }
++        let key = ParamKey {
++            definition: owner.signature().definition,
++            ordinal: generic.ordinal,
++        };
++        // GenericEnv owns checked declaration metadata, but its public legacy
++        // capture path is not a general nominal/caller source-call certificate.
++        // Admit only its closed primitive substitutions (or an unused absent
++        // pair); preserve Param(T) in the source view regardless of this table.
++        match (env.symbolic_binding(key), env.runtime_binding(key)) {
++            (None, None) => {}
++            (Some(TyTerm::Primitive(primitive)), Some(runtime))
++                if primitive_runtime_id(*primitive)? == runtime => {}
++            _ => {
++                return Err(source_fault(
++                    "source-view symbolic call substitution lacks current source admission",
++                ));
++            }
++        }
++        encoded.u32(key.ordinal);
++        encoded.option(&env.symbolic_binding(key), |e, term| e.record(*term));
++        encoded.option(&env.runtime_binding(key), |e, descriptor| {
++            e.u32(descriptor.0)
++        });
++    }
++    Ok(Some(encoded.finish()))
++}
++fn owning_signature(
++    db: &Database,
++    identity: Digest,
++    source: &PreparedSourceView,
++) -> Result<crate::syntax::signatures::FunctionSignature, Diagnostic> {
++    let get = |key| {
++        db.published_input(&key)
++            .map(|(value, _)| value)
++            .ok_or_else(|| source_fault("source-view exact definition publication absent"))
++    };
++    let InputValue::DefinitionSource(parse) = get(InputKey::DefinitionSource(identity))? else {
++        return Err(source_fault(
++            "source-view definition source variant differs",
++        ));
++    };
++    let InputValue::DefinitionHeader(header) = get(InputKey::DefinitionHeader(identity))? else {
++        return Err(source_fault(
++            "source-view definition header variant differs",
++        ));
++    };
++    let InputValue::DeclarationContext(context) = get(InputKey::DeclarationContext(identity))?
++    else {
++        return Err(source_fault(
++            "source-view declaration context variant differs",
++        ));
++    };
++    let InputValue::DefinitionBody(body) = get(InputKey::DefinitionBody(identity))? else {
++        return Err(source_fault("source-view definition body variant differs"));
++    };
++    if parse != &source.selection().outline.parse || context.scope.owner.is_some() {
++        return Err(source_fault(
++            "source-view generated/foreign/lexical owner needs separate admission",
++        ));
++    }
++    let item = source
++        .outline()
++        .items
++        .iter()
++        .find(|item| item.def_key.fingerprint() == identity)
++        .ok_or_else(|| source_fault("source-view original declaration absent"))?;
++    if &item.header != header
++        || item.scope != context.scope
++        || item.declaration_span != context.range
++        || item.body.as_ref() != Some(body)
++    {
++        return Err(source_fault(
++            "source-view exact declaration publication differs",
++        ));
++    }
++    db.prepared_parse(parse)
++        .ok_or_else(|| source_fault("source-view exact parser lease absent"))?
++        .function_signature(identity, header, context, Some(body))
++}
++fn current_seal(
++    db: &Database,
++    source: &PreparedSourceView,
++    owner: &DefinitionSourcePlan,
++) -> Result<(Arc<InputValue>, SealKey, Digest), Diagnostic> {
++    let published =
++        db.source_view_scope_certificate(source.selection(), &owner.signature().scope)?;
++    let InputValue::DiscoverySeal(input) = published.as_ref() else {
++        return Err(source_fault("source-view discovery variant differs"));
++    };
++    let scope = input
++        .scope
++        .as_ref()
++        .ok_or_else(|| source_fault("source-view exact Value scope certificate absent"))?;
++    let key = input.seal.key();
++    key.validate()?;
++    if scope.scope != owner.signature().scope
++        || scope.namespace != Namespace::Value
++        || scope.edition != owner.signature().header.profile.edition
++        || !matches!(input.seal.domain(), SealDomain::Scope{id,namespace} if *id==scope.scope.fingerprint() && *namespace==Namespace::Value)
++        || input.sources.len() != 1
++        || input.sources[0] != *source.selection()
++        || input.seal.unresolved_frontiers() != 0
++    {
++        return Err(source_fault(
++            "source-view current scope/world/edition differs",
++        ));
++    }
++    if !matches!(db.published_input(&InputKey::ExpansionEpoch), Some((InputValue::ExpansionEpoch(epoch),_)) if *epoch==key.epoch)
++    {
++        return Err(source_fault(
++            "source-view current expansion epoch absent or changed",
++        ));
++    }
++    if !matches!(db.published_input(&InputKey::SourceDependencies), Some((InputValue::SourceDependencies(graph),_)) if graph.fingerprint()==input.source_dependencies)
++    {
++        return Err(source_fault(
++            "source-view current world/source graph differs",
++        ));
++    }
++    for (key, fingerprint) in &input.compiler_inputs {
++        if db
++            .published_input(key)
++            .is_none_or(|(_, actual)| actual != *fingerprint)
++        {
++            return Err(source_fault("source-view compiler input changed"));
++        }
++    }
++    for (key, value) in source.prepared_inputs() {
++        if db
++            .published_input(key)
++            .is_none_or(|(_, actual)| actual != value.fingerprint())
++        {
++            return Err(source_fault(
++                "source-view captured base publication changed",
++            ));
++        }
++    }
++    // General generated/native/dependency worlds need their own exact entered
++    // indexes. This certificate admits only the established original-source lane.
++    if !input.records.is_empty()
++        || !input.procedural_catalogs.is_empty()
++        || !input.helper_declarations.is_empty()
++        || !input.argument_fragments.is_empty()
++        || !input.declaration_fragments.is_empty()
++        || !input.argument_indexes.is_empty()
++    {
++        return Err(source_fault(
++            "source-view generated/native namespace admission is unestablished",
++        ));
++    }
++    let fingerprint = published.fingerprint();
++    Ok((published, key, fingerprint))
++}
++impl SourceViewPairPlan {
++    /// Replay exact original provenance against freshly sealed entered locals.
++    /// No provider runs, no guest body/thunk is prepared, no descriptor seeds a term.
++    pub(crate) fn admit_current(
++        &self,
++        db: &Database,
++        source: &PreparedSourceView,
++        environment: Option<&GenericEnv>,
++        limit: usize,
++    ) -> Result<crate::frontend::source_view::SourceViewAdmission, Diagnostic> {
++        let limit = limit.min(SOURCE_VIEW_BUDGET);
++        if self.source.metadata_bytes() > limit || self.source.provenance.len() > 256 {
++            return Err(metadata_fault());
++        }
++        if self.source.provenance.is_empty() {
++            return Err(source_fault("source-view declared provenance is missing"));
++        }
++        self.source.require_current(db)?;
++        source.require_original_hygiene()?;
++        source.require_declaration_syntax()?;
++        require_definition(db, source, &self.source.definition)?;
++        let signature = owning_signature(db, self.source.definition.signature.definition, source)?;
++        if signature != self.source.definition.signature
++            || signature
++                .generics
++                .iter()
++                .any(|generic| generic.kind != GenericKind::Type)
++        {
++            return Err(source_fault(
++                "source-view signature, bound context or generic namespace differs",
++            ));
++        }
++        let environment_digest = environment_identity(&self.source.definition, environment)?;
++        let (published, seal, seal_fingerprint) =
++            current_seal(db, source, &self.source.definition)?;
++        let InputValue::DiscoverySeal(sealed) = published.as_ref() else {
++            unreachable!()
++        };
++        let provider = crate::expand::source_declarative::SourceDeclarative::new(source.share())?;
++        let published_index = provider.completed_published_index()?;
++        let mut entered =
++            published_index.enter_body(source.selection(), &self.source.definition.body.key())?;
++        for (_, proof) in sealed
++            .runtime_no_item_proofs
++            .iter()
++            .filter(|(_, proof)| proof.body() == &self.source.definition.body.key())
++        {
++            let catalog=crate::frontend::runtime_macro_catalog::RuntimeMacroCatalog::standard_for_definition(&source.selection().outline.parse.profile,proof.definition())?;
++            entered.accept_no_item_proof(
++                source.selection(),
++                &self.source.definition.body.key(),
++                proof,
++                &catalog,
++            )?;
++        }
++        // No current Value-prelude/pattern witness exists in this interface.
++        // Leave BindingOrConstant rows deferred instead of converting module
++        // absence into a binding decision. Explicit binding syntax is admitted
++        // by the pinned local index; unrelated cold names stay deferred.
++        let resolutions = BTreeMap::new();
++        let locals = entered.local_index(
++            source.selection(),
++            &self.source.definition.body.key(),
++            &resolutions,
++            &[],
++        )?;
++        let graph = NameNamespaces::from_outlines(&[source.outline()])?;
++        let parsed = db
++            .prepared_parse(&source.selection().outline.parse)
++            .ok_or_else(|| source_fault("source-view exact original parser absent"))?;
++        let item = source
++            .outline()
++            .items
++            .iter()
++            .find(|item| item.def_key.fingerprint() == signature.definition)
++            .ok_or_else(|| source_fault("source-view owning declaration absent"))?;
++        let owner = Arc::new(
++            parsed.source_view_definition_plan(
++                item.body
++                    .as_ref()
++                    .ok_or_else(|| source_fault("source-view owning body absent"))?,
++                &item.header,
++                &crate::syntax::outline::DeclarationContext {
++                    scope: item.scope.clone(),
++                    range: item.declaration_span,
++                },
++            )?,
++        );
++        if owner.metadata_bytes() != self.source.definition.metadata_bytes() {
++            return Err(source_fault(
++                "source-view definition retained metadata differs",
++            ));
++        }
++        let index = source.index_body(
++            source.selection(),
++            &self.source.definition.body.key(),
++            Default::default(),
++        )?;
++        let mut replay: Option<SourceViewPairPlan> = None;
++        for (ordinal, step) in self.source.provenance.iter().enumerate() {
++            replay = Some(match step {
++                SourcePropagation::DeclaredBinding { binding, site } if ordinal == 0 => {
++                    let read = parsed.source_view_read_plan(&owner, &index, site)?;
++                    if matches!(
++                        locals.lookup_ordinary(
++                            OrdinaryNameSite {
++                                source: source.selection(),
++                                body: &self.source.definition.body.key(),
++                                at: u64::from(read.range.start),
++                                name: &read.name,
++                                context: locals.context(),
++                                namespace: Namespace::Value
++                            },
++                            &graph,
++                            None
++                        )?,
++                        NameLookup::NeedInput(_)
++                    ) {
++                        return Err(source_fault(
++                            "source-view binding-or-constant syntax needs a current Value-prelude/pattern witness",
++                        ));
++                    }
++                    let value = declared_binding_view(
++                        db,
++                        &parsed,
++                        &index,
++                        source,
++                        &graph,
++                        &locals,
++                        owner.clone(),
++                        &read,
++                        environment,
++                        self.runtime,
++                        limit,
++                    )?;
++                    if value.source.binding != Some(*binding) {
++                        return Err(source_fault(
++                            "source-view declared provenance selects another binding",
++                        ));
++                    }
++                    value
++                }
++                SourcePropagation::LocalAlias {
++                    source: from,
++                    destination,
++                    pattern,
++                    site,
++                } => {
++                    let previous = replay.as_ref().ok_or_else(|| {
++                        source_fault("source-view alias lacks declared provenance")
++                    })?;
++                    let alias = parsed.source_view_alias_plan(&owner, &index, site)?;
++                    if previous.source.binding != Some(*from)
++                        || alias.destination != *destination
++                        || alias.pattern.0 != *pattern
++                    {
++                        return Err(source_fault(
++                            "source-view alias provenance differs from exact source",
++                        ));
++                    }
++                    local_alias_view(
++                        db,
++                        source,
++                        &graph,
++                        &locals,
++                        owner.clone(),
++                        &alias,
++                        previous,
++                        limit,
++                    )?
++                }
++                SourcePropagation::NamedReturn {
++                    callee,
++                    signature,
++                    declared,
++                    site,
++                } => {
++                    let previous = replay.as_ref().ok_or_else(|| {
++                        source_fault("source-view named return lacks declared argument provenance")
++                    })?;
++                    let call = parsed.source_view_named_call_plan(&owner, &index, site)?;
++                    if call.arguments.len() != 1 || call.path.contains("::") {
++                        return Err(source_fault(
++                            "source-view named return needs complete multiargument/source-world provenance",
++                        ));
++                    }
++                    let selected = locals.lookup_ordinary(
++                        OrdinaryNameSite {
++                            source: source.selection(),
++                            body: &self.source.definition.body.key(),
++                            at: u64::from(call.at),
++                            name: &call.path,
++                            context: locals.context(),
++                            namespace: Namespace::Value,
++                        },
++                        &graph,
++                        None,
++                    )?;
++                    if !matches!(selected,NameLookup::Defined(found) if found.identity==*callee)
++                        || previous.source.binding
++                            != Some(selected_binding(
++                                &locals,
++                                &graph,
++                                source,
++                                &owner,
++                                &call.arguments[0],
++                            )?)
++                    {
++                        return Err(source_fault(
++                            "source-view named return binding or callee identity changed",
++                        ));
++                    }
++                    let current = owning_signature(db, *callee, source)?;
++                    if current.fingerprint() != *signature
++                        || current.parameters.len() != 1
++                        || current.generics.iter().any(|g| g.kind != GenericKind::Type)
++                        || current.parameters.iter().any(|p| p.receiver || p.variadic)
++                        || current.header.tokens.iter().any(|t| {
++                            matches!(t.text.as_str(), "async" | "gen" | "unsafe" | "extern")
++                        })
++                    {
++                        return Err(source_fault(
++                            "source-view callee signature/bounds/ordinary ABI differs",
++                        ));
++                    }
++                    let names = SignatureNames::new(&graph, source, &current)?;
++                    let parameter = scalar_signature_term(
++                        &names,
++                        current.parameters[0].symbolic.as_ref(),
++                        &current.parameters[0].ty,
++                    )?;
++                    let result = scalar_signature_term(
++                        &names,
++                        current.result_symbolic.as_ref(),
++                        &current.result,
++                    )?;
++                    if result != *declared {
++                        return Err(source_fault("source-view callee declared return changed"));
++                    }
++                    let (term, runtime) = match (&parameter, &result) {
++                        (TyTerm::Param(parameter), TyTerm::Param(result))
++                            if parameter == result
++                                && parameter.definition == *callee
++                                && current.generics.iter().any(|g| {
++                                    g.ordinal == parameter.ordinal && g.kind == GenericKind::Type
++                                }) =>
++                        {
++                            (previous.source.term(), previous.runtime)
++                        }
++                        (TyTerm::Primitive(parameter), TyTerm::Primitive(result))
++                            if previous.source.term() == &TyTerm::Primitive(*parameter)
++                                && primitive_runtime_id(*parameter)? == previous.runtime =>
++                        {
++                            (&result, primitive_runtime_id(*result)?)
++                        }
++                        _ => {
++                            return Err(source_fault(
++                                "source-view named return substitution needs further matched call admission",
++                            ));
++                        }
++                    };
++                    let mut dependencies = require_definition(db, source, &self.source.definition)?;
++                    merge_dependencies(&mut dependencies, &previous.source.dependencies)?;
++                    for key in [
++                        InputKey::DefinitionSource(*callee),
++                        InputKey::DefinitionHeader(*callee),
++                        InputKey::DeclarationContext(*callee),
++                        InputKey::DefinitionBody(*callee),
++                    ] {
++                        let (_, fingerprint) = db
++                            .published_input(&key)
++                            .ok_or_else(|| source_fault("source-view callee publication absent"))?;
++                        dependencies.push((key, fingerprint));
++                    }
++                    checked_pair(
++                        db,
++                        owner.clone(),
++                        term,
++                        None,
++                        previous.source.provenance(),
++                        step.clone(),
++                        dependencies,
++                        runtime,
++                        limit,
++                    )?
++                }
++                _ => {
++                    return Err(source_fault(
++                        "source-view provenance order is not established",
++                    ));
++                }
++            });
++        }
++        let replay = replay.ok_or_else(|| source_fault("source-view provenance is empty"))?;
++        if replay.source.identity() != self.source.identity()
++            || replay.runtime != self.runtime
++            || replay.source.metadata_bytes() != self.source.metadata_bytes()
++        {
++            return Err(source_fault(
++                "source-view immutable plan differs from current source replay",
++            ));
++        }
++        let stamps = db.source_view_namespace_stamps()?;
++        let mut bytes = std::mem::size_of::<SourceViewAdmission>()
++            .checked_add(replay.source.metadata_bytes())
++            .ok_or_else(metadata_fault)?;
++        for key in stamps.keys() {
++            bytes = bytes
++                .checked_add(
++                    std::mem::size_of::<(InputKey, Digest)>()
++                        .checked_add(128)
++                        .ok_or_else(metadata_fault)?,
++                )
++                .and_then(|bytes| bytes.checked_add(key.heap_bytes()))
++                .filter(|bytes| *bytes <= limit)
++                .ok_or_else(metadata_fault)?;
++        }
++        if bytes > limit {
++            return Err(metadata_fault());
++        }
++        Ok(SourceViewAdmission {
++            view: replay,
++            environment: environment_digest,
++            seal,
++            seal_fingerprint,
++            stamps,
++            bytes,
++        })
++    }
++}
++impl SourceViewAdmission {
++    pub(crate) fn identity(&self) -> Digest {
++        let mut encoded = StableEncoder::new("lrr/v1/current-source-view-admission");
++        encoded.digest(self.view.source.identity());
++        encoded.u32(self.view.runtime.0);
++        encoded.option(&self.environment, |encoded, environment| {
++            encoded.digest(*environment)
++        });
++        encoded.record(&self.seal);
++        encoded.digest(self.seal_fingerprint);
++        encoded.u64(u64::try_from(self.stamps.len()).expect("bounded currentness stamps"));
++        for (key, fingerprint) in &self.stamps {
++            encoded.record(key);
++            encoded.digest(*fingerprint);
++        }
++        encoded.finish()
++    }
++    pub(crate) fn source(&self) -> &SourceViewPlan {
++        self.view.source()
++    }
++    pub(crate) fn runtime(&self) -> TypeId {
++        self.view.runtime()
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn revalidate(
++        &self,
++        db: &Database,
++        source: &PreparedSourceView,
++        environment: Option<&GenericEnv>,
++        expected: &SourceViewPairPlan,
++    ) -> Result<(), Diagnostic> {
++        if self.view.source.identity() != expected.source.identity()
++            || self.view.runtime != expected.runtime
++            || self.stamps != db.source_view_namespace_stamps()?
++        {
++            return Err(source_fault(
++                "source-view certificate plan or current membership changed",
++            ));
++        }
++        let fresh = expected.admit_current(db, source, environment, self.bytes)?;
++        if fresh.environment != self.environment
++            || fresh.seal != self.seal
++            || fresh.seal_fingerprint != self.seal_fingerprint
++            || fresh.stamps != self.stamps
++        {
++            return Err(source_fault(
++                "source-view certificate ParamEnv/seal/world changed",
++            ));
++        }
++        Ok(())
++    }
++}
++#[cfg(test)]
++#[path = "source_view_admission_tests.rs"]
++mod tests;
+--- /dev/null
++++ b/crates/lrr/src/frontend/source_view_admission_tests.rs
+@@ -0,0 +1,675 @@
++//! Captured-source component controls only: no VM/stock-runtime pass claim.
++use super::*;
++use crate::expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep};
++use crate::{
++    core::profile::ProfileIdentity,
++    db::key::OutlineKey,
++    frontend::{
++        call_contracts::PreparedCallContracts, source_locals::PatternResolution,
++        source_macros::PublishedMacroIndex,
++    },
++    ir::{op::PrimitiveType, pc::Phase},
++    source::{
++        changes::{PreparedSourceInputs, SourceSelection, SourceSelectionOutcome, SourceUnitInput},
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::{outline::DeclarationContext, parse::ParseKey},
++};
++const COPY: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/traits/copy-trait-implicit-copy.rs"
++);
++const INFER: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/generics/generic-fn-infer.rs"
++);
++fn world_unsealed(
++    text: &str,
++    function: &str,
++    edition: u16,
++) -> (
++    Database,
++    PreparedSourceView,
++    PublishedMacroIndex,
++    NameNamespaces,
++    ParsedFile,
++    BodyIndex,
++    Arc<DefinitionSourcePlan>,
++) {
++    let unit = Digest::of_bytes(b"LRR SourceView alias return component");
++    let profile = ProfileIdentity {
++        edition,
++        ..ProfileIdentity::current()
++    };
++    let cfg = CfgSet::guest_default();
++    let path = SourcePath::new("source-view-original.rs").unwrap();
++    let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++    let selection = SourceSelection {
++        path: path.clone(),
++        outline: OutlineKey {
++            parse: ParseKey {
++                content: blob.content(),
++                profile: profile.clone(),
++            },
++            crate_key: unit,
++            module_path: vec![],
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let inputs = PreparedSourceInputs::refresh(
++        None,
++        vec![SourceUnitInput {
++            path,
++            crate_key: unit,
++            module_path: vec![],
++            profile: profile.clone(),
++            cfg,
++            blob: blob.clone(),
++        }],
++        Default::default(),
++    )
++    .unwrap();
++    let SourceSelectionOutcome::Selected(view) = inputs.select(&selection).unwrap() else {
++        panic!()
++    };
++    let graph = NameNamespaces::from_outlines(&[view.outline()]).unwrap();
++    let mut db = Database::default();
++    db.trace.detailed = true;
++    inputs.publish(&mut db).unwrap();
++    let (context, hygiene) = crate::syntax::floating_fixture_hygiene::root(unit, edition);
++    let published = PublishedMacroIndex::from_view(view.share(), context, hygiene).unwrap();
++    let parsed = ParsedFile::parse(&blob, profile).unwrap();
++    let item = view
++        .outline()
++        .items
++        .iter()
++        .find(|item| item.def_key.declared_name == function)
++        .unwrap();
++    let handle = item.body.as_ref().unwrap();
++    let owner = Arc::new(
++        parsed
++            .source_view_definition_plan(
++                handle,
++                &item.header,
++                &DeclarationContext {
++                    scope: item.scope.clone(),
++                    range: item.declaration_span,
++                },
++            )
++            .unwrap(),
++    );
++    let index = parsed.index_body(handle, Default::default()).unwrap();
++    (db, view, published, graph, parsed, index, owner)
++}
++fn site(
++    text: &str,
++    owner: &DefinitionSourcePlan,
++    index: &BodyIndex,
++    needle: &str,
++    phase: Phase,
++) -> PcKey {
++    let start = u32::try_from(text.find(needle).unwrap()).unwrap() - owner.body.range.start;
++    let end = start + u32::try_from(needle.len()).unwrap();
++    let node = index
++        .nodes()
++        .iter()
++        .find(|node| node.range.start == start && node.range.end == end)
++        .unwrap();
++    index.pc(node.id, phase).unwrap()
++}
++fn read_in(
++    text: &str,
++    owner: &DefinitionSourcePlan,
++    index: &BodyIndex,
++    needle: &str,
++    name: &str,
++) -> PcKey {
++    let start = u32::try_from(text.find(needle).unwrap() + needle.rfind(name).unwrap()).unwrap()
++        - owner.body.range.start;
++    let end = start + u32::try_from(name.len()).unwrap();
++    let node = index
++        .nodes()
++        .iter()
++        .find(|node| node.range.start == start && node.range.end == end)
++        .unwrap();
++    index.pc(node.id, Phase::Entry).unwrap()
++}
++fn runtime_environment(owner: &DefinitionSourcePlan) -> GenericEnv {
++    let signature = owner.signature();
++    let mut symbolic = BTreeMap::new();
++    let mut runtime = BTreeMap::new();
++    for generic in signature
++        .generics
++        .iter()
++        .filter(|generic| generic.kind == GenericKind::Type)
++    {
++        let key = ParamKey {
++            definition: signature.definition,
++            ordinal: generic.ordinal,
++        };
++        symbolic.insert(key, TyTerm::Primitive(PrimitiveType::I32));
++        runtime.insert(key, TypeId(6));
++    }
++    let parameters: Vec<_> = signature
++        .parameters
++        .iter()
++        .map(|parameter| parameter.symbolic.clone().unwrap())
++        .collect();
++    let parameter_descriptors = parameters
++        .iter()
++        .map(|term| match term {
++            TyTerm::Param(_) => TypeId(6),
++            TyTerm::Primitive(primitive) => primitive_runtime_id(*primitive).unwrap(),
++            _ => panic!(),
++        })
++        .collect();
++    let result = signature.result_symbolic.clone();
++    let result_descriptor = match result.as_ref() {
++        Some(TyTerm::Primitive(primitive)) => Some(primitive_runtime_id(*primitive).unwrap()),
++        Some(TyTerm::Param(_)) => Some(TypeId(6)),
++        None => None,
++        _ => panic!(),
++    };
++    GenericEnv::capture(
++        signature,
++        &PreparedCallContracts {
++            definition: signature.definition,
++            source_parameters: parameters,
++            parameter_descriptors,
++            source_substitution: symbolic,
++            runtime_substitution: runtime,
++            source_result: result,
++            result_descriptor,
++            normalized_deferred_return: None,
++        },
++    )
++    .unwrap()
++}
++
++fn world(
++    text: &str,
++    function: &str,
++    edition: u16,
++) -> (
++    Database,
++    PreparedSourceView,
++    PublishedMacroIndex,
++    NameNamespaces,
++    ParsedFile,
++    BodyIndex,
++    Arc<DefinitionSourcePlan>,
++) {
++    let (mut db, view, published, graph, parsed, index, owner) =
++        world_unsealed(text, function, edition);
++    publish_scope(
++        &mut db,
++        &view,
++        Digest::of_bytes(b"LRR source-view admission world"),
++    );
++    (db, view, published, graph, parsed, index, owner)
++}
++fn publish_scope(db: &mut Database, view: &PreparedSourceView, world: Digest) {
++    let profile = &view.selection().outline.parse.profile;
++    let mut discovery = SourceDiscovery::new(
++        vec![view.share()],
++        view.outline().root_scope.clone(),
++        Namespace::Value,
++        world,
++        1,
++    )
++    .unwrap()
++    .with_declarative_compiler(
++        Digest::of_bytes(b"LRR source-view declarative"),
++        Digest::of_bytes(b"LRR source-view compiler"),
++        Arc::new(
++            crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(profile)
++                .unwrap(),
++        ),
++    )
++    .unwrap();
++    loop {
++        match discovery.poll().unwrap() {
++            SourceDiscoveryStep::Sealed(_) => break,
++            SourceDiscoveryStep::NeedExpansion { request } => discovery
++                .admit_expansion(Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                .admit_expansion(Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            _ => panic!("source-only acceptance needs unestablished discovery authority"),
++        }
++    }
++    discovery.publish(db).unwrap();
++}
++fn parameter_alias(
++    text: &str,
++    function: &str,
++    needle: &str,
++    edition: u16,
++    sealed: bool,
++) -> (Database, PreparedSourceView, GenericEnv, SourceViewPairPlan) {
++    let (db, view, published, graph, parsed, index, owner) = if sealed {
++        world(text, function, edition)
++    } else {
++        world_unsealed(text, function, edition)
++    };
++    let entered = published
++        .enter_body(view.selection(), &owner.body.key())
++        .unwrap();
++    let resolutions = entered
++        .facts()
++        .bindings
++        .iter()
++        .map(|binding| (binding.identity, PatternResolution::Binding))
++        .collect();
++    let locals = entered
++        .local_index(view.selection(), &owner.body.key(), &resolutions, &[])
++        .unwrap();
++    let environment = runtime_environment(&owner);
++    let alias = parsed
++        .source_view_alias_plan(
++            &owner,
++            &index,
++            &site(text, &owner, &index, needle, Phase::Commit),
++        )
++        .unwrap();
++    let value = declared_binding_view(
++        &db,
++        &parsed,
++        &index,
++        &view,
++        &graph,
++        &locals,
++        owner.clone(),
++        &alias.source,
++        Some(&environment),
++        TypeId(6),
++        SOURCE_VIEW_BUDGET,
++    )
++    .unwrap();
++    let alias = local_alias_view(
++        &db,
++        &view,
++        &graph,
++        &locals,
++        owner,
++        &alias,
++        &value,
++        SOURCE_VIEW_BUDGET,
++    )
++    .unwrap();
++    (db, view, environment, alias)
++}
++const EXPLICIT: &str = "fn chosen<T:Copy>(mut x:T){let mut alias=x;let mut later=alias;}fn id<T>(x:T)->T{x}fn main(){}";
++fn explicit() -> (Database, PreparedSourceView, GenericEnv, SourceViewPairPlan) {
++    parameter_alias(EXPLICIT, "chosen", "let mut alias=x;", 2024, true)
++}
++#[test]
++fn original_copy_ambiguity_is_preserved_as_current_pattern_prerequisite_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, view, environment, plan) =
++            parameter_alias(COPY, "can_copy_copy", "let _a = v;", edition, true);
++        let before = db.trace.events.len();
++        let error = plan
++            .admit_current(&db, &view, Some(&environment), SOURCE_VIEW_BUDGET)
++            .unwrap_err();
++        assert_eq!(error.code, "LRR-E-SOURCE-TYPE-CONTEXT");
++        assert!(error.message.contains("Value-prelude/pattern witness"));
++        assert_eq!(
++            plan.source.term(),
++            &TyTerm::Param(ParamKey {
++                definition: plan.source.definition.signature.definition,
++                ordinal: 0
++            })
++        );
++        assert_eq!(db.trace.events.len(), before);
++        // Unchanged source component is blocked, not a stock fixture pass.
++    }
++}
++#[test]
++fn explicit_nonmacro_binding_alias_current_admission_keeps_rigid_owner_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, view, environment, plan) =
++            parameter_alias(EXPLICIT, "chosen", "let mut alias=x;", edition, true);
++        let before = db.trace.events.len();
++        let certificate = plan
++            .admit_current(&db, &view, Some(&environment), SOURCE_VIEW_BUDGET)
++            .unwrap();
++        certificate
++            .revalidate(&db, &view, Some(&environment), &plan)
++            .unwrap();
++        assert_eq!(certificate.source().term(), plan.source.term());
++        assert_eq!(certificate.runtime(), TypeId(6));
++        assert!(
++            certificate.source().definition().signature().generics[0]
++                .bounds
++                .iter()
++                .any(|token| token.text == "Copy")
++        );
++        assert!(certificate.metadata_bytes() >= plan.source.metadata_bytes());
++        assert_eq!(db.trace.events.len(), before);
++        // LRR currentness control only; no replacement stock program/pass claim.
++    }
++}
++#[test]
++fn original_named_id_result_preserves_current_pattern_prerequisite_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, view, published, graph, parsed, index, owner) = world(INFER, "main", edition);
++        let entered = published
++            .enter_body(view.selection(), &owner.body.key())
++            .unwrap();
++        let resolutions = entered
++            .facts()
++            .bindings
++            .iter()
++            .map(|binding| (binding.identity, PatternResolution::Binding))
++            .collect();
++        let locals = entered
++            .local_index(view.selection(), &owner.body.key(), &resolutions, &[])
++            .unwrap();
++        let call = parsed
++            .source_view_named_call_plan(
++                &owner,
++                &index,
++                &site(INFER, &owner, &index, "id(x)", Phase::Entry),
++            )
++            .unwrap();
++        let argument = declared_binding_view(
++            &db,
++            &parsed,
++            &index,
++            &view,
++            &graph,
++            &locals,
++            owner.clone(),
++            &call.arguments[0],
++            None,
++            TypeId(8),
++            SOURCE_VIEW_BUDGET,
++        )
++        .unwrap();
++        let QueryPoll::Ready(Ok(result)) = named_function_return_view(
++            &mut db,
++            &view,
++            &[&view],
++            &graph,
++            &locals,
++            owner,
++            &call,
++            &[&argument],
++            TypeId(8),
++            SOURCE_VIEW_BUDGET,
++        ) else {
++            panic!()
++        };
++        let before = db.trace.events.len();
++        let error = result
++            .admit_current(&db, &view, None, SOURCE_VIEW_BUDGET)
++            .unwrap_err();
++        assert_eq!(error.code, "LRR-E-SOURCE-TYPE-CONTEXT");
++        assert!(error.message.contains("Value-prelude/pattern witness"));
++        assert_eq!(
++            result.source.term(),
++            &TyTerm::Primitive(PrimitiveType::Isize)
++        );
++        assert_eq!(result.runtime(), TypeId(8));
++        assert_eq!(db.trace.events.len(), before);
++        assert!(db.trace.events.iter().all(|event| !matches!(
++            event.key,
++            crate::db::key::QueryKey::BodyStructure(_) | crate::db::key::QueryKey::Thunk(_)
++        )));
++        // Header/source component only; neither call nor assertion executes.
++    }
++}
++#[test]
++fn unsealed_current_plan_cannot_default_to_namespace_authority() {
++    let (db, view, environment, plan) =
++        parameter_alias(EXPLICIT, "chosen", "let mut alias=x;", 2024, false);
++    assert!(
++        plan.admit_current(&db, &view, Some(&environment), SOURCE_VIEW_BUDGET)
++            .is_err()
++    );
++}
++#[test]
++fn source_same_derived_epoch_change_invalidates_certificate() {
++    let (mut db, view, environment, plan) = explicit();
++    let certificate = plan
++        .admit_current(&db, &view, Some(&environment), SOURCE_VIEW_BUDGET)
++        .unwrap();
++    let revision = db.source_revision();
++    db.begin_expansion_epoch(2).unwrap();
++    assert_eq!(db.source_revision(), revision);
++    assert!(
++        certificate
++            .revalidate(&db, &view, Some(&environment), &plan)
++            .is_err()
++    );
++    assert!(
++        plan.admit_current(&db, &view, Some(&environment), SOURCE_VIEW_BUDGET)
++            .is_err()
++    );
++}
++#[test]
++fn descriptor_equality_cannot_admit_tampered_term_provenance_or_dependencies() {
++    let (db, view, environment, plan) = explicit();
++    let mut wrong = plan.clone();
++    wrong.source.term = TyTerm::Primitive(PrimitiveType::I32);
++    assert!(
++        wrong
++            .admit_current(&db, &view, Some(&environment), SOURCE_VIEW_BUDGET)
++            .is_err()
++    );
++    let mut wrong = plan.clone();
++    wrong.source.dependencies = Box::new([]);
++    assert!(
++        wrong
++            .admit_current(&db, &view, Some(&environment), SOURCE_VIEW_BUDGET)
++            .is_err()
++    );
++    let mut wrong = plan.clone();
++    if let Some(SourcePropagation::LocalAlias { destination, .. }) =
++        wrong.source.provenance.last_mut()
++    {
++        *destination = Digest::of_bytes(b"LRR forged alias binding");
++    } else {
++        panic!()
++    }
++    assert!(
++        wrong
++            .admit_current(&db, &view, Some(&environment), SOURCE_VIEW_BUDGET)
++            .is_err()
++    );
++    let mut wrong = plan.clone();
++    wrong.source.bytes = 0;
++    assert!(
++        wrong
++            .admit_current(&db, &view, Some(&environment), SOURCE_VIEW_BUDGET)
++            .is_err()
++    );
++    let mut certificate = plan
++        .admit_current(&db, &view, Some(&environment), SOURCE_VIEW_BUDGET)
++        .unwrap();
++    certificate.stamps.clear();
++    assert!(
++        certificate
++            .revalidate(&db, &view, Some(&environment), &plan)
++            .is_err()
++    );
++}
++#[test]
++fn wrong_source_environment_and_zero_budget_refuse_without_provider_effect() {
++    let (db, view, environment, plan) = explicit();
++    let (_, other, _, _, _, _, other_owner) = world(INFER, "id", 2024);
++    let other_environment = runtime_environment(&other_owner);
++    let before = db.trace.events.len();
++    assert!(
++        plan.admit_current(&db, &other, Some(&environment), SOURCE_VIEW_BUDGET)
++            .is_err()
++    );
++    assert!(
++        plan.admit_current(&db, &view, Some(&other_environment), SOURCE_VIEW_BUDGET)
++            .is_err()
++    );
++    assert_eq!(
++        plan.admit_current(&db, &view, Some(&environment), 0)
++            .unwrap_err()
++            .code,
++        "LRR-E-METADATA-LIMIT"
++    );
++    assert_eq!(db.trace.events.len(), before);
++}
++#[test]
++fn ambiguous_identifier_pattern_keeps_unestablished_prelude_authority_typed() {
++    // Supplemental authority control. No rustc compile-pass claim: constant
++    // pattern ambiguity must not be overwritten by caller pattern decisions.
++    let text = "const v:i32=1;fn chosen<T>(v:T){let a=v;}fn main(){}";
++    let (db, view, environment, plan) = parameter_alias(text, "chosen", "let a=v;", 2024, true);
++    assert!(
++        plan.admit_current(&db, &view, Some(&environment), SOURCE_VIEW_BUDGET)
++            .is_err()
++    );
++}
++
++#[test]
++fn derived_seal_membership_change_is_not_hidden_by_equal_source_revision() {
++    let (mut db, view, environment, plan) = explicit();
++    let certificate = plan
++        .admit_current(&db, &view, Some(&environment), SOURCE_VIEW_BUDGET)
++        .unwrap();
++    let revision = db.source_revision();
++    publish_scope(
++        &mut db,
++        &view,
++        Digest::of_bytes(b"LRR changed derived discovery world"),
++    );
++    assert_eq!(db.source_revision(), revision);
++    assert!(
++        certificate
++            .revalidate(&db, &view, Some(&environment), &plan)
++            .is_err()
++    );
++}
++
++#[test]
++fn explicit_caller_alias_named_return_retains_caller_rigid_identity() {
++    let text = "fn chosen<T:Copy>(mut x:T){let mut alias=x;let mut out=id(alias);}fn id<T>(x:T)->T{x}fn main(){}";
++    let (mut db, view, published, graph, parsed, index, owner) = world(text, "chosen", 2024);
++    let entered = published
++        .enter_body(view.selection(), &owner.body.key())
++        .unwrap();
++    let locals = entered
++        .local_index(
++            view.selection(),
++            &owner.body.key(),
++            &Default::default(),
++            &[],
++        )
++        .unwrap();
++    let environment = runtime_environment(&owner);
++    let alias = parsed
++        .source_view_alias_plan(
++            &owner,
++            &index,
++            &site(text, &owner, &index, "let mut alias=x;", Phase::Commit),
++        )
++        .unwrap();
++    let seed = declared_binding_view(
++        &db,
++        &parsed,
++        &index,
++        &view,
++        &graph,
++        &locals,
++        owner.clone(),
++        &alias.source,
++        Some(&environment),
++        TypeId(6),
++        SOURCE_VIEW_BUDGET,
++    )
++    .unwrap();
++    let argument = local_alias_view(
++        &db,
++        &view,
++        &graph,
++        &locals,
++        owner.clone(),
++        &alias,
++        &seed,
++        SOURCE_VIEW_BUDGET,
++    )
++    .unwrap();
++    let call = parsed
++        .source_view_named_call_plan(
++            &owner,
++            &index,
++            &site(text, &owner, &index, "id(alias)", Phase::Entry),
++        )
++        .unwrap();
++    let QueryPoll::Ready(Ok(result)) = named_function_return_view(
++        &mut db,
++        &view,
++        &[&view],
++        &graph,
++        &locals,
++        owner,
++        &call,
++        &[&argument],
++        TypeId(6),
++        SOURCE_VIEW_BUDGET,
++    ) else {
++        panic!()
++    };
++    let before = db.trace.events.len();
++    let certificate = result
++        .admit_current(&db, &view, Some(&environment), SOURCE_VIEW_BUDGET)
++        .unwrap();
++    certificate
++        .revalidate(&db, &view, Some(&environment), &result)
++        .unwrap();
++    assert_eq!(certificate.source().term(), seed.source.term());
++    assert_ne!(
++        certificate.source().term(),
++        &TyTerm::Primitive(PrimitiveType::I32)
++    );
++    assert_eq!(certificate.runtime(), TypeId(6));
++    assert_eq!(db.trace.events.len(), before);
++}
++
++#[test]
++fn copied_header_does_not_admit_mutated_bounds_or_unproved_nominal_substitution() {
++    let (db, view, environment, plan) = explicit();
++    let mut changed = plan.source.definition.as_ref().clone();
++    changed.signature.generics[0].bounds.clear();
++    let changed_env = runtime_environment(&changed);
++    assert!(
++        plan.admit_current(&db, &view, Some(&changed_env), SOURCE_VIEW_BUDGET)
++            .is_err()
++    );
++    let signature = environment.definition();
++    let key = ParamKey {
++        definition: signature.definition,
++        ordinal: 0,
++    };
++    let forged = GenericEnv::capture(
++        signature,
++        &PreparedCallContracts {
++            definition: signature.definition,
++            source_parameters: vec![TyTerm::Param(key)],
++            parameter_descriptors: vec![TypeId(6)],
++            source_substitution: BTreeMap::from([(
++                key,
++                TyTerm::Nominal(
++                    Digest::of_bytes(b"LRR unproved public-contract nominal"),
++                    vec![],
++                ),
++            )]),
++            runtime_substitution: BTreeMap::from([(key, TypeId(6))]),
++            source_result: signature.result_symbolic.clone(),
++            result_descriptor: Some(TypeId(1)),
++            normalized_deferred_return: None,
++        },
++    )
++    .unwrap();
++    assert!(
++        plan.admit_current(&db, &view, Some(&forged), SOURCE_VIEW_BUDGET)
++            .is_err()
++    );
++}

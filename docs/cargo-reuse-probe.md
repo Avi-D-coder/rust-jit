@@ -31,12 +31,21 @@ linux-filesystem/ and is the controlled gate evidence. This isolates the observe
 failure to the development bind-mount environment; it does not prove that every
 filesystem or Cargo configuration shares its behavior.
 
-Use the original Section 45 command on Linux storage. When developing on macOS,
-keep the probe workspace inside the Linux container and copy only its evidence
-back to the repository. --trace-fingerprints adds Cargo diagnostics and verbose
+Run the original Section 45 command directly on macOS first. The probe selects
+Cargo-reported `.dylib` artifacts on macOS and `.so` artifacts on Linux, pins
+Rust 1.99.0, and uses an isolated workspace target directory. Docker is optional
+for the later Linux port. --trace-fingerprints adds Cargo diagnostics and verbose
 Dirty/Fresh explanations without changing compilation flags.
 
 Source module path handling was checked against the
 [Rust Reference module rules](https://doc.rust-lang.org/reference/items/modules.html),
 with a pinned-rustc witness confirming that an explicit external path override
 uses the source-file parent for its child's default module search directory.
+
+The macOS ARM64 replay passed with Rust 1.99.0. Its raw verbose Cargo commands,
+artifact freshness/hash records, and actual native outputs are retained in
+`artifacts/probe/macos-attempt-001/evidence/report.json`. The host regression
+`cargo_native_reuse_and_live_edit_isolation_are_observed` executes a fresh full
+probe and preserves its report under artifacts/probe/host-test-*; it never
+accepts a cached historical report in place of executing the fixture. This proves
+the controlled reuse premise on macOS, not the pending production native ABI.

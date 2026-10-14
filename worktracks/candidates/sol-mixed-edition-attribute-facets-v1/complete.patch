@@ -1,0 +1,1115 @@
+diff --git a/crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs b/crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs
+@@ -0,0 +1,98 @@
++//! Closed catalogue identity used by owning-source compiler-facet preparation.
++use super::*;
++use crate::core::profile::ProfileIdentity;
++impl CompileInputCatalog {
++    pub(crate) fn owning_profile_identity(&self) -> Result<Digest, Diagnostic> {
++        let mut e = StableEncoder::new("lrr/v1/prepared-compiler-facet-membership");
++        e.digest(self.unit);
++        e.u16(self.edition);
++        e.map(&self.facades, |e, name, unit| {
++            e.string(name);
++            e.digest(*unit)
++        });
++        e.option(&self.allocation, |e, unit| e.digest(*unit));
++        e.u64(self.definitions.len() as u64);
++        for (id, (definition, descriptor)) in &self.definitions {
++            definition.validate()?;
++            e.digest(*id);
++            e.digest(definition.identity);
++            e.digest(definition.defining_unit);
++            e.u16(definition.definition_edition);
++            e.digest(descriptor.definition_identity());
++            e.string(descriptor.name());
++        }
++        if let Some(attributes) = &self.attributes {
++            e.bool(true);
++            e.u64(attributes.definitions().count() as u64);
++            for definition in attributes.definitions() {
++                let descriptor = attributes
++                    .select(definition)?
++                    .ok_or_else(|| fault("compiler Attribute catalogue member absent"))?;
++                e.digest(definition.identity);
++                e.digest(definition.defining_unit);
++                e.u16(definition.definition_edition);
++                e.digest(descriptor.definition_identity());
++                e.string(descriptor.name());
++                e.u8(match descriptor.action() {
++                    crate::expand::builtin_attributes::BuiltinAttributeAction::Derive => 0,
++                    crate::expand::builtin_attributes::BuiltinAttributeAction::Test => 1,
++                });
++            }
++        } else {
++            e.bool(false)
++        }
++        Ok(e.finish())
++    }
++    pub(crate) fn canonical_standalone_member(
++        &self,
++        profile: &ProfileIdentity,
++    ) -> Result<Option<Digest>, Diagnostic> {
++        if self.unit != crate::facade::unit(profile, "core")
++            || self.edition != profile.edition
++            || self.attributes.is_none()
++            || self.facades.is_empty()
++        {
++            return Ok(None);
++        }
++        let expected = Self::standalone(profile)?;
++        let identity = self.owning_profile_identity()?;
++        Ok((identity == expected.owning_profile_identity()?).then_some(identity))
++    }
++    pub(crate) fn has_standard_facets(&self) -> bool {
++        !self.facades.is_empty() || self.attributes.is_some()
++    }
++    pub(crate) fn owning_profile_metadata_bytes(&self) -> Result<usize, Diagnostic> {
++        let mut bytes = std::mem::size_of::<Self>()
++            .checked_add(256)
++            .ok_or_else(|| fault("compiler facet metadata overflow"))?;
++        for name in self.facades.keys() {
++            bytes = bytes
++                .checked_add(name.capacity())
++                .and_then(|n| n.checked_add(128))
++                .ok_or_else(|| fault("compiler facade metadata overflow"))?;
++        }
++        bytes = bytes
++            .checked_add(
++                self.definitions
++                    .len()
++                    .checked_mul(256)
++                    .ok_or_else(|| fault("compiler definition metadata overflow"))?,
++            )
++            .ok_or_else(|| fault("compiler definition metadata overflow"))?;
++        if let Some(attrs) = &self.attributes {
++            bytes = bytes
++                .checked_add(
++                    attrs
++                        .definitions()
++                        .count()
++                        .checked_mul(256)
++                        .ok_or_else(|| fault("compiler Attribute metadata overflow"))?,
++                )
++                .ok_or_else(|| fault("compiler Attribute metadata overflow"))?;
++        }
++        if bytes > 64 * 1024 {
++            return Err(fault("compiler facet retained metadata limit"));
++        }
++        Ok(bytes)
++    }
++}
+diff --git a/crates/lrr/src/expand/source_discovery/compiler_profiles.rs b/crates/lrr/src/expand/source_discovery/compiler_profiles.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/expand/source_discovery/compiler_profiles.rs
+@@ -0,0 +1,188 @@
++//! Immutable compiler-facet preparation for actually selected owning profiles.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++        profile::ProfileIdentity,
++    },
++    frontend::compile_input_catalog::CompileInputCatalog,
++    source::changes::{PreparedSourceView, SourceSelection},
++};
++use std::{collections::BTreeMap, sync::Arc};
++struct Entry {
++    source: PreparedSourceView,
++    selection: SourceSelection,
++    catalog: Arc<CompileInputCatalog>,
++    identity: Digest,
++}
++pub(super) struct PreparedSourceCompilerFacets {
++    entries: Vec<Entry>,
++    bytes: usize,
++}
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-COMPILE-INPUT", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "owning-profile compiler facet budget".into(),
++    )
++}
++impl PreparedSourceCompilerFacets {
++    pub(super) fn prepare(
++        providers: &[super::super::source_declarative::SourceDeclarative],
++        supplied: Arc<CompileInputCatalog>,
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        if providers.is_empty()
++            || providers.len() > 100_000
++            || byte_limit > 64 * 1024 * 1024
++            || byte_limit < std::mem::size_of::<Self>() + 256
++        {
++            return Err(limit());
++        }
++        let canonical = providers.iter().try_fold(false, |matched, p| {
++            Ok::<_, Diagnostic>(
++                matched
++                    || supplied
++                        .canonical_standalone_member(
++                            &p.module_source().selection().outline.parse.profile,
++                        )?
++                        .is_some(),
++            )
++        })?;
++        if !canonical && supplied.has_standard_facets() {
++            return Err(fault(
++                "supplied compiler facet is not the actual standalone catalogue of any selected owning profile",
++            ));
++        }
++        let mut profiles: BTreeMap<ProfileIdentity, Arc<CompileInputCatalog>> = BTreeMap::new();
++        let mut entries = Vec::new();
++        let mut bytes = providers
++            .len()
++            .checked_mul(std::mem::size_of::<Entry>())
++            .and_then(|n| n.checked_add(std::mem::size_of::<Self>() + 256))
++            .filter(|n| *n <= byte_limit)
++            .ok_or_else(limit)?;
++        entries
++            .try_reserve_exact(providers.len())
++            .map_err(|_| limit())?;
++        for provider in providers {
++            let source = provider.module_source();
++            let profile = &source.selection().outline.parse.profile;
++            let catalog = if canonical {
++                source.require_declaration_syntax()?;
++                if let Some(catalog) = profiles.get(profile) {
++                    catalog.clone()
++                } else {
++                    if profiles.len() >= 256 {
++                        return Err(limit());
++                    }
++                    let catalog = if supplied.canonical_standalone_member(profile)?.is_some() {
++                        supplied.clone()
++                    } else {
++                        source.require_original_hygiene()?;
++                        Arc::new(CompileInputCatalog::standalone(profile)?)
++                    };
++                    if catalog.canonical_standalone_member(profile)?.is_none() {
++                        return Err(fault(
++                            "prepared compiler facet is not an exact owning-profile standalone member",
++                        ));
++                    }
++                    bytes = bytes
++                        .checked_add(catalog.owning_profile_metadata_bytes()?)
++                        .and_then(|n| n.checked_add(std::mem::size_of::<ProfileIdentity>()))
++                        .and_then(|n| n.checked_add(profile.semantics.capacity()))
++                        .and_then(|n| n.checked_add(128))
++                        .filter(|n| *n <= byte_limit)
++                        .ok_or_else(limit)?;
++                    profiles.insert(profile.clone(), catalog.clone());
++                    catalog
++                }
++            } else {
++                // Preserve explicit custom compile-input data without upgrading
++                // it into standard Attribute/prelude authority.
++                if entries.is_empty() {
++                    bytes = bytes
++                        .checked_add(supplied.owning_profile_metadata_bytes()?)
++                        .filter(|n| *n <= byte_limit)
++                        .ok_or_else(limit)?;
++                }
++                supplied.clone()
++            };
++            bytes = bytes
++                .checked_add(128)
++                .and_then(|n| n.checked_add(source.selection().metadata_bytes().ok()?))
++                .filter(|n| *n <= byte_limit)
++                .ok_or_else(limit)?;
++            entries.push(Entry {
++                source: source.share(),
++                selection: source.selection().clone(),
++                identity: catalog.owning_profile_identity()?,
++                catalog,
++            });
++        }
++        Ok(Self { entries, bytes })
++    }
++    pub(super) fn install(
++        &self,
++        providers: &mut [super::super::source_declarative::SourceDeclarative],
++    ) -> Result<(), Diagnostic> {
++        if providers.len() != self.entries.len() {
++            return Err(fault("compiler facet source membership differs"));
++        }
++        for (provider, entry) in providers.iter().zip(&self.entries) {
++            if provider.compiler.is_some()
++                || !provider.module_source().same_publication(&entry.source)
++                || provider.module_source().selection() != &entry.selection
++            {
++                return Err(fault(
++                    "compiler facet source owner/publication changed or already installed",
++                ));
++            }
++        }
++        for (provider, entry) in providers.iter_mut().zip(&self.entries) {
++            provider.compiler = Some(entry.catalog.clone());
++        }
++        Ok(())
++    }
++    pub(super) fn revalidate(
++        &self,
++        providers: &[super::super::source_declarative::SourceDeclarative],
++    ) -> Result<(), Diagnostic> {
++        if providers.len() != self.entries.len() {
++            return Err(fault("prepared compiler facet source membership changed"));
++        }
++        for (provider, entry) in providers.iter().zip(&self.entries) {
++            if !provider.module_source().same_publication(&entry.source)
++                || provider.module_source().selection() != &entry.selection
++            {
++                return Err(fault(
++                    "prepared compiler facet source/profile/current catalogue differs",
++                ));
++            }
++            let catalog = provider
++                .compiler
++                .as_ref()
++                .ok_or_else(|| fault("prepared compiler facet absent"))?;
++            if catalog.owning_profile_identity()? != entry.identity {
++                return Err(fault("prepared compiler facet current identity differs"));
++            }
++        }
++        Ok(())
++    }
++    pub(super) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(super) fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/owning-source-compiler-facets");
++        e.u64(self.entries.len() as u64);
++        for entry in &self.entries {
++            e.digest(entry.selection.location_identity());
++            e.record(&entry.selection.outline.parse);
++            e.digest(entry.selection.outline.cfg);
++            e.digest(entry.identity);
++        }
++        e.finish()
++    }
++}
+diff --git a/crates/lrr/src/frontend/compile_input_catalog.rs b/crates/lrr/src/frontend/compile_input_catalog.rs
+--- a/crates/lrr/src/frontend/compile_input_catalog.rs
++++ b/crates/lrr/src/frontend/compile_input_catalog.rs
+@@ -17,6 +17,8 @@
+ use std::collections::{BTreeMap, BTreeSet};
+ #[path = "compile_input_modules.rs"]
+ mod ordinary_modules;
++#[path = "compile_input_catalog/owning_profiles.rs"]
++mod owning_profiles;
+ pub(crate) use ordinary_modules::CompilerInjectedImport;
+ fn fault(message: &str) -> Diagnostic {
+     Diagnostic::new("LRR-E-COMPILE-INPUT", message.into())
+diff --git a/crates/lrr/src/expand/source_discovery.rs b/crates/lrr/src/expand/source_discovery.rs
+--- a/crates/lrr/src/expand/source_discovery.rs
++++ b/crates/lrr/src/expand/source_discovery.rs
+@@ -14,6 +14,8 @@
+     syntax::outline::{ScopeKey, TextualEventKind},
+ };
+ use std::collections::{BTreeMap, BTreeSet};
++#[path = "source_discovery/compiler_profiles.rs"]
++mod compiler_profiles;
+ #[path = "source_discovery/original_inert.rs"]
+ mod original_inert;
+ pub enum SourceDiscoveryStep {
+@@ -429,6 +431,7 @@
+         Digest,
+         Vec<super::source_declarative::SourceDeclarative>,
+     )>,
++    compiler_profiles: Option<compiler_profiles::PreparedSourceCompilerFacets>,
+     calls: BTreeMap<Digest, (usize, crate::syntax::outline::ItemInvocation)>,
+     frontier_producers: BTreeMap<(ScopeKey, Digest), BTreeSet<Digest>>,
+     nested_argument_summaries: BTreeMap<
+@@ -954,6 +957,7 @@
+             epoch,
+             started: false,
+             declarative: None,
++            compiler_profiles: None,
+             calls,
+             frontier_producers,
+             nested_argument_summaries: BTreeMap::new(),
+@@ -1207,9 +1211,19 @@
+             if catalog.definitions().next().is_none() {
+                 return Err(fault("compiler facet is empty"));
+             }
+-            for provider in &mut providers {
+-                provider.compiler = Some(catalog.clone());
+-            }
++            let prepared = compiler_profiles::PreparedSourceCompilerFacets::prepare(
++                &providers,
++                catalog,
++                64 * 1024 * 1024,
++            )?;
++            let retained = self
++                .nested_bytes
++                .checked_add(prepared.metadata_bytes())
++                .filter(|n| *n <= 512 * 1024 * 1024)
++                .ok_or_else(|| fault("owning compiler facet metadata limit"))?;
++            prepared.install(&mut providers)?;
++            self.nested_bytes = retained;
++            self.compiler_profiles = Some(prepared);
+         }
+         super::source_declarative::SourceDeclarative::configure_captured_modules(&mut providers)?;
+         Self::install_macro_routes_with_modules(
+@@ -1242,12 +1256,19 @@
+             .as_mut()
+             .ok_or_else(|| fault("compiler discovery requires captured declarative indexes"))?
+             .2;
+-        for provider in providers.iter_mut() {
+-            if provider.compiler.is_some() {
+-                return Err(fault("compiler discovery configuration is already frozen"));
+-            }
+-            provider.compiler = Some(catalog.clone());
+-        }
++        let prepared = compiler_profiles::PreparedSourceCompilerFacets::prepare(
++            providers,
++            catalog,
++            64 * 1024 * 1024,
++        )?;
++        let retained = self
++            .nested_bytes
++            .checked_add(prepared.metadata_bytes())
++            .filter(|n| *n <= 512 * 1024 * 1024)
++            .ok_or_else(|| fault("owning compiler facet metadata limit"))?;
++        prepared.install(providers)?;
++        self.nested_bytes = retained;
++        self.compiler_profiles = Some(prepared);
+         Self::install_macro_routes_with_modules(
+             &mut self.graph,
+             providers,
+@@ -3729,17 +3750,34 @@
+                 routes.push(route.clone());
+             }
+         }
+-        if let Some(catalog) = providers.first().and_then(|p| p.compiler.as_ref()) {
+-            routes.push(std::sync::Arc::new(catalog.source_routes()?));
++        let mut compiler_catalogues = BTreeSet::new();
++        for provider in providers {
++            let Some(catalog) = &provider.compiler else {
++                continue;
++            };
++            if !compiler_catalogues.insert(catalog.owning_profile_identity()?) {
++                continue;
++            }
+             let core = catalog
+                 .definitions()
+                 .next()
+                 .ok_or_else(|| fault("compiler facet is empty"))?
+                 .defining_unit;
++            let mut exports = vec![catalog.source_routes()?];
+             for (_, unit) in catalog.facade_aliases() {
+                 if unit != core {
+-                    routes.push(std::sync::Arc::new(catalog.source_exports(unit)?));
+-                }
++                    exports.push(catalog.source_exports(unit)?);
++                }
++            }
++            for export in exports {
++                route_bytes = route_bytes
++                    .checked_add(export.metadata_bytes()?)
++                    .filter(|n| *n <= 64 * 1024 * 1024)
++                    .ok_or_else(|| fault("owning compiler route metadata limit"))?;
++                routes
++                    .try_reserve_exact(1)
++                    .map_err(|_| fault("owning compiler route allocation failed"))?;
++                routes.push(std::sync::Arc::new(export));
+             }
+         }
+         Ok(routes)
+@@ -3768,34 +3806,35 @@
+         namespaces: &mut crate::frontend::macro_names::MacroNamespaces,
+         providers: impl Iterator<Item = &'a super::source_declarative::SourceDeclarative>,
+     ) -> Result<(), Diagnostic> {
+-        let mut providers = providers;
+-        let Some(first) = providers.next() else {
+-            return Ok(());
+-        };
+-        if let Some(catalog) = first.compiler.as_ref() {
++        let mut installed: BTreeMap<ScopeKey, Digest> = BTreeMap::new();
++        let mut scope_bytes = 0usize;
++        for provider in providers {
++            let Some(catalog) = provider.compiler.as_ref() else {
++                continue;
++            };
++            catalog.install_injected_import(namespaces, provider.module_source())?;
+             let unit = catalog
+-                .runtime_prelude_unit(first.module_source().macro_prelude_policy()?.standard);
+-            let mut scopes = BTreeSet::new();
+-            let mut scope_bytes = 0usize;
+-            for provider in std::iter::once(first).chain(providers) {
+-                if let Some(catalog) = &provider.compiler {
+-                    catalog.install_injected_import(namespaces, provider.module_source())?;
+-                }
+-                for scope in provider.compiler_scopes() {
+-                    if scope.owner.is_none() {
+-                        if !scopes.contains(scope) {
+-                            scope_bytes = scope_bytes
+-                                .checked_add(scope.heap_bytes())
+-                                .and_then(|n| n.checked_add(128))
+-                                .filter(|n| *n <= 32 * 1024 * 1024)
+-                                .ok_or_else(|| fault("compiler prelude scope metadata limit"))?;
+-                        }
+-                        scopes.insert(scope.clone());
++                .runtime_prelude_unit(provider.module_source().macro_prelude_policy()?.standard);
++            let identity = catalog.owning_profile_identity()?;
++            let globals = catalog.compiler_globals()?;
++            for scope in provider
++                .compiler_scopes()
++                .filter(|scope| scope.owner.is_none())
++            {
++                if let Some(old) = installed.get(scope) {
++                    if *old != identity {
++                        return Err(fault(
++                            "one source scope has conflicting owning compiler facets",
++                        ));
+                     }
+-                }
+-            }
+-            let globals = catalog.compiler_globals()?;
+-            for scope in scopes {
++                    continue;
++                }
++                scope_bytes = scope_bytes
++                    .checked_add(scope.heap_bytes())
++                    .and_then(|n| n.checked_add(128))
++                    .filter(|n| *n <= 32 * 1024 * 1024)
++                    .ok_or_else(|| fault("compiler prelude scope metadata limit"))?;
++                installed.insert(scope.clone(), identity);
+                 for (name, definition) in &globals {
+                     namespaces.compiler_global(
+                         scope.crate_key,
+@@ -3803,7 +3842,7 @@
+                         definition.clone(),
+                     )?;
+                 }
+-                namespaces.set_prelude(scope, unit)?;
++                namespaces.set_prelude(scope.clone(), unit)?;
+             }
+         }
+         Ok(())
+@@ -6367,8 +6406,14 @@
+                 return Err(fault("module readiness metadata limit"));
+             }
+             let macros = staged.provider.completed_published_index()?;
+-            let mut key = crate::core::digest::StableEncoder::new("lrr/v2/module-source-readiness");
++            let mut key = crate::core::digest::StableEncoder::new("lrr/v3/module-source-readiness");
+             key.record(&self.key);
++            if let Some(prepared) = &self.compiler_profiles {
++                key.bool(true);
++                key.digest(prepared.identity());
++            } else {
++                key.bool(false);
++            }
+             key.digest(syntax.identity());
+             key.u32(self.namespace.tag());
+             key.u64(
+@@ -9584,6 +9629,9 @@
+         let Some((compile_env, engine, providers)) = &self.declarative else {
+             return Ok(());
+         };
++        if let Some(prepared) = &self.compiler_profiles {
++            prepared.revalidate(providers)?;
++        }
+         let mut records = Vec::new();
+         self.calls
+             .len()
+diff --git a/crates/lrr/src/expand/source_discovery/compiler_profiles_tests.rs b/crates/lrr/src/expand/source_discovery/compiler_profiles_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/expand/source_discovery/compiler_profiles_tests.rs
+@@ -0,0 +1,477 @@
++//! Actual owning-source compiler catalogue facts; no full fixture execution.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    db::{
++        dependency::{InputKey, InputValue},
++        key::OutlineKey,
++        memo::Database,
++    },
++    source::{
++        changes::{PreparedSourceInputs, SourceSelection, SourceSelectionOutcome, SourceUnitInput},
++        dependencies::SourceDependency,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::parse::ParseKey,
++};
++use std::sync::Arc;
++const ORIGINAL: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-const-eval.rs"
++);
++const CROSS: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/cross-crate-pat-span.rs"
++);
++const AUX: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/auxiliary/foreign-crate-macro-pat.rs"
++);
++fn unit(text: &str, path: &str, key: Digest, edition: u16) -> SourceUnitInput {
++    SourceUnitInput {
++        path: SourcePath::new(path).unwrap(),
++        crate_key: key,
++        module_path: vec![],
++        profile: ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        cfg: CfgSet::guest_default(),
++        blob: SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++    }
++}
++fn world(
++    units: Vec<SourceUnitInput>,
++    edges: Vec<SourceDependency>,
++) -> (Database, Vec<PreparedSourceView>) {
++    let selections: Vec<_> = units
++        .iter()
++        .map(|u| SourceSelection {
++            path: u.path.clone(),
++            outline: OutlineKey {
++                parse: ParseKey {
++                    content: u.blob.content(),
++                    profile: u.profile.clone(),
++                },
++                crate_key: u.crate_key,
++                module_path: u.module_path.clone(),
++                cfg: u.cfg.fingerprint(),
++            },
++        })
++        .collect();
++    let inputs =
++        PreparedSourceInputs::refresh_with_dependencies(None, units, Default::default(), edges)
++            .unwrap();
++    let mut db = Database::default();
++    inputs.publish(&mut db).unwrap();
++    db.begin_expansion_epoch(1).unwrap();
++    let views = selections
++        .iter()
++        .map(|s| {
++            let SourceSelectionOutcome::Selected(v) = inputs.select(s).unwrap() else {
++                panic!()
++            };
++            v
++        })
++        .collect();
++    (db, views)
++}
++fn providers(
++    views: &[PreparedSourceView],
++) -> Vec<crate::expand::source_declarative::SourceDeclarative> {
++    views
++        .iter()
++        .map(|v| crate::expand::source_declarative::SourceDeclarative::new(v.share()).unwrap())
++        .collect()
++}
++fn supplied(edition: u16) -> Arc<crate::frontend::compile_input_catalog::CompileInputCatalog> {
++    Arc::new(
++        crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(&ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        })
++        .unwrap(),
++    )
++}
++fn seal(d: &mut SourceDiscovery) -> Seal {
++    loop {
++        match d.poll().unwrap() {
++            SourceDiscoveryStep::Sealed(s) => return s,
++            SourceDiscoveryStep::NeedExpansion { request } => d
++                .admit_expansion(Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::NeedGeneratedExpansion { request } => d
++                .admit_expansion(Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::Incomplete { diagnostic, .. } => panic!(
++                "actual preparation incomplete: {} {}",
++                diagnostic.code, diagnostic.message
++            ),
++            _ => panic!("actual producer requires unestablished authority"),
++        }
++    }
++}
++#[test]
++fn unchanged_cross_crate_2021_root_2018_aux_get_their_actual_owning_facets() {
++    let root = Digest([11; 32]);
++    let aux = Digest([12; 32]);
++    let (_, views) = world(
++        vec![
++            unit(CROSS, "cross.rs", root, 2021),
++            unit(AUX, "aux.rs", aux, 2018),
++        ],
++        vec![SourceDependency {
++            consumer: root,
++            alias: "foreign_crate_macro_pat".into(),
++            provider: aux,
++        }],
++    );
++    let mut ps = providers(&views);
++    let plan = compiler_profiles::PreparedSourceCompilerFacets::prepare(
++        &ps,
++        supplied(2021),
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    plan.install(&mut ps).unwrap();
++    plan.revalidate(&ps).unwrap();
++    for (p, view) in ps.iter().zip(&views) {
++        let c = p.compiler.as_ref().unwrap();
++        let profile = &view.selection().outline.parse.profile;
++        assert!(c.canonical_standalone_member(profile).unwrap().is_some());
++        assert_eq!(
++            c.runtime_prelude_unit(false),
++            crate::facade::unit(profile, "core")
++        );
++        assert!(
++            c.attribute_catalog()
++                .unwrap()
++                .definitions()
++                .all(|d| d.definition_edition == profile.edition)
++        );
++    }
++    assert_ne!(
++        ps[0]
++            .compiler
++            .as_ref()
++            .unwrap()
++            .owning_profile_identity()
++            .unwrap(),
++        ps[1]
++            .compiler
++            .as_ref()
++            .unwrap()
++            .owning_profile_identity()
++            .unwrap()
++    );
++    // No original custom_matches! expansion or whole main is asserted.
++}
++#[test]
++fn unchanged_array_original_mixed_profiles_publish_actual_prefix_proofs() {
++    for (root_edition, aux_edition) in [(2015, 2024), (2024, 2015), (2018, 2021), (2021, 2018)] {
++        let root = Digest([13; 32]);
++        let aux = Digest([14; 32]);
++        let (mut db, views) = world(
++            vec![
++                unit(ORIGINAL, "root.rs", root, root_edition),
++                unit(ORIGINAL, "aux.rs", aux, aux_edition),
++            ],
++            vec![SourceDependency {
++                consumer: root,
++                alias: "aux".into(),
++                provider: aux,
++            }],
++        );
++        for target in &views {
++            for ns in [Namespace::Type, Namespace::Value] {
++                let mut d = SourceDiscovery::new(
++                    views.iter().map(|v| v.share()).collect(),
++                    target.outline().root_scope.clone(),
++                    ns,
++                    Digest([15; 32]),
++                    1,
++                )
++                .unwrap()
++                .with_declarative_compiler(
++                    Digest([16; 32]),
++                    crate::expand::source_declarative::engine_version(),
++                    supplied(root_edition),
++                )
++                .unwrap();
++                let sealed = seal(&mut d);
++                d.publish(&mut db).unwrap();
++                let Some((InputValue::DiscoverySeal(input), _)) =
++                    db.published_input(&InputKey::DiscoverySeal(sealed.key()))
++                else {
++                    panic!()
++                };
++                assert_eq!(input.nested_inert_proofs.len(), 2);
++                assert!(
++                    input
++                        .nested_inert_proofs
++                        .iter()
++                        .all(|p| p.attribute_facet().is_some())
++                );
++                for view in &views {
++                    assert!(
++                        input
++                            .nested_inert_proofs
++                            .iter()
++                            .any(|p| p.scan().parse() == &view.selection().outline.parse
++                                && p.scan().path() == &view.selection().path)
++                    );
++                }
++                assert!(input.records.is_empty());
++            }
++        }
++        // Both exact originals are configured source components; ARR/add are
++        // never evaluated and neither original is a full fixture pass.
++    }
++}
++#[test]
++fn source_order_does_not_copy_the_first_profile_catalogue() {
++    let (_, views) = world(
++        vec![
++            unit(ORIGINAL, "a.rs", Digest([17; 32]), 2015),
++            unit(ORIGINAL, "b.rs", Digest([18; 32]), 2024),
++        ],
++        vec![],
++    );
++    for order in [[0, 1], [1, 0]] {
++        let mut ps: Vec<_> = order
++            .iter()
++            .map(|i| {
++                crate::expand::source_declarative::SourceDeclarative::new(views[*i].share())
++                    .unwrap()
++            })
++            .collect();
++        let p = compiler_profiles::PreparedSourceCompilerFacets::prepare(
++            &ps,
++            supplied(2024),
++            64 * 1024 * 1024,
++        )
++        .unwrap();
++        p.install(&mut ps).unwrap();
++        p.revalidate(&ps).unwrap();
++        for source in &ps {
++            assert!(
++                source
++                    .compiler
++                    .as_ref()
++                    .unwrap()
++                    .canonical_standalone_member(
++                        &source.module_source().selection().outline.parse.profile
++                    )
++                    .unwrap()
++                    .is_some()
++            );
++        }
++    }
++}
++#[test]
++fn all_four_actual_profiles_have_distinct_core_facet_owners() {
++    let (_, views) = world(
++        [2015, 2018, 2021, 2024]
++            .into_iter()
++            .enumerate()
++            .map(|(i, e)| unit(ORIGINAL, &format!("p{i}.rs"), Digest([20 + i as u8; 32]), e))
++            .collect(),
++        vec![],
++    );
++    let mut ps = providers(&views);
++    let plan = compiler_profiles::PreparedSourceCompilerFacets::prepare(
++        &ps,
++        supplied(2024),
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    plan.install(&mut ps).unwrap();
++    let ids: BTreeSet<_> = ps
++        .iter()
++        .map(|p| {
++            p.compiler
++                .as_ref()
++                .unwrap()
++                .owning_profile_identity()
++                .unwrap()
++        })
++        .collect();
++    assert_eq!(ids.len(), 4);
++    plan.revalidate(&ps).unwrap();
++}
++#[test]
++fn foreign_standard_profile_is_not_accepted_when_no_selected_source_owns_it() {
++    let (_, views) = world(vec![unit(ORIGINAL, "a.rs", Digest([30; 32]), 2015)], vec![]);
++    let ps = providers(&views);
++    let e = compiler_profiles::PreparedSourceCompilerFacets::prepare(
++        &ps,
++        supplied(2024),
++        64 * 1024 * 1024,
++    )
++    .err()
++    .unwrap();
++    assert_eq!(e.code, "LRR-E-COMPILE-INPUT");
++    assert!(ps.iter().all(|p| p.compiler.is_none()));
++}
++#[test]
++fn explicit_custom_compile_input_data_is_not_upgraded_to_attribute_authority() {
++    let (_, views) = world(
++        vec![
++            unit(ORIGINAL, "a.rs", Digest([31; 32]), 2015),
++            unit(ORIGINAL, "b.rs", Digest([32; 32]), 2024),
++        ],
++        vec![],
++    );
++    let mut ps = providers(&views);
++    let custom = Arc::new(
++        crate::frontend::compile_input_catalog::CompileInputCatalog::new(
++            Digest([33; 32]),
++            2024,
++            [crate::expand::compile_input_identity::descriptor("concat")
++                .unwrap()
++                .unwrap()],
++        )
++        .unwrap(),
++    );
++    let id = custom.owning_profile_identity().unwrap();
++    let p = compiler_profiles::PreparedSourceCompilerFacets::prepare(&ps, custom, 64 * 1024 * 1024)
++        .unwrap();
++    p.install(&mut ps).unwrap();
++    for source in &ps {
++        let c = source.compiler.as_ref().unwrap();
++        assert_eq!(c.owning_profile_identity().unwrap(), id);
++        assert!(c.attribute_catalog().is_none());
++        assert!(
++            original_inert::matched_attribute_facet(source.module_source(), source)
++                .unwrap()
++                .is_none()
++        );
++    }
++}
++#[test]
++fn copied_publication_changed_profile_and_replaced_catalogue_refuse_replay() {
++    let (_, views) = world(
++        vec![
++            unit(ORIGINAL, "a.rs", Digest([34; 32]), 2015),
++            unit(ORIGINAL, "b.rs", Digest([35; 32]), 2024),
++        ],
++        vec![],
++    );
++    let mut ps = providers(&views);
++    let plan = compiler_profiles::PreparedSourceCompilerFacets::prepare(
++        &ps,
++        supplied(2024),
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    plan.install(&mut ps).unwrap();
++    ps[0].compiler = Some(supplied(2024));
++    assert!(plan.revalidate(&ps).is_err());
++    let (_, copied) = world(
++        vec![
++            unit(ORIGINAL, "a.rs", Digest([34; 32]), 2015),
++            unit(ORIGINAL, "b.rs", Digest([35; 32]), 2024),
++        ],
++        vec![],
++    );
++    let mut other = providers(&copied);
++    let q = compiler_profiles::PreparedSourceCompilerFacets::prepare(
++        &other,
++        supplied(2024),
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    q.install(&mut other).unwrap();
++    assert!(plan.revalidate(&other).is_err());
++}
++#[test]
++fn quota_and_already_installed_facets_refuse_before_mutating_any_owner() {
++    let (_, views) = world(
++        vec![
++            unit(ORIGINAL, "a.rs", Digest([36; 32]), 2015),
++            unit(ORIGINAL, "b.rs", Digest([37; 32]), 2024),
++        ],
++        vec![],
++    );
++    let mut ps = providers(&views);
++    assert!(
++        compiler_profiles::PreparedSourceCompilerFacets::prepare(&ps, supplied(2024), 1).is_err()
++    );
++    assert!(ps.iter().all(|p| p.compiler.is_none()));
++    let p = compiler_profiles::PreparedSourceCompilerFacets::prepare(
++        &ps,
++        supplied(2024),
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    ps[1].compiler = Some(supplied(2024));
++    assert!(p.install(&mut ps).is_err());
++    assert!(ps[0].compiler.is_none());
++}
++
++#[test]
++fn exact_owning_cfg_no_std_and_disabled_prelude_policy_survive_facet_preparation() {
++    let text = "#![cfg_attr(owning_core,no_std)]#![no_implicit_prelude]const X:usize=1;fn main(){}";
++    let mut root = unit(text, "cfg-root.rs", Digest([40; 32]), 2015);
++    root.cfg.atoms.insert("owning_core".into());
++    let aux = unit(text, "cfg-aux.rs", Digest([41; 32]), 2024);
++    let (_, views) = world(vec![root, aux], vec![]);
++    let mut ps = providers(&views);
++    let plan = compiler_profiles::PreparedSourceCompilerFacets::prepare(
++        &ps,
++        supplied(2015),
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    plan.install(&mut ps).unwrap();
++    plan.revalidate(&ps).unwrap();
++    for (i, p) in ps.iter().enumerate() {
++        let policy = p.module_source().macro_prelude_policy().unwrap();
++        assert_eq!(policy.standard, i == 1);
++        assert_eq!(policy.disabled, vec![Vec::<String>::new()]);
++        let profile = &p.module_source().selection().outline.parse.profile;
++        assert_eq!(
++            p.compiler
++                .as_ref()
++                .unwrap()
++                .runtime_prelude_unit(policy.standard),
++            crate::facade::unit(profile, if i == 1 { "std" } else { "core" })
++        );
++        assert_eq!(
++            p.module_source().selection().outline.cfg,
++            views[i].selection().outline.cfg
++        );
++    }
++    assert_ne!(
++        views[0].selection().outline.cfg,
++        views[1].selection().outline.cfg
++    );
++    // Facet ownership never overrides actual source cfg or disableable prelude policy.
++}
++#[test]
++fn mixed_owner_prefix_publication_refuses_a_new_epoch_without_source_advance() {
++    let (mut db, views) = world(
++        vec![
++            unit(ORIGINAL, "epoch-root.rs", Digest([42; 32]), 2015),
++            unit(ORIGINAL, "epoch-aux.rs", Digest([43; 32]), 2024),
++        ],
++        vec![],
++    );
++    let mut d = SourceDiscovery::new(
++        views.iter().map(|v| v.share()).collect(),
++        views[0].outline().root_scope.clone(),
++        Namespace::Type,
++        Digest([44; 32]),
++        1,
++    )
++    .unwrap()
++    .with_declarative_compiler(
++        Digest([45; 32]),
++        crate::expand::source_declarative::engine_version(),
++        supplied(2015),
++    )
++    .unwrap();
++    seal(&mut d);
++    assert_eq!(d.nested_inert_proofs.len(), 2);
++    let revision = db.source_revision();
++    db.begin_expansion_epoch(2).unwrap();
++    assert_eq!(db.source_revision(), revision);
++    assert!(d.publish(&mut db).is_err());
++}
+diff --git a/crates/lrr/src/expand/source_discovery.rs b/crates/lrr/src/expand/source_discovery.rs
+--- a/crates/lrr/src/expand/source_discovery.rs
++++ b/crates/lrr/src/expand/source_discovery.rs
+@@ -10826,3 +10826,7 @@
+ #[cfg(test)]
+ #[path = "source_discovery/original_inert_tests.rs"]
+ mod original_inert_tests;
++
++#[cfg(test)]
++#[path = "source_discovery/compiler_profiles_tests.rs"]
++mod compiler_profiles_tests;
+diff --git a/crates/lrr/src/expand/source_discovery/original_inert_tests.rs b/crates/lrr/src/expand/source_discovery/original_inert_tests.rs
+--- a/crates/lrr/src/expand/source_discovery/original_inert_tests.rs
++++ b/crates/lrr/src/expand/source_discovery/original_inert_tests.rs
+@@ -211,18 +211,90 @@
+     assert!(input.nested_inert_proofs[0].attribute_facet().is_some());
+ }
+ #[test]
+-fn genuine_imported_compiler_attribute_shadow_cannot_be_retired_as_allow() {
++fn genuine_prelude_imported_compiler_attribute_shadow_cannot_be_retired_as_allow() {
++    let text = "#![allow(dead_code)]extern crate core;use core::prelude::v1::test as allow;const X:usize=1;fn main(){}";
++    for edition in [2015, 2018, 2021, 2024] {
++        let (_, view) = prepare(text, edition, CfgSet::guest_default(), &[]);
++        let mut d = discovery(&view, Namespace::Type, true);
++        let providers = &d.declarative.as_ref().unwrap().2;
++        let names = SourceDiscovery::install_macro_routes_with_modules(
++            &mut d.graph,
++            providers,
++            &d.module_routes,
++            &d.nested_sources,
++            &d.nested_inert_proofs,
++        )
++        .unwrap();
++        let producer = *d.original_prefix_jobs.first().unwrap();
++        let scan = d.nested_sources[&0].scan();
++        let crate::frontend::macro_names::PathLookup::Defined(definition) =
++            crate::service::source_attribute_requests::SourceAttributeSelection::cold_lookup(
++                &view, scan, producer, &names,
++            )
++            .unwrap()
++        else {
++            panic!("actual prelude import must select its compiler Attribute definition")
++        };
++        let catalog = providers
++            .iter()
++            .find(|p| p.module_source().same_publication(&view))
++            .unwrap()
++            .compiler
++            .as_ref()
++            .unwrap();
++        let descriptor = catalog
++            .attribute_catalog()
++            .unwrap()
++            .select(&definition)
++            .unwrap()
++            .unwrap();
++        assert_eq!(
++            descriptor.action(),
++            crate::expand::builtin_attributes::BuiltinAttributeAction::Test
++        );
++        assert_eq!(
++            definition.defining_unit,
++            crate::facade::unit(&view.outline().profile, "core")
++        );
++        assert_eq!(definition.definition_edition, edition);
++        assert_eq!(descriptor.name(), "test");
++        let error = d
++            .poll()
++            .err()
++            .expect("actual selected Test Attribute facet conflicts with inert allow");
++        assert_eq!(error.code, "LRR-E-MACRO-AMBIGUOUS");
++        assert!(d.nested_inert_proofs.is_empty());
++        assert!(d.seal.is_none());
++    }
++}
++#[test]
++fn unavailable_core_root_test_preserves_exact_pending_import_frontier() {
++    // Actual canonical singleton 40806/59fbfe/101 on 0438a468 disclosed this
++    // precise Incomplete step, rather than selecting a root Test export.
+     let text =
+         "#![allow(dead_code)]extern crate core;use core::test as allow;const X:usize=1;fn main(){}";
+-    let (_, view) = prepare(text, 2024, CfgSet::guest_default(), &[]);
++    let (mut db, view) = prepare(text, 2024, CfgSet::guest_default(), &[]);
+     let mut d = discovery(&view, Namespace::Type, true);
+-    let error = d
+-        .poll()
+-        .err()
+-        .expect("selected Test Attribute facet must conflict with inert allow");
+-    assert_eq!(error.code, "LRR-E-MACRO-AMBIGUOUS");
++    let SourceDiscoveryStep::Incomplete {
++        diagnostic,
++        blocked,
++    } = d.poll().unwrap()
++    else {
++        panic!("unavailable root Test route must retain its observed prerequisite")
++    };
++    assert_eq!(diagnostic.code, "LRR-E-CATALOG-INCOMPLETE");
++    assert!(
++        diagnostic
++            .message
++            .contains("fixed point retains unresolved import or macro producers")
++    );
++    assert_eq!(blocked.len(), 2);
++    assert!(blocked.iter().all(|(_, inputs)| !inputs.is_empty()));
++    let prefix = *d.original_prefix_jobs.first().unwrap();
++    assert!(blocked.iter().any(|(_, inputs)| inputs.contains(&prefix)));
+     assert!(d.nested_inert_proofs.is_empty());
+     assert!(d.seal.is_none());
++    assert!(d.publish(&mut db).is_err());
+ }
+ #[test]
+ fn foreign_compiler_profile_cannot_mint_source_prefix_facet_proof() {

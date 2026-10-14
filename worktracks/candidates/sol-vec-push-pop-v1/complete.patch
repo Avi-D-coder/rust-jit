@@ -1,0 +1,893 @@
+--- a/crates/lrr/src/runtime/arena.rs
++++ b/crates/lrr/src/runtime/arena.rs
+@@ -214,6 +214,30 @@
+     pub(crate) fn get_mut(&mut self, handle: impl Into<Handle<T>>) -> Result<&mut T, Diagnostic> {
+         let index = self.index(handle.into())?;
+         Ok(self.entries[index].as_mut().expect("occupied arena entry"))
++    }
++    /// Checked owner-payload replacement only; entries/handles are unchanged.
++    pub(crate) fn payload_bytes(&self, handle: impl Into<Handle<T>>) -> Result<usize, Diagnostic> {
++        let index = self.index(handle.into())?;
++        Ok(self.owned_bytes[index])
++    }
++    pub(crate) fn replace_payload_bytes(
++        &mut self,
++        handle: impl Into<Handle<T>>,
++        bytes: usize,
++        budget: &mut RunBudget,
++    ) -> Result<(), Diagnostic> {
++        if self.epoch != budget.epoch {
++            return Err(stale());
++        }
++        let index = self.index(handle.into())?;
++        let old = self.owned_bytes[index];
++        if bytes >= old {
++            budget.charge(0, bytes.checked_sub(old).ok_or_else(resource)?)?;
++        } else {
++            budget.release(old.checked_sub(bytes).ok_or_else(resource)?);
++        }
++        self.owned_bytes[index] = bytes;
++        Ok(())
+     }
+     pub fn take(
+         &mut self,
+--- a/crates/lrr/src/runtime/cell.rs
++++ b/crates/lrr/src/runtime/cell.rs
+@@ -7,6 +7,8 @@
+ mod construction_cleanup;
+ #[path = "cell_vector.rs"]
+ mod vector;
++#[path = "cell_vector_mutation.rs"]
++mod vector_mutation;
+ use super::{
+     arena::{GuestArena, Handle, RunBudget, resource, stale},
+     object::{
+--- a/crates/lrr/src/runtime/cell_vector_mutation.rs
++++ b/crates/lrr/src/runtime/cell_vector_mutation.rs
+@@ -0,0 +1,463 @@
++//! Scalar-only checked Vec transactions; selection/phase/fuel belongs to the driver.
++use super::*;
++use crate::runtime::{
++    object::{MAX_CONSTRUCTION_FIELDS, VectorBuffer},
++    vector_mutation::{PreparedVectorMutation, VectorChange, VectorMember, VectorMutationResult},
++};
++impl GuestStore {
++    fn prepare_vector_change(
++        &self,
++        base: &Place,
++        incoming: Option<TicketId>,
++    ) -> Result<PreparedVectorMutation, PlaceFailure> {
++        let resolved = self.resolve_place(base)?;
++        if !resolved.writable {
++            return Err(access_fault().into());
++        }
++        let element = match self.types.descriptor(resolved.ty)?.key.as_ref() {
++            TypeKey::Facade {
++                family: crate::runtime::shape::FacadeType::Vec,
++                args,
++            } if args.len() == 1 => args[0],
++            _ => return Err(invalid().into()),
++        };
++        if self.types.descriptor(element)?.shape != ShapeCategory::Scalar || element.0 == 16 {
++            return Err(Diagnostic::new(
++                "LRR-E-UNSUPPORTED",
++                "Vec mutation requires pending general source/layout/drop integration".into(),
++            )
++            .into());
++        }
++        let (object, storage) = self.place_object(resolved.target.cell)?;
++        let buffer = storage.buffer.ok_or_else(lease_fault)?;
++        self.validate_vector_buffer_owner(object, buffer.generation)?;
++        if !storage.initialized.complete_value() {
++            return Err(ownership().into());
++        }
++        let count = storage.fields.len();
++        let old_count = u32::try_from(count).map_err(|_| resource())?;
++        let (new_count, capacity, generation, change) = if let Some(ticket) = incoming {
++            let value = self.peek_ticket(ticket)?;
++            self.object_owner(value, ValueOwner::Ticket(ticket))?;
++            if !matches!(value.kind, 1..=7) || TypeId(value.type_id) != element {
++                return Err(Diagnostic::new(
++                    "LRR-E-VEC-ELEMENT",
++                    "evaluated Vec push element differs from bound source element".into(),
++                )
++                .into());
++            }
++            let next = old_count.checked_add(1).ok_or_else(resource)?;
++            let grow = next > buffer.capacity;
++            let capacity = if grow {
++                if buffer.capacity == 0 {
++                    4
++                } else {
++                    buffer.capacity.checked_mul(2).ok_or_else(resource)?
++                }
++            } else {
++                buffer.capacity
++            };
++            let generation = if grow {
++                buffer.generation.checked_add(1).ok_or_else(resource)?
++            } else {
++                buffer.generation
++            };
++            (
++                next,
++                capacity,
++                generation,
++                VectorChange::Push {
++                    incoming: ticket,
++                    value,
++                    grow,
++                },
++            )
++        } else {
++            (
++                old_count.saturating_sub(1),
++                buffer.capacity,
++                buffer.generation,
++                VectorChange::Pop,
++            )
++        };
++        if capacity as usize > MAX_CONSTRUCTION_FIELDS || new_count > capacity {
++            return Err(resource().into());
++        }
++        let mut members = Vec::new();
++        members.try_reserve_exact(count).map_err(|_| resource())?;
++        for (i, cell) in storage.fields.iter().copied().enumerate() {
++            if self.cells.get(cell)?.owner
++                != (CellOwner::Buffer {
++                    object,
++                    index: u32::try_from(i).map_err(|_| resource())?,
++                })
++            {
++                return Err(ownership().into());
++            }
++            let stamp = self.place_stamp(cell)?;
++            let value = self.admit_live_value(cell)?;
++            if !matches!(value.kind, 1..=7) || TypeId(value.type_id) != element {
++                return Err(ownership().into());
++            }
++            members.push(VectorMember {
++                stamp,
++                value,
++                retired_epoch: if matches!(change, VectorChange::Push { grow: true, .. })
++                    || (matches!(change, VectorChange::Pop) && i + 1 == count)
++                {
++                    stamp.epoch.checked_add(1).ok_or_else(resource)?
++                } else {
++                    stamp.epoch
++                },
++            });
++        }
++        let mut fields = Vec::new();
++        fields
++            .try_reserve_exact(capacity as usize)
++            .map_err(|_| resource())?;
++        if !matches!(change, VectorChange::Push { grow: true, .. }) {
++            fields.extend(storage.fields.iter().copied().take(new_count as usize));
++        }
++        let initialized = InitializedFields::complete(new_count as usize)?;
++        let owned = fields
++            .capacity()
++            .checked_mul(std::mem::size_of::<CellId>())
++            .and_then(|n| n.checked_add(initialized.owned_bytes()?))
++            .ok_or_else(resource)?;
++        let mut projections = Vec::new();
++        checked_chain_bytes(base.projections.len())?;
++        projections
++            .try_reserve_exact(base.projections.len())
++            .map_err(|_| resource())?;
++        projections.extend_from_slice(&base.projections);
++        checked_chain_bytes(projections.capacity())?;
++        let metadata = members
++            .capacity()
++            .checked_mul(std::mem::size_of::<VectorMember>())
++            .and_then(|n| n.checked_add(owned))
++            .and_then(|n| {
++                n.checked_add(
++                    projections
++                        .capacity()
++                        .checked_mul(std::mem::size_of::<Projection>())?,
++                )
++            })
++            .filter(|n| *n <= 32 * 1024 * 1024)
++            .ok_or_else(resource)?;
++        let _ = metadata;
++        let plan = PreparedVectorMutation {
++            epoch: self.budget.epoch(),
++            base: Place {
++                root: base.root,
++                projections: projections.into_boxed_slice(),
++            },
++            container: resolved.target,
++            object,
++            ty: resolved.ty,
++            element,
++            old_capacity: buffer.capacity,
++            old_generation: buffer.generation,
++            capacity,
++            generation,
++            members,
++            fields,
++            initialized,
++            owned,
++            change,
++        };
++        self.preflight_vector_mutation(&plan)?;
++        Ok(plan)
++    }
++    pub fn prepare_vector_push(
++        &self,
++        base: &Place,
++        incoming: TicketId,
++    ) -> Result<PreparedVectorMutation, PlaceFailure> {
++        self.prepare_vector_change(base, Some(incoming))
++    }
++    pub fn prepare_vector_pop(&self, base: &Place) -> Result<PreparedVectorMutation, PlaceFailure> {
++        self.prepare_vector_change(base, None)
++    }
++    fn mutation_reservations(
++        &self,
++        plan: &PreparedVectorMutation,
++    ) -> Result<(usize, usize, u32, usize), Diagnostic> {
++        let (cells, objects, tickets) = match plan.change {
++            VectorChange::Push { grow: true, .. } => (
++                plan.members.len().checked_add(1).ok_or_else(resource)?,
++                1,
++                1,
++            ),
++            VectorChange::Push { grow: false, .. } => (1, 0, 1),
++            VectorChange::Pop => (0, 0, usize::from(!plan.members.is_empty())),
++        };
++        let handles = u32::try_from(
++            cells
++                .checked_add(objects)
++                .and_then(|n| n.checked_add(tickets))
++                .ok_or_else(resource)?,
++        )
++        .map_err(|_| resource())?;
++        let payload = if objects != 0 {
++            plan.owned
++        } else {
++            plan.owned
++                .saturating_sub(self.objects.payload_bytes(plan.object)?)
++        };
++        let bytes = payload
++            .checked_add(self.cells.reservation_bytes(cells)?)
++            .and_then(|n| n.checked_add(self.objects.reservation_bytes(objects).ok()?))
++            .and_then(|n| n.checked_add(self.tickets.reservation_bytes(tickets).ok()?))
++            .ok_or_else(resource)?;
++        Ok((cells, objects, handles, bytes))
++    }
++    fn preflight_vector_mutation(&self, plan: &PreparedVectorMutation) -> Result<(), PlaceFailure> {
++        if plan.epoch != self.budget.epoch() {
++            return Err(lease_fault().into());
++        }
++        let resolved = self.resolve_place(&plan.base)?;
++        if !resolved.writable {
++            return Err(access_fault().into());
++        }
++        if resolved.target != plan.container || resolved.ty != plan.ty {
++            return Err(lease_fault().into());
++        }
++        let (object, storage) = self.place_object(resolved.target.cell)?;
++        let buffer = storage.buffer.ok_or_else(lease_fault)?;
++        self.validate_vector_buffer_owner(object, buffer.generation)?;
++        if object != plan.object
++            || buffer.capacity != plan.old_capacity
++            || buffer.generation != plan.old_generation
++            || storage.fields.len() != plan.members.len()
++            || !storage.initialized.complete_value()
++        {
++            return Err(lease_fault().into());
++        }
++        for (i, m) in plan.members.iter().enumerate() {
++            if storage.fields.get(i) != Some(&m.stamp.cell)
++                || self.place_stamp(m.stamp.cell)? != m.stamp
++                || self.admit_live_value(m.stamp.cell)? != m.value
++            {
++                return Err(lease_fault().into());
++            }
++        }
++        if let VectorChange::Push {
++            incoming, value, ..
++        } = plan.change
++        {
++            if self.peek_ticket(incoming)? != value {
++                return Err(ownership().into());
++            }
++            self.object_owner(value, ValueOwner::Ticket(incoming))?;
++        }
++        self.prepare_initialization_change(plan.container.cell, true)?;
++        let (_, _, handles, bytes) = self.mutation_reservations(plan)?;
++        self.budget.check(handles, bytes)?;
++        Ok(())
++    }
++    /// Reserves every publication capacity before consuming any existing owner.
++    pub fn reserve_vector_mutation(
++        &mut self,
++        plan: &PreparedVectorMutation,
++    ) -> Result<(), PlaceFailure> {
++        self.preflight_vector_mutation(plan)?;
++        let (cells, objects, _, _) = self.mutation_reservations(plan)?;
++        self.cells.reserve(cells, &mut self.budget)?;
++        self.objects.reserve(objects, &mut self.budget)?;
++        let tickets = match plan.change {
++            VectorChange::Push { .. } => 1,
++            VectorChange::Pop => usize::from(!plan.members.is_empty()),
++        };
++        self.tickets.reserve(tickets, &mut self.budget)?;
++        self.preflight_vector_mutation(plan)
++    }
++    /// Standalone precise helper: opcode charge then reservation and element work.
++    /// Root first establishes actual source member/receiver/type admission.
++    pub fn execute_vector_mutation(
++        &mut self,
++        plan: PreparedVectorMutation,
++        fuel: &mut crate::vm::fuel::RunFuel,
++    ) -> Result<VectorMutationResult, PlaceFailure> {
++        self.preflight_vector_mutation(&plan)?;
++        fuel.charge()?;
++        self.commit_vector_mutation_admitted(plan, fuel)
++    }
++    /// Authoritative step has charged its opcode once; helper charges each
++    /// processed scalar element before work and rolls back unpublished growth.
++    pub(crate) fn commit_vector_mutation_admitted(
++        &mut self,
++        mut plan: PreparedVectorMutation,
++        fuel: &mut crate::vm::fuel::RunFuel,
++    ) -> Result<VectorMutationResult, PlaceFailure> {
++        self.reserve_vector_mutation(&plan)?;
++        match plan.change {
++            VectorChange::Push {
++                incoming,
++                value,
++                grow: true,
++            } => {
++                let mut allocated = Vec::new();
++                allocated
++                    .try_reserve_exact(plan.members.len().checked_add(1).ok_or_else(resource)?)
++                    .map_err(|_| resource())?;
++                let object = ObjectId::from(self.objects.allocate(
++                    ObjectRecord {
++                        type_id: plan.ty,
++                        storage: ObjectStorage::Constructing,
++                        owner: None,
++                    },
++                    plan.owned,
++                    &mut self.budget,
++                )?);
++                let build = (|| -> Result<TicketId, Diagnostic> {
++                    for (index, scalar) in plan
++                        .members
++                        .iter()
++                        .map(|m| m.value)
++                        .chain(std::iter::once(value))
++                        .enumerate()
++                    {
++                        fuel.charge()?;
++                        let cell = self.new_cell(
++                            StorageContract::Exact(plan.element),
++                            true,
++                            CellOwner::Buffer {
++                                object,
++                                index: u32::try_from(index).map_err(|_| resource())?,
++                            },
++                        )?;
++                        allocated.push(cell);
++                        self.cells.get_mut(cell)?.state = CellState::Live(scalar);
++                        plan.fields.push(cell);
++                    }
++                    self.tickets
++                        .allocate(
++                            TransferTicket {
++                                value: ValueRepr::unit(),
++                            },
++                            0,
++                            &mut self.budget,
++                        )
++                        .map(TicketId::from)
++                })();
++                let unit = match build {
++                    Ok(t) => t,
++                    Err(e) => {
++                        for cell in allocated {
++                            self.cells.take(cell, &mut self.budget)?;
++                        }
++                        self.objects.take(object, &mut self.budget)?;
++                        return Err(e.into());
++                    }
++                };
++                // All fallible validation/allocation precedes this publication transaction.
++                self.tickets.take(incoming, &mut self.budget)?;
++                for m in &plan.members {
++                    let cell = self.cells.get_mut(m.stamp.cell)?;
++                    cell.state = CellState::Dropped;
++                    cell.retired = true;
++                    cell.location_epoch = m.retired_epoch;
++                }
++                self.objects.get_mut(object)?.storage = ObjectStorage::Vector(AggregateStorage {
++                    fields: plan.fields,
++                    initialized: plan.initialized,
++                    next_cleanup: 0,
++                    pending_cleanup: None,
++                    variant: None,
++                    buffer: Some(VectorBuffer {
++                        capacity: plan.capacity,
++                        generation: plan.generation,
++                        dropping: false,
++                    }),
++                });
++                self.objects.get_mut(object)?.owner = Some(ValueOwner::Cell(plan.container.cell));
++                self.cells.get_mut(plan.container.cell)?.state = CellState::Live(ValueRepr {
++                    kind: 8,
++                    type_id: plan.ty.0,
++                    payload: object.bits(),
++                });
++                self.objects.take(plan.object, &mut self.budget)?;
++                self.commit_initialization_change(plan.container.cell, true)?;
++                Ok(VectorMutationResult::Pushed(unit))
++            }
++            VectorChange::Push {
++                incoming,
++                value,
++                grow: false,
++            } => {
++                fuel.charge()?;
++                let index = u32::try_from(plan.members.len()).map_err(|_| resource())?;
++                let cell = self.new_cell(
++                    StorageContract::Exact(plan.element),
++                    true,
++                    CellOwner::Buffer {
++                        object: plan.object,
++                        index,
++                    },
++                )?;
++                let unit = match self
++                    .tickets
++                    .allocate(
++                        TransferTicket {
++                            value: ValueRepr::unit(),
++                        },
++                        0,
++                        &mut self.budget,
++                    )
++                    .map(TicketId::from)
++                {
++                    Ok(t) => t,
++                    Err(e) => {
++                        self.cells.take(cell, &mut self.budget)?;
++                        return Err(e.into());
++                    }
++                };
++                self.objects
++                    .replace_payload_bytes(plan.object, plan.owned, &mut self.budget)?;
++                self.tickets.take(incoming, &mut self.budget)?;
++                self.cells.get_mut(cell)?.state = CellState::Live(value);
++                plan.fields.push(cell);
++                let ObjectStorage::Vector(storage) =
++                    &mut self.objects.get_mut(plan.object)?.storage
++                else {
++                    return Err(invalid().into());
++                };
++                storage.fields = plan.fields;
++                storage.initialized = plan.initialized;
++                self.commit_initialization_change(plan.container.cell, true)?;
++                Ok(VectorMutationResult::Pushed(unit))
++            }
++            VectorChange::Pop => {
++                let Some(member) = plan.members.last() else {
++                    return Ok(VectorMutationResult::Popped(None));
++                };
++                fuel.charge()?;
++                let ticket = self
++                    .tickets
++                    .allocate(
++                        TransferTicket {
++                            value: member.value,
++                        },
++                        0,
++                        &mut self.budget,
++                    )
++                    .map(TicketId::from)?;
++                self.objects
++                    .replace_payload_bytes(plan.object, plan.owned, &mut self.budget)?;
++                let cell = self.cells.get_mut(member.stamp.cell)?;
++                cell.state = CellState::Dropped;
++                cell.retired = true;
++                cell.location_epoch = member.retired_epoch;
++                let ObjectStorage::Vector(storage) =
++                    &mut self.objects.get_mut(plan.object)?.storage
++                else {
++                    return Err(invalid().into());
++                };
++                storage.fields = plan.fields;
++                storage.initialized = plan.initialized;
++                self.commit_initialization_change(plan.container.cell, true)?;
++                Ok(VectorMutationResult::Popped(Some(ticket)))
++            }
++        }
++    }
++}
+--- a/crates/lrr/src/runtime/mod.rs
++++ b/crates/lrr/src/runtime/mod.rs
+@@ -7,3 +7,5 @@
+ pub mod value;
+ 
+ pub mod buffer_slice;
++
++pub mod vector_mutation;
+--- a/crates/lrr/src/runtime/vector_mutation.rs
++++ b/crates/lrr/src/runtime/vector_mutation.rs
+@@ -0,0 +1,46 @@
++//! Private run-owned scalar Vec transaction; no source member or trait witness.
++use super::{
++    cell::{CellId, ObjectId, TicketId},
++    object::InitializedFields,
++    place::{CellStamp, Place},
++    shape::TypeId,
++    value::ValueRepr,
++};
++#[derive(Clone, Copy)]
++pub(super) struct VectorMember {
++    pub stamp: CellStamp,
++    pub value: ValueRepr,
++    pub retired_epoch: u32,
++}
++#[derive(Clone, Copy)]
++pub(super) enum VectorChange {
++    Push {
++        incoming: TicketId,
++        value: ValueRepr,
++        grow: bool,
++    },
++    Pop,
++}
++/// Opaque physical plan. Its private fields bind actual old storage and owner.
++pub struct PreparedVectorMutation {
++    pub(super) epoch: u32,
++    pub(super) base: Place,
++    pub(super) container: CellStamp,
++    pub(super) object: ObjectId,
++    pub(super) ty: TypeId,
++    pub(super) element: TypeId,
++    pub(super) old_capacity: u32,
++    pub(super) old_generation: u32,
++    pub(super) capacity: u32,
++    pub(super) generation: u32,
++    pub(super) members: Vec<VectorMember>,
++    pub(super) fields: Vec<CellId>,
++    pub(super) initialized: InitializedFields,
++    pub(super) owned: usize,
++    pub(super) change: VectorChange,
++}
++/// Physical output, not a guest Option constructor or selected library result.
++pub enum VectorMutationResult {
++    Pushed(TicketId),
++    Popped(Option<TicketId>),
++}
+--- a/xtask/tests/vector_push_pop.rs
++++ b/xtask/tests/vector_push_pop.rs
+@@ -0,0 +1,323 @@
++use lrr::{
++    runtime::{
++        cell::{CellId, CellOwner, GuestStore, RefId, StorageContract, TicketId},
++        place::Place,
++        reference::Access,
++        shape::{TypeId, TypeKey},
++        value::ValueRepr,
++        vector_mutation::VectorMutationResult,
++    },
++    vm::{fuel::RunFuel, vector::VectorConstruction},
++};
++fn empty(handles: u32) -> (GuestStore, CellId) {
++    empty_element(handles, TypeId(8))
++}
++fn empty_element(handles: u32, element: TypeId) -> (GuestStore, CellId) {
++    let mut s = GuestStore::new(1, handles, 16 << 20).unwrap();
++    let mut fuel = RunFuel::new(100).unwrap();
++    let mut v = VectorConstruction::begin(&mut s, &mut fuel, element, 0).unwrap();
++    let t = v.finish(&mut s, &mut fuel).unwrap();
++    let ty = TypeId(s.peek_ticket(t).unwrap().type_id);
++    let frame = s.new_frame_anchor().unwrap();
++    let c = s
++        .new_cell(
++            StorageContract::Exact(ty),
++            true,
++            CellOwner::FrameSlot { frame, slot: 0 },
++        )
++        .unwrap();
++    s.initialize(c, t).unwrap();
++    let slice = s.intern_type(TypeKey::Slice { element }).unwrap();
++    for target in [slice, element] {
++        for mutable in [false, true] {
++            s.intern_type(TypeKey::Ref { mutable, target }).unwrap();
++        }
++    }
++    (s, c)
++}
++fn idx(n: u64) -> ValueRepr {
++    ValueRepr::unsigned(TypeId(13), n).unwrap()
++}
++fn incoming(s: &mut GuestStore, n: i64) -> TicketId {
++    s.ticket(ValueRepr::signed(TypeId(8), n).unwrap()).unwrap()
++}
++fn push(s: &mut GuestStore, c: CellId, n: i64) {
++    let t = incoming(s, n);
++    let p = s.prepare_vector_push(&Place::cell(c), t).unwrap();
++    let mut fuel = RunFuel::new(100).unwrap();
++    let VectorMutationResult::Pushed(unit) = s.execute_vector_mutation(p, &mut fuel).unwrap()
++    else {
++        panic!("push result")
++    };
++    assert_eq!(s.peek_ticket(unit).unwrap(), ValueRepr::unit());
++    s.discard(unit).unwrap();
++    assert!(s.peek_ticket(t).is_err());
++}
++fn pop(s: &mut GuestStore, c: CellId) -> Option<TicketId> {
++    let p = s.prepare_vector_pop(&Place::cell(c)).unwrap();
++    let mut fuel = RunFuel::new(100).unwrap();
++    let VectorMutationResult::Popped(value) = s.execute_vector_mutation(p, &mut fuel).unwrap()
++    else {
++        panic!("pop result")
++    };
++    value
++}
++fn reference(s: &mut GuestStore, t: TicketId) -> RefId {
++    let ty = TypeId(s.peek_ticket(t).unwrap().type_id);
++    let frame = s.new_frame_anchor().unwrap();
++    let c = s
++        .new_cell(
++            StorageContract::Exact(ty),
++            true,
++            CellOwner::FrameSlot { frame, slot: 1 },
++        )
++        .unwrap();
++    s.initialize(c, t).unwrap();
++    s.reference_from_cell(c).unwrap()
++}
++fn window(s: &mut GuestStore, c: CellId, a: u64, b: u64) -> RefId {
++    let p = s
++        .prepare_vector_window(&Place::cell(c), idx(a), idx(b), Access::Shared)
++        .unwrap();
++    let t = s.commit_buffer_borrow(p).unwrap();
++    reference(s, t)
++}
++fn element(s: &mut GuestStore, r: RefId, i: u64) -> RefId {
++    let p = s.prepare_slice_element(r, idx(i), Access::Shared).unwrap();
++    let t = s.commit_buffer_borrow(p).unwrap();
++    reference(s, t)
++}
++#[test]
++fn vector_actual_original_three_pushes_and_scalar_pop_order() {
++    let original = include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/mutable-alias-vec.rs"
++    );
++    assert_eq!(original.matches("grow(&mut v)").count(), 3);
++    let (mut s, c) = empty(100000);
++    for _ in 0..3 {
++        push(&mut s, c, 1);
++    }
++    assert_eq!(s.vector_len(&Place::cell(c)).unwrap(), 3);
++    assert_eq!(s.vector_capacity(&Place::cell(c)).unwrap(), 4);
++    for _ in 0..3 {
++        let t = pop(&mut s, c).unwrap();
++        assert_eq!(
++            s.peek_ticket(t).unwrap(),
++            ValueRepr::signed(TypeId(8), 1).unwrap()
++        );
++        s.discard(t).unwrap();
++    }
++    assert!(pop(&mut s, c).is_none());
++}
++#[test]
++fn vector_actual_nonrealloc_push_pop_keep_prefix_and_never_resurrect_removed() {
++    let original =
++        include_str!("../../fixtures/upstream/rustc-checkout/library/alloctests/tests/vec.rs");
++    assert!(
++        original.contains("fn test_stable_pointers()") && original.contains("v.pop().unwrap();")
++    );
++    let (mut s, c) = empty(100000);
++    push(&mut s, c, 13);
++    let prefix = window(&mut s, c, 0, 1);
++    let first = element(&mut s, prefix, 0);
++    push(&mut s, c, 2);
++    let full = window(&mut s, c, 0, 2);
++    let removed = element(&mut s, full, 1);
++    let empty = window(&mut s, c, 2, 2);
++    let t = pop(&mut s, c).unwrap();
++    assert_eq!(
++        s.peek_ticket(t).unwrap(),
++        ValueRepr::signed(TypeId(8), 2).unwrap()
++    );
++    s.discard(t).unwrap();
++    assert_eq!(
++        s.read_reference(first).unwrap(),
++        ValueRepr::signed(TypeId(8), 13).unwrap()
++    );
++    assert_eq!(s.buffer_slice_len(prefix).unwrap(), 1);
++    assert_eq!(s.buffer_slice_len(empty).unwrap(), 0);
++    assert!(s.read_reference(removed).is_err());
++    assert!(s.buffer_slice_len(full).is_err());
++    push(&mut s, c, 99);
++    assert!(s.read_reference(removed).is_err());
++    assert!(s.buffer_slice_len(full).is_err());
++    assert_eq!(
++        s.read_reference(first).unwrap(),
++        ValueRepr::signed(TypeId(8), 13).unwrap()
++    );
++}
++#[test]
++fn vector_actual_reallocation_stales_all_old_windows_and_preserves_values() {
++    let (mut s, c) = empty(100000);
++    let old_empty = window(&mut s, c, 0, 0);
++    push(&mut s, c, 1);
++    assert!(s.buffer_slice_len(old_empty).is_err());
++    for n in 2..=4 {
++        push(&mut s, c, n);
++    }
++    let vec_reference = s.borrow_ticket(&Place::cell(c), Access::Shared).unwrap();
++    let vec_reference = reference(&mut s, vec_reference);
++    let full = window(&mut s, c, 0, 4);
++    let first = element(&mut s, full, 0);
++    let empty = window(&mut s, c, 4, 4);
++    push(&mut s, c, 5);
++    assert_eq!(s.vector_capacity(&Place::cell(c)).unwrap(), 8);
++    assert_eq!(s.vector_len(&Place::deref(vec_reference)).unwrap(), 5);
++    assert!(s.buffer_slice_len(full).is_err());
++    assert!(s.buffer_slice_len(empty).is_err());
++    assert!(s.read_reference(first).is_err());
++    let fresh = window(&mut s, c, 0, 5);
++    for i in 0..5 {
++        let r = element(&mut s, fresh, i);
++        assert_eq!(
++            s.read_reference(r).unwrap(),
++            ValueRepr::signed(TypeId(8), i as i64 + 1).unwrap()
++        );
++    }
++}
++#[test]
++fn vector_actual_push_admission_faults_preserve_input_and_prefix() {
++    let (mut s, c) = empty(100000);
++    push(&mut s, c, 1);
++    let prefix = window(&mut s, c, 0, 1);
++    let t = incoming(&mut s, 2);
++    let p = s.prepare_vector_push(&Place::cell(c), t).unwrap();
++    s.reserve_vector_mutation(&p).unwrap();
++    let before = s.budget().handles();
++    let mut fuel = RunFuel::new(0).unwrap();
++    assert!(s.execute_vector_mutation(p, &mut fuel).is_err());
++    assert_eq!(s.budget().handles(), before);
++    assert!(s.peek_ticket(t).is_ok());
++    assert_eq!(s.buffer_slice_len(prefix).unwrap(), 1);
++    let p = s.prepare_vector_push(&Place::cell(c), t).unwrap();
++    let mut fuel = RunFuel::new(1).unwrap();
++    fuel.cancellation().cancel();
++    assert!(s.execute_vector_mutation(p, &mut fuel).is_err());
++    assert_eq!(s.vector_len(&Place::cell(c)).unwrap(), 1);
++    let shared = s.borrow_ticket(&Place::cell(c), Access::Shared).unwrap();
++    let shared = reference(&mut s, shared);
++    assert!(s.prepare_vector_push(&Place::deref(shared), t).is_err());
++    assert!(s.prepare_vector_pop(&Place::deref(shared)).is_err());
++    let wrong = s.ticket(ValueRepr::boolean(true)).unwrap();
++    assert!(s.prepare_vector_push(&Place::cell(c), wrong).is_err());
++    assert!(s.peek_ticket(wrong).is_ok());
++}
++#[test]
++fn vector_actual_stale_plan_and_foreign_epoch_refuse_without_transfer() {
++    let (mut s, c) = empty(100000);
++    push(&mut s, c, 1);
++    let t = incoming(&mut s, 2);
++    let old = s.prepare_vector_push(&Place::cell(c), t).unwrap();
++    let value = pop(&mut s, c).unwrap();
++    s.discard(value).unwrap();
++    let before = s.budget().handles();
++    let mut fuel = RunFuel::new(100).unwrap();
++    assert!(s.execute_vector_mutation(old, &mut fuel).is_err());
++    assert_eq!(s.budget().handles(), before);
++    assert!(s.peek_ticket(t).is_ok());
++    let p = s.prepare_vector_push(&Place::cell(c), t).unwrap();
++    let mut other = GuestStore::new(2, 100000, 16 << 20).unwrap();
++    assert!(other.execute_vector_mutation(p, &mut fuel).is_err());
++}
++#[test]
++fn vector_actual_interrupted_growth_rolls_back_and_charges_only_processed_prefix() {
++    let (mut s, c) = empty(100000);
++    for n in 1..=4 {
++        push(&mut s, c, n);
++    }
++    let prefix = window(&mut s, c, 0, 1);
++    let first = element(&mut s, prefix, 0);
++    let t = incoming(&mut s, 5);
++    let p = s.prepare_vector_push(&Place::cell(c), t).unwrap();
++    let bytes = s.budget().bytes();
++    let mut fuel = RunFuel::new(2).unwrap();
++    assert!(s.execute_vector_mutation(p, &mut fuel).is_err());
++    assert_eq!(fuel.snapshot().used, 2);
++    assert_eq!(s.vector_len(&Place::cell(c)).unwrap(), 4);
++    assert_eq!(s.vector_capacity(&Place::cell(c)).unwrap(), 4);
++    assert!(s.peek_ticket(t).is_ok());
++    assert_eq!(
++        s.read_reference(first).unwrap(),
++        ValueRepr::signed(TypeId(8), 1).unwrap()
++    );
++    assert_eq!(s.buffer_slice_len(prefix).unwrap(), 1);
++    assert!(s.budget().bytes() >= bytes);
++}
++#[test]
++fn vector_actual_low_quota_refuses_growth_before_input_transfer() {
++    let (s, _) = empty(100000);
++    let baseline = s.budget().handles();
++    let (mut s, c) = empty(baseline + 3);
++    let t = incoming(&mut s, 1);
++    let before = s.budget().handles();
++    assert!(s.prepare_vector_push(&Place::cell(c), t).is_err());
++    assert_eq!(s.budget().handles(), before);
++    assert!(s.peek_ticket(t).is_ok());
++    assert_eq!(s.vector_len(&Place::cell(c)).unwrap(), 0);
++}
++
++#[test]
++fn vector_actual_unit_push_pop_preserve_cardinality_and_element_fuel() {
++    let original =
++        include_str!("../../fixtures/upstream/rustc-checkout/library/alloctests/tests/vec.rs");
++    assert!(original.contains("fn zero_sized_values()"));
++    let (mut s, c) = empty_element(100000, TypeId(1));
++    for count in 1..=5 {
++        let t = s.ticket(ValueRepr::unit()).unwrap();
++        let p = s.prepare_vector_push(&Place::cell(c), t).unwrap();
++        let mut fuel = RunFuel::new(100).unwrap();
++        let VectorMutationResult::Pushed(unit) = s.execute_vector_mutation(p, &mut fuel).unwrap()
++        else {
++            panic!("unit push")
++        };
++        s.discard(unit).unwrap();
++        assert_eq!(s.vector_len(&Place::cell(c)).unwrap(), count);
++        assert_eq!(
++            fuel.snapshot().used,
++            if count == 1 {
++                2
++            } else if count == 5 {
++                6
++            } else {
++                2
++            }
++        );
++    }
++    for count in (0..5).rev() {
++        let t = pop(&mut s, c).unwrap();
++        assert_eq!(s.peek_ticket(t).unwrap(), ValueRepr::unit());
++        s.discard(t).unwrap();
++        assert_eq!(s.vector_len(&Place::cell(c)).unwrap(), count);
++    }
++    assert!(pop(&mut s, c).is_none());
++}
++#[test]
++fn vector_actual_growth_then_pop_cleanup_drops_remaining_in_order() {
++    let (mut s, c) = empty(100000);
++    for n in 1..=7 {
++        push(&mut s, c, n);
++    }
++    let t = pop(&mut s, c).unwrap();
++    s.discard(t).unwrap();
++    let parent = s.begin_drop(c).unwrap();
++    let mut actual = Vec::new();
++    loop {
++        match s.aggregate_cleanup_transfer(parent).unwrap() {
++            lrr::runtime::cell::AggregateCleanupTransfer::Field { cell, ticket } => {
++                actual.push(s.peek_ticket(ticket).unwrap());
++                s.discard(ticket).unwrap();
++                s.finish_aggregate_cleanup_field(parent, cell, ticket)
++                    .unwrap();
++            }
++            lrr::runtime::cell::AggregateCleanupTransfer::Complete => break,
++            lrr::runtime::cell::AggregateCleanupTransfer::Skipped => panic!("live scalar skipped"),
++        }
++    }
++    s.discard(parent).unwrap();
++    assert_eq!(
++        actual,
++        (1..=6)
++            .map(|n| ValueRepr::signed(TypeId(8), n).unwrap())
++            .collect::<Vec<_>>()
++    );
++}

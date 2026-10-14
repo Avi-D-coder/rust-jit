@@ -1,0 +1,2330 @@
+diff --git a/crates/lrr/src/frontend/mod.rs b/crates/lrr/src/frontend/mod.rs
+--- a/crates/lrr/src/frontend/mod.rs
++++ b/crates/lrr/src/frontend/mod.rs
+@@ -62,3 +62,5 @@
+ pub mod source_view;
+ 
+ pub mod primitive_constants;
++
++pub mod constants;
+diff --git a/crates/lrr/src/frontend/constants.rs b/crates/lrr/src/frontend/constants.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/constants.rs
+@@ -0,0 +1,1072 @@
++//! Separate pure constant evaluator. Never allocates live guest state or invokes a provider.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    ir::op::{DecodedLiteral, NumericBinary, PrimitiveType},
++    runtime::{
++        cell::GuestStore,
++        shape::{PrimitiveIdentity, TypeId},
++        value::ValueRepr,
++    },
++    syntax::{
++        pure_constants::{
++            ConstType, Constant, ConstantPlan, ConstantSource, ExprRef, Function, Node, Statement,
++        },
++        spans::SourceRange,
++    },
++    vm::numeric::{self, NumericFailure},
++};
++use std::{
++    collections::{BTreeMap, BTreeSet},
++    sync::Arc,
++};
++const MAX_STEPS: u32 = 100_000;
++const MAX_FRAMES: u16 = 128;
++const MAX_BYTES: usize = 1 << 20;
++fn fault(code: &'static str, message: &str) -> Diagnostic {
++    Diagnostic::new(code, message.into())
++}
++#[derive(Debug, Clone)]
++enum Immutable {
++    Scalar(ValueRepr),
++    Array(Arc<[ConstValue]>),
++}
++/// Fields are private: no guest/object/reference/function handle can enter a constant value.
++#[derive(Debug, Clone)]
++pub struct ConstValue(Immutable);
++impl ConstValue {
++    pub fn from_scalar(value: ValueRepr) -> Result<Self, Diagnostic> {
++        if !matches!(value.kind, 1..=7) {
++            return Err(fault(
++                "LRR-E-CONST-TYPE",
++                "constant scalar cannot contain a guest handle",
++            ));
++        }
++        value.validate_scalar()?;
++        Ok(Self(Immutable::Scalar(value)))
++    }
++    pub fn scalar(&self) -> Option<ValueRepr> {
++        match &self.0 {
++            Immutable::Scalar(v) => Some(*v),
++            _ => None,
++        }
++    }
++    pub fn elements(&self) -> Option<&[ConstValue]> {
++        match &self.0 {
++            Immutable::Array(es) => Some(es),
++            _ => None,
++        }
++    }
++    pub(crate) fn matches_scalar(&self, ty: PrimitiveType) -> Result<bool, Diagnostic> {
++        Ok(self.scalar().is_some_and(|v| {
++            Some(v.type_id) == PrimitiveIdentity::from_recipe(ty).ok().map(|id| id.id().0)
++        }))
++    }
++    fn field_bytes(&self) -> Option<usize> {
++        match &self.0 {
++            Immutable::Scalar(_) => Some(17),
++            Immutable::Array(es) => es
++                .iter()
++                .try_fold(9usize, |n, e| n.checked_add(e.field_bytes()?)),
++        }
++    }
++    fn serialized_bytes(&self) -> Option<usize> {
++        self.field_bytes()?
++            .checked_add(8)?
++            .checked_add(Self::DOMAIN.len())
++    }
++}
++impl StableEncode for ConstValue {
++    const DOMAIN: &'static str = "lrr/v1/immutable-constant-value";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        match &self.0 {
++            Immutable::Scalar(v) => {
++                e.u8(1);
++                e.u32(v.kind);
++                e.u32(v.type_id);
++                e.u64(v.payload)
++            }
++            Immutable::Array(es) => {
++                e.u8(2);
++                e.sequence(es, |e, v| v.encode_fields(e))
++            }
++        }
++    }
++}
++#[derive(Debug, Clone, Copy)]
++pub struct ConstLimits {
++    steps: u32,
++    frames: u16,
++    result_bytes: usize,
++}
++impl Default for ConstLimits {
++    fn default() -> Self {
++        Self {
++            steps: MAX_STEPS,
++            frames: MAX_FRAMES,
++            result_bytes: MAX_BYTES,
++        }
++    }
++}
++impl ConstLimits {
++    pub fn new(steps: u32, frames: u16, result_bytes: usize) -> Result<Self, Diagnostic> {
++        if steps == 0
++            || steps > MAX_STEPS
++            || frames == 0
++            || frames > MAX_FRAMES
++            || result_bytes == 0
++            || result_bytes > MAX_BYTES
++        {
++            return Err(fault(
++                "LRR-E-CONST-LIMIT",
++                "constant limits exceed the live profile",
++            ));
++        }
++        Ok(Self {
++            steps,
++            frames,
++            result_bytes,
++        })
++    }
++}
++#[derive(Debug, Clone)]
++pub struct ConstDependency {
++    definition: Digest,
++    body: crate::source::manifest::BodyKey,
++    arguments: Vec<Digest>,
++}
++impl ConstDependency {
++    pub fn definition(&self) -> Digest {
++        self.definition
++    }
++    pub fn body(&self) -> &crate::source::manifest::BodyKey {
++        &self.body
++    }
++    pub fn arguments(&self) -> &[Digest] {
++        &self.arguments
++    }
++}
++impl StableEncode for ConstDependency {
++    const DOMAIN: &'static str = "lrr/v1/pure-constant-dependency";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.digest(self.definition);
++        e.record(&self.body);
++        e.sequence(&self.arguments, |e, a| e.digest(*a))
++    }
++}
++#[derive(Debug)]
++pub struct ConstEvaluation {
++    value: ConstValue,
++    source: Digest,
++    cfg: Digest,
++    plan: Digest,
++    dependencies: Vec<ConstDependency>,
++    steps: u32,
++}
++impl ConstEvaluation {
++    pub fn value(&self) -> &ConstValue {
++        &self.value
++    }
++    pub fn source(&self) -> Digest {
++        self.source
++    }
++    pub fn cfg(&self) -> Digest {
++        self.cfg
++    }
++    pub fn plan(&self) -> Digest {
++        self.plan
++    }
++    pub fn dependencies(&self) -> &[ConstDependency] {
++        &self.dependencies
++    }
++    pub fn steps(&self) -> u32 {
++        self.steps
++    }
++    /// Pure admission calculation; the runtime must supply its actual element layout/limits.
++    pub fn admit_array_length(
++        &self,
++        element_bytes: usize,
++        max_elements: usize,
++        max_allocation_bytes: usize,
++    ) -> Result<usize, Diagnostic> {
++        let value = self
++            .value
++            .scalar()
++            .ok_or_else(|| fault("LRR-E-CONST-TYPE", "array length is not scalar"))?;
++        if value.kind != 5 || value.type_id != 13 {
++            return Err(fault(
++                "LRR-E-CONST-TYPE",
++                "array length is not exact nonnegative usize",
++            ));
++        }
++        let count = usize::try_from(value.payload)
++            .map_err(|_| fault("LRR-E-CONST-LIMIT", "array length exceeds host width"))?;
++        if count > max_elements
++            || count
++                .checked_mul(element_bytes)
++                .is_none_or(|n| n > max_allocation_bytes)
++        {
++            return Err(fault(
++                "LRR-E-CONST-LIMIT",
++                "array length exceeds element/allocation limits",
++            ));
++        }
++        Ok(count)
++    }
++}
++#[derive(Debug)]
++pub struct ConstFailure {
++    diagnostic: Diagnostic,
++    source: Digest,
++    range: SourceRange,
++}
++impl ConstFailure {
++    pub fn diagnostic(&self) -> &Diagnostic {
++        &self.diagnostic
++    }
++    pub fn source(&self) -> Digest {
++        self.source
++    }
++    pub fn range(&self) -> SourceRange {
++        self.range
++    }
++}
++#[derive(Debug)]
++enum Flow {
++    Value(ConstValue),
++    Return(ConstValue),
++}
++impl Flow {
++    fn into_value(self) -> ConstValue {
++        match self {
++            Self::Value(v) | Self::Return(v) => v,
++        }
++    }
++}
++#[derive(Clone, Copy)]
++enum Expected {
++    Scalar(PrimitiveType),
++    Array(PrimitiveType, usize),
++}
++struct Evaluator<'a> {
++    source: &'a ConstantSource,
++    limits: ConstLimits,
++    steps: u32,
++    frames: u16,
++    depth: u16,
++    returns: Vec<Expected>,
++    metadata_bytes: usize,
++    active: BTreeSet<Digest>,
++    active_calls: BTreeSet<Digest>,
++    dependencies: BTreeMap<Digest, ConstDependency>,
++    nodes: BTreeMap<(u32, u32), Node>,
++}
++macro_rules! take {
++    ($this:ident,$expr:expr,$hint:expr,$locals:expr,$allow:expr) => {
++        match $this.expr($expr, $hint, $locals, $allow)? {
++            Flow::Value(v) => v,
++            other => return Ok(other),
++        }
++    };
++}
++fn primitive_id(ty: PrimitiveType) -> Result<TypeId, Diagnostic> {
++    Ok(PrimitiveIdentity::from_recipe(ty)?.id())
++}
++fn scalar(v: ConstValue) -> Result<ValueRepr, Diagnostic> {
++    v.scalar()
++        .ok_or_else(|| fault("LRR-E-CONST-TYPE", "constant operation requires a scalar"))
++}
++impl Evaluator<'_> {
++    fn failure(&self, diagnostic: Diagnostic, range: SourceRange) -> ConstFailure {
++        ConstFailure {
++            diagnostic,
++            source: self.source.source(),
++            range,
++        }
++    }
++    fn limit(&self, at: SourceRange) -> ConstFailure {
++        self.failure(
++            fault("LRR-E-CONST-LIMIT", "constant resource limit reached"),
++            at,
++        )
++    }
++    fn checked_value(
++        &self,
++        value: ConstValue,
++        at: SourceRange,
++    ) -> Result<ConstValue, ConstFailure> {
++        if value
++            .serialized_bytes()
++            .is_none_or(|n| n > self.limits.result_bytes)
++        {
++            return Err(self.limit(at));
++        }
++        Ok(value)
++    }
++    fn node(&mut self, expr: &ExprRef) -> Result<Node, ConstFailure> {
++        if let Some(n) = self.nodes.get(&expr.key()) {
++            let bytes = n.owned_bytes().ok_or_else(|| self.limit(expr.range()))?;
++            self.metadata_bytes = self
++                .metadata_bytes
++                .checked_add(bytes)
++                .filter(|n| *n <= 32 * 1024 * 1024)
++                .ok_or_else(|| self.limit(expr.range()))?;
++            return Ok(n.clone());
++        }
++        let n = self
++            .source
++            .node(expr)
++            .map_err(|d| self.failure(d, expr.range()))?;
++        if self.nodes.len() >= MAX_STEPS as usize {
++            return Err(self.limit(expr.range()));
++        }
++        let bytes = n.owned_bytes().ok_or_else(|| self.limit(expr.range()))?;
++        self.admit_metadata(bytes, expr.range())?;
++        self.nodes.insert(expr.key(), n.clone());
++        Ok(n)
++    }
++    fn numeric(
++        &self,
++        result: Result<ValueRepr, NumericFailure>,
++        at: SourceRange,
++    ) -> Result<ConstValue, ConstFailure> {
++        let v = result.map_err(|e| {
++            self.failure(
++                match e {
++                    NumericFailure::GuestPanic(p) => fault("LRR-E-CONST-PANIC", p.description()),
++                    NumericFailure::RuntimeFault(d) => d,
++                },
++                at,
++            )
++        })?;
++        ConstValue::from_scalar(v).map_err(|d| self.failure(d, at))
++    }
++    fn ty(&mut self, ty: &ConstType, at: SourceRange) -> Result<Expected, ConstFailure> {
++        match ty {
++            ConstType::Scalar(p) => Ok(Expected::Scalar(*p)),
++            ConstType::Array(p, len) => {
++                let value = self
++                    .expr(
++                        len,
++                        Some(Expected::Scalar(PrimitiveType::Usize)),
++                        &mut BTreeMap::new(),
++                        false,
++                    )?
++                    .into_value();
++                let count = self.length(value, at)?;
++                Ok(Expected::Array(*p, count))
++            }
++        }
++    }
++    fn length(&self, value: ConstValue, at: SourceRange) -> Result<usize, ConstFailure> {
++        let scalar = scalar(value).map_err(|d| self.failure(d, at))?;
++        if scalar.kind != 5 || scalar.type_id != 13 {
++            return Err(self.failure(
++                fault(
++                    "LRR-E-CONST-TYPE",
++                    "array length requires exact nonnegative usize",
++                ),
++                at,
++            ));
++        }
++        usize::try_from(scalar.payload).map_err(|_| self.limit(at))
++    }
++    fn admit_metadata(&mut self, bytes: usize, at: SourceRange) -> Result<(), ConstFailure> {
++        self.metadata_bytes = self
++            .metadata_bytes
++            .checked_add(bytes)
++            .filter(|n| *n <= 32 * 1024 * 1024)
++            .ok_or_else(|| self.limit(at))?;
++        Ok(())
++    }
++    fn dependency(
++        &mut self,
++        declaration: &crate::syntax::pure_constants::ConstantDeclaration,
++        args: &[ConstValue],
++        at: SourceRange,
++    ) -> Result<(), ConstFailure> {
++        let dependency = ConstDependency {
++            definition: declaration.definition(),
++            body: declaration.body().clone(),
++            arguments: args.iter().map(StableEncode::fingerprint).collect(),
++        };
++        let key = dependency.fingerprint();
++        if !self.dependencies.contains_key(&key) {
++            self.admit_metadata(
++                args.len()
++                    .checked_mul(32)
++                    .and_then(|n| n.checked_add(160))
++                    .ok_or_else(|| self.limit(at))?,
++                at,
++            )?;
++            self.dependencies.insert(key, dependency);
++        }
++        Ok(())
++    }
++    fn constant(&mut self, c: Constant) -> Result<ConstValue, ConstFailure> {
++        let at = c.body.range();
++        if !self.active.insert(c.declaration.definition()) {
++            return Err(self.failure(
++                fault("LRR-E-CONST-CYCLE", "active named constant cycle"),
++                at,
++            ));
++        }
++        if self.frames >= self.limits.frames {
++            self.active.remove(&c.declaration.definition());
++            return Err(self.limit(at));
++        }
++        self.frames += 1;
++        self.dependency(&c.declaration, &[], at)?;
++        let previous_depth = std::mem::replace(&mut self.depth, 0);
++        let value = (|| {
++            let expected = self.ty(&c.ty, at)?;
++            let value = self
++                .expr(&c.body, Some(expected), &mut BTreeMap::new(), false)?
++                .into_value();
++            self.check_expected(&value, expected, at)?;
++            Ok(value)
++        })();
++        self.depth = previous_depth;
++        self.frames -= 1;
++        self.active.remove(&c.declaration.definition());
++        value
++    }
++    fn function(
++        &mut self,
++        f: Function,
++        args: Vec<ConstValue>,
++        at: SourceRange,
++    ) -> Result<ConstValue, ConstFailure> {
++        if self.frames >= self.limits.frames {
++            return Err(self.limit(at));
++        }
++        if f.params.len() != args.len() {
++            return Err(self.failure(
++                fault(
++                    "LRR-E-CONST-TYPE",
++                    "const-call argument cardinality differs",
++                ),
++                at,
++            ));
++        }
++        let bytes = f
++            .params
++            .iter()
++            .try_fold(0usize, |n, (name, _)| {
++                n.checked_add(name.len())?.checked_add(192)
++            })
++            .ok_or_else(|| self.limit(at))?;
++        self.admit_metadata(bytes, at)?;
++        let mut locals = BTreeMap::new();
++        for ((name, ty), value) in f.params.iter().zip(&args) {
++            if !value.matches_scalar(*ty).map_err(|d| self.failure(d, at))? {
++                return Err(self.failure(
++                    fault("LRR-E-CONST-TYPE", "const-call argument type differs"),
++                    at,
++                ));
++            }
++            locals.insert(name.clone(), value.clone());
++        }
++        let mut encoder = StableEncoder::new("lrr/v1/active-pure-const-call");
++        encoder.digest(f.declaration.definition());
++        encoder.record(f.declaration.body());
++        encoder.sequence(&args, |e, v| e.record(v));
++        let call_key = encoder.finish();
++        if !self.active_calls.insert(call_key) {
++            return Err(self.failure(
++                fault(
++                    "LRR-E-CONST-CYCLE",
++                    "active const-call cycle with identical pure arguments",
++                ),
++                at,
++            ));
++        }
++        self.frames += 1;
++        self.dependency(&f.declaration, &args, at)?;
++        let previous_depth = std::mem::replace(&mut self.depth, 0);
++        let value = (|| {
++            let expected = self.ty(&f.result, at)?;
++            self.returns.push(expected);
++            let value = self.expr(&f.body, Some(expected), &mut locals, true);
++            self.returns.pop();
++            let value = value?.into_value();
++            self.check_expected(&value, expected, at)?;
++            Ok(value)
++        })();
++        self.depth = previous_depth;
++        self.frames -= 1;
++        self.active_calls.remove(&call_key);
++        value
++    }
++    fn hint(
++        &mut self,
++        e: &ExprRef,
++        locals: &BTreeMap<String, ConstValue>,
++        depth: u16,
++    ) -> Result<Option<PrimitiveType>, ConstFailure> {
++        if depth >= 128 {
++            return Err(self.limit(e.range()));
++        }
++        Ok(match self.node(e)? {
++            Node::Bool(_) | Node::Logic(..) => Some(PrimitiveType::Bool),
++            Node::Char(_) => Some(PrimitiveType::Char),
++            Node::Byte(_) => Some(PrimitiveType::U8),
++            Node::Unit => Some(PrimitiveType::Unit),
++            Node::Integer(DecodedLiteral::Integer { suffix, .. }) => suffix,
++            Node::Float(_, suffix) => suffix,
++            Node::Parentheses(e) | Node::Unary(_, e) => self.hint(&e, locals, depth + 1)?,
++            Node::Cast(_, p) => Some(p),
++            Node::Binary(op, a, b) => {
++                if comparison(op) {
++                    Some(PrimitiveType::Bool)
++                } else {
++                    self.hint(&a, locals, depth + 1)?
++                        .or(self.hint(&b, locals, depth + 1)?)
++                }
++            }
++            Node::Path(name) => {
++                if let Some(v) = locals.get(&name) {
++                    primitive_for_value(v.scalar())
++                } else {
++                    let c = self
++                        .source
++                        .named_constant(&name)
++                        .map_err(|d| self.failure(d, e.range()))?;
++                    match c.ty {
++                        ConstType::Scalar(p) => Some(p),
++                        _ => None,
++                    }
++                }
++            }
++            _ => None,
++        })
++    }
++    fn expr(
++        &mut self,
++        e: &ExprRef,
++        hint: Option<Expected>,
++        locals: &mut BTreeMap<String, ConstValue>,
++        allow_return: bool,
++    ) -> Result<Flow, ConstFailure> {
++        self.steps = self
++            .steps
++            .checked_add(1)
++            .filter(|s| *s <= self.limits.steps)
++            .ok_or_else(|| self.limit(e.range()))?;
++        if self.depth >= 128 {
++            return Err(self.limit(e.range()));
++        }
++        self.depth += 1;
++        let result = self.inner(e, hint, locals, allow_return);
++        self.depth -= 1;
++        result
++    }
++    fn inner(
++        &mut self,
++        e: &ExprRef,
++        hint: Option<Expected>,
++        locals: &mut BTreeMap<String, ConstValue>,
++        allow_return: bool,
++    ) -> Result<Flow, ConstFailure> {
++        let at = e.range();
++        let scalar_hint = match hint {
++            Some(Expected::Scalar(p)) => Some(p),
++            _ => None,
++        };
++        let value = match self.node(e)? {
++            Node::Integer(DecodedLiteral::Integer {
++                negative,
++                magnitude,
++                suffix,
++                ..
++            }) => {
++                let ty = suffix.or(scalar_hint).unwrap_or(PrimitiveType::I32);
++                if suffix.is_some() && scalar_hint.is_some_and(|p| Some(p) != suffix) {
++                    return Err(self.failure(
++                        fault(
++                            "LRR-E-CONST-TYPE",
++                            "constant integer suffix conflicts with context",
++                        ),
++                        at,
++                    ));
++                }
++                let id = primitive_id(ty).map_err(|d| self.failure(d, at))?;
++                ConstValue::from_scalar(
++                    GuestStore::preview_integer(negative, magnitude, id)
++                        .map_err(|d| self.failure(d, at))?,
++                )
++                .map_err(|d| self.failure(d, at))?
++            }
++            Node::Integer(_) => {
++                return Err(self.failure(
++                    fault("LRR-E-CONST-TYPE", "invalid constant integer spelling"),
++                    at,
++                ));
++            }
++            Node::Bool(b) => {
++                ConstValue::from_scalar(ValueRepr::boolean(b)).map_err(|d| self.failure(d, at))?
++            }
++            Node::Char(c) => {
++                ConstValue::from_scalar(ValueRepr::character(c)).map_err(|d| self.failure(d, at))?
++            }
++            Node::Byte(b) => ConstValue::from_scalar(
++                ValueRepr::unsigned(TypeId(9), u64::from(b)).map_err(|d| self.failure(d, at))?,
++            )
++            .map_err(|d| self.failure(d, at))?,
++            Node::Unit => {
++                ConstValue::from_scalar(ValueRepr::unit()).map_err(|d| self.failure(d, at))?
++            }
++            Node::Float(text, suffix) => {
++                let p = suffix.or(scalar_hint).unwrap_or(PrimitiveType::F64);
++                ConstValue::from_scalar(
++                    GuestStore::preview_float(
++                        &text,
++                        primitive_id(p).map_err(|d| self.failure(d, at))?,
++                    )
++                    .map_err(|d| self.failure(d, at))?,
++                )
++                .map_err(|d| self.failure(d, at))?
++            }
++            Node::Parentheses(child) => return self.expr(&child, hint, locals, allow_return),
++            Node::Path(name) => {
++                if let Some(v) = locals.get(&name) {
++                    v.clone()
++                } else {
++                    let c = self
++                        .source
++                        .named_constant(&name)
++                        .map_err(|d| self.failure(d, at))?;
++                    self.constant(c)?
++                }
++            }
++            Node::Unary(op, child) => {
++                let v = take!(self, &child, hint, locals, allow_return);
++                let v = scalar(v).map_err(|d| self.failure(d, at))?;
++                self.numeric(numeric::unary(op, v), at)?
++            }
++            Node::Binary(op, a, b) => {
++                let inferred = self
++                    .hint(&a, locals, 0)?
++                    .or(self.hint(&b, locals, 0)?)
++                    .or(if comparison(op) { None } else { scalar_hint })
++                    .unwrap_or(PrimitiveType::I32);
++                let ah = Some(Expected::Scalar(inferred));
++                let av = take!(self, &a, ah, locals, allow_return);
++                let bv = take!(self, &b, ah, locals, allow_return);
++                self.numeric(
++                    numeric::binary(
++                        op,
++                        scalar(av).map_err(|d| self.failure(d, at))?,
++                        scalar(bv).map_err(|d| self.failure(d, at))?,
++                    ),
++                    at,
++                )?
++            }
++            Node::Logic(and, a, b) => {
++                let av = take!(
++                    self,
++                    &a,
++                    Some(Expected::Scalar(PrimitiveType::Bool)),
++                    locals,
++                    allow_return
++                );
++                let v = scalar(av).map_err(|d| self.failure(d, at))?;
++                if v.type_id != 2 {
++                    return Err(
++                        self.failure(fault("LRR-E-CONST-TYPE", "lazy boolean requires bool"), at)
++                    );
++                }
++                if (v.payload != 0) == and {
++                    take!(
++                        self,
++                        &b,
++                        Some(Expected::Scalar(PrimitiveType::Bool)),
++                        locals,
++                        allow_return
++                    )
++                } else {
++                    ConstValue::from_scalar(v).map_err(|d| self.failure(d, at))?
++                }
++            }
++            Node::Cast(child, destination) => {
++                let proven = self.hint(&child, locals, 0)?.ok_or_else(|| {
++                    self.failure(
++                        fault(
++                            "LRR-E-CONST-TYPE",
++                            "unsuffixed numeric cast requires source context integration",
++                        ),
++                        at,
++                    )
++                })?;
++                let v = take!(
++                    self,
++                    &child,
++                    Some(Expected::Scalar(proven)),
++                    locals,
++                    allow_return
++                );
++                self.numeric(
++                    numeric::cast(
++                        scalar(v).map_err(|d| self.failure(d, at))?,
++                        primitive_id(destination).map_err(|d| self.failure(d, at))?,
++                    ),
++                    at,
++                )?
++            }
++            Node::If(condition, yes, no) => {
++                let v = take!(
++                    self,
++                    &condition,
++                    Some(Expected::Scalar(PrimitiveType::Bool)),
++                    locals,
++                    allow_return
++                );
++                let v = scalar(v).map_err(|d| self.failure(d, at))?;
++                if v.type_id != 2 {
++                    return Err(self.failure(
++                        fault("LRR-E-CONST-TYPE", "constant if requires bool"),
++                        condition.range(),
++                    ));
++                }
++                if v.payload != 0 {
++                    return self.expr(&yes, hint, locals, allow_return);
++                }
++                if let Some(no) = no {
++                    return self.expr(&no, hint, locals, allow_return);
++                }
++                ConstValue::from_scalar(ValueRepr::unit()).map_err(|d| self.failure(d, at))?
++            }
++            Node::Block(statements, tail) => {
++                let bytes = locals
++                    .keys()
++                    .try_fold(0usize, |n, name| {
++                        n.checked_add(name.len())?.checked_add(192)
++                    })
++                    .ok_or_else(|| self.limit(at))?;
++                self.admit_metadata(bytes, at)?;
++                let mut block = locals.clone();
++                for statement in statements {
++                    self.steps = self
++                        .steps
++                        .checked_add(1)
++                        .filter(|s| *s <= self.limits.steps)
++                        .ok_or_else(|| self.limit(statement.range()))?;
++                    match self
++                        .source
++                        .statement(&statement)
++                        .map_err(|d| self.failure(d, statement.range()))?
++                    {
++                        Statement::Let(name, p, initializer) => {
++                            if p.is_none() && self.hint(&initializer, &block, 0)?.is_none() {
++                                return Err(self.failure(fault("LRR-E-CONST-UNSUPPORTED","unannotated numeric local requires source constraint integration"),initializer.range()));
++                            }
++                            let v = take!(
++                                self,
++                                &initializer,
++                                p.map(Expected::Scalar),
++                                &mut block,
++                                allow_return
++                            );
++                            if !block.contains_key(&name) {
++                                if block.len() >= 256 {
++                                    return Err(self.limit(initializer.range()));
++                                }
++                                self.admit_metadata(
++                                    name.len()
++                                        .checked_add(192)
++                                        .ok_or_else(|| self.limit(initializer.range()))?,
++                                    initializer.range(),
++                                )?;
++                            }
++                            block.insert(name, v);
++                        }
++                        Statement::Expression(child) => {
++                            take!(self, &child, None, &mut block, allow_return);
++                        }
++                        Statement::Unsupported(at) => {
++                            return Err(self.failure(
++                                fault(
++                                    "LRR-E-CONST-UNSUPPORTED",
++                                    "reached constant statement requires a later pure slice",
++                                ),
++                                at,
++                            ));
++                        }
++                    }
++                }
++                if let Some(tail) = tail {
++                    return self.expr(&tail, hint, &mut block, allow_return);
++                }
++                ConstValue::from_scalar(ValueRepr::unit()).map_err(|d| self.failure(d, at))?
++            }
++            Node::Return(child) => {
++                if !allow_return {
++                    return Err(self.failure(
++                        fault("LRR-E-CONST-UNSUPPORTED", "return outside a pure const fn"),
++                        at,
++                    ));
++                }
++                let return_hint = self.returns.last().copied().ok_or_else(|| {
++                    self.failure(
++                        fault(
++                            "LRR-E-CONST-TYPE",
++                            "constant return has no current frame result context",
++                        ),
++                        at,
++                    )
++                })?;
++                let v = if let Some(child) = child {
++                    take!(self, &child, Some(return_hint), locals, allow_return)
++                } else {
++                    ConstValue::from_scalar(ValueRepr::unit()).map_err(|d| self.failure(d, at))?
++                };
++                return Ok(Flow::Return(v));
++            }
++            Node::Call(name, args) => {
++                if locals.contains_key(&name) {
++                    return Err(self.failure(
++                        fault(
++                            "LRR-E-CONST-TYPE",
++                            "local scalar shadow is not a callable constant definition",
++                        ),
++                        at,
++                    ));
++                }
++                let f = self
++                    .source
++                    .named_function(&name)
++                    .map_err(|d| self.failure(d, at))?;
++                if args.len() != f.params.len() {
++                    return Err(
++                        self.failure(fault("LRR-E-CONST-TYPE", "const-call arity differs"), at)
++                    );
++                }
++                let mut values = Vec::new();
++                for (arg, (_, ty)) in args.iter().zip(&f.params) {
++                    values.push(take!(
++                        self,
++                        arg,
++                        Some(Expected::Scalar(*ty)),
++                        locals,
++                        allow_return
++                    ));
++                }
++                self.function(f, values, at)?
++            }
++            Node::Array(elements) => {
++                let Some(Expected::Array(p, len)) = hint else {
++                    return Err(self.failure(
++                        fault(
++                            "LRR-E-CONST-TYPE",
++                            "constant array needs exact declared element/length context",
++                        ),
++                        at,
++                    ));
++                };
++                if elements.len() != len {
++                    return Err(self.failure(
++                        fault("LRR-E-CONST-TYPE", "constant array cardinality differs"),
++                        at,
++                    ));
++                }
++                self.array_admission(len, 17, at)?;
++                let mut values = Vec::new();
++                values.try_reserve_exact(len).map_err(|_| self.limit(at))?;
++                for e in elements {
++                    values.push(take!(
++                        self,
++                        &e,
++                        Some(Expected::Scalar(p)),
++                        locals,
++                        allow_return
++                    ));
++                }
++                ConstValue(Immutable::Array(values.into()))
++            }
++            Node::Repeat(initializer, len) => {
++                let Some(Expected::Array(p, expected)) = hint else {
++                    return Err(self.failure(
++                        fault(
++                            "LRR-E-CONST-TYPE",
++                            "constant repeat needs exact declared element/length context",
++                        ),
++                        at,
++                    ));
++                };
++                let count = take!(
++                    self,
++                    &len,
++                    Some(Expected::Scalar(PrimitiveType::Usize)),
++                    locals,
++                    allow_return
++                );
++                let count = self.length(count, len.range())?;
++                if count != expected {
++                    return Err(self.failure(
++                        fault("LRR-E-CONST-TYPE", "constant repeat length differs"),
++                        at,
++                    ));
++                }
++                self.array_admission(count, 17, at)?;
++                let value = take!(
++                    self,
++                    &initializer,
++                    Some(Expected::Scalar(p)),
++                    locals,
++                    allow_return
++                );
++                let mut values = Vec::new();
++                values
++                    .try_reserve_exact(count)
++                    .map_err(|_| self.limit(at))?;
++                values.resize(count, value);
++                ConstValue(Immutable::Array(values.into()))
++            }
++            Node::Panic => {
++                return Err(self.failure(
++                    fault("LRR-E-CONST-PANIC", "reached explicit constant panic"),
++                    at,
++                ));
++            }
++            Node::Unsupported => {
++                return Err(self.failure(
++                    fault(
++                        "LRR-E-CONST-UNSUPPORTED",
++                        "reached operation is outside this pure constant slice",
++                    ),
++                    at,
++                ));
++            }
++        };
++        let value = self.checked_value(value, at)?;
++        if let Some(expected) = hint {
++            self.check_expected(&value, expected, at)?
++        }
++        Ok(Flow::Value(value))
++    }
++    fn check_expected(
++        &self,
++        value: &ConstValue,
++        expected: Expected,
++        at: SourceRange,
++    ) -> Result<(), ConstFailure> {
++        let matches = match expected {
++            Expected::Scalar(p) => value.matches_scalar(p).map_err(|d| self.failure(d, at))?,
++            Expected::Array(p, len) => value.elements().is_some_and(|e| {
++                e.len() == len && e.iter().all(|v| v.matches_scalar(p).unwrap_or(false))
++            }),
++        };
++        if !matches {
++            return Err(self.failure(
++                fault(
++                    "LRR-E-CONST-TYPE",
++                    "constant value differs from reached concrete type context",
++                ),
++                at,
++            ));
++        }
++        Ok(())
++    }
++    fn array_admission(
++        &self,
++        count: usize,
++        element_bytes: usize,
++        at: SourceRange,
++    ) -> Result<(), ConstFailure> {
++        let bytes = count
++            .checked_mul(element_bytes)
++            .and_then(|n| n.checked_add(9 + 8 + ConstValue::DOMAIN.len()))
++            .ok_or_else(|| self.limit(at))?;
++        if bytes > self.limits.result_bytes {
++            return Err(self.limit(at));
++        }
++        count
++            .checked_mul(std::mem::size_of::<ConstValue>())
++            .filter(|n| *n <= MAX_BYTES * 4)
++            .ok_or_else(|| self.limit(at))?;
++        Ok(())
++    }
++}
++fn comparison(op: NumericBinary) -> bool {
++    matches!(
++        op,
++        NumericBinary::Eq
++            | NumericBinary::Ne
++            | NumericBinary::Lt
++            | NumericBinary::Le
++            | NumericBinary::Gt
++            | NumericBinary::Ge
++    )
++}
++fn primitive_for_value(v: Option<ValueRepr>) -> Option<PrimitiveType> {
++    use PrimitiveType as P;
++    Some(match v?.type_id {
++        1 => P::Unit,
++        2 => P::Bool,
++        3 => P::Char,
++        4 => P::I8,
++        5 => P::I16,
++        6 => P::I32,
++        7 => P::I64,
++        8 => P::Isize,
++        9 => P::U8,
++        10 => P::U16,
++        11 => P::U32,
++        12 => P::U64,
++        13 => P::Usize,
++        14 => P::F32,
++        15 => P::F64,
++        _ => return None,
++    })
++}
++/// Returns an immutable result or an attributed typed refusal. This is not query publication.
++pub fn evaluate(plan: &ConstantPlan, limits: ConstLimits) -> Result<ConstEvaluation, ConstFailure> {
++    let mut evaluator = Evaluator {
++        source: plan.source(),
++        limits,
++        steps: 0,
++        frames: 0,
++        depth: 0,
++        returns: Vec::new(),
++        metadata_bytes: 0,
++        active: BTreeSet::new(),
++        active_calls: BTreeSet::new(),
++        dependencies: BTreeMap::new(),
++        nodes: BTreeMap::new(),
++    };
++    let (constant, call, length) = plan
++        .entry()
++        .map_err(|d| evaluator.failure(d, plan.range()))?;
++    let value = if let Some(c) = constant {
++        evaluator.constant(c)?
++    } else if let Some((f, args)) = call {
++        evaluator.function(f, args, plan.range())?
++    } else if let Some(length) = length {
++        let value = evaluator
++            .expr(
++                &length,
++                Some(Expected::Scalar(PrimitiveType::Usize)),
++                &mut BTreeMap::new(),
++                false,
++            )?
++            .into_value();
++        evaluator.length(value.clone(), length.range())?;
++        value
++    } else {
++        return Err(evaluator.failure(
++            fault("LRR-E-CONST-SOURCE", "sealed constant entry absent"),
++            plan.range(),
++        ));
++    };
++    let value = evaluator.checked_value(value, plan.range())?;
++    Ok(ConstEvaluation {
++        value,
++        source: plan.source().source(),
++        cfg: plan.source().cfg(),
++        plan: plan.identity(),
++        dependencies: evaluator.dependencies.into_values().collect(),
++        steps: evaluator.steps,
++    })
++}
+diff --git a/crates/lrr/src/syntax/mod.rs b/crates/lrr/src/syntax/mod.rs
+--- a/crates/lrr/src/syntax/mod.rs
++++ b/crates/lrr/src/syntax/mod.rs
+@@ -68,3 +68,5 @@
+ pub(crate) mod floating_fixture_hygiene;
+ 
+ pub(crate) mod literal_decode;
++
++pub mod pure_constants;
+diff --git a/crates/lrr/src/syntax/pure_constants.rs b/crates/lrr/src/syntax/pure_constants.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/syntax/pure_constants.rs
+@@ -0,0 +1,892 @@
++//! Pure, sealed constant source plans. Pinned AST identities never cross into frontend.
++use super::{ast_adapter::range, outline::BodyHandle, parse::ParsedFile, spans::SourceRange};
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++        profile::ProfileIdentity,
++    },
++    frontend::constants::ConstValue,
++    ir::op::{DecodedLiteral, NumericBinary, NumericUnary, PrimitiveType},
++    source::{
++        manifest::BodyKey,
++        snapshot::{CfgSet, SourceBlob},
++    },
++};
++use ra_ap_syntax::{
++    AstNode, AstToken,
++    ast::{self, HasArgList, HasAttrs, HasGenericArgs, HasGenericParams, HasModuleItem, HasName},
++};
++use std::{collections::BTreeMap, sync::Arc};
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-CONST-SOURCE", message.into())
++}
++fn required<T>(v: Option<T>) -> Result<T, Diagnostic> {
++    v.ok_or_else(|| fault("constant syntax is incomplete"))
++}
++#[derive(Debug, Clone)]
++pub struct ConstantDeclaration {
++    name: String,
++    range: SourceRange,
++    definition: Digest,
++    body: BodyKey,
++    blocked: bool,
++}
++impl ConstantDeclaration {
++    pub fn name(&self) -> &str {
++        &self.name
++    }
++    pub fn range(&self) -> SourceRange {
++        self.range
++    }
++    pub fn definition(&self) -> Digest {
++        self.definition
++    }
++    pub(crate) fn body(&self) -> &BodyKey {
++        &self.body
++    }
++}
++#[derive(Debug)]
++struct Captured {
++    parsed: ParsedFile,
++    cfg: CfgSet,
++    crate_key: Digest,
++    declarations: Vec<ConstantDeclaration>,
++    items: BTreeMap<String, Vec<ast::Item>>,
++    owners: Vec<(SourceRange, Digest, Option<BodyHandle>)>,
++}
++#[derive(Debug, Clone)]
++pub struct ConstantSource(Arc<Captured>);
++#[derive(Debug, Clone)]
++pub struct ConstantPlan {
++    source: ConstantSource,
++    entry: Entry,
++    identity: Digest,
++    owner_definition: Digest,
++}
++#[derive(Debug, Clone)]
++enum Entry {
++    Constant(ast::Const),
++    Call(ast::Fn, Vec<ConstValue>),
++    Length(ExprRef),
++}
++#[derive(Debug, Clone)]
++pub(crate) struct ExprRef(ast::Expr);
++impl ExprRef {
++    pub(crate) fn key(&self) -> (u32, u32) {
++        let r = self.range();
++        (r.start, r.end)
++    }
++    pub(crate) fn range(&self) -> SourceRange {
++        range(self.0.syntax().text_range())
++    }
++}
++#[derive(Debug, Clone)]
++pub(crate) enum ConstType {
++    Scalar(PrimitiveType),
++    Array(PrimitiveType, ExprRef),
++}
++#[derive(Debug, Clone)]
++pub(crate) struct Function {
++    pub(crate) declaration: ConstantDeclaration,
++    pub(crate) params: Vec<(String, PrimitiveType)>,
++    pub(crate) result: ConstType,
++    pub(crate) body: ExprRef,
++}
++#[derive(Debug, Clone)]
++pub(crate) struct Constant {
++    pub(crate) declaration: ConstantDeclaration,
++    pub(crate) ty: ConstType,
++    pub(crate) body: ExprRef,
++}
++#[derive(Debug, Clone)]
++pub(crate) struct StatementRef(ast::Stmt);
++impl StatementRef {
++    pub(crate) fn range(&self) -> SourceRange {
++        range(self.0.syntax().text_range())
++    }
++}
++#[derive(Debug, Clone)]
++pub(crate) enum Statement {
++    Let(String, Option<PrimitiveType>, ExprRef),
++    Expression(ExprRef),
++    Unsupported(SourceRange),
++}
++#[derive(Debug, Clone)]
++pub(crate) enum Node {
++    Integer(DecodedLiteral),
++    Bool(bool),
++    Char(char),
++    Byte(u8),
++    Float(String, Option<PrimitiveType>),
++    Unit,
++    Path(String),
++    Parentheses(ExprRef),
++    Unary(NumericUnary, ExprRef),
++    Binary(NumericBinary, ExprRef, ExprRef),
++    Logic(bool, ExprRef, ExprRef),
++    Cast(ExprRef, PrimitiveType),
++    If(ExprRef, ExprRef, Option<ExprRef>),
++    Block(Vec<StatementRef>, Option<ExprRef>),
++    Return(Option<ExprRef>),
++    Call(String, Vec<ExprRef>),
++    Array(Vec<ExprRef>),
++    Repeat(ExprRef, ExprRef),
++    Panic,
++    Unsupported,
++}
++impl ConstantSource {
++    /// Captures source bytes/profile/cfg privately. Never accepts caller-built outline/body proofs.
++    pub fn parse(
++        blob: &SourceBlob,
++        profile: ProfileIdentity,
++        crate_key: Digest,
++        cfg: CfgSet,
++    ) -> Result<Self, Diagnostic> {
++        let parsed = ParsedFile::parse(blob, profile)?;
++        let outline = parsed.outline(crate_key, vec![], &cfg)?;
++        let owners = outline
++            .items
++            .iter()
++            .map(|item| {
++                (
++                    item.declaration_span,
++                    item.def_key.fingerprint(),
++                    item.body.clone(),
++                )
++            })
++            .collect();
++        let tree = parsed.parsed.tree();
++        let mut declarations = Vec::new();
++        let mut items: BTreeMap<String, Vec<ast::Item>> = BTreeMap::new();
++        for item in tree.items() {
++            let at = range(item.syntax().text_range());
++            let Some(header) = outline.items.iter().find(|h| h.declaration_span == at) else {
++                continue;
++            };
++            let name = match &item {
++                ast::Item::Const(c) => c.name(),
++                ast::Item::Fn(f) => f.name(),
++                _ => None,
++            };
++            let Some(name) = name else { continue };
++            let Some(body) = header.body.as_ref() else {
++                continue;
++            };
++            if declarations.len() >= 100_000 {
++                return Err(fault("constant declaration inventory limit"));
++            }
++            declarations
++                .try_reserve(1)
++                .map_err(|_| fault("constant declaration allocation"))?;
++            declarations.push(ConstantDeclaration {
++                name: semantic(name.text())?,
++                range: at,
++                definition: header.def_key.fingerprint(),
++                body: body.key(),
++                blocked: body.entry_blocked,
++            });
++            items.entry(semantic(name.text())?).or_default().push(item);
++        }
++        Ok(Self(Arc::new(Captured {
++            parsed,
++            cfg,
++            crate_key,
++            declarations,
++            items,
++            owners,
++        })))
++    }
++    pub fn declarations(&self) -> &[ConstantDeclaration] {
++        &self.0.declarations
++    }
++    fn exact(&self, at: SourceRange) -> Result<ast::Item, Diagnostic> {
++        let d = self
++            .0
++            .declarations
++            .iter()
++            .find(|d| d.range == at)
++            .ok_or_else(|| fault("selected range is not an exact captured constant declaration"))?;
++        if d.blocked {
++            return Err(fault(
++                "selected constant body has unreliable syntax boundaries",
++            ));
++        }
++        self.0
++            .items
++            .get(&d.name)
++            .and_then(|items| items.iter().find(|i| range(i.syntax().text_range()) == at))
++            .cloned()
++            .ok_or_else(|| fault("captured declaration absent"))
++    }
++    pub fn constant(&self, at: SourceRange) -> Result<ConstantPlan, Diagnostic> {
++        let ast::Item::Const(c) = self.exact(at)? else {
++            return Err(fault("selected declaration is not a constant"));
++        };
++        self.constant_header(&c)?;
++        self.plan(Entry::Constant(c), at)
++    }
++    pub fn const_call(
++        &self,
++        at: SourceRange,
++        args: Vec<ConstValue>,
++    ) -> Result<ConstantPlan, Diagnostic> {
++        let ast::Item::Fn(f) = self.exact(at)? else {
++            return Err(fault("selected declaration is not const fn"));
++        };
++        let header = self.function_header(&f)?;
++        if header.params.len() != args.len() {
++            return Err(fault("pure const argument cardinality differs"));
++        }
++        for ((_, ty), arg) in header.params.iter().zip(&args) {
++            if !arg.matches_scalar(*ty)? {
++                return Err(fault("pure const argument type differs"));
++            }
++        }
++        self.plan(Entry::Call(f, args), at)
++    }
++    /// Only an exact array repeat count or array type length may request usize context.
++    pub fn array_length(&self, at: SourceRange) -> Result<ConstantPlan, Diagnostic> {
++        for node in self.0.parsed.parsed.tree().syntax().descendants() {
++            let candidate = if let Some(a) = ast::ArrayExpr::cast(node.clone()) {
++                match a.kind() {
++                    ast::ArrayExprKind::Repeat { repeat, .. } => repeat,
++                    _ => None,
++                }
++            } else if let Some(a) = ast::ArrayType::cast(node) {
++                a.const_arg()
++                    .and_then(|c| c.syntax().children().find_map(ast::Expr::cast))
++            } else {
++                None
++            };
++            if let Some(expr) = candidate
++                && range(expr.syntax().text_range()) == at
++            {
++                if !super::attributes::source_root_enabled(
++                    &self.0.parsed.parsed.tree(),
++                    &self.0.cfg,
++                )? {
++                    return Err(fault("array length owning root is cfg-disabled"));
++                }
++                for ancestor in expr.syntax().ancestors() {
++                    if ast::Module::can_cast(ancestor.kind())
++                        || ast::Impl::can_cast(ancestor.kind())
++                        || ast::Trait::can_cast(ancestor.kind())
++                        || ast::ClosureExpr::can_cast(ancestor.kind())
++                    {
++                        return Err(fault(
++                            "anonymous array length requires nested source namespace preparation",
++                        ));
++                    }
++                    if let Some(function) = ast::Fn::cast(ancestor.clone()) {
++                        if function
++                            .param_list()
++                            .is_none_or(|p| p.self_param().is_some() || p.params().next().is_some())
++                            || function.generic_param_list().is_some()
++                            || ancestor
++                                .parent()
++                                .is_none_or(|p| !ast::SourceFile::can_cast(p.kind()))
++                        {
++                            return Err(fault(
++                                "anonymous array length requires captured function binding context",
++                            ));
++                        }
++                    }
++                    if let Some(statements) = ast::StmtList::cast(ancestor.clone()) {
++                        for statement in statements.statements() {
++                            if let ast::Stmt::LetStmt(binding) = statement
++                                && range(binding.syntax().text_range()).end <= at.start
++                                && binding.pat().is_some_and(|p| {
++                                    p.syntax()
++                                        .descendants()
++                                        .any(|n| ast::IdentPat::can_cast(n.kind()))
++                                })
++                            {
++                                return Err(fault(
++                                    "anonymous array length requires captured preceding local bindings",
++                                ));
++                            }
++                        }
++                    }
++                    let metas = ancestor
++                        .children()
++                        .filter_map(ast::Attr::cast)
++                        .map(|a| required(a.meta()))
++                        .collect::<Result<Vec<_>, _>>()?;
++                    let (enabled, remaining) =
++                        super::attributes::effective_metas(metas, &self.0.cfg)?;
++                    if !enabled
++                        || remaining
++                            .iter()
++                            .any(|m| !matches!(m, ast::Meta::CfgMeta(_)))
++                    {
++                        return Err(fault(
++                            "array length owning syntax requires attribute preparation",
++                        ));
++                    }
++                }
++                return self.plan(Entry::Length(ExprRef(expr)), at);
++            }
++        }
++        Err(fault(
++            "selected range is not an exact captured array length",
++        ))
++    }
++    fn plan(&self, entry: Entry, at: SourceRange) -> Result<ConstantPlan, Diagnostic> {
++        if self
++            .0
++            .parsed
++            .errors
++            .iter()
++            .any(|e| e.range.start < at.end && at.start < e.range.end)
++        {
++            return Err(fault("selected constant syntax is malformed"));
++        }
++        let (_, owner_definition, owner_body) = self
++            .0
++            .owners
++            .iter()
++            .filter(|(owner, _, _)| owner.start <= at.start && at.end <= owner.end)
++            .min_by_key(|(owner, _, _)| owner.end - owner.start)
++            .ok_or_else(|| fault("constant selection has no exact captured declaration owner"))?;
++        if let Some(body) = owner_body {
++            body.require_entry()?;
++        }
++        let mut e = StableEncoder::new("lrr/v1/pure-constant-source-plan");
++        e.digest(self.0.crate_key);
++        e.digest(*owner_definition);
++        e.option(owner_body, |e, body| e.record(body));
++        e.digest(self.0.parsed.content);
++        e.record(&self.0.parsed.profile);
++        e.digest(self.0.cfg.fingerprint());
++        e.u32(at.start);
++        e.u32(at.end);
++        if let Some(d) = self.0.declarations.iter().find(|d| d.range == at) {
++            e.digest(d.definition);
++            e.record(&d.body)
++        }
++        match &entry {
++            Entry::Constant(_) => e.u8(1),
++            Entry::Call(_, args) => {
++                e.u8(2);
++                e.sequence(args, |e, a| e.record(a))
++            }
++            Entry::Length(_) => e.u8(3),
++        }
++        Ok(ConstantPlan {
++            source: self.clone(),
++            entry,
++            identity: e.finish(),
++            owner_definition: *owner_definition,
++        })
++    }
++    pub(crate) fn source(&self) -> Digest {
++        self.0.parsed.content
++    }
++    pub(crate) fn cfg(&self) -> Digest {
++        self.0.cfg.fingerprint()
++    }
++    pub(crate) fn profile(&self) -> &ProfileIdentity {
++        &self.0.parsed.profile
++    }
++    fn declaration(&self, item: &impl AstNode) -> Result<ConstantDeclaration, Diagnostic> {
++        self.0
++            .declarations
++            .iter()
++            .find(|d| d.range == range(item.syntax().text_range()))
++            .cloned()
++            .ok_or_else(|| fault("constant header is not captured"))
++    }
++    fn attributes_clear(&self, node: &ra_ap_syntax::SyntaxNode) -> Result<(), Diagnostic> {
++        let metas = node
++            .children()
++            .filter_map(ast::Attr::cast)
++            .map(|a| required(a.meta()))
++            .collect::<Result<Vec<_>, _>>()?;
++        let (enabled, metas) = super::attributes::effective_metas(metas, &self.0.cfg)?;
++        if !enabled || metas.iter().any(|m| !matches!(m, ast::Meta::CfgMeta(_))) {
++            return Err(fault(
++                "constant attributes require prior source preparation",
++            ));
++        }
++        Ok(())
++    }
++    fn primitive(&self, ty: ast::Type) -> Result<PrimitiveType, Diagnostic> {
++        let spelling = ty.syntax().text().to_string();
++        if spelling.trim() == "()" {
++            return Ok(PrimitiveType::Unit);
++        }
++        let ast::Type::PathType(path) = &ty else {
++            return Err(fault("constant type is not a handwritten primitive"));
++        };
++        let name = bare(required(path.path())?)?;
++        use PrimitiveType as P;
++        let primitive = match name.as_str() {
++            "bool" => P::Bool,
++            "char" => P::Char,
++            "i8" => P::I8,
++            "i16" => P::I16,
++            "i32" => P::I32,
++            "i64" => P::I64,
++            "isize" => P::Isize,
++            "u8" => P::U8,
++            "u16" => P::U16,
++            "u32" => P::U32,
++            "u64" => P::U64,
++            "usize" => P::Usize,
++            "f32" => P::F32,
++            "f64" => P::F64,
++            _ => return Err(fault("constant primitive type identity is unavailable")),
++        };
++        // Conservative captured lexical proof. Imports/producers never grant primitive identity.
++        let mut work = 0usize;
++        for scope in ty.syntax().ancestors() {
++            for child in scope.children() {
++                work = work
++                    .checked_add(1)
++                    .filter(|n| *n <= 100_000)
++                    .ok_or_else(|| fault("constant namespace work limit"))?;
++                if let Some(g)=ast::GenericParamList::cast(child.clone()) && g.generic_params().any(|p|matches!(p,ast::GenericParam::TypeParam(t) if t.name().is_some_and(|n|n.text()==name))){return Err(fault("constant primitive type is shadowed by a parameter"))}
++                let Some(item) = ast::Item::cast(child) else {
++                    continue;
++                };
++                let metas = item
++                    .attrs()
++                    .map(|a| required(a.meta()))
++                    .collect::<Result<Vec<_>, _>>()?;
++                let (enabled, metas) = super::attributes::effective_metas(metas, &self.0.cfg)?;
++                if !enabled {
++                    continue;
++                }
++                if metas.iter().any(|m| !matches!(m, ast::Meta::CfgMeta(_)))
++                    || matches!(item, ast::Item::Use(_) | ast::Item::MacroCall(_))
++                {
++                    return Err(fault(
++                        "constant primitive namespace has an unresolved source producer/import",
++                    ));
++                }
++                let declared = match &item {
++                    ast::Item::TypeAlias(x) => x.name(),
++                    ast::Item::Struct(x) => x.name(),
++                    ast::Item::Enum(x) => x.name(),
++                    ast::Item::Union(x) => x.name(),
++                    ast::Item::Trait(x) => x.name(),
++                    ast::Item::Module(x) => x.name(),
++                    _ => None,
++                };
++                if declared.is_some_and(|n| semantic(n.text()).is_ok_and(|n| n == name)) {
++                    return Err(fault("constant primitive type is shadowed in source"));
++                }
++            }
++        }
++        Ok(primitive)
++    }
++    fn ty(&self, ty: ast::Type) -> Result<ConstType, Diagnostic> {
++        if let ast::Type::ArrayType(a) = ty {
++            let len = required(
++                a.const_arg()
++                    .and_then(|c| c.syntax().children().find_map(ast::Expr::cast)),
++            )?;
++            Ok(ConstType::Array(
++                self.primitive(required(a.ty())?)?,
++                ExprRef(len),
++            ))
++        } else {
++            Ok(ConstType::Scalar(self.primitive(ty)?))
++        }
++    }
++    fn constant_header(&self, c: &ast::Const) -> Result<Constant, Diagnostic> {
++        self.attributes_clear(c.syntax())?;
++        if self.declaration(c)?.blocked {
++            return Err(fault("constant body boundaries are blocked"));
++        }
++        Ok(Constant {
++            declaration: self.declaration(c)?,
++            ty: self.ty(required(c.ty())?)?,
++            body: ExprRef(required(c.body())?),
++        })
++    }
++    fn function_header(&self, f: &ast::Fn) -> Result<Function, Diagnostic> {
++        self.attributes_clear(f.syntax())?;
++        if self.declaration(f)?.blocked {
++            return Err(fault("const fn body boundaries are blocked"));
++        }
++        if f.const_token().is_none()
++            || f.generic_param_list().is_some()
++            || f.async_token().is_some()
++            || f.unsafe_token().is_some()
++        {
++            return Err(Diagnostic::new(
++                "LRR-E-CONST-EFFECT",
++                "reached call is not a supported pure const fn".into(),
++            ));
++        }
++        let mut params = Vec::new();
++        for p in required(f.param_list())?.params() {
++            if params.len() >= 256 {
++                return Err(fault("constant parameter limit"));
++            }
++            let name = local_name(required(p.pat())?)?;
++            let ty = self.primitive(required(p.ty())?)?;
++            if params.iter().any(|(n, _)| n == &name) {
++                return Err(fault("duplicate constant parameter"));
++            }
++            params.push((name, ty));
++        }
++        let result = match f.ret_type() {
++            Some(r) => self.ty(required(r.ty())?)?,
++            None => ConstType::Scalar(PrimitiveType::Unit),
++        };
++        Ok(Function {
++            declaration: self.declaration(f)?,
++            params,
++            result,
++            body: ExprRef(ast::Expr::BlockExpr(required(f.body())?)),
++        })
++    }
++    pub(crate) fn named_constant(&self, name: &str) -> Result<Constant, Diagnostic> {
++        let i = self.named(name)?;
++        let ast::Item::Const(c) = i else {
++            return Err(fault("reached name is not a named constant"));
++        };
++        self.constant_header(&c)
++    }
++    pub(crate) fn named_function(&self, name: &str) -> Result<Function, Diagnostic> {
++        let i = self.named(name)?;
++        let ast::Item::Fn(f) = i else {
++            return Err(fault("reached callee is not const fn"));
++        };
++        self.function_header(&f)
++    }
++    fn named(&self, name: &str) -> Result<ast::Item, Diagnostic> {
++        // Generated declarations/import routing is a separate provider integration.
++        for item in self.0.parsed.parsed.tree().items() {
++            let metas = item
++                .attrs()
++                .map(|a| required(a.meta()))
++                .collect::<Result<Vec<_>, _>>()?;
++            let (enabled, _) = super::attributes::effective_metas(metas, &self.0.cfg)?;
++            if enabled && matches!(item, ast::Item::Use(_) | ast::Item::MacroCall(_)) {
++                return Err(fault("constant name requires source namespace preparation"));
++            }
++        }
++        let items = self
++            .0
++            .items
++            .get(name)
++            .ok_or_else(|| fault("reached constant name is absent"))?;
++        if items.len() != 1 {
++            return Err(fault("reached constant name is ambiguous"));
++        }
++        Ok(items[0].clone())
++    }
++    pub(crate) fn statement(&self, s: &StatementRef) -> Result<Statement, Diagnostic> {
++        Ok(match &s.0 {
++            ast::Stmt::LetStmt(l) => {
++                self.attributes_clear(l.syntax())?;
++                if l.let_else().is_some() {
++                    Statement::Unsupported(s.range())
++                } else {
++                    Statement::Let(
++                        local_name(required(l.pat())?)?,
++                        l.ty().map(|t| self.primitive(t)).transpose()?,
++                        ExprRef(required(l.initializer())?),
++                    )
++                }
++            }
++            ast::Stmt::ExprStmt(s) => Statement::Expression(ExprRef(required(s.expr())?)),
++            _ => Statement::Unsupported(s.range()),
++        })
++    }
++    fn lexical_value_clear(
++        &self,
++        syntax: &ra_ap_syntax::SyntaxNode,
++        wanted: &str,
++    ) -> Result<(), Diagnostic> {
++        let mut work = 0usize;
++        for scope in syntax.ancestors() {
++            if !ast::StmtList::can_cast(scope.kind()) {
++                continue;
++            }
++            for child in scope.children() {
++                work = work
++                    .checked_add(1)
++                    .filter(|n| *n <= 100_000)
++                    .ok_or_else(|| fault("constant lexical value work limit"))?;
++                let Some(item) = ast::Item::cast(child) else {
++                    continue;
++                };
++                let metas = item
++                    .attrs()
++                    .map(|a| required(a.meta()))
++                    .collect::<Result<Vec<_>, _>>()?;
++                let (enabled, metas) = super::attributes::effective_metas(metas, &self.0.cfg)?;
++                if !enabled {
++                    continue;
++                }
++                if metas.iter().any(|m| !matches!(m, ast::Meta::CfgMeta(_)))
++                    || matches!(item, ast::Item::Use(_) | ast::Item::MacroCall(_))
++                {
++                    return Err(fault(
++                        "constant lexical value namespace requires source preparation",
++                    ));
++                }
++                let name = match item {
++                    ast::Item::Const(i) => i.name(),
++                    ast::Item::Static(i) => i.name(),
++                    ast::Item::Fn(i) => i.name(),
++                    ast::Item::Struct(i) => i.name(),
++                    _ => None,
++                };
++                if name.is_some_and(|n| semantic(n.text()).is_ok_and(|n| n == wanted)) {
++                    return Err(fault(
++                        "constant value has an unsupported local item identity",
++                    ));
++                }
++            }
++        }
++        Ok(())
++    }
++    pub(crate) fn node(&self, e: &ExprRef) -> Result<Node, Diagnostic> {
++        self.attributes_clear(e.0.syntax())?;
++        use ast::Expr as E;
++        Ok(match &e.0 {
++            E::Literal(l) => match l.kind() {
++                ast::LiteralKind::IntNumber(n) => {
++                    Node::Integer(super::literal_decode::integer(&n, false))
++                }
++                ast::LiteralKind::Bool(v) => Node::Bool(v),
++                ast::LiteralKind::Char(c) => {
++                    Node::Char(c.value().map_err(|_| fault("invalid const char"))?)
++                }
++                ast::LiteralKind::Byte(c) => {
++                    Node::Byte(c.value().map_err(|_| fault("invalid const byte"))?)
++                }
++                ast::LiteralKind::FloatNumber(n) => {
++                    let ty = match n.suffix() {
++                        None => None,
++                        Some("f32") => Some(PrimitiveType::F32),
++                        Some("f64") => Some(PrimitiveType::F64),
++                        _ => return Err(fault("invalid constant float suffix")),
++                    };
++                    Node::Float(
++                        n.text()
++                            .to_string()
++                            .trim_end_matches(n.suffix().unwrap_or(""))
++                            .replace('_', ""),
++                        ty,
++                    )
++                }
++                _ => Node::Unsupported,
++            },
++            E::ParenExpr(p) => Node::Parentheses(ExprRef(required(p.expr())?)),
++            E::TupleExpr(t) if t.fields().next().is_none() => Node::Unit,
++            E::PathExpr(p) => {
++                let name = bare(required(p.path())?)?;
++                self.lexical_value_clear(p.syntax(), &name)?;
++                Node::Path(name)
++            }
++            E::PrefixExpr(p) => {
++                let expr = required(p.expr())?;
++                if p.op_kind() == Some(ast::UnaryOp::Neg)
++                    && let E::Literal(l) = &expr
++                    && let ast::LiteralKind::IntNumber(n) = l.kind()
++                {
++                    Node::Integer(super::literal_decode::integer(&n, true))
++                } else {
++                    let op = match p.op_kind() {
++                        Some(ast::UnaryOp::Neg) => NumericUnary::Neg,
++                        Some(ast::UnaryOp::Not) => NumericUnary::Not,
++                        _ => return Ok(Node::Unsupported),
++                    };
++                    Node::Unary(op, ExprRef(expr))
++                }
++            }
++            E::BinExpr(b) => {
++                let left = ExprRef(required(b.lhs())?);
++                let right = ExprRef(required(b.rhs())?);
++                match required(b.op_kind())? {
++                    ast::BinaryOp::LogicOp(op) => Node::Logic(op == ast::LogicOp::And, left, right),
++                    ast::BinaryOp::Assignment { .. } => Node::Unsupported,
++                    op => {
++                        use NumericBinary as B;
++                        let op = match op.to_string().as_str() {
++                            "+" => B::Add,
++                            "-" => B::Sub,
++                            "*" => B::Mul,
++                            "/" => B::Div,
++                            "%" => B::Rem,
++                            "<<" => B::Shl,
++                            ">>" => B::Shr,
++                            "&" => B::BitAnd,
++                            "|" => B::BitOr,
++                            "^" => B::BitXor,
++                            "==" => B::Eq,
++                            "!=" => B::Ne,
++                            "<" => B::Lt,
++                            "<=" => B::Le,
++                            ">" => B::Gt,
++                            ">=" => B::Ge,
++                            _ => return Ok(Node::Unsupported),
++                        };
++                        Node::Binary(op, left, right)
++                    }
++                }
++            }
++            E::CastExpr(c) => Node::Cast(
++                ExprRef(required(c.expr())?),
++                self.primitive(required(c.ty())?)?,
++            ),
++            E::IfExpr(i) => Node::If(
++                ExprRef(required(i.condition())?),
++                ExprRef(E::BlockExpr(required(i.then_branch())?)),
++                i.else_branch().map(|b| {
++                    ExprRef(match b {
++                        ast::ElseBranch::Block(b) => E::BlockExpr(b),
++                        ast::ElseBranch::IfExpr(i) => E::IfExpr(i),
++                    })
++                }),
++            ),
++            E::BlockExpr(b) => {
++                if b.async_token().is_some()
++                    || b.unsafe_token().is_some()
++                    || b.const_token().is_some()
++                    || b.gen_token().is_some()
++                    || b.try_block_modifier().is_some()
++                    || b.label().is_some()
++                {
++                    return Ok(Node::Unsupported);
++                }
++                let list = required(b.stmt_list())?;
++                let mut stmts = Vec::new();
++                for s in list.statements() {
++                    if stmts.len() >= 100_000 {
++                        return Err(fault("constant block inventory limit"));
++                    }
++                    stmts.push(StatementRef(s));
++                }
++                Node::Block(stmts, list.tail_expr().map(ExprRef))
++            }
++            E::ReturnExpr(r) => Node::Return(r.expr().map(ExprRef)),
++            E::CallExpr(c) => {
++                let E::PathExpr(p) = required(c.expr())? else {
++                    return Ok(Node::Unsupported);
++                };
++                let args = required(c.arg_list())?.args().map(ExprRef).collect();
++                let name = bare(required(p.path())?)?;
++                self.lexical_value_clear(c.syntax(), &name)?;
++                Node::Call(name, args)
++            }
++            E::ArrayExpr(a) => match a.kind() {
++                ast::ArrayExprKind::Repeat {
++                    initializer,
++                    repeat,
++                } => Node::Repeat(ExprRef(required(initializer)?), ExprRef(required(repeat)?)),
++                ast::ArrayExprKind::ElementList(es) => Node::Array(es.map(ExprRef).collect()),
++            },
++            E::MacroExpr(m) => {
++                let call = required(m.macro_call())?;
++                if bare(required(call.path())?)? == "panic"
++                    && call.token_tree().is_some_and(|t| {
++                        t.syntax()
++                            .text()
++                            .to_string()
++                            .chars()
++                            .filter(|c| !c.is_whitespace())
++                            .collect::<String>()
++                            == "()"
++                    })
++                {
++                    Node::Panic
++                } else {
++                    Node::Unsupported
++                }
++            }
++            _ => Node::Unsupported,
++        })
++    }
++}
++fn local_name(pat: ast::Pat) -> Result<String, Diagnostic> {
++    let ast::Pat::IdentPat(p) = pat else {
++        return Err(fault("constant local requires a scalar identifier"));
++    };
++    if p.ref_token().is_some() || p.pat().is_some() {
++        return Err(fault("constant local binding mode unsupported"));
++    }
++    semantic(required(p.name())?.text())
++}
++fn bare(path: ast::Path) -> Result<String, Diagnostic> {
++    let segment = required(path.segment())?;
++    if path.qualifier().is_some()
++        || segment.coloncolon_token().is_some()
++        || segment.generic_arg_list().is_some()
++    {
++        return Err(fault("constant path requires captured namespace routing"));
++    }
++    semantic(required(segment.name_ref())?.text())
++}
++impl ConstantPlan {
++    pub fn identity(&self) -> Digest {
++        self.identity
++    }
++    pub fn owner_definition(&self) -> Digest {
++        self.owner_definition
++    }
++    pub fn profile(&self) -> &ProfileIdentity {
++        self.source.profile()
++    }
++    pub(crate) fn source(&self) -> &ConstantSource {
++        &self.source
++    }
++    pub(crate) fn entry(
++        &self,
++    ) -> Result<
++        (
++            Option<Constant>,
++            Option<(Function, Vec<ConstValue>)>,
++            Option<ExprRef>,
++        ),
++        Diagnostic,
++    > {
++        Ok(match &self.entry {
++            Entry::Constant(c) => (Some(self.source.constant_header(c)?), None, None),
++            Entry::Call(f, args) => (
++                None,
++                Some((self.source.function_header(f)?, args.clone())),
++                None,
++            ),
++            Entry::Length(e) => (None, None, Some(e.clone())),
++        })
++    }
++    pub(crate) fn range(&self) -> SourceRange {
++        match &self.entry {
++            Entry::Constant(c) => range(c.syntax().text_range()),
++            Entry::Call(f, _) => range(f.syntax().text_range()),
++            Entry::Length(e) => e.range(),
++        }
++    }
++}
++
++impl Node {
++    pub(crate) fn owned_bytes(&self) -> Option<usize> {
++        let extra = match self {
++            Self::Path(s) | Self::Float(s, _) => s.capacity(),
++            Self::Block(s, _) => s
++                .capacity()
++                .checked_mul(std::mem::size_of::<StatementRef>())?,
++            Self::Array(es) => es.capacity().checked_mul(std::mem::size_of::<ExprRef>())?,
++            Self::Call(s, args) => s.capacity().checked_add(
++                args.capacity()
++                    .checked_mul(std::mem::size_of::<ExprRef>())?,
++            )?,
++            _ => 0,
++        };
++        std::mem::size_of::<Self>()
++            .checked_add(128)?
++            .checked_add(extra)
++    }
++}
++
++fn semantic(text: &str) -> Result<String, Diagnostic> {
++    super::ast_adapter::semantic_name(text).ok_or_else(|| fault("invalid captured constant name"))
++}
+diff --git a/xtask/tests/pure_source_constants.rs b/xtask/tests/pure_source_constants.rs
+new file mode 100644
+--- /dev/null
++++ b/xtask/tests/pure_source_constants.rs
+@@ -0,0 +1,333 @@
++use lrr::{
++    core::{
++        digest::{Digest, StableEncode},
++        profile::ProfileIdentity,
++    },
++    frontend::constants::{ConstLimits, ConstValue, evaluate},
++    runtime::{shape::TypeId, value::ValueRepr},
++    source::snapshot::{CfgSet, SourceBlob},
++    syntax::{pure_constants::ConstantSource, spans::SourceRange},
++};
++fn source(text: &str, edition: u16) -> ConstantSource {
++    let mut profile = ProfileIdentity::current();
++    profile.edition = edition;
++    ConstantSource::parse(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        profile,
++        Digest([174; 32]),
++        CfgSet::guest_default(),
++    )
++    .unwrap()
++}
++fn at(text: &str, spelling: &str) -> SourceRange {
++    let start = text.find(spelling).unwrap();
++    SourceRange {
++        start: u32::try_from(start).unwrap(),
++        end: u32::try_from(start + spelling.len()).unwrap(),
++    }
++}
++fn declaration(source: &ConstantSource, name: &str) -> SourceRange {
++    source
++        .declarations()
++        .iter()
++        .find(|d| d.name() == name)
++        .unwrap()
++        .range()
++}
++fn scalar(value: &ConstValue) -> ValueRepr {
++    value.scalar().unwrap()
++}
++#[test]
++fn pure_stock_array_lengths_keep_four_owning_editions() {
++    let arithmetic = include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/consts/arithmetic-expr-in-array-len.rs"
++    );
++    let bool_len = include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/consts/bool-comparison-in-const-array-len.rs"
++    );
++    for edition in [2015, 2018, 2021, 2024] {
++        for (text, expr, expected) in [
++            (arithmetic, "2*4", 8),
++            (bool_len, "((1 < 2) == false) as usize", 0),
++        ] {
++            let src = source(text, edition);
++            let plan = src.array_length(at(text, expr)).unwrap();
++            let result = evaluate(&plan, ConstLimits::default()).unwrap();
++            assert_eq!(
++                scalar(result.value()),
++                ValueRepr::unsigned(TypeId(13), expected).unwrap()
++            );
++            assert_eq!(result.source(), Digest::of_bytes(text.as_bytes()));
++            assert_eq!(plan.profile().edition, edition);
++            assert_eq!(
++                result.admit_array_length(8, 8, 64).unwrap(),
++                usize::try_from(expected).unwrap()
++            );
++            if expected != 0 {
++                assert!(result.admit_array_length(8, 7, 64).is_err());
++                assert!(result.admit_array_length(8, 8, 63).is_err());
++            }
++        }
++    }
++}
++#[test]
++fn pure_stock_exact_constants_and_recursive_gcd_remain_partial() {
++    let text = include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/consts/control-flow/basics.rs"
++    );
++    let src = source(text, 2024);
++    let plan = src.constant(declaration(&src, "ABS_DIFF")).unwrap();
++    let result = evaluate(&plan, ConstLimits::default()).unwrap();
++    assert_eq!(
++        scalar(result.value()),
++        ValueRepr::unsigned(TypeId(11), 1).unwrap()
++    );
++    assert_eq!(result.dependencies().len(), 3);
++    let args = [48, 18]
++        .map(|n| ConstValue::from_scalar(ValueRepr::unsigned(TypeId(11), n).unwrap()).unwrap());
++    let call = src
++        .const_call(declaration(&src, "gcd"), args.to_vec())
++        .unwrap();
++    assert_eq!(
++        scalar(evaluate(&call, ConstLimits::default()).unwrap().value()),
++        ValueRepr::unsigned(TypeId(11), 6).unwrap()
++    );
++    // main/abs_diff/fib/is_prime and compiler diagnostics are unexecuted.
++}
++#[test]
++fn pure_stock_cycle_and_reached_panic_have_exact_source_attribution() {
++    let text = include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/consts/recursive-const-stack-overflow.rs"
++    );
++    let src = source(text, 2024);
++    let plan = src.constant(declaration(&src, "FOO")).unwrap();
++    let error = evaluate(&plan, ConstLimits::default()).unwrap_err();
++    assert_eq!(error.diagnostic().code, "LRR-E-CONST-CYCLE");
++    assert_eq!(error.source(), Digest::of_bytes(text.as_bytes()));
++    let text = include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/consts/issue-66693-panic-in-array-len.rs"
++    );
++    let src = source(text, 2015);
++    let plan = src.array_length(at(text, "panic!()")).unwrap();
++    let error = evaluate(&plan, ConstLimits::default()).unwrap_err();
++    assert_eq!(error.diagnostic().code, "LRR-E-CONST-PANIC");
++    assert_eq!(error.range(), at(text, "panic!()"));
++}
++#[test]
++fn pure_cold_effects_short_circuit_and_reached_refusals_are_separate() {
++    let text = "fn io()->i32{0} const GOOD:i32=if true {7}else{io()}; const BAD:i32=io(); const LAZY:bool=false && missing();";
++    let src = source(text, 2024);
++    for (name, value) in [
++        ("GOOD", ValueRepr::signed(TypeId(6), 7).unwrap()),
++        ("LAZY", ValueRepr::boolean(false)),
++    ] {
++        let plan = src.constant(declaration(&src, name)).unwrap();
++        assert_eq!(
++            scalar(evaluate(&plan, ConstLimits::default()).unwrap().value()),
++            value
++        );
++    }
++    let error = evaluate(
++        &src.constant(declaration(&src, "BAD")).unwrap(),
++        ConstLimits::default(),
++    )
++    .unwrap_err();
++    assert_eq!(error.diagnostic().code, "LRR-E-CONST-EFFECT");
++    let start = u32::try_from(text.rfind("io()").unwrap()).unwrap();
++    assert_eq!(
++        error.range(),
++        SourceRange {
++            start,
++            end: start + 4
++        }
++    );
++}
++#[test]
++fn pure_checked_arithmetic_and_resource_limits_do_not_publish_values() {
++    for (text, code) in [
++        ("const A:u8=255+1;", "LRR-E-CONST-PANIC"),
++        ("const A:i32=1/0;", "LRR-E-CONST-PANIC"),
++    ] {
++        let src = source(text, 2024);
++        assert_eq!(
++            evaluate(
++                &src.constant(declaration(&src, "A")).unwrap(),
++                ConstLimits::default()
++            )
++            .unwrap_err()
++            .diagnostic()
++            .code,
++            code
++        );
++    }
++    let src = source("const A:i32=1+2;", 2024);
++    let plan = src.constant(declaration(&src, "A")).unwrap();
++    let low = ConstLimits::new(1, 128, 1 << 20).unwrap();
++    assert_eq!(
++        evaluate(&plan, low).unwrap_err().diagnostic().code,
++        "LRR-E-CONST-LIMIT"
++    );
++    assert!(ConstLimits::new(100001, 128, 1 << 20).is_err());
++    let src = source("const fn recurse(n:u32)->u32{recurse(n+1)}", 2024);
++    let args = vec![ConstValue::from_scalar(ValueRepr::unsigned(TypeId(11), 0).unwrap()).unwrap()];
++    let plan = src.const_call(declaration(&src, "recurse"), args).unwrap();
++    assert_eq!(
++        evaluate(&plan, ConstLimits::new(100000, 3, 1 << 20).unwrap())
++            .unwrap_err()
++            .diagnostic()
++            .code,
++        "LRR-E-CONST-LIMIT"
++    );
++}
++#[test]
++fn pure_private_identity_immutable_arrays_and_namespace_controls() {
++    let text = "const A:[u8;3]=[5;3];";
++    let src = source(text, 2024);
++    let plan = src.constant(declaration(&src, "A")).unwrap();
++    let first = evaluate(&plan, ConstLimits::default()).unwrap();
++    let second = evaluate(&plan, ConstLimits::default()).unwrap();
++    assert_eq!(first.value().elements().unwrap().len(), 3);
++    assert_eq!(first.value().fingerprint(), second.value().fingerprint());
++    assert!(src.constant(at(text, "[5;3]")).is_err());
++    assert!(
++        ConstValue::from_scalar(ValueRepr {
++            kind: 8,
++            type_id: 1,
++            payload: 42
++        })
++        .is_err()
++    );
++    assert_eq!(
++        evaluate(&plan, ConstLimits::new(100000, 128, 8).unwrap())
++            .unwrap_err()
++            .diagnostic()
++            .code,
++        "LRR-E-CONST-LIMIT"
++    );
++    for text in [
++        "type u32=bool; const A:u32=true;",
++        "mod u32{} const A:u32=3;",
++        "use other::u32;const A:u32=3;",
++    ] {
++        let src = source(text, 2024);
++        assert!(src.constant(declaration(&src, "A")).is_err());
++    }
++    let other = ConstantSource::parse(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity::current(),
++        Digest([175; 32]),
++        CfgSet::guest_default(),
++    )
++    .unwrap();
++    assert_ne!(
++        plan.identity(),
++        other.constant(declaration(&other, "A")).unwrap().identity()
++    );
++    // No live guest arrays were created; fresh runtime instantiation is a root hook.
++}
++
++#[test]
++fn pure_return_context_and_cold_later_statements_stay_lazy() {
++    let text = "const fn first()->u32 {return 7; missing();} const fn wrong()->u32{return true;}";
++    let src = source(text, 2024);
++    let first = src.const_call(declaration(&src, "first"), vec![]).unwrap();
++    assert_eq!(
++        scalar(evaluate(&first, ConstLimits::default()).unwrap().value()),
++        ValueRepr::unsigned(TypeId(11), 7).unwrap()
++    );
++    let wrong = src.const_call(declaration(&src, "wrong"), vec![]).unwrap();
++    assert_eq!(
++        evaluate(&wrong, ConstLimits::default())
++            .unwrap_err()
++            .diagnostic()
++            .code,
++        "LRR-E-CONST-TYPE"
++    );
++}
++
++#[test]
++fn pure_raw_names_and_disabled_imports_keep_source_identity() {
++    let text = "#[cfg(any())] use elsewhere::u32; #[cfg(any())] type u32=bool; const r#first:u32=4; const SECOND:u32=first+1;";
++    let src = source(text, 2024);
++    let plan = src.constant(declaration(&src, "SECOND")).unwrap();
++    assert_eq!(
++        scalar(evaluate(&plan, ConstLimits::default()).unwrap().value()),
++        ValueRepr::unsigned(TypeId(11), 5).unwrap()
++    );
++    let src = source("const A:i64={let n=1;n};", 2024);
++    let plan = src.constant(declaration(&src, "A")).unwrap();
++    assert_eq!(
++        evaluate(&plan, ConstLimits::default())
++            .unwrap_err()
++            .diagnostic()
++            .code,
++        "LRR-E-CONST-UNSUPPORTED"
++    );
++}
++
++#[test]
++fn pure_local_value_and_callable_shadows_do_not_capture_root_definitions() {
++    for (text, code) in [
++        (
++            "const fn same()->u32{4} const fn live(same:u32)->u32{same()}",
++            "LRR-E-CONST-TYPE",
++        ),
++        (
++            "const ROOT:u32=4; const LIVE:u32={ROOT;const ROOT:bool=true;4};",
++            "LRR-E-CONST-SOURCE",
++        ),
++    ] {
++        let src = source(text, 2024);
++        let error = if text.contains("fn live") {
++            let plan = src
++                .const_call(
++                    declaration(&src, "live"),
++                    vec![
++                        ConstValue::from_scalar(ValueRepr::unsigned(TypeId(11), 3).unwrap())
++                            .unwrap(),
++                    ],
++                )
++                .unwrap();
++            evaluate(&plan, ConstLimits::default()).unwrap_err()
++        } else {
++            let plan = src.constant(declaration(&src, "LIVE")).unwrap();
++            evaluate(&plan, ConstLimits::default()).unwrap_err()
++        };
++        assert_eq!(error.diagnostic().code, code);
++    }
++}
++
++#[test]
++fn pure_const_call_cycle_key_includes_immutable_arguments() {
++    let src = source("const fn again(n:u32)->u32{again(n)}", 2024);
++    let args = vec![ConstValue::from_scalar(ValueRepr::unsigned(TypeId(11), 1).unwrap()).unwrap()];
++    let plan = src.const_call(declaration(&src, "again"), args).unwrap();
++    assert_eq!(
++        evaluate(&plan, ConstLimits::default())
++            .unwrap_err()
++            .diagnostic()
++            .code,
++        "LRR-E-CONST-CYCLE"
++    );
++}
++
++#[test]
++fn pure_anonymous_lengths_refuse_foreign_lexical_capture() {
++    for text in [
++        "const N:usize=4;fn live(N:usize){let _=[0;N];}",
++        "const N:usize=4;fn live(){let N=2usize;let _=[0;N];}",
++        "const N:usize=4;mod inner{const N:usize=2;type A=[u8;N];}",
++    ] {
++        let src = source(text, 2024);
++        let start = u32::try_from(text.rfind(";N]").unwrap() + 1).unwrap();
++        assert_eq!(
++            src.array_length(SourceRange {
++                start,
++                end: start + 1
++            })
++            .unwrap_err()
++            .code,
++            "LRR-E-CONST-SOURCE"
++        );
++    }
++}

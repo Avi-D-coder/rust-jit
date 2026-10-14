@@ -7,7 +7,12 @@ license.workspace = true
 
 [dependencies]
 lrr = { path = "../crates/lrr" }
+lrr-expand-adapter = { path = "../crates/lrr-expand-adapter" }
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
 blake3.workspace = true
+rustix.workspace = true
+
+[dev-dependencies]
+ra_ap_syntax.workspace = true

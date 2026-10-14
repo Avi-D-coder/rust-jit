@@ -10,3 +10,18 @@ fixtures = ["BOOT-PARSER"]
 id = "closed_jit_symbols_bootstrap"
 status = "infrastructure"
 fixtures = ["BOOT-JIT", "BOOT-IMPORT"]
+
+[[feature]]
+id = "edition2024_reached_binding_modes"
+status = "infrastructure"
+fixtures = ["H003-PATTERN-1", "H003-PATTERN-2", "H003-PATTERN-3", "H003-PATTERN-4", "H003-PATTERN-5"]
+
+[[feature]]
+id = "async_trait_facade_reservations"
+status = "infrastructure"
+fixtures = ["H003-PRELUDE-1", "H003-PRELUDE-2", "H003-PRELUDE-3", "H003-PRELUDE-4"]
+
+[[feature]]
+id = "generators"
+status = "unsupported"
+fixtures = ["H003-GENERATOR-UNSUPPORTED"]

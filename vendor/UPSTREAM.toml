@@ -4,3 +4,112 @@ source = "https://static.crates.io/crates/cranelift-jit/cranelift-jit-0.136.2.cr
 archive = "cranelift-jit-0.136.2.crate"
 sha256 = "3b295275f5b395c764bc8e19f10afe1845cadd8fbcdd933ed40c298427c95ec2"
 patch = "closed-symbols.patch"
+
+[rust_analyzer_macros]
+commit = "bcf0514497034e1156f3cc2bb72b99cc9634a949"
+source = "https://codeload.github.com/rust-lang/rust-analyzer/tar.gz/bcf0514497034e1156f3cc2bb72b99cc9634a949"
+archive = "rust-analyzer-macros.tar.gz"
+sha256 = "fa50adddc735fc46b4a5e98f2650469b72f6cfe13615a78d918582e84de2f43d"
+inventory_sha256 = "11013c2b46a5a638086306d615dbb137abd6d773c8ea97b36b5dd88eed5d71ae"
+syntax_package = "ra_ap_syntax 0.0.356"
+syntax_package_dirty = true
+licenses = ["MIT", "Apache-2.0"]
+
+[[rust_analyzer_macros.patches]]
+id = "E-M006-001"
+path = "crates/mbe/src/expander/transcriber.rs"
+patch = "mbe-cardinality.patch"
+sha256 = "d64e5ea98bbc243b0a33fb4ae594e97d7443bdc17b94de01ab21c8e785d16269"
+preimage_sha256 = "298f1c16179722ae16dd9c934f42feaf4b306ac1d0c649ae836a788465aded3a"
+postimage_sha256 = "761629930f0eee31f7cd4f5c20f5907a49a23f9958ca8fb3597d8d7c18537845"
+erratum = "docs/errata/m006-repetition-cardinality.md"
+
+[[rust_analyzer_macros.patches]]
+id = "E-M006-003-API"
+path = "crates/mbe/src/lib.rs"
+patch = "mbe-token-preflight-api.patch"
+sha256 = "19fa3457b53e57ee2e8f79105c7dd65e34f9476325b572db099403e90ff05190"
+preimage_sha256 = "0ab00249e31187323956af8530fdc24f870a685d4004cae4f64c3d9c3ce2463f"
+postimage_sha256 = "a6b4726a98c7696c88b557ecd16da5971b6f049498b7d6bf8b629efe2418bbc1"
+erratum = "docs/errata/m006-token-preflight.md"
+
+[[rust_analyzer_macros.patches]]
+id = "E-M006-003-DISPATCH"
+path = "crates/mbe/src/expander.rs"
+patch = "mbe-token-preflight-dispatch.patch"
+sha256 = "cb0d512ad7b62b4ae602daad8924c14dfbf484cc98dd7d95f77f5118dc2172e7"
+preimage_sha256 = "a124958338d2801cd0b8ecd971e4fbe1abe61f01f45aed654d50eb36fab0aac1"
+postimage_sha256 = "1140355c9e097a903f2a3ba3ac9bf4672fa65368210cb21b61f2e3ebee49f75b"
+erratum = "docs/errata/m006-token-preflight.md"
+
+[[rust_analyzer_macros.patches]]
+id = "E-M006-003-RESTORE"
+path = "crates/tt/src/lib.rs"
+patch = "tt-restore-point-export.patch"
+sha256 = "8687342004db6000483b8f36397549e3d9545a28f6bd7521031f081be956e4e7"
+preimage_sha256 = "bcb50d0d1a00b21b3c91579cd59c0276a774ef7cbfa0805dd4c0f8beff17cdf8"
+postimage_sha256 = "d107bd7972ee27c3448f9b63beaa1b4beae96d96c467c4deae0ba1ac0dd2f589"
+erratum = "docs/errata/m006-token-preflight.md"
+
+[[rust_analyzer_macros.patches]]
+id = "E-M007-001"
+path = "crates/hir-expand/src/hygiene.rs"
+patch = "hygiene-call-site-api.patch"
+sha256 = "73939b658baff790605eba531ca2e150a3b7ab7e7ac60e04ab6189c977a53c17"
+preimage_sha256 = "aea3f40cd0a432f5031ef47b6aa2a59da2b410c4c05cb86fba49274f2977f131"
+postimage_sha256 = "f86c605e6193f7c32c2e4602aaad22605094cd925e481aa5f409c96f7127b586"
+erratum = "docs/errata/m007-hygiene-api.md"
+
+[[rust_analyzer_macros.patches]]
+id = "E-M009-002-API"
+path = "crates/proc-macro-api/src/lib.rs"
+patch = "proc-macro-explicit-protocol-api.patch"
+sha256 = "7003b2e26899ebe12f89ec644b6c3e31b6a3e3f2936d85f66d5568dccb6b5372"
+preimage_sha256 = "2e2dceb85444dd2e07377183855e7c47e4e2eae2b87280fc8417e4f1e8e33a87"
+postimage_sha256 = "7492abfe5d39bbb5633b3fdcd9536938f035b8ec00970dadc8ae75cb4b3585b4"
+erratum = "docs/errata/m009-explicit-protocol.md"
+
+[[rust_analyzer_macros.patches]]
+id = "E-M009-002-PROCESS"
+path = "crates/proc-macro-api/src/process.rs"
+patch = "proc-macro-explicit-protocol-process.patch"
+sha256 = "2dc23a887ea3903b5cec71b2a49bbc925e93c0c2a561f243dc724641752c4c1e"
+preimage_sha256 = "182402087192311c205bc355fefade5dcfebf842f581efc5f16d142656003ce0"
+postimage_sha256 = "9a729f772d63803de2b86515e5d99e5d88a68904cfb759bf45eff3ecaa69c656"
+erratum = "docs/errata/m009-explicit-protocol.md"
+
+[[rust_analyzer_macros.patches]]
+id = "E-M011-001-API"
+path = "crates/hir-expand/src/builtin/fn_macro.rs"
+patch = "concat-value-api.patch"
+sha256 = "5daac26851f0e32118a6bd8f101a991e9639e2a46fca1fd2523bc2621e8bf4ff"
+preimage_sha256 = "29b073077d2a28d60297bfc55c4ae7704d10daa365fb836f704de259a75d1d22"
+postimage_sha256 = "1675505c67ef73c4cc99a3c1a3c88807b1c3f610ab8320872f3bd71e90596f08"
+erratum = "docs/errata/m011-concat-api.md"
+
+[[rust_analyzer_macros.patches]]
+id = "E-M011-001-EXPORT"
+path = "crates/hir-expand/src/builtin.rs"
+patch = "concat-value-export.patch"
+sha256 = "f7f62b74b58f67ad68d9d320d0e2ca9ede23a881373e6db32a8dee82451a3dbd"
+preimage_sha256 = "0aeacc0947fc53868001ef610131414c9e5309b8b63be14e670213145615f72e"
+postimage_sha256 = "e26986c1a6b7c19e9e1a3467c9c4793e8433835745e3c7b8ec1b181c858af3c5"
+erratum = "docs/errata/m011-concat-api.md"
+
+[[rust_analyzer_macros.patches]]
+id = "E-M013-001-API-rust_analyzer_span"
+path = "crates/proc-macro-srv/src/server_impl/rust_analyzer_span.rs"
+patch = "proc-macro-rust99-injected-env-rust_analyzer_span.patch"
+sha256 = "83f032014e83ed4d3fabe1cc6011d65f1ab81764190c452745f550a0bdff1eec"
+preimage_sha256 = "467f2140fa1ed0b81d4b848b72616ec1d6b21086a81671982088966edafc6576"
+postimage_sha256 = "7d2d9bcac638b5166413154339ba4661e297725701cc23485574f97712aa72d6"
+erratum = "docs/errata/m013-procedural-stdout.md"
+
+[[rust_analyzer_macros.patches]]
+id = "E-M013-001-API-token_id"
+path = "crates/proc-macro-srv/src/server_impl/token_id.rs"
+patch = "proc-macro-rust99-injected-env-token_id.patch"
+sha256 = "c07b181fec87fb383b6f5de7f825ad9ebd91bbcccdb20e912404c85d2d43023c"
+preimage_sha256 = "43bba08f6d31c949cae2ecacb3a995fa20fffa377772090647eb450c3c87911a"
+postimage_sha256 = "2c635a76ad79c4d5c6388f334f42c7772fe532759ca6ef21f8533841703b604d"
+erratum = "docs/errata/m013-procedural-stdout.md"

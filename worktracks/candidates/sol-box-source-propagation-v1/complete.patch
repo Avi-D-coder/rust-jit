@@ -1,0 +1,1104 @@
+diff --git a/crates/lrr/src/frontend/box_source_propagation.rs b/crates/lrr/src/frontend/box_source_propagation.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/box_source_propagation.rs
+@@ -0,0 +1,611 @@
++//! M018 bounded same-module Box alias/field/return source propagation.
++//! These views are not layouts, selected trait witnesses or guest values.
++use super::{BoxPointeeReadiness, CurrentBoxPointee, current_query, source_name};
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::{
++        dependency::{DependencyStamp, InputKey, InputValue},
++        key::QueryKey,
++        memo::Database,
++        poll::QueryPoll,
++        provider::SyntaxProvider,
++        seals::SealKey,
++        value::QueryValue,
++    },
++    frontend::{
++        box_source_admission::compiler_contract::CurrentBoxLibraryContract,
++        compile_input_catalog::CompileInputCatalog, names::NameLookup, types::NominalSchema,
++    },
++    source::{
++        box_type_headers::{BoxPointeeSyntax, BoxTypeHeaderSite, BoxTypeRole},
++        changes::PreparedSourceView,
++        manifest::ItemKind,
++    },
++    syntax::box_source_headers::BoxHeaderRole as Role,
++    traits::term::{GenericArg, TyTerm},
++};
++use std::sync::Arc;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-BOX-SOURCE-VIEW", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "Box source propagation metadata limit".into(),
++    )
++}
++/// Full current origin/pointee/alias/schema records are retained. A view identity
++/// or printed type name cannot reconstruct this privately prepared source packet.
++pub(crate) struct CurrentBoxSourceView {
++    origin: Arc<BoxTypeHeaderSite>,
++    aliases: Vec<Arc<BoxTypeHeaderSite>>,
++    pointee: CurrentBoxPointee,
++    symbolic: TyTerm,
++    schema: Option<Box<NominalSchema>>,
++    dependencies: Vec<DependencyStamp>,
++    query_revision: u64,
++    source_revision: u64,
++    bytes: usize,
++}
++pub(crate) enum BoxViewPreparation {
++    Symbolic(Box<CurrentBoxSourceView>),
++    PointeeRequired(BoxPointeeReadiness),
++    ArrayLengthRequired(Box<BoxViewArrayContinuation>),
++    OwningContextRequired,
++    ForeignSourceRequired,
++    AliasOrBoxTypeRequired,
++}
++pub(crate) enum BoxRuntimeViewRequirement<'a> {
++    /// Exact source-selected Box layout + parameterized nominal frame views are
++    /// required. Descriptor availability alone never completes this requirement.
++    ParameterizedSourceTableAndLayout {
++        source: &'a TyTerm,
++        origin: &'a BoxTypeHeaderSite,
++    },
++    SelectedFieldLayout {
++        owner: Digest,
++        schema: Digest,
++        field: u32,
++        source: &'a TyTerm,
++    },
++    NamedReturnContract {
++        definition: Digest,
++        source: &'a TyTerm,
++    },
++}
++impl CurrentBoxSourceView {
++    pub(crate) fn prepare_current(
++        db: &mut Database,
++        source: &PreparedSourceView,
++        compiler: &CompileInputCatalog,
++        library: &CurrentBoxLibraryContract<'_>,
++        origin: Arc<BoxTypeHeaderSite>,
++        type_seal: &SealKey,
++        byte_limit: usize,
++    ) -> QueryPoll<BoxViewPreparation> {
++        let start = || -> Result<(), Diagnostic> {
++            source.require_original_hygiene()?;
++            library.revalidate(db, source, compiler)?;
++            if origin.source() != source.selection() || byte_limit > 32 << 20 {
++                return Err(fault("Box source view owning source/limit differs"));
++            }
++            Ok(())
++        };
++        if let Err(error) = start() {
++            return QueryPoll::Ready(Err(error));
++        }
++        let mut bytes = match std::mem::size_of::<Self>()
++            .checked_add(origin.metadata_bytes())
++            .filter(|n| *n <= byte_limit)
++        {
++            Some(n) => n,
++            None => return QueryPoll::Ready(Err(limit())),
++        };
++        let mut dependencies = Vec::new();
++        let mut aliases: Vec<Arc<BoxTypeHeaderSite>> = Vec::new();
++        let mut current = origin.clone();
++        let mut schema = None;
++        if let BoxTypeRole::Field(field) = origin.role() {
++            let key = QueryKey::TypeSchema(origin.definition().fingerprint());
++            let outcome = match db.fetch(&SyntaxProvider, key.clone()) {
++                QueryPoll::Ready(Ok(value)) => value,
++                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
++                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
++            };
++            if let Err(error) = current_query(db, &key, &outcome) {
++                return QueryPoll::Ready(Err(error));
++            }
++            let QueryValue::TypeSchema(actual) = outcome.value.as_ref() else {
++                return QueryPoll::Ready(Err(fault(
++                    "Box field source schema query variant differs",
++                )));
++            };
++            if actual.definition != origin.definition().fingerprint()
++                || actual.header != *origin.header()
++                || actual.scope != origin.context().scope
++                || actual.variants.len() != 1
++            {
++                return QueryPoll::Ready(Err(fault(
++                    "Box field current source/schema identity differs",
++                )));
++            }
++            if !actual.generics.is_empty() {
++                return QueryPoll::Ready(Ok(BoxViewPreparation::OwningContextRequired));
++            }
++            let Some(selected) = actual.variants[0].fields.get(field as usize) else {
++                return QueryPoll::Ready(Err(fault(
++                    "Box enabled field ordinal missing from current schema",
++                )));
++            };
++            if selected.ty != origin.type_tokens()
++                || selected.name.as_deref() != origin.field_name()
++            {
++                return QueryPoll::Ready(Err(fault(
++                    "Box selected field name/type/cfg differs from source schema",
++                )));
++            }
++            bytes = match bytes
++                .checked_add(actual.estimated_bytes())
++                .filter(|n| *n <= byte_limit)
++            {
++                Some(n) => n,
++                None => return QueryPoll::Ready(Err(limit())),
++            };
++            if let Err(error) = retain_stamp(
++                &mut dependencies,
++                &mut bytes,
++                byte_limit,
++                DependencyStamp::Query {
++                    key,
++                    fingerprint: outcome.fingerprint,
++                },
++            ) {
++                return QueryPoll::Ready(Err(error));
++            }
++            schema = Some(actual.clone());
++        }
++        loop {
++            if current.needs_owner_environment() || current.context().scope.owner.is_some() {
++                return QueryPoll::Ready(Ok(BoxViewPreparation::OwningContextRequired));
++            }
++            if let Err(error) = capture_site_inputs(
++                db,
++                source,
++                &current,
++                &mut dependencies,
++                &mut bytes,
++                byte_limit,
++            ) {
++                return QueryPoll::Ready(Err(error));
++            }
++            // Only bare original aliases are followed. Unsupported compound/qualified
++            // targets remain requirements; no textual parser or nominal guess is used.
++            if !matches!(current.pointee(), BoxPointeeSyntax::Unsupported)
++                || current.type_tokens().len() != 1
++            {
++                let result = match CurrentBoxPointee::capture_header_current(
++                    db,
++                    source,
++                    compiler,
++                    library,
++                    current.clone(),
++                    type_seal,
++                    byte_limit,
++                ) {
++                    QueryPoll::Ready(Ok(value)) => value,
++                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
++                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
++                };
++                let pointee = match result {
++                    BoxPointeeReadiness::Closed(pointee) => pointee,
++                    BoxPointeeReadiness::ArrayLengthRequired(demand) => {
++                        return QueryPoll::Ready(Ok(BoxViewPreparation::ArrayLengthRequired(
++                            Box::new(BoxViewArrayContinuation {
++                                origin,
++                                aliases,
++                                schema,
++                                dependencies,
++                                bytes,
++                                demand: *demand,
++                                query_revision: db.revision(),
++                                source_revision: db.source_revision(),
++                                metadata_limit: byte_limit,
++                            }),
++                        )));
++                    }
++                    other => {
++                        return QueryPoll::Ready(Ok(BoxViewPreparation::PointeeRequired(other)));
++                    }
++                };
++                let finish = || -> Result<Self, Diagnostic> {
++                    pointee.revalidate(db, source, compiler, library)?;
++                    let symbolic = TyTerm::Nominal(
++                        library.header(Role::OwnedBox)?.definition().fingerprint(),
++                        vec![
++                            GenericArg::Type(pointee.term().clone()),
++                            GenericArg::Type(TyTerm::Nominal(
++                                library.header(Role::Global)?.definition().fingerprint(),
++                                vec![],
++                            )),
++                        ],
++                    );
++                    let bytes = bytes
++                        .checked_add(pointee.metadata_bytes())
++                        .and_then(|n| n.checked_add(symbolic.measure()?.1))
++                        .filter(|n| *n <= byte_limit)
++                        .ok_or_else(limit)?;
++                    Ok(Self {
++                        origin,
++                        aliases,
++                        pointee: *pointee,
++                        symbolic,
++                        schema,
++                        dependencies,
++                        query_revision: db.revision(),
++                        source_revision: db.source_revision(),
++                        bytes,
++                    })
++                };
++                return QueryPoll::Ready(
++                    finish().map(|view| BoxViewPreparation::Symbolic(Box::new(view))),
++                );
++            }
++            let Some(name) = current.box_name() else {
++                return QueryPoll::Ready(Ok(BoxViewPreparation::AliasOrBoxTypeRequired));
++            };
++            bytes = match bytes
++                .checked_add(std::mem::size_of::<DependencyStamp>())
++                .filter(|n| *n <= byte_limit && dependencies.len() < 4000)
++            {
++                Some(n) => n,
++                None => return QueryPoll::Ready(Err(limit())),
++            };
++            if dependencies.try_reserve_exact(1).is_err() {
++                return QueryPoll::Ready(Err(limit()));
++            }
++            let found = match source_name(
++                db,
++                source,
++                library,
++                &current,
++                type_seal,
++                name,
++                &mut dependencies,
++                &mut bytes,
++                byte_limit,
++            ) {
++                QueryPoll::Ready(Ok(value)) => value,
++                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
++                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
++            };
++            let NameLookup::Defined(selected) = found else {
++                return QueryPoll::Ready(Ok(BoxViewPreparation::AliasOrBoxTypeRequired));
++            };
++            let Some(item) = source.outline().items.iter().find(|item| {
++                item.def_key.fingerprint() == selected.identity
++                    && item.def_key.crate_key == selected.defining_unit
++                    && item.header.profile.edition == selected.definition_edition
++            }) else {
++                return QueryPoll::Ready(Ok(BoxViewPreparation::ForeignSourceRequired));
++            };
++            if item.def_key.item_kind != ItemKind::TypeAlias {
++                return QueryPoll::Ready(Ok(BoxViewPreparation::AliasOrBoxTypeRequired));
++            }
++            if aliases
++                .iter()
++                .any(|alias| alias.definition() == &item.def_key)
++                || (origin.definition() == &item.def_key
++                    && origin.role() == BoxTypeRole::AliasTarget)
++            {
++                return QueryPoll::Ready(Err(Diagnostic::new(
++                    "LRR-E-TYPE-ALIAS-CYCLE",
++                    format!(
++                        "reached Box source alias cycle at {} after {} steps",
++                        item.def_key.fingerprint(),
++                        aliases.len()
++                    ),
++                )));
++            }
++            if aliases.len() >= 256 {
++                return QueryPoll::Ready(Err(limit()));
++            }
++            let key = QueryKey::TypeAlias(selected.identity);
++            let outcome = match db.fetch(&SyntaxProvider, key.clone()) {
++                QueryPoll::Ready(Ok(value)) => value,
++                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
++                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
++            };
++            if let Err(error) = current_query(db, &key, &outcome) {
++                return QueryPoll::Ready(Err(error));
++            }
++            let QueryValue::TypeAlias(recipe) = outcome.value.as_ref() else {
++                return QueryPoll::Ready(Err(fault("Box alias query variant differs")));
++            };
++            if recipe.definition != selected.identity
++                || recipe.header != item.header
++                || recipe.scope != item.scope
++            {
++                return QueryPoll::Ready(Err(fault(
++                    "Box alias actual source/header/query differs",
++                )));
++            }
++            if !recipe.generics.is_empty() || recipe.scope.owner.is_some() {
++                return QueryPoll::Ready(Ok(BoxViewPreparation::OwningContextRequired));
++            }
++            let site = match source.managed_box_type_header(&item.def_key, BoxTypeRole::AliasTarget)
++            {
++                Ok(site) => site,
++                Err(error) => return QueryPoll::Ready(Err(error)),
++            };
++            if site.type_tokens() != recipe.target {
++                return QueryPoll::Ready(Err(fault(
++                    "Box alias target differs from captured current source",
++                )));
++            }
++            bytes = match bytes
++                .checked_add(site.metadata_bytes())
++                .and_then(|n| n.checked_add(std::mem::size_of::<Arc<BoxTypeHeaderSite>>()))
++                .filter(|n| *n <= byte_limit)
++            {
++                Some(n) => n,
++                None => return QueryPoll::Ready(Err(limit())),
++            };
++            if let Err(error) = retain_stamp(
++                &mut dependencies,
++                &mut bytes,
++                byte_limit,
++                DependencyStamp::Query {
++                    key,
++                    fingerprint: outcome.fingerprint,
++                },
++            ) {
++                return QueryPoll::Ready(Err(error));
++            }
++            if aliases.try_reserve_exact(1).is_err() {
++                return QueryPoll::Ready(Err(limit()));
++            }
++            aliases.push(site.clone());
++            current = site;
++        }
++    }
++    pub(crate) fn revalidate(
++        &self,
++        db: &Database,
++        source: &PreparedSourceView,
++        compiler: &CompileInputCatalog,
++        library: &CurrentBoxLibraryContract<'_>,
++    ) -> Result<(), Diagnostic> {
++        self.pointee.revalidate(db, source, compiler, library)?;
++        if self.origin.source() != source.selection()
++            || self.query_revision != db.revision()
++            || self.source_revision != db.source_revision()
++        {
++            return Err(fault(
++                "Box source view publication/owner changed; recapture required",
++            ));
++        }
++        for stamp in &self.dependencies {
++            let current = match stamp {
++                DependencyStamp::Input { key, fingerprint } => db
++                    .published_input(key)
++                    .is_some_and(|(_, actual)| actual == *fingerprint),
++                DependencyStamp::Query { key, fingerprint } => db.memo(key).is_some_and(|memo| {
++                    memo.verified_revision == db.revision() && memo.fingerprint == *fingerprint
++                }),
++            };
++            if !current {
++                return Err(fault("Box alias/field/return source dependency changed"));
++            }
++        }
++        Ok(())
++    }
++    pub(crate) fn pointee(&self) -> &CurrentBoxPointee {
++        &self.pointee
++    }
++    pub(crate) fn symbolic(&self) -> &TyTerm {
++        &self.symbolic
++    }
++    pub(crate) fn origin(&self) -> &BoxTypeHeaderSite {
++        &self.origin
++    }
++    pub(crate) fn alias_origins(&self) -> &[Arc<BoxTypeHeaderSite>] {
++        &self.aliases
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/current-propagated-box-source-view");
++        e.record(self.origin.as_ref());
++        e.sequence(&self.aliases, |e, alias| e.record(alias.as_ref()));
++        e.digest(self.pointee.identity());
++        e.record(&self.symbolic);
++        e.option(&self.schema, |e, schema| e.record(schema.as_ref()));
++        e.sequence(&self.dependencies, |e, stamp| e.record(stamp));
++        e.u64(self.query_revision);
++        e.u64(self.source_revision);
++        e.finish()
++    }
++    pub(crate) fn runtime_requirement(&self) -> Result<BoxRuntimeViewRequirement<'_>, Diagnostic> {
++        Ok(match self.origin.role() {
++            BoxTypeRole::Field(field) => BoxRuntimeViewRequirement::SelectedFieldLayout {
++                owner: self.origin.definition().fingerprint(),
++                schema: self
++                    .schema
++                    .as_ref()
++                    .ok_or_else(|| fault("Box field view lacks actual retained schema"))?
++                    .fingerprint(),
++                field,
++                source: &self.symbolic,
++            },
++            BoxTypeRole::Result => BoxRuntimeViewRequirement::NamedReturnContract {
++                definition: self.origin.definition().fingerprint(),
++                source: &self.symbolic,
++            },
++            _ => BoxRuntimeViewRequirement::ParameterizedSourceTableAndLayout {
++                source: &self.symbolic,
++                origin: &self.origin,
++            },
++        })
++    }
++}
++fn retain_stamp(
++    deps: &mut Vec<DependencyStamp>,
++    bytes: &mut usize,
++    byte_limit: usize,
++    stamp: DependencyStamp,
++) -> Result<(), Diagnostic> {
++    let next = bytes
++        .checked_add(std::mem::size_of::<DependencyStamp>())
++        .and_then(|n| n.checked_add(stamp.heap_bytes()))
++        .filter(|n| *n <= byte_limit && deps.len() < 4000)
++        .ok_or_else(limit)?;
++    deps.try_reserve_exact(1).map_err(|_| limit())?;
++    deps.push(stamp);
++    *bytes = next;
++    Ok(())
++}
++fn capture_site_inputs(
++    db: &Database,
++    source: &PreparedSourceView,
++    site: &BoxTypeHeaderSite,
++    deps: &mut Vec<DependencyStamp>,
++    bytes: &mut usize,
++    byte_limit: usize,
++) -> Result<(), Diagnostic> {
++    let item = source
++        .outline()
++        .items
++        .iter()
++        .find(|item| item.def_key == *site.definition())
++        .ok_or_else(|| fault("Box view current source site absent"))?;
++    if item.header != *site.header()
++        || item.scope != site.context().scope
++        || item.declaration_span != site.context().range
++        || item.body.as_ref() != site.body()
++    {
++        return Err(fault("Box alias/field/return source context differs"));
++    }
++    for key in [
++        InputKey::CapturedSource(source.selection().location_identity()),
++        InputKey::DefinitionSource(site.definition().fingerprint()),
++        InputKey::DefinitionHeader(site.definition().fingerprint()),
++        InputKey::DeclarationContext(site.definition().fingerprint()),
++    ] {
++        let (value, fingerprint) = db
++            .published_input(&key)
++            .ok_or_else(|| fault("Box view actual source publication absent"))?;
++        let matches = match value {
++            InputValue::CapturedSource(value) => value == source.selection(),
++            InputValue::DefinitionSource(value) => value == &source.selection().outline.parse,
++            InputValue::DefinitionHeader(value) => value == site.header(),
++            InputValue::DeclarationContext(value) => value == site.context(),
++            _ => false,
++        };
++        if !matches {
++            return Err(fault("Box view source publication variant/context differs"));
++        }
++        retain_stamp(
++            deps,
++            bytes,
++            byte_limit,
++            DependencyStamp::Input { key, fingerprint },
++        )?;
++    }
++    Ok(())
++}
++
++/// Immutable source-only suspension state, no guest operand/owner/resources.
++/// The driver supplies current opaque library/source proof again after resume.
++pub(crate) struct BoxViewArrayContinuation {
++    origin: Arc<BoxTypeHeaderSite>,
++    aliases: Vec<Arc<BoxTypeHeaderSite>>,
++    schema: Option<Box<NominalSchema>>,
++    dependencies: Vec<DependencyStamp>,
++    bytes: usize,
++    demand: super::CurrentBoxArrayLengthDemand,
++    query_revision: u64,
++    source_revision: u64,
++    metadata_limit: usize,
++}
++impl BoxViewArrayContinuation {
++    pub(crate) fn fetch_current(
++        self,
++        db: &mut Database,
++        source: &PreparedSourceView,
++        compiler: &CompileInputCatalog,
++        library: &CurrentBoxLibraryContract<'_>,
++        limits: crate::frontend::constants::ConstLimits,
++        query_byte_limit: usize,
++    ) -> QueryPoll<CurrentBoxSourceView> {
++        if self.query_revision != db.revision()
++            || self.source_revision != db.source_revision()
++            || self.origin.source() != source.selection()
++        {
++            return QueryPoll::Ready(Err(fault(
++                "Box alias array continuation changed publication; recapture required",
++            )));
++        }
++        if let Err(error) = library.revalidate(db, source, compiler) {
++            return QueryPoll::Ready(Err(error));
++        }
++        for stamp in &self.dependencies {
++            let current = match stamp {
++                DependencyStamp::Input { key, fingerprint } => db
++                    .published_input(key)
++                    .is_some_and(|(_, actual)| actual == *fingerprint),
++                DependencyStamp::Query { key, fingerprint } => db.memo(key).is_some_and(|memo| {
++                    memo.verified_revision == db.revision() && memo.fingerprint == *fingerprint
++                }),
++            };
++            if !current {
++                return QueryPoll::Ready(Err(fault(
++                    "Box alias array continuation source dependency changed",
++                )));
++            }
++        }
++        let pointee =
++            match self
++                .demand
++                .fetch_current(db, source, compiler, library, limits, query_byte_limit)
++            {
++                QueryPoll::Ready(Ok(value)) => value,
++                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
++                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
++            };
++        let finish = || -> Result<CurrentBoxSourceView, Diagnostic> {
++            pointee.revalidate(db, source, compiler, library)?;
++            let symbolic = TyTerm::Nominal(
++                library.header(Role::OwnedBox)?.definition().fingerprint(),
++                vec![
++                    GenericArg::Type(pointee.term().clone()),
++                    GenericArg::Type(TyTerm::Nominal(
++                        library.header(Role::Global)?.definition().fingerprint(),
++                        vec![],
++                    )),
++                ],
++            );
++            let bytes = self
++                .bytes
++                .checked_add(pointee.metadata_bytes())
++                .and_then(|n| n.checked_add(symbolic.measure()?.1))
++                .filter(|n| *n <= self.metadata_limit)
++                .ok_or_else(limit)?;
++            Ok(CurrentBoxSourceView {
++                origin: self.origin,
++                aliases: self.aliases,
++                pointee,
++                symbolic,
++                schema: self.schema,
++                dependencies: self.dependencies,
++                query_revision: db.revision(),
++                source_revision: db.source_revision(),
++                bytes,
++            })
++        };
++        QueryPoll::Ready(finish())
++    }
++}
+diff --git a/crates/lrr/src/frontend/box_type_readiness.rs b/crates/lrr/src/frontend/box_type_readiness.rs
+--- a/crates/lrr/src/frontend/box_type_readiness.rs
++++ b/crates/lrr/src/frontend/box_type_readiness.rs
+@@ -553,3 +553,6 @@
+         _ => return None,
+     })
+ }
++
++#[path = "box_source_propagation.rs"]
++pub(crate) mod propagation;
+diff --git a/crates/lrr/src/source/box_type_headers.rs b/crates/lrr/src/source/box_type_headers.rs
+--- a/crates/lrr/src/source/box_type_headers.rs
++++ b/crates/lrr/src/source/box_type_headers.rs
+@@ -22,7 +22,7 @@
+ };
+ use ra_ap_syntax::{
+     AstNode,
+-    ast::{self, HasGenericArgs, HasGenericParams, HasName},
++    ast::{self, HasAttrs, HasGenericArgs, HasGenericParams, HasName},
+ };
+ const MAX_BYTES: usize = 32 << 20;
+ fn fault(message: &str) -> Diagnostic {
+@@ -33,6 +33,8 @@
+     Parameter(u32),
+     Result,
+     FunctionPointerResult(u32),
++    AliasTarget,
++    Field(u32),
+ }
+ #[derive(Debug)]
+ pub enum BoxPointeeSyntax {
+@@ -57,6 +59,8 @@
+     pointee: BoxPointeeSyntax,
+     bytes: usize,
+     needs_owner_environment: bool,
++    type_tokens: Vec<crate::syntax::ast_adapter::TokenRecipe>,
++    field_name: Option<String>,
+ }
+ impl BoxTypeHeaderSite {
+     pub fn source(&self) -> &SourceSelection {
+@@ -88,6 +92,12 @@
+     }
+     pub fn metadata_bytes(&self) -> usize {
+         self.bytes
++    }
++    pub fn type_tokens(&self) -> &[crate::syntax::ast_adapter::TokenRecipe] {
++        &self.type_tokens
++    }
++    pub fn field_name(&self) -> Option<&str> {
++        self.field_name.as_deref()
+     }
+     pub fn needs_owner_environment(&self) -> bool {
+         self.needs_owner_environment
+@@ -180,54 +190,122 @@
+         .iter()
+         .find(|row| &row.def_key == definition)
+         .ok_or_else(|| fault("Box type owning source declaration absent"))?;
+-    let function = tree
+-        .syntax()
+-        .descendants()
+-        .filter_map(ast::Fn::cast)
+-        .find(|function| range(function.syntax().text_range()) == item.declaration_span)
+-        .ok_or_else(|| fault("Box type owner is not exact source function"))?;
+     let context = DeclarationContext {
+         scope: item.scope.clone(),
+         range: item.declaration_span,
+     };
+-    let body = function.body();
+-    if tokens(
+-        function.syntax(),
+-        body.as_ref().map(|body| body.syntax().text_range()),
+-    ) != item.header.tokens
+-    {
+-        return Err(fault("Box header token/source attachment differs"));
+-    }
+-    let needs_owner_environment =
+-        function.generic_param_list().is_some() || function.where_clause().is_some();
+-    let parameter = |ordinal: u32| -> Result<ast::Type, Diagnostic> {
+-        function
+-            .param_list()
+-            .and_then(|list| list.params().nth(usize::try_from(ordinal).ok()?))
+-            .and_then(|param| param.ty())
+-            .ok_or_else(|| fault("Box header parameter/type ordinal absent"))
+-    };
+-    let ty = match role {
+-        BoxTypeRole::Result => function
+-            .ret_type()
+-            .and_then(|ret| ret.ty())
+-            .ok_or_else(|| fault("Box header explicit result type absent"))?,
+-        BoxTypeRole::Parameter(ordinal) => parameter(ordinal)?,
+-        BoxTypeRole::FunctionPointerResult(ordinal) => {
+-            let ast::Type::FnPtrType(pointer) = parameter(ordinal)? else {
+-                return Err(fault("Box nested result requires actual source fn pointer"));
++    let (ty, needs_owner_environment, field_name) = match role {
++        BoxTypeRole::AliasTarget => {
++            let alias = tree
++                .syntax()
++                .descendants()
++                .filter_map(ast::TypeAlias::cast)
++                .find(|alias| range(alias.syntax().text_range()) == item.declaration_span)
++                .ok_or_else(|| fault("Box alias source declaration absent"))?;
++            if tokens(alias.syntax(), None) != item.header.tokens {
++                return Err(fault("Box alias source/header differs"));
++            }
++            let needs = alias.generic_param_list().is_some() || alias.where_clause().is_some();
++            (
++                alias
++                    .ty()
++                    .ok_or_else(|| fault("Box alias exact target absent"))?,
++                needs,
++                None,
++            )
++        }
++        BoxTypeRole::Field(ordinal) => {
++            let structure = tree
++                .syntax()
++                .descendants()
++                .filter_map(ast::Struct::cast)
++                .find(|structure| range(structure.syntax().text_range()) == item.declaration_span)
++                .ok_or_else(|| fault("Box field original struct absent"))?;
++            if tokens(structure.syntax(), None) != item.header.tokens {
++                return Err(fault("Box field owning header/source differs"));
++            }
++            let Some(ast::FieldList::RecordFieldList(list)) = structure.field_list() else {
++                return Err(fault("Box selected field requires original record schema"));
+             };
+-            if pointer.abi().is_some()
+-                || pointer.unsafe_token().is_some()
+-                || pointer.async_token().is_some()
+-                || pointer.const_token().is_some()
++            let mut selected = None;
++            let mut enabled = 0u32;
++            for field in list.fields() {
++                if !crate::syntax::attributes::effective_metas(
++                    field.attrs().filter_map(|attr| attr.meta()).collect(),
++                    cfg,
++                )?
++                .0
++                {
++                    continue;
++                }
++                if enabled == ordinal {
++                    selected = Some(field);
++                    break;
++                }
++                enabled = enabled
++                    .checked_add(1)
++                    .ok_or_else(|| fault("Box field ordinal overflow"))?;
++            }
++            let field = selected.ok_or_else(|| fault("Box enabled field ordinal absent"))?;
++            let needs =
++                structure.generic_param_list().is_some() || structure.where_clause().is_some();
++            (
++                field
++                    .ty()
++                    .ok_or_else(|| fault("Box field source type absent"))?,
++                needs,
++                field.name().map(|name| name.text().to_string()),
++            )
++        }
++        _ => {
++            let function = tree
++                .syntax()
++                .descendants()
++                .filter_map(ast::Fn::cast)
++                .find(|function| range(function.syntax().text_range()) == item.declaration_span)
++                .ok_or_else(|| fault("Box type owner is not exact source function"))?;
++            let body = function.body();
++            if tokens(
++                function.syntax(),
++                body.as_ref().map(|body| body.syntax().text_range()),
++            ) != item.header.tokens
+             {
+-                return Err(fault("Box fn-pointer binder requires source context"));
+-            }
+-            pointer
+-                .ret_type()
+-                .and_then(|ret| ret.ty())
+-                .ok_or_else(|| fault("Box fn-pointer explicit result absent"))?
++                return Err(fault("Box header token/source attachment differs"));
++            }
++            let needs_owner_environment =
++                function.generic_param_list().is_some() || function.where_clause().is_some();
++            let parameter = |ordinal: u32| -> Result<ast::Type, Diagnostic> {
++                function
++                    .param_list()
++                    .and_then(|list| list.params().nth(usize::try_from(ordinal).ok()?))
++                    .and_then(|param| param.ty())
++                    .ok_or_else(|| fault("Box header parameter/type ordinal absent"))
++            };
++            let ty = match role {
++                BoxTypeRole::Result => function
++                    .ret_type()
++                    .and_then(|ret| ret.ty())
++                    .ok_or_else(|| fault("Box header explicit result type absent"))?,
++                BoxTypeRole::Parameter(ordinal) => parameter(ordinal)?,
++                BoxTypeRole::FunctionPointerResult(ordinal) => {
++                    let ast::Type::FnPtrType(pointer) = parameter(ordinal)? else {
++                        return Err(fault("Box nested result requires actual source fn pointer"));
++                    };
++                    if pointer.abi().is_some()
++                        || pointer.unsafe_token().is_some()
++                        || pointer.async_token().is_some()
++                        || pointer.const_token().is_some()
++                    {
++                        return Err(fault("Box fn-pointer binder requires source context"));
++                    }
++                    pointer
++                        .ret_type()
++                        .and_then(|ret| ret.ty())
++                        .ok_or_else(|| fault("Box fn-pointer explicit result absent"))?
++                }
++                _ => return Err(fault("Box function type role differs")),
++            };
++            (ty, needs_owner_environment, None)
+         }
+     };
+     let type_range = range(ty.syntax().text_range());
+@@ -241,6 +319,7 @@
+         ));
+     }
+     let (box_name, pointee) = shape(&ty);
++    let type_tokens = tokens(ty.syntax(), None);
+     let extra = match &pointee {
+         BoxPointeeSyntax::Name(name) => name.len(),
+         BoxPointeeSyntax::ArrayName { element, .. } => element.len(),
+@@ -258,6 +337,19 @@
+         })
+         .and_then(|n| n.checked_add(box_name.as_ref().map_or(0, String::len)))
+         .and_then(|n| n.checked_add(extra))
++        .and_then(|n| n.checked_add(field_name.as_ref().map_or(0, String::len)))
++        .and_then(|n| {
++            n.checked_add(
++                type_tokens
++                    .capacity()
++                    .checked_mul(std::mem::size_of::<crate::syntax::ast_adapter::TokenRecipe>())?,
++            )
++        })
++        .and_then(|n| {
++            type_tokens
++                .iter()
++                .try_fold(n, |n, t| n.checked_add(t.text.len()))
++        })
+         .filter(|n| *n <= MAX_BYTES)
+         .ok_or_else(|| fault("Box type header metadata bound"))?;
+     Ok(BoxTypeHeaderSite {
+@@ -272,6 +364,8 @@
+         pointee,
+         bytes,
+         needs_owner_environment,
++        type_tokens,
++        field_name,
+     })
+ }
+ #[derive(Debug)]
+@@ -423,7 +517,7 @@
+     })
+ }
+ impl StableEncode for BoxTypeHeaderSite {
+-    const DOMAIN: &'static str = "lrr/v1/source-box-header-type-site";
++    const DOMAIN: &'static str = "lrr/v2/source-box-header-type-site";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         e.string(self.source.path.as_str());
+         e.record(&QueryKey::Outline(self.source.outline.clone()));
+@@ -442,7 +536,14 @@
+                 e.u32(2);
+                 e.u32(n)
+             }
++            BoxTypeRole::AliasTarget => e.u32(3),
++            BoxTypeRole::Field(n) => {
++                e.u32(4);
++                e.u32(n)
++            }
+         };
++        e.sequence(&self.type_tokens, |e, t| e.record(t));
++        e.option(&self.field_name, |e, name| e.string(name));
+         e.u32(self.type_range.start);
+         e.u32(self.type_range.end);
+         e.option(&self.box_name, |e, name| e.string(name));
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/box/unit/unique-generic-assign.rs b/fixtures/upstream/rustc-checkout/tests/ui/box/unit/unique-generic-assign.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/box/unit/unique-generic-assign.rs
+@@ -0,0 +1,10 @@
++//@ run-pass
++#![allow(dead_code)]
++// Issue #976
++
++
++
++fn f<T>(x: Box<T>) {
++    let _x2 = x;
++}
++pub fn main() { }
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/moves/moves-sru-moved-field.rs b/fixtures/upstream/rustc-checkout/tests/ui/moves/moves-sru-moved-field.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/moves/moves-sru-moved-field.rs
+@@ -0,0 +1,23 @@
++type Noncopyable = Box<isize>;
++
++
++
++struct Foo {
++    copied: isize,
++    moved: Box<isize>,
++    noncopyable: Noncopyable
++}
++
++fn test0(f: Foo, g: Noncopyable, h: Noncopyable) {
++    // just copy implicitly copyable fields from `f`, no moves:
++    let _b = Foo {moved: Box::new(1), noncopyable: g, ..f};
++    let _c = Foo {moved: Box::new(2), noncopyable: h, ..f};
++}
++
++fn test1(f: Foo, g: Noncopyable, h: Noncopyable) {
++    // copying move-by-default fields from `f`, so move:
++    let _b = Foo {noncopyable: g, ..f};
++    let _c = Foo {noncopyable: h, ..f}; //~ ERROR use of moved value: `f.moved`
++}
++
++fn main() {}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/moves/moves-sru-moved-field.stderr b/fixtures/upstream/rustc-checkout/tests/ui/moves/moves-sru-moved-field.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/moves/moves-sru-moved-field.stderr
+@@ -0,0 +1,13 @@
++error[E0382]: use of moved value: `f.moved`
++  --> $DIR/moves-sru-moved-field.rs:20:14
++   |
++LL |     let _b = Foo {noncopyable: g, ..f};
++   |              ------------------------- value moved here
++LL |     let _c = Foo {noncopyable: h, ..f};
++   |              ^^^^^^^^^^^^^^^^^^^^^^^^^ value used here after move
++   |
++   = note: move occurs because `f.moved` has type `Box<isize>`, which does not implement the `Copy` trait
++
++error: aborting due to 1 previous error
++
++For more information about this error, try `rustc --explain E0382`.
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/type-alias/where-clause-on-generic-type-alias.rs b/fixtures/upstream/rustc-checkout/tests/ui/type-alias/where-clause-on-generic-type-alias.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/type-alias/where-clause-on-generic-type-alias.rs
+@@ -0,0 +1,8 @@
++//! Regression test for <https://github.com/rust-lang/rust/issues/22471>.
++
++//@ check-pass
++#![allow(type_alias_bounds)]
++
++type Foo<T> where T: Copy = Box<T>;
++
++fn main(){}
+diff --git a/xtask/tests/box_source_propagation.rs b/xtask/tests/box_source_propagation.rs
+new file mode 100644
+--- /dev/null
++++ b/xtask/tests/box_source_propagation.rs
+@@ -0,0 +1,130 @@
++//! Preregistered original source components; no whole program/diagnostic pass.
++use lrr::{
++    core::{
++        digest::{Digest, StableEncode},
++        profile::ProfileIdentity,
++    },
++    db::key::OutlineKey,
++    source::{
++        box_type_headers::{BoxPointeeSyntax, BoxTypeRole, capture_box_type_header},
++        changes::SourceSelection,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::parse::ParsedFile,
++};
++const MOVES: &str =
++    include_str!("../../fixtures/upstream/rustc-checkout/tests/ui/moves/moves-sru-moved-field.rs");
++const GENERIC: &str = include_str!(
++    "../../fixtures/upstream/rustc-checkout/tests/ui/type-alias/where-clause-on-generic-type-alias.rs"
++);
++fn parsed(text: &str, edition: u16) -> (ParsedFile, SourceSelection, CfgSet) {
++    let cfg = CfgSet::guest_default();
++    let parsed = ParsedFile::parse_declarations(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++    )
++    .unwrap();
++    let source = SourceSelection {
++        path: SourcePath::new("propagation.rs").unwrap(),
++        outline: OutlineKey {
++            parse: parsed.key(),
++            crate_key: Digest::of_bytes(b"disclosed source-only fixture consumer"),
++            module_path: vec![],
++            cfg: cfg.fingerprint(),
++        },
++    };
++    (parsed, source, cfg)
++}
++fn definition(
++    parsed: &ParsedFile,
++    source: &SourceSelection,
++    cfg: &CfgSet,
++    name: &str,
++) -> lrr::source::manifest::DefKey {
++    parsed
++        .outline(source.outline.crate_key, vec![], cfg)
++        .unwrap()
++        .items
++        .into_iter()
++        .find(|row| row.def_key.declared_name == name)
++        .unwrap()
++        .def_key
++}
++#[test]
++fn original_box_alias_keeps_declaring_header_and_owning_edition() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (parsed, source, cfg) = parsed(MOVES, edition);
++        let def = definition(&parsed, &source, &cfg, "Noncopyable");
++        let site = capture_box_type_header(&parsed, &source, &cfg, &def, BoxTypeRole::AliasTarget)
++            .unwrap();
++        assert_eq!(site.definition(), &def);
++        assert!(matches!(site.pointee(),BoxPointeeSyntax::Name(name) if name=="isize"));
++        assert_eq!(site.source().outline.parse.profile.edition, edition);
++    }
++}
++#[test]
++fn original_box_fields_retain_distinct_dense_schema_ordinals_and_alias_reference() {
++    let (parsed, source, cfg) = parsed(MOVES, 2024);
++    let def = definition(&parsed, &source, &cfg, "Foo");
++    let moved =
++        capture_box_type_header(&parsed, &source, &cfg, &def, BoxTypeRole::Field(1)).unwrap();
++    let aliased =
++        capture_box_type_header(&parsed, &source, &cfg, &def, BoxTypeRole::Field(2)).unwrap();
++    assert!(matches!(moved.pointee(),BoxPointeeSyntax::Name(name) if name=="isize"));
++    assert_eq!(aliased.box_name(), Some("Noncopyable"));
++    assert_ne!(moved.fingerprint(), aliased.fingerprint());
++}
++#[test]
++fn original_generic_alias_preserves_owner_environment_requirement() {
++    let (parsed, source, cfg) = parsed(GENERIC, 2024);
++    let def = definition(&parsed, &source, &cfg, "Foo");
++    let site =
++        capture_box_type_header(&parsed, &source, &cfg, &def, BoxTypeRole::AliasTarget).unwrap();
++    assert!(site.needs_owner_environment());
++    assert!(matches!(site.pointee(),BoxPointeeSyntax::Name(name) if name=="T"));
++}
++#[test]
++fn outside_original_named_return_and_alias_chain_keep_exact_source_type_tokens() {
++    let text = "type Inner=Box<u8>;type Outer=Inner;fn make()->Outer {loop{}}";
++    let (parsed, source, cfg) = parsed(text, 2024);
++    for (name, role, written) in [
++        ("Inner", BoxTypeRole::AliasTarget, "Box<u8>"),
++        ("Outer", BoxTypeRole::AliasTarget, "Inner"),
++        ("make", BoxTypeRole::Result, "Outer"),
++    ] {
++        let def = definition(&parsed, &source, &cfg, name);
++        let site = capture_box_type_header(&parsed, &source, &cfg, &def, role).unwrap();
++        assert_eq!(
++            &text[site.type_range().start as usize..site.type_range().end as usize],
++            written
++        );
++        assert!(!site.type_tokens().is_empty());
++    }
++}
++#[test]
++fn disabled_field_is_omitted_only_from_dense_enabled_field_schema() {
++    let text = "struct Holder{#[cfg(any())] cold:bool,value:Box<u8>,later:i32}";
++    let (parsed, source, cfg) = parsed(text, 2024);
++    let def = definition(&parsed, &source, &cfg, "Holder");
++    let site =
++        capture_box_type_header(&parsed, &source, &cfg, &def, BoxTypeRole::Field(0)).unwrap();
++    assert_eq!(
++        &text[site.type_range().start as usize..site.type_range().end as usize],
++        "Box<u8>"
++    );
++    assert_eq!(site.field_name(), Some("value"));
++}
++#[test]
++fn source_alias_cycle_capture_does_not_claim_a_resolved_box_type() {
++    let text = "type A=B;type B=A;fn make()->A{loop{}}";
++    let (parsed, source, cfg) = parsed(text, 2024);
++    for name in ["A", "B"] {
++        let def = definition(&parsed, &source, &cfg, name);
++        let site = capture_box_type_header(&parsed, &source, &cfg, &def, BoxTypeRole::AliasTarget)
++            .unwrap();
++        assert!(matches!(site.pointee(), BoxPointeeSyntax::Unsupported));
++    }
++}

@@ -12,6 +12,13 @@ pub fn source_violations(module: &str, source: &str) -> Vec<String> {
         let forbidden = if worker_pure {
             [
                 "std::fs",
+                "std::env",
+                "std::time::SystemTime",
+                "lrr_expand_adapter",
+                "crate::service",
+                "service::",
+                "crate::engine::dispatch",
+                "engine::dispatch",
                 "std::process",
                 "std::net",
                 "effects::broker",
@@ -103,6 +110,31 @@ mod tests {
                 "// use std::fs;\nconst S: &str = \"std::fs\";"
             )
             .is_empty()
+        );
+    }
+    #[test]
+    fn pure_provider_audit_rejects_environment_clock_macro_service_and_vm_paths() {
+        for source in [
+            "use std::{env as ambient};",
+            "use std::time::SystemTime;",
+            "use lrr_expand_adapter::proc_client::ProcMacroClient;",
+            "use crate::service::expansion::ExpansionCoordinator;",
+            "use crate::engine::dispatch::SavedPhase;",
+        ] {
+            assert!(
+                !source_violations("db/provider.rs", source).is_empty(),
+                "{source}"
+            );
+        }
+        assert!(
+            source_violations(
+                "db/provider.rs",
+                "use crate::db::poll::QueryPoll; fn f(){ /* std::env */ }"
+            )
+            .is_empty()
+        );
+        assert!(
+            source_violations("service/expansion.rs", "use crate::db::memo::Database;").is_empty()
         );
     }
     #[test]

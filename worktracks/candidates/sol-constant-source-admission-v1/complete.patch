@@ -1,0 +1,1444 @@
+diff --git a/crates/lrr/src/syntax/pure_constants.rs b/crates/lrr/src/syntax/pure_constants.rs
+--- a/crates/lrr/src/syntax/pure_constants.rs
++++ b/crates/lrr/src/syntax/pure_constants.rs
+@@ -1,14 +1,20 @@
+ //! Pure, sealed constant source plans. Pinned AST identities never cross into frontend.
+-use super::{ast_adapter::range, outline::BodyHandle, parse::ParsedFile, spans::SourceRange};
++use super::{
++    ast_adapter::range,
++    outline::{BodyHandle, DeclarationContext, ScopeKey},
++    parse::ParsedFile,
++    spans::SourceRange,
++};
+ use crate::{
+     core::{
+         diagnostic::Diagnostic,
+         digest::{Digest, StableEncode, StableEncoder},
+         profile::ProfileIdentity,
+     },
+-    frontend::constants::ConstValue,
++    frontend::{constant_source_admission::CurrentConstantTypeCertificate, constants::ConstValue},
+     ir::op::{DecodedLiteral, NumericBinary, NumericUnary, PrimitiveType},
+     source::{
++        changes::{PreparedSourceView, SourceSelection},
+         manifest::BodyKey,
+         snapshot::{CfgSet, SourceBlob},
+     },
+@@ -31,6 +37,8 @@
+     definition: Digest,
+     body: BodyKey,
+     blocked: bool,
++    context: DeclarationContext,
++    handle: BodyHandle,
+ }
+ impl ConstantDeclaration {
+     pub fn name(&self) -> &str {
+@@ -41,6 +49,12 @@
+     }
+     pub fn definition(&self) -> Digest {
+         self.definition
++    }
++    pub fn context(&self) -> &DeclarationContext {
++        &self.context
++    }
++    pub fn body_handle(&self) -> &BodyHandle {
++        &self.handle
+     }
+     pub(crate) fn body(&self) -> &BodyKey {
+         &self.body
+@@ -51,6 +65,10 @@
+     parsed: ParsedFile,
+     cfg: CfgSet,
+     crate_key: Digest,
++    scope: ScopeKey,
++    selection: Option<SourceSelection>,
++    module_items: Vec<ast::Item>,
++    type_certificate: Option<CurrentConstantTypeCertificate>,
+     declarations: Vec<ConstantDeclaration>,
+     items: BTreeMap<String, Vec<ast::Item>>,
+     owners: Vec<(SourceRange, Digest, Option<BodyHandle>)>,
+@@ -63,6 +81,8 @@
+     entry: Entry,
+     identity: Digest,
+     owner_definition: Digest,
++    owner_context: DeclarationContext,
++    owner_body: Option<BodyHandle>,
+ }
+ #[derive(Debug, Clone)]
+ enum Entry {
+@@ -145,9 +165,96 @@
+     ) -> Result<Self, Diagnostic> {
+         let parsed = ParsedFile::parse(blob, profile)?;
+         let outline = parsed.outline(crate_key, vec![], &cfg)?;
++        let scope = outline.root_scope.clone();
++        let items = parsed.parsed.tree().items().collect();
++        Self::capture_scope(parsed, cfg, crate_key, outline, scope, None, items)
++    }
++    /// Capture one actual original module, not a caller-issued namespace proof.
++    /// Header inventory is structural; bodies are not typechecked or evaluated.
++    pub(crate) fn capture_prepared(
++        view: &PreparedSourceView,
++        definition: Digest,
++    ) -> Result<Self, Diagnostic> {
++        view.require_original_hygiene()?;
++        view.require_declaration_syntax()?;
++        let selected = view.selection();
++        let cfg = view.captured_macro_cfg()?.clone();
++        let parsed = ParsedFile::parse(
++            view.captured_macro_blob()?,
++            selected.outline.parse.profile.clone(),
++        )?;
++        let outline = parsed.outline(
++            selected.outline.crate_key,
++            selected.outline.module_path.clone(),
++            &cfg,
++        )?;
++        if parsed.key() != selected.outline.parse
++            || outline.fingerprint() != view.outline().fingerprint()
++        {
++            return Err(fault("prepared constant parse/outline differs"));
++        }
++        let item = outline
++            .items
++            .iter()
++            .find(|i| i.def_key.fingerprint() == definition)
++            .ok_or_else(|| fault("prepared constant declaration absent"))?;
++        if item.scope.owner.is_some() {
++            return Err(fault(
++                "lexical/associated constant owner requires separate preparation",
++            ));
++        }
++        let scope = item.scope.clone();
++        view.captured_inline_module_layout(&scope)?;
++        let syntax = parsed
++            .parsed
++            .tree()
++            .syntax()
++            .descendants()
++            .filter_map(ast::Item::cast)
++            .find(|i| range(i.syntax().text_range()) == item.declaration_span)
++            .ok_or_else(|| fault("prepared constant declaration syntax absent"))?;
++        if !matches!(syntax, ast::Item::Const(_) | ast::Item::Fn(_)) {
++            return Err(fault(
++                "constant plan requires a direct const/function body owner",
++            ));
++        }
++        if syntax
++            .syntax()
++            .ancestors()
++            .any(|a| ast::Impl::can_cast(a.kind()) || ast::Trait::can_cast(a.kind()))
++        {
++            return Err(fault(
++                "associated constant needs an owning member certificate",
++            ));
++        }
++        let parent = required(syntax.syntax().parent())?;
++        if !ast::SourceFile::can_cast(parent.kind()) && !ast::ItemList::can_cast(parent.kind()) {
++            return Err(fault("constant owner is not a captured module"));
++        }
++        let items = parent.children().filter_map(ast::Item::cast).collect();
++        Self::capture_scope(
++            parsed,
++            cfg,
++            selected.outline.crate_key,
++            outline,
++            scope,
++            Some(selected.clone()),
++            items,
++        )
++    }
++    fn capture_scope(
++        parsed: ParsedFile,
++        cfg: CfgSet,
++        crate_key: Digest,
++        outline: super::outline::Outline,
++        scope: ScopeKey,
++        selection: Option<SourceSelection>,
++        module_items: Vec<ast::Item>,
++    ) -> Result<Self, Diagnostic> {
+         let owners = outline
+             .items
+             .iter()
++            .filter(|item| item.scope == scope)
+             .map(|item| {
+                 (
+                     item.declaration_span,
+@@ -156,12 +263,15 @@
+                 )
+             })
+             .collect();
+-        let tree = parsed.parsed.tree();
+         let mut declarations = Vec::new();
+         let mut items: BTreeMap<String, Vec<ast::Item>> = BTreeMap::new();
+-        for item in tree.items() {
++        for item in &module_items {
+             let at = range(item.syntax().text_range());
+-            let Some(header) = outline.items.iter().find(|h| h.declaration_span == at) else {
++            let Some(header) = outline
++                .items
++                .iter()
++                .find(|h| h.declaration_span == at && h.scope == scope)
++            else {
+                 continue;
+             };
+             let name = match &item {
+@@ -185,17 +295,99 @@
+                 definition: header.def_key.fingerprint(),
+                 body: body.key(),
+                 blocked: body.entry_blocked,
++                context: DeclarationContext {
++                    scope: header.scope.clone(),
++                    range: at,
++                },
++                handle: body.clone(),
+             });
+-            items.entry(semantic(name.text())?).or_default().push(item);
++            items
++                .entry(semantic(name.text())?)
++                .or_default()
++                .push(item.clone());
+         }
+         Ok(Self(Rc::new(Captured {
+             parsed,
+             cfg,
+             crate_key,
++            scope,
++            selection,
++            module_items,
++            type_certificate: None,
+             declarations,
+             items,
+             owners,
+         })))
++    }
++    pub(crate) fn scope(&self) -> &ScopeKey {
++        &self.0.scope
++    }
++    pub(crate) fn selection(&self) -> Option<&SourceSelection> {
++        self.0.selection.as_ref()
++    }
++    pub(crate) fn with_type_certificate(
++        mut self,
++        certificate: CurrentConstantTypeCertificate,
++    ) -> Result<Self, Diagnostic> {
++        if !self
++            .0
++            .selection
++            .as_ref()
++            .is_some_and(|selection| certificate.matches(selection, &self.0.scope))
++        {
++            return Err(fault("constant primitive certificate source/scope differs"));
++        }
++        certificate.metadata_bytes()?;
++        let captured = Rc::get_mut(&mut self.0)
++            .ok_or_else(|| fault("constant source certificate requires a fresh capture"))?;
++        if captured.type_certificate.is_some() {
++            return Err(fault("constant source certificate already attached"));
++        }
++        captured.type_certificate = Some(certificate);
++        Ok(self)
++    }
++    pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
++        let nodes = self
++            .0
++            .parsed
++            .parsed
++            .tree()
++            .syntax()
++            .descendants_with_tokens()
++            .take(100_001)
++            .count();
++        if nodes > 100_000 {
++            return Err(fault("constant source node count limit"));
++        }
++        let mut bytes = nodes
++            .checked_mul(128)
++            .and_then(|n| n.checked_add(std::mem::size_of::<Captured>()))
++            .and_then(|n| n.checked_add(self.0.scope.heap_bytes()))
++            .ok_or_else(|| fault("constant source metadata overflow"))?;
++        for declaration in &self.0.declarations {
++            bytes = bytes
++                .checked_add(std::mem::size_of::<ConstantDeclaration>() + 256)
++                .and_then(|n| n.checked_add(declaration.name.capacity()))
++                .and_then(|n| n.checked_add(declaration.context.scope.heap_bytes()))
++                .ok_or_else(|| fault("constant source declaration metadata overflow"))?;
++        }
++        bytes = bytes
++            .checked_add(
++                self.0
++                    .type_certificate
++                    .as_ref()
++                    .map_or(Ok(0), CurrentConstantTypeCertificate::metadata_bytes)?,
++            )
++            .ok_or_else(|| fault("constant type certificate metadata overflow"))?;
++        bytes
++            .checked_add(
++                self.0
++                    .selection
++                    .as_ref()
++                    .map_or(Ok(0), SourceSelection::metadata_bytes)?,
++            )
++            .filter(|n| *n <= 32 * 1024 * 1024)
++            .ok_or_else(|| fault("constant source metadata limit"))
+     }
+     pub fn declarations(&self) -> &[ConstantDeclaration] {
+         &self.0.declarations
+@@ -269,7 +461,7 @@
+                     return Err(fault("array length owning root is cfg-disabled"));
+                 }
+                 for ancestor in expr.syntax().ancestors() {
+-                    if ast::Module::can_cast(ancestor.kind())
++                    if (ast::Module::can_cast(ancestor.kind()) && self.0.selection.is_none())
+                         || ast::Impl::can_cast(ancestor.kind())
+                         || ast::Trait::can_cast(ancestor.kind())
+                         || ast::ClosureExpr::can_cast(ancestor.kind())
+@@ -282,9 +474,11 @@
+                         && (function.param_list().is_none_or(|p| {
+                             p.self_param().is_some() || p.params().next().is_some()
+                         }) || function.generic_param_list().is_some()
+-                            || ancestor
+-                                .parent()
+-                                .is_none_or(|p| !ast::SourceFile::can_cast(p.kind())))
++                            || ancestor.parent().is_none_or(|p| {
++                                !ast::SourceFile::can_cast(p.kind())
++                                    && !(self.0.selection.is_some()
++                                        && ast::ItemList::can_cast(p.kind()))
++                            }))
+                     {
+                         return Err(fault(
+                             "anonymous array length requires captured function binding context",
+@@ -340,7 +534,7 @@
+         {
+             return Err(fault("selected constant syntax is malformed"));
+         }
+-        let (_, owner_definition, owner_body) = self
++        let (owner_range, owner_definition, owner_body) = self
+             .0
+             .owners
+             .iter()
+@@ -350,8 +544,16 @@
+         if let Some(body) = owner_body {
+             body.require_entry()?;
+         }
+-        let mut e = StableEncoder::new("lrr/v1/pure-constant-source-plan");
++        let mut e = StableEncoder::new("lrr/v2/pure-constant-source-plan");
+         e.digest(self.0.crate_key);
++        e.record(&self.0.scope);
++        e.option(self.0.selection.as_ref(), |e, selection| {
++            e.string(selection.path.as_str());
++            e.digest(selection.location_identity());
++            e.digest(selection.outline.parse.content);
++            e.record(&selection.outline.parse.profile);
++            e.digest(selection.outline.cfg);
++        });
+         e.digest(*owner_definition);
+         e.option(owner_body, |e, body| e.record(body));
+         e.digest(self.0.parsed.content);
+@@ -376,6 +578,11 @@
+             entry,
+             identity: e.finish(),
+             owner_definition: *owner_definition,
++            owner_context: DeclarationContext {
++                scope: self.0.scope.clone(),
++                range: *owner_range,
++            },
++            owner_body: owner_body.clone(),
+         })
+     }
+     pub(crate) fn source(&self) -> Digest {
+@@ -477,6 +684,17 @@
+                 }
+             }
+         }
++        if self.0.selection.is_some()
++            && !self
++                .0
++                .type_certificate
++                .as_ref()
++                .is_some_and(|proof| proof.permits(&name))
++        {
++            return Err(fault(
++                "reached constant primitive requires current Type source identity",
++            ));
++        }
+         Ok(primitive)
+     }
+     fn ty(&self, ty: ast::Type) -> Result<ConstType, Diagnostic> {
+@@ -558,7 +776,7 @@
+     }
+     fn named(&self, name: &str) -> Result<ast::Item, Diagnostic> {
+         // Generated declarations/import routing is a separate provider integration.
+-        for item in self.0.parsed.parsed.tree().items() {
++        for item in &self.0.module_items {
+             let metas = item
+                 .attrs()
+                 .map(|a| required(a.meta()))
+@@ -838,6 +1056,12 @@
+     pub fn owner_definition(&self) -> Digest {
+         self.owner_definition
+     }
++    pub fn owner_context(&self) -> &DeclarationContext {
++        &self.owner_context
++    }
++    pub fn owner_body(&self) -> Option<&BodyHandle> {
++        self.owner_body.as_ref()
++    }
+     pub fn profile(&self) -> &ProfileIdentity {
+         self.source.profile()
+     }
+diff --git a/crates/lrr/src/frontend/constant_source_admission.rs b/crates/lrr/src/frontend/constant_source_admission.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_source_admission.rs
+@@ -0,0 +1,428 @@
++//! T054 current original-source constant admission. Pure published facts only.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::{
++        dependency::{InputKey, InputValue},
++        key::BucketKey,
++        memo::Database,
++        seals::{DiscoveryInput, SealDomain, SealKey},
++    },
++    frontend::{constants::ConstValue, names::NameLookup},
++    source::{
++        changes::{PreparedSourceView, SourceSelection},
++        manifest::Namespace,
++    },
++    syntax::{
++        pure_constants::{ConstantPlan, ConstantSource},
++        spans::SourceRange,
++    },
++};
++use std::collections::{BTreeMap, BTreeSet};
++const MAX_BYTES: usize = 32 * 1024 * 1024;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-CONST-SOURCE", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "constant source admission budget".into(),
++    )
++}
++/// No public constructor or mutable field exposes primitive-name authority.
++/// Minted only from the checked actually published Type scope. Present names
++/// remain deferred until the evaluator reaches that type spelling.
++#[derive(Debug, Clone)]
++pub(crate) struct CurrentConstantTypeCertificate {
++    selection: SourceSelection,
++    scope: crate::syntax::outline::ScopeKey,
++    absent: BTreeSet<String>,
++}
++impl CurrentConstantTypeCertificate {
++    pub(crate) fn matches(
++        &self,
++        selection: &SourceSelection,
++        scope: &crate::syntax::outline::ScopeKey,
++    ) -> bool {
++        &self.selection == selection && &self.scope == scope
++    }
++    pub(crate) fn permits(&self, name: &str) -> bool {
++        self.absent.contains(name)
++    }
++    pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
++        let mut bytes = std::mem::size_of::<Self>()
++            .checked_add(self.selection.metadata_bytes()?)
++            .and_then(|n| n.checked_add(self.scope.heap_bytes()))
++            .ok_or_else(limit)?;
++        for spelling in &self.absent {
++            bytes = bytes
++                .checked_add(128 + spelling.capacity())
++                .ok_or_else(limit)?;
++        }
++        if bytes > 64 * 1024 {
++            return Err(limit());
++        }
++        Ok(bytes)
++    }
++}
++/// A requested entry is not a source/seal authority and cannot forge a plan.
++#[derive(Debug, Clone)]
++pub(crate) enum ConstantRequest {
++    Constant,
++    ConstCall(Vec<ConstValue>),
++    ArrayLength(SourceRange),
++}
++/// Immutable privately minted publication certificate. The plan carries no guest
++/// state. Revalidate this packet before publishing/reusing a query result.
++#[derive(Debug, Clone)]
++pub(crate) struct ConstantSourceAdmission {
++    selection: SourceSelection,
++    definition: Digest,
++    request: ConstantRequest,
++    plan: ConstantPlan,
++    value_seal: SealKey,
++    type_seal: SealKey,
++    value_fingerprint: Digest,
++    type_fingerprint: Digest,
++    stamps: BTreeMap<InputKey, Digest>,
++    bytes: usize,
++    byte_limit: usize,
++}
++fn value_bytes(value: &ConstValue, depth: usize, nodes: &mut usize) -> Result<usize, Diagnostic> {
++    *nodes = nodes
++        .checked_add(1)
++        .filter(|n| *n <= 100_000)
++        .ok_or_else(limit)?;
++    if depth > 64 {
++        return Err(limit());
++    }
++    let mut bytes = std::mem::size_of::<ConstValue>() + 128;
++    if let Some(elements) = value.elements() {
++        for value in elements {
++            bytes = bytes
++                .checked_add(value_bytes(value, depth + 1, nodes)?)
++                .ok_or_else(limit)?;
++        }
++    } else if value.scalar().is_none() {
++        return Err(fault("constant argument is not an immutable value"));
++    }
++    Ok(bytes)
++}
++fn request_bytes(request: &ConstantRequest) -> Result<usize, Diagnostic> {
++    let mut bytes = std::mem::size_of::<ConstantRequest>() + 128;
++    if let ConstantRequest::ConstCall(arguments) = request {
++        if arguments.len() > 256 {
++            return Err(limit());
++        }
++        let mut nodes = 0;
++        for value in arguments {
++            bytes = bytes
++                .checked_add(value_bytes(value, 0, &mut nodes)?)
++                .ok_or_else(limit)?;
++        }
++    }
++    Ok(bytes)
++}
++fn validate_seal(
++    db: &Database,
++    source: &PreparedSourceView,
++    input: &DiscoveryInput,
++    key: &SealKey,
++    scope: &crate::syntax::outline::ScopeKey,
++    namespace: Namespace,
++) -> Result<(), Diagnostic> {
++    key.validate()?;
++    let certified = input
++        .scope
++        .as_ref()
++        .ok_or_else(|| fault("constant namespace scope absent"))?;
++    if input.seal.key() != *key
++        || certified.scope != *scope
++        || certified.namespace != namespace
++        || certified.edition != source.selection().outline.parse.profile.edition
++        || !matches!(input.seal.domain(), SealDomain::Scope {id, namespace: actual}
++            if *id == scope.fingerprint() && *actual == namespace)
++        || input.sources.len() != 1
++        || input.sources[0] != *source.selection()
++        || input.seal.unresolved_frontiers() != 0
++    {
++        return Err(fault(
++            "constant namespace source/scope/world differs or is incomplete",
++        ));
++    }
++    if !matches!(db.published_input(&InputKey::ExpansionEpoch), Some((InputValue::ExpansionEpoch(epoch),_)) if *epoch == key.epoch)
++        || !matches!(db.published_input(&InputKey::SourceDependencies), Some((InputValue::SourceDependencies(graph),_)) if graph.fingerprint() == input.source_dependencies)
++    {
++        return Err(fault("constant namespace epoch/source graph changed"));
++    }
++    if input.compiler_inputs.len() > 100_000 {
++        return Err(limit());
++    }
++    for (key, fingerprint) in &input.compiler_inputs {
++        if db
++            .published_input(key)
++            .is_none_or(|(_, actual)| actual != *fingerprint)
++        {
++            return Err(fault("constant namespace compiler input changed"));
++        }
++    }
++    if !input.records.is_empty()
++        || !input.procedural_catalogs.is_empty()
++        || !input.helper_declarations.is_empty()
++        || !input.argument_fragments.is_empty()
++        || !input.declaration_fragments.is_empty()
++        || !input.argument_indexes.is_empty()
++        || !input.argument_summaries.is_empty()
++        || !input.source_replacements.is_empty()
++    {
++        return Err(fault(
++            "generated/native constant namespace requires separate admission",
++        ));
++    }
++    Ok(())
++}
++impl ConstantSourceAdmission {
++    pub(crate) fn capture_current(
++        db: &Database,
++        source: &PreparedSourceView,
++        definition: Digest,
++        request: ConstantRequest,
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        if byte_limit < std::mem::size_of::<Self>() + 256 || byte_limit > MAX_BYTES {
++            return Err(limit());
++        }
++        source.require_original_hygiene()?;
++        source.require_declaration_syntax()?;
++        let item = source
++            .outline()
++            .items
++            .iter()
++            .find(|i| i.def_key.fingerprint() == definition)
++            .ok_or_else(|| fault("constant owning declaration absent"))?;
++        if item.scope.owner.is_some() {
++            return Err(fault("lexical/associated constant admission prerequisite"));
++        }
++        let body = item
++            .body
++            .as_ref()
++            .ok_or_else(|| fault("constant declaration body absent"))?;
++        body.require_entry()?;
++        let context = crate::syntax::outline::DeclarationContext {
++            scope: item.scope.clone(),
++            range: item.declaration_span,
++        };
++        if !matches!(db.published_input(&InputKey::DefinitionSource(definition)), Some((InputValue::DefinitionSource(parse),_)) if parse == &source.selection().outline.parse)
++            || !matches!(db.published_input(&InputKey::DefinitionHeader(definition)), Some((InputValue::DefinitionHeader(header),_)) if header == &item.header)
++            || !matches!(db.published_input(&InputKey::DefinitionBody(definition)), Some((InputValue::DefinitionBody(actual),_)) if actual == body)
++            || !matches!(db.published_input(&InputKey::DeclarationContext(definition)), Some((InputValue::DeclarationContext(actual),_)) if actual == &context)
++        {
++            return Err(fault(
++                "constant published declaration/member/body identity differs",
++            ));
++        }
++        for (key, value) in source.prepared_inputs() {
++            if db
++                .published_input(key)
++                .is_none_or(|(_, actual)| actual != value.fingerprint())
++            {
++                return Err(fault(
++                    "constant original source/compile publication changed",
++                ));
++            }
++        }
++        let stamps = db.source_view_namespace_stamps()?;
++        let mut bytes = std::mem::size_of::<Self>() + 256;
++        bytes = bytes
++            .checked_add(source.selection().metadata_bytes()?)
++            .and_then(|n| n.checked_add(request_bytes(&request).ok()?.checked_mul(2)?))
++            .ok_or_else(limit)?;
++        for key in stamps.keys() {
++            bytes = bytes
++                .checked_add(std::mem::size_of::<(InputKey, Digest)>() + 128)
++                .and_then(|n| n.checked_add(key.heap_bytes()))
++                .filter(|n| *n <= byte_limit)
++                .ok_or_else(limit)?;
++        }
++        // Bound new parser/owned-plan allocation before it happens. This source
++        // lane deliberately uses a conservative byte-per-token upper reservation.
++        let parser_reservation = source
++            .captured_macro_blob()?
++            .bytes()
++            .len()
++            .checked_mul(128)
++            .ok_or_else(limit)?;
++        if bytes
++            .checked_add(parser_reservation)
++            .is_none_or(|n| n > byte_limit)
++        {
++            return Err(limit());
++        }
++        let value = db.source_view_scope_certificate(source.selection(), &item.scope)?;
++        let InputValue::DiscoverySeal(value_input) = value.as_ref() else {
++            return Err(fault("constant Value seal variant differs"));
++        };
++        let value_seal = value_input.seal.key();
++        validate_seal(
++            db,
++            source,
++            value_input,
++            &value_seal,
++            &item.scope,
++            Namespace::Value,
++        )?;
++        let type_seal = SealKey {
++            domain: SealDomain::Scope {
++                id: item.scope.fingerprint(),
++                namespace: Namespace::Type,
++            },
++            unit_graph: value_seal.unit_graph,
++            epoch: value_seal.epoch,
++        };
++        let (type_value, type_fingerprint) = db
++            .published_input(&InputKey::DiscoverySeal(type_seal.clone()))
++            .ok_or_else(|| fault("constant current Type namespace certificate prerequisite"))?;
++        let InputValue::DiscoverySeal(type_input) = type_value else {
++            return Err(fault("constant Type seal variant differs"));
++        };
++        validate_seal(
++            db,
++            source,
++            type_input,
++            &type_seal,
++            &item.scope,
++            Namespace::Type,
++        )?;
++        let captured = ConstantSource::capture_prepared(source, definition)?;
++        if captured.selection() != Some(source.selection()) || captured.scope() != &item.scope {
++            return Err(fault("constant prepared capture source owner differs"));
++        }
++        // Bind every structurally captured direct member used by the immutable
++        // name map, including forward references. This inspects no callee body
++        // semantics and never prepares a thunk or guesses a missing name.
++        for declaration in captured.declarations() {
++            let bucket = BucketKey {
++                scope: item.scope.clone(),
++                namespace: Namespace::Value,
++                name: declaration.name().into(),
++            };
++            if !matches!(value_input.scope.as_ref().ok_or_else(|| fault("constant Value scope absent"))?.lookup(&bucket)?,
++                NameLookup::Defined(found) if found.identity == declaration.definition()
++                    && found.namespace == Namespace::Value && found.defining_unit == item.scope.crate_key
++                    && found.definition_edition == source.selection().outline.parse.profile.edition)
++            {
++                return Err(fault(
++                    "constant Value member does not select the exact declaration",
++                ));
++            }
++        }
++        let mut absent = BTreeSet::new();
++        let certified = type_input
++            .scope
++            .as_ref()
++            .ok_or_else(|| fault("constant Type scope absent"))?;
++        for spelling in [
++            "bool", "char", "i8", "i16", "i32", "i64", "isize", "u8", "u16", "u32", "u64", "usize",
++            "f32", "f64",
++        ] {
++            let bucket = BucketKey {
++                scope: item.scope.clone(),
++                namespace: Namespace::Type,
++                name: spelling.into(),
++            };
++            if matches!(certified.lookup(&bucket)?, NameLookup::Absent) {
++                absent.insert(spelling.into());
++            }
++        }
++        let captured = captured.with_type_certificate(CurrentConstantTypeCertificate {
++            selection: source.selection().clone(),
++            scope: item.scope.clone(),
++            absent,
++        })?;
++        bytes = bytes
++            .checked_add(captured.metadata_bytes()?)
++            .filter(|n| *n <= byte_limit)
++            .ok_or_else(limit)?;
++        let plan = match &request {
++            ConstantRequest::Constant => captured.constant(item.declaration_span)?,
++            ConstantRequest::ConstCall(arguments) => {
++                captured.const_call(item.declaration_span, arguments.clone())?
++            }
++            ConstantRequest::ArrayLength(at) => captured.array_length(*at)?,
++        };
++        if plan.owner_definition() != definition
++            || plan.owner_context() != &context
++            || plan.owner_body() != Some(body)
++        {
++            return Err(fault("constant selected plan owner/body differs"));
++        }
++        Ok(Self {
++            selection: source.selection().clone(),
++            definition,
++            request,
++            plan,
++            value_seal,
++            type_seal,
++            value_fingerprint: value.fingerprint(),
++            type_fingerprint,
++            stamps,
++            bytes,
++            byte_limit,
++        })
++    }
++    pub(crate) fn plan(&self) -> &ConstantPlan {
++        &self.plan
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn dependencies(&self) -> &BTreeMap<InputKey, Digest> {
++        &self.stamps
++    }
++    pub(crate) fn revalidate(
++        &self,
++        db: &Database,
++        source: &PreparedSourceView,
++    ) -> Result<(), Diagnostic> {
++        if source.selection() != &self.selection
++            || db.source_view_namespace_stamps()? != self.stamps
++        {
++            return Err(fault(
++                "constant admitted publication or input membership changed",
++            ));
++        }
++        let fresh = Self::capture_current(
++            db,
++            source,
++            self.definition,
++            self.request.clone(),
++            self.byte_limit,
++        )?;
++        if self.identity() != fresh.identity() {
++            return Err(fault("constant source plan/certificate changed"));
++        }
++        Ok(())
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/current-constant-source-admission");
++        e.string(self.selection.path.as_str());
++        e.digest(self.selection.location_identity());
++        e.digest(self.plan.identity());
++        e.record(&self.value_seal);
++        e.record(&self.type_seal);
++        e.digest(self.value_fingerprint);
++        e.digest(self.type_fingerprint);
++        e.u64(self.stamps.len() as u64);
++        for (key, fingerprint) in &self.stamps {
++            e.record(key);
++            e.digest(*fingerprint);
++        }
++        e.finish()
++    }
++}
++
++#[cfg(test)]
++#[path = "constant_source_admission_tests.rs"]
++mod tests;
+diff --git a/crates/lrr/src/frontend/mod.rs b/crates/lrr/src/frontend/mod.rs
+--- a/crates/lrr/src/frontend/mod.rs
++++ b/crates/lrr/src/frontend/mod.rs
+@@ -63,4 +63,5 @@
+ 
+ pub mod primitive_constants;
+ 
++pub(crate) mod constant_source_admission;
+ pub mod constants;
+diff --git a/crates/lrr/src/frontend/constant_source_admission_tests.rs b/crates/lrr/src/frontend/constant_source_admission_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_source_admission_tests.rs
+@@ -0,0 +1,469 @@
++//! Source-component acceptance; unchanged originals never imply full-main passes.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    db::key::OutlineKey,
++    expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    frontend::constants::{ConstLimits, evaluate},
++    source::{
++        changes::{PreparedSourceInputs, SourceSelectionOutcome, SourceUnitInput},
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::parse::ParseKey,
++};
++use std::sync::Arc;
++const MODULE: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs"
++);
++const NESTED: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs");
++const LOCALS: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/locals-in-const-fn.rs"
++);
++const SHADOW: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/resolve/shadow-const-param.rs"
++);
++fn world(
++    text: &str,
++    name: &str,
++    edition: u16,
++    seal_type: bool,
++) -> (Database, PreparedSourceView, Digest) {
++    let unit = Digest::of_bytes(b"LRR current constant source acceptance");
++    let profile = ProfileIdentity {
++        edition,
++        ..ProfileIdentity::current()
++    };
++    let cfg = CfgSet::guest_default();
++    let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++    let path = SourcePath::new("constant-original.rs").unwrap();
++    let selection = SourceSelection {
++        path: path.clone(),
++        outline: OutlineKey {
++            parse: ParseKey {
++                content: blob.content(),
++                profile: profile.clone(),
++            },
++            crate_key: unit,
++            module_path: vec![],
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let inputs = PreparedSourceInputs::refresh(
++        None,
++        vec![SourceUnitInput {
++            path,
++            crate_key: unit,
++            module_path: vec![],
++            profile: profile.clone(),
++            cfg,
++            blob,
++        }],
++        Default::default(),
++    )
++    .unwrap();
++    let SourceSelectionOutcome::Selected(view) = inputs.select(&selection).unwrap() else {
++        panic!()
++    };
++    let item = view
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == name)
++        .unwrap();
++    let definition = item.def_key.fingerprint();
++    let scope = item.scope.clone();
++    let mut db = Database::default();
++    inputs.publish(&mut db).unwrap();
++    for namespace in [Namespace::Value, Namespace::Type] {
++        if namespace == Namespace::Type && !seal_type {
++            continue;
++        }
++        let mut discovery = SourceDiscovery::new(
++            vec![view.share()],
++            scope.clone(),
++            namespace,
++            Digest::of_bytes(b"LRR constant source current world"),
++            1,
++        )
++        .unwrap()
++        .with_declarative_compiler(
++            Digest::of_bytes(b"LRR constant declarative"),
++            Digest::of_bytes(b"LRR constant compiler"),
++            Arc::new(
++                crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(&profile)
++                    .unwrap(),
++            ),
++        )
++        .unwrap();
++        loop {
++            match discovery.poll().unwrap() {
++                SourceDiscoveryStep::Sealed(_) => break,
++                SourceDiscoveryStep::NeedExpansion { request } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                _ => panic!("unestablished constant source authority"),
++            }
++        }
++        discovery.publish(&mut db).unwrap();
++    }
++    (db, view, definition)
++}
++fn admit(
++    db: &Database,
++    view: &PreparedSourceView,
++    definition: Digest,
++) -> Result<ConstantSourceAdmission, Diagnostic> {
++    ConstantSourceAdmission::capture_current(
++        db,
++        view,
++        definition,
++        ConstantRequest::Constant,
++        MAX_BYTES,
++    )
++}
++#[test]
++fn unchanged_module_bits_has_exact_owning_module_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, view, definition) = world(MODULE, "BITS", edition, true);
++        let certificate = admit(&db, &view, definition).unwrap();
++        assert_eq!(
++            certificate.plan().owner_context().scope.module_path,
++            vec!["u8"]
++        );
++        assert_eq!(certificate.plan().owner_definition(), definition);
++        assert_eq!(certificate.plan().profile().edition, edition);
++        let evaluated = evaluate(certificate.plan(), ConstLimits::default()).unwrap();
++        assert_eq!(evaluated.value().scalar().unwrap().payload, 8);
++        certificate.revalidate(&db, &view).unwrap();
++        // Qualified NUM routing/main construction remain a separate runtime frontier.
++        let (db, view, definition) = world(MODULE, "NUM", edition, true);
++        let certificate = admit(&db, &view, definition).unwrap();
++        assert!(evaluate(certificate.plan(), ConstLimits::default()).is_err());
++    }
++}
++#[test]
++fn unchanged_nested_const_calls_preserve_definition_and_arguments_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, view, definition) = world(NESTED, "X", edition, true);
++        let before = db.trace.events.len();
++        let certificate = admit(&db, &view, definition).unwrap();
++        assert_eq!(
++            evaluate(certificate.plan(), ConstLimits::default())
++                .unwrap()
++                .value()
++                .scalar()
++                .unwrap()
++                .payload,
++            22
++        );
++        certificate.revalidate(&db, &view).unwrap();
++        assert_eq!(db.trace.events.len(), before);
++        assert!(
++            certificate
++                .dependencies()
++                .contains_key(&InputKey::DefinitionBody(definition))
++        );
++        assert!(certificate.metadata_bytes() <= MAX_BYTES);
++    }
++}
++#[test]
++fn unchanged_const_fn_local_alias_and_mutation_frontier() {
++    let (db, view, definition) = world(LOCALS, "foo", 2024, true);
++    let argument = ConstValue::from_scalar(
++        crate::runtime::value::ValueRepr::unsigned(crate::runtime::shape::TypeId(13), 42).unwrap(),
++    )
++    .unwrap();
++    let certificate = ConstantSourceAdmission::capture_current(
++        &db,
++        &view,
++        definition,
++        ConstantRequest::ConstCall(vec![argument.clone()]),
++        MAX_BYTES,
++    )
++    .unwrap();
++    assert_eq!(
++        evaluate(certificate.plan(), ConstLimits::default())
++            .unwrap()
++            .value()
++            .scalar()
++            .unwrap()
++            .payload,
++        42
++    );
++    let (db, view, definition) = world(LOCALS, "bar", 2024, true);
++    // The original mutable binding is not silently treated as an immutable parameter.
++    let certificate = ConstantSourceAdmission::capture_current(
++        &db,
++        &view,
++        definition,
++        ConstantRequest::ConstCall(vec![argument]),
++        MAX_BYTES,
++    );
++    assert!(evaluate(certificate.unwrap().plan(), ConstLimits::default()).is_err());
++}
++#[test]
++fn absence_of_type_seal_is_a_precise_prerequisite() {
++    let (db, view, definition) = world(NESTED, "X", 2024, false);
++    assert!(admit(&db, &view, definition).is_err());
++}
++#[test]
++fn primitive_looking_type_alias_is_never_descriptor_recovery() {
++    let text = "type i32=bool;const X:i32=true;fn main(){}";
++    let (db, view, definition) = world(text, "X", 2024, true);
++    assert!(admit(&db, &view, definition).is_err());
++}
++#[test]
++fn import_or_producer_cannot_grant_primitive_identity() {
++    let (db, view, definition) = world(
++        "mod m{pub type i32=bool;}use m::i32;const X:i32=true;fn main(){}",
++        "X",
++        2024,
++        true,
++    );
++    assert!(admit(&db, &view, definition).is_err());
++}
++#[test]
++fn stale_derived_epoch_refuses_without_source_revision_change() {
++    let (mut db, view, definition) = world(NESTED, "X", 2024, true);
++    let certificate = admit(&db, &view, definition).unwrap();
++    let revision = db.source_revision();
++    db.begin_expansion_epoch(2).unwrap();
++    assert_eq!(db.source_revision(), revision);
++    assert!(certificate.revalidate(&db, &view).is_err());
++}
++#[test]
++fn copied_wrong_source_and_mutable_public_fact_pairs_refuse() {
++    let (mut db, view, definition) = world(NESTED, "X", 2024, true);
++    let certificate = admit(&db, &view, definition).unwrap();
++    let (_, other, _) = world("const X:u32=22;fn main(){}", "X", 2024, true);
++    assert!(certificate.revalidate(&db, &other).is_err());
++    let mut facts = view.prepared_inputs().clone();
++    facts.remove(&InputKey::DefinitionBody(definition));
++    db.publish_inputs(facts).unwrap();
++    assert!(admit(&db, &view, definition).is_err());
++    assert!(certificate.revalidate(&db, &view).is_err());
++}
++#[test]
++fn no_seal_and_metadata_refusal_publish_nothing() {
++    let (db, view, definition) = world(NESTED, "X", 2024, true);
++    let before = db.trace.events.len();
++    assert!(
++        ConstantSourceAdmission::capture_current(
++            &db,
++            &view,
++            definition,
++            ConstantRequest::Constant,
++            1
++        )
++        .is_err()
++    );
++    assert_eq!(db.trace.events.len(), before);
++    assert!(
++        ConstantSourceAdmission::capture_current(
++            &Database::default(),
++            &view,
++            definition,
++            ConstantRequest::Constant,
++            MAX_BYTES
++        )
++        .is_err()
++    );
++}
++#[test]
++fn same_written_bytes_in_external_module_keep_distinct_definition_identity() {
++    let text = "const X:u32=22;";
++    let unit = Digest::of_bytes(b"LRR current constant source acceptance");
++    let profile = ProfileIdentity::current();
++    let cfg = CfgSet::guest_default();
++    let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++    let path = SourcePath::new("module.rs").unwrap();
++    let selection = SourceSelection {
++        path: path.clone(),
++        outline: OutlineKey {
++            parse: ParseKey {
++                content: blob.content(),
++                profile: profile.clone(),
++            },
++            crate_key: unit,
++            module_path: vec!["child".into()],
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let inputs = PreparedSourceInputs::refresh(
++        None,
++        vec![SourceUnitInput {
++            path,
++            crate_key: unit,
++            module_path: vec!["child".into()],
++            profile,
++            cfg,
++            blob,
++        }],
++        Default::default(),
++    )
++    .unwrap();
++    let SourceSelectionOutcome::Selected(view) = inputs.select(&selection).unwrap() else {
++        panic!()
++    };
++    let definition = view
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "X")
++        .unwrap()
++        .def_key
++        .fingerprint();
++    let source = ConstantSource::capture_prepared(&view, definition).unwrap();
++    let declaration = source
++        .declarations()
++        .iter()
++        .find(|d| d.definition() == definition)
++        .unwrap();
++    assert_eq!(declaration.context().scope.module_path, vec!["child"]);
++    let (_, root, root_definition) = world(text, "X", 2024, true);
++    assert_ne!(definition, root_definition);
++    assert_ne!(declaration.body_handle().def_key, root_definition);
++    assert_eq!(root.selection().outline.module_path, Vec::<String>::new());
++    // Raw prepared capture deliberately lacks current Type authority.
++    assert!(source.constant(declaration.range()).is_err());
++}
++#[test]
++fn unchanged_shadow_const_param_is_a_retained_prerequisite() {
++    // Whole compile-fail diagnostics are not manufactured by this pure evaluator.
++    let profile = ProfileIdentity::current();
++    let blob = SourceBlob::new(SHADOW.as_bytes().to_vec()).unwrap();
++    let source = ConstantSource::parse(
++        &blob,
++        profile,
++        Digest::of_bytes(b"shadow source"),
++        CfgSet::guest_default(),
++    )
++    .unwrap();
++    assert!(!source.declarations().is_empty());
++    for declaration in source.declarations() {
++        assert!(source.const_call(declaration.range(), vec![]).is_err());
++    }
++}
++
++#[test]
++fn exact_body_context_and_cfg_publication_tampering_refuses() {
++    for variant in 0..3 {
++        let (mut db, view, definition) = world(NESTED, "X", 2024, true);
++        let certificate = admit(&db, &view, definition).unwrap();
++        let mut facts = view.prepared_inputs().clone();
++        match variant {
++            0 => {
++                let InputValue::DefinitionBody(body) = facts
++                    .get_mut(&InputKey::DefinitionBody(definition))
++                    .unwrap()
++                else {
++                    panic!()
++                };
++                body.def_key = Digest::of_bytes(b"forged body owner");
++            }
++            1 => {
++                let InputValue::DeclarationContext(context) = facts
++                    .get_mut(&InputKey::DeclarationContext(definition))
++                    .unwrap()
++                else {
++                    panic!()
++                };
++                context.scope.module_path.push("forged".into());
++            }
++            _ => {
++                let InputValue::CrateCfg(cfg) = facts
++                    .get_mut(&InputKey::CrateCfg(view.selection().outline.crate_key))
++                    .unwrap()
++                else {
++                    panic!()
++                };
++                cfg.atoms.insert("forged_configuration".into());
++            }
++        }
++        db.publish_inputs(facts).unwrap();
++        assert!(admit(&db, &view, definition).is_err());
++        assert!(certificate.revalidate(&db, &view).is_err());
++    }
++}
++
++#[test]
++fn cold_shadowed_type_declaration_does_not_force_header_semantics() {
++    let text = "type i32=bool;const BAD:i32=true;const X:u32=22;fn main(){}";
++    let (db, view, definition) = world(text, "X", 2024, true);
++    let certificate = admit(&db, &view, definition).unwrap();
++    assert_eq!(
++        evaluate(certificate.plan(), ConstLimits::default())
++            .unwrap()
++            .value()
++            .scalar()
++            .unwrap()
++            .payload,
++        22
++    );
++    let (db, view, definition) = world(text, "BAD", 2024, true);
++    assert!(admit(&db, &view, definition).is_err());
++}
++
++#[test]
++fn copied_type_absence_certificate_wrong_owner_cannot_attach() {
++    let (_, view, definition) = world(NESTED, "X", 2024, true);
++    let source = ConstantSource::capture_prepared(&view, definition).unwrap();
++    let mut selection = view.selection().clone();
++    selection.outline.crate_key = Digest::of_bytes(b"wrong source owner");
++    let certificate = CurrentConstantTypeCertificate {
++        selection,
++        scope: view.outline().root_scope.clone(),
++        absent: ["u32".into()].into(),
++    };
++    assert!(source.with_type_certificate(certificate).is_err());
++}
++
++#[test]
++fn unchanged_array_length_request_binds_exact_function_body_all_editions() {
++    let text = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/arithmetic-expr-in-array-len.rs"
++    );
++    let start = u32::try_from(text.find("2*4").unwrap()).unwrap();
++    let range = SourceRange {
++        start,
++        end: start + 3,
++    };
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, view, definition) = world(text, "main", edition, true);
++        let certificate = ConstantSourceAdmission::capture_current(
++            &db,
++            &view,
++            definition,
++            ConstantRequest::ArrayLength(range),
++            MAX_BYTES,
++        )
++        .unwrap();
++        assert_eq!(
++            evaluate(certificate.plan(), ConstLimits::default())
++                .unwrap()
++                .value()
++                .scalar()
++                .unwrap()
++                .payload,
++            8
++        );
++        let wrong = SourceRange {
++            start,
++            end: start + 2,
++        };
++        assert!(
++            ConstantSourceAdmission::capture_current(
++                &db,
++                &view,
++                definition,
++                ConstantRequest::ArrayLength(wrong),
++                MAX_BYTES
++            )
++            .is_err()
++        );
++    }
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/arithmetic-expr-in-array-len.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/arithmetic-expr-in-array-len.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/arithmetic-expr-in-array-len.rs
+@@ -0,0 +1,7 @@
++//! Regression test for https://github.com/rust-lang/rust/issues/4387
++
++//@ run-pass
++
++pub fn main() {
++    let _foo = [0; 2*4];
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs
+@@ -0,0 +1,12 @@
++//@ run-pass
++// Test a call whose argument is the result of another call.
++
++const fn sub(x: u32, y: u32) -> u32 {
++    x - y
++}
++
++const X: u32 = sub(sub(88, 44), 22);
++
++fn main() {
++    assert_eq!(X, 22);
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/locals-in-const-fn.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/locals-in-const-fn.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/locals-in-const-fn.rs
+@@ -0,0 +1,35 @@
++//@ run-pass
++
++// https://github.com/rust-lang/rust/issues/48821
++
++const fn foo(i: usize) -> usize {
++    let x = i;
++    x
++}
++
++static FOO: usize = foo(42);
++
++const fn bar(mut i: usize) -> usize {
++    i += 8;
++    let x = &i;
++    *x
++}
++
++static BAR: usize = bar(42);
++
++const fn boo(mut i: usize) -> usize {
++    {
++        let mut x = i;
++        x += 10;
++        i = x;
++    }
++    i
++}
++
++static BOO: usize = boo(42);
++
++fn main() {
++    assert!(FOO == 42);
++    assert!(BAR == 50);
++    assert!(BOO == 52);
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs
+@@ -0,0 +1,16 @@
++//! Regression test for https://github.com/rust-lang/rust/issues/13763
++
++//@ run-pass
++#![allow(dead_code)]
++
++mod u8 {
++    pub const BITS: usize = 8;
++}
++
++const NUM: usize = u8::BITS;
++
++struct MyStruct { nums: [usize; 8] }
++
++fn main() {
++    let _s = MyStruct { nums: [0; NUM] };
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/resolve/shadow-const-param.rs b/fixtures/upstream/rustc-checkout/tests/ui/resolve/shadow-const-param.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/resolve/shadow-const-param.rs
+@@ -0,0 +1,20 @@
++// Checks that const parameters cannot be shadowed with fresh bindings
++// even in syntactically unambiguous contexts. See
++// https://github.com/rust-lang/rust/issues/33118#issuecomment-233962221
++
++fn foo<const N: i32>(i: i32) -> bool {
++    match i {
++        N @ _ => true,
++        //~^ ERROR: match bindings cannot shadow const parameters [E0530]
++    }
++}
++
++fn bar<const N: i32>(i: i32) -> bool {
++    let N @ _ = 0;
++    //~^ ERROR: let bindings cannot shadow const parameters [E0530]
++    match i {
++        N @ _ => true,
++    }
++}
++
++fn main() {}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/resolve/shadow-const-param.stderr b/fixtures/upstream/rustc-checkout/tests/ui/resolve/shadow-const-param.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/resolve/shadow-const-param.stderr
+@@ -0,0 +1,20 @@
++error[E0530]: match bindings cannot shadow const parameters
++  --> $DIR/shadow-const-param.rs:7:9
++   |
++LL | fn foo<const N: i32>(i: i32) -> bool {
++   |              - the const parameter `N` is defined here
++LL |     match i {
++LL |         N @ _ => true,
++   |         ^ cannot be named the same as a const parameter
++
++error[E0530]: let bindings cannot shadow const parameters
++  --> $DIR/shadow-const-param.rs:13:9
++   |
++LL | fn bar<const N: i32>(i: i32) -> bool {
++   |              - the const parameter `N` is defined here
++LL |     let N @ _ = 0;
++   |         ^ cannot be named the same as a const parameter
++
++error: aborting due to 2 previous errors
++
++For more information about this error, try `rustc --explain E0530`.

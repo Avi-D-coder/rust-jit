@@ -1,0 +1,3591 @@
+diff --git a/crates/lrr/src/syntax/mod.rs b/crates/lrr/src/syntax/mod.rs
+--- a/crates/lrr/src/syntax/mod.rs
++++ b/crates/lrr/src/syntax/mod.rs
+@@ -76,3 +76,5 @@
+ pub(crate) mod constant_paths;
+ 
+ pub(crate) mod original_inert;
++
++pub mod trait_headers;
+diff --git a/crates/lrr/src/syntax/trait_headers.rs b/crates/lrr/src/syntax/trait_headers.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/syntax/trait_headers.rs
+@@ -0,0 +1,1025 @@
++//! Read-only pinned AST adapter. No body entry, expansion, lookup or trait solving.
++use super::{
++    ast_adapter::{range, semantic_name},
++    declaration_scan::DeclarationScanLimits,
++    outline::{DeclarationContext, ItemOutline, ScopeKey},
++    parse::ParsedFile,
++    signatures::{DefinitionParameter, GenericKind, capture_generics},
++    spans::SourceRange,
++};
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    source::{
++        manifest::ItemKind,
++        snapshot::{CfgSet, SourcePath},
++    },
++    traits::{
++        header::*,
++        term::{BoundKind, ParamKey, RegionTerm},
++    },
++};
++use ra_ap_syntax::{
++    AstNode, SyntaxNode,
++    ast::{self, HasGenericArgs, HasName, HasTypeBounds},
++};
++
++struct Capture {
++    limits: HeaderCaptureLimits,
++    bytes: usize,
++    nodes: usize,
++    tokens: usize,
++    owner: Digest,
++    self_owner: Digest,
++    generics: Vec<HeaderParameter>,
++    binders: Vec<Vec<HeaderParameter>>,
++}
++impl Capture {
++    fn add(&mut self, n: usize) -> Result<(), Diagnostic> {
++        self.bytes = self
++            .bytes
++            .checked_add(n)
++            .filter(|n| *n <= self.limits.metadata_bytes)
++            .ok_or_else(limit)?;
++        Ok(())
++    }
++    fn step(&mut self, depth: usize) -> Result<(), Diagnostic> {
++        self.nodes = self
++            .nodes
++            .checked_add(1)
++            .filter(|n| *n <= self.limits.nodes)
++            .ok_or_else(limit)?;
++        if depth >= self.limits.depth {
++            return Err(limit());
++        }
++        Ok(())
++    }
++    fn list<T>(&mut self, n: usize) -> Result<Vec<T>, Diagnostic> {
++        self.add(n.checked_mul(std::mem::size_of::<T>()).ok_or_else(limit)?)?;
++        let mut v = Vec::new();
++        v.try_reserve_exact(n).map_err(|_| limit())?;
++        Ok(v)
++    }
++    fn owned_tokens(
++        &mut self,
++        node: &SyntaxNode,
++    ) -> Result<Vec<super::ast_adapter::TokenRecipe>, Diagnostic> {
++        let count = node
++            .descendants_with_tokens()
++            .filter_map(|e| e.into_token())
++            .filter(|t| !t.kind().is_trivia())
++            .count();
++        self.tokens = self
++            .tokens
++            .checked_add(count)
++            .filter(|n| *n <= self.limits.tokens)
++            .ok_or_else(limit)?;
++        let mut result = self.list(count)?;
++        for t in node
++            .descendants_with_tokens()
++            .filter_map(|e| e.into_token())
++            .filter(|t| !t.kind().is_trivia())
++        {
++            self.add(t.text().len())?;
++            let mut text = String::new();
++            text.try_reserve_exact(t.text().len())
++                .map_err(|_| limit())?;
++            text.push_str(t.text());
++            result.push(super::ast_adapter::TokenRecipe {
++                kind: t.kind() as u16,
++                text,
++            });
++        }
++        Ok(result)
++    }
++    fn parameters(
++        &mut self,
++        list: Option<ast::GenericParamList>,
++        owner: Digest,
++    ) -> Result<Vec<HeaderParameter>, Diagnostic> {
++        if let Some(l) = &list {
++            let count = l.generic_params().count();
++            let tokens = l
++                .syntax()
++                .descendants_with_tokens()
++                .filter_map(|e| e.into_token())
++                .filter(|t| !t.kind().is_trivia())
++                .count();
++            let bytes = count
++                .checked_mul(
++                    std::mem::size_of::<HeaderParameter>()
++                        + std::mem::size_of::<DefinitionParameter>(),
++                )
++                .and_then(|n| {
++                    n.checked_add(
++                        tokens
++                            .checked_mul(std::mem::size_of::<super::ast_adapter::TokenRecipe>())?,
++                    )
++                })
++                .and_then(|n| {
++                    n.checked_add(usize::from(l.syntax().text_range().len()).checked_mul(4)?)
++                })
++                .ok_or_else(limit)?;
++            self.add(bytes)?;
++        }
++        let parameters = capture_generics(list)?;
++        self.add(
++            parameters
++                .len()
++                .checked_mul(std::mem::size_of::<HeaderParameter>())
++                .ok_or_else(limit)?,
++        )?;
++        let mut result = Vec::new();
++        result
++            .try_reserve_exact(parameters.len())
++            .map_err(|_| limit())?;
++        for DefinitionParameter {
++            ordinal,
++            kind,
++            name,
++            bounds,
++            default,
++            const_type,
++        } in parameters
++        {
++            result.push(HeaderParameter {
++                key: ParamKey {
++                    definition: owner,
++                    ordinal,
++                },
++                kind: match kind {
++                    GenericKind::Lifetime => BoundKind::Region,
++                    GenericKind::Type => BoundKind::Type,
++                    GenericKind::Const => BoundKind::Const,
++                },
++                name,
++                bounds,
++                default,
++                const_type,
++            });
++        }
++        Ok(result)
++    }
++    fn binder(
++        &mut self,
++        binder: Option<ast::ForBinder>,
++    ) -> Result<Vec<HeaderParameter>, Diagnostic> {
++        let Some(binder) = binder else {
++            return Ok(Vec::new());
++        };
++        let mut e = StableEncoder::new("lrr/v5/header-binder-source/v1");
++        e.digest(self.owner);
++        let r = range(binder.syntax().text_range());
++        e.u32(r.start);
++        e.u32(r.end);
++        let result = self.parameters(binder.generic_param_list(), e.finish())?;
++        // Non-lifetime binder forms stay explicit unresolved syntax in downstream readiness.
++        Ok(result)
++    }
++    fn unsupported_bound_shadow(&self, name: &str) -> bool {
++        self.binders.iter().rev().any(|binder| {
++            binder
++                .iter()
++                .any(|p| p.kind != BoundKind::Region && p.name == name)
++        })
++    }
++    fn param(&self, name: &str, kind: BoundKind) -> Option<ParamKey> {
++        if kind != BoundKind::Region && self.unsupported_bound_shadow(name) {
++            return None;
++        }
++        self.generics
++            .iter()
++            .rev()
++            .find(|p| p.name == name && p.kind == kind)
++            .map(|p| p.key)
++    }
++    fn region(
++        &mut self,
++        lifetime: Option<ast::Lifetime>,
++        position: SourceRange,
++    ) -> Result<HeaderRegion, Diagnostic> {
++        let Some(l) = lifetime else {
++            return Ok(HeaderRegion::Known(RegionTerm::Local {
++                definition: self.owner,
++                start: position.start,
++                end: position.end,
++            }));
++        };
++        let name = l.syntax().text().to_string();
++        self.add(name.capacity())?;
++        if name == "'static" {
++            return Ok(HeaderRegion::Known(RegionTerm::Static));
++        }
++        for (depth, binder) in self.binders.iter().rev().enumerate() {
++            if let Some((index, _)) = binder.iter().enumerate().find(|(_, p)| {
++                p.kind == BoundKind::Region
++                    && format!("'{}", p.name.trim_start_matches('\'')) == name
++            }) {
++                return Ok(HeaderRegion::Known(RegionTerm::Bound {
++                    depth: u32::try_from(depth).map_err(|_| limit())?,
++                    index: u32::try_from(index).map_err(|_| limit())?,
++                }));
++            }
++        }
++        let semantic = name.trim_start_matches('\'');
++        if let Some(p) = self
++            .param(semantic, BoundKind::Region)
++            .or_else(|| self.param(&name, BoundKind::Region))
++        {
++            return Ok(HeaderRegion::Known(RegionTerm::Param(p)));
++        }
++        Ok(HeaderRegion::Unresolved(self.owned_tokens(l.syntax())?))
++    }
++    fn constant(&mut self, c: ast::ConstArg) -> Result<HeaderConst, Diagnostic> {
++        let tokens = self.owned_tokens(c.syntax())?;
++        if tokens.len() == 1
++            && let Some(p) =
++                semantic_name(&tokens[0].text).and_then(|n| self.param(&n, BoundKind::Const))
++        {
++            return Ok(HeaderConst::Parameter(p));
++        }
++        Ok(HeaderConst::RequiredExpression {
++            range: range(c.syntax().text_range()),
++            tokens,
++        })
++    }
++    fn ty(&mut self, ty: ast::Type, depth: usize) -> Result<HeaderType, Diagnostic> {
++        self.step(depth)?;
++        let r = range(ty.syntax().text_range());
++        let tokens = self.owned_tokens(ty.syntax())?;
++        let form = match ty {
++            ast::Type::PathType(p) => {
++                let Some(path) = p.path() else {
++                    return Err(fault("header path is structurally incomplete"));
++                };
++                let count = path.segments().count();
++                let mut segments = self.list(count)?;
++                for s in path.segments() {
++                    let name = s.name_ref().and_then(|n| semantic_name(n.text()));
++                    if let Some(n) = &name {
++                        self.add(n.capacity())?;
++                    }
++                    let args = s.generic_arg_list();
++                    let mut arguments =
++                        self.list(args.as_ref().map_or(0, |a| a.generic_args().count()))?;
++                    if let Some(args) = args {
++                        for arg in args.generic_args() {
++                            arguments.push(match arg {
++                                ast::GenericArg::TypeArg(a) => {
++                                    let ty = a
++                                        .ty()
++                                        .ok_or_else(|| fault("header type argument absent"))?;
++                                    let ts = self.owned_tokens(ty.syntax())?;
++                                    if ts.len() == 1
++                                        && let Some(key) = semantic_name(&ts[0].text)
++                                            .and_then(|name| self.param(&name, BoundKind::Const))
++                                    {
++                                        HeaderArgument::Const(HeaderConst::Parameter(key))
++                                    } else {
++                                        self.add(std::mem::size_of::<HeaderType>())?;
++                                        HeaderArgument::Type(Box::new(self.ty(ty, depth + 1)?))
++                                    }
++                                }
++                                ast::GenericArg::LifetimeArg(a) => HeaderArgument::Region(
++                                    self.region(a.lifetime(), range(a.syntax().text_range()))?,
++                                ),
++                                ast::GenericArg::ConstArg(a) => {
++                                    HeaderArgument::Const(self.constant(a)?)
++                                }
++                                ast::GenericArg::AssocTypeArg(a) => HeaderArgument::Associated {
++                                    name: a.name_ref().and_then(|n| semantic_name(n.text())),
++                                    tokens: self.owned_tokens(a.syntax())?,
++                                },
++                            });
++                        }
++                    }
++                    segments.push(HeaderPathSegment {
++                        name,
++                        arguments,
++                        parenthesized: s.parenthesized_arg_list().is_some(),
++                        type_anchor: s.type_anchor().is_some(),
++                        absolute_separator: s.coloncolon_token().is_some(),
++                    });
++                }
++                if segments.len() == 1
++                    && segments[0].arguments.is_empty()
++                    && !segments[0].absolute_separator
++                    && !segments[0].type_anchor
++                    && !segments[0].parenthesized
++                {
++                    if segments[0]
++                        .name
++                        .as_deref()
++                        .is_some_and(|name| self.unsupported_bound_shadow(name))
++                    {
++                        HeaderTypeForm::RequiredSyntax
++                    } else if let Some(p) = segments[0]
++                        .name
++                        .as_deref()
++                        .and_then(|n| self.param(n, BoundKind::Type))
++                    {
++                        HeaderTypeForm::Parameter(p)
++                    } else if segments[0].name.as_deref() == Some("Self") {
++                        HeaderTypeForm::SelfType(self.self_owner)
++                    } else {
++                        HeaderTypeForm::Path(segments)
++                    }
++                } else {
++                    HeaderTypeForm::Path(segments)
++                }
++            }
++            ast::Type::TupleType(t) => {
++                let mut v = self.list(t.fields().count())?;
++                for ty in t.fields() {
++                    v.push(self.ty(ty, depth + 1)?);
++                }
++                HeaderTypeForm::Tuple(v)
++            }
++            ast::Type::ArrayType(t) => {
++                self.add(std::mem::size_of::<HeaderType>())?;
++                HeaderTypeForm::Array(
++                    Box::new(self.ty(
++                        t.ty().ok_or_else(|| fault("array element header absent"))?,
++                        depth + 1,
++                    )?),
++                    self.constant(
++                        t.const_arg()
++                            .ok_or_else(|| fault("array length header absent"))?,
++                    )?,
++                )
++            }
++            ast::Type::SliceType(t) => {
++                self.add(std::mem::size_of::<HeaderType>())?;
++                HeaderTypeForm::Slice(Box::new(self.ty(
++                    t.ty().ok_or_else(|| fault("slice element header absent"))?,
++                    depth + 1,
++                )?))
++            }
++            ast::Type::RefType(t) => {
++                self.add(std::mem::size_of::<HeaderType>())?;
++                HeaderTypeForm::Reference {
++                    region: self.region(t.lifetime(), r)?,
++                    mutable: t.mut_token().is_some(),
++                    pointee: Box::new(self.ty(
++                        t.ty().ok_or_else(|| fault("reference header absent"))?,
++                        depth + 1,
++                    )?),
++                }
++            }
++            ast::Type::ParenType(t) => {
++                self.ty(
++                    t.ty().ok_or_else(|| fault("parenthesized header absent"))?,
++                    depth + 1,
++                )?
++                .form
++            }
++            ast::Type::NeverType(_) => HeaderTypeForm::Never,
++            _ => HeaderTypeForm::RequiredSyntax,
++        };
++        Ok(HeaderType {
++            range: r,
++            tokens,
++            form,
++        })
++    }
++    fn bounds(&mut self, list: Option<ast::TypeBoundList>) -> Result<Vec<HeaderBound>, Diagnostic> {
++        let Some(list) = list else {
++            return Ok(Vec::new());
++        };
++        let mut result = self.list(list.bounds().count())?;
++        for b in list.bounds() {
++            let binder = self.binder(b.for_binder())?;
++            self.push_binder(&binder)?;
++            let ty = b.ty().map(|t| self.ty(t, 0)).transpose()?;
++            let lifetime = b
++                .lifetime()
++                .map(|l| self.region(Some(l), range(b.syntax().text_range())))
++                .transpose()?;
++            if !binder.is_empty() {
++                self.binders.pop();
++            }
++            result.push(HeaderBound {
++                range: range(b.syntax().text_range()),
++                binder,
++                modifier: if b.const_token().is_some()
++                    || b.tilde_token().is_some()
++                    || b.async_token().is_some()
++                    || b.use_token().is_some()
++                {
++                    BoundModifier::RequiredConstOrOther
++                } else if b.question_mark_token().is_some() {
++                    BoundModifier::Relaxed
++                } else {
++                    BoundModifier::Ordinary
++                },
++                ty,
++                lifetime,
++                tokens: self.owned_tokens(b.syntax())?,
++            });
++        }
++        Ok(result)
++    }
++    fn push_binder(&mut self, p: &[HeaderParameter]) -> Result<(), Diagnostic> {
++        if p.is_empty() {
++            return Ok(());
++        }
++        if self.binders.len() >= self.limits.depth {
++            return Err(limit());
++        }
++        self.add(
++            std::mem::size_of::<Vec<HeaderParameter>>()
++                + p.len()
++                    .checked_mul(std::mem::size_of::<HeaderParameter>())
++                    .ok_or_else(limit)?,
++        )?;
++        self.binders.try_reserve_exact(1).map_err(|_| limit())?;
++        let mut retained = self.list(p.len())?;
++        retained.extend_from_slice(p);
++        self.add(parameter_heap(p)?)?;
++        self.binders.push(retained);
++        Ok(())
++    }
++    fn predicates(
++        &mut self,
++        list: Option<ast::GenericParamList>,
++        where_clause: Option<ast::WhereClause>,
++    ) -> Result<Vec<HeaderPredicate>, Diagnostic> {
++        let parameter_count = list.as_ref().map_or(0, |l| l.generic_params().count());
++        let where_count = where_clause.as_ref().map_or(0, |w| w.predicates().count());
++        let mut result = self.list(
++            parameter_count
++                .checked_mul(2)
++                .and_then(|n| n.checked_add(where_count))
++                .ok_or_else(limit)?,
++        )?;
++        if let Some(list) = list {
++            for p in list.generic_params() {
++                let r = range(p.syntax().text_range());
++                match p {
++                    ast::GenericParam::TypeParam(p) => {
++                        let name = p
++                            .name()
++                            .and_then(|n| semantic_name(n.text()))
++                            .ok_or_else(|| fault("type parameter name absent"))?;
++                        let key = self
++                            .param(&name, BoundKind::Type)
++                            .ok_or_else(|| fault("actual type parameter identity absent"))?;
++                        let before_subject = self.bytes;
++                        let subject = HeaderType {
++                            range: r,
++                            tokens: self.owned_tokens(p.syntax())?,
++                            form: HeaderTypeForm::Parameter(key),
++                        };
++                        let subject_heap =
++                            self.bytes.checked_sub(before_subject).ok_or_else(limit)?;
++                        self.add(subject_heap)?;
++                        let before_bounds = self.bytes;
++                        let bounds = self.bounds(p.type_bound_list())?;
++                        let bound_heap = self.bytes.checked_sub(before_bounds).ok_or_else(limit)?;
++                        self.add(bound_heap)?;
++                        let count = bounds
++                            .iter()
++                            .filter(|b| b.modifier == BoundModifier::Relaxed)
++                            .count();
++                        let mut relaxed = self.list(count)?;
++                        relaxed.extend(
++                            bounds
++                                .iter()
++                                .filter(|b| b.modifier == BoundModifier::Relaxed)
++                                .cloned(),
++                        );
++                        result.push(HeaderPredicate {
++                            range: r,
++                            binder: Vec::new(),
++                            kind: PredicateKind::ImplicitSized {
++                                subject: subject.clone(),
++                                relaxed,
++                            },
++                        });
++                        if !bounds.is_empty() {
++                            result.push(HeaderPredicate {
++                                range: r,
++                                binder: Vec::new(),
++                                kind: PredicateKind::Bound { subject, bounds },
++                            });
++                        }
++                    }
++                    ast::GenericParam::LifetimeParam(p) => {
++                        let subject = self.region(p.lifetime(), r)?;
++                        let bounds = self.bounds(p.type_bound_list())?;
++                        if !bounds.is_empty() {
++                            result.push(HeaderPredicate {
++                                range: r,
++                                binder: Vec::new(),
++                                kind: PredicateKind::RegionOutlives { subject, bounds },
++                            });
++                        }
++                    }
++                    ast::GenericParam::ConstParam(_) => {}
++                }
++            }
++        }
++        if let Some(w) = where_clause {
++            for p in w.predicates() {
++                let binder = self.binder(p.for_binder())?;
++                self.push_binder(&binder)?;
++                let bounds = self.bounds(p.type_bound_list())?;
++                let kind = if let Some(ty) = p.ty() {
++                    PredicateKind::Bound {
++                        subject: self.ty(ty, 0)?,
++                        bounds,
++                    }
++                } else if let Some(l) = p.lifetime() {
++                    PredicateKind::RegionOutlives {
++                        subject: self.region(Some(l), range(p.syntax().text_range()))?,
++                        bounds,
++                    }
++                } else {
++                    PredicateKind::RequiredSyntax(self.owned_tokens(p.syntax())?)
++                };
++                if !binder.is_empty() {
++                    self.binders.pop();
++                }
++                result.push(HeaderPredicate {
++                    range: range(p.syntax().text_range()),
++                    binder,
++                    kind,
++                });
++            }
++        }
++        Ok(result)
++    }
++    fn associated(
++        &mut self,
++        parsed: &ParsedFile,
++        outline: &super::outline::Outline,
++        item: &ItemOutline,
++        node: &SyntaxNode,
++        trait_owner: bool,
++    ) -> Result<AssociatedHeader, Diagnostic> {
++        let old_owner = self.owner;
++        let old_generics = std::mem::take(&mut self.generics);
++        self.owner = item.def_key.fingerprint();
++        let list = node.children().find_map(ast::GenericParamList::cast);
++        let parameters = self.parameters(list.clone(), self.owner)?;
++        // Keep the actual parent and own namespaces. Own keys shadow same-spelled parent keys.
++        let retained_count = old_generics
++            .len()
++            .checked_add(parameters.len())
++            .ok_or_else(limit)?;
++        self.generics = self.list(retained_count)?;
++        self.add(
++            parameter_heap(&old_generics)?
++                .checked_add(parameter_heap(&parameters)?)
++                .ok_or_else(limit)?,
++        )?;
++        self.generics.extend_from_slice(&old_generics);
++        self.generics.extend_from_slice(&parameters);
++        let where_clause = node.children().find_map(ast::WhereClause::cast);
++        let mut predicates = self.predicates(list, where_clause)?;
++        let extra = ast::Fn::cast(node.clone())
++            .and_then(|f| f.param_list())
++            .map_or(0, |p| p.params().count())
++            .checked_add(3)
++            .ok_or_else(limit)?;
++        self.add(
++            extra
++                .checked_mul(std::mem::size_of::<HeaderPredicate>())
++                .ok_or_else(limit)?,
++        )?;
++        predicates.try_reserve_exact(extra).map_err(|_| limit())?;
++        let mut parameter_types = Vec::new();
++        let mut receiver = Vec::new();
++        let (kind, declared_type) = if let Some(f) = ast::Fn::cast(node.clone()) {
++            if let Some(p) = f.param_list() {
++                parameter_types = self.list(p.params().count())?;
++                if let Some(s) = p.self_param() {
++                    receiver = self.owned_tokens(s.syntax())?;
++                }
++                for p in p.params() {
++                    if let Some(t) = p.ty() {
++                        parameter_types.push(self.ty(t, 0)?);
++                    } else {
++                        predicates.push(HeaderPredicate {
++                            range: range(p.syntax().text_range()),
++                            binder: Vec::new(),
++                            kind: PredicateKind::RequiredSyntax(self.owned_tokens(p.syntax())?),
++                        });
++                    }
++                }
++            }
++            (
++                AssociatedKind::Method,
++                f.ret_type()
++                    .and_then(|r| r.ty())
++                    .map(|t| self.ty(t, 0))
++                    .transpose()?,
++            )
++        } else if let Some(t) = ast::TypeAlias::cast(node.clone()) {
++            let before_bounds = self.bytes;
++            let bounds = self.bounds(t.type_bound_list())?;
++            let bound_heap = self.bytes.checked_sub(before_bounds).ok_or_else(limit)?;
++            // Associated type identity is not a nominal or inferred projection. Retain its
++            // definition's Self position until M023 produces a genuine ProjectionKey.
++            let subject = HeaderType {
++                range: item.header_span,
++                tokens: Vec::new(),
++                form: HeaderTypeForm::AssociatedType(self.owner),
++            };
++            if trait_owner {
++                self.add(bound_heap)?;
++                let mut relaxed = self.list(
++                    bounds
++                        .iter()
++                        .filter(|b| b.modifier == BoundModifier::Relaxed)
++                        .count(),
++                )?;
++                relaxed.extend(
++                    bounds
++                        .iter()
++                        .filter(|b| b.modifier == BoundModifier::Relaxed)
++                        .cloned(),
++                );
++                predicates.push(HeaderPredicate {
++                    range: item.header_span,
++                    binder: Vec::new(),
++                    kind: PredicateKind::ImplicitSized {
++                        subject: subject.clone(),
++                        relaxed,
++                    },
++                });
++            }
++            if !bounds.is_empty() {
++                predicates.push(HeaderPredicate {
++                    range: item.header_span,
++                    binder: Vec::new(),
++                    kind: PredicateKind::Bound { subject, bounds },
++                });
++            }
++            (
++                AssociatedKind::Type,
++                t.ty().map(|t| self.ty(t, 0)).transpose()?,
++            )
++        } else if let Some(t) = ast::Const::cast(node.clone()) {
++            (
++                AssociatedKind::Constant,
++                t.ty().map(|t| self.ty(t, 0)).transpose()?,
++            )
++        } else {
++            return Err(fault("unsupported associated declaration header"));
++        };
++        self.add(
++            item.header
++                .estimated_bytes()
++                .checked_add(scope_heap(&item.scope)?)
++                .and_then(|n| n.checked_add(std::mem::size_of::<AssociatedHeader>()))
++                .ok_or_else(limit)?,
++        )?;
++        let result = AssociatedHeader {
++            definition: item.def_key.clone(),
++            context: DeclarationContext {
++                scope: item.scope.clone(),
++                range: item.declaration_span,
++            },
++            header: item.header.clone(),
++            kind,
++            generics: parameters,
++            predicates,
++            parameter_types,
++            receiver,
++            declared_type,
++            body: item.body.clone(),
++        };
++        self.owner = old_owner;
++        self.generics = old_generics;
++        // These borrowed parameters document the source/outline ownership boundary.
++        if parsed.key() != outline_source(outline) {
++            return Err(fault("associated source/outline changed"));
++        }
++        Ok(result)
++    }
++}
++fn parameter_heap(p: &[HeaderParameter]) -> Result<usize, Diagnostic> {
++    let mut bytes = 0usize;
++    for p in p {
++        bytes = bytes.checked_add(p.name.capacity()).ok_or_else(limit)?;
++        for tokens in [&p.bounds, &p.default, &p.const_type] {
++            bytes = bytes
++                .checked_add(
++                    tokens
++                        .capacity()
++                        .checked_mul(std::mem::size_of::<super::ast_adapter::TokenRecipe>())
++                        .ok_or_else(limit)?,
++                )
++                .ok_or_else(limit)?;
++            for token in tokens {
++                bytes = bytes.checked_add(token.text.capacity()).ok_or_else(limit)?;
++            }
++        }
++    }
++    Ok(bytes)
++}
++fn scope_heap(scope: &ScopeKey) -> Result<usize, Diagnostic> {
++    if scope.module_path.len() > 256 || scope.module_path.iter().any(|p| p.len() > 64 * 1024) {
++        return Err(limit());
++    }
++    scope.module_path.iter().try_fold(
++        scope
++            .module_path
++            .capacity()
++            .checked_mul(std::mem::size_of::<String>())
++            .ok_or_else(limit)?,
++        |n, p| n.checked_add(p.capacity()).ok_or_else(limit),
++    )
++}
++fn outline_source(outline: &super::outline::Outline) -> super::parse::ParseKey {
++    super::parse::ParseKey {
++        content: outline.content,
++        profile: outline.profile.clone(),
++    }
++}
++impl ParsedFile {
++    pub fn capture_trait_headers(
++        &self,
++        path: SourcePath,
++        scope: ScopeKey,
++        cfg: &CfgSet,
++        limits: HeaderCaptureLimits,
++    ) -> Result<CapturedSourceHeaders, Diagnostic> {
++        let limits = limits.validate()?;
++        path.heap_bytes()
++            .checked_add(scope_heap(&scope)?)
++            .and_then(|n| n.checked_add(self.profile.semantics.capacity()))
++            .filter(|n| *n <= limits.metadata_bytes)
++            .ok_or_else(limit)?;
++        if self.generated_origin.is_some() || scope.owner.is_some() {
++            return Err(fault(
++                "generated or attached header needs exact token-origin/context producer",
++            ));
++        }
++        let scan = self.scan_declarations(
++            path.clone(),
++            scope.clone(),
++            cfg,
++            DeclarationScanLimits {
++                nodes: limits.nodes,
++                impls: limits.headers,
++                producers: 100_000,
++                depth: limits.depth,
++                metadata_bytes: limits.metadata_bytes,
++            },
++        )?;
++        let outline = self.outline(scope.crate_key, scope.module_path.clone(), cfg)?;
++        let count = outline
++            .items
++            .iter()
++            .filter(|i| matches!(i.def_key.item_kind, ItemKind::Trait | ItemKind::Impl))
++            .count();
++        if count > limits.headers {
++            return Err(limit());
++        }
++        let mut capture = Capture {
++            limits,
++            bytes: std::mem::size_of::<CapturedSourceHeaders>(),
++            nodes: 0,
++            tokens: 0,
++            owner: scope.crate_key,
++            self_owner: scope.crate_key,
++            generics: Vec::new(),
++            binders: Vec::new(),
++        };
++        capture.add(
++            path.heap_bytes()
++                .checked_add(scope_heap(&scope)?)
++                .and_then(|n| n.checked_add(self.profile.semantics.capacity()))
++                .ok_or_else(limit)?,
++        )?;
++        let nominal_count = outline
++            .items
++            .iter()
++            .filter(|i| {
++                matches!(
++                    i.def_key.item_kind,
++                    ItemKind::Struct | ItemKind::Enum | ItemKind::Union
++                )
++            })
++            .count();
++        if nominal_count > limits.headers {
++            return Err(limit());
++        }
++        let mut nominals = capture.list(nominal_count)?;
++        for item in outline.items.iter().filter(|i| {
++            matches!(
++                i.def_key.item_kind,
++                ItemKind::Struct | ItemKind::Enum | ItemKind::Union
++            )
++        }) {
++            capture.add(
++                item.header
++                    .estimated_bytes()
++                    .checked_add(scope_heap(&item.scope)?)
++                    .and_then(|n| n.checked_add(item.def_key.declared_name.capacity()))
++                    .ok_or_else(limit)?,
++            )?;
++            nominals.push(HeaderNominal {
++                definition: item.def_key.clone(),
++                context: DeclarationContext {
++                    scope: item.scope.clone(),
++                    range: item.declaration_span,
++                },
++                header: item.header.clone(),
++            });
++        }
++        let mut headers = capture.list(count)?;
++        let tree = self.parsed.tree();
++        let mut total_members = 0usize;
++        for item in outline
++            .items
++            .iter()
++            .filter(|i| matches!(i.def_key.item_kind, ItemKind::Trait | ItemKind::Impl))
++        {
++            let mut found = None;
++            for node in tree.syntax().descendants() {
++                capture.step(0)?;
++                if range(node.text_range()) == item.declaration_span
++                    && (ast::Trait::can_cast(node.kind()) || ast::Impl::can_cast(node.kind()))
++                {
++                    if found.replace(node).is_some() {
++                        return Err(fault("header AST attachment is ambiguous"));
++                    }
++                }
++            }
++            let node = found.ok_or_else(|| fault("header AST attachment absent"))?;
++            capture.owner = item.def_key.fingerprint();
++            capture.self_owner = capture.owner;
++            let list = node.children().find_map(ast::GenericParamList::cast);
++            capture.generics = capture.parameters(list.clone(), capture.owner)?;
++            let predicates =
++                capture.predicates(list, node.children().find_map(ast::WhereClause::cast))?;
++            let (kind, container) = if let Some(t) = ast::Trait::cast(node.clone()) {
++                (
++                    HeaderKind::Trait {
++                        supertraits: capture.bounds(t.type_bound_list())?,
++                        alias: t.eq_token().is_some(),
++                        auto_trait: t.auto_token().is_some(),
++                        unsafe_trait: t.unsafe_token().is_some(),
++                    },
++                    t.assoc_item_list(),
++                )
++            } else if let Some(i) = ast::Impl::cast(node) {
++                (
++                    HeaderKind::Impl {
++                        trait_type: i
++                            .trait_()
++                            .map(|t| capture.ty(t, 0).map(Box::new))
++                            .transpose()?,
++                        self_type: Box::new(
++                            capture.ty(
++                                i.self_ty()
++                                    .ok_or_else(|| fault("impl self header absent"))?,
++                                0,
++                            )?,
++                        ),
++                        negative: i.excl_token().is_some(),
++                        unsafe_impl: i.unsafe_token().is_some(),
++                        default_impl: i.default_token().is_some(),
++                    },
++                    i.assoc_item_list(),
++                )
++            } else {
++                return Err(fault("header kind mismatch"));
++            };
++            let mut associated = Vec::new();
++            if let Some(c) = container {
++                let expected_owner = if item.def_key.item_kind == ItemKind::Impl {
++                    item.header.fingerprint()
++                } else {
++                    item.def_key.fingerprint()
++                };
++                let members = outline
++                    .items
++                    .iter()
++                    .filter(|m| {
++                        m.scope.owner == Some(expected_owner)
++                            && m.scope.crate_key == item.scope.crate_key
++                            && m.scope.module_path == item.scope.module_path
++                            && item.declaration_span.start <= m.declaration_span.start
++                            && m.declaration_span.end <= item.declaration_span.end
++                            && matches!(
++                                m.def_key.item_kind,
++                                ItemKind::Function | ItemKind::TypeAlias | ItemKind::Constant
++                            )
++                    })
++                    .collect::<Vec<_>>();
++                total_members = total_members
++                    .checked_add(members.len())
++                    .filter(|n| *n <= limits.members)
++                    .ok_or_else(limit)?;
++                associated = capture.list(members.len())?;
++                for member in members {
++                    let n = c
++                        .syntax()
++                        .children()
++                        .find(|n| range(n.text_range()) == member.declaration_span)
++                        .ok_or_else(|| fault("associated source/header attachment absent"))?;
++                    associated.push(capture.associated(
++                        self,
++                        &outline,
++                        member,
++                        &n,
++                        item.def_key.item_kind == ItemKind::Trait,
++                    )?);
++                }
++            }
++            capture.add(
++                item.header
++                    .estimated_bytes()
++                    .checked_add(scope_heap(&item.scope)?)
++                    .and_then(|n| n.checked_add(std::mem::size_of::<SourceTraitHeader>()))
++                    .ok_or_else(limit)?,
++            )?;
++            let scan_identity = if item.def_key.item_kind == ItemKind::Impl {
++                Some(
++                    scan.impls()
++                        .iter()
++                        .find(|i| i.range == item.declaration_span)
++                        .ok_or_else(|| fault("impl header missing from structural inventory"))?
++                        .identity,
++                )
++            } else {
++                None
++            };
++            headers.push(SourceTraitHeader {
++                source: self.key(),
++                path: path.clone(),
++                cfg: cfg.fingerprint(),
++                definition: item.def_key.clone(),
++                context: DeclarationContext {
++                    scope: item.scope.clone(),
++                    range: item.declaration_span,
++                },
++                header: item.header.clone(),
++                kind,
++                generics: std::mem::take(&mut capture.generics),
++                predicates,
++                associated,
++                scan_identity,
++            });
++        }
++        // Account every retained capacity before returning the immutable payload.
++        let nominal_bytes = nominals.iter().try_fold(
++            nominals
++                .capacity()
++                .checked_mul(std::mem::size_of::<HeaderNominal>())
++                .ok_or_else(limit)?,
++            |n, item| {
++                n.checked_add(item.header.estimated_bytes())
++                    .and_then(|n| {
++                        scope_heap(&item.context.scope)
++                            .ok()
++                            .and_then(|m| n.checked_add(m))
++                    })
++                    .and_then(|n| n.checked_add(item.definition.declared_name.capacity()))
++                    .and_then(|n| {
++                        n.checked_add(
++                            item.definition
++                                .module_path
++                                .capacity()
++                                .checked_mul(std::mem::size_of::<String>())?,
++                        )
++                    })
++                    .and_then(|n| {
++                        n.checked_add(
++                            item.definition
++                                .module_path
++                                .iter()
++                                .try_fold(0usize, |n, s| n.checked_add(s.capacity()))?,
++                        )
++                    })
++                    .ok_or_else(limit)
++            },
++        )?;
++        let metadata_bytes = crate::traits::header::captured_capacity_bytes(&headers)?
++            .checked_add(nominal_bytes)
++            .ok_or_else(limit)?
++            .checked_add(std::mem::size_of::<CapturedSourceHeaders>())
++            .and_then(|n| scope_heap(&scope).ok().and_then(|m| n.checked_add(m)))
++            .and_then(|n| n.checked_add(path.heap_bytes()))
++            .and_then(|n| n.checked_add(self.profile.semantics.capacity()))
++            .filter(|n| *n <= limits.metadata_bytes)
++            .ok_or_else(limit)?;
++        Ok(CapturedSourceHeaders {
++            source: self.key(),
++            path,
++            cfg: cfg.fingerprint(),
++            scope,
++            headers,
++            nominals,
++            scan_identity: scan.fingerprint(),
++            pending_producers: scan.producers().len(),
++            metadata_bytes,
++        })
++    }
++}
+diff --git a/crates/lrr/src/traits/header.rs b/crates/lrr/src/traits/header.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/traits/header.rs
+@@ -0,0 +1,792 @@
++//! Immutable source header data. No solver, dictionary, descriptor or body permission.
++use super::term::{ConstTerm, ParamKey, RegionTerm, TyTerm};
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    source::{manifest::DefKey, snapshot::SourcePath},
++    syntax::{
++        ast_adapter::TokenRecipe,
++        outline::{BodyHandle, DeclarationContext, HeaderRecipe, ScopeKey},
++        parse::ParseKey,
++        spans::SourceRange,
++    },
++};
++#[derive(Clone, Copy, Debug)]
++pub struct HeaderCaptureLimits {
++    pub headers: usize,
++    pub members: usize,
++    pub nodes: usize,
++    pub tokens: usize,
++    pub depth: usize,
++    pub metadata_bytes: usize,
++}
++impl Default for HeaderCaptureLimits {
++    fn default() -> Self {
++        Self {
++            headers: 10_000,
++            members: 100_000,
++            nodes: 1_000_000,
++            tokens: 1_000_000,
++            depth: 256,
++            metadata_bytes: 32 * 1024 * 1024,
++        }
++    }
++}
++impl HeaderCaptureLimits {
++    pub(crate) fn validate(self) -> Result<Self, Diagnostic> {
++        let maximum = Self::default();
++        if self.headers > maximum.headers
++            || self.members > maximum.members
++            || self.nodes > maximum.nodes
++            || self.tokens > maximum.tokens
++            || self.depth > maximum.depth
++            || self.metadata_bytes > maximum.metadata_bytes
++        {
++            return Err(fault("capture limits exceed fixed M019 ceilings"));
++        }
++        Ok(self)
++    }
++}
++pub(crate) fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-TRAIT-HEADER", message.into())
++}
++pub(crate) fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "trait header count/depth/token/metadata limit".into(),
++    )
++}
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub struct HeaderParameter {
++    pub key: ParamKey,
++    pub kind: super::term::BoundKind,
++    pub name: String,
++    pub bounds: Vec<TokenRecipe>,
++    pub default: Vec<TokenRecipe>,
++    pub const_type: Vec<TokenRecipe>,
++}
++impl StableEncode for HeaderParameter {
++    const DOMAIN: &'static str = "lrr/v5/trait-header-parameter/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.record(&self.key);
++        e.u32(self.kind.tag());
++        e.string(&self.name);
++        encode_tokens(e, &self.bounds);
++        encode_tokens(e, &self.default);
++        encode_tokens(e, &self.const_type);
++    }
++}
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub enum HeaderRegion {
++    Known(RegionTerm),
++    Unresolved(Vec<TokenRecipe>),
++}
++impl StableEncode for HeaderRegion {
++    const DOMAIN: &'static str = "lrr/v5/header-region/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        match self {
++            Self::Known(t) => {
++                e.u8(0);
++                e.record(t);
++            }
++            Self::Unresolved(t) => {
++                e.u8(1);
++                encode_tokens(e, t);
++            }
++        }
++    }
++}
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub enum HeaderConst {
++    Parameter(ParamKey),
++    RequiredExpression {
++        range: SourceRange,
++        tokens: Vec<TokenRecipe>,
++    },
++}
++impl StableEncode for HeaderConst {
++    const DOMAIN: &'static str = "lrr/v5/header-const/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        match self {
++            Self::Parameter(p) => {
++                e.u8(0);
++                e.record(p);
++            }
++            Self::RequiredExpression { range, tokens } => {
++                e.u8(1);
++                encode_range(e, *range);
++                encode_tokens(e, tokens);
++            }
++        }
++    }
++}
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub enum HeaderArgument {
++    Type(Box<HeaderType>),
++    Region(HeaderRegion),
++    Const(HeaderConst),
++    Associated {
++        name: Option<String>,
++        tokens: Vec<TokenRecipe>,
++    },
++}
++impl StableEncode for HeaderArgument {
++    const DOMAIN: &'static str = "lrr/v5/header-argument/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        match self {
++            Self::Type(t) => {
++                e.u8(0);
++                e.record(t.as_ref());
++            }
++            Self::Region(t) => {
++                e.u8(1);
++                e.record(t);
++            }
++            Self::Const(t) => {
++                e.u8(2);
++                e.record(t);
++            }
++            Self::Associated { name, tokens } => {
++                e.u8(3);
++                e.option(name, |e, s| e.string(s));
++                encode_tokens(e, tokens);
++            }
++        }
++    }
++}
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub struct HeaderPathSegment {
++    pub name: Option<String>,
++    pub arguments: Vec<HeaderArgument>,
++    pub parenthesized: bool,
++    pub type_anchor: bool,
++    pub absolute_separator: bool,
++}
++impl StableEncode for HeaderPathSegment {
++    const DOMAIN: &'static str = "lrr/v5/header-path-segment/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.option(&self.name, |e, s| e.string(s));
++        e.sequence(&self.arguments, |e, a| e.record(a));
++        e.bool(self.parenthesized);
++        e.bool(self.type_anchor);
++        e.bool(self.absolute_separator);
++    }
++}
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub struct HeaderType {
++    pub range: SourceRange,
++    pub tokens: Vec<TokenRecipe>,
++    pub form: HeaderTypeForm,
++}
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub enum HeaderTypeForm {
++    Parameter(ParamKey),
++    SelfType(Digest),
++    AssociatedType(Digest),
++    Tuple(Vec<HeaderType>),
++    Array(Box<HeaderType>, HeaderConst),
++    Slice(Box<HeaderType>),
++    Reference {
++        region: HeaderRegion,
++        mutable: bool,
++        pointee: Box<HeaderType>,
++    },
++    Path(Vec<HeaderPathSegment>),
++    Never,
++    RequiredSyntax,
++}
++impl HeaderType {
++    /// Only existing symbolic APIs' closed structure/actual parameters. Paths and
++    /// `Self` cannot acquire source definition identity from their spelling.
++    pub fn symbolic(&self) -> Option<TyTerm> {
++        match &self.form {
++            HeaderTypeForm::Parameter(p) => Some(TyTerm::Param(*p)),
++            HeaderTypeForm::Tuple(v) if v.is_empty() => {
++                Some(TyTerm::Primitive(crate::ir::op::PrimitiveType::Unit))
++            }
++            HeaderTypeForm::Tuple(v) => v
++                .iter()
++                .map(Self::symbolic)
++                .collect::<Option<Vec<_>>>()
++                .map(TyTerm::Tuple),
++            HeaderTypeForm::Array(t, HeaderConst::Parameter(p)) => {
++                Some(TyTerm::Array(Box::new(t.symbolic()?), ConstTerm::Param(*p)))
++            }
++            HeaderTypeForm::Slice(t) => Some(TyTerm::Slice(Box::new(t.symbolic()?))),
++            HeaderTypeForm::Reference {
++                region: HeaderRegion::Known(r),
++                mutable,
++                pointee,
++            } => Some(TyTerm::Ref(
++                r.clone(),
++                *mutable,
++                Box::new(pointee.symbolic()?),
++            )),
++            HeaderTypeForm::Never => Some(TyTerm::Never),
++            _ => None,
++        }
++    }
++}
++impl StableEncode for HeaderType {
++    const DOMAIN: &'static str = "lrr/v5/header-type/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        encode_range(e, self.range);
++        encode_tokens(e, &self.tokens);
++        match &self.form {
++            HeaderTypeForm::Parameter(p) => {
++                e.u8(0);
++                e.record(p);
++            }
++            HeaderTypeForm::SelfType(d) => {
++                e.u8(1);
++                e.digest(*d);
++            }
++            HeaderTypeForm::Tuple(v) => {
++                e.u8(2);
++                e.sequence(v, |e, t| e.record(t));
++            }
++            HeaderTypeForm::Array(t, c) => {
++                e.u8(3);
++                e.record(t.as_ref());
++                e.record(c);
++            }
++            HeaderTypeForm::Slice(t) => {
++                e.u8(4);
++                e.record(t.as_ref());
++            }
++            HeaderTypeForm::Reference {
++                region,
++                mutable,
++                pointee,
++            } => {
++                e.u8(5);
++                e.record(region);
++                e.bool(*mutable);
++                e.record(pointee.as_ref());
++            }
++            HeaderTypeForm::Path(p) => {
++                e.u8(6);
++                e.sequence(p, |e, s| e.record(s));
++            }
++            HeaderTypeForm::AssociatedType(d) => {
++                e.u8(9);
++                e.digest(*d);
++            }
++            HeaderTypeForm::Never => e.u8(7),
++            HeaderTypeForm::RequiredSyntax => e.u8(8),
++        }
++    }
++}
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum BoundModifier {
++    Ordinary,
++    Relaxed,
++    RequiredConstOrOther,
++}
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub struct HeaderBound {
++    pub range: SourceRange,
++    pub binder: Vec<HeaderParameter>,
++    pub modifier: BoundModifier,
++    pub ty: Option<HeaderType>,
++    pub lifetime: Option<HeaderRegion>,
++    pub tokens: Vec<TokenRecipe>,
++}
++impl StableEncode for HeaderBound {
++    const DOMAIN: &'static str = "lrr/v5/header-bound/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        encode_range(e, self.range);
++        e.sequence(&self.binder, |e, p| e.record(p));
++        e.u8(match self.modifier {
++            BoundModifier::Ordinary => 0,
++            BoundModifier::Relaxed => 1,
++            BoundModifier::RequiredConstOrOther => 2,
++        });
++        e.option(&self.ty, |e, t| e.record(t));
++        e.option(&self.lifetime, |e, t| e.record(t));
++        encode_tokens(e, &self.tokens);
++    }
++}
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub enum PredicateKind {
++    Bound {
++        subject: HeaderType,
++        bounds: Vec<HeaderBound>,
++    },
++    RegionOutlives {
++        subject: HeaderRegion,
++        bounds: Vec<HeaderBound>,
++    },
++    ImplicitSized {
++        subject: HeaderType,
++        relaxed: Vec<HeaderBound>,
++    },
++    RequiredSyntax(Vec<TokenRecipe>),
++}
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub struct HeaderPredicate {
++    pub range: SourceRange,
++    pub binder: Vec<HeaderParameter>,
++    pub kind: PredicateKind,
++}
++impl StableEncode for HeaderPredicate {
++    const DOMAIN: &'static str = "lrr/v5/header-predicate/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        encode_range(e, self.range);
++        e.sequence(&self.binder, |e, p| e.record(p));
++        match &self.kind {
++            PredicateKind::Bound { subject, bounds } => {
++                e.u8(0);
++                e.record(subject);
++                e.sequence(bounds, |e, b| e.record(b));
++            }
++            PredicateKind::RegionOutlives { subject, bounds } => {
++                e.u8(1);
++                e.record(subject);
++                e.sequence(bounds, |e, b| e.record(b));
++            }
++            PredicateKind::ImplicitSized { subject, relaxed } => {
++                e.u8(2);
++                e.record(subject);
++                e.sequence(relaxed, |e, b| e.record(b));
++            }
++            PredicateKind::RequiredSyntax(t) => {
++                e.u8(3);
++                encode_tokens(e, t);
++            }
++        }
++    }
++}
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum AssociatedKind {
++    Method,
++    Type,
++    Constant,
++}
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub struct AssociatedHeader {
++    pub definition: DefKey,
++    pub context: DeclarationContext,
++    pub header: HeaderRecipe,
++    pub kind: AssociatedKind,
++    pub generics: Vec<HeaderParameter>,
++    pub predicates: Vec<HeaderPredicate>,
++    pub parameter_types: Vec<HeaderType>,
++    pub receiver: Vec<TokenRecipe>,
++    pub declared_type: Option<HeaderType>,
++    pub body: Option<BodyHandle>,
++}
++impl StableEncode for AssociatedHeader {
++    const DOMAIN: &'static str = "lrr/v5/associated-header/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.record(&self.definition);
++        e.record(&self.context);
++        e.record(&self.header);
++        e.u8(match self.kind {
++            AssociatedKind::Method => 0,
++            AssociatedKind::Type => 1,
++            AssociatedKind::Constant => 2,
++        });
++        e.sequence(&self.generics, |e, p| e.record(p));
++        e.sequence(&self.predicates, |e, p| e.record(p));
++        e.sequence(&self.parameter_types, |e, t| e.record(t));
++        encode_tokens(e, &self.receiver);
++        e.option(&self.declared_type, |e, t| e.record(t));
++        e.option(&self.body, |e, b| e.record(b));
++    }
++}
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub enum HeaderKind {
++    Trait {
++        supertraits: Vec<HeaderBound>,
++        alias: bool,
++        auto_trait: bool,
++        unsafe_trait: bool,
++    },
++    Impl {
++        trait_type: Option<Box<HeaderType>>,
++        self_type: Box<HeaderType>,
++        negative: bool,
++        unsafe_impl: bool,
++        default_impl: bool,
++    },
++}
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub struct SourceTraitHeader {
++    pub(crate) source: ParseKey,
++    pub(crate) path: SourcePath,
++    pub(crate) cfg: Digest,
++    pub(crate) definition: DefKey,
++    pub(crate) context: DeclarationContext,
++    pub(crate) header: HeaderRecipe,
++    pub(crate) kind: HeaderKind,
++    pub(crate) generics: Vec<HeaderParameter>,
++    pub(crate) predicates: Vec<HeaderPredicate>,
++    pub(crate) associated: Vec<AssociatedHeader>,
++    pub(crate) scan_identity: Option<Digest>,
++}
++impl SourceTraitHeader {
++    pub fn source(&self) -> &ParseKey {
++        &self.source
++    }
++    pub fn definition(&self) -> &DefKey {
++        &self.definition
++    }
++    pub fn context(&self) -> &DeclarationContext {
++        &self.context
++    }
++    pub fn header(&self) -> &HeaderRecipe {
++        &self.header
++    }
++    pub fn kind(&self) -> &HeaderKind {
++        &self.kind
++    }
++    pub fn generics(&self) -> &[HeaderParameter] {
++        &self.generics
++    }
++    pub fn predicates(&self) -> &[HeaderPredicate] {
++        &self.predicates
++    }
++    pub fn associated(&self) -> &[AssociatedHeader] {
++        &self.associated
++    }
++    pub fn exact_identity(&self) -> Digest {
++        self.fingerprint()
++    }
++}
++impl StableEncode for SourceTraitHeader {
++    const DOMAIN: &'static str = "lrr/v5/source-trait-header/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.record(&self.source);
++        e.string(self.path.as_str());
++        e.digest(self.cfg);
++        e.record(&self.definition);
++        e.record(&self.context);
++        e.record(&self.header);
++        match &self.kind {
++            HeaderKind::Trait {
++                supertraits,
++                alias,
++                auto_trait,
++                unsafe_trait,
++            } => {
++                e.u8(0);
++                e.sequence(supertraits, |e, b| e.record(b));
++                e.bool(*alias);
++                e.bool(*auto_trait);
++                e.bool(*unsafe_trait);
++            }
++            HeaderKind::Impl {
++                trait_type,
++                self_type,
++                negative,
++                unsafe_impl,
++                default_impl,
++            } => {
++                e.u8(1);
++                e.option(trait_type, |e, t| e.record(t.as_ref()));
++                e.record(self_type.as_ref());
++                e.bool(*negative);
++                e.bool(*unsafe_impl);
++                e.bool(*default_impl);
++            }
++        }
++        e.sequence(&self.generics, |e, p| e.record(p));
++        e.sequence(&self.predicates, |e, p| e.record(p));
++        e.sequence(&self.associated, |e, m| e.record(m));
++        e.option(&self.scan_identity, |e, d| e.digest(*d));
++    }
++}
++#[derive(Clone, Debug)]
++pub(crate) struct HeaderNominal {
++    pub definition: DefKey,
++    pub context: DeclarationContext,
++    pub header: HeaderRecipe,
++}
++impl StableEncode for HeaderNominal {
++    const DOMAIN: &'static str = "lrr/v5/header-nominal-attachment/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.record(&self.definition);
++        e.record(&self.context);
++        e.record(&self.header);
++    }
++}
++#[derive(Debug)]
++pub struct CapturedSourceHeaders {
++    pub(crate) source: ParseKey,
++    pub(crate) path: SourcePath,
++    pub(crate) cfg: Digest,
++    pub(crate) scope: ScopeKey,
++    pub(crate) headers: Vec<SourceTraitHeader>,
++    pub(crate) nominals: Vec<HeaderNominal>,
++    pub(crate) scan_identity: Digest,
++    pub(crate) pending_producers: usize,
++    pub(crate) metadata_bytes: usize,
++}
++impl CapturedSourceHeaders {
++    pub fn source(&self) -> &ParseKey {
++        &self.source
++    }
++    pub fn headers(&self) -> &[SourceTraitHeader] {
++        &self.headers
++    }
++    pub fn metadata_bytes(&self) -> usize {
++        self.metadata_bytes
++    }
++    pub fn pending_producers(&self) -> usize {
++        self.pending_producers
++    }
++}
++impl StableEncode for CapturedSourceHeaders {
++    const DOMAIN: &'static str = "lrr/v5/trait-header-fragment/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.record(&self.source);
++        e.string(self.path.as_str());
++        e.digest(self.cfg);
++        e.record(&self.scope);
++        e.digest(self.scan_identity);
++        e.sequence(&self.headers, |e, h| e.record(h));
++        e.sequence(&self.nominals, |e, n| e.record(n));
++        e.u64(self.pending_producers as u64);
++    }
++}
++pub(crate) fn encode_tokens(e: &mut StableEncoder, t: &[TokenRecipe]) {
++    e.sequence(t, |e, t| e.record(t));
++}
++pub(crate) fn encode_range(e: &mut StableEncoder, r: SourceRange) {
++    e.u32(r.start);
++    e.u32(r.end);
++}
++
++/// Checked owned-capacity accounting shared by capture and catalog admission.
++pub(crate) fn captured_capacity_bytes(
++    headers: &Vec<SourceTraitHeader>,
++) -> Result<usize, Diagnostic> {
++    struct Size {
++        bytes: usize,
++        work: usize,
++    }
++    impl Size {
++        fn add(&mut self, n: usize) -> Result<(), Diagnostic> {
++            self.bytes = self
++                .bytes
++                .checked_add(n)
++                .filter(|n| *n <= 32 * 1024 * 1024)
++                .ok_or_else(limit)?;
++            Ok(())
++        }
++        fn vec<T>(&mut self, v: &Vec<T>) -> Result<(), Diagnostic> {
++            self.add(
++                v.capacity()
++                    .checked_mul(std::mem::size_of::<T>())
++                    .ok_or_else(limit)?,
++            )
++        }
++        fn step(&mut self, depth: usize) -> Result<(), Diagnostic> {
++            self.work = self
++                .work
++                .checked_add(1)
++                .filter(|n| *n <= 1_000_000)
++                .ok_or_else(limit)?;
++            if depth >= 256 {
++                return Err(limit());
++            }
++            Ok(())
++        }
++        fn tokens(&mut self, t: &Vec<TokenRecipe>) -> Result<(), Diagnostic> {
++            self.vec(t)?;
++            for t in t {
++                self.add(t.text.capacity())?;
++            }
++            Ok(())
++        }
++        fn params(&mut self, p: &Vec<HeaderParameter>) -> Result<(), Diagnostic> {
++            self.vec(p)?;
++            for p in p {
++                self.add(p.name.capacity())?;
++                self.tokens(&p.bounds)?;
++                self.tokens(&p.default)?;
++                self.tokens(&p.const_type)?;
++            }
++            Ok(())
++        }
++        fn region(&mut self, r: &HeaderRegion) -> Result<(), Diagnostic> {
++            if let HeaderRegion::Unresolved(t) = r {
++                self.tokens(t)?;
++            }
++            Ok(())
++        }
++        fn constant(&mut self, c: &HeaderConst) -> Result<(), Diagnostic> {
++            if let HeaderConst::RequiredExpression { tokens, .. } = c {
++                self.tokens(tokens)?;
++            }
++            Ok(())
++        }
++        fn ty(&mut self, t: &HeaderType, depth: usize) -> Result<(), Diagnostic> {
++            self.step(depth)?;
++            self.tokens(&t.tokens)?;
++            match &t.form {
++                HeaderTypeForm::Tuple(v) => {
++                    self.vec(v)?;
++                    for t in v {
++                        self.ty(t, depth + 1)?;
++                    }
++                }
++                HeaderTypeForm::Array(t, c) => {
++                    self.add(std::mem::size_of::<HeaderType>())?;
++                    self.ty(t, depth + 1)?;
++                    self.constant(c)?;
++                }
++                HeaderTypeForm::Slice(t) => {
++                    self.add(std::mem::size_of::<HeaderType>())?;
++                    self.ty(t, depth + 1)?;
++                }
++                HeaderTypeForm::Reference {
++                    region, pointee, ..
++                } => {
++                    self.region(region)?;
++                    self.add(std::mem::size_of::<HeaderType>())?;
++                    self.ty(pointee, depth + 1)?;
++                }
++                HeaderTypeForm::Path(p) => {
++                    self.vec(p)?;
++                    for p in p {
++                        if let Some(n) = &p.name {
++                            self.add(n.capacity())?;
++                        }
++                        self.vec(&p.arguments)?;
++                        for a in &p.arguments {
++                            match a {
++                                HeaderArgument::Type(t) => {
++                                    self.add(std::mem::size_of::<HeaderType>())?;
++                                    self.ty(t, depth + 1)?;
++                                }
++                                HeaderArgument::Region(r) => self.region(r)?,
++                                HeaderArgument::Const(c) => self.constant(c)?,
++                                HeaderArgument::Associated { name, tokens } => {
++                                    if let Some(n) = name {
++                                        self.add(n.capacity())?;
++                                    }
++                                    self.tokens(tokens)?;
++                                }
++                            }
++                        }
++                    }
++                }
++                _ => {}
++            }
++            Ok(())
++        }
++        fn bounds(&mut self, b: &Vec<HeaderBound>) -> Result<(), Diagnostic> {
++            self.vec(b)?;
++            for b in b {
++                self.params(&b.binder)?;
++                if let Some(t) = &b.ty {
++                    self.ty(t, 0)?;
++                }
++                if let Some(r) = &b.lifetime {
++                    self.region(r)?;
++                }
++                self.tokens(&b.tokens)?;
++            }
++            Ok(())
++        }
++        fn predicates(&mut self, p: &Vec<HeaderPredicate>) -> Result<(), Diagnostic> {
++            self.vec(p)?;
++            for p in p {
++                self.step(0)?;
++                self.params(&p.binder)?;
++                match &p.kind {
++                    PredicateKind::Bound { subject, bounds } => {
++                        self.ty(subject, 0)?;
++                        self.bounds(bounds)?;
++                    }
++                    PredicateKind::RegionOutlives { subject, bounds } => {
++                        self.region(subject)?;
++                        self.bounds(bounds)?;
++                    }
++                    PredicateKind::ImplicitSized { subject, relaxed } => {
++                        self.ty(subject, 0)?;
++                        self.bounds(relaxed)?;
++                    }
++                    PredicateKind::RequiredSyntax(t) => self.tokens(t)?,
++                }
++            }
++            Ok(())
++        }
++        fn header(&mut self, h: &HeaderRecipe) -> Result<(), Diagnostic> {
++            self.add(h.profile.semantics.capacity())?;
++            self.tokens(&h.tokens)?;
++            self.tokens(&h.context)?;
++            self.vec(&h.attributes)?;
++            for a in &h.attributes {
++                self.add(a.name.capacity())?;
++                self.tokens(&a.tokens)?;
++            }
++            if let crate::syntax::outline::Visibility::Restricted(t) = &h.visibility {
++                self.tokens(t)?;
++            }
++            Ok(())
++        }
++        fn definition(&mut self, d: &DefKey) -> Result<(), Diagnostic> {
++            self.vec(&d.module_path)?;
++            for n in &d.module_path {
++                self.add(n.capacity())?;
++            }
++            self.add(d.declared_name.capacity())
++        }
++        fn scope(&mut self, s: &ScopeKey) -> Result<(), Diagnostic> {
++            self.vec(&s.module_path)?;
++            for n in &s.module_path {
++                self.add(n.capacity())?;
++            }
++            Ok(())
++        }
++    }
++    let mut s = Size { bytes: 0, work: 0 };
++    s.vec(headers)?;
++    for h in headers {
++        s.step(0)?;
++        s.add(h.source.profile.semantics.capacity())?;
++        s.add(h.path.heap_bytes())?;
++        s.definition(&h.definition)?;
++        s.scope(&h.context.scope)?;
++        s.header(&h.header)?;
++        s.params(&h.generics)?;
++        s.predicates(&h.predicates)?;
++        match &h.kind {
++            HeaderKind::Trait { supertraits, .. } => s.bounds(supertraits)?,
++            HeaderKind::Impl {
++                trait_type,
++                self_type,
++                ..
++            } => {
++                if let Some(t) = trait_type {
++                    s.add(std::mem::size_of::<HeaderType>())?;
++                    s.ty(t, 0)?;
++                }
++                s.add(std::mem::size_of::<HeaderType>())?;
++                s.ty(self_type, 0)?;
++            }
++        }
++        s.vec(&h.associated)?;
++        for m in &h.associated {
++            s.definition(&m.definition)?;
++            s.scope(&m.context.scope)?;
++            s.header(&m.header)?;
++            s.params(&m.generics)?;
++            s.predicates(&m.predicates)?;
++            s.vec(&m.parameter_types)?;
++            for t in &m.parameter_types {
++                s.ty(t, 0)?;
++            }
++            s.tokens(&m.receiver)?;
++            if let Some(t) = &m.declared_type {
++                s.ty(t, 0)?;
++            }
++        }
++    }
++    Ok(s.bytes)
++}
+diff --git a/crates/lrr/src/traits/index.rs b/crates/lrr/src/traits/index.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/traits/index.rs
+@@ -0,0 +1,780 @@
++//! Conservative deterministic candidate metadata. Membership is never fulfillment.
++use super::header::*;
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::{
++        dependency::{InputKey, InputValue},
++        key::{BucketKey, QueryKey, SealedNameKey},
++        memo::Database,
++        seals::{SealDomain, SealKey},
++        value::QueryValue,
++    },
++    frontend::names::NameLookup,
++    source::manifest::{ItemKind, Namespace},
++    syntax::outline::ScopeKey,
++};
++use std::collections::BTreeMap;
++#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
++enum TraitBucket {
++    Exact(Digest),
++    Inherent,
++    Unresolved,
++}
++#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
++enum SelfBucket {
++    Nominal(Digest),
++    Tuple(u32),
++    Array,
++    Slice,
++    Reference(bool),
++    Never,
++    Blanket,
++    Unresolved,
++}
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++struct Row {
++    fragment: usize,
++    header: usize,
++    identity: Digest,
++    trait_bucket: TraitBucket,
++    self_bucket: SelfBucket,
++}
++impl StableEncode for Row {
++    const DOMAIN: &'static str = "lrr/v5/trait-candidate-row/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.digest(self.identity);
++        match self.trait_bucket {
++            TraitBucket::Exact(d) => {
++                e.u8(0);
++                e.digest(d);
++            }
++            TraitBucket::Inherent => e.u8(1),
++            TraitBucket::Unresolved => e.u8(2),
++        }
++        match self.self_bucket {
++            SelfBucket::Nominal(d) => {
++                e.u8(0);
++                e.digest(d);
++            }
++            SelfBucket::Tuple(n) => {
++                e.u8(1);
++                e.u32(n);
++            }
++            SelfBucket::Array => e.u8(2),
++            SelfBucket::Slice => e.u8(3),
++            SelfBucket::Reference(m) => {
++                e.u8(4);
++                e.bool(m);
++            }
++            SelfBucket::Never => e.u8(5),
++            SelfBucket::Blanket => e.u8(6),
++            SelfBucket::Unresolved => e.u8(7),
++        }
++    }
++}
++fn bare_path(t: &HeaderType) -> Option<&str> {
++    let HeaderTypeForm::Path(segments) = &t.form else {
++        return None;
++    };
++    if segments.len() != 1
++        || segments[0].absolute_separator
++        || segments[0].type_anchor
++        || segments[0].parenthesized
++    {
++        return None;
++    }
++    segments[0].name.as_deref()
++}
++fn constructor(t: &HeaderType, nominal: impl FnOnce(&str) -> Option<Digest>) -> SelfBucket {
++    match &t.form {
++        HeaderTypeForm::Parameter(_) => SelfBucket::Blanket,
++        HeaderTypeForm::Tuple(v) => {
++            u32::try_from(v.len()).map_or(SelfBucket::Unresolved, SelfBucket::Tuple)
++        }
++        HeaderTypeForm::Array(..) => SelfBucket::Array,
++        HeaderTypeForm::Slice(_) => SelfBucket::Slice,
++        HeaderTypeForm::Reference { mutable, .. } => SelfBucket::Reference(*mutable),
++        HeaderTypeForm::Never => SelfBucket::Never,
++        _ => bare_path(t)
++            .and_then(nominal)
++            .map_or(SelfBucket::Unresolved, SelfBucket::Nominal),
++    }
++}
++fn unique<T>(mut values: impl Iterator<Item = T>) -> Option<T> {
++    let first = values.next()?;
++    if values.next().is_some() {
++        None
++    } else {
++        Some(first)
++    }
++}
++/// Disclosed property-test model only. It has no catalog certificate or current
++/// Type-namespace proof, so its candidates cannot become executable selection.
++#[derive(Debug)]
++pub struct HeaderIndexModel {
++    fragments: Vec<CapturedSourceHeaders>,
++    rows: Vec<Row>,
++    buckets: BTreeMap<(TraitBucket, SelfBucket), Vec<usize>>,
++    metadata_bytes: usize,
++    metadata_ceiling: usize,
++}
++impl HeaderIndexModel {
++    pub fn from_fragments(
++        mut fragments: Vec<CapturedSourceHeaders>,
++        limits: HeaderCaptureLimits,
++    ) -> Result<Self, Diagnostic> {
++        let limits = limits.validate()?;
++        if fragments.len() > 4096 {
++            return Err(limit());
++        }
++        fragments.sort_by_key(StableEncode::fingerprint);
++        if fragments
++            .windows(2)
++            .any(|p| p[0].fingerprint() == p[1].fingerprint())
++        {
++            return Err(fault("duplicate header source attachment"));
++        }
++        let count = fragments.iter().try_fold(0usize, |n, f| {
++            n.checked_add(f.headers.len())
++                .filter(|n| *n <= limits.headers)
++                .ok_or_else(limit)
++        })?;
++        let bytes = fragments.iter().try_fold(
++            fragments
++                .capacity()
++                .checked_mul(std::mem::size_of::<CapturedSourceHeaders>())
++                .ok_or_else(limit)?,
++            |n, f| n.checked_add(f.metadata_bytes).ok_or_else(limit),
++        )?;
++        let mut rows = Vec::new();
++        rows.try_reserve_exact(count).map_err(|_| limit())?;
++        for (fi, f) in fragments.iter().enumerate() {
++            for (hi, h) in f.headers.iter().enumerate() {
++                if let HeaderKind::Impl {
++                    trait_type,
++                    self_type,
++                    ..
++                } = &h.kind
++                {
++                    let trait_bucket = match trait_type {
++                        None => TraitBucket::Inherent,
++                        Some(t) => bare_path(t)
++                            .and_then(|name| {
++                                unique(
++                                    f.headers
++                                        .iter()
++                                        .filter(|d| {
++                                            matches!(d.kind, HeaderKind::Trait { alias: false, .. })
++                                                && d.context.scope == h.context.scope
++                                                && d.definition.declared_name == name
++                                        })
++                                        .map(|d| d.definition.fingerprint()),
++                                )
++                            })
++                            .map_or(TraitBucket::Unresolved, TraitBucket::Exact),
++                    };
++                    let self_bucket = constructor(self_type, |name| {
++                        unique(
++                            f.nominals
++                                .iter()
++                                .filter(|d| {
++                                    d.context.scope == h.context.scope
++                                        && d.definition.declared_name == name
++                                })
++                                .map(|d| d.definition.fingerprint()),
++                        )
++                    });
++                    rows.push(Row {
++                        fragment: fi,
++                        header: hi,
++                        identity: h.exact_identity(),
++                        trait_bucket,
++                        self_bucket,
++                    });
++                }
++            }
++        }
++        rows.sort_by_key(|r| r.identity);
++        if rows.windows(2).any(|p| p[0].identity == p[1].identity) {
++            return Err(fault("duplicate impl source identity"));
++        }
++        Self::finish(fragments, rows, bytes, limits)
++    }
++    fn finish(
++        fragments: Vec<CapturedSourceHeaders>,
++        rows: Vec<Row>,
++        bytes: usize,
++        limits: HeaderCaptureLimits,
++    ) -> Result<Self, Diagnostic> {
++        // BTree nodes and each one-row capacity are conservatively charged before insertion.
++        let overhead = rows
++            .len()
++            .checked_mul(256)
++            .and_then(|n| n.checked_add(rows.capacity().checked_mul(std::mem::size_of::<Row>())?))
++            .ok_or_else(limit)?;
++        let mut bytes = bytes
++            .checked_add(overhead)
++            .filter(|n| *n <= limits.metadata_bytes)
++            .ok_or_else(limit)?;
++        let mut buckets = BTreeMap::<(TraitBucket, SelfBucket), Vec<usize>>::new();
++        for (ordinal, row) in rows.iter().enumerate() {
++            let b = buckets
++                .entry((row.trait_bucket, row.self_bucket))
++                .or_default();
++            b.try_reserve_exact(1).map_err(|_| limit())?;
++            b.push(ordinal);
++        }
++        let capacity_bytes = buckets.values().try_fold(0usize, |n, b| {
++            n.checked_add(b.capacity().checked_mul(std::mem::size_of::<usize>())?)
++                .ok_or_else(limit)
++        })?;
++        bytes = bytes
++            .checked_add(capacity_bytes)
++            .filter(|n| *n <= limits.metadata_bytes)
++            .ok_or_else(limit)?;
++        Ok(Self {
++            fragments,
++            rows,
++            buckets,
++            metadata_bytes: bytes,
++            metadata_ceiling: limits.metadata_bytes,
++        })
++    }
++    pub fn header_count(&self) -> usize {
++        self.fragments.iter().map(|f| f.headers.len()).sum()
++    }
++    pub fn metadata_bytes(&self) -> usize {
++        self.metadata_bytes
++    }
++    fn indexed(&self, t: TraitBucket, s: SelfBucket) -> Result<Vec<Digest>, Diagnostic> {
++        self.metadata_bytes
++            .checked_add(
++                self.rows
++                    .len()
++                    .checked_mul(std::mem::size_of::<Digest>())
++                    .ok_or_else(limit)?,
++            )
++            .filter(|n| *n <= self.metadata_ceiling)
++            .ok_or_else(limit)?;
++        let mut ids = Vec::new();
++        ids.try_reserve_exact(self.rows.len())
++            .map_err(|_| limit())?;
++        for ((tb, sb), entries) in &self.buckets {
++            if (if t == TraitBucket::Inherent {
++                *tb == TraitBucket::Inherent
++            } else {
++                *tb != TraitBucket::Inherent
++                    && (*tb == t || *tb == TraitBucket::Unresolved || t == TraitBucket::Unresolved)
++            }) && (*sb == s
++                || matches!(sb, SelfBucket::Blanket | SelfBucket::Unresolved)
++                || matches!(s, SelfBucket::Blanket | SelfBucket::Unresolved))
++            {
++                for ordinal in entries {
++                    ids.push(self.rows[*ordinal].identity);
++                }
++            }
++        }
++        ids.sort_unstable();
++        Ok(ids)
++    }
++    fn full_catalog(&self, t: TraitBucket, s: SelfBucket) -> Result<Vec<Digest>, Diagnostic> {
++        // Deliberately no bucket iteration: all retained headers are inspected independently.
++        self.metadata_bytes
++            .checked_add(
++                self.rows
++                    .len()
++                    .checked_mul(2 * std::mem::size_of::<Digest>())
++                    .ok_or_else(limit)?,
++            )
++            .filter(|n| *n <= self.metadata_ceiling)
++            .ok_or_else(limit)?;
++        let mut ids = Vec::new();
++        ids.try_reserve_exact(self.rows.len())
++            .map_err(|_| limit())?;
++        for fragment in &self.fragments {
++            for header in &fragment.headers {
++                if !matches!(header.kind, HeaderKind::Impl { .. }) {
++                    continue;
++                }
++                let row = self
++                    .rows
++                    .iter()
++                    .find(|r| r.identity == header.exact_identity())
++                    .ok_or_else(|| fault("full catalog impl omitted from index rows"))?;
++                let different_trait = matches!((t,row.trait_bucket),(TraitBucket::Exact(a),TraitBucket::Exact(b)) if a!=b)
++                    || matches!(
++                        (t, row.trait_bucket),
++                        (
++                            TraitBucket::Inherent,
++                            TraitBucket::Exact(_) | TraitBucket::Unresolved
++                        ) | (
++                            TraitBucket::Exact(_) | TraitBucket::Unresolved,
++                            TraitBucket::Inherent
++                        )
++                    );
++                let different_self = !matches!(s, SelfBucket::Blanket | SelfBucket::Unresolved)
++                    && !matches!(
++                        row.self_bucket,
++                        SelfBucket::Blanket | SelfBucket::Unresolved
++                    )
++                    && s != row.self_bucket;
++                if !different_trait && !different_self {
++                    ids.push(header.exact_identity());
++                }
++            }
++        }
++        ids.sort_unstable();
++        Ok(ids)
++    }
++    /// Metadata property oracle. Never evaluates predicates or proves applicability.
++    pub fn check_all_buckets_against_full_catalog(&self) -> Result<(), Diagnostic> {
++        self.rows
++            .len()
++            .checked_mul(self.header_count())
++            .and_then(|n| n.checked_mul(self.rows.len()))
++            .and_then(|n| n.checked_mul(3))
++            .filter(|n| *n <= 1_000_000)
++            .ok_or_else(limit)?;
++        for row in &self.rows {
++            for (t, s) in [
++                (row.trait_bucket, row.self_bucket),
++                (row.trait_bucket, SelfBucket::Unresolved),
++                (TraitBucket::Unresolved, row.self_bucket),
++            ] {
++                if self.indexed(t, s)? != self.full_catalog(t, s)? {
++                    return Err(fault("indexed candidates differ from full-catalog oracle"));
++                }
++            }
++        }
++        Ok(())
++    }
++}
++impl StableEncode for HeaderIndexModel {
++    const DOMAIN: &'static str = "lrr/v5/header-index-model/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.sequence(&self.fragments, |e, f| e.record(f));
++        e.sequence(&self.rows, |e, r| e.record(r));
++    }
++}
++fn required(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-TRAIT-CATALOG-REQUIRED", message.into())
++}
++/// Published ImplCatalog admission. Its data is not a SourceView or trait goal.
++pub struct CurrentImplCandidateIndex {
++    model: HeaderIndexModel,
++    seal: SealKey,
++    publication: Digest,
++    source_revision: u64,
++    query_revision: u64,
++    limits: HeaderCaptureLimits,
++}
++impl CurrentImplCandidateIndex {
++    pub fn capture_current(
++        db: &Database,
++        seal: &SealKey,
++        limits: HeaderCaptureLimits,
++    ) -> Result<Self, Diagnostic> {
++        let limits = limits.validate()?;
++        let (input, publication) = published_catalog(db, seal)?;
++        if !input.source_replacements.is_empty()
++            || input
++                .declaration_inventory
++                .scan_handles()
++                .iter()
++                .any(|s| s.generated_origin().is_some() || s.scope().owner.is_some())
++        {
++            return Err(required(
++                "generated/replaced header needs exact token-aware source/context lowering",
++            ));
++        }
++        let scans = input.declaration_inventory.scan_handles();
++        if scans.len() > 4096 {
++            return Err(limit());
++        }
++        let mut fragments = Vec::new();
++        fragments
++            .try_reserve_exact(scans.len())
++            .map_err(|_| limit())?;
++        let mut total_bytes = 0usize;
++        for scan in scans {
++            let parse_key = QueryKey::ParseFile(scan.parse().clone());
++            let memo = db
++                .memo(&parse_key)
++                .filter(|m| m.verified_revision == db.revision())
++                .ok_or_else(|| {
++                    required("current immutable parse query needs explicit source preparation")
++                })?;
++            let QueryValue::ParseFile(parsed) = memo.value.as_ref() else {
++                return Err(fault("parse memo variant differs"));
++            };
++            if parsed.key() != *scan.parse() {
++                return Err(fault("parse memo source/profile differs"));
++            }
++            let Some((InputValue::CrateCfg(cfg), _)) =
++                db.published_input(&InputKey::CrateCfg(scan.scope().crate_key))
++            else {
++                return Err(required("owning source cfg is unpublished"));
++            };
++            if cfg.fingerprint() != scan.cfg() {
++                return Err(fault("source cfg/header catalog differs"));
++            }
++            let fragment = parsed.capture_trait_headers(
++                scan.path().clone(),
++                scan.scope().clone(),
++                cfg,
++                limits,
++            )?;
++            if fragment.scan_identity != scan.fingerprint() {
++                return Err(fault("captured source header inventory differs"));
++            }
++            validate_fragment(db, &fragment)?;
++            total_bytes = total_bytes
++                .checked_add(fragment.metadata_bytes)
++                .filter(|n| *n <= limits.metadata_bytes)
++                .ok_or_else(limit)?;
++            fragments.push(fragment);
++        }
++        let mut model = HeaderIndexModel::from_fragments(fragments, limits)?;
++        // Replace disclosed local-name model keys with only actual current Type lookups.
++        for ordinal in 0..model.rows.len() {
++            let (t, s) = current_row_buckets(db, seal, &model.fragments, model.rows[ordinal])?;
++            model.rows[ordinal].trait_bucket = t;
++            model.rows[ordinal].self_bucket = s;
++        }
++        let bytes = model.fragments.iter().try_fold(
++            model
++                .fragments
++                .capacity()
++                .checked_mul(std::mem::size_of::<CapturedSourceHeaders>())
++                .ok_or_else(limit)?,
++            |n, f| n.checked_add(f.metadata_bytes).ok_or_else(limit),
++        )?;
++        drop(model.buckets);
++        let model = HeaderIndexModel::finish(model.fragments, model.rows, bytes, limits)?;
++        Ok(Self {
++            model,
++            seal: seal.clone(),
++            publication,
++            source_revision: db.source_revision(),
++            query_revision: db.revision(),
++            limits,
++        })
++    }
++    pub fn revalidate(&self, db: &Database) -> Result<(), Diagnostic> {
++        if self.source_revision != db.source_revision() || self.query_revision != db.revision() {
++            return Err(fault(
++                "catalog input universe/revision changed; fresh capture required",
++            ));
++        }
++        let (_, stamp) = published_catalog(db, &self.seal)?;
++        if stamp != self.publication {
++            return Err(fault("catalog publication changed"));
++        }
++        for f in &self.model.fragments {
++            validate_fragment(db, f)?;
++        }
++        for row in &self.model.rows {
++            let actual = current_row_buckets(db, &self.seal, &self.model.fragments, *row)?;
++            if actual != (row.trait_bucket, row.self_bucket) {
++                return Err(fault(
++                    "header Type readiness changed; fresh capture required",
++                ));
++            }
++        }
++        Ok(())
++    }
++    /// Source-header-to-source-header structural candidates only. M018 must supply
++    /// the later reached symbolic goal producer; no caller TyTerm/descriptor factory.
++    pub fn candidates_for_header_current(
++        &self,
++        db: &Database,
++        header: Digest,
++    ) -> Result<Vec<&SourceTraitHeader>, Diagnostic> {
++        self.revalidate(db)?;
++        let row = self
++            .model
++            .rows
++            .iter()
++            .find(|r| r.identity == header)
++            .ok_or_else(|| fault("query header is outside the captured catalog"))?;
++        if row.trait_bucket == TraitBucket::Unresolved {
++            return Err(required(
++                "query header exact trait Type publication is not ready",
++            ));
++        }
++        let ids = self.model.indexed(row.trait_bucket, row.self_bucket)?;
++        self.model
++            .metadata_bytes
++            .checked_add(
++                ids.capacity()
++                    .checked_mul(std::mem::size_of::<Digest>())
++                    .ok_or_else(limit)?,
++            )
++            .and_then(|n| {
++                n.checked_add(
++                    ids.len()
++                        .checked_mul(std::mem::size_of::<&SourceTraitHeader>())?,
++                )
++            })
++            .filter(|n| *n <= self.limits.metadata_bytes)
++            .ok_or_else(limit)?;
++        let mut selected = Vec::new();
++        selected.try_reserve_exact(ids.len()).map_err(|_| limit())?;
++        for row in &self.model.rows {
++            if ids.binary_search(&row.identity).is_ok() {
++                selected.push(&self.model.fragments[row.fragment].headers[row.header]);
++            }
++        }
++        #[cfg(debug_assertions)]
++        if ids != self.model.full_catalog(row.trait_bucket, row.self_bucket)? {
++            return Err(fault("current index differs from full-catalog oracle"));
++        }
++        Ok(selected)
++    }
++}
++fn published_catalog<'a>(
++    db: &'a Database,
++    key: &SealKey,
++) -> Result<(&'a crate::db::seals::DiscoveryInput, Digest), Diagnostic> {
++    key.validate()?;
++    if !matches!(key.domain, SealDomain::ImplCatalog { .. }) {
++        return Err(required(
++            "only an actual ImplCatalogSeal admits enumeration",
++        ));
++    }
++    let Some((InputValue::DiscoverySeal(input), stamp)) =
++        db.published_input(&InputKey::DiscoverySeal(key.clone()))
++    else {
++        return Err(required("current complete impl catalog is unpublished"));
++    };
++    if input.seal.key() != *key {
++        return Err(fault("published impl catalog identity differs"));
++    }
++    if !matches!(db.published_input(&InputKey::ExpansionEpoch),Some((InputValue::ExpansionEpoch(epoch),_)) if *epoch==key.epoch)
++    {
++        return Err(fault("catalog expansion epoch stale or absent"));
++    }
++    if !matches!(db.published_input(&InputKey::SourceDependencies),Some((InputValue::SourceDependencies(graph),_)) if graph.fingerprint()==input.source_dependencies)
++    {
++        return Err(fault("catalog source dependency graph stale"));
++    }
++    validate_discovery_current(db, input, key)?;
++    Ok((input, stamp))
++}
++fn current_name(
++    db: &Database,
++    catalog: &SealKey,
++    scope: &ScopeKey,
++    edition: u16,
++    name: &str,
++) -> Option<crate::frontend::names::NameDefinition> {
++    if scope.owner.is_some() {
++        return None;
++    } // Lexical owner/generic ribs require M018 context.
++    let seal = SealKey {
++        domain: SealDomain::Scope {
++            id: scope.fingerprint(),
++            namespace: Namespace::Type,
++        },
++        unit_graph: catalog.unit_graph,
++        epoch: catalog.epoch,
++    };
++    let (InputValue::DiscoverySeal(input), _) =
++        db.published_input(&InputKey::DiscoverySeal(seal.clone()))?;
++    if validate_discovery_current(db, input, &seal).is_err() {
++        return None;
++    }
++    let certified = input.scope.as_ref()?;
++    if certified.scope != *scope
++        || certified.namespace != Namespace::Type
++        || certified.edition != edition
++    {
++        return None;
++    }
++    let key = QueryKey::SealedName(Box::new(SealedNameKey {
++        seal,
++        bucket: BucketKey {
++            scope: scope.clone(),
++            namespace: Namespace::Type,
++            name: name.into(),
++        },
++    }));
++    let memo = db
++        .memo(&key)
++        .filter(|m| m.verified_revision == db.revision())?;
++    let QueryValue::SealedName {
++        key: actual,
++        lookup: NameLookup::Defined(d),
++    } = memo.value.as_ref()
++    else {
++        return None;
++    };
++    if QueryKey::SealedName(actual.clone()) != key
++        || d.namespace != Namespace::Type
++        || !matches!(d.definition_edition, 2015 | 2018 | 2021 | 2024)
++    {
++        return None;
++    }
++    Some(d.clone())
++}
++fn validate_fragment(db: &Database, f: &CapturedSourceHeaders) -> Result<(), Diagnostic> {
++    let Some((InputValue::SourceBlob(blob), _)) =
++        db.published_input(&InputKey::SourceBlob(f.source.content))
++    else {
++        return Err(required("actual source blob is unpublished"));
++    };
++    if Digest::of_bytes(blob.bytes()) != f.source.content {
++        return Err(fault("source blob content differs"));
++    }
++    if !matches!(db.published_input(&InputKey::CrateCfg(f.scope.crate_key)),Some((InputValue::CrateCfg(cfg),_)) if cfg.fingerprint()==f.cfg)
++    {
++        return Err(fault("owning cfg changed"));
++    }
++    for h in &f.headers {
++        validate_header(db, &f.source, &h.definition, &h.header, &h.context)?;
++        for m in &h.associated {
++            validate_header(db, &f.source, &m.definition, &m.header, &m.context)?;
++            if let Some(body) = &m.body
++                && !matches!(db.published_input(&InputKey::DefinitionBody(m.definition.fingerprint())),Some((InputValue::DefinitionBody(actual),_)) if actual==body)
++            {
++                return Err(fault("associated body attachment changed"));
++            }
++        }
++    }
++    for n in &f.nominals {
++        if !matches!(
++            n.definition.item_kind,
++            ItemKind::Struct | ItemKind::Enum | ItemKind::Union
++        ) {
++            return Err(fault("nominal kind differs"));
++        }
++        validate_header(db, &f.source, &n.definition, &n.header, &n.context)?;
++    }
++    Ok(())
++}
++fn validate_header(
++    db: &Database,
++    source: &crate::syntax::parse::ParseKey,
++    definition: &crate::source::manifest::DefKey,
++    header: &crate::syntax::outline::HeaderRecipe,
++    context: &crate::syntax::outline::DeclarationContext,
++) -> Result<(), Diagnostic> {
++    let id = definition.fingerprint();
++    if !matches!(db.published_input(&InputKey::DefinitionSource(id)),Some((InputValue::DefinitionSource(actual),_)) if actual==source)
++        || !matches!(db.published_input(&InputKey::DefinitionHeader(id)),Some((InputValue::DefinitionHeader(actual),_)) if actual==header)
++        || !matches!(db.published_input(&InputKey::DeclarationContext(id)),Some((InputValue::DeclarationContext(actual),_)) if actual==context)
++    {
++        return Err(fault(
++            "actual source definition/header/context publication differs",
++        ));
++    }
++    Ok(())
++}
++
++/// Replay the existing DiscoverySeal provider's source/record premises read-only.
++/// Missing query preparation is not serviced by this metadata consumer.
++fn validate_discovery_current(
++    db: &Database,
++    input: &crate::db::seals::DiscoveryInput,
++    key: &SealKey,
++) -> Result<(), Diagnostic> {
++    if input.seal.key() != *key
++        || input.sources.len() > 4096
++        || input.records.len() > 100_000
++        || input.seal.input_dependencies().len() > 100_000
++        || !db.compiler_inputs_match(&input.compiler_inputs)
++    {
++        return Err(fault("discovery compiler/source universe or bounds differ"));
++    }
++    if !matches!(db.published_input(&InputKey::SourceDependencies),Some((InputValue::SourceDependencies(graph),_)) if graph.fingerprint()==input.source_dependencies)
++    {
++        return Err(fault("discovery source graph stale"));
++    }
++    for source in &input.sources {
++        if !matches!(db.published_input(&InputKey::CapturedSource(source.location_identity())),Some((InputValue::CapturedSource(actual),_)) if actual==source)
++        {
++            return Err(fault("catalog selected source context changed"));
++        }
++        let query = QueryKey::Outline(source.outline.clone());
++        let memo = db
++            .memo(&query)
++            .filter(|m| m.verified_revision == db.revision())
++            .ok_or_else(|| required("current outline query needs explicit preparation"))?;
++        let QueryValue::Outline(outline) = memo.value.as_ref() else {
++            return Err(fault("current source outline variant differs"));
++        };
++        if input
++            .seal
++            .input_dependencies()
++            .binary_search(&(query.fingerprint(), outline.fingerprint()))
++            .is_err()
++        {
++            return Err(fault("source outline differs from actual seal dependency"));
++        }
++    }
++    for descriptor in &input.records {
++        if !matches!(db.published_input(&InputKey::ExpansionRecord(descriptor.key.fingerprint())),Some((InputValue::ExpansionRecord(record),_)) if record.key()==&descriptor.key && record.descriptor().fingerprint()==descriptor.fingerprint())
++        {
++            return Err(fault("catalog expansion record changed"));
++        }
++        if descriptor
++            .key
++            .procedural_epoch
++            .is_some_and(|epoch| epoch != key.epoch)
++        {
++            return Err(fault("catalog record epoch differs"));
++        }
++    }
++    Ok(())
++}
++
++fn current_row_buckets(
++    db: &Database,
++    seal: &SealKey,
++    fragments: &[CapturedSourceHeaders],
++    row: Row,
++) -> Result<(TraitBucket, SelfBucket), Diagnostic> {
++    let fragment = &fragments[row.fragment];
++    let h = &fragment.headers[row.header];
++    let HeaderKind::Impl {
++        trait_type,
++        self_type,
++        ..
++    } = &h.kind
++    else {
++        return Err(fault("candidate is not an impl"));
++    };
++    let trait_bucket = match trait_type {
++        None => TraitBucket::Inherent,
++        Some(t) => bare_path(t)
++            .and_then(|name| {
++                current_name(db, seal, &h.context.scope, h.source.profile.edition, name)
++            })
++            .filter(|definition| {
++                fragments.iter().flat_map(|f| &f.headers).any(|d| {
++                    d.definition.fingerprint() == definition.identity
++                        && d.definition.crate_key == definition.defining_unit
++                        && d.source.profile.edition == definition.definition_edition
++                        && matches!(d.kind, HeaderKind::Trait { alias: false, .. })
++                })
++            })
++            .map_or(TraitBucket::Unresolved, |d| TraitBucket::Exact(d.identity)),
++    };
++    let self_bucket = constructor(self_type, |name| {
++        current_name(db, seal, &h.context.scope, h.source.profile.edition, name)
++            .filter(|definition| {
++                fragments.iter().any(|f| {
++                    f.source.profile.edition == definition.definition_edition
++                        && f.nominals.iter().any(|n| {
++                            n.definition.fingerprint() == definition.identity
++                                && n.definition.crate_key == definition.defining_unit
++                        })
++                })
++            })
++            .map(|d| d.identity)
++    });
++    Ok((trait_bucket, self_bucket))
++}
+diff --git a/crates/lrr/src/traits/mod.rs b/crates/lrr/src/traits/mod.rs
+--- a/crates/lrr/src/traits/mod.rs
++++ b/crates/lrr/src/traits/mod.rs
+@@ -3,3 +3,6 @@
+ pub mod unify;
+ 
+ pub mod subst;
++
++pub mod header;
++pub mod index;
+diff --git a/fixtures/upstream/rustc-checkout/LICENSE-APACHE b/fixtures/upstream/rustc-checkout/LICENSE-APACHE
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/LICENSE-APACHE
+@@ -0,0 +1,176 @@
++                              Apache License
++                        Version 2.0, January 2004
++                     http://www.apache.org/licenses/
++
++TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
++
++1. Definitions.
++
++   "License" shall mean the terms and conditions for use, reproduction,
++   and distribution as defined by Sections 1 through 9 of this document.
++
++   "Licensor" shall mean the copyright owner or entity authorized by
++   the copyright owner that is granting the License.
++
++   "Legal Entity" shall mean the union of the acting entity and all
++   other entities that control, are controlled by, or are under common
++   control with that entity. For the purposes of this definition,
++   "control" means (i) the power, direct or indirect, to cause the
++   direction or management of such entity, whether by contract or
++   otherwise, or (ii) ownership of fifty percent (50%) or more of the
++   outstanding shares, or (iii) beneficial ownership of such entity.
++
++   "You" (or "Your") shall mean an individual or Legal Entity
++   exercising permissions granted by this License.
++
++   "Source" form shall mean the preferred form for making modifications,
++   including but not limited to software source code, documentation
++   source, and configuration files.
++
++   "Object" form shall mean any form resulting from mechanical
++   transformation or translation of a Source form, including but
++   not limited to compiled object code, generated documentation,
++   and conversions to other media types.
++
++   "Work" shall mean the work of authorship, whether in Source or
++   Object form, made available under the License, as indicated by a
++   copyright notice that is included in or attached to the work
++   (an example is provided in the Appendix below).
++
++   "Derivative Works" shall mean any work, whether in Source or Object
++   form, that is based on (or derived from) the Work and for which the
++   editorial revisions, annotations, elaborations, or other modifications
++   represent, as a whole, an original work of authorship. For the purposes
++   of this License, Derivative Works shall not include works that remain
++   separable from, or merely link (or bind by name) to the interfaces of,
++   the Work and Derivative Works thereof.
++
++   "Contribution" shall mean any work of authorship, including
++   the original version of the Work and any modifications or additions
++   to that Work or Derivative Works thereof, that is intentionally
++   submitted to Licensor for inclusion in the Work by the copyright owner
++   or by an individual or Legal Entity authorized to submit on behalf of
++   the copyright owner. For the purposes of this definition, "submitted"
++   means any form of electronic, verbal, or written communication sent
++   to the Licensor or its representatives, including but not limited to
++   communication on electronic mailing lists, source code control systems,
++   and issue tracking systems that are managed by, or on behalf of, the
++   Licensor for the purpose of discussing and improving the Work, but
++   excluding communication that is conspicuously marked or otherwise
++   designated in writing by the copyright owner as "Not a Contribution."
++
++   "Contributor" shall mean Licensor and any individual or Legal Entity
++   on behalf of whom a Contribution has been received by Licensor and
++   subsequently incorporated within the Work.
++
++2. Grant of Copyright License. Subject to the terms and conditions of
++   this License, each Contributor hereby grants to You a perpetual,
++   worldwide, non-exclusive, no-charge, royalty-free, irrevocable
++   copyright license to reproduce, prepare Derivative Works of,
++   publicly display, publicly perform, sublicense, and distribute the
++   Work and such Derivative Works in Source or Object form.
++
++3. Grant of Patent License. Subject to the terms and conditions of
++   this License, each Contributor hereby grants to You a perpetual,
++   worldwide, non-exclusive, no-charge, royalty-free, irrevocable
++   (except as stated in this section) patent license to make, have made,
++   use, offer to sell, sell, import, and otherwise transfer the Work,
++   where such license applies only to those patent claims licensable
++   by such Contributor that are necessarily infringed by their
++   Contribution(s) alone or by combination of their Contribution(s)
++   with the Work to which such Contribution(s) was submitted. If You
++   institute patent litigation against any entity (including a
++   cross-claim or counterclaim in a lawsuit) alleging that the Work
++   or a Contribution incorporated within the Work constitutes direct
++   or contributory patent infringement, then any patent licenses
++   granted to You under this License for that Work shall terminate
++   as of the date such litigation is filed.
++
++4. Redistribution. You may reproduce and distribute copies of the
++   Work or Derivative Works thereof in any medium, with or without
++   modifications, and in Source or Object form, provided that You
++   meet the following conditions:
++
++   (a) You must give any other recipients of the Work or
++       Derivative Works a copy of this License; and
++
++   (b) You must cause any modified files to carry prominent notices
++       stating that You changed the files; and
++
++   (c) You must retain, in the Source form of any Derivative Works
++       that You distribute, all copyright, patent, trademark, and
++       attribution notices from the Source form of the Work,
++       excluding those notices that do not pertain to any part of
++       the Derivative Works; and
++
++   (d) If the Work includes a "NOTICE" text file as part of its
++       distribution, then any Derivative Works that You distribute must
++       include a readable copy of the attribution notices contained
++       within such NOTICE file, excluding those notices that do not
++       pertain to any part of the Derivative Works, in at least one
++       of the following places: within a NOTICE text file distributed
++       as part of the Derivative Works; within the Source form or
++       documentation, if provided along with the Derivative Works; or,
++       within a display generated by the Derivative Works, if and
++       wherever such third-party notices normally appear. The contents
++       of the NOTICE file are for informational purposes only and
++       do not modify the License. You may add Your own attribution
++       notices within Derivative Works that You distribute, alongside
++       or as an addendum to the NOTICE text from the Work, provided
++       that such additional attribution notices cannot be construed
++       as modifying the License.
++
++   You may add Your own copyright statement to Your modifications and
++   may provide additional or different license terms and conditions
++   for use, reproduction, or distribution of Your modifications, or
++   for any such Derivative Works as a whole, provided Your use,
++   reproduction, and distribution of the Work otherwise complies with
++   the conditions stated in this License.
++
++5. Submission of Contributions. Unless You explicitly state otherwise,
++   any Contribution intentionally submitted for inclusion in the Work
++   by You to the Licensor shall be under the terms and conditions of
++   this License, without any additional terms or conditions.
++   Notwithstanding the above, nothing herein shall supersede or modify
++   the terms of any separate license agreement you may have executed
++   with Licensor regarding such Contributions.
++
++6. Trademarks. This License does not grant permission to use the trade
++   names, trademarks, service marks, or product names of the Licensor,
++   except as required for reasonable and customary use in describing the
++   origin of the Work and reproducing the content of the NOTICE file.
++
++7. Disclaimer of Warranty. Unless required by applicable law or
++   agreed to in writing, Licensor provides the Work (and each
++   Contributor provides its Contributions) on an "AS IS" BASIS,
++   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
++   implied, including, without limitation, any warranties or conditions
++   of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
++   PARTICULAR PURPOSE. You are solely responsible for determining the
++   appropriateness of using or redistributing the Work and assume any
++   risks associated with Your exercise of permissions under this License.
++
++8. Limitation of Liability. In no event and under no legal theory,
++   whether in tort (including negligence), contract, or otherwise,
++   unless required by applicable law (such as deliberate and grossly
++   negligent acts) or agreed to in writing, shall any Contributor be
++   liable to You for damages, including any direct, indirect, special,
++   incidental, or consequential damages of any character arising as a
++   result of this License or out of the use or inability to use the
++   Work (including but not limited to damages for loss of goodwill,
++   work stoppage, computer failure or malfunction, or any and all
++   other commercial damages or losses), even if such Contributor
++   has been advised of the possibility of such damages.
++
++9. Accepting Warranty or Additional Liability. While redistributing
++   the Work or Derivative Works thereof, You may choose to offer,
++   and charge a fee for, acceptance of support, warranty, indemnity,
++   or other liability obligations and/or rights consistent with this
++   License. However, in accepting such obligations, You may act only
++   on Your own behalf and on Your sole responsibility, not on behalf
++   of any other Contributor, and only if You agree to indemnify,
++   defend, and hold each Contributor harmless for any liability
++   incurred by, or claims asserted against, such Contributor by reason
++   of your accepting any such warranty or additional liability.
++
++END OF TERMS AND CONDITIONS
+diff --git a/fixtures/upstream/rustc-checkout/LICENSE-MIT b/fixtures/upstream/rustc-checkout/LICENSE-MIT
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/LICENSE-MIT
+@@ -0,0 +1,25 @@
++Copyright (c) The Rust Project Contributors
++
++Permission is hereby granted, free of charge, to any
++person obtaining a copy of this software and associated
++documentation files (the "Software"), to deal in the
++Software without restriction, including without
++limitation the rights to use, copy, modify, merge,
++publish, distribute, sublicense, and/or sell copies of
++the Software, and to permit persons to whom the Software
++is furnished to do so, subject to the following
++conditions:
++
++The above copyright notice and this permission notice
++shall be included in all copies or substantial portions
++of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
++ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
++TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
++PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
++SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
++CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
++OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
++IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
++DEALINGS IN THE SOFTWARE.
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/associated-types/assoc-type-method-call-via-blanket-impl.rs b/fixtures/upstream/rustc-checkout/tests/ui/associated-types/assoc-type-method-call-via-blanket-impl.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/associated-types/assoc-type-method-call-via-blanket-impl.rs
+@@ -0,0 +1,13 @@
++//! Regression test for https://github.com/rust-lang/rust/issues/23336
++
++//@ run-pass
++pub trait Data { fn doit(&self) {} }
++impl<T> Data for T {}
++pub trait UnaryLogic { type D: Data; }
++impl UnaryLogic for () { type D = i32; }
++
++pub fn crashes<T: UnaryLogic>(t: T::D) {
++    t.doit();
++}
++
++fn main() { crashes::<()>(0); }
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-basic.rs b/fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-basic.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-basic.rs
+@@ -0,0 +1,14 @@
++//@ run-pass
++trait Foo {
++    type T;
++}
++
++impl Foo for i32 {
++    type T = isize;
++}
++
++fn main() {
++    let x: <i32 as Foo>::T = 22;
++    let y: isize = 44;
++    assert_eq!(x * 2, y);
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/associated-types/hr-associated-type-bound-param-3.rs b/fixtures/upstream/rustc-checkout/tests/ui/associated-types/hr-associated-type-bound-param-3.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/associated-types/hr-associated-type-bound-param-3.rs
+@@ -0,0 +1,20 @@
++trait X<'a, T>
++where
++    for<'b> T: X<'b, T>,
++    for<'b> <T as X<'b, T>>::U: Clone,
++{
++    type U: ?Sized;
++    fn f(x: &<T as X<'_, T>>::U) {
++        <<T as X<'_, T>>::U>::clone(x);
++    }
++}
++
++impl<S, T> X<'_, (T,)> for (S,) {
++    type U = str;
++    //~^ ERROR the trait bound `str: Clone` is not satisfied
++}
++
++pub fn main() {
++    <(i32,) as X<(i32,)>>::f("abc");
++    //~^ ERROR the trait bound `str: Clone` is not satisfied
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/associated-types/hr-associated-type-bound-param-3.stderr b/fixtures/upstream/rustc-checkout/tests/ui/associated-types/hr-associated-type-bound-param-3.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/associated-types/hr-associated-type-bound-param-3.stderr
+@@ -0,0 +1,38 @@
++error[E0277]: the trait bound `str: Clone` is not satisfied
++  --> $DIR/hr-associated-type-bound-param-3.rs:13:14
++   |
++LL |     type U = str;
++   |              ^^^ the trait `Clone` is not implemented for `str`
++   |
++help: the trait `Clone` is implemented for `String`
++  --> $SRC_DIR/alloc/src/string.rs:LL:COL
++note: required by a bound in `X`
++  --> $DIR/hr-associated-type-bound-param-3.rs:4:33
++   |
++LL | trait X<'a, T>
++...
++LL |     for<'b> <T as X<'b, T>>::U: Clone,
++   |                                 ^^^^^ required by this bound in `X`
++
++error[E0277]: the trait bound `str: Clone` is not satisfied
++  --> $DIR/hr-associated-type-bound-param-3.rs:18:18
++   |
++LL |     <(i32,) as X<(i32,)>>::f("abc");
++   |                  ^^^^^^ the trait `Clone` is not implemented for `str`
++   |
++help: the trait `Clone` is implemented for `String`
++  --> $SRC_DIR/alloc/src/string.rs:LL:COL
++note: required by a bound in `X::f`
++  --> $DIR/hr-associated-type-bound-param-3.rs:4:33
++   |
++LL | trait X<'a, T>
++...
++LL |     for<'b> <T as X<'b, T>>::U: Clone,
++   |                                 ^^^^^ required by this bound in `X::f`
++...
++LL |     fn f(x: &<T as X<'_, T>>::U) {
++   |
++
++error: aborting due to 2 previous errors
++
++For more information about this error, try `rustc --explain E0277`.
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/generic-associated-types/generic-associated-types-where.rs b/fixtures/upstream/rustc-checkout/tests/ui/generic-associated-types/generic-associated-types-where.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/generic-associated-types/generic-associated-types-where.rs
+@@ -0,0 +1,26 @@
++// Checking the interaction with this other feature
++#![feature(associated_type_defaults)]
++
++use std::fmt::{Display, Debug};
++
++trait Foo {
++    type Assoc where Self: Sized;
++    type Assoc2<T> where T: Display;
++    type Assoc3<T>;
++    type WithDefault<'a, T: Debug + 'a>: ?Sized = dyn Iterator<Item=T>;
++    type NoGenerics;
++}
++
++struct Bar;
++
++impl Foo for Bar {
++    type Assoc = usize;
++    type Assoc2<T> = Vec<T>;
++    //~^ ERROR `T` doesn't implement `std::fmt::Display`
++    type Assoc3<T> = Vec<T> where T: Iterator;
++    //~^ ERROR impl has stricter requirements than trait
++    type WithDefault<'a, T: Debug + 'a> = &'a dyn Iterator<Item=T>;
++    type NoGenerics = ::std::cell::Cell<i32>;
++}
++
++fn main() {}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/generic-associated-types/generic-associated-types-where.stderr b/fixtures/upstream/rustc-checkout/tests/ui/generic-associated-types/generic-associated-types-where.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/generic-associated-types/generic-associated-types-where.stderr
+@@ -0,0 +1,24 @@
++error[E0277]: `T` doesn't implement `std::fmt::Display`
++  --> $DIR/generic-associated-types-where.rs:18:22
++   |
++LL |     type Assoc2<T> = Vec<T>;
++   |                      ^^^^^^ the trait `std::fmt::Display` is not implemented for `T`
++   |
++help: consider restricting type parameter `T` with trait `Display`
++   |
++LL |     type Assoc2<T: std::fmt::Display> = Vec<T>;
++   |                  +++++++++++++++++++
++
++error[E0276]: impl has stricter requirements than trait
++  --> $DIR/generic-associated-types-where.rs:20:38
++   |
++LL |     type Assoc3<T>;
++   |     -------------- definition of `Assoc3` from trait
++...
++LL |     type Assoc3<T> = Vec<T> where T: Iterator;
++   |                                      ^^^^^^^^ impl has extra requirement `T: Iterator`
++
++error: aborting due to 2 previous errors
++
++Some errors have detailed explanations: E0276, E0277.
++For more information about an error, try `rustc --explain E0276`.
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/traits/blanket-impl-trait-object-10456.rs b/fixtures/upstream/rustc-checkout/tests/ui/traits/blanket-impl-trait-object-10456.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/traits/blanket-impl-trait-object-10456.rs
+@@ -0,0 +1,26 @@
++//! Regression test for https://github.com/rust-lang/rust/issues/10456
++
++//@ check-pass
++
++pub struct Foo;
++
++pub trait Bar {
++    fn bar(&self);
++}
++
++pub trait Baz {
++    fn baz(&self) { }
++}
++
++impl<T: Baz> Bar for T {
++    fn bar(&self) {}
++}
++
++impl Baz for Foo {}
++
++pub fn foo(t: Box<Foo>) {
++    t.bar(); // ~Foo doesn't implement Baz
++    (*t).bar(); // ok b/c Foo implements Baz
++}
++
++fn main() {}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/traits/default-method/auxiliary/xc.rs b/fixtures/upstream/rustc-checkout/tests/ui/traits/default-method/auxiliary/xc.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/traits/default-method/auxiliary/xc.rs
+@@ -0,0 +1,40 @@
++pub struct Something { pub x: isize }
++
++pub trait A {
++    fn f(&self) -> isize;
++    fn g(&self) -> isize { 10 }
++    fn h(&self) -> isize { 11 }
++    fn lurr(x: &Self, y: &Self) -> isize { x.g() + y.h() }
++}
++
++
++impl A for isize {
++    fn f(&self) -> isize { 10 }
++}
++
++impl A for Something {
++    fn f(&self) -> isize { 10 }
++}
++
++pub trait B<T> {
++    fn thing<U>(&self, x: T, y: U) -> (T, U) { (x, y) }
++    fn staticthing<U>(_z: &Self, x: T, y: U) -> (T, U) { (x, y) }
++}
++
++impl<T> B<T> for isize { }
++impl B<f64> for bool { }
++
++
++
++pub trait TestEquality {
++    fn test_eq(&self, rhs: &Self) -> bool;
++    fn test_neq(&self, rhs: &Self) -> bool {
++        !self.test_eq(rhs)
++    }
++}
++
++impl TestEquality for isize {
++    fn test_eq(&self, rhs: &isize) -> bool {
++        *self == *rhs
++    }
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/traits/default-method/bound-subst.rs b/fixtures/upstream/rustc-checkout/tests/ui/traits/default-method/bound-subst.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/traits/default-method/bound-subst.rs
+@@ -0,0 +1,18 @@
++//@ run-pass
++
++
++trait A<T> {
++    fn g<U>(&self, x: T, y: U) -> (T, U) { (x, y) }
++}
++
++impl A<i32> for i32 { }
++impl<T> A<T> for u32 { }
++
++fn f<T, U, V: A<T>>(i: V, j: T, k: U) -> (T, U) {
++    i.g(j, k)
++}
++
++pub fn main () {
++    assert_eq!(f(0, 1, 2), (1, 2));
++    assert_eq!(f(0, 1, 2), (1, 2));
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/traits/default-method/xc.rs b/fixtures/upstream/rustc-checkout/tests/ui/traits/default-method/xc.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/traits/default-method/xc.rs
+@@ -0,0 +1,81 @@
++//@ run-pass
++#![allow(dead_code)]
++#![allow(non_camel_case_types)]
++
++//@ aux-build:xc.rs
++
++
++extern crate xc as aux;
++use aux::{A, TestEquality, Something};
++use aux::B;
++
++fn f<T: aux::A>(i: T) {
++    assert_eq!(i.g(), 10);
++}
++
++fn welp<T>(i: isize, _x: &T) -> isize {
++    i.g()
++}
++
++mod stuff {
++    pub struct thing { pub x: isize }
++}
++
++impl A for stuff::thing {
++    fn f(&self) -> isize { 10 }
++}
++
++fn g<T, U, V: B<T>>(i: V, j: T, k: U) -> (T, U) {
++    i.thing(j, k)
++}
++
++fn eq<T: TestEquality>(lhs: &T, rhs: &T) -> bool {
++    lhs.test_eq(rhs)
++}
++fn neq<T: TestEquality>(lhs: &T, rhs: &T) -> bool {
++    lhs.test_neq(rhs)
++}
++
++
++impl TestEquality for stuff::thing {
++    fn test_eq(&self, rhs: &stuff::thing) -> bool {
++        //self.x.test_eq(&rhs.x)
++        eq(&self.x, &rhs.x)
++    }
++}
++
++
++pub fn main() {
++    // Some tests of random things
++    f(0);
++
++    assert_eq!(A::lurr(&0, &1), 21);
++
++    let a = stuff::thing { x: 0 };
++    let b = stuff::thing { x: 1 };
++    let c = Something { x: 1 };
++
++    assert_eq!(0.g(), 10);
++    assert_eq!(a.g(), 10);
++    assert_eq!(a.h(), 11);
++    assert_eq!(c.h(), 11);
++
++    assert_eq!(0.thing(3.14f64, 1), (3.14f64, 1));
++    assert_eq!(B::staticthing(&0, 3.14f64, 1), (3.14f64, 1));
++    assert_eq!(B::<f64>::staticthing::<isize>(&0, 3.14, 1), (3.14, 1));
++
++    assert_eq!(g(0, 3.14f64, 1), (3.14f64, 1));
++    assert_eq!(g(false, 3.14f64, 1), (3.14, 1));
++
++
++    // Trying out a real one
++    assert!(12.test_neq(&10));
++    assert!(!10.test_neq(&10));
++    assert!(a.test_neq(&b));
++    assert!(!a.test_neq(&a));
++
++    assert!(neq(&12, &10));
++    assert!(!neq(&10, &10));
++    assert!(neq(&a, &b));
++    assert!(!neq(&a, &a));
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/traits/multidispatch-conditional-impl-not-considered.rs b/fixtures/upstream/rustc-checkout/tests/ui/traits/multidispatch-conditional-impl-not-considered.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/traits/multidispatch-conditional-impl-not-considered.rs
+@@ -0,0 +1,24 @@
++//@ run-pass
++// Test that we correctly ignore the blanket impl
++// because (in this case) `T` does not impl `Clone`.
++//
++// Issue #17594.
++
++use std::cell::RefCell;
++
++trait Foo { //~ WARN trait `Foo` is never used
++    fn foo(&self) {}
++}
++
++impl<T> Foo for T where T: Clone {}
++
++struct Bar;
++
++impl Bar {
++    fn foo(&self) {}
++}
++
++fn main() {
++    let b = RefCell::new(Bar);
++    b.borrow().foo();
++}
+diff --git a/xtask/tests/trait_header_index.rs b/xtask/tests/trait_header_index.rs
+new file mode 100644
+--- /dev/null
++++ b/xtask/tests/trait_header_index.rs
+@@ -0,0 +1,365 @@
++//! Source-component M019 controls. Original execution/diagnostics remain unexecuted.
++use lrr::{
++    core::{
++        digest::{Digest, StableEncode},
++        profile::ProfileIdentity,
++    },
++    source::snapshot::{CfgSet, SourceBlob, SourcePath},
++    syntax::{outline::ScopeKey, parse::ParsedFile},
++    traits::{
++        header::{HeaderCaptureLimits, HeaderKind, HeaderTypeForm, PredicateKind},
++        index::HeaderIndexModel,
++    },
++};
++fn capture(text: &str, unit: u8, edition: u16) -> lrr::traits::header::CapturedSourceHeaders {
++    let mut profile = ProfileIdentity::current();
++    profile.edition = edition;
++    let parsed = ParsedFile::parse_declarations(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        profile,
++    )
++    .unwrap();
++    parsed
++        .capture_trait_headers(
++            SourcePath::new("fixture.rs").unwrap(),
++            ScopeKey {
++                crate_key: Digest([unit; 32]),
++                module_path: vec![],
++                owner: None,
++            },
++            &CfgSet::guest_default(),
++            HeaderCaptureLimits::default(),
++        )
++        .unwrap()
++}
++#[test]
++fn m019_original_conditional_blanket_keeps_predicates_and_no_body_tokens() {
++    let source = include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/traits/multidispatch-conditional-impl-not-considered.rs"
++    );
++    for edition in [2015, 2018, 2021, 2024] {
++        let catalog = capture(source, 31, edition);
++        let blanket=catalog.headers().iter().find(|h| matches!(h.kind(),HeaderKind::Impl { self_type, .. } if matches!(self_type.form,HeaderTypeForm::Parameter(_)))).unwrap();
++        assert_eq!(blanket.generics().len(), 1);
++        assert!(
++            blanket
++                .predicates()
++                .iter()
++                .any(|p| matches!(p.kind, PredicateKind::Bound { .. }))
++        );
++        assert!(
++            blanket
++                .predicates()
++                .iter()
++                .any(|p| matches!(p.kind, PredicateKind::ImplicitSized { .. }))
++        );
++        assert!(!blanket.header().tokens.iter().any(|t| t.text == "borrow"));
++        assert!(blanket.associated().is_empty());
++        assert_eq!(
++            HeaderIndexModel::from_fragments(vec![catalog], HeaderCaptureLimits::default())
++                .unwrap()
++                .header_count(),
++            3
++        );
++    }
++}
++#[test]
++fn m019_original_associated_headers_keep_defaults_and_bounds_without_evaluation() {
++    let source = include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/associated-types/assoc-type-method-call-via-blanket-impl.rs"
++    );
++    let catalog = capture(source, 32, 2015);
++    let t = catalog
++        .headers()
++        .iter()
++        .find(|h| h.definition().declared_name == "UnaryLogic")
++        .unwrap();
++    assert_eq!(t.associated().len(), 1);
++    assert!(!t.associated()[0].predicates.is_empty());
++    let i=catalog.headers().iter().find(|h| matches!(h.kind(),HeaderKind::Impl { self_type, .. } if matches!(&self_type.form,HeaderTypeForm::Tuple(v) if v.is_empty()))).unwrap();
++    assert!(i.associated()[0].declared_type.is_some());
++    let basic = capture(
++        include_str!(
++            "../../fixtures/upstream/rustc-checkout/tests/ui/associated-types/associated-types-basic.rs"
++        ),
++        33,
++        2015,
++    );
++    assert_eq!(basic.headers().len(), 2);
++}
++#[test]
++fn m019_original_auxiliary_parameter_owners_and_editions_are_distinct() {
++    let source = include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/traits/default-method/auxiliary/xc.rs"
++    );
++    let a = capture(source, 34, 2015);
++    let b = capture(source, 35, 2024);
++    let ga = a
++        .headers()
++        .iter()
++        .find(|h| h.definition().declared_name == "B")
++        .unwrap();
++    let gb = b
++        .headers()
++        .iter()
++        .find(|h| h.definition().declared_name == "B")
++        .unwrap();
++    assert_ne!(ga.generics()[0].key, gb.generics()[0].key);
++    assert_eq!(ga.source().profile.edition, 2015);
++    assert_eq!(gb.source().profile.edition, 2024);
++    assert_eq!(ga.associated().len(), 2);
++    assert!(ga.associated().iter().all(|m| m.body.is_some()));
++    assert!(ga.associated().iter().all(|m| {
++        !m.header
++            .tokens
++            .iter()
++            .any(|t| t.text == "10" || t.text == "11")
++    }));
++}
++#[test]
++fn m019_original_higher_ranked_and_gat_headers_keep_unresolved_requirements() {
++    let hr = capture(
++        include_str!(
++            "../../fixtures/upstream/rustc-checkout/tests/ui/associated-types/hr-associated-type-bound-param-3.rs"
++        ),
++        36,
++        2015,
++    );
++    let t = hr
++        .headers()
++        .iter()
++        .find(|h| h.definition().declared_name == "X")
++        .unwrap();
++    assert_eq!(
++        t.predicates()
++            .iter()
++            .filter(|p| !p.binder.is_empty())
++            .count(),
++        2
++    );
++    assert!(t.predicates().iter().any(
++        |p| matches!(&p.kind,PredicateKind::Bound { subject, .. } if subject.symbolic().is_none())
++    ));
++    let gat = capture(
++        include_str!(
++            "../../fixtures/upstream/rustc-checkout/tests/ui/generic-associated-types/generic-associated-types-where.rs"
++        ),
++        37,
++        2015,
++    );
++    let foo = gat
++        .headers()
++        .iter()
++        .find(|h| h.definition().declared_name == "Foo")
++        .unwrap();
++    assert_eq!(foo.associated().len(), 5);
++    assert!(
++        foo.associated()
++            .iter()
++            .any(|m| !m.generics.is_empty() && !m.predicates.is_empty())
++    );
++}
++#[test]
++fn m019_cfg_and_cold_body_semantic_identity_controls() {
++    let first = capture(
++        "trait P { fn f<T: X>(&self) { unknown!(side_effect); } } #[cfg(any())] impl P for Missing {} impl P for () { fn f<T: X>(&self) { panic!() } }",
++        38,
++        2024,
++    );
++    let second = capture(
++        "trait P { fn f<T: X>(&self) { totally_different(); } } #[cfg(any())] impl P for Missing {} impl P for () { fn f<T: X>(&self) { loop {} } }",
++        38,
++        2024,
++    );
++    assert_eq!(first.headers().len(), 2);
++    assert_eq!(second.headers().len(), 2);
++    for (a, b) in first.headers().iter().zip(second.headers()) {
++        assert_eq!(a.header().fingerprint(), b.header().fingerprint());
++        assert_eq!(
++            a.associated()[0].header.fingerprint(),
++            b.associated()[0].header.fingerprint()
++        );
++    }
++    assert_ne!(first.source().content, second.source().content);
++}
++#[test]
++fn m019_index_matches_full_oracle_under_disclosed_generated_additions() {
++    // These are model additions, not published macro output or catalog authority.
++    for n in 0..24 {
++        let mut text = String::from(
++            "trait P {} trait Q {} struct N; impl<T> P for T {} impl P for N {} impl Q for () {}",
++        );
++        for k in 0..n {
++            text.push_str(&format!(
++                "mod m{k} {{ trait P {{}} impl<T> P for &T {{}} impl P for [(); {k}] {{}} }}"
++            ));
++        }
++        let a = capture(&text, 39, 2024);
++        let b = capture("trait P {} impl<T> P for (T,) {}", 40, 2018);
++        let index =
++            HeaderIndexModel::from_fragments(vec![a, b], HeaderCaptureLimits::default()).unwrap();
++        index.check_all_buckets_against_full_catalog().unwrap();
++        let reverse = HeaderIndexModel::from_fragments(
++            vec![
++                capture("trait P {} impl<T> P for (T,) {}", 40, 2018),
++                capture(&text, 39, 2024),
++            ],
++            HeaderCaptureLimits::default(),
++        )
++        .unwrap();
++        assert_eq!(index.fingerprint(), reverse.fingerprint());
++    }
++}
++#[test]
++fn m019_duplicate_and_reduced_budget_refuse_without_partial_index() {
++    let source = "trait P {} impl<T> P for T {}";
++    assert!(
++        HeaderIndexModel::from_fragments(
++            vec![capture(source, 41, 2024), capture(source, 41, 2024)],
++            HeaderCaptureLimits::default()
++        )
++        .is_err()
++    );
++    let parsed = ParsedFile::parse_declarations(
++        &SourceBlob::new(source.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity::current(),
++    )
++    .unwrap();
++    let limit = HeaderCaptureLimits {
++        metadata_bytes: 1,
++        ..HeaderCaptureLimits::default()
++    };
++    assert!(
++        parsed
++            .capture_trait_headers(
++                SourcePath::new("fixture.rs").unwrap(),
++                ScopeKey {
++                    crate_key: Digest([41; 32]),
++                    module_path: vec![],
++                    owner: None
++                },
++                &CfgSet::guest_default(),
++                limit
++            )
++            .is_err()
++    );
++}
++#[test]
++fn m019_actual_seal_required_and_wrong_domain_refuses() {
++    use lrr::{
++        db::{
++            memo::Database,
++            seals::{SealDomain, SealKey},
++        },
++        traits::index::CurrentImplCandidateIndex,
++    };
++    let db = Database::default();
++    let query_revision = db.revision();
++    let source_revision = db.source_revision();
++    let impl_key = SealKey {
++        domain: SealDomain::ImplCatalog {
++            id: Digest([42; 32]),
++        },
++        unit_graph: Digest([43; 32]),
++        epoch: 1,
++    };
++    assert!(
++        CurrentImplCandidateIndex::capture_current(&db, &impl_key, HeaderCaptureLimits::default())
++            .is_err()
++    );
++    let wrong = SealKey {
++        domain: SealDomain::TestCatalog {
++            id: Digest([42; 32]),
++        },
++        ..impl_key
++    };
++    assert!(
++        CurrentImplCandidateIndex::capture_current(&db, &wrong, HeaderCaptureLimits::default())
++            .is_err()
++    );
++    assert_eq!(db.revision(), query_revision);
++    assert_eq!(db.source_revision(), source_revision);
++    assert!(db.trace.events.is_empty());
++    assert!(db.trace.counts.is_empty());
++}
++#[test]
++fn m019_source_binders_self_and_const_parameters_keep_exact_namespaces() {
++    use lrr::traits::{
++        header::{HeaderArgument, HeaderConst, HeaderRegion},
++        term::{ConstTerm, RegionTerm, TyTerm},
++    };
++    let source = "trait X<'a, const N: usize> {} trait P<T> { fn f(&self) -> Self; } impl<T, const N: usize> X<'static,N> for [();N] where for<'b> T: X<'b,N> {}";
++    let fragment = capture(source, 44, 2024);
++    let p = fragment
++        .headers()
++        .iter()
++        .find(|h| h.definition().declared_name == "P")
++        .unwrap();
++    assert!(
++        matches!(p.associated()[0].declared_type.as_ref().unwrap().form,HeaderTypeForm::SelfType(owner) if owner==p.definition().fingerprint())
++    );
++    let i = fragment
++        .headers()
++        .iter()
++        .find(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++        .unwrap();
++    assert!(
++        matches!(i.kind(),HeaderKind::Impl {self_type,..} if matches!(self_type.symbolic(),Some(TyTerm::Array(_,ConstTerm::Param(_)))))
++    );
++    let where_bound = i
++        .predicates()
++        .iter()
++        .find(|p| !p.binder.is_empty())
++        .unwrap();
++    let PredicateKind::Bound { bounds, .. } = &where_bound.kind else {
++        panic!("expected bound")
++    };
++    let HeaderTypeForm::Path(segments) = &bounds[0].ty.as_ref().unwrap().form else {
++        panic!("expected source path")
++    };
++    assert!(matches!(
++        &segments[0].arguments[0],
++        HeaderArgument::Region(HeaderRegion::Known(RegionTerm::Bound {
++            depth: 0,
++            index: 0
++        }))
++    ));
++    assert!(
++        matches!(&segments[0].arguments[1],HeaderArgument::Const(HeaderConst::Parameter(key)) if *key==i.generics()[1].key)
++    );
++    // Non-lifetime binder semantics need ordered M017/M020 admission. Their
++    // spelling must never bind an outer same-named parameter or ambient type.
++    let blocked = capture("trait Z {} impl<T> Z for T where for<T> T: Z {}", 46, 2024);
++    let i = blocked
++        .headers()
++        .iter()
++        .find(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++        .unwrap();
++    let p = i
++        .predicates()
++        .iter()
++        .find(|p| !p.binder.is_empty())
++        .unwrap();
++    assert!(
++        matches!(&p.kind,PredicateKind::Bound {subject,..} if matches!(subject.form,HeaderTypeForm::RequiredSyntax) && subject.symbolic().is_none())
++    );
++}
++#[test]
++fn m019_distinct_overlapping_headers_are_not_collapsed_or_selected() {
++    let f = capture("trait P {} impl P for () {} impl P for () {}", 45, 2024);
++    let impls = f
++        .headers()
++        .iter()
++        .filter(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++        .collect::<Vec<_>>();
++    assert_eq!(impls.len(), 2);
++    assert_ne!(
++        impls[0].definition().fingerprint(),
++        impls[1].definition().fingerprint()
++    );
++    assert_ne!(impls[0].exact_identity(), impls[1].exact_identity());
++    HeaderIndexModel::from_fragments(vec![f], HeaderCaptureLimits::default())
++        .unwrap()
++        .check_all_buckets_against_full_catalog()
++        .unwrap();
++}

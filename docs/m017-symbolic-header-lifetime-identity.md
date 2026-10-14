@@ -1,0 +1,25 @@
+# M017 canonical lifetime identity — isolated V2 successor
+
+The invariant is that function-pointer binder declarations and named references use the same NFC/raw identifier identity as existing source declaration capture. Written `K`, the Kelvin sign `K`, `r#K`, and `r#K` name the same lifetime. Canonicalization affects owned semantic identity only; original source tokens and imported files remain unchanged. Duplicate canonical binder names must refuse admission even when their written spellings differ.
+
+V2 inherits the frozen elision candidate at membership `489ffc7275f996034d8cc5246951a1273db422b2daa9ecf4f50fb68234965eee`. A source review found that `signatures.rs` already used `canonical_lifetime` for rigid declaration identity, while `symbolic_headers.rs` compared raw lifetime strings. The minimal adapted witness is `type LifetimeHeader<'K> = fn(&'K (), &'K ());`: the second reference could not match the existing canonical declaration identity. This is an implementation gap under the existing E-M007 identity contract, not a specification contradiction or an alternate normalization policy.
+
+The production repair changes only two files. `signatures.rs` exposes its existing `canonical_lifetime` helper as `pub(crate)`. `symbolic_headers.rs` calls that helper before binder insertion, duplicate detection, and named reference lookup. Failed canonicalization remains a typed incomplete result, distinct from an omitted lifetime. Static and underscore handling occurs after canonicalization. The underlying normalization helper and source admission limits are unchanged.
+
+Pinned rustc evidence is `compiler/rustc_parse/src/lexer/mod.rs` at commit `ae0fe511b15ab760d7e963b13389d1bc2ab42b18`, SHA-256 `c9839c143cbe32718846c32da070e0cd1fdc5e023055d8f0d83490b48d1aa28c`. Lines 358 and 412 normalize ordinary and raw lifetimes respectively; line 436 retains the earlier-edition compatibility path. The adjacent `normative-witness.json` records exact source ranges and provenance. The new unchanged official import `tests/ui/lexer/ident_normalization.rs` contains both `lifetime_nfc<'K>(_: &'K str, _: &'K str)` and `raw_lifetime_nfc<'K>(_: &'r#K str, _: &'r#K str)`. Its `check-pass` and edition-2021 directives, bytes, commit, hashes and both rustc licenses are retained. It has not been executed as a whole stock fixture.
+
+Five controls in `xtask/tests/symbolic_header_lifetime_identity.rs` were authored before the repair:
+
+- Exact original parameter/generic nodes wrapped as a function-pointer alias still refuse the unresolved `str` primitive target.
+- Replacing only each `str` target with Unit preserves the exact original lifetime spellings and verifies rigid declaration identity.
+- Moving an exact original lifetime token to an explicit function-pointer binder verifies canonical bound identity and equal term fingerprints across raw/NFC spellings.
+- Moving the original generic lifetime declaration to an outer pointer binder and nesting one empty pointer binder verifies de Bruijn depth one.
+- Combining the original distinct spellings into a duplicate binder is a supplemental LRR corruption and must produce `LRR-E-UNSUPPORTED`.
+
+All adapters are outside the licensed import directory. They retain edition 2021 in AST parsing and source query preparation. Original function bodies/patterns are omitted, Unit target replacement is explicit, and binder-position/nesting/duplicate cases are disclosed structural adaptations. These controls do not claim original `str` resolution, whole-function semantics or a full stock pass. Each query checks that bodies and thunks remain cold.
+
+All five new controls, thirteen inherited elision controls and eight inherited array controls remain unexecuted on V2. Formatting and imported-source integrity review are the only executed checks. Root-coordinated compilation, strict Clippy, architecture/manifest/importer checks, semantic tests and the integrated macOS milestone remain pending. M017, TR001/TR002, full stock fixtures, release and Linux acceptance remain incomplete. Both earlier frozen candidates are preserved unchanged.
+
+Root V7 scope observed0pass5fail in live2021 setup, before header queries; source/world invariant remained correct. V8 preserves original edition2021 via a recorded dependency declaration provider and explicitly checks bare live refusal. Production unchanged; exact repaired component and integrated milestone validation pending. See m017-unicode-declaration-world.md.
+
+Root integration update: the V8 repaired scoped suffix and unchanged successful37-body V7 prefix passed all60 registered M017 controls once in complete unfiltered binaries; the earlier V7 outer1 and failed5-case setup remain preserved; independent logs, inventories, source ownership and original provenance were checked before copying tested source. Previous unexecuted/pending notes describe historical candidates. The required fresh integrated MAIN milestone and full M017/TR001/TR002/original-body acceptance remain pending. Full stock fixture passes:0. All subagents are stopped; root owns implementation and tests.

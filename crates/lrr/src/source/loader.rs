@@ -18,10 +18,7 @@ use std::{
 };
 
 fn fault(code: &'static str, message: impl Into<String>) -> Diagnostic {
-    Diagnostic {
-        code,
-        message: message.into(),
-    }
+    Diagnostic::new(code, message.into())
 }
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct Stamp {
@@ -65,10 +62,18 @@ pub struct SourceLoader {
     root_identity: String,
     selected: SourcePath,
     approved_includes: BTreeSet<SourcePath>,
+    profile: crate::core::profile::ProfileIdentity,
 }
 impl SourceLoader {
     /// Effect: opens only the user-selected standalone source root authority.
     pub fn standalone(root_file: &Path) -> Result<Self, Diagnostic> {
+        Self::standalone_with_profile(root_file, crate::core::profile::ProfileIdentity::current())
+    }
+    pub fn standalone_with_profile(
+        root_file: &Path,
+        profile: crate::core::profile::ProfileIdentity,
+    ) -> Result<Self, Diagnostic> {
+        profile.validate_live()?;
         let parent = root_file
             .parent()
             .filter(|p| !p.as_os_str().is_empty())
@@ -89,6 +94,7 @@ impl SourceLoader {
             root_identity,
             selected: SourcePath::new(Path::new(name))?,
             approved_includes: BTreeSet::new(),
+            profile,
         })
     }
     /// Coordinator manifest additions, all restricted to the selected source root.
@@ -229,7 +235,11 @@ impl SourceLoader {
                 SourceBlob::included_bytes(bytes)?
             };
             if let Some(directory) = directory {
-                for request in crate::syntax::modules::external_modules(blob.text()?, &cfg)? {
+                for request in crate::syntax::modules::external_modules_in_profile(
+                    blob.text()?,
+                    &cfg,
+                    &self.profile,
+                )? {
                     let (child, child_directory) =
                         super::graph::module_target(&path, &directory, request, |p| {
                             self.exists(p)
@@ -257,7 +267,8 @@ impl SourceLoader {
             },
             target_kind: TargetKind::Binary,
             target_name: self.selected.as_str().to_owned(),
-            guest_edition: 2024,
+            guest_edition: self.profile.edition,
+            semantics_profile: self.profile.fingerprint(),
             cfg_fingerprint: cfg.fingerprint(),
             dependency_aliases: Digest::of_bytes(b""),
         };
@@ -282,18 +293,20 @@ impl SourceLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    static NEXT_TEMP: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     struct Temp(PathBuf);
     impl Temp {
         fn new() -> Self {
             let path = std::env::temp_dir().join(format!(
-                "lrr-source-{}-{}",
+                "lrr-source-{}-{}-{}",
+                NEXT_TEMP.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
                     .as_nanos()
             ));
-            std::fs::create_dir_all(&path).unwrap();
+            std::fs::create_dir(&path).unwrap();
             Self(path)
         }
         fn write(&self, path: &str, text: &str) {
@@ -443,18 +456,20 @@ mod tests {
 #[cfg(test)]
 mod additional_tests {
     use super::*;
+    static NEXT_TEMP: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     struct Temp(PathBuf);
     impl Temp {
         fn new() -> Self {
             let path = std::env::temp_dir().join(format!(
-                "lrr-source-extra-{}-{}",
+                "lrr-source-extra-{}-{}-{}",
+                NEXT_TEMP.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
                     .as_nanos()
             ));
-            std::fs::create_dir_all(&path).unwrap();
+            std::fs::create_dir(&path).unwrap();
             Self(path)
         }
         fn write(&self, path: &str, bytes: &[u8]) {

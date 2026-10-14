@@ -1,0 +1,7 @@
+# Private T044 unit assertion integration V15 — unvalidated
+
+The unchanged `assign-expr-unit-type.rs` program asserts both assigned numbers and `()` results. Static review of frozen V14 found no empty TupleExpr case in runtime_macro_scalars.rs: the generic fallback refuses it as a pending non-scalar expression. VM numeric comparison already supports Primitive::Unit. This is a code-path witness, not an executed failure or pass; V14 was never tested.
+
+V15 adds only the guarded empty-tuple assertion operand, lowering it to the existing Op::Unit. Attribute checks, source/key/range attachment, token-bounded slot/phase reservations, ordinary write/type/ownership checks and numeric comparison remain. Nonempty tuple expression equality still requires its ordered integration. No expected expression/value or original assertion is rewritten.
+
+The same unchanged stock whole-program control must execute main, both callees and every assertion; counts are derived from the original AST. V14 replacement components remain included and unvalidated, with reserve-before-consume, commit-before-old-cleanup, stable local epoch and retained partial-move/cancellation obligations. Expected478 library bodies/37 T044 controls,169 official cases/289 original files. Full rustc compiletest passes0; user Drop/traits/panic/JIT/release/Linux acceptance remain incomplete. JIT stays deferred under the interpreter-first priority.

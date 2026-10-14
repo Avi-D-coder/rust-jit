@@ -1,0 +1,1669 @@
+diff --git a/crates/lrr/src/frontend/box_compiler_contract.rs b/crates/lrr/src/frontend/box_compiler_contract.rs
+--- a/crates/lrr/src/frontend/box_compiler_contract.rs
++++ b/crates/lrr/src/frontend/box_compiler_contract.rs
+@@ -580,3 +580,132 @@
+ #[cfg(test)]
+ #[path = "box_compiler_contract_tests.rs"]
+ mod tests;
++
++/// Finite library semantics for source type preparation only. No call/PC,
++/// concrete type/goal witness or execution permission is created by this join.
++pub(crate) struct CurrentBoxLibraryContract<'a> {
++    facet: &'a BoxCompilerFacet,
++    catalog: &'a CurrentBoxSourceCatalog,
++    targets: &'a [Arc<BoxTargetHeaders>],
++    trait_target: &'a BoxTargetHeader,
++    impl_target: &'a BoxTargetHeader,
++    dependencies: Vec<DependencyStamp>,
++    identity: Digest,
++    bytes: usize,
++}
++impl<'a> CurrentBoxLibraryContract<'a> {
++    pub(crate) fn capture_current(
++        db: &Database,
++        source: &PreparedSourceView,
++        compiler: &CompileInputCatalog,
++        facet: &'a BoxCompilerFacet,
++        catalog: &'a CurrentBoxSourceCatalog,
++        targets: &'a [Arc<BoxTargetHeaders>],
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        catalog.revalidate(db, source)?;
++        facet.require_current(&source.selection().outline.parse.profile, compiler)?;
++        if targets.len() > 5 || byte_limit > MAX_BYTES {
++            return Err(limit());
++        }
++        for headers in &catalog.headers {
++            facet.require_reviewed_source(headers)?;
++        }
++        let trait_target = find_target(targets, Role::DerefTrait)?;
++        let impl_target = find_target(targets, Role::DerefImpl)?;
++        let mut bytes = std::mem::size_of::<Self>()
++            .checked_add(catalog.metadata_bytes())
++            .and_then(|n| n.checked_add(facet.metadata_bytes()))
++            .and_then(|n| n.checked_add(8 * std::mem::size_of::<DependencyStamp>()))
++            .ok_or_else(limit)?;
++        for target in targets {
++            bytes = bytes
++                .checked_add(target.metadata_bytes())
++                .filter(|n| *n <= byte_limit)
++                .ok_or_else(limit)?;
++        }
++        if bytes > byte_limit {
++            return Err(limit());
++        }
++        let mut dependencies = Vec::new();
++        dependencies.try_reserve_exact(8).map_err(|_| limit())?;
++        for target in [trait_target, impl_target] {
++            validate_target(
++                db,
++                catalog,
++                targets,
++                target,
++                &mut dependencies,
++                &mut bytes,
++                byte_limit,
++            )?;
++        }
++        let mut e = StableEncoder::new("lrr/v1/current-source-box-library-contract");
++        e.digest(facet.fingerprint());
++        e.digest(catalog.identity());
++        e.record(trait_target);
++        e.record(impl_target);
++        e.sequence(&dependencies, |e, stamp| e.record(stamp));
++        Ok(Self {
++            facet,
++            catalog,
++            targets,
++            trait_target,
++            impl_target,
++            dependencies,
++            identity: e.finish(),
++            bytes,
++        })
++    }
++    pub(crate) fn revalidate(
++        &self,
++        db: &Database,
++        source: &PreparedSourceView,
++        compiler: &CompileInputCatalog,
++    ) -> Result<(), Diagnostic> {
++        self.catalog.revalidate(db, source)?;
++        self.facet
++            .require_current(&source.selection().outline.parse.profile, compiler)?;
++        for stamp in &self.dependencies {
++            let DependencyStamp::Input { key, fingerprint } = stamp else {
++                return Err(fault("Box library dependencies must be actual inputs"));
++            };
++            if db
++                .published_input(key)
++                .is_none_or(|(_, current)| current != *fingerprint)
++            {
++                return Err(fault("Box library Target publication changed"));
++            }
++        }
++        Ok(())
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        self.identity
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn header(
++        &self,
++        role: Role,
++    ) -> Result<&crate::syntax::box_source_headers::BoxSourceHeader, Diagnostic> {
++        self.catalog.header(role)
++    }
++    pub(crate) fn source_headers(&self) -> &[Arc<BoxSourceHeaders>] {
++        &self.catalog.headers
++    }
++    pub(crate) fn impl_target(&self) -> &BoxTargetHeader {
++        self.impl_target
++    }
++    pub(crate) fn trait_target(&self) -> &BoxTargetHeader {
++        self.trait_target
++    }
++    pub(crate) fn unknown_candidates(&self) -> &[Digest] {
++        &self.catalog.unknown
++    }
++    pub(crate) fn target_captures(&self) -> &[Arc<BoxTargetHeaders>] {
++        self.targets
++    }
++}
++#[path = "box_type_readiness.rs"]
++pub(crate) mod type_readiness;
+diff --git a/crates/lrr/src/frontend/box_type_readiness.rs b/crates/lrr/src/frontend/box_type_readiness.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/box_type_readiness.rs
+@@ -0,0 +1,555 @@
++//! Current source-selected closed Box header pointee, not a runtime TypeId or
++//! selected trait witness. Unsolved goals remain explicit adapter prerequisites.
++use super::CurrentBoxLibraryContract;
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::{
++        dependency::{DependencyStamp, InputKey, InputValue},
++        key::{BucketKey, QueryKey, SealedNameKey},
++        memo::{Database, Outcome},
++        poll::QueryPoll,
++        provider::SyntaxProvider,
++        seals::{SealDomain, SealKey},
++        value::QueryValue,
++    },
++    frontend::{
++        compile_input_catalog::CompileInputCatalog,
++        constant_source_admission::{ConstantRequest, ConstantSourceAdmission},
++        constants::{ConstLimits, query::fetch_current_constant, wire::ConstantWireType},
++        names::NameLookup,
++    },
++    ir::op::PrimitiveType,
++    source::{
++        box_type_headers::{BoxPointeeSyntax, BoxTypeHeaderSite},
++        changes::PreparedSourceView,
++        manifest::Namespace,
++    },
++    syntax::box_source_headers::BoxHeaderRole as Role,
++    traits::term::{ConstTerm, ParamEnv, TyTerm},
++};
++use std::sync::Arc;
++const MAX_BYTES: usize = 32 << 20;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-BOX-TYPE-SOURCE", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "Box pointee source metadata bound".into(),
++    )
++}
++/// This owns genuine source-site and length admission records, never a guest
++/// descriptor/count/solved flag. Current compiler/library proof is reborrowed.
++pub(crate) struct CurrentBoxPointee {
++    site: Arc<BoxTypeHeaderSite>,
++    term: TyTerm,
++    environment: ParamEnv,
++    library: Digest,
++    query_revision: u64,
++    source_revision: u64,
++    dependencies: Vec<DependencyStamp>,
++    length: Option<ConstantSourceAdmission>,
++    bytes: usize,
++}
++pub(crate) struct CurrentBoxArrayLengthDemand {
++    element: CurrentBoxPointee,
++    range: crate::syntax::spans::SourceRange,
++    byte_limit: usize,
++}
++pub(crate) enum BoxPointeeReadiness {
++    Closed(Box<CurrentBoxPointee>),
++    ArrayLengthRequired(Box<CurrentBoxArrayLengthDemand>),
++    TypePreludeRequired,
++    TypeNormalizationRequired,
++    OwningParamEnvRequired,
++    LexicalTypeScopeRequired,
++}
++impl CurrentBoxPointee {
++    pub(crate) fn capture_header_current(
++        db: &mut Database,
++        source: &PreparedSourceView,
++        compiler: &CompileInputCatalog,
++        library: &CurrentBoxLibraryContract<'_>,
++        site: Arc<BoxTypeHeaderSite>,
++        type_seal: &SealKey,
++        byte_limit: usize,
++    ) -> QueryPoll<BoxPointeeReadiness> {
++        let setup = || -> Result<(Vec<DependencyStamp>, usize), Diagnostic> {
++            source.require_original_hygiene()?;
++            library.revalidate(db, source, compiler)?;
++            if site.source() != source.selection() || byte_limit > MAX_BYTES {
++                return Err(fault("Box type source/limit differs"));
++            }
++            let key = InputKey::CapturedSource(site.source().location_identity());
++            if !matches!(db.published_input(&key),Some((InputValue::CapturedSource(actual),_)) if actual==site.source())
++            {
++                return Err(fault("Box type actual captured source publication absent"));
++            }
++            let item = source
++                .outline()
++                .items
++                .iter()
++                .find(|row| row.def_key == *site.definition())
++                .ok_or_else(|| fault("Box type definition outside actual source"))?;
++            if item.header != *site.header()
++                || item.scope != site.context().scope
++                || item.declaration_span != site.context().range
++                || item.body.as_ref() != site.body()
++            {
++                return Err(fault("Box type owning header/context/body differs"));
++            }
++            let bytes = std::mem::size_of::<Self>()
++                .checked_add(site.metadata_bytes())
++                .and_then(|n| n.checked_add(library.metadata_bytes()))
++                .and_then(|n| n.checked_add(12 * std::mem::size_of::<DependencyStamp>()))
++                .filter(|n| *n <= byte_limit)
++                .ok_or_else(limit)?;
++            let mut deps = Vec::new();
++            deps.try_reserve_exact(12).map_err(|_| limit())?;
++            for key in [
++                key,
++                InputKey::DefinitionSource(site.definition().fingerprint()),
++                InputKey::DefinitionHeader(site.definition().fingerprint()),
++                InputKey::DeclarationContext(site.definition().fingerprint()),
++            ] {
++                let (value, fingerprint) = db
++                    .published_input(&key)
++                    .ok_or_else(|| fault("Box type actual header publication absent"))?;
++                let valid = match value {
++                    InputValue::CapturedSource(value) => value == site.source(),
++                    InputValue::DefinitionSource(value) => value == &site.source().outline.parse,
++                    InputValue::DefinitionHeader(value) => value == site.header(),
++                    InputValue::DeclarationContext(value) => value == site.context(),
++                    _ => false,
++                };
++                if !valid {
++                    return Err(fault("Box type published source/header/context differs"));
++                }
++                deps.push(DependencyStamp::Input { key, fingerprint });
++            }
++            if let Some(body) = site.body() {
++                let key = InputKey::DefinitionBody(site.definition().fingerprint());
++                let (InputValue::DefinitionBody(actual), fingerprint) = db
++                    .published_input(&key)
++                    .ok_or_else(|| fault("Box header actual body attachment absent"))?
++                else {
++                    return Err(fault("Box body variant differs"));
++                };
++                if actual != body {
++                    return Err(fault("Box body identity differs"));
++                }
++                deps.push(DependencyStamp::Input { key, fingerprint });
++            }
++            Ok((deps, bytes))
++        };
++        let (mut dependencies, mut bytes) = match setup() {
++            Ok(value) => value,
++            Err(error) => return QueryPoll::Ready(Err(error)),
++        };
++        if site.context().scope.owner.is_some() {
++            return QueryPoll::Ready(Ok(BoxPointeeReadiness::LexicalTypeScopeRequired));
++        }
++        let signature_key = QueryKey::Signature(site.definition().fingerprint());
++        let signature = match db.fetch(&SyntaxProvider, signature_key.clone()) {
++            QueryPoll::Ready(Ok(value)) => value,
++            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
++            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
++        };
++        let QueryValue::Signature(actual) = signature.value.as_ref() else {
++            return QueryPoll::Ready(Err(fault(
++                "Box type source signature query variant differs",
++            )));
++        };
++        if actual.as_ref() != site.header() {
++            return QueryPoll::Ready(Err(fault("Box exact source header query differs")));
++        }
++        if site.needs_owner_environment() {
++            return QueryPoll::Ready(Ok(BoxPointeeReadiness::OwningParamEnvRequired));
++        }
++        if let Err(error) = current_query(db, &signature_key, &signature) {
++            return QueryPoll::Ready(Err(error));
++        }
++        bytes = match bytes
++            .checked_add(actual.estimated_bytes())
++            .filter(|n| *n <= byte_limit)
++        {
++            Some(n) => n,
++            None => return QueryPoll::Ready(Err(limit())),
++        };
++        dependencies.push(DependencyStamp::Query {
++            key: signature_key,
++            fingerprint: signature.fingerprint,
++        });
++        let Some(name) = site.box_name() else {
++            return QueryPoll::Ready(Ok(BoxPointeeReadiness::TypeNormalizationRequired));
++        };
++        let lookup = match source_name(
++            db,
++            source,
++            library,
++            &site,
++            type_seal,
++            name,
++            &mut dependencies,
++            &mut bytes,
++            byte_limit,
++        ) {
++            QueryPoll::Ready(Ok(value)) => value,
++            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
++            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
++        };
++        if lookup == NameLookup::Absent {
++            return QueryPoll::Ready(Ok(BoxPointeeReadiness::TypePreludeRequired));
++        }
++        let boxed = match library.header(Role::OwnedBox) {
++            Ok(value) => value.definition(),
++            Err(error) => return QueryPoll::Ready(Err(error)),
++        };
++        if !matches!(lookup,NameLookup::Defined(actual) if actual.namespace==Namespace::Type&&actual.identity==boxed.fingerprint()&&actual.defining_unit==boxed.crate_key&&actual.definition_edition==2024)
++        {
++            return QueryPoll::Ready(Ok(BoxPointeeReadiness::TypeNormalizationRequired));
++        }
++        let (primitive, length) = match site.pointee() {
++            BoxPointeeSyntax::Unit => (PrimitiveType::Unit, None),
++            BoxPointeeSyntax::Name(name) | BoxPointeeSyntax::ArrayName { element: name, .. } => {
++                let lookup = match source_name(
++                    db,
++                    source,
++                    library,
++                    &site,
++                    type_seal,
++                    name,
++                    &mut dependencies,
++                    &mut bytes,
++                    byte_limit,
++                ) {
++                    QueryPoll::Ready(Ok(value)) => value,
++                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
++                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
++                };
++                if lookup != NameLookup::Absent {
++                    return QueryPoll::Ready(Ok(BoxPointeeReadiness::TypeNormalizationRequired));
++                }
++                let Some(primitive) = primitive_name(name) else {
++                    return QueryPoll::Ready(Ok(BoxPointeeReadiness::TypeNormalizationRequired));
++                };
++                let length = match site.pointee() {
++                    BoxPointeeSyntax::ArrayName { length, .. } => Some(*length),
++                    _ => None,
++                };
++                (primitive, length)
++            }
++            BoxPointeeSyntax::Unsupported => {
++                return QueryPoll::Ready(Ok(BoxPointeeReadiness::TypeNormalizationRequired));
++            }
++        };
++        let environment = match ParamEnv::new(site.definition().fingerprint(), vec![], vec![]) {
++            Ok(env) => env,
++            Err(error) => return QueryPoll::Ready(Err(error)),
++        };
++        if let Err(error) = library.revalidate(db, source, compiler) {
++            return QueryPoll::Ready(Err(error));
++        }
++        let pointee = Self {
++            site,
++            term: TyTerm::Primitive(primitive),
++            environment,
++            library: library.identity(),
++            query_revision: db.revision(),
++            source_revision: db.source_revision(),
++            dependencies,
++            length: None,
++            bytes,
++        };
++        QueryPoll::Ready(Ok(match length {
++            Some(range) => {
++                BoxPointeeReadiness::ArrayLengthRequired(Box::new(CurrentBoxArrayLengthDemand {
++                    element: pointee,
++                    range,
++                    byte_limit,
++                }))
++            }
++            None => BoxPointeeReadiness::Closed(Box::new(pointee)),
++        }))
++    }
++    pub(crate) fn revalidate(
++        &self,
++        db: &Database,
++        source: &PreparedSourceView,
++        compiler: &CompileInputCatalog,
++        library: &CurrentBoxLibraryContract<'_>,
++    ) -> Result<(), Diagnostic> {
++        library.revalidate(db, source, compiler)?;
++        if source.selection() != self.site.source()
++            || self.library != library.identity()
++            || self.query_revision != db.revision()
++            || self.source_revision != db.source_revision()
++        {
++            return Err(fault(
++                "Box pointee source/world/publication stale; recapture required",
++            ));
++        }
++        if let Some(length) = &self.length {
++            length.revalidate(db, source)?;
++        }
++        for stamp in &self.dependencies {
++            let current = match stamp {
++                DependencyStamp::Input { key, fingerprint } => db
++                    .published_input(key)
++                    .is_some_and(|(_, actual)| actual == *fingerprint),
++                DependencyStamp::Query { key, fingerprint } => db.memo(key).is_some_and(|memo| {
++                    memo.verified_revision == db.revision() && memo.fingerprint == *fingerprint
++                }),
++            };
++            if !current {
++                return Err(fault("Box pointee current source/query dependency changed"));
++            }
++        }
++        Ok(())
++    }
++    pub(crate) fn term(&self) -> &TyTerm {
++        &self.term
++    }
++    pub(crate) fn environment(&self) -> &ParamEnv {
++        &self.environment
++    }
++    pub(crate) fn site(&self) -> &BoxTypeHeaderSite {
++        &self.site
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/current-box-source-pointee");
++        e.record(self.site.as_ref());
++        e.record(&self.term);
++        e.record(&self.environment);
++        e.digest(self.library);
++        e.u64(self.query_revision);
++        e.u64(self.source_revision);
++        e.sequence(&self.dependencies, |e, d| e.record(d));
++        e.option(&self.length, |e, length| e.digest(length.identity()));
++        e.finish()
++    }
++}
++impl CurrentBoxArrayLengthDemand {
++    /// Driver coordinator consumes the actual current Usize constant query; raw
++    /// source digits/counts and cached typed failures can never complete the array.
++    pub(crate) fn fetch_current(
++        mut self,
++        db: &mut Database,
++        source: &PreparedSourceView,
++        compiler: &CompileInputCatalog,
++        library: &CurrentBoxLibraryContract<'_>,
++        limits: ConstLimits,
++        query_byte_limit: usize,
++    ) -> QueryPoll<CurrentBoxPointee> {
++        if let Err(error) = self.element.revalidate(db, source, compiler, library) {
++            return QueryPoll::Ready(Err(error));
++        }
++        if query_byte_limit > self.byte_limit {
++            return QueryPoll::Ready(Err(limit()));
++        }
++        let admission = match ConstantSourceAdmission::capture_current(
++            db,
++            source,
++            self.element.site.definition().fingerprint(),
++            ConstantRequest::ArrayLength(self.range),
++            self.byte_limit,
++        ) {
++            Ok(value) => value,
++            Err(error) => return QueryPoll::Ready(Err(error)),
++        };
++        let expected = ConstantWireType::Scalar(PrimitiveType::Usize);
++        let outcome = match fetch_current_constant(
++            db,
++            source,
++            &admission,
++            &expected,
++            limits,
++            query_byte_limit,
++        ) {
++            QueryPoll::Ready(Ok(value)) => value,
++            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
++            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
++        };
++        let mut complete = || -> Result<(), Diagnostic> {
++            admission.revalidate(db, source)?;
++            self.element.revalidate(db, source, compiler, library)?;
++            let QueryValue::Constant(value) = outcome.value.as_ref() else {
++                return Err(fault(
++                    "Box array length requires actual typed successful constant query",
++                ));
++            };
++            let key = value.key();
++            key.validate()?;
++            let plan = admission.plan();
++            if key.admission() != admission.identity()
++                || key.definition() != plan.owner_definition()
++                || key.selection() != plan.identity()
++                || key.source() != plan.source().source()
++                || key.cfg() != plan.source().cfg()
++                || key.profile() != plan.profile()
++                || key.result_type() != expected.fingerprint_checked()?
++                || key.universe() != Some(db.constant_input_universe()?)
++                || !key.matches_payload(value.payload())
++            {
++                return Err(fault(
++                    "Box length query is foreign source/plan/type/universe",
++                ));
++            }
++            let query = QueryKey::Constant(key.clone());
++            current_query(db, &query, &outcome)?;
++            let memo = db
++                .memo(&query)
++                .ok_or_else(|| fault("Box length current memo absent"))?;
++            if memo.dependencies.len() != admission.dependencies().len() {
++                return Err(fault("Box length exact dependency cardinality differs"));
++            }
++            for (key, fingerprint) in admission.dependencies() {
++                if !memo.dependencies.contains(&DependencyStamp::Input {
++                    key: key.clone(),
++                    fingerprint: *fingerprint,
++                }) {
++                    return Err(fault("Box length admitted dependency missing"));
++                }
++            }
++            let decoded = value.payload().decode_value()?;
++            if !decoded.matches_scalar(PrimitiveType::Usize)? {
++                return Err(fault("Box length query decoded another scalar type"));
++            }
++            let scalar = decoded
++                .scalar()
++                .ok_or_else(|| fault("Box length Usize query returned aggregate"))?;
++            let new_bytes = self
++                .element
++                .bytes
++                .checked_add(admission.metadata_bytes())
++                .and_then(|n| n.checked_add(value.metadata_bytes().ok()?))
++                .and_then(|n| n.checked_add(std::mem::size_of::<TyTerm>()))
++                .and_then(|n| n.checked_add(query.heap_bytes()))
++                .filter(|n| *n <= self.byte_limit)
++                .ok_or_else(limit)?;
++            self.element.term = TyTerm::Array(
++                Box::new(self.element.term.clone()),
++                ConstTerm::Value(scalar.payload),
++            );
++            self.element.dependencies.push(DependencyStamp::Query {
++                key: query,
++                fingerprint: outcome.fingerprint,
++            });
++            self.element.bytes = new_bytes;
++            Ok(())
++        };
++        match complete() {
++            Ok(()) => {
++                self.element.length = Some(admission);
++                QueryPoll::Ready(Ok(self.element))
++            }
++            Err(error) => QueryPoll::Ready(Err(error)),
++        }
++    }
++    pub(crate) fn range(&self) -> crate::syntax::spans::SourceRange {
++        self.range
++    }
++}
++fn current_query(db: &Database, key: &QueryKey, outcome: &Outcome) -> Result<(), Diagnostic> {
++    if !outcome.cacheable
++        || db.memo(key).is_none_or(|memo| {
++            memo.verified_revision != db.revision()
++                || memo.fingerprint != outcome.fingerprint
++                || !Arc::ptr_eq(&memo.value, &outcome.value)
++        })
++    {
++        return Err(fault("Box source type requires exact current memo outcome"));
++    }
++    Ok(())
++}
++fn source_name(
++    db: &mut Database,
++    source: &PreparedSourceView,
++    library: &CurrentBoxLibraryContract<'_>,
++    site: &BoxTypeHeaderSite,
++    seal: &SealKey,
++    name: &str,
++    deps: &mut Vec<DependencyStamp>,
++    bytes: &mut usize,
++    limit_bytes: usize,
++) -> QueryPoll<NameLookup> {
++    if !matches!(seal.domain,SealDomain::Scope {id,namespace:Namespace::Type} if id==site.context().scope.fingerprint())
++        || seal.unit_graph != library.catalog.seal.unit_graph
++        || seal.epoch != library.catalog.seal.epoch
++    {
++        return QueryPoll::Ready(Err(fault("Box type owning Type namespace seal differs")));
++    }
++    let normalized = match crate::expand::scopes::MacroName::parse(
++        name,
++        source.selection().outline.parse.profile.edition,
++    ) {
++        Ok(name) => name,
++        Err(error) => return QueryPoll::Ready(Err(error)),
++    };
++    let key = QueryKey::SealedName(Box::new(SealedNameKey {
++        seal: seal.clone(),
++        bucket: BucketKey {
++            scope: site.context().scope.clone(),
++            namespace: Namespace::Type,
++            name: normalized.as_str().into(),
++        },
++    }));
++    *bytes = match bytes
++        .checked_add(key.heap_bytes())
++        .filter(|n| *n <= limit_bytes)
++    {
++        Some(n) => n,
++        None => return QueryPoll::Ready(Err(limit())),
++    };
++    let outcome = match db.fetch(&SyntaxProvider, key.clone()) {
++        QueryPoll::Ready(Ok(value)) => value,
++        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
++        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
++    };
++    if let Err(error) = current_query(db, &key, &outcome) {
++        return QueryPoll::Ready(Err(error));
++    }
++    let QueryValue::SealedName {
++        key: actual,
++        lookup,
++    } = outcome.value.as_ref()
++    else {
++        return QueryPoll::Ready(Err(fault("Box source Type name query variant differs")));
++    };
++    if &QueryKey::SealedName(actual.clone()) != &key {
++        return QueryPoll::Ready(Err(fault("Box source name exact key differs")));
++    }
++    deps.push(DependencyStamp::Query {
++        key,
++        fingerprint: outcome.fingerprint,
++    });
++    QueryPoll::Ready(Ok(lookup.clone()))
++}
++fn primitive_name(name: &str) -> Option<PrimitiveType> {
++    use PrimitiveType as P;
++    Some(match name {
++        "bool" => P::Bool,
++        "char" => P::Char,
++        "i8" => P::I8,
++        "i16" => P::I16,
++        "i32" => P::I32,
++        "i64" => P::I64,
++        "i128" => P::I128,
++        "isize" => P::Isize,
++        "u8" => P::U8,
++        "u16" => P::U16,
++        "u32" => P::U32,
++        "u64" => P::U64,
++        "u128" => P::U128,
++        "usize" => P::Usize,
++        "f32" => P::F32,
++        "f64" => P::F64,
++        _ => return None,
++    })
++}
+diff --git a/crates/lrr/src/source/box_type_headers.rs b/crates/lrr/src/source/box_type_headers.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/source/box_type_headers.rs
+@@ -0,0 +1,487 @@
++//! Read-only original Box type sites and associated impl binder data.
++//! No source names, array lengths or trait predicates are declared solved here.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::key::QueryKey,
++    source::{
++        box_contract_headers::BoxTargetHeaders, changes::SourceSelection, manifest::DefKey,
++        snapshot::CfgSet,
++    },
++    syntax::{
++        ast_adapter::{range, tokens},
++        box_source_headers::{BoxHeaderRole as Role, BoxSourceHeaders},
++        outline::{BodyHandle, DeclarationContext, HeaderRecipe},
++        parse::ParsedFile,
++        signatures::{DefinitionParameter, GenericKind, capture_generics},
++        spans::SourceRange,
++    },
++    traits::term::{ParamKey, TyTerm},
++};
++use ra_ap_syntax::{
++    AstNode,
++    ast::{self, HasGenericArgs, HasGenericParams, HasName},
++};
++const MAX_BYTES: usize = 32 << 20;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-BOX-TYPE-SOURCE", message.into())
++}
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum BoxTypeRole {
++    Parameter(u32),
++    Result,
++    FunctionPointerResult(u32),
++}
++#[derive(Debug)]
++pub enum BoxPointeeSyntax {
++    Unit,
++    Name(String),
++    ArrayName {
++        element: String,
++        length: SourceRange,
++    },
++    Unsupported,
++}
++#[derive(Debug)]
++pub struct BoxTypeHeaderSite {
++    source: SourceSelection,
++    definition: DefKey,
++    header: HeaderRecipe,
++    context: DeclarationContext,
++    body: Option<BodyHandle>,
++    role: BoxTypeRole,
++    type_range: SourceRange,
++    box_name: Option<String>,
++    pointee: BoxPointeeSyntax,
++    bytes: usize,
++    needs_owner_environment: bool,
++}
++impl BoxTypeHeaderSite {
++    pub fn source(&self) -> &SourceSelection {
++        &self.source
++    }
++    pub fn definition(&self) -> &DefKey {
++        &self.definition
++    }
++    pub fn header(&self) -> &HeaderRecipe {
++        &self.header
++    }
++    pub fn context(&self) -> &DeclarationContext {
++        &self.context
++    }
++    pub fn body(&self) -> Option<&BodyHandle> {
++        self.body.as_ref()
++    }
++    pub fn role(&self) -> BoxTypeRole {
++        self.role
++    }
++    pub fn type_range(&self) -> SourceRange {
++        self.type_range
++    }
++    pub fn box_name(&self) -> Option<&str> {
++        self.box_name.as_deref()
++    }
++    pub fn pointee(&self) -> &BoxPointeeSyntax {
++        &self.pointee
++    }
++    pub fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub fn needs_owner_environment(&self) -> bool {
++        self.needs_owner_environment
++    }
++}
++fn single_name(ty: &ast::Type) -> Option<String> {
++    let ast::Type::PathType(ty) = ty else {
++        return None;
++    };
++    let path = ty.path()?;
++    if path.qualifier().is_some() {
++        return None;
++    };
++    let segment = path.segment()?;
++    if segment.coloncolon_token().is_some() || segment.generic_arg_list().is_some() {
++        return None;
++    };
++    segment.name_ref().map(|name| name.text().to_string())
++}
++fn shape(ty: &ast::Type) -> (Option<String>, BoxPointeeSyntax) {
++    let ast::Type::PathType(ty) = ty else {
++        return (None, BoxPointeeSyntax::Unsupported);
++    };
++    let Some(path) = ty.path() else {
++        return (None, BoxPointeeSyntax::Unsupported);
++    };
++    if path.qualifier().is_some() {
++        return (None, BoxPointeeSyntax::Unsupported);
++    };
++    let Some(segment) = path.segment() else {
++        return (None, BoxPointeeSyntax::Unsupported);
++    };
++    if segment.coloncolon_token().is_some() {
++        return (None, BoxPointeeSyntax::Unsupported);
++    };
++    let name = segment.name_ref().map(|name| name.text().to_string());
++    let Some(list) = segment.generic_arg_list() else {
++        return (name, BoxPointeeSyntax::Unsupported);
++    };
++    let mut args = list.generic_args();
++    let first = args.next();
++    if args.next().is_some() {
++        return (name, BoxPointeeSyntax::Unsupported);
++    };
++    let Some(ast::GenericArg::TypeArg(arg)) = first else {
++        return (name, BoxPointeeSyntax::Unsupported);
++    };
++    let Some(ty) = arg.ty() else {
++        return (name, BoxPointeeSyntax::Unsupported);
++    };
++    let pointee = match &ty {
++        ast::Type::TupleType(tuple) if tuple.fields().next().is_none() => BoxPointeeSyntax::Unit,
++        ast::Type::ArrayType(array) => {
++            match (array.ty().as_ref().and_then(single_name), array.const_arg()) {
++                (Some(element), Some(length)) => BoxPointeeSyntax::ArrayName {
++                    element,
++                    length: range(length.syntax().text_range()),
++                },
++                _ => BoxPointeeSyntax::Unsupported,
++            }
++        }
++        _ => single_name(&ty).map_or(BoxPointeeSyntax::Unsupported, BoxPointeeSyntax::Name),
++    };
++    (name, pointee)
++}
++pub fn capture_box_type_header(
++    parsed: &ParsedFile,
++    source: &SourceSelection,
++    cfg: &CfgSet,
++    definition: &DefKey,
++    role: BoxTypeRole,
++) -> Result<BoxTypeHeaderSite, Diagnostic> {
++    if parsed.generated_origin.is_some()
++        || parsed.key() != source.outline.parse
++        || cfg.fingerprint() != source.outline.cfg
++    {
++        return Err(fault("Box type original source/profile/cfg differs"));
++    }
++    let tree = parsed.parsed.tree();
++    if tree.syntax().descendants().take(100_001).count() > 100_000 {
++        return Err(fault("Box type source structural bound"));
++    }
++    let outline = parsed.outline(
++        source.outline.crate_key,
++        source.outline.module_path.clone(),
++        cfg,
++    )?;
++    let item = outline
++        .items
++        .iter()
++        .find(|row| &row.def_key == definition)
++        .ok_or_else(|| fault("Box type owning source declaration absent"))?;
++    let function = tree
++        .syntax()
++        .descendants()
++        .filter_map(ast::Fn::cast)
++        .find(|function| range(function.syntax().text_range()) == item.declaration_span)
++        .ok_or_else(|| fault("Box type owner is not exact source function"))?;
++    let context = DeclarationContext {
++        scope: item.scope.clone(),
++        range: item.declaration_span,
++    };
++    let body = function.body();
++    if tokens(
++        function.syntax(),
++        body.as_ref().map(|body| body.syntax().text_range()),
++    ) != item.header.tokens
++    {
++        return Err(fault("Box header token/source attachment differs"));
++    }
++    let needs_owner_environment =
++        function.generic_param_list().is_some() || function.where_clause().is_some();
++    let parameter = |ordinal: u32| -> Result<ast::Type, Diagnostic> {
++        function
++            .param_list()
++            .and_then(|list| list.params().nth(usize::try_from(ordinal).ok()?))
++            .and_then(|param| param.ty())
++            .ok_or_else(|| fault("Box header parameter/type ordinal absent"))
++    };
++    let ty = match role {
++        BoxTypeRole::Result => function
++            .ret_type()
++            .and_then(|ret| ret.ty())
++            .ok_or_else(|| fault("Box header explicit result type absent"))?,
++        BoxTypeRole::Parameter(ordinal) => parameter(ordinal)?,
++        BoxTypeRole::FunctionPointerResult(ordinal) => {
++            let ast::Type::FnPtrType(pointer) = parameter(ordinal)? else {
++                return Err(fault("Box nested result requires actual source fn pointer"));
++            };
++            if pointer.abi().is_some()
++                || pointer.unsafe_token().is_some()
++                || pointer.async_token().is_some()
++                || pointer.const_token().is_some()
++            {
++                return Err(fault("Box fn-pointer binder requires source context"));
++            }
++            pointer
++                .ret_type()
++                .and_then(|ret| ret.ty())
++                .ok_or_else(|| fault("Box fn-pointer explicit result absent"))?
++        }
++    };
++    let type_range = range(ty.syntax().text_range());
++    if parsed
++        .errors
++        .iter()
++        .any(|error| error.range.start < type_range.end && error.range.end > type_range.start)
++    {
++        return Err(fault(
++            "Box type selected source header has parse diagnostics",
++        ));
++    }
++    let (box_name, pointee) = shape(&ty);
++    let extra = match &pointee {
++        BoxPointeeSyntax::Name(name) => name.len(),
++        BoxPointeeSyntax::ArrayName { element, .. } => element.len(),
++        _ => 0,
++    };
++    let bytes = std::mem::size_of::<BoxTypeHeaderSite>()
++        .checked_add(source.metadata_bytes()?)
++        .and_then(|n| n.checked_add(item.header.estimated_bytes()))
++        .and_then(|n| n.checked_add(item.scope.heap_bytes()))
++        .and_then(|n| n.checked_add(definition.declared_name.len()))
++        .and_then(|n| {
++            n.checked_add(definition.module_path.iter().try_fold(0usize, |n, p| {
++                n.checked_add(std::mem::size_of::<String>() + p.len())
++            })?)
++        })
++        .and_then(|n| n.checked_add(box_name.as_ref().map_or(0, String::len)))
++        .and_then(|n| n.checked_add(extra))
++        .filter(|n| *n <= MAX_BYTES)
++        .ok_or_else(|| fault("Box type header metadata bound"))?;
++    Ok(BoxTypeHeaderSite {
++        source: source.clone(),
++        definition: definition.clone(),
++        header: item.header.clone(),
++        context,
++        body: item.body.clone(),
++        role,
++        type_range,
++        box_name,
++        pointee,
++        bytes,
++        needs_owner_environment,
++    })
++}
++#[derive(Debug)]
++pub struct BoxImplParameters {
++    source: SourceSelection,
++    definition: DefKey,
++    header: HeaderRecipe,
++    parameters: Vec<DefinitionParameter>,
++    target: TyTerm,
++    target_identity: Digest,
++    bytes: usize,
++}
++impl BoxImplParameters {
++    pub fn source(&self) -> &SourceSelection {
++        &self.source
++    }
++    pub fn definition(&self) -> &DefKey {
++        &self.definition
++    }
++    pub fn header(&self) -> &HeaderRecipe {
++        &self.header
++    }
++    pub fn parameters(&self) -> &[DefinitionParameter] {
++        &self.parameters
++    }
++    pub fn target_term(&self) -> &TyTerm {
++        &self.target
++    }
++    pub fn target_identity(&self) -> Digest {
++        self.target_identity
++    }
++    pub fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++}
++pub fn capture_box_impl_parameters(
++    parsed: &ParsedFile,
++    headers: &BoxSourceHeaders,
++    targets: &BoxTargetHeaders,
++    cfg: &CfgSet,
++) -> Result<BoxImplParameters, Diagnostic> {
++    let source = headers.source();
++    if targets.source() != source
++        || parsed.generated_origin.is_some()
++        || parsed.key() != source.outline.parse
++        || cfg.fingerprint() != source.outline.cfg
++    {
++        return Err(fault("Box impl binder source/profile/cfg differs"));
++    }
++    let parent = headers
++        .header(Role::DerefImpl)
++        .ok_or_else(|| fault("actual Box Deref impl absent"))?;
++    let target = targets
++        .target(Role::DerefImpl)
++        .ok_or_else(|| fault("actual Box associated Target absent"))?;
++    if target.parent() != parent.definition()
++        || target.parent_header() != parent.header().fingerprint()
++    {
++        return Err(fault("Box Target owning impl differs"));
++    }
++    let tree = parsed.parsed.tree();
++    if tree.syntax().descendants().take(1_000_001).count() > 1_000_000 {
++        return Err(fault("Box binder structural bound"));
++    }
++    let implementation = tree
++        .syntax()
++        .children()
++        .filter_map(ast::Impl::cast)
++        .find(|item| range(item.syntax().text_range()) == parent.range())
++        .ok_or_else(|| fault("Box impl exact source node absent"))?;
++    let parameters = capture_generics(implementation.generic_param_list())?;
++    let associated = implementation
++        .assoc_item_list()
++        .ok_or_else(|| fault("Box impl associated list absent"))?;
++    let alias = associated
++        .syntax()
++        .children()
++        .filter_map(ast::TypeAlias::cast)
++        .find(|alias| range(alias.syntax().text_range()) == target.range())
++        .ok_or_else(|| fault("Box Target exact source alias absent"))?;
++    let name = alias
++        .ty()
++        .as_ref()
++        .and_then(single_name)
++        .ok_or_else(|| fault("Box Target requires actual owning simple parameter reference"))?;
++    let parameter = parameters
++        .iter()
++        .find(|parameter| parameter.kind == GenericKind::Type && parameter.name == name)
++        .ok_or_else(|| fault("Box Target is not an actual owning type parameter"))?;
++    let term = TyTerm::Param(ParamKey {
++        definition: parent.definition().fingerprint(),
++        ordinal: parameter.ordinal,
++    });
++    let mut bytes = std::mem::size_of::<BoxImplParameters>()
++        .checked_add(source.metadata_bytes()?)
++        .and_then(|n| n.checked_add(parent.header().estimated_bytes()))
++        .and_then(|n| n.checked_add(parent.definition().declared_name.len()))
++        .and_then(|n| {
++            n.checked_add(
++                parent
++                    .definition()
++                    .module_path
++                    .iter()
++                    .try_fold(0usize, |n, p| {
++                        n.checked_add(std::mem::size_of::<String>() + p.len())
++                    })?,
++            )
++        })
++        .and_then(|n| {
++            n.checked_add(
++                parameters
++                    .capacity()
++                    .checked_mul(std::mem::size_of::<DefinitionParameter>())?,
++            )
++        })
++        .ok_or_else(|| fault("Box binder metadata overflow"))?;
++    for parameter in &parameters {
++        bytes = bytes
++            .checked_add(parameter.name.len())
++            .ok_or_else(|| fault("Box binder metadata overflow"))?;
++        for tokens in [&parameter.bounds, &parameter.default, &parameter.const_type] {
++            bytes = bytes
++                .checked_add(
++                    tokens
++                        .capacity()
++                        .checked_mul(std::mem::size_of::<crate::syntax::ast_adapter::TokenRecipe>())
++                        .ok_or_else(|| fault("Box binder metadata overflow"))?,
++                )
++                .ok_or_else(|| fault("Box binder metadata overflow"))?;
++            for token in tokens {
++                bytes = bytes
++                    .checked_add(token.text.len())
++                    .filter(|n| *n <= MAX_BYTES)
++                    .ok_or_else(|| fault("Box binder metadata bound"))?;
++            }
++        }
++    }
++    if bytes > MAX_BYTES {
++        return Err(fault("Box binder metadata bound"));
++    }
++    Ok(BoxImplParameters {
++        source: source.clone(),
++        definition: parent.definition().clone(),
++        header: parent.header().clone(),
++        parameters,
++        target: term,
++        target_identity: target.fingerprint(),
++        bytes,
++    })
++}
++impl StableEncode for BoxTypeHeaderSite {
++    const DOMAIN: &'static str = "lrr/v1/source-box-header-type-site";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.string(self.source.path.as_str());
++        e.record(&QueryKey::Outline(self.source.outline.clone()));
++        e.record(&self.definition);
++        e.record(&self.header);
++        e.record(&self.context);
++        e.bool(self.needs_owner_environment);
++        e.option(&self.body, |e, body| e.record(body));
++        match self.role {
++            BoxTypeRole::Parameter(n) => {
++                e.u32(0);
++                e.u32(n)
++            }
++            BoxTypeRole::Result => e.u32(1),
++            BoxTypeRole::FunctionPointerResult(n) => {
++                e.u32(2);
++                e.u32(n)
++            }
++        };
++        e.u32(self.type_range.start);
++        e.u32(self.type_range.end);
++        e.option(&self.box_name, |e, name| e.string(name));
++        match &self.pointee {
++            BoxPointeeSyntax::Unit => e.u32(0),
++            BoxPointeeSyntax::Name(name) => {
++                e.u32(1);
++                e.string(name)
++            }
++            BoxPointeeSyntax::ArrayName { element, length } => {
++                e.u32(2);
++                e.string(element);
++                e.u32(length.start);
++                e.u32(length.end)
++            }
++            BoxPointeeSyntax::Unsupported => e.u32(3),
++        }
++    }
++}
++impl StableEncode for BoxImplParameters {
++    const DOMAIN: &'static str = "lrr/v1/source-box-impl-binder";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.string(self.source.path.as_str());
++        e.record(&QueryKey::Outline(self.source.outline.clone()));
++        e.record(&self.definition);
++        e.record(&self.header);
++        e.record(&self.target);
++        e.digest(self.target_identity);
++        e.sequence(&self.parameters, |e, p| {
++            e.u32(p.ordinal);
++            e.u32(match p.kind {
++                GenericKind::Lifetime => 0,
++                GenericKind::Type => 1,
++                GenericKind::Const => 2,
++            });
++            e.string(&p.name);
++            for tokens in [&p.bounds, &p.default, &p.const_type] {
++                e.sequence(tokens, |e, t| e.record(t));
++            }
++        });
++    }
++}
+diff --git a/crates/lrr/src/source/mod.rs b/crates/lrr/src/source/mod.rs
+--- a/crates/lrr/src/source/mod.rs
++++ b/crates/lrr/src/source/mod.rs
+@@ -20,3 +20,5 @@
+ pub mod ordinary_module;
+ 
+ pub mod box_contract_headers;
++
++pub mod box_type_headers;
+diff --git a/crates/lrr/src/traits/box_target_substitution.rs b/crates/lrr/src/traits/box_target_substitution.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/traits/box_target_substitution.rs
+@@ -0,0 +1,258 @@
++//! Exact source-owned Box Target instantiation. M019–M023 goal/witness/projection
++//! fulfillment is absent: the result is conditional data, never a solved witness.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::memo::Database,
++    frontend::{
++        box_source_admission::compiler_contract::{
++            CurrentBoxLibraryContract, type_readiness::CurrentBoxPointee,
++        },
++        compile_input_catalog::CompileInputCatalog,
++    },
++    source::{box_type_headers::BoxImplParameters, changes::PreparedSourceView},
++    syntax::{box_source_headers::BoxHeaderRole as Role, signatures::GenericKind},
++    traits::{
++        subst::Substitution,
++        term::{
++            Binder, BoundKind, GenericArg, ParamEnv, ParamKey, ProjectionKey, TraitRef, TyTerm,
++        },
++    },
++};
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-BOX-TARGET-SOURCE", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "Box Target source substitution metadata bound".into(),
++    )
++}
++/// Driver retains/replays full opaque source/library proof before using this
++/// conditional plan. Its identity is agreement data, never a WitnessKey.
++pub(crate) struct ConditionalBoxTarget<'a> {
++    library: &'a CurrentBoxLibraryContract<'a>,
++    pointee: &'a CurrentBoxPointee,
++    binder: &'a BoxImplParameters,
++    environment: ParamEnv,
++    predicates: Vec<TraitRef>,
++    goal: TraitRef,
++    projection: ProjectionKey,
++    instantiated: TyTerm,
++    source_candidate: Digest,
++    identity: Digest,
++    bytes: usize,
++}
++pub(crate) enum BoxGoalReadiness<'a> {
++    GoalEngineRequired {
++        goal: &'a TraitRef,
++        projection: &'a ProjectionKey,
++        caller_environment: &'a ParamEnv,
++        impl_environment: &'a ParamEnv,
++        predicates: &'a [TraitRef],
++        candidate: Digest,
++        other_candidates: &'a [Digest],
++        trait_header: &'a crate::syntax::outline::HeaderRecipe,
++    },
++}
++impl<'a> ConditionalBoxTarget<'a> {
++    pub(crate) fn capture_current(
++        db: &Database,
++        source: &PreparedSourceView,
++        compiler: &CompileInputCatalog,
++        library: &'a CurrentBoxLibraryContract<'a>,
++        pointee: &'a CurrentBoxPointee,
++        binder: &'a BoxImplParameters,
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        library.revalidate(db, source, compiler)?;
++        pointee.revalidate(db, source, compiler, library)?;
++        let header = library.header(Role::DerefImpl)?;
++        if binder.definition() != header.definition()
++            || binder.header() != header.header()
++            || binder.target_identity() != library.impl_target().fingerprint()
++            || !library
++                .source_headers()
++                .iter()
++                .any(|file| file.source() == binder.source())
++        {
++            return Err(fault(
++                "Box Target impl/binder is not actual current selected library source",
++            ));
++        }
++        let parameters = binder.parameters();
++        let TyTerm::Param(target) = binder.target_term() else {
++            return Err(fault("Box Target is not actual owning parameter"));
++        };
++        if parameters.len() != 2
++            || parameters.iter().any(|p| p.kind != GenericKind::Type)
++            || target.definition != binder.definition().fingerprint()
++            || target.ordinal != parameters[0].ordinal
++        {
++            return Err(fault("Box owning source generic shape differs"));
++        }
++        let allocator = ParamKey {
++            definition: binder.definition().fingerprint(),
++            ordinal: parameters[1].ordinal,
++        };
++        let measured = pointee.term().measure().ok_or_else(limit)?;
++        let bytes = std::mem::size_of::<Self>()
++            .checked_add(library.metadata_bytes())
++            .and_then(|n| n.checked_add(pointee.metadata_bytes()))
++            .and_then(|n| n.checked_add(binder.metadata_bytes()))
++            .and_then(|n| n.checked_add(measured.1.checked_mul(8)?))
++            .and_then(|n| {
++                n.checked_add(
++                    32 * std::mem::size_of::<TyTerm>() + 8 * std::mem::size_of::<TraitRef>(),
++                )
++            })
++            .filter(|n| *n <= byte_limit && byte_limit <= 32 << 20)
++            .ok_or_else(limit)?;
++        let global = TyTerm::Nominal(
++            library.header(Role::Global)?.definition().fingerprint(),
++            vec![],
++        );
++        let implementation_parameters =
++            vec![(BoundKind::Type, *target), (BoundKind::Type, allocator)];
++        // Captured approved impl has T:?Sized (no implicit Sized predicate) and
++        // A:Allocator with A's normal implicit Sized bound. These are assumptions,
++        // not concrete proof of Global or the requested Deref goal.
++        let environment = ParamEnv::new(
++            binder.definition().fingerprint(),
++            implementation_parameters,
++            vec![
++                Binder {
++                    variables: vec![],
++                    value: TraitRef {
++                        trait_key: library.header(Role::Allocator)?.definition().fingerprint(),
++                        self_ty: TyTerm::Param(allocator),
++                        args: vec![],
++                    },
++                },
++                Binder {
++                    variables: vec![],
++                    value: TraitRef {
++                        trait_key: library.header(Role::Sized)?.definition().fingerprint(),
++                        self_ty: TyTerm::Param(allocator),
++                        args: vec![],
++                    },
++                },
++            ],
++        )?;
++        let mut substitution = Substitution::default();
++        substitution.insert(*target, GenericArg::Type(pointee.term().clone()))?;
++        substitution.insert(allocator, GenericArg::Type(global.clone()))?;
++        let mut predicates = Vec::new();
++        predicates
++            .try_reserve_exact(environment.predicates().len())
++            .map_err(|_| limit())?;
++        for predicate in environment.predicates() {
++            if !predicate.variables.is_empty() || !predicate.value.args.is_empty() {
++                return Err(fault(
++                    "Box impl predicate binder requires ordered goal integration",
++                ));
++            }
++            predicates.push(TraitRef {
++                trait_key: predicate.value.trait_key,
++                self_ty: substitution.apply(&predicate.value.self_ty)?,
++                args: vec![],
++            });
++        }
++        let instantiated =
++            substitute_target_parameter(binder.target_term(), *target, pointee.term())?;
++        let boxed = TyTerm::Nominal(
++            library.header(Role::OwnedBox)?.definition().fingerprint(),
++            vec![
++                GenericArg::Type(pointee.term().clone()),
++                GenericArg::Type(global),
++            ],
++        );
++        let goal = TraitRef {
++            trait_key: library.header(Role::DerefTrait)?.definition().fingerprint(),
++            self_ty: boxed,
++            args: vec![],
++        };
++        let projection = ProjectionKey {
++            trait_ref: goal.clone(),
++            item: library.trait_target().definition().fingerprint(),
++            item_args: vec![],
++        };
++        let source_candidate = header
++            .impl_source()
++            .ok_or_else(|| fault("Box active source impl identity absent"))?;
++        let mut e = StableEncoder::new("lrr/v1/conditional-source-box-target-substitution");
++        e.digest(library.identity());
++        e.digest(pointee.identity());
++        e.record(binder);
++        e.record(&environment);
++        e.sequence(&predicates, |e, goal| e.record(goal));
++        e.record(&goal);
++        e.record(&projection);
++        e.record(&instantiated);
++        e.digest(source_candidate);
++        Ok(Self {
++            library,
++            pointee,
++            binder,
++            environment,
++            predicates,
++            goal,
++            projection,
++            instantiated,
++            source_candidate,
++            identity: e.finish(),
++            bytes,
++        })
++    }
++    pub(crate) fn revalidate(
++        &self,
++        db: &Database,
++        source: &PreparedSourceView,
++        compiler: &CompileInputCatalog,
++    ) -> Result<(), Diagnostic> {
++        self.library.revalidate(db, source, compiler)?;
++        self.pointee
++            .revalidate(db, source, compiler, self.library)?;
++        if self.binder.target_identity() != self.library.impl_target().fingerprint() {
++            return Err(fault("Box Target source substitution changed"));
++        }
++        Ok(())
++    }
++    pub(crate) fn instantiated_target(&self) -> &TyTerm {
++        &self.instantiated
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        self.identity
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn readiness(&self) -> Result<BoxGoalReadiness<'_>, Diagnostic> {
++        Ok(BoxGoalReadiness::GoalEngineRequired {
++            goal: &self.goal,
++            projection: &self.projection,
++            caller_environment: self.pointee.environment(),
++            impl_environment: &self.environment,
++            predicates: &self.predicates,
++            candidate: self.source_candidate,
++            other_candidates: self.library.unknown_candidates(),
++            trait_header: self.library.header(Role::DerefTrait)?.header(),
++        })
++    }
++}
++/// Pure symbolic transform, deliberately not a source authority constructor.
++/// Foreign owner keys remain rigid because existing Substitution is simultaneous.
++fn substitute_target_parameter(
++    target: &TyTerm,
++    parameter: ParamKey,
++    pointee: &TyTerm,
++) -> Result<TyTerm, Diagnostic> {
++    let mut substitution = Substitution::default();
++    substitution.insert(parameter, GenericArg::Type(pointee.clone()))?;
++    substitution.apply(target)
++}
++#[cfg(test)]
++#[path = "box_target_substitution_tests.rs"]
++mod tests;
+diff --git a/crates/lrr/src/traits/box_target_substitution_tests.rs b/crates/lrr/src/traits/box_target_substitution_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/traits/box_target_substitution_tests.rs
+@@ -0,0 +1,41 @@
++//! Pure symbolic substitution controls, not solved source trait witnesses.
++use super::*;
++use crate::{ir::op::PrimitiveType, traits::term::ConstTerm};
++#[test]
++fn exact_box_target_substitution_preserves_unit_scalar_and_array_terms() {
++    let owner = Digest::of_bytes(b"disclosed source-data impl owner");
++    let target = ParamKey {
++        definition: owner,
++        ordinal: 0,
++    };
++    for pointee in [
++        TyTerm::Primitive(PrimitiveType::Unit),
++        TyTerm::Primitive(PrimitiveType::Isize),
++        TyTerm::Array(
++            Box::new(TyTerm::Primitive(PrimitiveType::I8)),
++            ConstTerm::Value(300),
++        ),
++    ] {
++        assert_eq!(
++            substitute_target_parameter(&TyTerm::Param(target), target, &pointee).unwrap(),
++            pointee
++        );
++    }
++}
++#[test]
++fn same_ordinal_from_foreign_owner_is_not_the_box_target_parameter() {
++    let actual = ParamKey {
++        definition: Digest::of_bytes(b"source actual impl"),
++        ordinal: 0,
++    };
++    let foreign = ParamKey {
++        definition: Digest::of_bytes(b"source other impl"),
++        ordinal: 0,
++    };
++    let term = TyTerm::Param(foreign);
++    assert_eq!(
++        substitute_target_parameter(&term, actual, &TyTerm::Primitive(PrimitiveType::Unit))
++            .unwrap(),
++        term
++    );
++}
+diff --git a/crates/lrr/src/traits/mod.rs b/crates/lrr/src/traits/mod.rs
+--- a/crates/lrr/src/traits/mod.rs
++++ b/crates/lrr/src/traits/mod.rs
+@@ -3,3 +3,5 @@
+ pub mod unify;
+ 
+ pub mod subst;
++
++pub(crate) mod box_target_substitution;
+diff --git a/xtask/tests/box_type_headers.rs b/xtask/tests/box_type_headers.rs
+new file mode 100644
+--- /dev/null
++++ b/xtask/tests/box_type_headers.rs
+@@ -0,0 +1,149 @@
++//! Preregistered original source components; never full Box execution.
++use lrr::{
++    core::{
++        digest::{Digest, StableEncode},
++        profile::ProfileIdentity,
++    },
++    db::key::OutlineKey,
++    source::box_contract_headers::capture_box_targets,
++    source::{
++        box_type_headers::{
++            BoxPointeeSyntax, BoxTypeRole, capture_box_impl_parameters, capture_box_type_header,
++        },
++        changes::SourceSelection,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::{
++        box_source_headers::{BoxHeaderRole as Role, capture_box_headers},
++        parse::ParsedFile,
++    },
++    traits::term::TyTerm,
++};
++const SCALAR: &str = include_str!("../../fixtures/upstream/rustc-checkout/tests/ui/box/new-box.rs");
++const ARRAYS: &str = include_str!(
++    "../../fixtures/upstream/rustc-checkout/tests/ui/box/box-fixed-array-coerce-unsized-match.rs"
++);
++const BOXED: &str =
++    include_str!("../../fixtures/upstream/rustc-checkout/library/alloc/src/boxed.rs");
++fn parsed(text: &str, edition: u16, module: &[&str]) -> (ParsedFile, SourceSelection, CfgSet) {
++    let cfg = CfgSet::guest_default();
++    let parsed = ParsedFile::parse_declarations(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++    )
++    .unwrap();
++    let source = SourceSelection {
++        path: SourcePath::new(format!("{}.rs", module.join("/"))).unwrap(),
++        outline: OutlineKey {
++            parse: parsed.key(),
++            crate_key: Digest::of_bytes(module[0].as_bytes()),
++            module_path: module[1..].iter().map(|s| s.to_string()).collect(),
++            cfg: cfg.fingerprint(),
++        },
++    };
++    (parsed, source, cfg)
++}
++fn definition(
++    parsed: &ParsedFile,
++    source: &SourceSelection,
++    cfg: &CfgSet,
++    name: &str,
++) -> lrr::source::manifest::DefKey {
++    parsed
++        .outline(
++            source.outline.crate_key,
++            source.outline.module_path.clone(),
++            cfg,
++        )
++        .unwrap()
++        .items
++        .into_iter()
++        .find(|row| row.def_key.declared_name == name)
++        .unwrap()
++        .def_key
++}
++#[test]
++fn original_box_scalar_header_uses_exact_parameter_source_in_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (parsed, source, cfg) = parsed(SCALAR, edition, &["consumer"]);
++        let def = definition(&parsed, &source, &cfg, "f");
++        let site = capture_box_type_header(&parsed, &source, &cfg, &def, BoxTypeRole::Parameter(0))
++            .unwrap();
++        assert_eq!(site.box_name(), Some("Box"));
++        assert!(matches!(site.pointee(),BoxPointeeSyntax::Name(name) if name=="isize"));
++        assert_eq!(site.source(), &source);
++        assert_eq!(site.definition(), &def);
++    }
++}
++#[test]
++fn original_box_array_function_pointer_results_retain_length_source_ranges() {
++    let (parsed, source, cfg) = parsed(ARRAYS, 2024, &["consumer"]);
++    let def = definition(&parsed, &source, &cfg, "foo");
++    for (ordinal, count) in [(0, "1"), (1, "20"), (2, "300"), (3, "4000")] {
++        let site = capture_box_type_header(
++            &parsed,
++            &source,
++            &cfg,
++            &def,
++            BoxTypeRole::FunctionPointerResult(ordinal),
++        )
++        .unwrap();
++        let BoxPointeeSyntax::ArrayName { element, length } = site.pointee() else {
++            panic!("original array shape absent")
++        };
++        assert_eq!(element, "i8");
++        assert_eq!(&ARRAYS[length.start as usize..length.end as usize], count);
++    }
++}
++#[test]
++fn original_dyn_header_stays_an_explicit_source_type_prerequisite() {
++    let (parsed, source, cfg) = parsed(SCALAR, 2024, &["consumer"]);
++    let def = definition(&parsed, &source, &cfg, "g");
++    let site =
++        capture_box_type_header(&parsed, &source, &cfg, &def, BoxTypeRole::Parameter(0)).unwrap();
++    assert!(matches!(site.pointee(), BoxPointeeSyntax::Unsupported));
++}
++#[test]
++fn actual_box_impl_target_captures_owning_generic_ordinal_not_a_printed_type() {
++    let (parsed, source, cfg) = parsed(BOXED, 2024, &["alloc", "boxed"]);
++    let headers = capture_box_headers(&parsed, &source, &cfg).unwrap();
++    let targets = capture_box_targets(&parsed, &headers, &cfg).unwrap();
++    let binder = capture_box_impl_parameters(&parsed, &headers, &targets, &cfg).unwrap();
++    let target = targets.target(Role::DerefImpl).unwrap();
++    let TyTerm::Param(key) = binder.target_term() else {
++        panic!("actual owning Target parameter absent")
++    };
++    assert_eq!(key.definition, binder.definition().fingerprint());
++    assert_eq!(key.ordinal, binder.parameters()[0].ordinal);
++    assert_eq!(binder.target_identity(), target.fingerprint());
++}
++#[test]
++fn source_box_type_header_refuses_foreign_definition_and_cfg() {
++    let (parsed, source, cfg) = parsed(SCALAR, 2024, &["consumer"]);
++    let mut def = definition(&parsed, &source, &cfg, "f");
++    def.crate_key = Digest::of_bytes(b"foreign");
++    assert!(
++        capture_box_type_header(&parsed, &source, &cfg, &def, BoxTypeRole::Parameter(0)).is_err()
++    );
++    let def = definition(&parsed, &source, &cfg, "f");
++    let mut changed = cfg;
++    changed.atoms.insert("foreign_cfg".into());
++    assert!(
++        capture_box_type_header(&parsed, &source, &changed, &def, BoxTypeRole::Parameter(0))
++            .is_err()
++    );
++}
++
++#[test]
++fn disclosed_unit_header_adapter_retains_tuple_unit_without_name_lookup() {
++    // Original Unit Box::new(()) call readiness remains in the predecessor;
++    // this outside-upstream adapter isolates a declared Unit source header.
++    let (parsed, source, cfg) =
++        parsed("fn unit_box()->Box<()> {Box::new(())}", 2024, &["consumer"]);
++    let def = definition(&parsed, &source, &cfg, "unit_box");
++    let site = capture_box_type_header(&parsed, &source, &cfg, &def, BoxTypeRole::Result).unwrap();
++    assert!(matches!(site.pointee(), BoxPointeeSyntax::Unit));
++}

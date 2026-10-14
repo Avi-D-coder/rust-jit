@@ -1,0 +1,4625 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/rust-lang/rust",
+  "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "license": "MIT OR Apache-2.0",
+  "scope": "Selected unchanged official UI cases; no complete-suite or execution claim",
+  "files": [
+    {
+      "path": "COPYRIGHT",
+      "git_blob": "4dad74f234eaaaa3c311ca031216e16fc9c4e940",
+      "sha256": "172020dbfd5b53a226dfde77616190a48dcff519b0bc0e6deb91a8450782c4af",
+      "bytes": 1571
+    },
+    {
+      "path": "LICENSE-APACHE",
+      "git_blob": "1b5ec8b78e237b5c3b3d812a7c0a6589d0f7161d",
+      "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "bytes": 9723
+    },
+    {
+      "path": "LICENSE-MIT",
+      "git_blob": "a2070c4be7acd5316f8d0357ca3c12419a2f3c62",
+      "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "bytes": 1068
+    },
+    {
+      "path": "tests/auxiliary/minicore.rs",
+      "git_blob": "e7e924f9ebc08eb89da011442440e058efb0c201",
+      "sha256": "87ffcc2c7c3b08fdd96d7fd8f6b104e81aa4d87b6c8d142dc1f9e786988cb406",
+      "bytes": 16391
+    },
+    {
+      "path": "tests/mir-opt/graphviz.main.built.after.dot",
+      "git_blob": "8d1da7f1b9651c5224281abf544534966c29f886",
+      "sha256": "aa5424bb9aca0db954b2b3b6b16d27ce2c7b8cbaf636ead41ea18446da726183",
+      "bytes": 454
+    },
+    {
+      "path": "tests/mir-opt/graphviz.rs",
+      "git_blob": "2537dcab0d3a8370aa2737460d86a078fa8dfbb1",
+      "sha256": "f114f739b1018aa9671710cca865478cb88b527f3ef578f0f10fc59786076763",
+      "bytes": 139
+    },
+    {
+      "path": "tests/run-make/test-harness/rmake.rs",
+      "git_blob": "30b3d00f4d114feadd91b291b4f88bd5eca8ebe0",
+      "sha256": "6977ea7f9b400b0ac5783a4eafb5640d38eff3de16643950d2d1dd06506ee196",
+      "bytes": 1152
+    },
+    {
+      "path": "tests/run-make/test-harness/test-ignore-cfg.rs",
+      "git_blob": "c6bd7680bd5c3594099a45019c71f31fd8a3d4d9",
+      "sha256": "91de0e0f5778b7bb3b2fe70f3648c24203a2b487ffcc53ac4b2cfde8c78a50b2",
+      "bytes": 126
+    },
+    {
+      "path": "tests/ui/abi/debug.generic.stderr",
+      "git_blob": "fd72327d42fd7afe10056c34173d72a69807c12e",
+      "sha256": "30d86cb08438df06af044864972776185cbf729374d9a07057774584d9d6f3e4",
+      "bytes": 36807
+    },
+    {
+      "path": "tests/ui/abi/debug.loongarch64.stderr",
+      "git_blob": "15d76f6e32078da49f2d229750d38532afe25d6f",
+      "sha256": "6e459cb8d1493a441f5dfda76de284f23e21f74ab84e6db3da4ae73e982510ec",
+      "bytes": 36807
+    },
+    {
+      "path": "tests/ui/abi/debug.riscv64.stderr",
+      "git_blob": "15d76f6e32078da49f2d229750d38532afe25d6f",
+      "sha256": "6e459cb8d1493a441f5dfda76de284f23e21f74ab84e6db3da4ae73e982510ec",
+      "bytes": 36807
+    },
+    {
+      "path": "tests/ui/abi/debug.rs",
+      "git_blob": "8b897492e7865948ef4cd00ae255875b3ac4cb7e",
+      "sha256": "cf27dd157476e5d5662f410f1d0f3c3a9b985a71b5ad6f00db7197179c9626ec",
+      "bytes": 2785
+    },
+    {
+      "path": "tests/ui/array-slice-vec/array_const_index-1.rs",
+      "git_blob": "4adbd157ed0c62d05f3eb7673754fac2089cdd5d",
+      "sha256": "c09c39f4a9252426b03750e5d7d28b5b0c1e63b8ef91889ba4451b82adff1ffc",
+      "bytes": 142
+    },
+    {
+      "path": "tests/ui/array-slice-vec/array_const_index-1.stderr",
+      "git_blob": "68b02673b0190ab4fc8893fffcddc655ced73465",
+      "sha256": "0338015ebc8075496350e164818f83c6f8c4060e389c99f4af17dfad5bf90867",
+      "bytes": 305
+    },
+    {
+      "path": "tests/ui/array-slice-vec/eval-empty-array-expr.rs",
+      "git_blob": "92e1c689436ab5ea2b3909da3846bc7a2aa06edc",
+      "sha256": "a74a341bea40ce66407ba973d054645ffcb656e0333955f40fde0bebdec2d90a",
+      "bytes": 283
+    },
+    {
+      "path": "tests/ui/array-slice-vec/fixed-size-arrays-zero-size-types-8898.rs",
+      "git_blob": "fe627b00f53bc0a8e807dcd3ae418bc4b9f8c6f8",
+      "sha256": "cbbd99d7962b898d0351376fb05877e3b25d8349037f7f33c8cb595b8055b228",
+      "bytes": 566
+    },
+    {
+      "path": "tests/ui/array-slice-vec/fixed_length_copy.rs",
+      "git_blob": "64f8480f8af3a7c7575ed049fd19d9273fd0574f",
+      "sha256": "243024aa36422b419a3286ee5128bd747b5e35799099d8d941b81fd3069b5073",
+      "bytes": 131
+    },
+    {
+      "path": "tests/ui/array-slice-vec/vec-fixed-length.rs",
+      "git_blob": "70ceb7f85bc5bb1581ffa1e8004db1f7bb2b5909",
+      "sha256": "73ea6104219b1d59e9c6b54faf56220427fa7c7392b2a60677e64e0a6c873819",
+      "bytes": 430
+    },
+    {
+      "path": "tests/ui/attributes/attr_unknown_custom_attr.rs",
+      "git_blob": "cdbe48a636fca5294528468e6a79a1c27a434302",
+      "sha256": "482a2d97b4ea90acbd878d0dac7c10e37be9c88c9c2b62221ea0cbb617ac6ea0",
+      "bytes": 316
+    },
+    {
+      "path": "tests/ui/attributes/attr_unknown_custom_attr.stderr",
+      "git_blob": "76c3b884a5d4c4922f82bda662b23d75ca8cc437",
+      "sha256": "2bf448df25bd3d0b9f22a63535189b290db8388c031ab4d6f63d3f0954921199",
+      "bytes": 421
+    },
+    {
+      "path": "tests/ui/attributes/issue-115264-expr-field.rs",
+      "git_blob": "8adb68deb5b4f0b0fc3d0ff9a7022a4585c272e1",
+      "sha256": "4d8ec8cf0b846f071e746a334c23f0da1c83a69ea04ad7d14e0a8fd5edcd32b5",
+      "bytes": 283
+    },
+    {
+      "path": "tests/ui/attributes/malformed-attrs.rs",
+      "git_blob": "9156f86b880660f2f651688febe0d166eae45b83",
+      "sha256": "dc00fffaa8cd2d7c135724e4d3159e445f54a0c53528bd819bf38b8f444b1dfb",
+      "bytes": 5309
+    },
+    {
+      "path": "tests/ui/attributes/malformed-attrs.stderr",
+      "git_blob": "adbf66fa48507437dc6dbd31a03acbe8e6438b28",
+      "sha256": "23115207548d3ed4b467bdd265625a8c1cd2e1081dbc1fb4da4b86d381aac4a3",
+      "bytes": 30585
+    },
+    {
+      "path": "tests/ui/attributes/unknown-attr.rs",
+      "git_blob": "70fef04e95c670f83db5476e3aaab7304ed76bad",
+      "sha256": "d1f558b833e356ea8d6396527d4f673410ce65820b30be986e8ee8ddbc2207fc",
+      "bytes": 331
+    },
+    {
+      "path": "tests/ui/attributes/unknown-attr.stderr",
+      "git_blob": "85c227dc83aa6a2346674c9d598f42b7138a4579",
+      "sha256": "07dc223540f72e2633865e5ad3e1288851d013cdec44a40b26c21603156e5dea",
+      "bytes": 430
+    },
+    {
+      "path": "tests/ui/binding/expr-match-panic.rs",
+      "git_blob": "b3adc80cb8e19a6bbbefce62f28a0de03a656b4f",
+      "sha256": "15f74527aa06afe722c88a5b5234a43ba032c7e229b725f5b9e756e845d803da",
+      "bytes": 290
+    },
+    {
+      "path": "tests/ui/binding/expr-match.rs",
+      "git_blob": "ce502ae149033f2639e52eb64e4eedbd96e8ce0a",
+      "sha256": "7039599185a12922c5bd6899210a271c295cf3002a9cd3a7756b5cb9457cdfdf",
+      "bytes": 916
+    },
+    {
+      "path": "tests/ui/binding/let-destruct-ref.rs",
+      "git_blob": "824ac6f5f02428e3b444ebdceb00966824da84e7",
+      "sha256": "d6d1eef36c6f86be1a007e4f971d7445b61222cfb77116e8dc8c8f49c33bdf31",
+      "bytes": 95
+    },
+    {
+      "path": "tests/ui/binding/match-naked-record-expr.rs",
+      "git_blob": "57697a73ca4b2e53b4fe005e480918a70d6dbb48",
+      "sha256": "6e8a1549b819d07ce8f37dae44847b798bce0bd216e973c1455d74ed2a4b746d",
+      "bytes": 123
+    },
+    {
+      "path": "tests/ui/binding/match-pattern-lit.rs",
+      "git_blob": "2c453594905cfe818c85e088a2483e2ade709423",
+      "sha256": "961036f37af7935d6f731a2a056f38bdda640cf9b242b34182aa8ec0980e49f2",
+      "bytes": 293
+    },
+    {
+      "path": "tests/ui/borrowck/assign-imm-local-twice.fixed",
+      "git_blob": "dca994141bb8b4108d791dee36538207000646e2",
+      "sha256": "199f1da59944f5a3b61535e86980efbef5bdd44c7964b0ac4e451619df1b23fa",
+      "bytes": 713
+    },
+    {
+      "path": "tests/ui/borrowck/assign-imm-local-twice.rs",
+      "git_blob": "43437fa69fa84170c6c5d853514914d85a2a099d",
+      "sha256": "0e2787f575c3e01f8eab556388bdfb215619fe04297beb6b5e1a9696b0295382",
+      "bytes": 709
+    },
+    {
+      "path": "tests/ui/borrowck/assign-imm-local-twice.stderr",
+      "git_blob": "0a2138d0b9625de2996abc9932d0b248336124cd",
+      "sha256": "1124ba7e663a8878cb79c700a9310a780a737efbd37aba00c1f39eaf7d49f3b2",
+      "bytes": 446
+    },
+    {
+      "path": "tests/ui/borrowck/assignment-to-immutable-ref.rs",
+      "git_blob": "c04c26f6ea2e7aaf7c6c2774602eafe93031363b",
+      "sha256": "36a018c63f11a562d2166850e8417e0c3491e70ee34f15b9aa32b8242c56c624",
+      "bytes": 573
+    },
+    {
+      "path": "tests/ui/borrowck/assignment-to-immutable-ref.stderr",
+      "git_blob": "ec1be1acce0aa8975aa9681454fe54e63339aec7",
+      "sha256": "4e505755b560e35f55de9bffdcd1d776285ae5fae585d764c97879d5c0ab93a7",
+      "bytes": 775
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-assign-comp.rs",
+      "git_blob": "98bb2d85ad7c113bf88d017437e98d3d2b2b3106",
+      "sha256": "837f5dd5fcd17e159b3457683e8878e8e8e6e09f116730e74de910d20877dc57",
+      "bytes": 1004
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-assign-comp.stderr",
+      "git_blob": "d35f2331a76f4ed06b2c3593a4f1bce997962e32",
+      "sha256": "54468d4ddfc94fc92582de20871c78291e0e93b5f0b671ecc1a4ad76d86dcbe8",
+      "bytes": 1118
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-describe-field-generic-param-owned-box.rs",
+      "git_blob": "95a34f173fbd3bd9c5f3c8fddfa515aaf5e1b039",
+      "sha256": "974f09b2141358b4d72af57c6e6f6a7bda75f694511eec5c050b9d52f3e69f05",
+      "bytes": 1145
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-describe-field-generic-param-owned-box.stderr",
+      "git_blob": "00fc198bac2317625f830f3101c9ce6779e92bbd",
+      "sha256": "e979c4c2b97762dda4d94183d135fe1c6b3dfede3e4b305ed0ad90738c2266ff",
+      "bytes": 480
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-fixed-length-vecs.rs",
+      "git_blob": "3441ae0e3bba9d7ab5854f17c0a58c95adffda0d",
+      "sha256": "9b7ea2cb1160a50c8be656196daca50eab0b63205e0ebdf4e4876843b02e1848",
+      "bytes": 93
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-local-borrow-outlives-fn.rs",
+      "git_blob": "b6eebd4e3256fbc25a6648138ed1fd14ac5bbd2b",
+      "sha256": "299998d820679b05f7ecce5a108b6cd0eb4fea310b380bea6c83e7626a9f7501",
+      "bytes": 144
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-local-borrow-outlives-fn.stderr",
+      "git_blob": "9c26bc353ab7d4533473dba7cac4905f32c6f0b1",
+      "sha256": "3ce00ec3ead2ece962e16b68106fe76c2220bd5a51fadffe0144bd5cdccfd4c8",
+      "bytes": 313
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-move-mut-base-ptr.rs",
+      "git_blob": "fa2d5531b139336b2485139759cda2d721ac9a97",
+      "sha256": "698a1806ffbe9197a868eb8126c3b24725d6fc7adee3ec606b1de75240cde84e",
+      "bytes": 417
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-move-mut-base-ptr.stderr",
+      "git_blob": "4b9351b64a03814d1402605e9cfc0e710e0bd713",
+      "sha256": "0e22c23bffdef7035fda310c68057c61054aadaac1bdb6eac266fc86862ebdc7",
+      "bytes": 737
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-move-out-of-struct-with-dtor.fixed",
+      "git_blob": "02c455f01de7282f2d97e355ffffb7f43948aa72",
+      "sha256": "6e9590c39cf69dbf83b05da5959a1a5ba30500ec5d2bb78371dbaa331f9175ab",
+      "bytes": 417
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-move-out-of-struct-with-dtor.rs",
+      "git_blob": "6b20b6e465abecd2cb83b3149e0b76a76e6cc466",
+      "sha256": "19abbf503abb7e0497e8d11494028aa4c9c6bd7f44172ebfb0e7e17a374ebe7b",
+      "bytes": 405
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-move-out-of-struct-with-dtor.stderr",
+      "git_blob": "fa77eddb49651fbde149c010fc7ca79f8235c3eb",
+      "sha256": "d5d1a9df4eb933fedf333db4a2a6d582b147a3b8cc1c7e78c6c70713203af6cc",
+      "bytes": 1666
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-mut-addr-of-imm-var.rs",
+      "git_blob": "a79a239cbe004a48a3e9b54ccfd15b7805d32f53",
+      "sha256": "25b1a2cbbcdf2ca5df6d82499421a5fa0c575ccfde63e429f49a88b16040f629",
+      "bytes": 128
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-mut-addr-of-imm-var.stderr",
+      "git_blob": "84f35dc2249ecb1719bf8fc2bc0290d1be96c669",
+      "sha256": "37c92814c0bcb52b6162cbb73f5b4feae36895f787fb02b04db969afedf0c936",
+      "bytes": 439
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-partial-reinit-4.rs",
+      "git_blob": "a43a1936678ff7288ec55faa73ce4c00a00a41ab",
+      "sha256": "dff39184d4eb291b549e81d4ed028380f3d0d749cc589df23ec730eb64d89d71",
+      "bytes": 296
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-partial-reinit-4.stderr",
+      "git_blob": "4833e689c19b38f4dd8cbe5cb40d98654c581b13",
+      "sha256": "0c0ee6f9b3da20dca9f02018b5a1a137d70a3f92f9f965e8f63123d48be0a4ef",
+      "bytes": 573
+    },
+    {
+      "path": "tests/ui/borrowck/cannot-assign-borrowed-ref-in-slice.rs",
+      "git_blob": "97d2f690b6245688289d9337e08e5bdb07a9bb4d",
+      "sha256": "81b47ca872ed406493b0c86cde81140fce0c2964563c3b5f21748bc88cb9d5f1",
+      "bytes": 486
+    },
+    {
+      "path": "tests/ui/borrowck/cannot-assign-borrowed-ref-in-slice.stderr",
+      "git_blob": "c4371d9d9cc901031f25fc42647a2791d5c0ac08",
+      "sha256": "e6f02b83a9169eb78eb833bf42bd7a98dc943d4b285f88ccd08dccc6235f4024",
+      "bytes": 513
+    },
+    {
+      "path": "tests/ui/borrowck/issue-46471.rs",
+      "git_blob": "8922005d2f82c6c154efb001f187e65519618cf0",
+      "sha256": "5811f771dabaa890f00f3573649a4597cf53d7d8036b1a10741080f32fee3cb6",
+      "bytes": 135
+    },
+    {
+      "path": "tests/ui/borrowck/issue-46471.stderr",
+      "git_blob": "17e4b5e8dcfb281c6f08758e8ab14f3e54f43023",
+      "sha256": "b774995bf0fdda708d71ec22ed908dec9ac8291da76a2048ebe818b4831fb83a",
+      "bytes": 287
+    },
+    {
+      "path": "tests/ui/borrowck/issue-58776-borrowck-scans-children.rs",
+      "git_blob": "0b2372d1274ceabd037bc547b662f24ca7e438ad",
+      "sha256": "34a96f77c11c5ab06b19dc4dd795dee64cd41cbec120182050b95ff821942daa",
+      "bytes": 239
+    },
+    {
+      "path": "tests/ui/borrowck/issue-58776-borrowck-scans-children.stderr",
+      "git_blob": "630d07d652b30722c7a6130bf8550444c1bc8811",
+      "sha256": "e0411326508ecfc77f7811c65ba95eb811cb18e33ae722778a8e08ea1f87a5be",
+      "bytes": 669
+    },
+    {
+      "path": "tests/ui/borrowck/issue-62007-assign-field.rs",
+      "bytes": 600,
+      "sha256": "f4eabcf629ae74def3f79f564b870edd5c237fa196ab20193eabe4908c57f561",
+      "git_blob": "d5d6e67cac6042c073d7b8d85aeaeda99876cc17"
+    },
+    {
+      "path": "tests/ui/borrowck/mut-borrow-outside-loop.rs",
+      "git_blob": "3cc362def38f3dab5ef200f64aba4db230ba8184",
+      "sha256": "b01fe8a6ff96700e63c4859c3ea67e8b01da1748a506aea1109b3fc629dc26b1",
+      "bytes": 536
+    },
+    {
+      "path": "tests/ui/borrowck/mut-borrow-outside-loop.stderr",
+      "git_blob": "4fcb693f1bf1df7bcf9b3865c3be2c1641b288a4",
+      "sha256": "342ef814c112dfbec712383144af8de20839c15677f4d877c557fafce056325b",
+      "bytes": 1008
+    },
+    {
+      "path": "tests/ui/borrowck/rvalue-borrow-scope-error.rs",
+      "git_blob": "5bf96e800d38efcd6bffb5e90eda6832cd46bbfc",
+      "sha256": "1eb55316a0bdd9f665cad97451f8994066fb42f687328eeb7adc963e0ffc8cf2",
+      "bytes": 1075
+    },
+    {
+      "path": "tests/ui/borrowck/rvalue-borrow-scope-error.stderr",
+      "git_blob": "bedcfce4541115cf81fdbbb0b71547ade56cc5a1",
+      "sha256": "f616700ebe3451d03599bc00951eea3cca86c47e670e6b1716a6610ee8777771",
+      "bytes": 4385
+    },
+    {
+      "path": "tests/ui/borrowck/tuple-field-move-with-drop-borrow.rs",
+      "git_blob": "4b94c32bdd3aa38394087d162465786e5052e0da",
+      "sha256": "b849c574e130f75a63df06d61e9b2046f49798e7091afc7c7caa9099afea32ef",
+      "bytes": 227
+    },
+    {
+      "path": "tests/ui/cast/cast-does-fallback.rs",
+      "git_blob": "553bf51a53d8c1f0cb9e0514b4378242126965de",
+      "sha256": "c13a3593226ec2f5ded724a786da0f0ee4827a34aa9eb8bc69e0d5fdf7aee7b7",
+      "bytes": 261
+    },
+    {
+      "path": "tests/ui/cast/cast-not-treated-as-lvalue.rs",
+      "git_blob": "42d74530ded615407c7cccfc14f8d02d0291c978",
+      "sha256": "0a3e55793d25ca30542bd120e0201b30b4c0f80bd68aa63fea91332ee28ee88b",
+      "bytes": 472
+    },
+    {
+      "path": "tests/ui/cast/cast-rfc0401.rs",
+      "git_blob": "cb03065f0a69073dee002774fa1b584036e1d27c",
+      "sha256": "4379535335f3db9d2d0be292686e06fbbb334622e4d51eef75de8b130e8a9ca7",
+      "bytes": 4724
+    },
+    {
+      "path": "tests/ui/cast/cast-to-char-compare.rs",
+      "git_blob": "159b8ee04e028bffb8d493dc12fd8e5ee1f3ae03",
+      "sha256": "07571eefa6d49e66067331e68600abac871995c0f4480e8484267658a34be23f",
+      "bytes": 203
+    },
+    {
+      "path": "tests/ui/cast/cast.rs",
+      "git_blob": "b9f21792816d6c3913168f80c0a78d7d6b9883eb",
+      "sha256": "f202f1e05a7802e17c80ba4fb57d99fb7e6ca3d9384e059f5897c7dcddf87753",
+      "bytes": 527
+    },
+    {
+      "path": "tests/ui/cast/coercion-as-explicit-cast.rs",
+      "git_blob": "b99f5d93478ccbf88801e4d4923d34f6861b5681",
+      "sha256": "ec0c89e393b667282f3a22071d73489996b5ff3b842f98ed3c2f5e8e094856ad",
+      "bytes": 1407
+    },
+    {
+      "path": "tests/ui/cast/coercion-as-explicit-cast.stderr",
+      "git_blob": "9553ddd6567144732e601d1646c2cf7cf595bcb0",
+      "sha256": "0dcc71841b3a58f49aa2b79e77526cd411c1fb408447dfa4d972a836efd58111",
+      "bytes": 288
+    },
+    {
+      "path": "tests/ui/cast/issue-10991.rs",
+      "git_blob": "c36829fdf5b85ecbe404b5aac2ba9bec74ebdb80",
+      "sha256": "2f29b22588cab5a29a7e58f0604d5617ca69d3c582220f0734ad9c5ede31d723",
+      "bytes": 106
+    },
+    {
+      "path": "tests/ui/cast/issue-10991.stderr",
+      "git_blob": "52afc8343e1ebd82e9aa0cf1030bbd8a679c19f4",
+      "sha256": "c268e4afe150cf5c861e96e3cb8df0c90b1a0e61a6fd63b0e139ac44d0edefc6",
+      "bytes": 370
+    },
+    {
+      "path": "tests/ui/cast/u8-to-char-cast-9918.rs",
+      "git_blob": "2b8be1f0fc9b9dd92f401e4037ec43883751468c",
+      "sha256": "995ddb3bc08567a146f1ac7fb5dcdbfd32b4306ccfb6af7df268327bdee13388",
+      "bytes": 122
+    },
+    {
+      "path": "tests/ui/cfg/cfg-false-use-item.rs",
+      "git_blob": "35b40e3e6a0db4d93e9bd8744f5046d9602710fc",
+      "sha256": "3a8298885dbd1727367d9f36b0cfd3751dd28cb7a5242ae9f3bf34bfdd4e6d1b",
+      "bytes": 316
+    },
+    {
+      "path": "tests/ui/cfg/cfg_stmt_expr.rs",
+      "git_blob": "ef74a0b75df174a602d108d63d531577c895fe98",
+      "sha256": "e9bd4d57bf63e4e1792e21fbff284b6bbcee90607700904fd4ac076541e5dc9a",
+      "bytes": 1747
+    },
+    {
+      "path": "tests/ui/codegen/assign-expr-unit-type.rs",
+      "git_blob": "b4268b5e09a3ca7c5b1299d90dc7d34743869c69",
+      "sha256": "5ab90d8eb254ffdc0e19a6a9bfa38fed820ea415d676433ffa8228322a9eaa11",
+      "bytes": 976
+    },
+    {
+      "path": "tests/ui/coercion/coerce-unsize-subtype.rs",
+      "git_blob": "a3e762e4c5fa1e3d4d0cb22d74af2e35524ac79f",
+      "sha256": "36dc816b3a4b8009cd3a0c3779e740d78bcdc31797ec1a7d2ee99af3b56a67df",
+      "bytes": 1198
+    },
+    {
+      "path": "tests/ui/const-generics/defaults/self-referential.rs",
+      "git_blob": "14a870dc39bf6a3ca2e1754aab5aaff9ee99dbe3",
+      "sha256": "de2adc599c76b0a1826ba506097b8a309a9f1de147d47c1f7adce06fdb95ac52",
+      "bytes": 176
+    },
+    {
+      "path": "tests/ui/const-generics/defaults/self-referential.stderr",
+      "git_blob": "be67ea3f5039ba4f6dd5c29907efba4283f84b56",
+      "sha256": "e9ea1f8b8e4fa89a026ec9fbd6a8dde843691a17bfd8a6071a42b5d39b056036",
+      "bytes": 410
+    },
+    {
+      "path": "tests/ui/const-generics/ensure_is_evaluatable.rs",
+      "git_blob": "1e8d8c3d3559bc3d0675054f3b1685f8eec6cbac",
+      "sha256": "fe6ed78a850df08b06e04397251c4bbe3ff2eb1ebec4b5552e035b8190a75b70",
+      "bytes": 296
+    },
+    {
+      "path": "tests/ui/const-generics/ensure_is_evaluatable.stderr",
+      "git_blob": "599add4af15963cb78ff1ba61548d004547f868c",
+      "sha256": "f99f9adb760c504f3909bb4edd3f29722d9212456810ed5ac17ba854a9d09974",
+      "bytes": 479
+    },
+    {
+      "path": "tests/ui/const-generics/issues/issue-70180-1-stalled_on.rs",
+      "git_blob": "dd5e94df665e59d9e7c0294b7825182dd8750ea4",
+      "sha256": "80341a0cfbb0acb362ca172ca39262b29e5a96325a2f9358158d72a835bd1fb9",
+      "bytes": 542
+    },
+    {
+      "path": "tests/ui/consts/arithmetic-expr-in-array-len.rs",
+      "git_blob": "758833b485bd32db19403d8bbb9dcfe80c275f09",
+      "sha256": "506460b90e751d37778ce27bda5338743409050507e740eff545b9776267c69e",
+      "bytes": 128
+    },
+    {
+      "path": "tests/ui/consts/bool-comparison-in-const-array-len.rs",
+      "git_blob": "028ec16a21c660e65f6a1f52aa2809b0a16e6c4a",
+      "sha256": "285de044f854607876aeb72df9b6dd23f9b4de563844cdc5a9d8e64b187c1f25",
+      "bytes": 171
+    },
+    {
+      "path": "tests/ui/consts/const-as-fn.rs",
+      "git_blob": "388f907f8d2c36acbef578fe7b0ba983c596f2f1",
+      "sha256": "e425b4b04cbecdd213045fbce0c7cf2d372019522d10bbe627ef1e159818cf8d",
+      "bytes": 91
+    },
+    {
+      "path": "tests/ui/consts/const-as-fn.stderr",
+      "git_blob": "8d30321e3734564c7177a3e88212ec4bdd3b51f4",
+      "sha256": "8efffd7b7463d0c7f919276420a26186d0295b25a673a6a4ac8b4e7cd814696a",
+      "bytes": 349
+    },
+    {
+      "path": "tests/ui/consts/const-contents.rs",
+      "git_blob": "d486325796fa370cb1f34dd80012a17de072ca17",
+      "sha256": "85b3d454ed95d4e848ac5c91decf254b53182e0b06658b12538f4ef246b4804c",
+      "bytes": 403
+    },
+    {
+      "path": "tests/ui/consts/const-struct.rs",
+      "git_blob": "d11f4ea77c474012086a013dff6c81095a450418",
+      "sha256": "ea2ef00a878f74349c68eb5db9f3026befe26b02bac48fbc3eadaf24dc58978b",
+      "bytes": 762
+    },
+    {
+      "path": "tests/ui/consts/control-flow/basics.rs",
+      "git_blob": "c4e32e246f0d17f364df1b0640ba1b5ee419e3d3",
+      "sha256": "775b613d035b23f47c54406cc68034384ffb9f1d121acc7f5a1f85b4ff404655",
+      "bytes": 1371
+    },
+    {
+      "path": "tests/ui/consts/control-flow/dead_branches_dont_eval.rs",
+      "git_blob": "374349732f9ef6bc0286139e61b65706967fb12d",
+      "sha256": "219115a0ce3a49aa5c7d1ce5b05c8569bbdd081aafa988fb797d5c6b3455e13e",
+      "bytes": 866
+    },
+    {
+      "path": "tests/ui/consts/issue-19244.rs",
+      "git_blob": "02a109cc65cf9863ab88623acb2ff982959bba5d",
+      "sha256": "823455a81007696fc60ddb0a14f0ebdcc12af84e32705b8c008eba9a04ccd76e",
+      "bytes": 1020
+    },
+    {
+      "path": "tests/ui/consts/issue-66693-panic-in-array-len.rs",
+      "git_blob": "c775b491a80946e43be950a1886ddb72eb6f55f5",
+      "sha256": "eaf37440516165a8c5242c0fa98c6522479ece7668c351c873104cba822f9c7c",
+      "bytes": 612
+    },
+    {
+      "path": "tests/ui/consts/issue-66693-panic-in-array-len.stderr",
+      "git_blob": "5dfd977a3d39b692fba54ce1a190e1a659a56c8c",
+      "sha256": "ef83a2844a7f70a822c65cc92a169e55c4e94e85291e991121e294bbf1094d88",
+      "bytes": 537
+    },
+    {
+      "path": "tests/ui/consts/qualif-indirect-mutation-pass.rs",
+      "git_blob": "de417216a494335e0c9bc8ee68f45b6ce091f6d6",
+      "sha256": "740ad6577b9213ce8005d3518239c96f0ac12c971f7676a153dd302c4a4bcb8a",
+      "bytes": 545
+    },
+    {
+      "path": "tests/ui/consts/recursive-const-stack-overflow.rs",
+      "git_blob": "aee95a685b20ad534125f16a8f595cbd670c506b",
+      "sha256": "0a3c517399b319806f8c7174787834fa19ae861549e55e211713bfb116d4063d",
+      "bytes": 394
+    },
+    {
+      "path": "tests/ui/consts/recursive-const-stack-overflow.stderr",
+      "git_blob": "64351428a592fcf1e1ba3a6f6925e2ce79014f08",
+      "sha256": "cfca4090000ca919257a1c566f1979f4e360c2ff3be0b16dcf953aa3fadc7d86",
+      "bytes": 1268
+    },
+    {
+      "path": "tests/ui/cross-crate/auxiliary/aux-9906.rs",
+      "git_blob": "8a3eea790a26ace46469d43c3bc5d30c587eeb09",
+      "sha256": "6ffcbf72c2b4ed845658e118209b5d146641dcf50d3c55f780eacd82af7471bf",
+      "bytes": 239
+    },
+    {
+      "path": "tests/ui/cross-crate/auxiliary/inline-fn-with-trait-method-as-value.rs",
+      "git_blob": "dd90b4a082331c8a365ab67226e57398dbee163e",
+      "sha256": "abc5f3f8e3b991022f2d746ca0380473a560dd1bd3655b96294bc7ab051739a0",
+      "bytes": 291
+    },
+    {
+      "path": "tests/ui/cross-crate/inline-fn-with-trait-method-as-value.rs",
+      "git_blob": "7c68f293524939057378680f5890a038e891b1b3",
+      "sha256": "80f870ade0ae466794d24325bbcabce14f3d097cee0eae36335a5b1a364f25a6",
+      "bytes": 440
+    },
+    {
+      "path": "tests/ui/cross-crate/reexported-structs-impls-link-error-9906.rs",
+      "git_blob": "b49951bd1f9840ab5e5f15490021805e0101c1da",
+      "sha256": "2b09dfc0f6ffebc9665188c0c8a7dde88ba6b1a638643fc7f286fe9037c0542f",
+      "bytes": 191
+    },
+    {
+      "path": "tests/ui/derives/derive-on-trait-item-or-impl-item.rs",
+      "git_blob": "7e579ec22dd42762b36768d7a2aa463a3d9c25e9",
+      "sha256": "aad137c27b20e5f0683ff32294d5b252af1537aa5fa43e108a93f3e65c14a456",
+      "bytes": 290
+    },
+    {
+      "path": "tests/ui/derives/derive-on-trait-item-or-impl-item.stderr",
+      "git_blob": "1fd97bdd5ec62f4f24df1a1d0bec0ee4fbe75891",
+      "sha256": "f7d0f686858344df81b5f522015828a7d24e7647c457177fff6f0a065153b8bf",
+      "bytes": 695
+    },
+    {
+      "path": "tests/ui/derives/deriving-meta-empty-trait-list.rs",
+      "git_blob": "37265c8d1a89e356e20be39d7d61aeff4a6e8682",
+      "sha256": "e30af247f858d456e727fe9b42865f69c6c8718604993f4ead1f1ae7a12d64cb",
+      "bytes": 83
+    },
+    {
+      "path": "tests/ui/derives/deriving-non-type.rs",
+      "git_blob": "9afffa90085908d0d6857bb44efbb4bb20a0f754",
+      "sha256": "d5bdbf4be58a2f77b077d9d508c34e2a470a80e7019986d33645a6b9dab0efb0",
+      "bytes": 1041
+    },
+    {
+      "path": "tests/ui/derives/deriving-non-type.stderr",
+      "git_blob": "ef7ef54d1ae6b494d48f0baae983cc38fdfe40a6",
+      "sha256": "1cee55b52b38c1a9b1350c195085b2845bd9b29b07f381952be829ef489b589b",
+      "bytes": 2513
+    },
+    {
+      "path": "tests/ui/destructuring-assignment/drop-order.rs",
+      "git_blob": "ff1263562274da77e91616ddd190de33d7244f25",
+      "sha256": "b87d02015dd8c35e08b85041363fbd5bad0eaf84152aeffe8c8a84510117af14",
+      "bytes": 1153
+    },
+    {
+      "path": "tests/ui/drop/auxiliary/edition-2021-macros.rs",
+      "git_blob": "8a6444f8614d4c8b3c0b84783a706aa88d1809fa",
+      "sha256": "81b68849de6f2d0acc8e06f909f78e5dc538400fdfda3c1304a0afc6c12f280a",
+      "bytes": 116
+    },
+    {
+      "path": "tests/ui/drop/auxiliary/edition-2024-macros.rs",
+      "git_blob": "44befbc98438fb7bdfc06a733c697c8992a3cc6b",
+      "sha256": "bc055352f1ebd20cd9246d3585f0e4537d80c25e731b9c70fbc1909dbf4371de",
+      "bytes": 116
+    },
+    {
+      "path": "tests/ui/drop/destructor-run-for-let-ignore-6892.rs",
+      "git_blob": "643eac466845a00ad094fa761dbc1f9b7b14e39b",
+      "sha256": "d88e08207a79ecf4cc212d037d5458e35f59050304fce535a4e6646efdf26b65",
+      "bytes": 1557
+    },
+    {
+      "path": "tests/ui/drop/dynamic-drop.rs",
+      "git_blob": "408604fe3e6a23a7fc407c461d297e1d14687e6a",
+      "sha256": "917f5c6beaea0888b9ed7b70f276b74570c28e785d2e44aa854fe617463de251",
+      "bytes": 14721
+    },
+    {
+      "path": "tests/ui/drop/field-replace-in-struct-with-drop.rs",
+      "git_blob": "8c65a4b3ad1e0c044314044fa2747851c091f296",
+      "sha256": "2b3faa35858698e53e184ad4f59bf1ad5827194753451382986d8d2dbba906fc",
+      "bytes": 1345
+    },
+    {
+      "path": "tests/ui/drop/nested-return-drop-order.rs",
+      "git_blob": "67ab52e6250c8409b05850706d3b0ce29c66c5e2",
+      "sha256": "ca17709857abe9b238cbb30b8b6821ffd83b928028910c1a78c83ed034deb6cc",
+      "bytes": 1601
+    },
+    {
+      "path": "tests/ui/drop/or-pattern-drop-order.rs",
+      "git_blob": "c7913be032eab2fdbbe47026a21655eb283a054e",
+      "sha256": "82e4748da991120a15909e14ec275fc6efa4eb16038f74ae380c2915e7d5a064",
+      "bytes": 5415
+    },
+    {
+      "path": "tests/ui/drop/or-pattern-drop-order.stderr",
+      "git_blob": "3d1aa69fb91a802d46a5d6548af76551b43f3e94",
+      "sha256": "62c67032288bd9f52757edcb2a0376265db6f71a30362dd44ede35ccf3baff8a",
+      "bytes": 1102
+    },
+    {
+      "path": "tests/ui/drop/struct-field-drop-order.rs",
+      "git_blob": "80e3ea616a5513ee9db1c4bafe551e9edd5a9d67",
+      "sha256": "780bcf4cb558e244db2d6ba1b1ec2f53af3c869ba6e2676dc103c5159e3c0b27",
+      "bytes": 1430
+    },
+    {
+      "path": "tests/ui/drop/tail-expr-drop-order.rs",
+      "git_blob": "a6807b16b5066a4bca1f110fe0ad0f87de914f0c",
+      "sha256": "744c56809a3a9c0163b83e45328b84058054cf05528a36296539f32b9d5d1d35",
+      "bytes": 2491
+    },
+    {
+      "path": "tests/ui/dyn-compatibility/assoc_type_bounds2.rs",
+      "git_blob": "2b35016d774ce3feba78f39c21573f3eca2c0e3c",
+      "sha256": "4c173ca9f9f0e2e58c0b1c97e73a672c2ee4ac7a2a700ae56398650ff043d1fe",
+      "bytes": 331
+    },
+    {
+      "path": "tests/ui/dyn-compatibility/assoc_type_bounds2.stderr",
+      "git_blob": "19d8576c7ada261a893061869ff276346358a243",
+      "sha256": "ffaa582927db7c037ac12dd1f98b71837c57bcf7ad9b406264ecd018516d8152",
+      "bytes": 889
+    },
+    {
+      "path": "tests/ui/editions/auxiliary/edition-kw-macro-2015.rs",
+      "git_blob": "913cac39d5e5978b672f030a03df517cb3fd3578",
+      "sha256": "d7f9377735d95f9c3d5fb0aeed7c10910b1cd3d04c8a77fcf32d87ed5a630f84",
+      "bytes": 486
+    },
+    {
+      "path": "tests/ui/editions/auxiliary/nested_macro_rules_dep_2021.rs",
+      "git_blob": "36d3e712dc0e973004882b279c718f88ac06818e",
+      "sha256": "c5501b0d6cf4ea670b9615d3c306f1f00f1da695eaacf759cb99abfa3e98a14b",
+      "bytes": 394
+    },
+    {
+      "path": "tests/ui/editions/auxiliary/nested_macro_rules_dep_2024.rs",
+      "git_blob": "4012398fe6622860ba27d803e31a598855eb8b79",
+      "sha256": "d75cdae086ce6d5c4d274e11fc4639fb8d51dc71dd043623b9bf65c28d6f6907",
+      "bytes": 394
+    },
+    {
+      "path": "tests/ui/editions/edition-keywords-2015-2015.rs",
+      "git_blob": "083767e2f0247bfc15e0e6fb61353cc9bd3db29b",
+      "sha256": "f0ff7977898e914a2e612b523eb7a5de479a8074a1e6be868918c8a40f132fe3",
+      "bytes": 917
+    },
+    {
+      "path": "tests/ui/editions/edition-keywords-2018-2015.rs",
+      "git_blob": "4bcb501075e34daad6f368fef22abe85fc520293",
+      "sha256": "a9dc2d1cd694b0ecd10a7acf1ecda4234cc0583ae2058aa4bdc27e45b63841e0",
+      "bytes": 947
+    },
+    {
+      "path": "tests/ui/editions/nested-macro-rules-edition.e2021.stderr",
+      "git_blob": "eac80262364baf208cb207f775b3cb34c8f7a20b",
+      "sha256": "ca7390df697001f5d855fd43603981e48c9b1a0e922b57b79625ca39b24bafc6",
+      "bytes": 1070
+    },
+    {
+      "path": "tests/ui/editions/nested-macro-rules-edition.rs",
+      "git_blob": "28d568f77501b2bc123eae072472caa5e10552c3",
+      "sha256": "6261d2f8d69d29d5d8d2c1b96b8298f5eb1cd49bcc8496d6b8efb1df257a5d1c",
+      "bytes": 1662
+    },
+    {
+      "path": "tests/ui/enum-discriminant/issue-61696.rs",
+      "git_blob": "e93fd0e07f61b3198890cc6c60898b778749251f",
+      "sha256": "da27ddbe29652b2a76c45ceb405c0be4c817fe56542ec1a5b871292ca50348a6",
+      "bytes": 3164
+    },
+    {
+      "path": "tests/ui/expr/block-fn.rs",
+      "git_blob": "1d3689eb4f3d431ee605b8002640a0377ada72b9",
+      "sha256": "f34a3cc0fb3fac435085f6ce10e639d75992ec15342c865fe02b8d23e33cff5e",
+      "bytes": 142
+    },
+    {
+      "path": "tests/ui/expr/return-in-block-tuple.rs",
+      "git_blob": "2b3a59f21412fa2e7ff57d977327e0bf215a5d01",
+      "sha256": "db74a5039b2e5fbb5f855630bacce5b0dc7589ce0a90779feb0d59f37177023b",
+      "bytes": 146
+    },
+    {
+      "path": "tests/ui/fn/fn-bad-block-type.rs",
+      "git_blob": "47ddc583c87748c6134ad824baa699ef23273f23",
+      "sha256": "2ab4a4ce8c1a81547b8d848f1a8eaf7b721f79fc8045e6c23706a4b69ed0d1ef",
+      "bytes": 67
+    },
+    {
+      "path": "tests/ui/fn/fn-bad-block-type.stderr",
+      "git_blob": "287caee45821e8c91bf7fcffceb8f988556084a0",
+      "sha256": "4654d2f88cde73682921b958558f8c840514578a3b83d90cbca645c680eb511d",
+      "bytes": 344
+    },
+    {
+      "path": "tests/ui/for-loop-while/issue-69841.rs",
+      "git_blob": "16132ce7c28dafa74db8c7a468560b6ec1d8bd65",
+      "sha256": "b95c8408502b933578270b445a558de0f0f55fa732e1303623aa89fa1c138794",
+      "bytes": 729
+    },
+    {
+      "path": "tests/ui/generic-associated-types/construct_with_other_type.rs",
+      "git_blob": "74ac8313cadfdcb6be0922a8d1551c726f53e9f1",
+      "sha256": "6b42cd92a814354862aeed77b4810fadd714d29371dfd9728297922254ec017a",
+      "bytes": 471
+    },
+    {
+      "path": "tests/ui/generics/generic-fn-infer.rs",
+      "git_blob": "a335fbd328994e220c7dceb10832cdaeaaf19bbf",
+      "sha256": "60b87afb3360b82f5d96b0aaca78d890fa24f303d62bf4bfca925b1c986460ce",
+      "bytes": 191
+    },
+    {
+      "path": "tests/ui/generics/generic-fn-twice.rs",
+      "git_blob": "26d6f750c80f80303a36ab888d7e615d23038241",
+      "sha256": "240daf13f12103941f6c56de71b3dbb0cb773ddb9931ab2f0089c7ca2b8b5bc4",
+      "bytes": 123
+    },
+    {
+      "path": "tests/ui/generics/generic-temporary.rs",
+      "git_blob": "6b3d258a2d297faef34f61193aac95e9147ccaa4",
+      "sha256": "d2400346f10242eb31727c0863cca8f98204ab6b352cb7daa6035782919941cd",
+      "bytes": 324
+    },
+    {
+      "path": "tests/ui/higher-ranked/anonymous-higher-ranked-lifetime.rs",
+      "git_blob": "8d8d0e710674154f8a58f5dbcec4d2bc54db6e38",
+      "sha256": "6530c1c166d6304c4b62a32adf185f0646598c9b876b17893fdd1832e42bc032",
+      "bytes": 1494
+    },
+    {
+      "path": "tests/ui/higher-ranked/anonymous-higher-ranked-lifetime.stderr",
+      "git_blob": "7e0cdba6ff21ecced9294ded8841d529fa0b4a6e",
+      "sha256": "3bb2383dd6e712676f80cd12d708a4896c9926a0d4eb077a814c35ddd7c2ca0b",
+      "bytes": 8820
+    },
+    {
+      "path": "tests/ui/higher-ranked/nested-binder-cmp-fn-sig-print.rs",
+      "git_blob": "65620812e3f8a742e117584935574a17564d2154",
+      "sha256": "42584488adab98e5dc917820df1f9294a550d7ca31323930a93414c2b1f693c3",
+      "bytes": 817
+    },
+    {
+      "path": "tests/ui/higher-ranked/nested-binder-cmp-fn-sig-print.stderr",
+      "git_blob": "c26b39ec5a567ed29e4129975df1febe00644829",
+      "sha256": "d23323bb4a99c6aabcfb945ffd2e43551f9a958fd119867ba83c7e806185df45",
+      "bytes": 862
+    },
+    {
+      "path": "tests/ui/higher-ranked/trait-bounds/normalize-under-binder/issue-62529-2.rs",
+      "git_blob": "af086750840a3fc70094f0ad3ff63c10a74abd61",
+      "sha256": "9618767afd3588e7e12708efe55045a2f1fa152bf0499c91e63b0f58b79e6cf9",
+      "bytes": 558
+    },
+    {
+      "path": "tests/ui/higher-ranked/trait-bounds/rigid-equate-projections-in-higher-ranked-fn-signature.next.stderr",
+      "git_blob": "a917c34b52ae533fd858b43bf36d4e49cb8bf2bd",
+      "sha256": "30478f99f858deb8ba1a69537b6c316a783facf20a937676e552454d3f448bec",
+      "bytes": 434
+    },
+    {
+      "path": "tests/ui/higher-ranked/trait-bounds/rigid-equate-projections-in-higher-ranked-fn-signature.rs",
+      "git_blob": "10dbc2a4a825ce5e7ab727c2a7bcff0fb100a16f",
+      "sha256": "0c6e4f263a56ef9c3d678c3f94b3b08de793d4980b2ead10e7bd1313f8766dd6",
+      "bytes": 922
+    },
+    {
+      "path": "tests/ui/impl-trait/precise-capturing/higher-ranked.rs",
+      "git_blob": "925f03589e8942fd66b3ffdb1e4c11f81330b23c",
+      "sha256": "24150cd0738256a41cf32eb60f8a66536d80afa8663bdd5ddc856475414ebea8",
+      "bytes": 292
+    },
+    {
+      "path": "tests/ui/impl-trait/type_parameters_captured.rs",
+      "git_blob": "81ee7d3f8a561dc5436d1d4b32990348b3fc58fa",
+      "sha256": "aba89d7c7086ec994645501c4d8468d3f7ff79140e204bfdda71ebd939c037d3",
+      "bytes": 252
+    },
+    {
+      "path": "tests/ui/impl-trait/type_parameters_captured.stderr",
+      "git_blob": "28dfcd8b871d844c26cc1a6cc25e3f2a60d7d6d7",
+      "sha256": "88c5874e56e58e4f6be6118f29c4015f2baccce8b71af261122d853131e8646d",
+      "bytes": 534
+    },
+    {
+      "path": "tests/ui/imports/auxiliary/two_macros.rs",
+      "git_blob": "92c211467d83dbde0ee22f4146c532c7eecfaba9",
+      "sha256": "3c82d09f1387bf6ff185fab8a815c4ff9ca245794de3b9ae197ac31548987514",
+      "bytes": 123
+    },
+    {
+      "path": "tests/ui/imports/duplicate.rs",
+      "git_blob": "be089dbf5a4af1b15420c3051d067d1c32381ef7",
+      "sha256": "9797443fb84f7c1aa0f9e817509e771a2acd9e6c9c195a2771f86809ba8421ee",
+      "bytes": 821
+    },
+    {
+      "path": "tests/ui/imports/duplicate.stderr",
+      "git_blob": "7bff44109e40bd594491cb4bd859d2ec30a21132",
+      "sha256": "dcd5a21af61b2a94a94697b3c78f46e64fe1ef9bc5d6e769a188d0696a382dc8",
+      "bytes": 3087
+    },
+    {
+      "path": "tests/ui/imports/glob-shadowing.rs",
+      "git_blob": "72848aac51143113f38710059ed7df096e003366",
+      "sha256": "fee739c2380da8e8807b3f1ce3951e9e26401202e94f579dee82a3dab6de9a62",
+      "bytes": 618
+    },
+    {
+      "path": "tests/ui/imports/glob-shadowing.stderr",
+      "git_blob": "025147d08f014bdc5e2c73aca8f68d8e323ce33f",
+      "sha256": "90831547c7787e4854b1665c586b67331d18007d7e08926ef0eea6eace44c115",
+      "bytes": 2135
+    },
+    {
+      "path": "tests/ui/imports/local-modularized-tricky-fail-1.rs",
+      "git_blob": "ce700ae0de9b12e42c8308a72280acc04f1c5018",
+      "sha256": "36e5a0b57e0b36d677438e9673dd715b7dd7b6bed545d722e6c30e1d652726af",
+      "bytes": 722
+    },
+    {
+      "path": "tests/ui/imports/local-modularized-tricky-fail-1.stderr",
+      "git_blob": "b69051140ed257b82a2cdae0a437d6cfba1d7e8a",
+      "sha256": "2fa777c3e53ae904fba1adfa5193f1474a603cb7689ba5170f3b39917a6cf0e7",
+      "bytes": 2627
+    },
+    {
+      "path": "tests/ui/imports/local-modularized-tricky-pass-2.rs",
+      "git_blob": "1cf97c5aa06e66403653ae8978c7a244c33ac05d",
+      "sha256": "af5c98a6dbeae2db54346233733bc1b152cf2662ea9dad39fad5dba2df696e04",
+      "bytes": 885
+    },
+    {
+      "path": "tests/ui/imports/macro-paths.rs",
+      "git_blob": "916442a7c4eabd3d78de7cbf23fdb43e20d9c19e",
+      "sha256": "2e636acae6c4f5bfab1d4d16a1c8713f5a6409f0578d125954009af5260a2067",
+      "bytes": 386
+    },
+    {
+      "path": "tests/ui/imports/macro-paths.stderr",
+      "git_blob": "56a40e908258b871473766a87ace2dfcc2b8b444",
+      "sha256": "2f394c5ea1afef0f02846663a2bc411a53a27088760ec4595d133b5e381924b0",
+      "bytes": 1395
+    },
+    {
+      "path": "tests/ui/imports/shadow-glob-module-resolution-1.rs",
+      "git_blob": "ba1e65cddc6523bc1876850c9f3843e5b8d2daca",
+      "sha256": "b84abeab77676e4f4d0437c134608eedce7c84de9c9403769ab1a6bf2651b27c",
+      "bytes": 300
+    },
+    {
+      "path": "tests/ui/imports/shadow-glob-module-resolution-1.stderr",
+      "git_blob": "f9135963fe99ebacb6cac31d47a97c097ae09604",
+      "sha256": "0d18ccb2190dda4451a28bad6d978b69f35bc924c860e2ca77efbdf3bf1658f4",
+      "bytes": 591
+    },
+    {
+      "path": "tests/ui/inference/infer-binary-operand-behind-reference.rs",
+      "git_blob": "05b18ca104cf757745bc56577b405ce12da00451",
+      "sha256": "8dbf538b6beab9dd7c7878b5d8e3363caea4bff18c47b03dd88c8946a4209053",
+      "bytes": 754
+    },
+    {
+      "path": "tests/ui/inference/infer-result-type-through-dead-code.rs",
+      "git_blob": "b4497f8d8bc49f34699670b53d5ab5a8cabb6eb1",
+      "sha256": "77688ff434f8c35cf638b7f368a3639f45c093d8e008f506667dd69bc23808e2",
+      "bytes": 352
+    },
+    {
+      "path": "tests/ui/let-else/let-else-irrefutable.rs",
+      "git_blob": "59de726d38ddf7c8d1e29ec95c691ebcf9a13c54",
+      "sha256": "b96e1ea582cd16dae7b1bfd783890c1073a52583fa9d19943908ecf7ca78a565",
+      "bytes": 535
+    },
+    {
+      "path": "tests/ui/let-else/let-else-irrefutable.stderr",
+      "git_blob": "12338789d2a03288ecba2669079f619944065243",
+      "sha256": "790695837aca24970674fcee3f4d0119ebc5fff7b1c2b96caa73ef27f7c094e3",
+      "bytes": 1124
+    },
+    {
+      "path": "tests/ui/lexer/ident_normalization.rs",
+      "git_blob": "a16c52171106b9367b6adab55ec79c75625b7b3f",
+      "sha256": "5542ace1ed207fd2a3c56f5f8ecc47c9af791c9a3c9d4ff3f882d7147a70fdf6",
+      "bytes": 516
+    },
+    {
+      "path": "tests/ui/lifetimes/issue-19707.rs",
+      "git_blob": "6bc7132af3c4339aeedc63b5f1639dbaae442509",
+      "sha256": "bb69e8d7b2786b376ca39c47fe79cc46ba6051142c6aa8584a4a81107da74835",
+      "bytes": 184
+    },
+    {
+      "path": "tests/ui/lifetimes/issue-19707.stderr",
+      "git_blob": "3e1bb32c19b92e48676102b0544263389d645b1e",
+      "sha256": "6f41c04163ad2a8fcc6b9b28ee531843255996ddf77d127b6a5ca3f3b8569b01",
+      "bytes": 1598
+    },
+    {
+      "path": "tests/ui/lifetimes/lifetime-elision-return-type-requires-explicit-lifetime.rs",
+      "git_blob": "d0a8fe795efd03549df1ec44ac889d45a8a0d506",
+      "sha256": "60177cdcef6cc03f5adb43668591d2cdfaabb8dd5f9c8f8a526553583a73986c",
+      "bytes": 1414
+    },
+    {
+      "path": "tests/ui/lifetimes/lifetime-elision-return-type-requires-explicit-lifetime.stderr",
+      "git_blob": "23ef36888f0793271977797f6a91c6bbebd75a2f",
+      "sha256": "753f20c170c503c180bbd51e308f75ae800134cdf5a077d1341fd895ea840080",
+      "bytes": 4612
+    },
+    {
+      "path": "tests/ui/lifetimes/temporary-lifetime-extension-tuple-ctor.rs",
+      "git_blob": "2427c75f3e00ed29e1de8c3f0de6563fd3b300b7",
+      "sha256": "6c0d10b30db402e1cc3ef448c7dc0a7a086d9e97ef7163b44c0b9b948d50e425",
+      "bytes": 890
+    },
+    {
+      "path": "tests/ui/lifetimes/temporary-lifetime-extension-tuple-ctor.stderr",
+      "git_blob": "b0d64b531cb402f00a43c3754a4c4a74819ce82d",
+      "sha256": "1f7ef2af86169bd2a1be1be5f0c505a8730b2124696f8a4883b4f8d7a540a7ca",
+      "bytes": 746
+    },
+    {
+      "path": "tests/ui/lifetimes/temporary-lifetime-extension.rs",
+      "git_blob": "d101aa476d060e2786d600c58ecaad5c04b670d6",
+      "sha256": "56f293215cf95d9fe5e96a6a8be0a434f7ab1c7370da9fcd226dd55459ffbb38",
+      "bytes": 1135
+    },
+    {
+      "path": "tests/ui/lifetimes/temporary-lifetime-extension.run.stdout",
+      "git_blob": "8643722158985df5b466f1da9d493b789e1bbfe0",
+      "sha256": "54031d221794c52017719d969cffe5dd41849b91bb2f00299e4ce10015515e13",
+      "bytes": 94
+    },
+    {
+      "path": "tests/ui/lint/lint-type-overflow.rs",
+      "git_blob": "9672da6d3586cdac57cc37b40e0f8db8a4f3d49c",
+      "sha256": "e30b8077175e3d0ee12ac336842d30d5897fbf9d6956e307fb11f2534819782f",
+      "bytes": 1771
+    },
+    {
+      "path": "tests/ui/lint/lint-type-overflow.stderr",
+      "git_blob": "971c3eb9b2e3bcfe145f68e3b8584061be50127f",
+      "sha256": "3935e2625b4bfdfc896cb2b39da8f4820c08ef87c498afedb3311720d31f300a",
+      "bytes": 5626
+    },
+    {
+      "path": "tests/ui/lint/negative_literals.rs",
+      "git_blob": "5964bbb559a1e2965617b017469c17120a9f40c4",
+      "sha256": "ebe0d549efcde24b82381f67f460a49fbee758250df99df155b04e1561f4ada1",
+      "bytes": 1209
+    },
+    {
+      "path": "tests/ui/lint/negative_literals.stderr",
+      "git_blob": "b0323cc96a0ead23b8ec1034ca724fe919b0dffd",
+      "sha256": "1a05857ff22c6578a8ff39b1decb2a557c441f769b87d7865158c56a05aa2d30",
+      "bytes": 6668
+    },
+    {
+      "path": "tests/ui/lint/non-local-defs/local.rs",
+      "git_blob": "f7ecd68f59e9081730be85641b01c9c820dae797",
+      "sha256": "69297cb342340bea24b4312f6532667c6e3e4281a2dae93b34c715a8c4fa8227",
+      "bytes": 931
+    },
+    {
+      "path": "tests/ui/lint/non-local-defs/weird-exprs.rs",
+      "git_blob": "1d9cecea0c971870f1f5c5f9c971774b1c062692",
+      "sha256": "2e32dfa8dd939d1720cb5bbb02adb633c8c8e2675f1ae853f5652631e0ce95cf",
+      "bytes": 816
+    },
+    {
+      "path": "tests/ui/lint/non-local-defs/weird-exprs.stderr",
+      "git_blob": "5b7d1a837444ed8164a0b47be8768d073121f6a0",
+      "sha256": "da21b96a81c26d9f125b0e449e25651485c454e7392538ace67af56ee38b6eb8",
+      "bytes": 4589
+    },
+    {
+      "path": "tests/ui/lint/unconditional_panic_98444.rs",
+      "git_blob": "56e0cf68d8a869117e6f64d17270582ae4a189d6",
+      "sha256": "5660939aa18232fae3b4d8f95f0237f1175a162d4dcdb50b2df7e804c13e3779",
+      "bytes": 176
+    },
+    {
+      "path": "tests/ui/lint/unconditional_panic_98444.stderr",
+      "git_blob": "29719b2dad5235e5e7f6d892ce691e878ed09d30",
+      "sha256": "e20732640f33d868b47e68f17403ef59c42ebf985b954ce20055e14b23e57b1d",
+      "bytes": 300
+    },
+    {
+      "path": "tests/ui/lint/unused/unused-result.rs",
+      "git_blob": "bfc9d61bb9c88a29584ba5b0cd04c5beccd88a62",
+      "sha256": "c9ad4f318b28f0103cb1d6063c1feff0c2b137656677b0d782f24a782c328f92",
+      "bytes": 1465
+    },
+    {
+      "path": "tests/ui/lint/unused/unused-result.stderr",
+      "git_blob": "b584733ba1cb49e2f7d8b9a50bc2d230431273ec",
+      "sha256": "44e013a8d7f33335de5f6d6c947d2cd4e7cf8a4dcce3ff0a7dae73b913ca0b48",
+      "bytes": 1793
+    },
+    {
+      "path": "tests/ui/lint/use-redundant/use-redundant.rs",
+      "git_blob": "0efed378f988b4b0dc3259208d9127a7c931c800",
+      "sha256": "fc35d59cb30b4333fa19ba2eac783ff51a3e619606eefdfa63fa1cd5b02ce1ae",
+      "bytes": 415
+    },
+    {
+      "path": "tests/ui/lint/use-redundant/use-redundant.stderr",
+      "git_blob": "76846a1dca98da0bf8d9a72dbc9c0ef565c8b738",
+      "sha256": "8a37529c45824cd7fa86a2b70dfabaf67f583add5c896ea492ebe3813529e792",
+      "bytes": 806
+    },
+    {
+      "path": "tests/ui/macros/assert-eq-macro-success.rs",
+      "git_blob": "490cd9315b6e2e4cc112c94e8876f1b12e008910",
+      "sha256": "4462de6a46c80a312692fb19ddd0b11bc92448867844b30fc963eaf2dd526c9f",
+      "bytes": 403
+    },
+    {
+      "path": "tests/ui/macros/auxiliary/macro-include-items-expr.rs",
+      "git_blob": "d00491fd7e5bb6fa28c517a0bb32b8b506539d4d",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "bytes": 2
+    },
+    {
+      "path": "tests/ui/macros/auxiliary/macro-include-items-item.rs",
+      "git_blob": "761cd00218977129cd0d7c80d6e6e7b052f7e30f",
+      "sha256": "66fdc62735d8c61918cdfa6201d8dd350821ebdbc9cfb7fff83cc06e68b6e387",
+      "bytes": 19
+    },
+    {
+      "path": "tests/ui/macros/auxiliary/use-macro-self.rs",
+      "git_blob": "f1307411a7f773c8b18b148e64c349d51be2e32b",
+      "sha256": "34724823b51ce71baeeb057a0d6479a8b150d3a10f6758a7d868a2616ecccc34",
+      "bytes": 82
+    },
+    {
+      "path": "tests/ui/macros/best-failure.rs",
+      "git_blob": "1b73066c8749d168f622c9d06d28869c9d806c8e",
+      "sha256": "a08e7229b72f460ff6ac261e4d4ce6b289ef074c9f5decd6d4d3f1fcdea25c9d",
+      "bytes": 225
+    },
+    {
+      "path": "tests/ui/macros/best-failure.stderr",
+      "git_blob": "541ffae1ecf2837de82c1a7344ed2e3e664fe207",
+      "sha256": "9772b1d6e96aa7cf3fdd45bfcdc65ad9610744837f69d45f81e2fb5173975d0a",
+      "bytes": 581
+    },
+    {
+      "path": "tests/ui/macros/expr_2021_cargo_fix_edition.fixed",
+      "git_blob": "c0d27609358933dc4869196f1983edcdfe12e782",
+      "sha256": "4d5d96e940a3553d8b08cacbef72165924bfe86281abf4a4b0fd8fceb159134c",
+      "bytes": 555
+    },
+    {
+      "path": "tests/ui/macros/expr_2021_cargo_fix_edition.rs",
+      "git_blob": "b2c16fc7041c01ec4b1811a84976d5fe35e8460a",
+      "sha256": "ed24a9d040102a131203ed09abc3211a3eadd1fad4102adaa8e5a6e34d2ddb46",
+      "bytes": 545
+    },
+    {
+      "path": "tests/ui/macros/expr_2021_cargo_fix_edition.stderr",
+      "git_blob": "17ec247bd4defb9955e75de6bf42368cec064410",
+      "sha256": "6550aa48c9bac9bbce5647a9f4b0f5345a1ddfbe402e7e208155ae86c84d5cf5",
+      "bytes": 1215
+    },
+    {
+      "path": "tests/ui/macros/include-single-expr-helper-1.rs",
+      "git_blob": "6802719afa1b370b7fb9faa92aedde210217a712",
+      "sha256": "dbb72ea95f8cd2a52f82161069c21054590b2381a943316ebe27753079a22f9c",
+      "bytes": 92
+    },
+    {
+      "path": "tests/ui/macros/include-single-expr-helper.rs",
+      "git_blob": "bd75bbbd583e6ace019410e28c72c1a751223837",
+      "sha256": "445485c594a036b32758765f3dcc16832ecf4b995f1afa9581b7c053b611de04",
+      "bytes": 68
+    },
+    {
+      "path": "tests/ui/macros/include-single-expr.rs",
+      "git_blob": "e3ab1257b42ad88339729281d93680ab4c1b23f6",
+      "sha256": "09707d7601c54f04ecd5a93b6d19de2011d35bb82a4fcf6084d7dee59047b459",
+      "bytes": 163
+    },
+    {
+      "path": "tests/ui/macros/include-single-expr.stderr",
+      "git_blob": "e99109e11729c9eb70dcb5714cd2e13297f2dbdc",
+      "sha256": "4056ceb4b6e23c5d44e1dc48c775018840833b3d290cb0b045e117d57f83bbc3",
+      "bytes": 226
+    },
+    {
+      "path": "tests/ui/macros/issue-29084.rs",
+      "git_blob": "a0a2966f75b5bea2e447f09b3e02d14d488b6faa",
+      "sha256": "35d66f935a48a7a820894eb094bedd09fcf9831f6b12f1467baae9b390e82519",
+      "bytes": 287
+    },
+    {
+      "path": "tests/ui/macros/issue-29084.stderr",
+      "git_blob": "de64f46747059626bde07b9adeb6a08050739683",
+      "sha256": "f543d07a33475b7bf1739985879aac2ac97a1af59d6ea080ebc4b0bd89b1259b",
+      "bytes": 619
+    },
+    {
+      "path": "tests/ui/macros/macro-as-fn-body.rs",
+      "git_blob": "188c7f7f728c9739868f058639d2f539830e2b01",
+      "sha256": "6ae5e64fd603f1817e3e5a8b69c09b7b72cf39ab8ecc8d58df6706c3b9bf3797",
+      "bytes": 496
+    },
+    {
+      "path": "tests/ui/macros/macro-deep_expansion.rs",
+      "git_blob": "1ac466ba1ea44f9e9c012be5ae32addee7c5bebd",
+      "sha256": "6e3e03b6748a80fd119520c859389619ffe15593fc8d38a6337203d523fb9cd1",
+      "bytes": 188
+    },
+    {
+      "path": "tests/ui/macros/macro-fragment-ident-underscore-error.rs",
+      "git_blob": "882dd167adc7d691ae45045938fba069460b1dce",
+      "sha256": "4596dad476f18133d41fb84fd6085a93b2f7a3cac61024f6b28b74f61fdd0041",
+      "bytes": 318
+    },
+    {
+      "path": "tests/ui/macros/macro-fragment-ident-underscore-error.stderr",
+      "git_blob": "929e4624e4b2e439911dd6bfd9c34ebd368a03f0",
+      "sha256": "dc068edb4c5cdd1b777bc972abdad7409eff55f880c98f904826b42e1159ca2d",
+      "bytes": 503
+    },
+    {
+      "path": "tests/ui/macros/macro-include-items.rs",
+      "git_blob": "9423d2c494930253187c1ff0306b5edf33cb7914",
+      "sha256": "eced45f0a9ed803abecd03e2cea488a3be671ef30c64bb409b5c682d33b0c2d6",
+      "bytes": 251
+    },
+    {
+      "path": "tests/ui/macros/macro-invocation-span-error-7970.rs",
+      "git_blob": "df7e1cfea88bc1c5f92ac12fa383eff2b7dfe692",
+      "sha256": "2a48414e4fc7de67943436950ed4a6019465cdfca0c41583f9d313fa4fe74c7a",
+      "bytes": 231
+    },
+    {
+      "path": "tests/ui/macros/macro-invocation-span-error-7970.stderr",
+      "git_blob": "beb54e0599248ebc9e0041e98c45fa47d866d519",
+      "sha256": "825316cc8dc15c10b87d456ff2778bc6b6f11fe9d2b2aeab38f735eaf3b0b368",
+      "bytes": 482
+    },
+    {
+      "path": "tests/ui/macros/macro-named-default.rs",
+      "git_blob": "c7eac831cffb80d2360a50d10b935f138475e730",
+      "sha256": "33b4c15e82260ea449e06559a6afeedcc133f60d3c8ebd7be7a2e14825d7a782",
+      "bytes": 184
+    },
+    {
+      "path": "tests/ui/macros/macro-nested_stmt_macros.rs",
+      "git_blob": "054aa3cb29306e770e6b967889532afd85682866",
+      "sha256": "abef2c55f007cf929838a1cae6e3e329f8bf4747979db3e78b11580d5b86eb49",
+      "bytes": 344
+    },
+    {
+      "path": "tests/ui/macros/macro-non-lifetime.rs",
+      "git_blob": "3defffd29604a87e9c375bdd6aacf7064efbd588",
+      "sha256": "ec3493c1faf32b573f977a8e301d53fd4636155bea187a18f72aa1bdd040409a",
+      "bytes": 164
+    },
+    {
+      "path": "tests/ui/macros/macro-non-lifetime.stderr",
+      "git_blob": "35040a2229bd3273311ab20677b34b8f922f347f",
+      "sha256": "0c303ac4ed0293b4e0d778ead301ce90aa0608aa869db36002d7ec23f11d4d7a",
+      "bytes": 463
+    },
+    {
+      "path": "tests/ui/macros/macro_undefined.rs",
+      "git_blob": "6ca1eb568616c0a479a4f2215fe3dac471bd112e",
+      "sha256": "0a1224438ca9c8bf55b52b2fd3db8a02e6f6b359de42c2d6673204e3876f75ef",
+      "bytes": 164
+    },
+    {
+      "path": "tests/ui/macros/macro_undefined.stderr",
+      "git_blob": "74457dc406cd9655744816212cbea47b8d7e28f0",
+      "sha256": "26a9fb01ac06d4638f7e22f5396291feb765b63e140eb64886c0699b4b25aeb5",
+      "bytes": 367
+    },
+    {
+      "path": "tests/ui/macros/nested-macro-expansion.rs",
+      "git_blob": "3b94b1051c9b7cd398894ae47664f06e8f2c7768",
+      "sha256": "ae332f7729310027246210edc60d592084ea49009698474eacfc56494d5aa3d8",
+      "bytes": 189
+    },
+    {
+      "path": "tests/ui/macros/pub-item-inside-macro.rs",
+      "git_blob": "679987ac1f4a32fb2b883d7eb608f8e0f71ebea5",
+      "sha256": "8abf09748ba8633483f076946bc7fda6b45c28c4a7541548ef4fdd07b57e7276",
+      "bytes": 175
+    },
+    {
+      "path": "tests/ui/macros/span-covering-argument-1.rs",
+      "git_blob": "9b9506c80b150284adb10ed6b08c699b541d1c24",
+      "sha256": "75ef18d3060d881b42588bc67ae460ca6f940434572d2ba53d7dc8c3e726464a",
+      "bytes": 261
+    },
+    {
+      "path": "tests/ui/macros/span-covering-argument-1.stderr",
+      "git_blob": "dd2213be593295d642e76ffa135ab755ead8b83b",
+      "sha256": "aaf07ea7b8c586947f38542621dd492ee9ed8088fdd0df87bbd6d50abe5da226",
+      "bytes": 545
+    },
+    {
+      "path": "tests/ui/macros/use-macro-self.rs",
+      "git_blob": "cf5a410c6edfc0e05cdaf10b7f9ac975c3a59f56",
+      "sha256": "54d67117aabd1e631e0b2cd972362879fb7081440afe6a962d72fb6f7e7dac1c",
+      "bytes": 231
+    },
+    {
+      "path": "tests/ui/match/issue-26251.rs",
+      "git_blob": "b1a81fcf20920131d4f336d3ac5831374178b278",
+      "sha256": "a0993bf1d51fa8bcc9028b10f76a89f62c675097104ed2fce379967e7e8b98be",
+      "bytes": 260
+    },
+    {
+      "path": "tests/ui/match/overeager-sub-match-pruning-13027.rs",
+      "git_blob": "c4feb697f7d121ff654cc59dd3231f1249f9a7c0",
+      "sha256": "cc84129ba72b7478705567606b06581b3ccf83bd0b970afcde9ca1a6927ab5c6",
+      "bytes": 3373
+    },
+    {
+      "path": "tests/ui/methods/call_method_unknown_referent.rs",
+      "git_blob": "54b8653a2109d1d663bf667ee69287c6eed7d553",
+      "sha256": "3c60a92b82103c8cd4be173ba3d494a3d589f867eacf01d39ee28f708efbc326",
+      "bytes": 1561
+    },
+    {
+      "path": "tests/ui/methods/call_method_unknown_referent.stderr",
+      "git_blob": "92fb32b987dfc0c3a75b5e2f52eaf2fe92ea9c93",
+      "sha256": "7b14b210f6a3150d9ae24467926be3193b6f7501dabf511e4ba82d84452b21a2",
+      "bytes": 1139
+    },
+    {
+      "path": "tests/ui/methods/leak-check-disquality.rs",
+      "git_blob": "d3b7dd4b80719207f0f44f0879b854b5770df7cc",
+      "sha256": "0cb5aefa131f46c7ccc830431d3a078e3acb0bd6655be7670d1776a6526aa088",
+      "bytes": 558
+    },
+    {
+      "path": "tests/ui/missing/missing-items/missing-const-parameter.rs",
+      "git_blob": "a3af88f263331e55841090423081b7f3668ef5d5",
+      "sha256": "50898063c25418732d50616828f308600383be3d362452d7fd4ba2a8c1eb65c0",
+      "bytes": 732
+    },
+    {
+      "path": "tests/ui/missing/missing-items/missing-const-parameter.stderr",
+      "git_blob": "97b9be716fcdc248186f9d29da8d5a718311b407",
+      "sha256": "01fb04de862d02cabd6a933d659786fd9709ee5dbf30946db3179e5548d10c3a",
+      "bytes": 2127
+    },
+    {
+      "path": "tests/ui/moves/move-arg.rs",
+      "git_blob": "3a7cbb4c0f6df2da457c0946afe483a950a73e2d",
+      "sha256": "dfa2c9faea3912aa257107ffecf4e8f676a8e9ad7f41d27c487ad1f85a0e82d2",
+      "bytes": 99
+    },
+    {
+      "path": "tests/ui/moves/move-out-of-field.rs",
+      "git_blob": "f4a0693daafb358ef670dd59b17d272b8f01000d",
+      "sha256": "3653ece92160f2aa15b25a7b3e79ae1516270816534d31c9bf60985aa2ab2fad",
+      "bytes": 407
+    },
+    {
+      "path": "tests/ui/moves/move-out-of-tuple-field.rs",
+      "git_blob": "66912fa4d099809b8c9901f7906f6c5552b6822e",
+      "sha256": "622a465e657d0696010635b86836341ffd89a4b27ba8ae64052378d9a4aac4e9",
+      "bytes": 251
+    },
+    {
+      "path": "tests/ui/moves/move-out-of-tuple-field.stderr",
+      "git_blob": "bb4eb76772abb24be9a44510301c594eab5dbb22",
+      "sha256": "a594f9bf3ef63716f2e39bf1df370605880b052a8eca31c5da4b4083bdd8311f",
+      "bytes": 761
+    },
+    {
+      "path": "tests/ui/moves/moves-based-on-type-distribute-copy-over-paren.rs",
+      "git_blob": "d256e18b6ca973cbaeae98ff165a663ae0a4b254",
+      "sha256": "126946fcaa75cfcf1548d0e7b89191200015f54e612a826213ff48541a4084a8",
+      "bytes": 1092
+    },
+    {
+      "path": "tests/ui/moves/moves-based-on-type-distribute-copy-over-paren.stderr",
+      "git_blob": "0930df148059dae9dd5329c268b575d15dfc264e",
+      "sha256": "4f3d65d7191829f8b60850d9134ed6c67916dbd2e0a5dde876a605acc0c48f65",
+      "bytes": 1254
+    },
+    {
+      "path": "tests/ui/moves/moves-based-on-type-exprs.rs",
+      "git_blob": "4a52d8d32064f27d55d1b391edeccec17c51048c",
+      "sha256": "fb690255a4acbfed5b004885371a0b027efe761bd444bd26e4500c305ea33a56",
+      "bytes": 1968
+    },
+    {
+      "path": "tests/ui/moves/moves-based-on-type-exprs.stderr",
+      "git_blob": "bdb81d65a45952ef41bba2add7da668f3a1f996a",
+      "sha256": "87f15b4968d2295ed091be8a55cb151c59565f873df821b1783d444a6461ebf2",
+      "bytes": 6539
+    },
+    {
+      "path": "tests/ui/moves/moves-based-on-type-match-bindings.rs",
+      "git_blob": "407f097690045abf56478496322ed6903c07c383",
+      "sha256": "dbc09c78b1026ddf95fa91caa0487fabd76d695382fcc8c92addd0811144491d",
+      "bytes": 608
+    },
+    {
+      "path": "tests/ui/moves/moves-based-on-type-match-bindings.stderr",
+      "git_blob": "b99b2bd9eef4e1e9f3f0fd15a0c91466865d4181",
+      "sha256": "4c1a4a0dd60acbb3b26ee8707fa8e7fd77e5d639d8d528c04b506c19ba1daf32",
+      "bytes": 612
+    },
+    {
+      "path": "tests/ui/nll/issue-61424.fixed",
+      "git_blob": "5ea9d531e24344749126fc9768925257e4d77dd8",
+      "sha256": "56714669203440929cef7b31b860b0e4a2d4fe06fa0b19995f8c1d04ce79ec5a",
+      "bytes": 148
+    },
+    {
+      "path": "tests/ui/nll/issue-61424.rs",
+      "git_blob": "9c09bd6f1d18e060ff34cf6c5456c5c002f4d46b",
+      "sha256": "ac232b67f88d5e9a8bd44a40b98d2ae23058f6d4d6ed0d813be3a362391585b5",
+      "bytes": 152
+    },
+    {
+      "path": "tests/ui/nll/issue-61424.stderr",
+      "git_blob": "8dc66cbaef80f6f8a980a619817127c6688039fe",
+      "sha256": "ba5d63d64d85f29ca87a03cb2b6d4728a33bc5ab80c7e5d171d29b29088ff65a",
+      "bytes": 339
+    },
+    {
+      "path": "tests/ui/nll/local-outlives-static-via-hrtb.rs",
+      "git_blob": "5f1f9b3a7f2299ce9d12133785edfe5583a61802",
+      "sha256": "35a29dc887b4aa66ddff203c11438fefc05536ca34965ec6b7f6025d29604cd3",
+      "bytes": 766
+    },
+    {
+      "path": "tests/ui/nll/local-outlives-static-via-hrtb.stderr",
+      "git_blob": "263d271b6b3d0d62ba87a74c90e57b05a8a98d84",
+      "sha256": "f1f13bce78a0042c99b8036a149256ad94d2bb907ea5d6d9587601ca634127d6",
+      "bytes": 2321
+    },
+    {
+      "path": "tests/ui/nll/match-on-borrowed.rs",
+      "git_blob": "447dabeb47e598f619a5d916c1dd1b11853079cd",
+      "sha256": "2efad5876a5bf2fec5f498a411dcb09c5b341a00e4f3a49b4a555b252e234f14",
+      "bytes": 1912
+    },
+    {
+      "path": "tests/ui/nll/match-on-borrowed.stderr",
+      "git_blob": "81163ebe2bcc9274aafee2d1abac2a5fd740c6af",
+      "sha256": "181785779c68491d269bcd155020190bae3ff6cf97681b87c40d6d1168de0290",
+      "bytes": 1529
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/arith-unsigned.rs",
+      "git_blob": "4a1bae438ca2e0b153d6431131f122fb674bbeb6",
+      "sha256": "dc06b2b7d93d5148eeca5294b03227ef0bce1d97e05adc23a2b132f168c0e16e",
+      "bytes": 774
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/div-mod.rs",
+      "git_blob": "ee654e00463a06ca413f7b7a5441077518afa083",
+      "sha256": "f423e53eebac953dfef26ed3b5ca878e43d93d2b731e0a255d5f6a3936d45c4c",
+      "bytes": 342
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/float-nan.rs",
+      "git_blob": "ee3718f6f939b43f7dcd889bf0d277837ab6681a",
+      "sha256": "50a2c50502c1b60a42f38b6ac7778f06039ab591573ef406f004d9512e011a00",
+      "bytes": 1940
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/float2.rs",
+      "git_blob": "515220fee9ffeee0b8260b7b4a68ef65989e67c0",
+      "sha256": "102d6451a4a519b355845c3761e888ef29ecb353e91e14148100c5dceea3d38c",
+      "bytes": 468
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/floatlits.rs",
+      "git_blob": "2dab2242011930bafc677fcc3ae463b6c1c5c3c3",
+      "sha256": "8ac6638db52e1db1149795db6f9bbc1b93edaddffb409c3f97c1532791e4e985",
+      "bytes": 203
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/i128-min-literal-parses.rs",
+      "git_blob": "623a8a92ae62b178e93c47323e4e11a2de958dad",
+      "sha256": "d6298ddfc5b48c1c75d513b9e09add7b60ca69e447843c1af9f2810cf67eb8c6",
+      "bytes": 160
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/i32-sub.rs",
+      "git_blob": "c2aed62c966140d09b39eb4e152a4880b8341972",
+      "sha256": "57db50eb4f791a05b515f3032b8e2f45b24adfef208e6596c7b733432558ad27",
+      "bytes": 89
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/i8-incr.rs",
+      "git_blob": "a0f1becce2ea15de3fbe6ce167694a32d43aeb80",
+      "sha256": "eeb83cacf6480156db31ba39eff9f044a1bef565e66ef03872036f059a0c8cc0",
+      "bytes": 133
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/integer-literal-radix.rs",
+      "git_blob": "ebccb023e600fb297e8e8cb4bb2ee107ddc5c0a5",
+      "sha256": "16c665a96bdcd8ae5ba95ae80708acbf8914db8dc3989ed3ec9793db6c19b89d",
+      "bytes": 343
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+      "git_blob": "ed59bba119606fe2c37ee70504de592b1ba25172",
+      "sha256": "f502f13f4f96fe146c05a02dd1a387eb3d4d9932915da35c047975d40eade4a6",
+      "bytes": 1221
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/isize-base.rs",
+      "git_blob": "412e7ac7a2e92ca1a9535f34fe293bcf892ae2a1",
+      "sha256": "b554630379a981b5354e216f1391e81fe0bb3e300417a9f1dd7a29735adcd253",
+      "bytes": 550
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/shift-various-types.rs",
+      "git_blob": "f046820ad90081c93bf5e9666f219608f6d4f5c6",
+      "sha256": "7a4a161b320fd311d6d7eb7fc11f9097950f1e3e8ba2eeded36f0b600bc4c548",
+      "bytes": 808
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/shift.rs",
+      "git_blob": "beb4f29381159e8a978df31951f2f8c646450de4",
+      "sha256": "d6457a9cb5e412016ddc8de0687e0267654fdb577410958cf2fa48bd45e64cf4",
+      "bytes": 1947
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/u32-decr.rs",
+      "git_blob": "2f68cf6f961604a8d1836fae573c9f69d754e3cf",
+      "sha256": "d2106a21e0e6b52e843a5b95ddb20d8e7dda3f16a3a3d850921a9d0930371a7e",
+      "bytes": 118
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/u8-incr-decr.rs",
+      "git_blob": "a3b86c531f3e0eb558cc4aa621a9e5b834e1e46a",
+      "sha256": "74190a656a2f2735ac4c11426b99531dd919fca4d4a4267991c4cc62dc42c511",
+      "bytes": 301
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/u8-incr.rs",
+      "git_blob": "dd5d1680fac5bc81ed88b634ea63084615e0c4a6",
+      "sha256": "482ddf38252c38c33a8fb2364814cdf58a39d6693a6ddc82727a5f58905843c3",
+      "bytes": 165
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/unary-negation-unsigned-integer-error.rs",
+      "git_blob": "4325c8b111bc589898391fd55c3402132cd73885",
+      "sha256": "39c5c2c25a0d8fad10c8d0cc245737a7ca85ba62a8bda53e3c1baae24cebd61e",
+      "bytes": 313
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/unary-negation-unsigned-integer-error.stderr",
+      "git_blob": "4ce870ded9f76eff53293294267dfd0a8d08be0f",
+      "sha256": "66be7669cce2381a94746553fb7b33dbfcb2606c2649964bc8a29f8dcd49bff7",
+      "bytes": 1252
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/usize-base.rs",
+      "git_blob": "833fc0497989d6cf58f7c4e0a0fcc9e1694b1d7b",
+      "sha256": "020c6ac71b9a48feb0ba9b9edd20eef6d6c130dc68728c05ea19ab0bb511bf80",
+      "bytes": 550
+    },
+    {
+      "path": "tests/ui/numeric/type-limit-comparisons-6130.rs",
+      "git_blob": "54b3f631e67bc607b040b3b09f20e5f75c306cdf",
+      "sha256": "d74ee8f6062078b083e56c4e2b978808abd5b2df941bae2fa6f410eb93bdce3a",
+      "bytes": 220
+    },
+    {
+      "path": "tests/ui/or-patterns/issue-69875-should-have-been-expanded-earlier-non-exhaustive.rs",
+      "git_blob": "3538aad5d772f7b1d2b209348e1e82100f96d415",
+      "sha256": "ecf4e93e829c13d25a98d0df000866f1cb7c89bcb71c2978c9f1eafc2e3a921c",
+      "bytes": 175
+    },
+    {
+      "path": "tests/ui/or-patterns/issue-69875-should-have-been-expanded-earlier-non-exhaustive.stderr",
+      "git_blob": "7044b8e035ad8a059600179fdb719d7d19eab5b7",
+      "sha256": "3e535f5bb8907ba3dda1527079a19336a18649b058933c93d7425c048a960866",
+      "bytes": 1462
+    },
+    {
+      "path": "tests/ui/panics/args-panic.rs",
+      "git_blob": "9675c99dcb6f81691817b153a37c7a671dfed426",
+      "sha256": "12d116bb5cd4ce6b065ff10d8c2c553536879a755dacfd63791d5de9aaaeaded",
+      "bytes": 180
+    },
+    {
+      "path": "tests/ui/panics/doublepanic.rs",
+      "git_blob": "6fddde82a277a10f8dbe2b65e67cf7cf90547c02",
+      "sha256": "1aa2f781766d4163ce6c910d6444da2eec77757efc4c1ad85cd92843d329ca46",
+      "bytes": 138
+    },
+    {
+      "path": "tests/ui/panics/explicit-panic.rs",
+      "git_blob": "7c69289940e49f80ce1fc5b01d8f9977cb04993f",
+      "sha256": "50201e2e00091fcb81d5ea6cef9d0d98025539c89f957464d17dab64dcd8197d",
+      "bytes": 90
+    },
+    {
+      "path": "tests/ui/panics/main-panic.rs",
+      "git_blob": "9f2a92da90f53e4a4febba57e4bdb3fc0c2ac272",
+      "sha256": "aa5bdf0da78bf571f780c91c8f21934df3b40f1e68f599be37f166bcdd6c3d71",
+      "bytes": 121
+    },
+    {
+      "path": "tests/ui/panics/panic-arg.rs",
+      "git_blob": "037cfda3689a1e0bfd2f66dbb3a348b9ba58bd65",
+      "sha256": "10392e688e0ba720242ceae928adeba8ee398762ea554232a58de03015601e74",
+      "bytes": 136
+    },
+    {
+      "path": "tests/ui/panics/panic-macro-explicit.rs",
+      "git_blob": "b9195e3b0fccf4c0b042b6ba987b15fe5fe3cfcc",
+      "sha256": "3f2112577b064de1f5ba0a4875699c4230d05c53658dfb5c03ea0c2b20bfabbd",
+      "bytes": 123
+    },
+    {
+      "path": "tests/ui/panics/panic-macro-static.rs",
+      "git_blob": "1c6258ebed24b83ead79f91d7cdc09a38ac9747a",
+      "sha256": "4fe42d8d4dc8b86e31fe18f97055b9b79813ed8da69c4edc9181e98a5d31e8e9",
+      "bytes": 143
+    },
+    {
+      "path": "tests/ui/panics/panic-parens.rs",
+      "git_blob": "5440bf18f256789239cbd94e28c022a316fba67c",
+      "sha256": "ac49686f109aceac9f291386cfb50ad6c28dff3b8d92f4628feeb53200248524",
+      "bytes": 329
+    },
+    {
+      "path": "tests/ui/panics/panic.rs",
+      "git_blob": "068f187524d5be52298d9b3f0ef14299f16a12cd",
+      "sha256": "99821fa85dbafeca7462dd3704e4b3f0cc7378b174392b644016cddc9ea532d6",
+      "bytes": 95
+    },
+    {
+      "path": "tests/ui/panics/while-body-panics.rs",
+      "git_blob": "8459a8d63bff3e7d7a69a2e06927db4ab717983f",
+      "sha256": "f663089777d7e2446f002f1e88c25a00b647d473ea926a079a7eef9930ceb4f2",
+      "bytes": 193
+    },
+    {
+      "path": "tests/ui/parser/bad-lit-suffixes.rs",
+      "git_blob": "70e3f7aa6c3b2b248625b45304b035faed62c951",
+      "sha256": "00c1723e8cfde6c0dbc8fac406a576a487a5b5271fca3e3331ab80abce798e33",
+      "bytes": 1651
+    },
+    {
+      "path": "tests/ui/parser/bad-lit-suffixes.stderr",
+      "git_blob": "6ac912797d2a80f3757f6d250daa058a2762fa55",
+      "sha256": "e5e366890996533d6f70747bb134b2190d448d2f051799ee805f892472cf803c",
+      "bytes": 4725
+    },
+    {
+      "path": "tests/ui/parser/doc-comment-parsing.rs",
+      "git_blob": "00f6b0e09a892d1bb68847592e1a0546bcfc91a8",
+      "sha256": "44961e44db059c25550674f350e63649b08bf135ffe3d11ae1599935674a0931",
+      "bytes": 286
+    },
+    {
+      "path": "tests/ui/parser/float-literals.rs",
+      "git_blob": "7bb588a8aacf915222a29b7ed4f4d358fb353343",
+      "sha256": "599c08483153ffa0656dc2072ed7aa61b53d0a012718049b14be6802a796eab3",
+      "bytes": 562
+    },
+    {
+      "path": "tests/ui/parser/int-literal-too-large-span.rs",
+      "git_blob": "666ca9350597674a8d631b8bab35eb5d75111985",
+      "sha256": "8ba0f1c3def62b22301997750d4470ac40153ca910f9abb1779ce165ac5194ff",
+      "bytes": 221
+    },
+    {
+      "path": "tests/ui/parser/int-literal-too-large-span.stderr",
+      "git_blob": "d65a3052ba933a13e1a8ffc624c1f10d3d4c33ec",
+      "sha256": "c9c3be7fd3b543115301c24ce264f9ded461dbc75567fa4d8f373de994f130d9",
+      "bytes": 417
+    },
+    {
+      "path": "tests/ui/parser/raw/raw-idents.rs",
+      "git_blob": "fd0a4c7522a09a5c54cadc1dd1e929f777515330",
+      "sha256": "ea07c8b14ab1e180d83fe9cd408b2604b32714d635b8e85f41cc6afeeb3f1a7d",
+      "bytes": 3716
+    },
+    {
+      "path": "tests/ui/proc-macro/add-impl.rs",
+      "git_blob": "645e9321bba0411d56fff7441273ba1928fe71c5",
+      "sha256": "ae4d2a7cd7985e67dbc0bb49041f6375995a0a263bc4ac82c66199ad8c6ea627",
+      "bytes": 188
+    },
+    {
+      "path": "tests/ui/proc-macro/ambiguous-builtin-attrs-test.rs",
+      "git_blob": "e580e0784b34e570a46e3f74def46bea7c1be366",
+      "sha256": "733f9a2d71c77116586bd97736c483b969b5bf4412e92ef18e54cd614d9d3139",
+      "bytes": 408
+    },
+    {
+      "path": "tests/ui/proc-macro/ambiguous-builtin-attrs-test.stderr",
+      "git_blob": "e5de873cf31f8a4cde1d9a27d8602b1a0072c920",
+      "sha256": "150b3602592b3d3286de2ce553ecee875ad6fae8141f1eb17e3394661fe62642",
+      "bytes": 290
+    },
+    {
+      "path": "tests/ui/proc-macro/ambiguous-builtin-attrs.rs",
+      "git_blob": "922a2e4c1f4635ba2718200aa489169c9291ecd9",
+      "sha256": "af53cb26eb9049a03237d853e39fbfc26af64cc3bf168d26697f22d678037a96",
+      "bytes": 892
+    },
+    {
+      "path": "tests/ui/proc-macro/ambiguous-builtin-attrs.stderr",
+      "git_blob": "882de640aa2f1fc870e559889024cb3d53be1597",
+      "sha256": "c6af18d3d5f536b7390487b880411d40c548155dd021184497b3aae4dd1c3cdb",
+      "bytes": 4023
+    },
+    {
+      "bytes": 241,
+      "git_blob": "345653864f841ee76b86e51c8f5cab615fafa46e",
+      "path": "tests/ui/proc-macro/attr-on-trait.rs",
+      "sha256": "95418e1288f40567df3b2988a9764b331eba51e8b0a07cfc690608393ea4796a"
+    },
+    {
+      "path": "tests/ui/proc-macro/attribute-after-derive.rs",
+      "git_blob": "382ef1f6ddfd3aea90b3a387d43027bcbc27c22c",
+      "sha256": "829292b8f55b7a68681641966aeefb377a9ba2b540ba4c62836f1222ae48814a",
+      "bytes": 524
+    },
+    {
+      "path": "tests/ui/proc-macro/attribute-after-derive.stdout",
+      "git_blob": "bc0fc6dc1af14d08dc89f6554446e8d500710c3f",
+      "sha256": "285554a18f61515c0fc36260267a68857824e03964cc4077f0d3cc5ebe38ad3c",
+      "bytes": 6517
+    },
+    {
+      "path": "tests/ui/proc-macro/attributes-included.rs",
+      "git_blob": "d2e2f7570aa1aff0667db8674fcc4486da8a557f",
+      "sha256": "000827ce089d2bda5203dae85cbdfd1acf584c3e6410e7286f08f75a046e743b",
+      "bytes": 292
+    },
+    {
+      "path": "tests/ui/proc-macro/attributes-included.stderr",
+      "git_blob": "5e2c8aa613db5243796b4c91b92fc50f0469132e",
+      "sha256": "f35e6340794885d1b35fd4268cd53b510a7ea4a8bc5bbc3bfb9a5a2d87ddf2ba",
+      "bytes": 407
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/add-impl.rs",
+      "git_blob": "327e6065ef2d1b41851794f83d19f4fd33653588",
+      "sha256": "1d5bb2b1f5e1a5c7a79af28fe6b0b0ffa48d77003403ca3dde08a47f9b8ba4cd",
+      "bytes": 295
+    },
+    {
+      "bytes": 251,
+      "git_blob": "012243febce0dc2ee9b3c00a9872e6e0080b4b6d",
+      "path": "tests/ui/proc-macro/auxiliary/attr-on-trait.rs",
+      "sha256": "7deaeea202714ae84d20daab08f3894dedf314b1053b8455c97e9dc9f80d406a"
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/attributes-included.rs",
+      "git_blob": "3a129c8185efbaa9ad9faa083f30e877ba43ab6d",
+      "sha256": "c129afb9694b42955c254ee3c5ad66f336f767b6ddb732ea90634c23f87f763f",
+      "bytes": 4238
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/builtin-attrs.rs",
+      "git_blob": "9743ec78c96755d80ed67fcddc5bd3acd893e50f",
+      "sha256": "5f0cac6001b32e65aa9f9c0f380f148abf4049acd6cce378c25b1763cbc84f44",
+      "bytes": 509
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/derive-attr-cfg.rs",
+      "git_blob": "b1da93de2a6e947db75ff5b067721cf358a263ef",
+      "sha256": "f98b69c581ff46be11e427a263941bbbbeca88f19ce06bddbce76bdf6e2051d9",
+      "bytes": 235
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/derive-bad.rs",
+      "git_blob": "bd25478fb1de08d915606456684d407a36cb1c73",
+      "sha256": "76c66db4e5bf4f605c1e1c7fa1c1d9c9d0cf02085c6fb6cfe7b78971bbd65b31",
+      "bytes": 178
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/derive-helper-shadowing-2.rs",
+      "git_blob": "da474cf5614b9e5b4b4de3d95ded0f7a540a9178",
+      "sha256": "94eff0da9c85f21733e6055ee38e5d289813625217b626bdff56742734d18c66",
+      "bytes": 174
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/derive-helper-shadowing.rs",
+      "git_blob": "eb56293955c0cd93489782acea522e31d1ccbe95",
+      "sha256": "44ac932d35366488c8ecb7ab4bc46b07573acbdbc38b143590c5d21de93a7218",
+      "bytes": 294
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/env.rs",
+      "git_blob": "089ace7792d4b17f6063bbbf3fdfaf033ddbd15f",
+      "sha256": "3d063357f8e15576e826a6867bc7dcb924feb3610c5ee66f5fb9cacd83eaab5c",
+      "bytes": 583
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/extra-empty-derive.rs",
+      "git_blob": "9a89e04364d75992604f43858a1ff4f37fd49dd7",
+      "sha256": "e36364c6abd4fa9fc3a4cd1a3511d4a88046004895203bd77619aff2325bb932",
+      "bytes": 202
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/gen-macro-rules.rs",
+      "git_blob": "855cb1d7095c561cd1b3dfc1943915494677aeb0",
+      "sha256": "b91a50ee003255ca2ffdbb8fcdb87655d759e81659bc2e533a8760c7be9d5afe",
+      "bytes": 198
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/mixed-site-span.rs",
+      "git_blob": "63ec0508a9735f7bae1c4ee1e8e587d06a2a327f",
+      "sha256": "c367ea01fc3d8f85c77a1ed3482c3691ad2716f49bf63d47b16ec703d8ee64ce",
+      "bytes": 2996
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/multiple-derives.rs",
+      "git_blob": "6f03f0a08f0bd3006a98125d4e619be45f4cbcf5",
+      "sha256": "282855f29907c373bbfbc76bbd1197ba973df026183662d22684752d02286451",
+      "bytes": 415
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/nested-macro-rules.rs",
+      "git_blob": "27676a5cb8112e2a3a077d4f6279fd020ad38bbe",
+      "sha256": "abf681ca67099a6c32cbf1dc6418ff72e5df952b0e76d270ceee34aac255b6c7",
+      "bytes": 404
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/proc-macro-panic.rs",
+      "git_blob": "8506c9f0de0bf18fd0bdabec20f253083fcb517f",
+      "sha256": "0f20f1e547e6f8ce71ba721779d13cce16d3416cbb34a7194863f8af3e1de54a",
+      "bytes": 211
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/resolved-located-at.rs",
+      "git_blob": "493956c00e987fd25c00536fae5333d719f27512",
+      "sha256": "a6849b16b072cb384716bdbd29bbe1f4c69b0aa593d33b82b7e7f1680c7c2311",
+      "bytes": 845
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/test-count-attributes.rs",
+      "git_blob": "c5658f445df2de14a7ffa214091294cda7a8901f",
+      "sha256": "d1e0a3071f0fea081338ebb342467ae31e37b23ccd340ff9e0cfce87a0630ed2",
+      "bytes": 919
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/test-macros.rs",
+      "git_blob": "8375767d6fb6876b8c8453df6abbd4dd65262b3e",
+      "sha256": "36abda9ac004677a55e1a5306b99d8fb5e3c55bec2dbaa3edbef7a3463a4fb59",
+      "bytes": 5073
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/test-re-emit.rs",
+      "git_blob": "4b500c4a66166dea46fccd04cbfa3f9bc78c881c",
+      "sha256": "c35755c8d29b74458935c558bbfade647a5162073640b951a8177751d2ce311b",
+      "bytes": 263
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/token-site-span.rs",
+      "git_blob": "60718c368e347c67e9c69e60571be404c2c48291",
+      "sha256": "f0ebefd82ffd8c657ec8364eee8e4630144a95e4af923f6b9a3016415df3357b",
+      "bytes": 773
+    },
+    {
+      "path": "tests/ui/proc-macro/custom-attr-panic.rs",
+      "git_blob": "560af228c2aef9e43289feaaa748821dc337dddd",
+      "sha256": "ddfaadb2a5730f4956b76c0bd185e475e3f07bdc8105158001e6f5d7c579e363",
+      "bytes": 148
+    },
+    {
+      "path": "tests/ui/proc-macro/custom-attr-panic.stderr",
+      "git_blob": "e436162bcc158994ed459e84672081517538cd21",
+      "sha256": "94822933023c16d6015411ec033b9f38542980700986cf9a4dae2c8c6e319869",
+      "bytes": 216
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-attr-cfg.rs",
+      "git_blob": "21d3a93ffa6cdca68e2cd5eb7d2bce6e90cef622",
+      "sha256": "b7fca3a121516b272ba363a3b6f372a1365f9a14dbcdce8c71a2399d98757365",
+      "bytes": 207
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-bad.rs",
+      "git_blob": "9b9a2bc33c946a9834f4293753cf69fd62169976",
+      "sha256": "11ce3765519626381dcb31f89d313f7394b477946784bde4edec271bfa631c89",
+      "bytes": 272
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-bad.stderr",
+      "git_blob": "8a252e826efff1c546bb1470410e1522dbf2a48d",
+      "sha256": "ace07937b75286eb0f614614eed362ba41b341bdd6d4e2bddcb93b3116a7f2b7",
+      "bytes": 841
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-expand-order.rs",
+      "git_blob": "076590bdb4cdae58ba8e056a0a74f459ec6f728f",
+      "sha256": "ddadad0f99d5e29f923a4ce1bda8bedc853224dd0ad94ef07c70f186a29cedd6",
+      "bytes": 217
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-expand-order.stdout",
+      "git_blob": "dffbbf1494b9ae9d5ed9c1a04209e1f3369e0d74",
+      "sha256": "4f40cae0cf0f6ffd20c6aded2d4429b1261f82335950fd2b188e54b9aef1c693",
+      "bytes": 298
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-helper-configured.rs",
+      "git_blob": "b96ebdebaebb9f5942a0751ab2b35b94d729e956",
+      "sha256": "a5d8d67fde94193a71df5764b91d0266f17e7fc9bcc0d52f1f0dfc678cd80b5d",
+      "bytes": 278
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-helper-shadowing-2.rs",
+      "git_blob": "6aba061acf35708eef3cea9044fa465fac8ee1d7",
+      "sha256": "160c26aa2fad9fafe85a31632ee3d1cbc7d8995845f568648a382256dce0c429",
+      "bytes": 395
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-helper-shadowing.edition2015.stderr",
+      "git_blob": "3a018bdcf0ad94d55312e3df32c6ac4f2ecbe30f",
+      "sha256": "17ef043b5632773160a0614274e1bf4a9ad4d14d0919bf33ad4c1075a4b14094",
+      "bytes": 3156
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-helper-shadowing.edition2018.stderr",
+      "git_blob": "a5c6ef25056ce90aa83576289503b2f16e805bfa",
+      "sha256": "db8e34cec8a153be1ba4ae2c74a7993672444471d721a6e9fc7cbd3d990094ee",
+      "bytes": 3530
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-helper-shadowing.rs",
+      "git_blob": "324d2477869e2ba46f86ec1479ee8bd82fcba765",
+      "sha256": "ae5ea5f5807947dd098eb31e5f8059834d0ce96c8f3654a66649170657e9e3aa",
+      "bytes": 1644
+    },
+    {
+      "path": "tests/ui/proc-macro/env.rs",
+      "git_blob": "ef3d8b5a898cbdac161fe66a232be5bbf514d713",
+      "sha256": "5be2b7313789f7bbdb6545736666d58d4551109171ec98bd4a40c97f0636f3f4",
+      "bytes": 288
+    },
+    {
+      "path": "tests/ui/proc-macro/expand-to-derive.rs",
+      "git_blob": "05c8e32624313c197c3036c53de285b1dbd2ed76",
+      "sha256": "779d7f3bc108215219e6973104095f08b52da008c671c6046411cdf25b0a73a5",
+      "bytes": 678
+    },
+    {
+      "path": "tests/ui/proc-macro/expand-to-derive.stdout",
+      "git_blob": "3a16f23ecf23cd07f47ab67e1ef1179edab6dcfe",
+      "sha256": "88ef3838bba7f1a4f193525d1a7e7b0b884d558045c0a0092c39fc880faa85ca",
+      "bytes": 5163
+    },
+    {
+      "path": "tests/ui/proc-macro/gen-macro-rules.rs",
+      "git_blob": "8ee38b2cc2795159bfc2db7dd5cc8e83ff2efc10",
+      "sha256": "c909683e487b889181b2c61bcb4c02c2bc1252360f3bd0e8e0532d24ceca4e40",
+      "bytes": 267
+    },
+    {
+      "path": "tests/ui/proc-macro/helper-attr-compat-collision.rs",
+      "git_blob": "7755582c4632244516cfba18c29820b10c023705",
+      "sha256": "ab7b3fff424a214c609eb223ab2f87b692282bf13a5b4ab5e3c9cb56a88208d9",
+      "bytes": 774
+    },
+    {
+      "path": "tests/ui/proc-macro/issue-75930-derive-cfg.rs",
+      "git_blob": "e8df1a66dd94987ec6ff8b42107511de11d713cf",
+      "sha256": "8baeea4082cc7d7665c441995e48506867b3d7b72bd0e815f43cbd98878f8c92",
+      "bytes": 2976
+    },
+    {
+      "path": "tests/ui/proc-macro/issue-75930-derive-cfg.stderr",
+      "git_blob": "906e9c6bf69f4e1cbeacda8ef5860b107015ab38",
+      "sha256": "4f39a025474613a3a7ed51b51c06ff2677f9e93adf2bb9887841c70e8e4850ad",
+      "bytes": 2552
+    },
+    {
+      "path": "tests/ui/proc-macro/issue-75930-derive-cfg.stdout",
+      "git_blob": "549621fdca31335b3ade3c02f76ad7704808dd5d",
+      "sha256": "7f8e497a97eee576050e2a08ba653906e1fca8a006ae7acf25cc3377592ed700",
+      "bytes": 103386
+    },
+    {
+      "path": "tests/ui/proc-macro/issue-76270-panic-in-libproc-macro.rs",
+      "git_blob": "2a003c30bf9f3c88b717a8db4e2159fa55100f7d",
+      "sha256": "617e6777981b69bd997c2feed07ad1077e266adf8818c036befdfc0db9cdd9e8",
+      "bytes": 398
+    },
+    {
+      "path": "tests/ui/proc-macro/issue-76270-panic-in-libproc-macro.stderr",
+      "git_blob": "7bf85104db3e76fe54d864a6af1d72b98728d084",
+      "sha256": "76cf92040ece44b561f97553605f0786c2326b234e06af64ad4f741128324feb",
+      "bytes": 283
+    },
+    {
+      "path": "tests/ui/proc-macro/load-panic.rs",
+      "git_blob": "18bfb71050b3dd2e1281d1207cffcc7b5e175b74",
+      "sha256": "ee30b0f6c3ac902415bc9ec040fb4d8e78a18bff66dfe30c36b555307705fc8f",
+      "bytes": 206
+    },
+    {
+      "path": "tests/ui/proc-macro/load-panic.stderr",
+      "git_blob": "bb429ad631db8dc47bb73b280d3148733d59bac3",
+      "sha256": "36049b6d1dbe62cb11aca5c001aa6c794d116b61e7b4271e46fbd82f1fd95f00",
+      "bytes": 191
+    },
+    {
+      "path": "tests/ui/proc-macro/mixed-site-span.rs",
+      "git_blob": "23f90ce67b6efd58484df18f15f30984b62440c3",
+      "sha256": "d60ce1316ecbb8c2d9e2c18fcd392f207d1b5ac70962a6922f092e1a1bd4fb80",
+      "bytes": 7368
+    },
+    {
+      "path": "tests/ui/proc-macro/mixed-site-span.stderr",
+      "git_blob": "0c1aaaebba58162783ab384ee19cec1d933ade92",
+      "sha256": "a4737b4106c71e40675167784a6c48cc5d638c78a672448d621febec50740f74",
+      "bytes": 29420
+    },
+    {
+      "path": "tests/ui/proc-macro/nested-derive-cfg.rs",
+      "git_blob": "b3dcfb7c39665b07f3bf74f5485888c499e83c62",
+      "sha256": "794e4bf18c442b9d8e54bcbb091a17f1fad2275500b420c48006439e16bae45b",
+      "bytes": 472
+    },
+    {
+      "path": "tests/ui/proc-macro/nested-derive-cfg.stdout",
+      "git_blob": "a3046e4ab85cbebf2c3fe1b81b1de52c9a40133d",
+      "sha256": "875c1e701eeb6ca90dac84d7a7133b011ee71235ceb7e047cb87b13eaa6b70b3",
+      "bytes": 3460
+    },
+    {
+      "path": "tests/ui/proc-macro/nested-macro-rules.rs",
+      "git_blob": "95a38e4c1b6a2caec6eece3ad5676ae9d862ab76",
+      "sha256": "f6812cd3fdfdae265b184e908e8df82e867de420b7c59d4fffb82f4d49dbfe2c",
+      "bytes": 670
+    },
+    {
+      "path": "tests/ui/proc-macro/nested-macro-rules.stderr",
+      "git_blob": "439297d87ca5db6f456e30135e41f39f19645059",
+      "sha256": "6dfcd30408366ca3f73e3ec4cd6620201dd4f3352a834e770cb68ad4a9c9d40a",
+      "bytes": 1199
+    },
+    {
+      "path": "tests/ui/proc-macro/nested-macro-rules.stdout",
+      "git_blob": "89fb7b0422187bdf2e68e9a015208764e26731c6",
+      "sha256": "7bc5ab3d687eee5ab597767edb5e9d9c7ee5ff5cca5434ccbe5768e55e749eac",
+      "bytes": 1350
+    },
+    {
+      "path": "tests/ui/proc-macro/resolved-located-at.rs",
+      "git_blob": "c932c40189681530d46c1a81c8f908645ecacf9e",
+      "sha256": "4b5c67b2bb90a2e04d7e00ecb83159a2f7520cc347749f77e5cbdbb30409c5c3",
+      "bytes": 193
+    },
+    {
+      "path": "tests/ui/proc-macro/resolved-located-at.stderr",
+      "git_blob": "a4f838521fdd60a42e201d3e5d306b2968e9e136",
+      "sha256": "16af162a55d69d9d95957e4845dff6141edf8d482bfae2bc9e032bed49647b5a",
+      "bytes": 758
+    },
+    {
+      "path": "tests/ui/proc-macro/test-count-attributes.rs",
+      "git_blob": "930e69cc6381fe6a030bac241bdfb2cf439b4e17",
+      "sha256": "a2063c119466fa5585d0045fea62b152f5fd33332165ea3bae7d6e1030d6bc94",
+      "bytes": 634
+    },
+    {
+      "path": "tests/ui/proc-macro/test-followed-by-attr-macros.rs",
+      "git_blob": "4f5b9801c552c34ae5f514278d412aba8be23d88",
+      "sha256": "41c8fc3a2cdc66b8a1440fb436fac3ddd83c3070b74a90c73c14181c35e41076",
+      "bytes": 389
+    },
+    {
+      "path": "tests/ui/proc-macro/test-re-emit.rs",
+      "git_blob": "c01df98e79a6e0473f147fbed17a2e8396af4ba3",
+      "sha256": "68f2421e2ec110707585f0349cbe3af69179e3bdb1b2fa6d49e15894d5f725d5",
+      "bytes": 349
+    },
+    {
+      "path": "tests/ui/reachable/reachable-unnameable-type-alias.rs",
+      "git_blob": "7e71cb1f113b3c2666ef2cee8657940493795e26",
+      "sha256": "73131591f74861a63dd15ec0aeb36f64d06acc30525a057dadaaf17f637067ec",
+      "bytes": 371
+    },
+    {
+      "path": "tests/ui/regions/regions-infer-borrow-scope-within-loop-ok.rs",
+      "git_blob": "5134256a893f133c76df8da7f85aa00d882895ad",
+      "sha256": "397d69eb4733ff856d4e35860d4fabfacb7a6a45d33457b90567f9e072b5065d",
+      "bytes": 185
+    },
+    {
+      "path": "tests/ui/regions/regions-outlives-projection-hrtype.rs",
+      "git_blob": "0fd634125d51af1448c5de88e2428ddeed7be92c",
+      "sha256": "1e390028defc5cc9d965a0e780769e7c2f329cb0ed6c89425acd9e6d9ea108a1",
+      "bytes": 594
+    },
+    {
+      "path": "tests/ui/regions/regions-simple.rs",
+      "git_blob": "fdf827956667ae5b04558d892900521b76805a7e",
+      "sha256": "eb0b190737724638de6556e1378399af9687f57cfa99d89422461fde6bb1eb12",
+      "bytes": 125
+    },
+    {
+      "path": "tests/ui/resolve/auxiliary/i8.rs",
+      "git_blob": "889a9c4ebb1f7c1972276446c0b1983e08a41cba",
+      "sha256": "7364c1018d46a4548b6526ecc90ef63e2c31c75593837a42eb350220de03d4f7",
+      "bytes": 58
+    },
+    {
+      "path": "tests/ui/resolve/blind-item-mixed-use-item.rs",
+      "git_blob": "7796233c419916f2ab02cc9e3f316f5f7a54edf9",
+      "sha256": "05271c0e917ea0f17a2f67c51cce645dfc5aaa75b58a11d2346a2b0af10416fd",
+      "bytes": 245
+    },
+    {
+      "path": "tests/ui/resolve/shadow-primitives.rs",
+      "git_blob": "17da0cd0530c26e089f18b0408f3078b133087ca",
+      "sha256": "1c43e6ca1ed22a628a5ee212ce7bf2d5270e7aa2c56913a4e95c6e2bf4c935db",
+      "bytes": 1992
+    },
+    {
+      "path": "tests/ui/return/early-return-with-unreachable-code-24353.rs",
+      "git_blob": "13add4652d9946b0564bb5b7b9dc82094d46a19e",
+      "sha256": "14da3397020b38db497a9eb72223c0305764cf117a931c0046c19e473c188c18",
+      "bytes": 144
+    },
+    {
+      "path": "tests/ui/return/return-nil.rs",
+      "git_blob": "c2591a77b30150b7689a1d10a2d230e1de5820fa",
+      "sha256": "c938ea53b9abd69f930c19b4825993b8f9d60d109b7b71383508959e2bae94b9",
+      "bytes": 71
+    },
+    {
+      "path": "tests/ui/rfcs/rfc-1857-stabilize-drop-order/drop-order.rs",
+      "git_blob": "d5f6628e0dbc14011b4e372970021b2e4c86ce1c",
+      "sha256": "399f6cf79751edd57f5a7941a585f06800ca77213e21c64f596f04117bd15c22",
+      "bytes": 8297
+    },
+    {
+      "path": "tests/ui/rust-2018/auxiliary/time.rs",
+      "git_blob": "a03d3d1fb53410b51b3c6d4551ebe7387aa1d71e",
+      "sha256": "b7f04b881e6dd8db5ec9507a807a36693595335211dce952a7d77dfa4df8a187",
+      "bytes": 30
+    },
+    {
+      "path": "tests/ui/rust-2018/extern-crate-alias-shadowed-by-module-55759.rs",
+      "git_blob": "c2ca2a970a1690750b37c095841978e5f801d11c",
+      "sha256": "114f184e526e3777ce750ea59a102150110618bf98266a75a616a1eaf4edefe4",
+      "bytes": 540
+    },
+    {
+      "path": "tests/ui/self/self-shadowing-import.rs",
+      "git_blob": "78d04e0713aa2bbc3899ad3aa14bb73957c7660e",
+      "sha256": "fa50ceb77c18f6ad0c46b1d3ea3c31929e12853941804996607a13fa3b05dc20",
+      "bytes": 234
+    },
+    {
+      "path": "tests/ui/shadowed/primitive-type-shadowing.rs",
+      "git_blob": "fdcb4246a82fc957a5cf5a795d10ac346a8b4d4a",
+      "sha256": "f8347c7e72dc88adf6f94a69f5726c214e24e0c57a569d5ddf2f8f9913da66c6",
+      "bytes": 445
+    },
+    {
+      "path": "tests/ui/structs/large-records.rs",
+      "git_blob": "d02a9f488c61bd7351d432dc6e1313304d44ff2c",
+      "sha256": "654d0ee072a90ebedfaa89d11b2d931fb24af4a53110d8ac1b1c42339d5e4c7d",
+      "bytes": 561
+    },
+    {
+      "path": "tests/ui/structs/struct-fields-decl-dupe.rs",
+      "git_blob": "6ddf3d976b79a19f93596e68d3179a8097d594a0",
+      "sha256": "5c2665e5da90126b4dc62acba2a02edfeb2916a18820e26b126c3619f710b2c5",
+      "bytes": 123
+    },
+    {
+      "path": "tests/ui/structs/struct-fields-decl-dupe.stderr",
+      "git_blob": "3c25708a3de1749a8c141a7317e252dee6997be3",
+      "sha256": "a5818cffcc19682fe50cf8cb159a4c7d4008c8c68401764bb734ad142d65053c",
+      "bytes": 334
+    },
+    {
+      "path": "tests/ui/structs/struct-fields-dupe.rs",
+      "git_blob": "2fa25a33545dfe21feace9fda7097579cddfad48",
+      "sha256": "1d4d535166f6e6f0e52ac1d681a56705522d0334f910f163b717410c79e251c6",
+      "bytes": 163
+    },
+    {
+      "path": "tests/ui/structs/struct-fields-dupe.stderr",
+      "git_blob": "ee38743471f6f116a1a5fbf467e1b79d0c9d675e",
+      "sha256": "ff35a65a692fd279a890071f9da252998481386e657fdac03a26d1d3d9b15210",
+      "bytes": 320
+    },
+    {
+      "path": "tests/ui/structs/struct-fields-missing.rs",
+      "git_blob": "0c7919d0249e9e0eea9dea190f27da7ddbd2bf39",
+      "sha256": "d95679ec46e52c9ad1fa5fa4c59013c4b1746a1854b14f622db5979d47e2db04",
+      "bytes": 181
+    },
+    {
+      "path": "tests/ui/structs/struct-fields-missing.stderr",
+      "git_blob": "eba095fd35a323b63c68c12d0dc97bf0e12f2477",
+      "sha256": "00bfb32ade98a755fadebb5c94caff9636a3c1c7673766f112ea5aea486bd4cb",
+      "bytes": 294
+    },
+    {
+      "path": "tests/ui/structs/struct-fields-shorthand.rs",
+      "git_blob": "1bdcc8315c154eea45fb799d11ffdc89aed28fc0",
+      "sha256": "ae03ed5941b17ae1d9826167ef91af2929b215a8f06c6e3cbc16609e82122b1d",
+      "bytes": 173
+    },
+    {
+      "path": "tests/ui/structs/struct-fields-shorthand.stderr",
+      "git_blob": "c4d804aaf9d8cd5b78e20483e22f061fe87b4f53",
+      "sha256": "291fbfefa689664d2a9095df5f568e7f59f4923412924f70b0ffb9c1d7276fcf",
+      "bytes": 336
+    },
+    {
+      "path": "tests/ui/structs/struct-new-as-field-name.rs",
+      "git_blob": "1f776b40f52cf49b7336a9a7255ae3fc2f2afd6a",
+      "sha256": "f933fdf94b0de90de1d1a93656edba9502550735d80502e1f9bdc4d547d5b003",
+      "bytes": 121
+    },
+    {
+      "path": "tests/ui/structs/struct-order-of-eval-1.rs",
+      "git_blob": "25cdabcc03c3f7d039e8999bd9a71cc766ef193d",
+      "sha256": "b96a7351221a955b324586222bd8dec4e2d62f0f8c55ba80ee9e85777b37269f",
+      "bytes": 281
+    },
+    {
+      "path": "tests/ui/structs/struct-order-of-eval-2.rs",
+      "git_blob": "eb425e62d8eaa48d7bbc9ae6e556156e0a4e1b9e",
+      "sha256": "2dcdd82498bd0b4788cddc7d6df25cca8631f7de5c06a3048a2763e48a78da10",
+      "bytes": 243
+    },
+    {
+      "path": "tests/ui/structs/struct-order-of-eval-3.rs",
+      "git_blob": "d0ce498ac4fa9f95a42b895ee2a285d30f266ed9",
+      "sha256": "0ae45bb5de592e3bfec9d502e1bae76651192130d0c51f41bee82bc6bed9d7f8",
+      "bytes": 939
+    },
+    {
+      "path": "tests/ui/structs/struct-order-of-eval-4.rs",
+      "git_blob": "0ad22296ba604d6e5bfdc09c4a06fb734ce340bb",
+      "sha256": "ca6047d3e53d53b4fa9906e8c9df8020dbd0641e5db931aed0ab7d2b07426ea1",
+      "bytes": 864
+    },
+    {
+      "path": "tests/ui/structs/struct-partial-move-1.rs",
+      "git_blob": "9494922b7d73287c4602a9b1418bae29997ffc2b",
+      "sha256": "7c1c88e14a67ad5ed88b683823c0eacf4a3de95135e8aada05d92f4c89d3292c",
+      "bytes": 656
+    },
+    {
+      "path": "tests/ui/structs/unit-like-struct-drop-run.rs",
+      "git_blob": "5e3fc5931bdc526daaafb10e14415437325528ff",
+      "sha256": "a41f8da56481172fd3b8dc0a637a6a8d485d4f6068ada3b6a8237fc990aac65f",
+      "bytes": 469
+    },
+    {
+      "path": "tests/ui/test-attrs/auxiliary/test_macro.rs",
+      "git_blob": "60a98ab6a026be32398e5645e40e16b6bb9f175a",
+      "sha256": "5b1d947e7cc29662afc6d0ecec5e5e3be6b344f3b68c6911eff4f51e644109a2",
+      "bytes": 52
+    },
+    {
+      "bytes": 228,
+      "git_blob": "60d014afdf3ea73073f00a09f43252243be4d578",
+      "path": "tests/ui/test-attrs/issue-109816.rs",
+      "sha256": "3ab6d01aa40378ee43e31c0881ceeb7e3aa22d9d036aa13dfcbbe072bd88b83c"
+    },
+    {
+      "bytes": 534,
+      "git_blob": "b3e414b9dbe2ec22a977a2140541a39cb31149ba",
+      "path": "tests/ui/test-attrs/issue-109816.stderr",
+      "sha256": "2944f25cd8e3c2411b53a18a1428d3d95153758636c0e8c9337a5281f556afd9"
+    },
+    {
+      "path": "tests/ui/test-attrs/issue-20823.rs",
+      "git_blob": "a5a924786074e4999abfc34d79fd4d8e7d503431",
+      "sha256": "9c022e61547dfd6ec6124b09b42a6d9696881a36d962893ac59e16498a871116",
+      "bytes": 64
+    },
+    {
+      "path": "tests/ui/test-attrs/issue-34932.rs",
+      "git_blob": "f0cbdd07df84c865ca617a2ad0434155d46dfb87",
+      "sha256": "e44861953fea305f08807eef4b16ffbf46293f47098e4384ce7676700aeb2b45",
+      "bytes": 326
+    },
+    {
+      "path": "tests/ui/test-attrs/issue-36768.rs",
+      "git_blob": "aca012f4af09c8ec32920a92a6157717a3d3965a",
+      "sha256": "24cc97d1d0d52466a8869e806bfaca977a560b6940cd3a36885503dcd2d05288",
+      "bytes": 140
+    },
+    {
+      "path": "tests/ui/test-attrs/issue-52557.rs",
+      "git_blob": "02e95669d32aa44554e5c68b10033f91a43aea16",
+      "sha256": "8235cb8627c4404d9d05348d53b499ca78c2017c880c728ff20d21788fc5272d",
+      "bytes": 496
+    },
+    {
+      "path": "tests/ui/test-attrs/issue-53675-a-test-called-panic.rs",
+      "git_blob": "06b9270cc333b35b0c329358462fcb34b52724d6",
+      "sha256": "f71dcf54b9d2d1f88a02aa9026bb939f376a0417ee28d041cb287fa5cd799025",
+      "bytes": 615
+    },
+    {
+      "path": "tests/ui/test-attrs/run-unexported-tests.rs",
+      "git_blob": "fc73eb519d21fb7852bb11b8d59defb11fe88320",
+      "sha256": "5e9dc503c153884dc376bb419caec2db2394807ba39d9eb6bb13877d2dee03ee",
+      "bytes": 174
+    },
+    {
+      "path": "tests/ui/test-attrs/test-attr-non-associated-functions.rs",
+      "git_blob": "7adfb3189c7736046b250ae0bb83436ded4c87c3",
+      "sha256": "82739314c0adcd8a69d2335bcc0b5a43c1c648d5ba4aa8e10f876c14b72be0e1",
+      "bytes": 425
+    },
+    {
+      "path": "tests/ui/test-attrs/test-attr-non-associated-functions.stderr",
+      "git_blob": "3d8c963517f438b167b64ae938b63a04a16f2c85",
+      "sha256": "63ca2c2e38a3a58a919574afa2a20bac9c037f1717ef732c879f315fde2fc622",
+      "bytes": 845
+    },
+    {
+      "path": "tests/ui/test-attrs/test-cant-be-shadowed.rs",
+      "git_blob": "ff47b1de177c0497a3e0e7b1324f8460fd89ba3e",
+      "sha256": "be55423a0b14924c7a832d4ac653db89b21d299c036318ab5b43ee14fb1f88a5",
+      "bytes": 217
+    },
+    {
+      "path": "tests/ui/test-attrs/test-function-signature.rs",
+      "git_blob": "4a6c0e8450ce4807d9bfb01e8513c3c3bf4d2558",
+      "sha256": "458fa54c228d66dcfbc59bd803c959b882ffda2e64557dcaceda5a30a1595a62",
+      "bytes": 871
+    },
+    {
+      "path": "tests/ui/test-attrs/test-function-signature.stderr",
+      "git_blob": "7fdaaed1aebc0f11f96bd653f8108694ac871ec1",
+      "sha256": "dc09f6c51e1ec53a1b6624fb9b95d8783cfd2ae6e7e36f011588b9cc3e0001a6",
+      "bytes": 1198
+    },
+    {
+      "path": "tests/ui/test-attrs/test-on-not-fn.rs",
+      "git_blob": "23b6cdb02ebd3a27d7f38738dca96d605f87b299",
+      "sha256": "ad3bf00d9ae0cd02dffa6e1d9f260d870e6914cb1baa8c378c5ffb476333b4ea",
+      "bytes": 2270
+    },
+    {
+      "path": "tests/ui/test-attrs/test-on-not-fn.stderr",
+      "git_blob": "3a97d0da4ff8c941290c637d9fab34d311ed4f73",
+      "sha256": "9da53f854ece411e5b23486677d463b018856bd00be9936ef7a661e627c1276d",
+      "bytes": 5920
+    },
+    {
+      "path": "tests/ui/test-attrs/test-should-panic-attr.rs",
+      "git_blob": "8207c4c0be753e6002fb953b2727798116558aa2",
+      "sha256": "ae20cb7d9fc382673ce32730a087a774610bd9b32d5053ecd468c920d0f6f492",
+      "bytes": 1004
+    },
+    {
+      "path": "tests/ui/test-attrs/test-should-panic-attr.stderr",
+      "git_blob": "ffe7b5dc15636c7ef4e951b15a39c1df7766f813",
+      "sha256": "a76402937ea9a2b1f9e79f8181dfc1f3623750f8f25287fd4d0a9aa65715d1eb",
+      "bytes": 2948
+    },
+    {
+      "path": "tests/ui/test-attrs/test-should-panic-failed-show-span.rs",
+      "git_blob": "f8c1840ab79f1c75d01ca6a1c1c0b551d7c8247d",
+      "sha256": "831b994d6016880fcd520040c7690a4e796f6d35c5f65ae9ca1c9e2b1c669ce8",
+      "bytes": 1052
+    },
+    {
+      "path": "tests/ui/test-attrs/test-should-panic-failed-show-span.run.stderr",
+      "git_blob": "398479f15fa233c7b3e45412b0e90468c0ff94b4",
+      "sha256": "5c898ec6f17921b04e9e60d7894541fd7dcc5725f97b2c32e188d927de329c8b",
+      "bytes": 599
+    },
+    {
+      "path": "tests/ui/test-attrs/test-should-panic-failed-show-span.run.stdout",
+      "git_blob": "c28403a11e8ec2685b064d71ce29955552357f9d",
+      "sha256": "0ad27917f8f712e0898cc405713661ef64d9ddef4dd4606dddbdd5c5cb9dd273",
+      "bytes": 1458
+    },
+    {
+      "path": "tests/ui/test-attrs/test-vs-cfg-test.rs",
+      "git_blob": "634511fdff392a1a1be21f08e532a54d78cea8c3",
+      "sha256": "584051ed434b1f80293eacaee1fd48f4c41a2f029e0aa2fde6d2e92c66873cbb",
+      "bytes": 170
+    },
+    {
+      "path": "tests/ui/test-attrs/tests-listing-format-default.rs",
+      "git_blob": "86e871448b93f39deec271ace1729fdac2161f0f",
+      "sha256": "407afc3fbb7ed5e01dc3bd68f8f2379619ae4fa5cbdec947dc257255b64822c0",
+      "bytes": 285
+    },
+    {
+      "path": "tests/ui/test-attrs/tests-listing-format-default.run.stdout",
+      "git_blob": "72337daf02cdfb43ef278bfb1c83afba3a15ce09",
+      "sha256": "4b6563386c8314009c78b988b05162a61636bb43f37f90501705c31f9d5e7bec",
+      "bytes": 62
+    },
+    {
+      "path": "tests/ui/traits/trait-upcasting/impossible-method-modulo-binders-2.rs",
+      "git_blob": "c03b5145aa73bf86d46407b522f0c4a9c35ad862",
+      "sha256": "70df2daeb1991f192ee5387575f987c0df326c29f6ad73ede8088002c85b4685",
+      "bytes": 668
+    },
+    {
+      "path": "tests/ui/tuple/index-float.rs",
+      "git_blob": "ee080361fd87dcdc4bf66d06a8ab41aa5daabb39",
+      "sha256": "6bec83c42c7b4d0036ef7f1bd979029d03d0c58c29b2d6c7ee2a01d429756e0a",
+      "bytes": 283
+    },
+    {
+      "path": "tests/ui/tuple/one-tuple.rs",
+      "git_blob": "a9dd0bf6c06c042613fc47e52f3c8ae8a1c3aa90",
+      "sha256": "e02033c2ac00b18d27f5d496baee6a6205a653e20c6483864d47dac7d4d6139b",
+      "bytes": 418
+    },
+    {
+      "path": "tests/ui/tuple/tup.rs",
+      "git_blob": "2564c863f7802b742c940b5729391eda3156300a",
+      "sha256": "2662841b4f0c18b37258d564aa6899a7fc403f8fba2f2dbdcc0eca8d3a03b4d0",
+      "bytes": 429
+    },
+    {
+      "path": "tests/ui/type-inference/direct-self-reference-occurs-check.rs",
+      "git_blob": "6e3d8251fc4f83e17858e222f3018e99f92cb271",
+      "sha256": "dc315eb98dfeb13fcb9400c95765d9add859c54ae6def9e6fcc1faea2be7daa8",
+      "bytes": 255
+    },
+    {
+      "path": "tests/ui/type-inference/direct-self-reference-occurs-check.stderr",
+      "git_blob": "6c522ffac1f7af43cee49bd4b3cbdced96403b96",
+      "sha256": "f4baa253bbe3108ce1626c60cab2f126c831c736204d2455c11561d5587c65d7",
+      "bytes": 268
+    },
+    {
+      "path": "tests/ui/type-inference/enum-self-reference-occurs-check.rs",
+      "git_blob": "2905868b8bfa94c7b15dae7d009f855ac97e9a39",
+      "sha256": "c10de069f0f04ce391772cdbbebd883023ae69725c6a4d9d4a9150b6794e1e30",
+      "bytes": 333
+    },
+    {
+      "path": "tests/ui/type-inference/enum-self-reference-occurs-check.stderr",
+      "git_blob": "3239be51a1766e9c7b058b4bc423fbf72ec7c920",
+      "sha256": "dd4e713dd616c7ae34172578b03d186ecfd1f56e288c2e6847f8edafc46d83b2",
+      "bytes": 266
+    },
+    {
+      "path": "tests/ui/type-inference/infinite-type-occurs-check.rs",
+      "git_blob": "b353824e931d472bbf223116650af91b644e7211",
+      "sha256": "442e3b6ba01d0cf395a695770c682ce96368e4fb1bd24752dd5317ba661f2bf8",
+      "bytes": 270
+    },
+    {
+      "path": "tests/ui/type-inference/infinite-type-occurs-check.stderr",
+      "git_blob": "9cb8bb917962e20d17188fef27cf5acd274475bb",
+      "sha256": "4a79d741599fda3396eca2eb802d9066ff3342b793f2011a578a43f352a70d2a",
+      "bytes": 240
+    },
+    {
+      "path": "tests/ui/type/unit-type-basic-usages.rs",
+      "git_blob": "c3ee8067f591844c16713e4c647a747f1848e791",
+      "sha256": "df7ef266253d44eb50337126a4a1f7b9a11edc9d776bae60c4656a3308f4455e",
+      "bytes": 167
+    },
+    {
+      "path": "tests/ui/union/union-const-eval-field.rs",
+      "git_blob": "0c68a98affc52d99638ffcfab5fa09ea5e0b4151",
+      "sha256": "ba8ef6dea7e096d0f57741971ea427bd8e0798122eefcd17d3848e8c734c9c1e",
+      "bytes": 926
+    },
+    {
+      "path": "tests/ui/use/use-after-move-based-on-type.rs",
+      "git_blob": "ba7aa0345e19c81b28d23d116cf670ed9f14c651",
+      "sha256": "249fdb00bb9359976a2c84eb27df38d3f4673e13f1615da2fa55b92839659c46",
+      "bytes": 119
+    },
+    {
+      "path": "tests/ui/use/use-after-move-based-on-type.stderr",
+      "git_blob": "1e72b3a1e95a5ea3c074e04335fce5f998db9537",
+      "sha256": "0e8ef0ed7e186c607d1f6c81e18253d195dbc0cc439b7b79f8033a955267ae34",
+      "bytes": 624
+    },
+    {
+      "path": "tests/ui/where-clauses/higher-ranked-fn-type.quiet.stderr",
+      "git_blob": "47c906175b7a9b1ffa0a0c57d464f1f5d37e2c20",
+      "sha256": "49b57e9edd84d11c40ecf7e107fb9877af518288de83ace8bd534c069bc3f559",
+      "bytes": 683
+    },
+    {
+      "path": "tests/ui/where-clauses/higher-ranked-fn-type.rs",
+      "git_blob": "7ad7a896e8d3814b5344bb34ff755b864272d25c",
+      "sha256": "8c602e123460b158ca63472d4dfa20053ab5bf6e6ef698bc5bee97f30012f849",
+      "bytes": 402
+    },
+    {
+      "path": "tests/ui/where-clauses/higher-ranked-fn-type.verbose.stderr",
+      "git_blob": "5392c269ee907400243b743d4aaee0232b0d9ca9",
+      "sha256": "49114e774115c3a099649ed7f322731b7f442931a77add48920342ede095800e",
+      "bytes": 978
+    }
+  ],
+  "cases": [
+    {
+      "path": "tests/mir-opt/graphviz.rs",
+      "directives": [
+        "//@ skip-filecheck",
+        "//@ compile-flags: -Z dump-mir-graphviz"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/run-make/test-harness/rmake.rs",
+      "directives": [
+        "//@ ignore-cross-compile"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/run-make/test-harness/test-ignore-cfg.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/abi/debug.rs",
+      "directives": [
+        "//@ add-minicore",
+        "//@ normalize-stderr: \"(abi|pref|unadjusted_abi_align): Align\\([1-8] bytes\\)\" -> \"$1: $$SOME_ALIGN\"",
+        "//@ normalize-stderr: \"randomization_seed: \\d+\" -> \"randomization_seed: $$SEED\"",
+        "//@ normalize-stderr: \"(size): Size\\([48] bytes\\)\" -> \"$1: $$SOME_SIZE\"",
+        "//@ normalize-stderr: \"(can_unwind): (true|false)\" -> \"$1: $$SOME_BOOL\"",
+        "//@ normalize-stderr: \"(pointer is|valid_range:) 0\\.\\.=(4294967295|18446744073709551615)\" -> \"$1 $$FULL\"",
+        "//@ normalize-stderr: \"(pointer is|valid_range:) [1-9]\\.\\.=(429496729[0-9]|1844674407370955161[0-9])\" -> \"$1 $$NON_NULL\"",
+        "//@ compile-flags: -O",
+        "//@ revisions: generic riscv64 loongarch64",
+        "//@ [riscv64] compile-flags: --target riscv64gc-unknown-linux-gnu",
+        "//@ [riscv64] needs-llvm-components: riscv",
+        "//@ [loongarch64] compile-flags: --target loongarch64-unknown-linux-gnu",
+        "//@ [loongarch64] needs-llvm-components: loongarch",
+        "//@ [generic] ignore-riscv64",
+        "//@ [generic] ignore-loongarch64",
+        "//@ ignore-backends: gcc"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/array-slice-vec/array_const_index-1.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/array-slice-vec/eval-empty-array-expr.rs",
+      "directives": [
+        "//@ run-fail",
+        "//@ error-pattern:panic evaluated",
+        "//@ needs-subprocess"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/array-slice-vec/fixed-size-arrays-zero-size-types-8898.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/array-slice-vec/fixed_length_copy.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/array-slice-vec/vec-fixed-length.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/attributes/attr_unknown_custom_attr.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/attributes/issue-115264-expr-field.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/attributes/malformed-attrs.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/attributes/unknown-attr.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/binding/expr-match-panic.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/binding/expr-match.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/binding/let-destruct-ref.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/binding/match-naked-record-expr.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/binding/match-pattern-lit.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/assign-imm-local-twice.rs",
+      "directives": [
+        "//@ run-rustfix"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/assignment-to-immutable-ref.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-assign-comp.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-fixed-length-vecs.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-local-borrow-outlives-fn.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-move-mut-base-ptr.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-move-out-of-struct-with-dtor.rs",
+      "directives": [
+        "//@ run-rustfix"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-mut-addr-of-imm-var.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/borrowck-partial-reinit-4.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/cannot-assign-borrowed-ref-in-slice.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/issue-46471.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/issue-58776-borrowck-scans-children.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/issue-62007-assign-field.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/mut-borrow-outside-loop.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/rvalue-borrow-scope-error.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/borrowck/tuple-field-move-with-drop-borrow.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/cast/cast-does-fallback.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/cast/cast-not-treated-as-lvalue.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/cast/cast-rfc0401.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/cast/cast-to-char-compare.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/cast/cast.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/cast/coercion-as-explicit-cast.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/cast/issue-10991.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/cast/u8-to-char-cast-9918.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/cfg/cfg-false-use-item.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ reference: cfg.attr.effect",
+        "//@ reference: cfg.predicate-literal"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/cfg/cfg_stmt_expr.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ reference: cfg.attr.allowed-positions"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/codegen/assign-expr-unit-type.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/coercion/coerce-unsize-subtype.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/const-generics/defaults/self-referential.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/const-generics/ensure_is_evaluatable.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/const-generics/issues/issue-70180-1-stalled_on.rs",
+      "directives": [
+        "//@ build-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/arithmetic-expr-in-array-len.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/bool-comparison-in-const-array-len.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/const-as-fn.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/const-contents.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/const-struct.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/control-flow/basics.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/control-flow/dead_branches_dont_eval.rs",
+      "directives": [
+        "//@ build-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/issue-19244.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/issue-66693-panic-in-array-len.rs",
+      "directives": [
+        "//@ edition:2015..2021"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/qualif-indirect-mutation-pass.rs",
+      "directives": [
+        "//@ compile-flags: --crate-type=lib",
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/recursive-const-stack-overflow.rs",
+      "directives": [
+        "//@ ignore-parallel-frontend query cycle"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/cross-crate/inline-fn-with-trait-method-as-value.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ aux-build:inline-fn-with-trait-method-as-value.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/cross-crate/reexported-structs-impls-link-error-9906.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ aux-build:aux-9906.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/derives/derive-on-trait-item-or-impl-item.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/derives/deriving-meta-empty-trait-list.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/derives/deriving-non-type.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/destructuring-assignment/drop-order.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/drop/destructor-run-for-let-ignore-6892.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/drop/dynamic-drop.rs",
+      "directives": [
+        "//@ edition:2015..2021",
+        "//@ run-pass",
+        "//@ needs-unwind",
+        "//@ ignore-backends: gcc"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/drop/field-replace-in-struct-with-drop.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/drop/nested-return-drop-order.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/drop/or-pattern-drop-order.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/drop/struct-field-drop-order.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/drop/tail-expr-drop-order.rs",
+      "directives": [
+        "//@ aux-build:edition-2021-macros.rs",
+        "//@ aux-build:edition-2024-macros.rs",
+        "//@ compile-flags: -Z validate-mir",
+        "//@ edition: 2024",
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/dyn-compatibility/assoc_type_bounds2.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/editions/edition-keywords-2015-2015.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ edition:2015",
+        "//@ aux-build:edition-kw-macro-2015.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/editions/edition-keywords-2018-2015.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ edition:2018",
+        "//@ aux-build:edition-kw-macro-2015.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/editions/nested-macro-rules-edition.rs",
+      "directives": [
+        "//@ revisions: e2021 e2024",
+        "//@[e2021] edition:2021",
+        "//@[e2024] edition:2024",
+        "//@[e2021] aux-crate: nested_macro_rules_dep=nested_macro_rules_dep_2024.rs",
+        "//@[e2024] aux-crate: nested_macro_rules_dep=nested_macro_rules_dep_2021.rs",
+        "//@[e2024] check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/enum-discriminant/issue-61696.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/expr/block-fn.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/expr/return-in-block-tuple.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/fn/fn-bad-block-type.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/for-loop-while/issue-69841.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/generic-associated-types/construct_with_other_type.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/generics/generic-fn-infer.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/generics/generic-fn-twice.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/generics/generic-temporary.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/higher-ranked/anonymous-higher-ranked-lifetime.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/higher-ranked/nested-binder-cmp-fn-sig-print.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/higher-ranked/trait-bounds/normalize-under-binder/issue-62529-2.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/higher-ranked/trait-bounds/rigid-equate-projections-in-higher-ranked-fn-signature.rs",
+      "directives": [
+        "//@ revisions: current next",
+        "//@[current] check-pass",
+        "//@[next] compile-flags: -Znext-solver",
+        "//@[next] check-fail",
+        "//@ ignore-compare-mode-next-solver (explicit revisions)"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/impl-trait/precise-capturing/higher-ranked.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ edition: 2024"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/impl-trait/type_parameters_captured.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/imports/duplicate.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/imports/glob-shadowing.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/imports/local-modularized-tricky-fail-1.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/imports/local-modularized-tricky-pass-2.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/imports/macro-paths.rs",
+      "directives": [
+        "//@ aux-build:two_macros.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/imports/shadow-glob-module-resolution-1.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/inference/infer-binary-operand-behind-reference.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/inference/infer-result-type-through-dead-code.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/let-else/let-else-irrefutable.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lexer/ident_normalization.rs",
+      "directives": [
+        "//@check-pass",
+        "//@edition:2021"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lifetimes/issue-19707.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lifetimes/lifetime-elision-return-type-requires-explicit-lifetime.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lifetimes/temporary-lifetime-extension-tuple-ctor.rs",
+      "directives": [
+        "//@ reference: destructors.scope.lifetime-extension.exprs.extending"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lifetimes/temporary-lifetime-extension.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ check-run-results",
+        "//@ edition: 2015.."
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lint/lint-type-overflow.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lint/negative_literals.rs",
+      "directives": [
+        "//@ check-fail"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lint/non-local-defs/local.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ edition:2021"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lint/non-local-defs/weird-exprs.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ edition:2021"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lint/unconditional_panic_98444.rs",
+      "directives": [
+        "//@ build-fail"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lint/unused/unused-result.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lint/use-redundant/use-redundant.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/assert-eq-macro-success.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/best-failure.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/expr_2021_cargo_fix_edition.rs",
+      "directives": [
+        "//@ run-rustfix",
+        "//@ check-pass",
+        "//@ edition: 2021"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/include-single-expr.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/issue-29084.rs",
+      "directives": [
+        "//@ dont-require-annotations: NOTE"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/macro-as-fn-body.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/macro-deep_expansion.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/macro-fragment-ident-underscore-error.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/macro-include-items.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/macro-invocation-span-error-7970.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/macro-named-default.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/macro-nested_stmt_macros.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/macro-non-lifetime.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/macro_undefined.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/nested-macro-expansion.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/pub-item-inside-macro.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/span-covering-argument-1.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/use-macro-self.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ aux-build:use-macro-self.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/match/issue-26251.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/match/overeager-sub-match-pruning-13027.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/methods/call_method_unknown_referent.rs",
+      "directives": [
+        "//@ edition: 2018"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/methods/leak-check-disquality.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ revisions: current next",
+        "//@ ignore-compare-mode-next-solver (explicit revisions)",
+        "//@[next] compile-flags: -Znext-solver"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/missing/missing-items/missing-const-parameter.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/moves/move-arg.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/moves/move-out-of-field.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/moves/move-out-of-tuple-field.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/moves/moves-based-on-type-distribute-copy-over-paren.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/moves/moves-based-on-type-exprs.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/moves/moves-based-on-type-match-bindings.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/nll/issue-61424.rs",
+      "directives": [
+        "//@ run-rustfix"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/nll/local-outlives-static-via-hrtb.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/nll/match-on-borrowed.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/arith-unsigned.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/div-mod.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/float-nan.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/float2.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/floatlits.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/i128-min-literal-parses.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/i32-sub.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/i8-incr.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/integer-literal-radix.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/isize-base.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/shift-various-types.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/shift.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/u32-decr.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/u8-incr-decr.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/u8-incr.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/unary-negation-unsigned-integer-error.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/usize-base.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/numeric/type-limit-comparisons-6130.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/or-patterns/issue-69875-should-have-been-expanded-earlier-non-exhaustive.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/panics/args-panic.rs",
+      "directives": [
+        "//@ run-fail",
+        "//@ error-pattern:meep",
+        "//@ needs-subprocess"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/panics/doublepanic.rs",
+      "directives": [
+        "//@ run-fail",
+        "//@ error-pattern:One",
+        "//@ needs-subprocess"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/panics/explicit-panic.rs",
+      "directives": [
+        "//@ run-fail",
+        "//@ error-pattern:explicit",
+        "//@ needs-subprocess"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/panics/main-panic.rs",
+      "directives": [
+        "//@ run-fail",
+        "//@ regex-error-pattern: thread 'main' \\(\\d+\\) panicked at",
+        "//@ needs-subprocess"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/panics/panic-arg.rs",
+      "directives": [
+        "//@ run-fail",
+        "//@ error-pattern:woe",
+        "//@ needs-subprocess"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/panics/panic-macro-explicit.rs",
+      "directives": [
+        "//@ run-fail",
+        "//@ error-pattern:panicked",
+        "//@ error-pattern:explicit panic",
+        "//@ needs-subprocess"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/panics/panic-macro-static.rs",
+      "directives": [
+        "//@ run-fail",
+        "//@ error-pattern:panicked",
+        "//@ error-pattern:test-fail-static",
+        "//@ needs-subprocess"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/panics/panic-parens.rs",
+      "directives": [
+        "//@ run-fail",
+        "//@ error-pattern:oops",
+        "//@ needs-subprocess"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/panics/panic.rs",
+      "directives": [
+        "//@ run-fail",
+        "//@ error-pattern:1 == 2",
+        "//@ needs-subprocess"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/panics/while-body-panics.rs",
+      "directives": [
+        "//@ run-fail",
+        "//@ error-pattern:quux",
+        "//@ needs-subprocess"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/parser/bad-lit-suffixes.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/parser/doc-comment-parsing.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/parser/float-literals.rs",
+      "directives": [
+        "//@ build-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/parser/int-literal-too-large-span.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/parser/raw/raw-idents.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ revisions:e2015 e2018 e2021 e2024",
+        "//@[e2015] edition:2015",
+        "//@[e2018] edition:2018",
+        "//@[e2021] edition:2021",
+        "//@[e2024] edition:2024"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/add-impl.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ proc-macro: add-impl.rs",
+        "//@ ignore-backends: gcc"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/ambiguous-builtin-attrs-test.rs",
+      "directives": [
+        "//@ proc-macro: builtin-attrs.rs",
+        "//@ compile-flags:--test",
+        "//@ ignore-backends: gcc"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/ambiguous-builtin-attrs.rs",
+      "directives": [
+        "//@ edition:2018",
+        "//@ proc-macro: builtin-attrs.rs",
+        "//@ ignore-backends: gcc"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "directives": [
+        "//@ run-pass",
+        "//@ proc-macro: attr-on-trait.rs",
+        "//@ ignore-backends: gcc"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted",
+      "path": "tests/ui/proc-macro/attr-on-trait.rs"
+    },
+    {
+      "path": "tests/ui/proc-macro/attribute-after-derive.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ compile-flags: -Z span-debug",
+        "//@ proc-macro: test-macros.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/attributes-included.rs",
+      "directives": [
+        "//@ edition:2015",
+        "//@ proc-macro: attributes-included.rs",
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/custom-attr-panic.rs",
+      "directives": [
+        "//@ proc-macro: test-macros.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-attr-cfg.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ proc-macro: derive-attr-cfg.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-bad.rs",
+      "directives": [
+        "//@ proc-macro: derive-bad.rs",
+        "//@ ignore-backends: gcc"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-expand-order.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ proc-macro: multiple-derives.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-helper-configured.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ proc-macro: test-macros.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-helper-shadowing-2.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ proc-macro: derive-helper-shadowing-2.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/derive-helper-shadowing.rs",
+      "directives": [
+        "//@revisions: edition2015 edition2018",
+        "//@[edition2015] edition:2015",
+        "//@[edition2018] edition:2018",
+        "//@ proc-macro: test-macros.rs",
+        "//@ proc-macro: derive-helper-shadowing.rs",
+        "//@ ignore-backends: gcc"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/env.rs",
+      "directives": [
+        "//@ proc-macro: env.rs",
+        "//@ run-pass",
+        "//@ rustc-env: THE_CONST=1",
+        "//@ ignore-backends: gcc"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/expand-to-derive.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ compile-flags: -Z span-debug --error-format human",
+        "//@ proc-macro: test-macros.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/gen-macro-rules.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ proc-macro: gen-macro-rules.rs",
+        "//@ ignore-backends: gcc"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/helper-attr-compat-collision.rs",
+      "directives": [
+        "//@ proc-macro: test-macros.rs",
+        "//@ proc-macro: extra-empty-derive.rs",
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/issue-75930-derive-cfg.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ compile-flags: -Z span-debug",
+        "//@ proc-macro: test-macros.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/issue-76270-panic-in-libproc-macro.rs",
+      "directives": [
+        "//@ proc-macro: proc-macro-panic.rs",
+        "//@ edition:2018",
+        "//@ needs-unwind proc macro panics to report errors"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/load-panic.rs",
+      "directives": [
+        "//@ proc-macro: test-macros.rs",
+        "//@ needs-unwind proc macro panics to report errors"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/mixed-site-span.rs",
+      "directives": [
+        "//@ edition:2015",
+        "//@ aux-build: token-site-span.rs",
+        "//@ proc-macro: mixed-site-span.rs",
+        "//@ ignore-backends: gcc"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/nested-derive-cfg.rs",
+      "directives": [
+        "//@ compile-flags: -Z span-debug --error-format human",
+        "//@ proc-macro: test-macros.rs",
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/nested-macro-rules.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ aux-build:nested-macro-rules.rs",
+        "//@ proc-macro: test-macros.rs",
+        "//@ compile-flags: -Z span-debug -Z macro-backtrace",
+        "//@ edition:2018"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/resolved-located-at.rs",
+      "directives": [
+        "//@ proc-macro: resolved-located-at.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/test-count-attributes.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ proc-macro: test-count-attributes.rs",
+        "//@ compile-flags: --test"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/test-followed-by-attr-macros.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ compile-flags: --test",
+        "//@ proc-macro: test-macros.rs",
+        "//@ edition: 2024"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/proc-macro/test-re-emit.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ proc-macro: test-re-emit.rs",
+        "//@ compile-flags: --test"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/reachable/reachable-unnameable-type-alias.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/regions/regions-infer-borrow-scope-within-loop-ok.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/regions/regions-outlives-projection-hrtype.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/regions/regions-simple.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/resolve/blind-item-mixed-use-item.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/resolve/shadow-primitives.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ aux-build:i8.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/return/early-return-with-unreachable-code-24353.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/return/return-nil.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/rfcs/rfc-1857-stabilize-drop-order/drop-order.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ needs-unwind"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/rust-2018/extern-crate-alias-shadowed-by-module-55759.rs",
+      "directives": [
+        "//@ edition: 2018",
+        "//@ aux-build: time.rs",
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/self/self-shadowing-import.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/shadowed/primitive-type-shadowing.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/structs/large-records.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/structs/struct-fields-decl-dupe.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/structs/struct-fields-dupe.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/structs/struct-fields-missing.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/structs/struct-fields-shorthand.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/structs/struct-new-as-field-name.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/structs/struct-order-of-eval-1.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/structs/struct-order-of-eval-2.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/structs/struct-order-of-eval-3.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/structs/struct-order-of-eval-4.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/structs/struct-partial-move-1.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/structs/unit-like-struct-drop-run.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ needs-unwind",
+        "//@ needs-threads",
+        "//@ ignore-backends: gcc"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "directives": [
+        "//@ compile-flags: --test",
+        "//@ reference: attributes.testing.test.allowed-positions"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted",
+      "path": "tests/ui/test-attrs/issue-109816.rs"
+    },
+    {
+      "path": "tests/ui/test-attrs/issue-20823.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ compile-flags: --test"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/test-attrs/issue-34932.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ compile-flags:--test"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/test-attrs/issue-36768.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ compile-flags:--test"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/test-attrs/issue-52557.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ compile-flags: --test"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/test-attrs/issue-53675-a-test-called-panic.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ compile-flags: --test"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/test-attrs/run-unexported-tests.rs",
+      "directives": [
+        "//@ run-fail",
+        "//@ compile-flags:--test",
+        "//@ check-stdout"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/test-attrs/test-attr-non-associated-functions.rs",
+      "directives": [
+        "//@ compile-flags:--test",
+        "//@ reference: attributes.testing.test.allowed-positions"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/test-attrs/test-cant-be-shadowed.rs",
+      "directives": [
+        "//@ build-pass (FIXME(62277): could be check-pass?)",
+        "//@ aux-build:test_macro.rs",
+        "//@ compile-flags:--test"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/test-attrs/test-function-signature.rs",
+      "directives": [
+        "//@ compile-flags: --test",
+        "//@ reference: attributes.testing.test.allowed-positions"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/test-attrs/test-on-not-fn.rs",
+      "directives": [
+        "//@ compile-flags: --test",
+        "//@ reference: attributes.testing.test.allowed-positions"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/test-attrs/test-should-panic-attr.rs",
+      "directives": [
+        "//@ compile-flags: --test",
+        "//@ reference: attributes.testing.should_panic.syntax"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/test-attrs/test-should-panic-failed-show-span.rs",
+      "directives": [
+        "//@ edition:2015..2021",
+        "//@ compile-flags: --test",
+        "//@ run-flags: --test-threads=1 --nocapture",
+        "//@ run-fail",
+        "//@ check-run-results",
+        "//@ exec-env:RUST_BACKTRACE=0",
+        "//@ normalize-stdout: \"finished in \\d+\\.\\d+s\" -> \"finished in $$TIME\"",
+        "//@ normalize-stdout: \"TypeId\\(0x[0-9a-f]+\\)\" -> \"TypeId($$HEX)\"",
+        "//@ needs-threads",
+        "//@ needs-unwind (panic)",
+        "//@ reference: attributes.testing.should_panic.expected"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/test-attrs/test-vs-cfg-test.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ compile-flags: --cfg test",
+        "//@ reference: cfg.test"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/test-attrs/tests-listing-format-default.rs",
+      "directives": [
+        "//@ no-prefer-dynamic",
+        "//@ compile-flags: --test",
+        "//@ run-flags: --list",
+        "//@ run-pass",
+        "//@ check-run-results"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/traits/trait-upcasting/impossible-method-modulo-binders-2.rs",
+      "directives": [
+        "//@ build-pass",
+        "//@ revisions: current next",
+        "//@ ignore-compare-mode-next-solver (explicit revisions)",
+        "//@[next] compile-flags: -Znext-solver"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/tuple/index-float.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ reference: expr.tuple-index.syntax",
+        "//@ reference: comments.normal.tokenization"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/tuple/one-tuple.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ reference: expr.tuple.unary-tuple-restriction",
+        "//@ reference: patterns.tuple.syntax",
+        "//@ reference: statement.let.syntax",
+        "//@ reference: type.tuple.restriction"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/tuple/tup.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ reference: patterns.tuple.syntax",
+        "//@ reference: type.tuple.constructor"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/type-inference/direct-self-reference-occurs-check.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/type-inference/enum-self-reference-occurs-check.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/type-inference/infinite-type-occurs-check.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/type/unit-type-basic-usages.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/union/union-const-eval-field.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/use/use-after-move-based-on-type.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/where-clauses/higher-ranked-fn-type.rs",
+      "directives": [
+        "//@ revisions: quiet verbose",
+        "//@ [verbose]compile-flags: -Zverbose-internals"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    }
+  ]
+}

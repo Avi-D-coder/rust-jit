@@ -1,0 +1,158 @@
+--- a/crates/mbe/src/lib.rs
++++ b/crates/mbe/src/lib.rs
+@@ -187,6 +187,23 @@
+         }
+ 
+         DeclarativeMacro { rules: rules.into_boxed_slice(), err }
++    }
++
++    /// LRR's ordinary stable-profile definition demand. Keep the pinned rule parser;
++    /// reject its optional nightly syntax before any invocation transcription.
++    pub fn parse_macro_rules_stable(
++        tt: &tt::TopSubtree,
++        ctx_edition: impl Copy + Fn(SyntaxContext) -> Edition,
++    ) -> DeclarativeMacro {
++        let mut parsed = Self::parse_macro_rules(tt, ctx_edition);
++        let nightly_header =
++            tt.iter().any(|token| matches!(token, tt::TtElement::Leaf(tt::Leaf::Ident(_))));
++        if parsed.err.is_none() && (nightly_header || nightly_template_syntax(tt.iter())) {
++            parsed.err = Some(Box::new(ParseError::unexpected(
++                "nightly declarative macro syntax is outside the stable LRR profile",
++            )));
++        }
++        parsed
+     }
+ 
+     /// The new, unstable `macro m {}` flavor.
+@@ -281,8 +298,129 @@
+         call_style: MacroCallStyle,
+         call_site: Span,
+     ) -> ExpandResult<(tt::TopSubtree, MatchedArmIndex)> {
+-        expander::expand_rules(db, &self.rules, tt, marker, call_style, call_site)
+-    }
++        expander::expand_rules(
++            db,
++            &self.rules,
++            tt,
++            marker,
++            call_style,
++            call_site,
++            None,
++            None,
++            &mut TranscriptionStats::default(),
++        )
++    }
++    /// Explicit LRR token admission using a count-only pass of the same transcriber.
++    pub fn expand_with_token_limit(
++        &self,
++        db: &dyn salsa::Database,
++        tt: &tt::TopSubtree,
++        marker: impl Fn(&mut Span) + Copy,
++        call_style: MacroCallStyle,
++        call_site: Span,
++        token_limit: usize,
++    ) -> (ExpandResult<(tt::TopSubtree, MatchedArmIndex)>, TranscriptionStats) {
++        let mut stats = TranscriptionStats::default();
++        let result = expander::expand_rules(
++            db,
++            &self.rules,
++            tt,
++            marker,
++            call_style,
++            call_site,
++            Some(token_limit),
++            None,
++            &mut stats,
++        );
++        (result, stats)
++    }
++    /// LRR schema-aware byte admission, supplied by its private owned span mapper.
++    pub fn expand_with_limits(
++        &self,
++        db: &dyn salsa::Database,
++        tt: &tt::TopSubtree,
++        marker: impl Fn(&mut Span) + Copy,
++        call_style: MacroCallStyle,
++        call_site: Span,
++        token_limit: usize,
++        byte_budget: &ByteBudget<'_>,
++    ) -> (ExpandResult<(tt::TopSubtree, MatchedArmIndex)>, TranscriptionStats) {
++        let mut stats = TranscriptionStats::default();
++        let result = expander::expand_rules(
++            db,
++            &self.rules,
++            tt,
++            marker,
++            call_style,
++            call_site,
++            Some(token_limit),
++            Some(byte_budget),
++            &mut stats,
++        );
++        (result, stats)
++    }
++}
++
++#[derive(Debug, Default, Clone, Copy)]
++pub struct TranscriptionStats {
++    pub preflight_calls: usize,
++    pub materializations: usize,
++    pub admitted_tokens: usize,
++    pub max_preflight_tokens: usize,
++    pub admitted_bytes: usize,
++    pub max_preflight_bytes: usize,
++    pub materialized_leaves: usize,
++    pub materialized_raw_peak: usize,
++}
++#[derive(Clone, Copy)]
++pub struct SpanWireCost {
++    pub context: [u8; 32],
++    pub context_bytes: usize,
++    pub span_bytes: usize,
++}
++#[derive(Clone, Copy)]
++pub struct ContextWireCost {
++    pub context: [u8; 32],
++    pub context_bytes: usize,
++}
++pub enum ContextParent {
++    Root,
++    Parent(ContextWireCost),
++}
++pub struct ByteBudget<'a> {
++    pub byte_limit: usize,
++    pub span_cost: &'a dyn Fn(Span) -> Option<SpanWireCost>,
++    pub context_parent: &'a dyn Fn([u8; 32]) -> Option<ContextParent>,
++    pub preview_marker: &'a dyn Fn(&mut Span),
++}
++
++fn nightly_template_syntax(tokens: tt::TtIter<'_>) -> bool {
++    let mut dollar = false;
++    for token in tokens {
++        if dollar
++            && matches!(
++                &token,
++                tt::TtElement::Leaf(tt::Leaf::Punct(tt::Punct { char: '$', .. }))
++                    | tt::TtElement::Subtree(
++                        tt::Subtree {
++                            delimiter: tt::Delimiter { kind: tt::DelimiterKind::Brace, .. },
++                            ..
++                        },
++                        _
++                    )
++            )
++        {
++            return true;
++        }
++        dollar =
++            matches!(&token, tt::TtElement::Leaf(tt::Leaf::Punct(tt::Punct { char: '$', .. })));
++        if let tt::TtElement::Subtree(_, children) = token {
++            if nightly_template_syntax(children) {
++                return true;
++            }
++        }
++    }
++    false
+ }
+ 
+ impl Rule {

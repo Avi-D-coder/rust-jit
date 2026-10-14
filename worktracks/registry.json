@@ -1,0 +1,710 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-14T16:46:37.723226+00:00",
+  "repository_url": null,
+  "publication_status": "local_draft",
+  "source_of_truth": {
+    "specification": "lrr_rust2024_macros_traits_implementation_spec.md",
+    "task_ledger": "docs/tasks.json",
+    "implementation_state": "docs/implementation-state.md"
+  },
+  "baseline": {
+    "git_head": "6a4c1a5d5992653cc32cff763b5e3971acf848ca",
+    "working_tree": "inherited_dirty",
+    "spec_revision": "5.0",
+    "spec_sha256": "1f67c44acd5b7713f5761288a1182c7ce30a23f25ae363364f6180101ed861ec",
+    "task_ledger_sha256": "0645e41ad382632dc01ee9b43d654d9bb4d1c3c6868856e4f86f456faf220c79",
+    "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "imported_cases": 243,
+    "imported_files": 398,
+    "full_fixture_passes": 0,
+    "claims_are_not_acceptance": true
+  },
+  "gate_policy": {
+    "guest_jit_prerequisites": [
+      "upstream_runtime_acceptance",
+      "applicable_interpreter_correctness"
+    ],
+    "reports": [
+      "upstream_runtime_acceptance",
+      "diagnostic_compatibility",
+      "compiler_tooling_compatibility",
+      "full_suite_compatibility"
+    ],
+    "runtime_gate_status": "incomplete",
+    "classification": "asserted_contract",
+    "unsupported_runtime_is_blocker": true,
+    "runtime_only_pass_is_not_full_fixture_pass": true,
+    "external_rustc_is_not_interpreter_execution": true
+  },
+  "tracks": [
+    {
+      "id": "WT01",
+      "title": "Upstream inventory and contract execution",
+      "plan": "worktracks/01-upstream-contracts/README.md",
+      "status": "open",
+      "task_ids": [
+        "T003",
+        "T034",
+        "T100",
+        "T104",
+        "M043",
+        "M047"
+      ],
+      "coordination_dependencies": [],
+      "suggested_paths": [
+        "tools/",
+        "xtask/",
+        "compat/",
+        "fixtures/upstream/"
+      ],
+      "items": [
+        {
+          "id": "WT01-01",
+          "title": "Contract classification",
+          "status": "planned"
+        },
+        {
+          "id": "WT01-02",
+          "title": "Configured case enumeration",
+          "status": "in_progress",
+          "candidate": "artifacts/macos-first/root-stock-configured-matrix-v2/README.md",
+          "acceptance_scope": "Actual six-case host metadata configurations/command constructions; zero guest/runtime/full-fixture passes; complete inventory gate incomplete"
+        },
+        {
+          "id": "WT01-03",
+          "title": "Runtime execution drivers",
+          "status": "in_progress",
+          "candidate": "artifacts/macos-first/sol-stock-run-pass-contract-runner-v1/README.md",
+          "acceptance_scope": "source-only metadata handoff; runtime unexecuted"
+        },
+        {
+          "id": "WT01-04",
+          "title": "Separate compatibility reports",
+          "status": "in_review",
+          "candidate": "artifacts/macos-first/sol-rustc-runtime-contract-classification-v1/scoped-report.json",
+          "acceptance_scope": "source/driver union metadata classification; actual runtime configurations and executions pending"
+        },
+        {
+          "id": "WT01-05",
+          "title": "Inventory completeness and reduction",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "WT02",
+      "title": "Numeric inference, primitives and constants",
+      "plan": "worktracks/02-numeric-semantics/README.md",
+      "status": "open",
+      "task_ids": [
+        "T022",
+        "T024",
+        "T025",
+        "T054"
+      ],
+      "coordination_dependencies": [],
+      "suggested_paths": [
+        "crates/lrr/src/syntax/local_numeric_constraints.rs",
+        "crates/lrr/src/syntax/numeric_fallback.rs",
+        "crates/lrr/src/runtime/cell.rs",
+        "crates/lrr/src/vm/",
+        "crates/lrr/src/frontend/constants.rs"
+      ],
+      "items": [
+        {
+          "id": "WT02-01",
+          "title": "Reached local constraints",
+          "status": "planned"
+        },
+        {
+          "id": "WT02-02",
+          "title": "Literal and cast boundaries",
+          "status": "planned"
+        },
+        {
+          "id": "WT02-03",
+          "title": "Primitive operator coverage",
+          "status": "planned"
+        },
+        {
+          "id": "WT02-04",
+          "title": "Pure constant evaluator",
+          "status": "in_progress",
+          "candidate": "artifacts/macos-first/root-reached-constant-macro-v1/HANDOFF.md",
+          "acceptance_scope": "private840/0 library and architecture/fmt; reached macro proof/budget/child/memo controls; strict21/MAIN/upstream runtime gate incomplete"
+        },
+        {
+          "id": "WT02-05",
+          "title": "Cache and cost acceptance",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "WT03",
+      "title": "Control flow and transactional patterns",
+      "plan": "worktracks/03-control-flow-patterns/README.md",
+      "status": "open",
+      "task_ids": [
+        "T030",
+        "T031",
+        "T050",
+        "T051",
+        "H002",
+        "H003"
+      ],
+      "coordination_dependencies": [],
+      "suggested_paths": [
+        "crates/lrr/src/syntax/body_index.rs",
+        "crates/lrr/src/syntax/conditions.rs",
+        "crates/lrr/src/syntax/temporary_extensions.rs",
+        "crates/lrr/src/vm/pattern.rs",
+        "crates/lrr/src/vm/control.rs"
+      ],
+      "items": [
+        {
+          "id": "WT03-01",
+          "title": "Literal match and alternatives",
+          "status": "in_progress"
+        },
+        {
+          "id": "WT03-02",
+          "title": "Transactional structural patterns",
+          "status": "planned"
+        },
+        {
+          "id": "WT03-03",
+          "title": "Guards and conditional forms",
+          "status": "planned"
+        },
+        {
+          "id": "WT03-04",
+          "title": "Loop transfers and cleanup",
+          "status": "planned"
+        },
+        {
+          "id": "WT03-05",
+          "title": "Question mark flow",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "WT04",
+      "title": "Calls, generics and source views",
+      "plan": "worktracks/04-calls-source-views/README.md",
+      "status": "open",
+      "task_ids": [
+        "T032",
+        "T033",
+        "T052",
+        "T053",
+        "M017",
+        "M018",
+        "M025",
+        "M026"
+      ],
+      "coordination_dependencies": [],
+      "suggested_paths": [
+        "crates/lrr/src/frontend/callables.rs",
+        "crates/lrr/src/frontend/source_view.rs",
+        "crates/lrr/src/syntax/signatures.rs",
+        "crates/lrr/src/engine/run_argument_hints.rs",
+        "crates/lrr/src/engine/run_return.rs",
+        "crates/lrr/src/vm/frame.rs"
+      ],
+      "items": [
+        {
+          "id": "WT04-01",
+          "title": "Lexical source callable admission",
+          "status": "in_progress"
+        },
+        {
+          "id": "WT04-02",
+          "title": "Expression source views",
+          "status": "in_progress"
+        },
+        {
+          "id": "WT04-03",
+          "title": "Generic call packets",
+          "status": "planned"
+        },
+        {
+          "id": "WT04-04",
+          "title": "Callable values and closures",
+          "status": "in_progress",
+          "candidate": "artifacts/macos-first/sol-closure-instance-adoption-v1/REVIEW.md",
+          "acceptance_scope": "frozen source-only source-owned instance/adoption;10 Rust controls unexecuted, symbolic type/layout/Fn/publication missing"
+        },
+        {
+          "id": "WT04-05",
+          "title": "Async execution dependencies",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "WT05",
+      "title": "Trait headers, goals and dispatch",
+      "plan": "worktracks/05-trait-goal-engine/README.md",
+      "status": "open",
+      "task_ids": [
+        "M019",
+        "M020",
+        "M021",
+        "M022",
+        "M023",
+        "M024",
+        "M027",
+        "M028",
+        "M030",
+        "M034"
+      ],
+      "coordination_dependencies": [
+        "WT04"
+      ],
+      "suggested_paths": [
+        "crates/lrr/src/traits/",
+        "crates/lrr/src/frontend/member.rs",
+        "compat/traits.toml"
+      ],
+      "items": [
+        {
+          "id": "WT05-01",
+          "title": "Header catalogs",
+          "status": "claimed",
+          "candidate": "artifacts/macos-first/sol-trait-header-index-v1/HANDOFF.md",
+          "acceptance_scope": "frozen source-only exact replay/fmt/provenance;10 Rust controls uncompiled, M018 prerequisite and integration incomplete"
+        },
+        {
+          "id": "WT05-02",
+          "title": "Canonical goals and transactions",
+          "status": "claimed",
+          "candidate": "artifacts/macos-first/sol-canonical-candidate-transactions-v1/HANDOFF.md",
+          "acceptance_scope": "frozen source-only exact replay/fmt/provenance;10 Rust controls uncompiled; actual source-goal and normalization prerequisites incomplete"
+        },
+        {
+          "id": "WT05-03",
+          "title": "Tabled conditional proofs",
+          "status": "claimed",
+          "candidate": "artifacts/macos-first/sol-conditional-goal-tables-v1/",
+          "acceptance_scope": "source-only table preparation; M018/M019/M020 integration and genuine source-goal/approved cycle policy producers incomplete"
+        },
+        {
+          "id": "WT05-04",
+          "title": "Projection and binder semantics",
+          "status": "planned"
+        },
+        {
+          "id": "WT05-05",
+          "title": "Dispatch integration",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "WT06",
+      "title": "Aggregates, places, ownership and cleanup",
+      "plan": "worktracks/06-storage-ownership/README.md",
+      "status": "open",
+      "task_ids": [
+        "T040",
+        "T041",
+        "T042",
+        "T043",
+        "T044",
+        "T045",
+        "M029",
+        "M032"
+      ],
+      "coordination_dependencies": [],
+      "suggested_paths": [
+        "crates/lrr/src/runtime/",
+        "crates/lrr/src/engine/run_places.rs",
+        "crates/lrr/src/engine/run_fields.rs",
+        "crates/lrr/src/engine/run_panic.rs",
+        "crates/lrr/src/vm/cleanup.rs"
+      ],
+      "items": [
+        {
+          "id": "WT06-01",
+          "title": "Place and lease coverage",
+          "status": "planned"
+        },
+        {
+          "id": "WT06-02",
+          "title": "Structural transfer and construction",
+          "status": "planned"
+        },
+        {
+          "id": "WT06-03",
+          "title": "User Copy Clone Drop Default",
+          "status": "planned"
+        },
+        {
+          "id": "WT06-04",
+          "title": "Panic and cancellation cleanup",
+          "status": "planned"
+        },
+        {
+          "id": "WT06-05",
+          "title": "Managed Box and dyn storage",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "WT07",
+      "title": "Standard library facade and runtime support",
+      "plan": "worktracks/07-library-runtime/README.md",
+      "status": "open",
+      "task_ids": [
+        "T060",
+        "T061",
+        "T062",
+        "M031",
+        "M033"
+      ],
+      "coordination_dependencies": [
+        "WT05",
+        "WT06"
+      ],
+      "suggested_paths": [
+        "crates/lrr/src/facade/",
+        "crates/lrr/src/runtime/object.rs",
+        "crates/lrr/src/runtime/reference.rs"
+      ],
+      "items": [
+        {
+          "id": "WT07-01",
+          "title": "Option Result and scalar APIs",
+          "status": "planned"
+        },
+        {
+          "id": "WT07-02",
+          "title": "Vec slices and arrays",
+          "status": "in_progress"
+        },
+        {
+          "id": "WT07-03",
+          "title": "String and output",
+          "status": "planned"
+        },
+        {
+          "id": "WT07-04",
+          "title": "Iterators and conversions",
+          "status": "planned"
+        },
+        {
+          "id": "WT07-05",
+          "title": "Remaining runtime library backlog",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "WT08",
+      "title": "Macros, generated source and all editions",
+      "plan": "worktracks/08-macros-editions/README.md",
+      "status": "open",
+      "task_ids": [
+        "H001",
+        "H002",
+        "H003",
+        "M004",
+        "M005",
+        "M006",
+        "M007",
+        "M010",
+        "M011",
+        "M012",
+        "M013",
+        "M014",
+        "M015",
+        "M016",
+        "T063"
+      ],
+      "coordination_dependencies": [],
+      "suggested_paths": [
+        "crates/lrr/src/expand/",
+        "crates/lrr/src/syntax/entered_macros.rs",
+        "crates/lrr/src/service/",
+        "crates/lrr/src/source/generated.rs",
+        "crates/lrr/src/source/included.rs"
+      ],
+      "items": [
+        {
+          "id": "WT08-01",
+          "title": "Edition-sensitive expansion",
+          "status": "planned"
+        },
+        {
+          "id": "WT08-02",
+          "title": "Nested producer discovery",
+          "status": "planned"
+        },
+        {
+          "id": "WT08-03",
+          "title": "All procedural forms",
+          "status": "planned"
+        },
+        {
+          "id": "WT08-04",
+          "title": "Includes cfg and environments",
+          "status": "planned"
+        },
+        {
+          "id": "WT08-05",
+          "title": "Epoch revalidation and seals",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "WT09",
+      "title": "Cargo units, preparation and native-world provenance",
+      "plan": "worktracks/09-cargo-preparation/README.md",
+      "status": "open",
+      "task_ids": [
+        "M001",
+        "M002",
+        "M003",
+        "M038",
+        "M039",
+        "M040",
+        "T090",
+        "T091",
+        "H005",
+        "H006",
+        "H007",
+        "H008",
+        "H009",
+        "H010",
+        "H011",
+        "H012",
+        "H013"
+      ],
+      "coordination_dependencies": [],
+      "suggested_paths": [
+        "crates/lrr/src/cargo/",
+        "crates/lrr/src/cli/compile_inputs.rs",
+        "tools/cargo-planner.toml",
+        "tools/probe_compile_time_deps.py",
+        "tools/prepare_macro_server.py",
+        "vendor/UPSTREAM.toml"
+      ],
+      "items": [
+        {
+          "id": "WT09-01",
+          "title": "Exact unit graph",
+          "status": "planned"
+        },
+        {
+          "id": "WT09-02",
+          "title": "Compile-time dependency preparation",
+          "status": "planned"
+        },
+        {
+          "id": "WT09-03",
+          "title": "Dependency fixture closure",
+          "status": "planned"
+        },
+        {
+          "id": "WT09-04",
+          "title": "Freshness and generated captures",
+          "status": "planned"
+        },
+        {
+          "id": "WT09-05",
+          "title": "Later native generations",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "WT10",
+      "title": "Queries, derived facts and portable caches",
+      "plan": "worktracks/10-query-cache-invalidation/README.md",
+      "status": "open",
+      "task_ids": [
+        "T010",
+        "T011",
+        "T013",
+        "T014",
+        "T015",
+        "M008",
+        "M012",
+        "M027",
+        "M036",
+        "H022",
+        "H023"
+      ],
+      "coordination_dependencies": [],
+      "suggested_paths": [
+        "crates/lrr/src/db/",
+        "crates/lrr/src/source/changes.rs",
+        "crates/lrr/src/source/checkpoint.rs",
+        "crates/lrr/src/expand/cache.rs",
+        "crates/lrr/src/traits/cache.rs"
+      ],
+      "items": [
+        {
+          "id": "WT10-01",
+          "title": "Atomic derived publication",
+          "status": "planned"
+        },
+        {
+          "id": "WT10-02",
+          "title": "Positive and negative dependencies",
+          "status": "planned"
+        },
+        {
+          "id": "WT10-03",
+          "title": "Portable stable encoding",
+          "status": "planned"
+        },
+        {
+          "id": "WT10-04",
+          "title": "Cache quotas and reclamation",
+          "status": "planned"
+        },
+        {
+          "id": "WT10-05",
+          "title": "Restart and edit acceptance",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "WT11",
+      "title": "Authority, workers and service protocols",
+      "plan": "worktracks/11-authority-workers-service/README.md",
+      "status": "open",
+      "task_ids": [
+        "T064",
+        "T065",
+        "T092",
+        "T093",
+        "T094",
+        "M009",
+        "M037",
+        "M041",
+        "M042",
+        "M045",
+        "H020",
+        "H021",
+        "H024",
+        "H025"
+      ],
+      "coordination_dependencies": [],
+      "suggested_paths": [
+        "crates/lrr/src/service/",
+        "crates/lrr/src/cli/",
+        "crates/lrr/src/bin/lrr-worker.rs",
+        "crates/lrr/src/broker/",
+        "crates/lrr/src/engine/worker.rs"
+      ],
+      "items": [
+        {
+          "id": "WT11-01",
+          "title": "Guest effect broker",
+          "status": "planned"
+        },
+        {
+          "id": "WT11-02",
+          "title": "Worker lifecycle",
+          "status": "planned"
+        },
+        {
+          "id": "WT11-03",
+          "title": "Service schemas and raw framing",
+          "status": "planned"
+        },
+        {
+          "id": "WT11-04",
+          "title": "Resumable requests and watch",
+          "status": "planned"
+        },
+        {
+          "id": "WT11-05",
+          "title": "Robustness and telemetry",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "WT12",
+      "title": "Integration, contribution coordination and release evidence",
+      "plan": "worktracks/12-integration-release/README.md",
+      "status": "open",
+      "task_ids": [
+        "T003",
+        "T101",
+        "T102",
+        "T103",
+        "T104",
+        "T110",
+        "T111",
+        "T112",
+        "T120",
+        "T121",
+        "T122",
+        "M043",
+        "M044",
+        "M045",
+        "M046",
+        "M047",
+        "M048",
+        "H026",
+        "H027",
+        "H028"
+      ],
+      "coordination_dependencies": [],
+      "suggested_paths": [
+        "worktracks/",
+        ".github/",
+        "docs/implementation-state.md",
+        "docs/feature-traceability.md",
+        "xtask/src/gates.rs",
+        "artifacts/release/"
+      ],
+      "items": [
+        {
+          "id": "WT12-01",
+          "title": "Claims and integration queue",
+          "status": "in_review",
+          "candidate": "worktracks/README.md",
+          "acceptance_scope": "local contribution plans and metadata integrity only; remote publication pending"
+        },
+        {
+          "id": "WT12-02",
+          "title": "Four compatibility gates",
+          "status": "planned"
+        },
+        {
+          "id": "WT12-03",
+          "title": "Frozen-source acceptance",
+          "status": "planned"
+        },
+        {
+          "id": "WT12-04",
+          "title": "Reproduction and reporting",
+          "status": "planned"
+        },
+        {
+          "id": "WT12-05",
+          "title": "Later optimization release lane",
+          "status": "planned"
+        }
+      ]
+    }
+  ],
+  "current_private_checkpoint": {
+    "at": "2026-10-14T16:46:37.723226+00:00",
+    "root": "artifacts/macos-first/root-reached-constant-macro-v1/checkpoint.json",
+    "integrated_MAIN_changed": false,
+    "upstream_runtime_contract_passes": 0,
+    "full_fixture_passes": 0
+  }
+}

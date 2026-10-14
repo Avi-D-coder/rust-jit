@@ -1,0 +1,2062 @@
+diff --git a/crates/lrr/src/traits/candidate_transactions.rs b/crates/lrr/src/traits/candidate_transactions.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/traits/candidate_transactions.rs
+@@ -0,0 +1,552 @@
++//! Candidate-local type transactions. Structural matching is not trait fulfillment.
++use super::Unifier;
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    traits::{
++        canonical::{CanonicalError, CanonicalLimits},
++        header::{HeaderPredicate, SourceTraitHeader},
++        subst::Substitution,
++        term::*,
++    },
++};
++const SCRATCH_BYTES: usize = 32 * 1024 * 1024;
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum CandidateReadiness {
++    SourceGoalAndPredicatesRequired,
++    GenericNamespaceRequired,
++}
++#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
++pub enum UnificationRequirement {
++    ProjectionNormalization,
++    FunctionBinderMatching,
++    DynOrOpaqueSchema,
++    BoundUniverseMatching,
++    ConstEquality,
++    RegionEquality,
++    CandidateGenericNamespace,
++    SourceGoal,
++}
++#[derive(Debug)]
++pub enum ConstraintAttempt {
++    MatchedPending,
++    Conflict(Diagnostic),
++    Unresolved(Vec<UnificationRequirement>),
++    Overflow(CanonicalError),
++    Invalid(Diagnostic),
++}
++fn invalid(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-CANDIDATE-TRANSACTION", message.into())
++}
++/// Explicit component-model demand. A live demand/source-goal producer must
++/// supply the ordered authority later; this token cannot grant execution.
++pub struct CandidateFactoryModel {
++    demand: Digest,
++    next: u64,
++    limits: CanonicalLimits,
++}
++impl CandidateFactoryModel {
++    pub fn new(demand: Digest, limits: CanonicalLimits) -> Result<Self, CanonicalError> {
++        Ok(Self {
++            demand,
++            next: 0,
++            limits: limits.validate()?,
++        })
++    }
++    pub fn start(
++        &mut self,
++        header: &SourceTraitHeader,
++    ) -> Result<CandidateTransaction, CanonicalError> {
++        if !matches!(
++            header.kind(),
++            crate::traits::header::HeaderKind::Impl { .. }
++        ) {
++            return Err(CanonicalError::Invalid(
++                "candidate template must be an actual captured impl header",
++            ));
++        }
++        if header.generics().len() > self.limits.variables {
++            return Err(CanonicalError::Overflow(
++                crate::traits::canonical::CanonicalLimit::Variables,
++            ));
++        }
++        let estimate = header
++            .candidate_snapshot_bytes()
++            .map_err(CanonicalError::SourceTerm)?
++            .checked_add(header.generics().len().checked_mul(512).ok_or(
++                CanonicalError::Overflow(crate::traits::canonical::CanonicalLimit::Bytes),
++            )?)
++            .filter(|n| *n <= SCRATCH_BYTES)
++            .ok_or(CanonicalError::Overflow(
++                crate::traits::canonical::CanonicalLimit::Bytes,
++            ))?;
++        let serial = self
++            .next
++            .checked_add(1)
++            .ok_or(CanonicalError::Invalid("candidate serial overflow"))?;
++        let mut e = StableEncoder::new("lrr/v5/candidate-local-transaction/v1");
++        e.digest(self.demand);
++        e.digest(header.exact_identity());
++        e.u64(serial);
++        let transaction = e.finish();
++        let mut unifier = Unifier::new(transaction);
++        let mut substitution = Substitution::default();
++        let mut unsupported = Vec::new();
++        let mut variables = Vec::new();
++        variables
++            .try_reserve_exact(header.generics().len())
++            .map_err(|_| {
++                CanonicalError::Overflow(crate::traits::canonical::CanonicalLimit::Bytes)
++            })?;
++        for p in header.generics() {
++            if p.kind != BoundKind::Type {
++                unsupported.try_reserve_exact(1).map_err(|_| {
++                    CanonicalError::Overflow(crate::traits::canonical::CanonicalLimit::Bytes)
++                })?;
++                unsupported.push((p.kind, p.key));
++                continue;
++            }
++            let key = InferVarKey {
++                transaction,
++                ordinal: u32::try_from(variables.len()).map_err(|_| {
++                    CanonicalError::Overflow(crate::traits::canonical::CanonicalLimit::Variables)
++                })?,
++            };
++            unifier
++                .register_variable(key, 0)
++                .map_err(CanonicalError::SourceTerm)?;
++            substitution
++                .insert(p.key, GenericArg::Type(TyTerm::Infer(key)))
++                .map_err(CanonicalError::SourceTerm)?;
++            variables.push((p.key, key));
++        }
++        let pending = header.predicates().to_vec();
++        self.next = serial;
++        Ok(CandidateTransaction {
++            header: header.exact_identity(),
++            transaction,
++            unifier,
++            substitution,
++            variables,
++            unsupported,
++            pending,
++            source_reservation: estimate,
++            limits: self.limits,
++        })
++    }
++}
++pub struct CandidateTransaction {
++    header: Digest,
++    transaction: Digest,
++    unifier: Unifier,
++    substitution: Substitution,
++    variables: Vec<(ParamKey, InferVarKey)>,
++    unsupported: Vec<(BoundKind, ParamKey)>,
++    pending: Vec<HeaderPredicate>,
++    source_reservation: usize,
++    limits: CanonicalLimits,
++}
++impl CandidateTransaction {
++    pub fn transaction(&self) -> Digest {
++        self.transaction
++    }
++    pub fn source_header(&self) -> Digest {
++        self.header
++    }
++    pub fn pending_predicate_count(&self) -> usize {
++        self.pending.len()
++    }
++    pub fn pending_predicates(&self) -> &[HeaderPredicate] {
++        &self.pending
++    }
++    pub fn binding_count(&self) -> usize {
++        self.unifier.bindings.len()
++    }
++    pub fn readiness(&self) -> CandidateReadiness {
++        if self.unsupported.is_empty() {
++            CandidateReadiness::SourceGoalAndPredicatesRequired
++        } else {
++            CandidateReadiness::GenericNamespaceRequired
++        }
++    }
++    pub fn parameter_variable(&self, key: ParamKey) -> Option<InferVarKey> {
++        self.variables.iter().find(|p| p.0 == key).map(|p| p.1)
++    }
++    pub fn binding(&self, key: InferVarKey) -> Option<&TyTerm> {
++        self.unifier.binding(key)
++    }
++    pub fn fresh_universe(&mut self) -> Result<u32, Diagnostic> {
++        self.unifier.fresh_universe()
++    }
++    /// Candidate template parameters only. Applying this to a caller's symbolic
++    /// view is not allowed by the eventual source-goal adapter. All other Params
++    /// stay rigid; no runtime descriptor substitution is consulted.
++    pub fn instantiate_type_model(&self, template: &TyTerm) -> Result<TyTerm, Diagnostic> {
++        self.substitution.apply(template)
++    }
++    pub fn attempt_constraints(&mut self, pairs: &[(TyTerm, TyTerm)]) -> ConstraintAttempt {
++        let mut requirements = std::collections::BTreeSet::new();
++        let mut admission_work = 0usize;
++        let mut input_bytes = 0usize;
++        for (a, b) in pairs {
++            for t in [a, b] {
++                let Some((nodes, bytes)) = t.measure() else {
++                    return ConstraintAttempt::Overflow(CanonicalError::Overflow(
++                        crate::traits::canonical::CanonicalLimit::Bytes,
++                    ));
++                };
++                admission_work = match admission_work.checked_add(nodes) {
++                    Some(n) if n <= self.limits.work => n,
++                    _ => {
++                        return ConstraintAttempt::Overflow(CanonicalError::Overflow(
++                            crate::traits::canonical::CanonicalLimit::Work,
++                        ));
++                    }
++                };
++                input_bytes = match input_bytes
++                    .checked_add(bytes)
++                    .and_then(|n| n.checked_add(std::mem::size_of::<TyTerm>()))
++                {
++                    Some(n) if n <= SCRATCH_BYTES => n,
++                    _ => {
++                        return ConstraintAttempt::Overflow(CanonicalError::Overflow(
++                            crate::traits::canonical::CanonicalLimit::Bytes,
++                        ));
++                    }
++                };
++                if let Err(error) = t.validate_opaque_shape() {
++                    return ConstraintAttempt::Invalid(error);
++                }
++                if let Err(error) =
++                    requirements_for(t, self.transaction, &mut requirements, 0, self.limits.depth)
++                {
++                    return ConstraintAttempt::Invalid(error);
++                }
++            }
++            if definitely_different_outer(a, b) {
++                return ConstraintAttempt::Conflict(invalid(
++                    "definite outer source constructor mismatch",
++                ));
++            }
++            collect_pair_requirements(a, b, &mut requirements, 0, self.limits.depth);
++        }
++        if !requirements.is_empty() {
++            return ConstraintAttempt::Unresolved(requirements.into_iter().collect());
++        }
++        if !self.unsupported.is_empty() {
++            return ConstraintAttempt::Unresolved(vec![
++                UnificationRequirement::CandidateGenericNamespace,
++            ]);
++        }
++        let Some(old_bytes) = unifier_bytes(&self.unifier) else {
++            return ConstraintAttempt::Overflow(CanonicalError::Overflow(
++                crate::traits::canonical::CanonicalLimit::Bytes,
++            ));
++        };
++        // Existing Unifier stages its maps/work queues. Reserve the parent snapshot,
++        // outer candidate stage and inner pair stage, plus bounded input work storage.
++        if old_bytes
++            .checked_mul(3)
++            .and_then(|n| n.checked_add(input_bytes.checked_mul(4)?))
++            .and_then(|n| n.checked_add(self.source_reservation))
++            .is_none_or(|n| n > SCRATCH_BYTES)
++        {
++            return ConstraintAttempt::Overflow(CanonicalError::Overflow(
++                crate::traits::canonical::CanonicalLimit::Bytes,
++            ));
++        }
++        let mut staged = self.unifier.clone();
++        let mut used = admission_work;
++        for (left, right) in pairs {
++            let Some(remaining) = self.limits.work.checked_sub(used) else {
++                return ConstraintAttempt::Overflow(CanonicalError::Overflow(
++                    crate::traits::canonical::CanonicalLimit::Work,
++                ));
++            };
++            match staged.unify_with_work_limit(left, right, remaining) {
++                Ok(steps) => {
++                    used = match used.checked_add(steps) {
++                        Some(n) if n <= self.limits.work => n,
++                        _ => {
++                            return ConstraintAttempt::Overflow(CanonicalError::Overflow(
++                                crate::traits::canonical::CanonicalLimit::Work,
++                            ));
++                        }
++                    };
++                }
++                Err(error) if error.code == "LRR-E-METADATA-LIMIT" => {
++                    return ConstraintAttempt::Overflow(CanonicalError::SourceTerm(error));
++                }
++                Err(error) => return ConstraintAttempt::Conflict(error),
++            }
++        }
++        if unifier_bytes(&staged)
++            .and_then(|n| n.checked_add(self.source_reservation))
++            .is_none_or(|n| n > SCRATCH_BYTES)
++        {
++            return ConstraintAttempt::Overflow(CanonicalError::Overflow(
++                crate::traits::canonical::CanonicalLimit::Bytes,
++            ));
++        }
++        self.unifier = staged;
++        // Structural constraints committed locally; neither header predicates nor
++        // reached source/goal/catalog/trait obligations were discharged.
++        ConstraintAttempt::MatchedPending
++    }
++}
++fn unifier_bytes(u: &Unifier) -> Option<usize> {
++    let mut bytes = std::mem::size_of::<Unifier>()
++        .checked_add(u.variable_universes.len().checked_mul(128)?)?
++        .checked_add(
++            u.bindings
++                .len()
++                .checked_mul(128 + std::mem::size_of::<TyTerm>())?,
++        )?;
++    for t in u.bindings.values() {
++        bytes = bytes.checked_add(t.heap_bytes()?)?;
++    }
++    Some(bytes)
++}
++fn requirements_for(
++    t: &TyTerm,
++    transaction: Digest,
++    required: &mut std::collections::BTreeSet<UnificationRequirement>,
++    depth: usize,
++    limit: usize,
++) -> Result<(), Diagnostic> {
++    if depth >= limit {
++        return Err(invalid("candidate shape depth limit"));
++    }
++    match t {
++        TyTerm::Infer(v) if v.transaction != transaction => {
++            return Err(invalid("foreign candidate inference transaction"));
++        }
++        TyTerm::Placeholder(p) if p.transaction != transaction => {
++            return Err(invalid("foreign candidate universal placeholder"));
++        }
++        TyTerm::Projection(p) => {
++            required.insert(UnificationRequirement::ProjectionNormalization);
++            requirements_for(
++                &p.trait_ref.self_ty,
++                transaction,
++                required,
++                depth + 1,
++                limit,
++            )?;
++            for a in p.arguments() {
++                match a {
++                    GenericArg::Type(t) => {
++                        requirements_for(t, transaction, required, depth + 1, limit)?
++                    }
++                    GenericArg::Const(c) => const_requirement(c, transaction, required)?,
++                    GenericArg::Region(r) => region_requirement(r, transaction, required)?,
++                }
++            }
++        }
++        TyTerm::Function(f) => {
++            required.insert(UnificationRequirement::FunctionBinderMatching);
++            for t in &f.value.parameters {
++                requirements_for(t, transaction, required, depth + 1, limit)?;
++            }
++            requirements_for(&f.value.result, transaction, required, depth + 1, limit)?;
++        }
++        TyTerm::Dyn(_) => {
++            required.insert(UnificationRequirement::DynOrOpaqueSchema);
++        }
++        TyTerm::Opaque(_, args) => {
++            required.insert(UnificationRequirement::DynOrOpaqueSchema);
++            for a in args {
++                match a {
++                    GenericArg::Type(t) => {
++                        requirements_for(t, transaction, required, depth + 1, limit)?
++                    }
++                    GenericArg::Const(c) => const_requirement(c, transaction, required)?,
++                    GenericArg::Region(r) => region_requirement(r, transaction, required)?,
++                }
++            }
++        }
++        TyTerm::Bound { .. } => {
++            required.insert(UnificationRequirement::BoundUniverseMatching);
++        }
++        TyTerm::Tuple(v) => {
++            for t in v {
++                requirements_for(t, transaction, required, depth + 1, limit)?;
++            }
++        }
++        TyTerm::Nominal(_, args) => {
++            for a in args {
++                match a {
++                    GenericArg::Type(t) => {
++                        requirements_for(t, transaction, required, depth + 1, limit)?
++                    }
++                    GenericArg::Const(c) => const_requirement(c, transaction, required)?,
++                    GenericArg::Region(r) => region_requirement(r, transaction, required)?,
++                }
++            }
++        }
++        TyTerm::Array(t, c) => {
++            requirements_for(t, transaction, required, depth + 1, limit)?;
++            const_requirement(c, transaction, required)?;
++        }
++        TyTerm::Ref(r, _, t) => {
++            requirements_for(t, transaction, required, depth + 1, limit)?;
++            region_requirement(r, transaction, required)?;
++        }
++        TyTerm::Slice(t) => requirements_for(t, transaction, required, depth + 1, limit)?,
++        _ => {}
++    }
++    Ok(())
++}
++fn const_requirement(
++    c: &ConstTerm,
++    transaction: Digest,
++    r: &mut std::collections::BTreeSet<UnificationRequirement>,
++) -> Result<(), Diagnostic> {
++    match c {
++        ConstTerm::Placeholder(p) if p.transaction != transaction => {
++            return Err(invalid("foreign const placeholder"));
++        }
++        ConstTerm::Bound { .. } => {
++            r.insert(UnificationRequirement::BoundUniverseMatching);
++        }
++        _ => {}
++    }
++    Ok(())
++}
++fn region_requirement(
++    c: &RegionTerm,
++    transaction: Digest,
++    r: &mut std::collections::BTreeSet<UnificationRequirement>,
++) -> Result<(), Diagnostic> {
++    match c {
++        RegionTerm::Placeholder(p) if p.transaction != transaction => {
++            return Err(invalid("foreign region placeholder"));
++        }
++        RegionTerm::Bound { .. } => {
++            r.insert(UnificationRequirement::BoundUniverseMatching);
++        }
++        _ => {}
++    }
++    Ok(())
++}
++fn collect_pair_requirements(
++    a: &TyTerm,
++    b: &TyTerm,
++    r: &mut std::collections::BTreeSet<UnificationRequirement>,
++    depth: usize,
++    limit: usize,
++) {
++    if depth >= limit {
++        return;
++    }
++    match (a, b) {
++        (TyTerm::Array(x, c), TyTerm::Array(y, d)) => {
++            if c != d && (!matches!(c, ConstTerm::Value(_)) || !matches!(d, ConstTerm::Value(_))) {
++                r.insert(UnificationRequirement::ConstEquality);
++            }
++            collect_pair_requirements(x, y, r, depth + 1, limit);
++        }
++        (TyTerm::Ref(c, _, x), TyTerm::Ref(d, _, y)) => {
++            if c != d
++                && (matches!(c, RegionTerm::Param(_) | RegionTerm::Local { .. })
++                    || matches!(d, RegionTerm::Param(_) | RegionTerm::Local { .. }))
++            {
++                r.insert(UnificationRequirement::RegionEquality);
++            }
++            collect_pair_requirements(x, y, r, depth + 1, limit);
++        }
++        (TyTerm::Tuple(x), TyTerm::Tuple(y)) => {
++            for (x, y) in x.iter().zip(y) {
++                collect_pair_requirements(x, y, r, depth + 1, limit);
++            }
++        }
++        (TyTerm::Slice(x), TyTerm::Slice(y)) => {
++            collect_pair_requirements(x, y, r, depth + 1, limit)
++        }
++        (TyTerm::Nominal(_, x), TyTerm::Nominal(_, y)) => {
++            for (x, y) in x.iter().zip(y) {
++                match (x, y) {
++                    (GenericArg::Type(x), GenericArg::Type(y)) => {
++                        collect_pair_requirements(x, y, r, depth + 1, limit)
++                    }
++                    (GenericArg::Const(x), GenericArg::Const(y))
++                        if x != y
++                            && (!matches!(x, ConstTerm::Value(_))
++                                || !matches!(y, ConstTerm::Value(_))) =>
++                    {
++                        r.insert(UnificationRequirement::ConstEquality);
++                    }
++                    (GenericArg::Region(x), GenericArg::Region(y)) if x != y => {
++                        r.insert(UnificationRequirement::RegionEquality);
++                    }
++                    _ => {}
++                }
++            }
++        }
++        _ => {}
++    }
++}
++
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum CandidateDispositionModel {
++    StructuralMatchPending,
++    Unresolved,
++    StructuralConflict,
++}
++#[derive(Debug)]
++pub enum CandidateSetModel {
++    NoStructuralMatch(Vec<Digest>),
++    Unresolved(Vec<Digest>),
++    Ambiguous(Vec<Digest>),
++}
++/// Potential-candidate aggregation only. Never Unique/NoSolution or a witness;
++/// conditions, source goal readiness and tables remain unfulfilled.
++pub fn combine_candidate_models(
++    mut reports: Vec<(Digest, CandidateDispositionModel)>,
++) -> Result<CandidateSetModel, Diagnostic> {
++    if reports.len() > 50_000 {
++        return Err(invalid("candidate model count limit"));
++    }
++    reports.sort_by_key(|r| r.0);
++    if reports.windows(2).any(|p| p[0].0 == p[1].0) {
++        return Err(invalid(
++            "duplicate candidate identity is not a second witness",
++        ));
++    }
++    let mut possible = Vec::new();
++    possible
++        .try_reserve_exact(reports.len())
++        .map_err(|_| invalid("candidate metadata allocation"))?;
++    let mut rejected = Vec::new();
++    rejected
++        .try_reserve_exact(reports.len())
++        .map_err(|_| invalid("candidate metadata allocation"))?;
++    for (key, state) in reports {
++        if state == CandidateDispositionModel::StructuralConflict {
++            rejected.push(key);
++        } else {
++            possible.push(key);
++        }
++    }
++    Ok(if possible.len() > 1 {
++        CandidateSetModel::Ambiguous(possible)
++    } else if possible.is_empty() {
++        CandidateSetModel::NoStructuralMatch(rejected)
++    } else {
++        CandidateSetModel::Unresolved(possible)
++    })
++}
++
++fn definitely_different_outer(a: &TyTerm, b: &TyTerm) -> bool {
++    match (a, b) {
++        (TyTerm::Primitive(a), TyTerm::Primitive(b)) => a != b,
++        (TyTerm::Param(a), TyTerm::Param(b)) => a != b,
++        (TyTerm::Nominal(a, _), TyTerm::Nominal(b, _)) => a != b,
++        (TyTerm::Tuple(a), TyTerm::Tuple(b)) => a.len() != b.len(),
++        (TyTerm::Array(_, ConstTerm::Value(a)), TyTerm::Array(_, ConstTerm::Value(b))) => a != b,
++        (TyTerm::Ref(_, a, _), TyTerm::Ref(_, b, _)) => a != b,
++        _ => false,
++    }
++}
+diff --git a/crates/lrr/src/traits/canonical.rs b/crates/lrr/src/traits/canonical.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/traits/canonical.rs
+@@ -0,0 +1,708 @@
++//! Bounded canonical data, not a source goal certificate or executable witness.
++use super::term::*;
++use crate::core::{
++    diagnostic::Diagnostic,
++    digest::{Digest, StableEncode, StableEncoder},
++    profile::ProfileIdentity,
++};
++use std::collections::{BTreeMap, BTreeSet};
++#[derive(Clone, Debug)]
++pub enum GoalModel {
++    Implemented(TraitRef),
++    Normalize(ProjectionKey, TyTerm),
++    ConstEqual(ConstTerm, ConstTerm),
++    TypeEqual(TyTerm, TyTerm),
++    Outlives(RegionTerm, RegionTerm),
++    TypeOutlives(TyTerm, RegionTerm),
++    DynCompatible(DynSchemaKey),
++}
++/// Explicit metadata fixture context. This is neither an M018 source view nor
++/// live/world permission. The actual admitted producer remains a prerequisite.
++#[derive(Clone, Debug)]
++pub struct CanonicalContextModel {
++    pub transaction: Digest,
++    pub profile: ProfileIdentity,
++    pub unit: Digest,
++    pub world: Digest,
++    pub catalog: Digest,
++    pub cfg: Digest,
++    pub source_namespace: Digest,
++    pub epoch: u64,
++    pub source_revision: u64,
++    pub query_revision: u64,
++    pub max_universe: u32,
++    pub excluded_dictionary_slots: Vec<Digest>,
++}
++#[derive(Clone, Copy, Debug)]
++pub struct CanonicalLimits {
++    pub bytes: usize,
++    pub work: usize,
++    pub depth: usize,
++    pub variables: usize,
++}
++impl Default for CanonicalLimits {
++    fn default() -> Self {
++        Self {
++            bytes: 1024 * 1024,
++            work: 1_000_000,
++            depth: 256,
++            variables: 50_000,
++        }
++    }
++}
++impl CanonicalLimits {
++    pub(crate) fn validate(self) -> Result<Self, CanonicalError> {
++        let hard = Self::default();
++        if self.bytes > hard.bytes
++            || self.work > hard.work
++            || self.depth > hard.depth
++            || self.variables > hard.variables
++        {
++            return Err(CanonicalError::Invalid(
++                "canonical limit exceeds fixed ceiling",
++            ));
++        }
++        Ok(self)
++    }
++}
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum CanonicalLimit {
++    Bytes,
++    Work,
++    Depth,
++    Variables,
++}
++#[derive(Debug)]
++pub enum CanonicalError {
++    Overflow(CanonicalLimit),
++    Invalid(&'static str),
++    SourceTerm(Diagnostic),
++}
++impl std::fmt::Display for CanonicalError {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        match self {
++            Self::Overflow(l) => write!(f, "canonical metadata overflow: {l:?}"),
++            Self::Invalid(s) => f.write_str(s),
++            Self::SourceTerm(d) => f.write_str(&d.message),
++        }
++    }
++}
++impl std::error::Error for CanonicalError {}
++/// Back-mapping is demand-local data only; original inference spelling/nonce
++/// is omitted from the canonical identity but remains available for a later
++/// ordered answer-instantiation producer.
++#[derive(Clone, Debug)]
++pub struct CanonicalVariableModel {
++    pub original: InferVarKey,
++    pub universe: u32,
++}
++#[derive(Debug)]
++pub struct CanonicalGoalModel {
++    bytes: Vec<u8>,
++    variables: Vec<CanonicalVariableModel>,
++    identity: Digest,
++    metadata_bytes: usize,
++}
++impl CanonicalGoalModel {
++    pub fn capture(
++        context: &CanonicalContextModel,
++        goal: &Binder<GoalModel>,
++        env: &ParamEnv,
++        universes: &BTreeMap<InferVarKey, u32>,
++        limits: CanonicalLimits,
++    ) -> Result<Self, CanonicalError> {
++        let limits = limits.validate()?;
++        context
++            .profile
++            .validate_source()
++            .map_err(CanonicalError::SourceTerm)?;
++        if context.epoch == 0
++            || context.max_universe > 256
++            || context.excluded_dictionary_slots.len() > limits.variables
++            || universes.len() > limits.variables
++        {
++            return Err(CanonicalError::Invalid(
++                "canonical context epoch/universe/count invalid",
++            ));
++        }
++        if universes
++            .iter()
++            .any(|(key, u)| key.transaction != context.transaction || *u > context.max_universe)
++        {
++            return Err(CanonicalError::Invalid(
++                "foreign or invisible inference universe",
++            ));
++        }
++        let auxiliary = env
++            .parameters()
++            .len()
++            .checked_mul(128)
++            .and_then(|n| {
++                n.checked_add(
++                    env.predicates()
++                        .len()
++                        .checked_mul(std::mem::size_of::<&Binder<TraitRef>>())?,
++                )
++            })
++            .and_then(|n| {
++                n.checked_add(
++                    context
++                        .excluded_dictionary_slots
++                        .capacity()
++                        .checked_mul(std::mem::size_of::<Digest>())?,
++                )
++            })
++            .and_then(|n| n.checked_add(256usize.checked_mul(std::mem::size_of::<&[BoundKind]>())?))
++            .filter(|n| *n <= limits.bytes)
++            .ok_or(CanonicalError::Overflow(CanonicalLimit::Bytes))?;
++        let declared = env.parameters().iter().copied().collect::<BTreeSet<_>>();
++        let mut writer = Writer {
++            bytes: Vec::new(),
++            limits,
++            steps: 0,
++            context,
++            universes,
++            inference: BTreeMap::new(),
++            variables: Vec::new(),
++            placeholders: BTreeMap::new(),
++            scopes: Vec::new(),
++            declared,
++            auxiliary_bytes: 0,
++        };
++        writer.account(auxiliary)?;
++        writer.u32(1)?;
++        writer.string(crate::core::profile::GUEST_TARGET)?;
++        writer.u16(context.profile.edition)?;
++        writer.string(&context.profile.semantics)?;
++        for digest in [
++            context.unit,
++            context.world,
++            context.catalog,
++            context.cfg,
++            context.source_namespace,
++        ] {
++            writer.digest(digest)?;
++        }
++        writer.u64(context.epoch)?;
++        writer.u64(context.source_revision)?;
++        writer.u64(context.query_revision)?;
++        writer.u32(context.max_universe)?;
++        let mut exclusions = context.excluded_dictionary_slots.clone();
++        exclusions.sort_unstable();
++        if exclusions.windows(2).any(|p| p[0] == p[1]) {
++            return Err(CanonicalError::Invalid(
++                "duplicate in-progress dictionary exclusion",
++            ));
++        }
++        writer.count(exclusions.len())?;
++        for e in exclusions {
++            writer.digest(e)?;
++        }
++        writer.push(&goal.variables)?;
++        writer.goal(&goal.value, 0)?;
++        writer.scopes.pop();
++        writer.digest(env.definition())?;
++        let mut parameters = env.parameters().iter().collect::<Vec<_>>();
++        parameters.sort_unstable();
++        writer.count(parameters.len())?;
++        for (kind, key) in parameters {
++            writer.u8(kind.tag() as u8)?;
++            writer.param(*key, *kind)?;
++        }
++        // Definition assumptions cannot contain Infer/transaction placeholders (the
++        // existing ParamEnv constructor enforces this). Sort source facts before
++        // canonical traversal, independently of demand-variable allocation order.
++        let mut facts = env.predicates().iter().collect::<Vec<_>>();
++        facts.sort_by_key(|p| p.fingerprint());
++        writer.count(facts.len())?;
++        for p in facts {
++            writer.push(&p.variables)?;
++            writer.trait_ref(&p.value, 0)?;
++            writer.scopes.pop();
++        }
++        writer.count(writer.variables.len())?;
++        for ordinal in 0..writer.variables.len() {
++            writer.u8(BoundKind::Type.tag() as u8)?;
++            writer.u32(writer.variables[ordinal].universe)?;
++        }
++        let metadata_bytes = writer
++            .bytes
++            .capacity()
++            .checked_add(
++                writer
++                    .variables
++                    .capacity()
++                    .checked_mul(std::mem::size_of::<CanonicalVariableModel>())
++                    .ok_or(CanonicalError::Overflow(CanonicalLimit::Bytes))?,
++            )
++            .and_then(|n| n.checked_add(std::mem::size_of::<Self>()))
++            .filter(|n| *n <= limits.bytes)
++            .ok_or(CanonicalError::Overflow(CanonicalLimit::Bytes))?;
++        let mut e = StableEncoder::new("lrr/v5/canonical-goal-model/v1");
++        e.bytes(&writer.bytes);
++        let identity = e.finish();
++        Ok(Self {
++            bytes: writer.bytes,
++            variables: writer.variables,
++            identity,
++            metadata_bytes,
++        })
++    }
++    pub fn encoded(&self) -> &[u8] {
++        &self.bytes
++    }
++    pub fn variables(&self) -> &[CanonicalVariableModel] {
++        &self.variables
++    }
++    pub fn metadata_bytes(&self) -> usize {
++        self.metadata_bytes
++    }
++}
++impl StableEncode for CanonicalGoalModel {
++    const DOMAIN: &'static str = "lrr/v5/canonical-goal-model/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.bytes(&self.bytes);
++    }
++    fn fingerprint(&self) -> Digest {
++        self.identity
++    }
++}
++struct Writer<'a> {
++    bytes: Vec<u8>,
++    limits: CanonicalLimits,
++    steps: usize,
++    context: &'a CanonicalContextModel,
++    universes: &'a BTreeMap<InferVarKey, u32>,
++    inference: BTreeMap<InferVarKey, u32>,
++    variables: Vec<CanonicalVariableModel>,
++    placeholders: BTreeMap<(BoundKind, PlaceholderKey), u32>,
++    scopes: Vec<&'a [BoundKind]>,
++    declared: BTreeSet<(BoundKind, ParamKey)>,
++    auxiliary_bytes: usize,
++}
++impl<'a> Writer<'a> {
++    fn step(&mut self, depth: usize) -> Result<(), CanonicalError> {
++        self.steps = self
++            .steps
++            .checked_add(1)
++            .filter(|n| *n <= self.limits.work)
++            .ok_or(CanonicalError::Overflow(CanonicalLimit::Work))?;
++        if depth >= self.limits.depth {
++            return Err(CanonicalError::Overflow(CanonicalLimit::Depth));
++        }
++        Ok(())
++    }
++    fn account(&mut self, bytes: usize) -> Result<(), CanonicalError> {
++        self.auxiliary_bytes = self
++            .auxiliary_bytes
++            .checked_add(bytes)
++            .filter(|n| *n <= self.limits.bytes)
++            .ok_or(CanonicalError::Overflow(CanonicalLimit::Bytes))?;
++        Ok(())
++    }
++    fn append(&mut self, v: &[u8]) -> Result<(), CanonicalError> {
++        self.bytes
++            .len()
++            .checked_add(v.len())
++            .and_then(|n| n.checked_add(self.auxiliary_bytes))
++            .filter(|n| *n <= self.limits.bytes)
++            .ok_or(CanonicalError::Overflow(CanonicalLimit::Bytes))?;
++        self.bytes
++            .try_reserve_exact(v.len())
++            .map_err(|_| CanonicalError::Overflow(CanonicalLimit::Bytes))?;
++        self.bytes.extend_from_slice(v);
++        Ok(())
++    }
++    fn u8(&mut self, n: u8) -> Result<(), CanonicalError> {
++        self.append(&[n])
++    }
++    fn u16(&mut self, n: u16) -> Result<(), CanonicalError> {
++        self.append(&n.to_le_bytes())
++    }
++    fn u32(&mut self, n: u32) -> Result<(), CanonicalError> {
++        self.append(&n.to_le_bytes())
++    }
++    fn u64(&mut self, n: u64) -> Result<(), CanonicalError> {
++        self.append(&n.to_le_bytes())
++    }
++    fn count(&mut self, n: usize) -> Result<(), CanonicalError> {
++        self.u64(u64::try_from(n).map_err(|_| CanonicalError::Overflow(CanonicalLimit::Bytes))?)
++    }
++    fn string(&mut self, s: &str) -> Result<(), CanonicalError> {
++        self.count(s.len())?;
++        self.append(s.as_bytes())
++    }
++    fn digest(&mut self, d: Digest) -> Result<(), CanonicalError> {
++        self.append(&d.0)
++    }
++    fn push(&mut self, variables: &'a [BoundKind]) -> Result<(), CanonicalError> {
++        if self.scopes.len() >= self.limits.depth || variables.len() > self.limits.variables {
++            return Err(CanonicalError::Overflow(CanonicalLimit::Depth));
++        }
++        self.count(variables.len())?;
++        for k in variables {
++            self.u8(k.tag() as u8)?;
++        }
++        self.scopes
++            .try_reserve_exact(1)
++            .map_err(|_| CanonicalError::Overflow(CanonicalLimit::Bytes))?;
++        self.scopes.push(variables);
++        Ok(())
++    }
++    fn bound(&mut self, kind: BoundKind, depth: u32, index: u32) -> Result<(), CanonicalError> {
++        let scope = self
++            .scopes
++            .len()
++            .checked_sub(
++                usize::try_from(depth)
++                    .map_err(|_| CanonicalError::Invalid("binder depth overflow"))?
++                    .checked_add(1)
++                    .ok_or(CanonicalError::Invalid("binder depth overflow"))?,
++            )
++            .and_then(|d| self.scopes.get(d))
++            .ok_or(CanonicalError::Invalid(
++                "bound variable escapes goal binder",
++            ))?;
++        if scope.get(index as usize) != Some(&kind) {
++            return Err(CanonicalError::Invalid(
++                "bound variable namespace/ordinal differs",
++            ));
++        }
++        self.u32(depth)?;
++        self.u32(index)
++    }
++    fn param(&mut self, p: ParamKey, kind: BoundKind) -> Result<(), CanonicalError> {
++        if !self.declared.contains(&(kind, p)) {
++            return Err(CanonicalError::Invalid(
++                "rigid source parameter is outside owning environment",
++            ));
++        }
++        self.digest(p.definition)?;
++        self.u32(p.ordinal)
++    }
++    fn placeholder(&mut self, p: PlaceholderKey, kind: BoundKind) -> Result<(), CanonicalError> {
++        if p.transaction != self.context.transaction
++            || p.universe == 0
++            || p.universe > self.context.max_universe
++        {
++            return Err(CanonicalError::Invalid(
++                "foreign/invisible universal placeholder",
++            ));
++        }
++        let ordinal = if let Some(n) = self.placeholders.get(&(kind, p)) {
++            *n
++        } else {
++            if self.placeholders.len() >= self.limits.variables {
++                return Err(CanonicalError::Overflow(CanonicalLimit::Variables));
++            }
++            self.account(128)?;
++            let n = u32::try_from(self.placeholders.len())
++                .map_err(|_| CanonicalError::Overflow(CanonicalLimit::Variables))?;
++            self.placeholders.insert((kind, p), n);
++            n
++        };
++        self.u8(kind.tag() as u8)?;
++        self.u32(p.universe)?;
++        self.u32(ordinal)
++    }
++    fn region(&mut self, r: &RegionTerm) -> Result<(), CanonicalError> {
++        self.step(0)?;
++        match r {
++            RegionTerm::Placeholder(p) => {
++                self.u8(0)?;
++                self.placeholder(*p, BoundKind::Region)
++            }
++            RegionTerm::Static => self.u8(1),
++            RegionTerm::Param(p) => {
++                self.u8(2)?;
++                self.param(*p, BoundKind::Region)
++            }
++            RegionTerm::Bound { depth, index } => {
++                self.u8(3)?;
++                self.bound(BoundKind::Region, *depth, *index)
++            }
++            RegionTerm::Local {
++                definition,
++                start,
++                end,
++            } => {
++                if start > end {
++                    return Err(CanonicalError::Invalid("local region source range invalid"));
++                }
++                self.u8(4)?;
++                self.digest(*definition)?;
++                self.u32(*start)?;
++                self.u32(*end)
++            }
++        }
++    }
++    fn constant(&mut self, c: &ConstTerm) -> Result<(), CanonicalError> {
++        self.step(0)?;
++        match c {
++            ConstTerm::Placeholder(p) => {
++                self.u8(0)?;
++                self.placeholder(*p, BoundKind::Const)
++            }
++            ConstTerm::Bound { depth, index } => {
++                self.u8(1)?;
++                self.bound(BoundKind::Const, *depth, *index)
++            }
++            ConstTerm::Value(v) => {
++                self.u8(2)?;
++                self.u64(*v)
++            }
++            ConstTerm::Param(p) => {
++                self.u8(3)?;
++                self.param(*p, BoundKind::Const)
++            }
++        }
++    }
++    fn args(&mut self, args: &'a [GenericArg], depth: usize) -> Result<(), CanonicalError> {
++        self.count(args.len())?;
++        for a in args {
++            self.step(depth)?;
++            match a {
++                GenericArg::Type(t) => {
++                    self.u8(0)?;
++                    self.ty(t, depth + 1)?;
++                }
++                GenericArg::Const(c) => {
++                    self.u8(1)?;
++                    self.constant(c)?;
++                }
++                GenericArg::Region(r) => {
++                    self.u8(2)?;
++                    self.region(r)?;
++                }
++            }
++        }
++        Ok(())
++    }
++    fn trait_ref(&mut self, t: &'a TraitRef, depth: usize) -> Result<(), CanonicalError> {
++        self.digest(t.trait_key)?;
++        self.ty(&t.self_ty, depth + 1)?;
++        self.args(&t.args, depth + 1)
++    }
++    fn projection(&mut self, p: &'a ProjectionKey, depth: usize) -> Result<(), CanonicalError> {
++        self.trait_ref(&p.trait_ref, depth + 1)?;
++        self.digest(p.item)?;
++        self.args(&p.item_args, depth + 1)
++    }
++    fn ty(&mut self, t: &'a TyTerm, depth: usize) -> Result<(), CanonicalError> {
++        self.step(depth)?;
++        match t {
++            TyTerm::Dyn(d) => {
++                self.u8(0)?;
++                self.digest(d.0)
++            }
++            TyTerm::Opaque(k, args) => {
++                k.validate_arguments(args)
++                    .map_err(CanonicalError::SourceTerm)?;
++                self.u8(1)?;
++                self.digest(k.definition())?;
++                self.u32(k.return_position())?;
++                self.count(k.captures().len())?;
++                for (kind, p) in k.captures() {
++                    self.u8(kind.tag() as u8)?;
++                    self.digest(p.definition)?;
++                    self.u32(p.ordinal)?;
++                }
++                self.args(args, depth + 1)
++            }
++            TyTerm::Projection(p) => {
++                self.u8(2)?;
++                self.projection(p, depth + 1)
++            }
++            TyTerm::Placeholder(p) => {
++                self.u8(3)?;
++                self.placeholder(*p, BoundKind::Type)
++            }
++            TyTerm::Bound { depth, index } => {
++                self.u8(4)?;
++                self.bound(BoundKind::Type, *depth, *index)
++            }
++            TyTerm::Function(f) => {
++                self.u8(5)?;
++                self.push(&f.variables)?;
++                self.count(f.value.parameters.len())?;
++                for p in &f.value.parameters {
++                    self.ty(p, depth + 1)?;
++                }
++                self.ty(&f.value.result, depth + 1)?;
++                self.scopes.pop();
++                Ok(())
++            }
++            TyTerm::Primitive(p) => {
++                self.u8(6)?;
++                self.u32(p.tag())
++            }
++            TyTerm::Nominal(d, args) => {
++                self.u8(7)?;
++                self.digest(*d)?;
++                self.args(args, depth + 1)
++            }
++            TyTerm::Tuple(v) => {
++                self.u8(8)?;
++                self.count(v.len())?;
++                for t in v {
++                    self.ty(t, depth + 1)?;
++                }
++                Ok(())
++            }
++            TyTerm::Array(t, c) => {
++                self.u8(9)?;
++                self.ty(t, depth + 1)?;
++                self.constant(c)
++            }
++            TyTerm::Slice(t) => {
++                self.u8(10)?;
++                self.ty(t, depth + 1)
++            }
++            TyTerm::Ref(r, m, t) => {
++                self.u8(11)?;
++                self.region(r)?;
++                self.u8(u8::from(*m))?;
++                self.ty(t, depth + 1)
++            }
++            TyTerm::Param(p) => {
++                self.u8(12)?;
++                self.param(*p, BoundKind::Type)
++            }
++            TyTerm::Infer(v) => {
++                if v.transaction != self.context.transaction {
++                    return Err(CanonicalError::Invalid("foreign inference transaction"));
++                }
++                let universe = *self.universes.get(v).ok_or(CanonicalError::Invalid(
++                    "inference variable lacks owning universe",
++                ))?;
++                let ordinal = if let Some(n) = self.inference.get(v) {
++                    *n
++                } else {
++                    if self.variables.len() >= self.limits.variables {
++                        return Err(CanonicalError::Overflow(CanonicalLimit::Variables));
++                    }
++                    self.account(160)?;
++                    let n = u32::try_from(self.variables.len())
++                        .map_err(|_| CanonicalError::Overflow(CanonicalLimit::Variables))?;
++                    self.variables
++                        .try_reserve_exact(1)
++                        .map_err(|_| CanonicalError::Overflow(CanonicalLimit::Bytes))?;
++                    self.variables.push(CanonicalVariableModel {
++                        original: *v,
++                        universe,
++                    });
++                    self.inference.insert(*v, n);
++                    n
++                };
++                self.u8(13)?;
++                self.u32(ordinal)?;
++                self.u32(universe)
++            }
++            TyTerm::Never => self.u8(14),
++        }
++    }
++    fn goal(&mut self, g: &'a GoalModel, depth: usize) -> Result<(), CanonicalError> {
++        self.step(depth)?;
++        match g {
++            GoalModel::Implemented(t) => {
++                self.u8(0)?;
++                self.trait_ref(t, depth + 1)
++            }
++            GoalModel::Normalize(p, t) => {
++                self.u8(1)?;
++                self.projection(p, depth + 1)?;
++                self.ty(t, depth + 1)
++            }
++            GoalModel::ConstEqual(a, b) => {
++                self.u8(2)?;
++                self.constant(a)?;
++                self.constant(b)
++            }
++            GoalModel::TypeEqual(a, b) => {
++                self.u8(3)?;
++                self.ty(a, depth + 1)?;
++                self.ty(b, depth + 1)
++            }
++            GoalModel::Outlives(a, b) => {
++                self.u8(4)?;
++                self.region(a)?;
++                self.region(b)
++            }
++            GoalModel::TypeOutlives(t, r) => {
++                self.u8(5)?;
++                self.ty(t, depth + 1)?;
++                self.region(r)
++            }
++            GoalModel::DynCompatible(d) => {
++                self.u8(6)?;
++                self.digest(d.0)
++            }
++        }
++    }
++}
++
++/// Agreement data from the actual M019 adapter, not a CanonicalGoalKey or M018
++/// completion. Its producer is the narrowly proposed read-only index bridge.
++pub(super) struct CatalogHeaderRequirement {
++    pub catalog: crate::db::seals::SealKey,
++    pub catalog_identity: Digest,
++    pub header: Digest,
++    pub definition: Digest,
++    pub profile: ProfileIdentity,
++    pub cfg: Digest,
++    pub source_revision: u64,
++    pub query_revision: u64,
++}
++impl StableEncode for CatalogHeaderRequirement {
++    const DOMAIN: &'static str = "lrr/v5/canonical-header-prerequisite/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.record(&self.catalog);
++        e.digest(self.catalog_identity);
++        e.digest(self.header);
++        e.digest(self.definition);
++        e.record(&self.profile);
++        e.digest(self.cfg);
++        e.u64(self.source_revision);
++        e.u64(self.query_revision);
++    }
++}
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum GoalAdmissionPrerequisite {
++    M018SourceView,
++    M019ResolvedPredicates,
++    NormalizationGoalProducer,
++}
++pub struct CurrentGoalPrerequisite {
++    stamp: CatalogHeaderRequirement,
++}
++impl CurrentGoalPrerequisite {
++    pub fn capture_header_current(
++        db: &crate::db::memo::Database,
++        index: &super::index::CurrentImplCandidateIndex,
++        header: Digest,
++    ) -> Result<Self, Diagnostic> {
++        let stamp = index.canonical_header_requirement_current(db, header)?;
++        Ok(Self { stamp })
++    }
++    pub fn revalidate(
++        &self,
++        db: &crate::db::memo::Database,
++        index: &super::index::CurrentImplCandidateIndex,
++    ) -> Result<(), Diagnostic> {
++        let current = index.canonical_header_requirement_current(db, self.stamp.header)?;
++        if current.fingerprint() != self.stamp.fingerprint() {
++            return Err(Diagnostic::new(
++                "LRR-E-TRAIT-GOAL-CONTEXT",
++                "canonical source/catalog prerequisite changed".into(),
++            ));
++        }
++        Ok(())
++    }
++    pub fn requirements(&self) -> &[GoalAdmissionPrerequisite] {
++        &[
++            GoalAdmissionPrerequisite::M018SourceView,
++            GoalAdmissionPrerequisite::M019ResolvedPredicates,
++            GoalAdmissionPrerequisite::NormalizationGoalProducer,
++        ]
++    }
++}
+diff --git a/crates/lrr/src/traits/header.rs b/crates/lrr/src/traits/header.rs
+--- a/crates/lrr/src/traits/header.rs
++++ b/crates/lrr/src/traits/header.rs
+@@ -563,6 +563,18 @@
+ /// Checked owned-capacity accounting shared by capture and catalog admission.
+ pub(crate) fn captured_capacity_bytes(
+     headers: &Vec<SourceTraitHeader>,
++) -> Result<usize, Diagnostic> {
++    header_capacity_bytes(headers, headers.capacity())
++}
++impl SourceTraitHeader {
++    /// Read-only full-header reservation for candidate-local copies; data only.
++    pub(crate) fn candidate_snapshot_bytes(&self) -> Result<usize, Diagnostic> {
++        header_capacity_bytes(std::slice::from_ref(self), 1)
++    }
++}
++fn header_capacity_bytes(
++    headers: &[SourceTraitHeader],
++    capacity: usize,
+ ) -> Result<usize, Diagnostic> {
+     struct Size {
+         bytes: usize,
+@@ -746,7 +758,11 @@
+         }
+     }
+     let mut s = Size { bytes: 0, work: 0 };
+-    s.vec(headers)?;
++    s.add(
++        capacity
++            .checked_mul(std::mem::size_of::<SourceTraitHeader>())
++            .ok_or_else(limit)?,
++    )?;
+     for h in headers {
+         s.step(0)?;
+         s.add(h.source.profile.semantics.capacity())?;
+diff --git a/crates/lrr/src/traits/index.rs b/crates/lrr/src/traits/index.rs
+--- a/crates/lrr/src/traits/index.rs
++++ b/crates/lrr/src/traits/index.rs
+@@ -463,6 +463,31 @@
+             limits,
+         })
+     }
++    /// Actual current header/catalog agreement only, no source-goal completion.
++    pub(super) fn canonical_header_requirement_current(
++        &self,
++        db: &Database,
++        header: Digest,
++    ) -> Result<super::canonical::CatalogHeaderRequirement, Diagnostic> {
++        self.revalidate(db)?;
++        let row = self
++            .model
++            .rows
++            .iter()
++            .find(|r| r.identity == header)
++            .ok_or_else(|| required("canonical header is outside actual current catalog"))?;
++        let h = &self.model.fragments[row.fragment].headers[row.header];
++        Ok(super::canonical::CatalogHeaderRequirement {
++            catalog: self.seal.clone(),
++            catalog_identity: self.model.fingerprint(),
++            header,
++            definition: h.definition.fingerprint(),
++            profile: h.source.profile.clone(),
++            cfg: h.cfg,
++            source_revision: self.source_revision,
++            query_revision: self.query_revision,
++        })
++    }
+     pub fn revalidate(&self, db: &Database) -> Result<(), Diagnostic> {
+         if self.source_revision != db.source_revision() || self.query_revision != db.revision() {
+             return Err(fault(
+diff --git a/crates/lrr/src/traits/mod.rs b/crates/lrr/src/traits/mod.rs
+--- a/crates/lrr/src/traits/mod.rs
++++ b/crates/lrr/src/traits/mod.rs
+@@ -6,3 +6,5 @@
+ 
+ pub mod header;
+ pub mod index;
++
++pub mod canonical;
+diff --git a/crates/lrr/src/traits/unify.rs b/crates/lrr/src/traits/unify.rs
+--- a/crates/lrr/src/traits/unify.rs
++++ b/crates/lrr/src/traits/unify.rs
+@@ -147,6 +147,20 @@
+         self.bindings.get(&key)
+     }
+     pub fn unify(&mut self, left: &TyTerm, right: &TyTerm) -> Result<(), Diagnostic> {
++        self.unify_with_work_limit(left, right, MAX_STEPS)
++            .map(|_| ())
++    }
++    /// Candidate coordinators account exact existing structural work across a
++    /// constraint set. This is not a trait solver or guest fuel counter.
++    pub(crate) fn unify_with_work_limit(
++        &mut self,
++        left: &TyTerm,
++        right: &TyTerm,
++        work_limit: usize,
++    ) -> Result<usize, Diagnostic> {
++        if work_limit > MAX_STEPS {
++            return Err(limit());
++        }
+         validate(left, self.transaction, self.universe)?;
+         validate(right, self.transaction, self.universe)?;
+         // Rejected constraints must not publish a prefix of their bindings.
+@@ -158,7 +172,10 @@
+         admit_variables(left, &mut universes)?;
+         admit_variables(right, &mut universes)?;
+         let mut work = vec![(left.clone(), right.clone())];
+-        let mut steps = 0usize;
++        let mut steps = UnificationSteps {
++            used: 0,
++            limit: work_limit,
++        };
+         while let Some((left, right)) = work.pop() {
+             charge(&mut steps)?;
+             let left = resolve_head(&staged, &left, &mut steps)?.clone();
+@@ -216,12 +233,16 @@
+         }
+         self.bindings = staged;
+         self.variable_universes = universes;
+-        Ok(())
+-    }
+-}
+-fn charge(steps: &mut usize) -> Result<(), Diagnostic> {
+-    *steps = steps.checked_add(1).ok_or_else(limit)?;
+-    if *steps > MAX_STEPS {
++        Ok(steps.used)
++    }
++}
++struct UnificationSteps {
++    used: usize,
++    limit: usize,
++}
++fn charge(steps: &mut UnificationSteps) -> Result<(), Diagnostic> {
++    steps.used = steps.used.checked_add(1).ok_or_else(limit)?;
++    if steps.used > steps.limit {
+         Err(limit())
+     } else {
+         Ok(())
+@@ -230,7 +251,7 @@
+ fn resolve_head<'a>(
+     bindings: &'a BTreeMap<InferVarKey, TyTerm>,
+     mut term: &'a TyTerm,
+-    steps: &mut usize,
++    steps: &mut UnificationSteps,
+ ) -> Result<&'a TyTerm, Diagnostic> {
+     while let TyTerm::Infer(v) = term {
+         charge(steps)?;
+@@ -243,7 +264,7 @@
+     bindings: &BTreeMap<InferVarKey, TyTerm>,
+     variable: InferVarKey,
+     term: &TyTerm,
+-    steps: &mut usize,
++    steps: &mut UnificationSteps,
+ ) -> Result<bool, Diagnostic> {
+     let mut stack = vec![(term, 0)];
+     while let Some((term, depth)) = stack.pop() {
+@@ -283,7 +304,7 @@
+     universes: &mut BTreeMap<InferVarKey, u32>,
+     variable: InferVarKey,
+     term: &TyTerm,
+-    steps: &mut usize,
++    steps: &mut UnificationSteps,
+ ) -> Result<(), Diagnostic> {
+     let visible = universes.get(&variable).copied().unwrap_or(0);
+     let mut work = vec![(term, 0usize)];
+@@ -327,3 +348,6 @@
+     }
+     Ok(())
+ }
++
++#[path = "candidate_transactions.rs"]
++pub mod candidate;
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/higher-ranked/higher-ranked-encoding.rs b/fixtures/upstream/rustc-checkout/tests/ui/higher-ranked/higher-ranked-encoding.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/higher-ranked/higher-ranked-encoding.rs
+@@ -0,0 +1,51 @@
++//! Regression test for https://github.com/rust-lang/rust/issues/15924
++
++//@ run-pass
++
++use std::marker::PhantomData;
++
++trait Encoder {
++    type Error;
++}
++
++trait Encodable<S: Encoder> {
++    fn encode(&self, s: &mut S) -> Result<(), S::Error>;
++}
++
++impl<S: Encoder> Encodable<S> for i32 {
++    fn encode(&self, _s: &mut S) -> Result<(), S::Error> {
++        Ok(())
++    }
++}
++
++struct JsonEncoder<'a>(PhantomData<&'a mut ()>);
++
++impl Encoder for JsonEncoder<'_> {
++    type Error = ();
++}
++
++// This function uses higher-ranked trait bounds, which previously caused ICE
++fn encode_json<T: for<'r> Encodable<JsonEncoder<'r>>>(object: &T) -> Result<String, ()> {
++    let s = String::new();
++    {
++        let mut encoder = JsonEncoder(PhantomData);
++        object.encode(&mut encoder)?;
++    }
++    Ok(s)
++}
++
++// Structure with HRTB constraint that was problematic
++struct Foo<T: for<'a> Encodable<JsonEncoder<'a>>> {
++    v: T,
++}
++
++// Drop implementation that exercises the HRTB bounds
++impl<T: for<'a> Encodable<JsonEncoder<'a>>> Drop for Foo<T> {
++    fn drop(&mut self) {
++        let _ = encode_json(&self.v);
++    }
++}
++
++fn main() {
++    let _ = Foo { v: 10 };
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/higher-ranked/leak-check/leak-check-in-selection-1.rs b/fixtures/upstream/rustc-checkout/tests/ui/higher-ranked/leak-check/leak-check-in-selection-1.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/higher-ranked/leak-check/leak-check-in-selection-1.rs
+@@ -0,0 +1,25 @@
++//@ run-pass
++//@ revisions: old next
++//@ ignore-compare-mode-next-solver (explicit revisions)
++//@[next] compile-flags: -Znext-solver
++#![allow(coherence_leak_check)]
++
++trait Trait: Sized {
++    fn is_higher_ranked(self) -> bool;
++}
++
++impl Trait for for<'a> fn(&'a ()) {
++    fn is_higher_ranked(self) -> bool {
++        true
++    }
++}
++impl<'a> Trait for fn(&'a ()) {
++    fn is_higher_ranked(self) -> bool {
++        false
++    }
++}
++
++fn main() {
++    let x: for<'a> fn(&'a ()) = |&()| ();
++    assert!(x.is_higher_ranked());
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/traits/multidispatch1.rs b/fixtures/upstream/rustc-checkout/tests/ui/traits/multidispatch1.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/traits/multidispatch1.rs
+@@ -0,0 +1,33 @@
++//@ run-pass
++
++use std::fmt::Debug;
++
++trait MyTrait<T> {
++    fn get(&self) -> T;
++}
++
++#[derive(Copy, Clone)]
++struct MyType {
++    dummy: usize
++}
++
++impl MyTrait<usize> for MyType {
++    fn get(&self) -> usize { self.dummy }
++}
++
++impl MyTrait<u8> for MyType {
++    fn get(&self) -> u8 { self.dummy as u8 }
++}
++
++fn test_eq<T,M>(m: M, v: T)
++where T : Eq + Debug,
++      M : MyTrait<T>
++{
++    assert_eq!(m.get(), v);
++}
++
++pub fn main() {
++    let value = MyType { dummy: 256 + 22 };
++    test_eq::<usize, _>(value, value.dummy);
++    test_eq::<u8, _>(value, value.dummy as u8);
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/traits/multidispatch2.rs b/fixtures/upstream/rustc-checkout/tests/ui/traits/multidispatch2.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/traits/multidispatch2.rs
+@@ -0,0 +1,38 @@
++//@ run-pass
++
++use std::fmt::Debug;
++
++trait MyTrait<T> {
++    fn get(&self) -> T;
++}
++
++impl<T> MyTrait<T> for T
++    where T : Default
++{
++    fn get(&self) -> T {
++        Default::default()
++    }
++}
++
++#[derive(Copy, Clone)]
++struct MyType {
++    dummy: usize
++}
++
++impl MyTrait<usize> for MyType {
++    fn get(&self) -> usize { self.dummy }
++}
++
++fn test_eq<T,M>(m: M, v: T)
++where T : Eq + Debug,
++      M : MyTrait<T>
++{
++    assert_eq!(m.get(), v);
++}
++
++pub fn main() {
++    test_eq(22_usize, 0_usize);
++
++    let value = MyType { dummy: 256 + 22 };
++    test_eq(value, value.dummy);
++}
+diff --git a/xtask/tests/canonical_candidates.rs b/xtask/tests/canonical_candidates.rs
+new file mode 100644
+--- /dev/null
++++ b/xtask/tests/canonical_candidates.rs
+@@ -0,0 +1,448 @@
++//! M020 data/kernel adapters; no source-goal/solver/stock runtime acceptance.
++use lrr::{
++    core::{
++        digest::{Digest, StableEncode},
++        profile::ProfileIdentity,
++    },
++    source::snapshot::{CfgSet, SourceBlob, SourcePath},
++    syntax::{outline::ScopeKey, parse::ParsedFile},
++    traits::{
++        canonical::{CanonicalContextModel, CanonicalGoalModel, CanonicalLimits, GoalModel},
++        header::{HeaderCaptureLimits, HeaderKind},
++        term::{
++            Binder, BoundKind, ConstTerm, GenericArg, InferVarKey, ParamEnv, ParamKey,
++            ProjectionKey, RegionTerm, TraitRef, TyTerm,
++        },
++        unify::candidate::{CandidateFactoryModel, CandidateReadiness, ConstraintAttempt},
++    },
++};
++use std::collections::BTreeMap;
++fn headers(text: &str, unit: u8) -> lrr::traits::header::CapturedSourceHeaders {
++    let mut p = ProfileIdentity::current();
++    p.edition = 2015;
++    let parsed =
++        ParsedFile::parse_declarations(&SourceBlob::new(text.as_bytes().to_vec()).unwrap(), p)
++            .unwrap();
++    parsed
++        .capture_trait_headers(
++            SourcePath::new("fixture.rs").unwrap(),
++            ScopeKey {
++                crate_key: Digest([unit; 32]),
++                module_path: vec![],
++                owner: None,
++            },
++            &CfgSet::guest_default(),
++            HeaderCaptureLimits::default(),
++        )
++        .unwrap()
++}
++fn context(tx: u8) -> CanonicalContextModel {
++    CanonicalContextModel {
++        transaction: Digest([tx; 32]),
++        profile: ProfileIdentity::current(),
++        unit: Digest([81; 32]),
++        world: Digest([82; 32]),
++        catalog: Digest([83; 32]),
++        cfg: Digest([84; 32]),
++        source_namespace: Digest([85; 32]),
++        epoch: 1,
++        source_revision: 1,
++        query_revision: 1,
++        max_universe: 2,
++        excluded_dictionary_slots: vec![],
++    }
++}
++fn encode(
++    context: &CanonicalContextModel,
++    goal: GoalModel,
++    env: &ParamEnv,
++    vars: BTreeMap<InferVarKey, u32>,
++) -> CanonicalGoalModel {
++    CanonicalGoalModel::capture(
++        context,
++        &Binder {
++            variables: vec![],
++            value: goal,
++        },
++        env,
++        &vars,
++        CanonicalLimits::default(),
++    )
++    .unwrap()
++}
++#[test]
++fn m020_original_trait_arguments_and_associated_arguments_have_distinct_keys() {
++    let h = headers(
++        include_str!("../../fixtures/upstream/rustc-checkout/tests/ui/traits/multidispatch1.rs"),
++        71,
++    );
++    let trait_key = h
++        .headers()
++        .iter()
++        .find(|h| h.definition().declared_name == "MyTrait")
++        .unwrap()
++        .definition()
++        .fingerprint();
++    // Primitive terms are disclosed closed-language model adapters; the source
++    // Type namespace join is pending and no Rust member is selected by them.
++    let env = ParamEnv::new(Digest([70; 32]), vec![], vec![]).unwrap();
++    let cx = context(1);
++    let goal = |arg| {
++        GoalModel::Implemented(TraitRef {
++            trait_key,
++            self_ty: TyTerm::Primitive(lrr::ir::op::PrimitiveType::Unit),
++            args: vec![GenericArg::Type(TyTerm::Primitive(arg))],
++        })
++    };
++    let a = encode(
++        &cx,
++        goal(lrr::ir::op::PrimitiveType::Usize),
++        &env,
++        BTreeMap::new(),
++    );
++    let b = encode(
++        &cx,
++        goal(lrr::ir::op::PrimitiveType::U8),
++        &env,
++        BTreeMap::new(),
++    );
++    assert_ne!(a.fingerprint(), b.fingerprint());
++    let projection = |arg| {
++        GoalModel::Normalize(
++            ProjectionKey {
++                trait_ref: TraitRef {
++                    trait_key,
++                    self_ty: TyTerm::Primitive(lrr::ir::op::PrimitiveType::Unit),
++                    args: vec![],
++                },
++                item: Digest([72; 32]),
++                item_args: vec![GenericArg::Const(ConstTerm::Value(arg))],
++            },
++            TyTerm::Primitive(lrr::ir::op::PrimitiveType::Unit),
++        )
++    };
++    assert_ne!(
++        encode(&cx, projection(1), &env, BTreeMap::new()).fingerprint(),
++        encode(&cx, projection(2), &env, BTreeMap::new()).fingerprint()
++    );
++}
++#[test]
++fn m020_inference_renaming_is_alpha_equal_but_rigid_source_parameters_are_not() {
++    let h = headers("trait A<T> {}", 73);
++    let key = h.headers()[0].generics()[0].key;
++    let env = ParamEnv::new(
++        h.headers()[0].definition().fingerprint(),
++        vec![(BoundKind::Type, key)],
++        vec![],
++    )
++    .unwrap();
++    let model = |tx, ordinal| {
++        let v = InferVarKey {
++            transaction: Digest([tx; 32]),
++            ordinal,
++        };
++        encode(
++            &context(tx),
++            GoalModel::TypeEqual(TyTerm::Infer(v), TyTerm::Param(key)),
++            &env,
++            BTreeMap::from([(v, 0)]),
++        )
++    };
++    assert_eq!(model(1, 0).fingerprint(), model(2, 999).fingerprint());
++    let a = encode(
++        &context(1),
++        GoalModel::TypeEqual(TyTerm::Param(key), TyTerm::Param(key)),
++        &env,
++        BTreeMap::new(),
++    );
++    let other = ParamKey {
++        definition: Digest([74; 32]),
++        ordinal: key.ordinal,
++    };
++    let e = ParamEnv::new(other.definition, vec![(BoundKind::Type, other)], vec![]).unwrap();
++    let b = encode(
++        &context(1),
++        GoalModel::TypeEqual(TyTerm::Param(other), TyTerm::Param(other)),
++        &e,
++        BTreeMap::new(),
++    );
++    assert_ne!(a.fingerprint(), b.fingerprint());
++}
++#[test]
++fn m020_original_conditional_candidate_keeps_pending_bounds_and_fresh_variables() {
++    let h = headers(
++        include_str!("../../fixtures/upstream/rustc-checkout/tests/ui/traits/multidispatch2.rs"),
++        75,
++    );
++    let blanket=h.headers().iter().find(|h|matches!(h.kind(),HeaderKind::Impl {self_type,..} if matches!(self_type.form,lrr::traits::header::HeaderTypeForm::Parameter(_)))).unwrap();
++    let mut factory =
++        CandidateFactoryModel::new(Digest([76; 32]), CanonicalLimits::default()).unwrap();
++    let mut first = factory.start(blanket).unwrap();
++    let second = factory.start(blanket).unwrap();
++    assert_ne!(first.transaction(), second.transaction());
++    assert!(first.pending_predicate_count() > 0);
++    assert!(matches!(
++        first.readiness(),
++        CandidateReadiness::SourceGoalAndPredicatesRequired
++    ));
++    let source = TyTerm::Param(blanket.generics()[0].key);
++    let a = first.instantiate_type_model(&source).unwrap();
++    let b = second.instantiate_type_model(&source).unwrap();
++    assert_ne!(a, b);
++    assert!(matches!(
++        first.attempt_constraints(&[(a, TyTerm::Primitive(lrr::ir::op::PrimitiveType::Usize))]),
++        ConstraintAttempt::MatchedPending
++    ));
++    assert!(first.pending_predicate_count() > 0);
++}
++#[test]
++fn m020_partial_constraint_failure_leaves_second_candidate_unconstrained() {
++    let h = headers("trait P<T> {} impl<T> P<T> for T {}", 77);
++    let header = h
++        .headers()
++        .iter()
++        .find(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++        .unwrap();
++    let mut f = CandidateFactoryModel::new(Digest([78; 32]), CanonicalLimits::default()).unwrap();
++    let mut a = f.start(header).unwrap();
++    let mut b = f.start(header).unwrap();
++    let x = a
++        .instantiate_type_model(&TyTerm::Param(header.generics()[0].key))
++        .unwrap();
++    let y = b
++        .instantiate_type_model(&TyTerm::Param(header.generics()[0].key))
++        .unwrap();
++    let i = TyTerm::Primitive(lrr::ir::op::PrimitiveType::I32);
++    let u = TyTerm::Primitive(lrr::ir::op::PrimitiveType::U32);
++    assert!(matches!(
++        a.attempt_constraints(&[(x.clone(), i), (x, u.clone())]),
++        ConstraintAttempt::Conflict(_)
++    ));
++    assert_eq!(a.binding_count(), 0);
++    assert_eq!(b.binding_count(), 0);
++    assert!(matches!(
++        b.attempt_constraints(&[(y, u)]),
++        ConstraintAttempt::MatchedPending
++    ));
++    assert_eq!(b.binding_count(), 1);
++}
++#[test]
++fn m020_binder_data_distinguishes_free_static_and_universal_regions() {
++    let original = headers(
++        include_str!(
++            "../../fixtures/upstream/rustc-checkout/tests/ui/higher-ranked/leak-check/leak-check-in-selection-1.rs"
++        ),
++        79,
++    );
++    assert_eq!(
++        original
++            .headers()
++            .iter()
++            .filter(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++            .count(),
++        2
++    );
++    let env = ParamEnv::new(Digest([79; 32]), vec![], vec![]).unwrap();
++    let root = TyTerm::Primitive(lrr::ir::op::PrimitiveType::Unit);
++    let goal = |region| {
++        GoalModel::TypeEqual(
++            TyTerm::Ref(region, false, Box::new(root.clone())),
++            root.clone(),
++        )
++    };
++    let bound = CanonicalGoalModel::capture(
++        &context(1),
++        &Binder {
++            variables: vec![BoundKind::Region],
++            value: goal(RegionTerm::Bound { depth: 0, index: 0 }),
++        },
++        &env,
++        &BTreeMap::new(),
++        CanonicalLimits::default(),
++    )
++    .unwrap();
++    let free = encode(&context(1), goal(RegionTerm::Static), &env, BTreeMap::new());
++    assert_ne!(bound.fingerprint(), free.fingerprint());
++    let wrong = Binder {
++        variables: vec![BoundKind::Type],
++        value: goal(RegionTerm::Bound { depth: 0, index: 0 }),
++    };
++    assert!(
++        CanonicalGoalModel::capture(
++            &context(1),
++            &wrong,
++            &env,
++            &BTreeMap::new(),
++            CanonicalLimits::default()
++        )
++        .is_err()
++    );
++}
++#[test]
++fn m020_world_profile_epoch_and_reduced_budgets_are_not_ignored() {
++    let env = ParamEnv::new(Digest([80; 32]), vec![], vec![]).unwrap();
++    let g = GoalModel::ConstEqual(ConstTerm::Value(3), ConstTerm::Value(3));
++    let cx = context(1);
++    let a = encode(&cx, g.clone(), &env, BTreeMap::new());
++    for edition in [2015, 2018, 2021] {
++        let mut b = cx.clone();
++        b.profile.edition = edition;
++        assert_ne!(
++            a.fingerprint(),
++            encode(&b, g.clone(), &env, BTreeMap::new()).fingerprint()
++        );
++    }
++    let mut b = cx.clone();
++    b.epoch += 1;
++    assert_ne!(
++        a.fingerprint(),
++        encode(&b, g.clone(), &env, BTreeMap::new()).fingerprint()
++    );
++    assert!(
++        CanonicalGoalModel::capture(
++            &cx,
++            &Binder {
++                variables: vec![],
++                value: g
++            },
++            &env,
++            &BTreeMap::new(),
++            CanonicalLimits {
++                bytes: 1,
++                ..CanonicalLimits::default()
++            }
++        )
++        .is_err()
++    );
++}
++#[test]
++fn m020_const_region_and_projection_requirements_never_become_no_solution() {
++    let h = headers("trait P {} impl<T,const N:usize> P for [T;N] {}", 86);
++    let candidate = h
++        .headers()
++        .iter()
++        .find(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++        .unwrap();
++    let mut f = CandidateFactoryModel::new(Digest([87; 32]), CanonicalLimits::default()).unwrap();
++    let mut c = f.start(candidate).unwrap();
++    assert!(matches!(
++        c.readiness(),
++        CandidateReadiness::GenericNamespaceRequired
++    ));
++    let projection = TyTerm::Projection(Box::new(ProjectionKey {
++        trait_ref: TraitRef {
++            trait_key: Digest([88; 32]),
++            self_ty: TyTerm::Primitive(lrr::ir::op::PrimitiveType::Unit),
++            args: vec![],
++        },
++        item: Digest([89; 32]),
++        item_args: vec![],
++    }));
++    assert!(matches!(
++        c.attempt_constraints(&[(projection.clone(), projection)]),
++        ConstraintAttempt::Unresolved(_)
++    ));
++    assert_eq!(c.binding_count(), 0);
++    // A definite outer mismatch does not require a cold child projection.
++    let cold = TyTerm::Projection(Box::new(ProjectionKey {
++        trait_ref: TraitRef {
++            trait_key: Digest([88; 32]),
++            self_ty: TyTerm::Primitive(lrr::ir::op::PrimitiveType::Unit),
++            args: vec![],
++        },
++        item: Digest([89; 32]),
++        item_args: vec![],
++    }));
++    assert!(matches!(
++        c.attempt_constraints(&[(TyTerm::Tuple(vec![cold]), TyTerm::Tuple(vec![]))]),
++        ConstraintAttempt::Conflict(_)
++    ));
++}
++
++#[test]
++fn m020_reduced_work_and_universe_leaks_rollback_candidate_state() {
++    use lrr::traits::term::PlaceholderKey;
++    let h = headers("trait P {} impl<T> P for T {}", 90);
++    let header = h
++        .headers()
++        .iter()
++        .find(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++        .unwrap();
++    let mut f = CandidateFactoryModel::new(
++        Digest([91; 32]),
++        CanonicalLimits {
++            work: 1,
++            ..CanonicalLimits::default()
++        },
++    )
++    .unwrap();
++    let mut c = f.start(header).unwrap();
++    let v = c
++        .instantiate_type_model(&TyTerm::Param(header.generics()[0].key))
++        .unwrap();
++    assert!(matches!(
++        c.attempt_constraints(&[(v, TyTerm::Primitive(lrr::ir::op::PrimitiveType::Unit))]),
++        ConstraintAttempt::Overflow(_)
++    ));
++    assert_eq!(c.binding_count(), 0);
++    let mut f = CandidateFactoryModel::new(Digest([92; 32]), CanonicalLimits::default()).unwrap();
++    let mut c = f.start(header).unwrap();
++    let v = c
++        .instantiate_type_model(&TyTerm::Param(header.generics()[0].key))
++        .unwrap();
++    let universe = c.fresh_universe().unwrap();
++    assert!(matches!(
++        c.attempt_constraints(&[(
++            v,
++            TyTerm::Placeholder(PlaceholderKey {
++                transaction: c.transaction(),
++                universe,
++                index: 0
++            })
++        )]),
++        ConstraintAttempt::Conflict(_)
++    ));
++    assert_eq!(c.binding_count(), 0);
++}
++#[test]
++fn m020_potential_candidates_preserve_ambiguity_without_chosen_witness() {
++    use lrr::traits::unify::candidate::{
++        CandidateDispositionModel as D, CandidateSetModel, combine_candidate_models,
++    };
++    let a = Digest([93; 32]);
++    let b = Digest([94; 32]);
++    assert!(
++        matches!(combine_candidate_models(vec![(b,D::Unresolved),(a,D::StructuralMatchPending)]).unwrap(),CandidateSetModel::Ambiguous(keys) if keys==vec![a,b])
++    );
++    assert!(matches!(
++        combine_candidate_models(vec![(a, D::StructuralConflict)]).unwrap(),
++        CandidateSetModel::NoStructuralMatch(_)
++    ));
++    assert!(
++        combine_candidate_models(vec![(a, D::StructuralMatchPending), (a, D::Unresolved)]).is_err()
++    );
++}
++#[test]
++fn m020_actual_source_goal_prerequisite_refuses_uncaptured_catalog() {
++    use lrr::{
++        db::{
++            memo::Database,
++            seals::{SealDomain, SealKey},
++        },
++        traits::{canonical::CurrentGoalPrerequisite, index::CurrentImplCandidateIndex},
++    };
++    let db = Database::default();
++    let key = SealKey {
++        domain: SealDomain::ImplCatalog {
++            id: Digest([95; 32]),
++        },
++        unit_graph: Digest([96; 32]),
++        epoch: 1,
++    };
++    let missing =
++        CurrentImplCandidateIndex::capture_current(&db, &key, HeaderCaptureLimits::default());
++    assert!(missing.is_err());
++    // No mock CurrentImplCandidateIndex/Goal certificate constructor exists.
++    let _capture = CurrentGoalPrerequisite::capture_header_current;
++    assert!(db.trace.counts.is_empty());
++}

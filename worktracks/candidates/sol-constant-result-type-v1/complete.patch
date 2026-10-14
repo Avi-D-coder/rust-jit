@@ -1,0 +1,1348 @@
+diff --git a/crates/lrr/src/frontend/constant_result_type.rs b/crates/lrr/src/frontend/constant_result_type.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_result_type.rs
+@@ -0,0 +1,367 @@
++//! T054 source-proven result-type readiness, never a constant evaluator.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncoder},
++    },
++    db::memo::Database,
++    frontend::{
++        constant_source_admission::{ConstantRequest, ConstantSourceAdmission},
++        constants::wire::ConstantWireType,
++    },
++    ir::op::PrimitiveType,
++    source::changes::{PreparedSourceView, SourceSelection},
++    syntax::{
++        outline::{BodyHandle, DeclarationContext},
++        pure_constants::{ConstType, ConstantPlan},
++        spans::SourceRange,
++    },
++};
++const MAX_BYTES: usize = 32 << 20;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-CONST-RESULT-TYPE-SOURCE", message.into())
++}
++fn mismatch() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-CONST-TYPE",
++        "caller expected type differs from the exact declared constant result type".into(),
++    )
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "constant result-type readiness metadata limit".into(),
++    )
++}
++#[derive(Debug, Clone, Copy, Eq, PartialEq)]
++enum Role {
++    Constant,
++    ConstCall,
++    ArrayLength,
++}
++impl Role {
++    fn tag(self) -> u8 {
++        match self {
++            Self::Constant => 1,
++            Self::ConstCall => 2,
++            Self::ArrayLength => 3,
++        }
++    }
++}
++#[derive(Debug, Clone, Copy, Eq, PartialEq)]
++enum HeaderShape {
++    Scalar(PrimitiveType),
++    Array(PrimitiveType, SourceRange),
++}
++fn declared_shape(plan: &ConstantPlan) -> Result<(Role, HeaderShape), Diagnostic> {
++    let (constant, call, length) = plan.entry()?;
++    let (role, ty) = match (constant, call, length) {
++        (Some(constant), None, None) => (Role::Constant, constant.ty),
++        (None, Some((function, _)), None) => (Role::ConstCall, function.result),
++        // This is the language's array-length role, independent of a user
++        // declaration named usize. The source plan already proves exact syntax.
++        (None, None, Some(_)) => {
++            return Ok((Role::ArrayLength, HeaderShape::Scalar(PrimitiveType::Usize)));
++        }
++        _ => {
++            return Err(fault(
++                "constant selected entry does not have one exact result role",
++            ));
++        }
++    };
++    Ok((
++        role,
++        match ty {
++            ConstType::Scalar(primitive) => HeaderShape::Scalar(primitive),
++            ConstType::Array(element, length) => HeaderShape::Array(element, length.range()),
++        },
++    ))
++}
++/// No mutable fields or descriptor/name constructor supply source authority.
++#[derive(Debug)]
++pub(crate) struct SourceScalarExpected {
++    primitive: PrimitiveType,
++    binding: Digest,
++}
++impl SourceScalarExpected {
++    /// Concrete wire data only. Currentness remains with the owning packet.
++    pub(crate) fn wire_type(&self) -> ConstantWireType {
++        ConstantWireType::Scalar(self.primitive)
++    }
++    pub(crate) fn primitive(&self) -> PrimitiveType {
++        self.primitive
++    }
++    pub(crate) fn source_identity(&self) -> Digest {
++        self.binding
++    }
++}
++/// Exact unresolved type-length site, not a length value or evaluation permission.
++#[derive(Debug)]
++pub(crate) struct CurrentArrayLengthDemand {
++    selection: SourceSelection,
++    definition: Digest,
++    context: DeclarationContext,
++    body: BodyHandle,
++    range: SourceRange,
++    parent_plan: Digest,
++    binding: Digest,
++}
++impl CurrentArrayLengthDemand {
++    pub(crate) fn source(&self) -> &SourceSelection {
++        &self.selection
++    }
++    pub(crate) fn definition(&self) -> Digest {
++        self.definition
++    }
++    pub(crate) fn context(&self) -> &DeclarationContext {
++        &self.context
++    }
++    pub(crate) fn body(&self) -> &BodyHandle {
++        &self.body
++    }
++    pub(crate) fn range(&self) -> SourceRange {
++        self.range
++    }
++    pub(crate) fn parent_plan_identity(&self) -> Digest {
++        self.parent_plan
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        self.binding
++    }
++    pub(crate) fn expected_wire(&self) -> ConstantWireType {
++        ConstantWireType::Scalar(PrimitiveType::Usize)
++    }
++    /// Data request only: root must establish current ArrayLength admission/query
++    /// at this exact source site and check its result before initializer work.
++    pub(crate) fn request(&self) -> ConstantRequest {
++        ConstantRequest::ArrayLength(self.range)
++    }
++}
++#[derive(Debug)]
++enum ResultReadiness {
++    Scalar(SourceScalarExpected),
++    Array {
++        element: SourceScalarExpected,
++        length: CurrentArrayLengthDemand,
++    },
++}
++/// Matching element type never completes an array from the caller's count.
++#[derive(Debug)]
++pub(crate) enum ExpectedResultReadiness<'a> {
++    ReadyScalar(&'a SourceScalarExpected),
++    RequiredArrayLength(&'a CurrentArrayLengthDemand),
++}
++/// Consumes and retains actual source/type admission, including const-call
++/// concrete argument identity. No caller-built ConstType or length is trusted.
++#[derive(Debug)]
++pub(crate) struct CurrentConstantResultType {
++    admission: ConstantSourceAdmission,
++    readiness: ResultReadiness,
++    role: Role,
++    binding: Digest,
++    bytes: usize,
++}
++fn binding(
++    admission: &ConstantSourceAdmission,
++    role: Role,
++    shape: HeaderShape,
++) -> Result<Digest, Diagnostic> {
++    let plan = admission.plan();
++    let source = plan.source().selection().ok_or_else(|| {
++        fault("legacy content-only constant plan grants no current result authority")
++    })?;
++    let body = plan
++        .owner_body()
++        .ok_or_else(|| fault("constant result owning body is absent"))?;
++    let mut e = StableEncoder::new("lrr/v1/current-constant-result-type");
++    e.digest(admission.identity());
++    e.digest(plan.identity());
++    e.string(source.path.as_str());
++    e.record(&source.outline);
++    e.digest(plan.owner_definition());
++    e.record(plan.owner_context());
++    e.record(body);
++    // BodyHandle's historical stable encoding omits range. This proof binds it.
++    e.u32(body.range.start);
++    e.u32(body.range.end);
++    e.u8(role.tag());
++    match shape {
++        HeaderShape::Scalar(ty) => {
++            e.u8(1);
++            e.u32(ty.tag());
++        }
++        HeaderShape::Array(element, length) => {
++            e.u8(2);
++            e.u32(element.tag());
++            e.u32(length.start);
++            e.u32(length.end);
++        }
++    }
++    Ok(e.finish())
++}
++impl CurrentConstantResultType {
++    pub(crate) fn capture_current(
++        db: &Database,
++        source: &PreparedSourceView,
++        admission: ConstantSourceAdmission,
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        if byte_limit == 0 || byte_limit > MAX_BYTES {
++            return Err(limit());
++        }
++        let plan = admission.plan();
++        let selection = plan
++            .source()
++            .selection()
++            .ok_or_else(|| fault("current constant result source selection absent"))?;
++        // Reserve retained metadata before current-source replay/header allocation.
++        let bytes = std::mem::size_of::<Self>()
++            .checked_add(256)
++            .and_then(|n| n.checked_add(admission.metadata_bytes()))
++            .and_then(|n| n.checked_add(selection.metadata_bytes().ok()?))
++            .and_then(|n| n.checked_add(plan.owner_context().scope.heap_bytes()))
++            .and_then(|n| {
++                n.checked_add(
++                    std::mem::size_of::<CurrentArrayLengthDemand>()
++                        + std::mem::size_of::<SourceScalarExpected>(),
++                )
++            })
++            .filter(|n| *n <= byte_limit)
++            .ok_or_else(limit)?;
++        admission.revalidate(db, source)?;
++        let (role, shape) = declared_shape(plan)?;
++        let binding = binding(&admission, role, shape)?;
++        let readiness = match shape {
++            HeaderShape::Scalar(primitive) => {
++                ResultReadiness::Scalar(SourceScalarExpected { primitive, binding })
++            }
++            HeaderShape::Array(primitive, range) => {
++                let body = plan
++                    .owner_body()
++                    .ok_or_else(|| fault("constant result body absent"))?;
++                let context = plan.owner_context();
++                // A type length is inside the owning declaration header; it need
++                // not be inside the initializer/body expression's narrower range.
++                if range.start >= range.end
++                    || range.start < context.range.start
++                    || range.end > context.range.end
++                {
++                    return Err(fault(
++                        "array result length is not within its exact owning declaration",
++                    ));
++                }
++                ResultReadiness::Array {
++                    element: SourceScalarExpected { primitive, binding },
++                    length: CurrentArrayLengthDemand {
++                        selection: selection.clone(),
++                        definition: plan.owner_definition(),
++                        context: context.clone(),
++                        body: body.clone(),
++                        range,
++                        parent_plan: plan.identity(),
++                        binding,
++                    },
++                }
++            }
++        };
++        Ok(Self {
++            admission,
++            readiness,
++            role,
++            binding,
++            bytes,
++        })
++    }
++    pub(crate) fn admission(&self) -> &ConstantSourceAdmission {
++        &self.admission
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        self.binding
++    }
++    pub(crate) fn scalar(&self) -> Option<&SourceScalarExpected> {
++        match &self.readiness {
++            ResultReadiness::Scalar(scalar) => Some(scalar),
++            _ => None,
++        }
++    }
++    pub(crate) fn array(&self) -> Option<(&SourceScalarExpected, &CurrentArrayLengthDemand)> {
++        match &self.readiness {
++            ResultReadiness::Array { element, length } => Some((element, length)),
++            _ => None,
++        }
++    }
++    pub(crate) fn revalidate(
++        &self,
++        db: &Database,
++        source: &PreparedSourceView,
++    ) -> Result<(), Diagnostic> {
++        self.admission.revalidate(db, source)?;
++        let (role, shape) = declared_shape(self.admission.plan())?;
++        let fresh = binding(&self.admission, role, shape)?;
++        if role != self.role || fresh != self.binding {
++            return Err(fault(
++                "constant result signature/argument source identity changed",
++            ));
++        }
++        let matches = match (&self.readiness, shape) {
++            (ResultReadiness::Scalar(scalar), HeaderShape::Scalar(primitive)) => {
++                scalar.primitive == primitive && scalar.binding == fresh
++            }
++            (ResultReadiness::Array { element, length }, HeaderShape::Array(primitive, range)) => {
++                let plan = self.admission.plan();
++                element.primitive == primitive
++                    && element.binding == fresh
++                    && length.binding == fresh
++                    && length.range == range
++                    && length.definition == plan.owner_definition()
++                    && length.context == *plan.owner_context()
++                    && Some(&length.body) == plan.owner_body()
++                    && Some(&length.selection) == plan.source().selection()
++                    && length.parent_plan == plan.identity()
++            }
++            _ => false,
++        };
++        if !matches {
++            return Err(fault(
++                "constant retained result/length proof differs from its admitted header",
++            ));
++        }
++        Ok(())
++    }
++    /// Use before provider/memo work. Known type mismatches require no length,
++    /// initializer, const callee execution, or caller descriptor recovery.
++    pub(crate) fn check_current_expected<'a>(
++        &'a self,
++        db: &Database,
++        source: &PreparedSourceView,
++        expected: &ConstantWireType,
++    ) -> Result<ExpectedResultReadiness<'a>, Diagnostic> {
++        self.revalidate(db, source)?;
++        match (&self.readiness, expected) {
++            (ResultReadiness::Scalar(scalar), ConstantWireType::Scalar(primitive))
++                if scalar.primitive == *primitive =>
++            {
++                Ok(ExpectedResultReadiness::ReadyScalar(scalar))
++            }
++            (
++                ResultReadiness::Array { element, length },
++                ConstantWireType::Array {
++                    element: expected, ..
++                },
++            ) => {
++                if !matches!(expected.as_ref(),ConstantWireType::Scalar(primitive) if element.primitive==*primitive)
++                {
++                    return Err(mismatch());
++                }
++                Ok(ExpectedResultReadiness::RequiredArrayLength(length))
++            }
++            _ => Err(mismatch()),
++        }
++    }
++}
++#[cfg(test)]
++#[path = "constant_result_type_tests.rs"]
++mod tests;
+diff --git a/crates/lrr/src/frontend/mod.rs b/crates/lrr/src/frontend/mod.rs
+--- a/crates/lrr/src/frontend/mod.rs
++++ b/crates/lrr/src/frontend/mod.rs
+@@ -66,3 +66,5 @@
+ pub(crate) mod constant_macro_admission;
+ pub(crate) mod constant_source_admission;
+ pub mod constants;
++
++pub(crate) mod constant_result_type;
+diff --git a/crates/lrr/src/frontend/constant_result_type_tests.rs b/crates/lrr/src/frontend/constant_result_type_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_result_type_tests.rs
+@@ -0,0 +1,523 @@
++//! Source/header component controls; no initializer, callee or length evaluation.
++use super::*;
++use crate::{
++    core::{digest::StableEncode, profile::ProfileIdentity},
++    db::{
++        dependency::{InputKey, InputValue},
++        key::OutlineKey,
++    },
++    expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    frontend::{constant_source_admission::ConstantRequest, constants::ConstValue},
++    source::{
++        changes::{PreparedSourceInputs, SourceSelectionOutcome, SourceUnitInput},
++        manifest::Namespace,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::parse::ParseKey,
++};
++use std::sync::Arc;
++const NESTED: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs");
++const DIV_ZERO: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const-eval-query-stack.rs"
++);
++const PANIC: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const_panic.rs"
++);
++const FUNCTIONS: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn.rs");
++const MODULE: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs"
++);
++const ARRAY_MISMATCH: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/array-literal-len-mismatch.rs"
++);
++const ARRAY_OOB: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-array-oob.rs");
++const BAD_LENGTH_TYPES: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/issue-69310-array-size-lit-wrong-ty.rs"
++);
++fn world(text: &str, name: &str, edition: u16) -> (Database, PreparedSourceView, Digest) {
++    let unit = Digest::of_bytes(b"LRR result type readiness acceptance");
++    let cfg = CfgSet::guest_default();
++    let profile = ProfileIdentity {
++        edition,
++        ..ProfileIdentity::current()
++    };
++    let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++    let path = SourcePath::new("result-type-original.rs").unwrap();
++    let selection = SourceSelection {
++        path: path.clone(),
++        outline: OutlineKey {
++            parse: ParseKey {
++                content: blob.content(),
++                profile: profile.clone(),
++            },
++            crate_key: unit,
++            module_path: vec![],
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let inputs = PreparedSourceInputs::refresh(
++        None,
++        vec![SourceUnitInput {
++            path,
++            crate_key: unit,
++            module_path: vec![],
++            profile: profile.clone(),
++            cfg,
++            blob,
++        }],
++        Default::default(),
++    )
++    .unwrap();
++    let SourceSelectionOutcome::Selected(view) = inputs.select(&selection).unwrap() else {
++        panic!()
++    };
++    let item = view
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == name)
++        .unwrap();
++    let definition = item.def_key.fingerprint();
++    let scope = item.scope.clone();
++    let mut db = Database::default();
++    inputs.publish(&mut db).unwrap();
++    db.trace.detailed = true;
++    for namespace in [Namespace::Value, Namespace::Type] {
++        let mut discovery = SourceDiscovery::new(
++            vec![view.share()],
++            scope.clone(),
++            namespace,
++            Digest::of_bytes(b"result type current world"),
++            1,
++        )
++        .unwrap()
++        .with_declarative_compiler(
++            Digest::of_bytes(b"result type declarative"),
++            Digest::of_bytes(b"result type compiler"),
++            Arc::new(
++                crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(&profile)
++                    .unwrap(),
++            ),
++        )
++        .unwrap();
++        loop {
++            match discovery.poll().unwrap() {
++                SourceDiscoveryStep::Sealed(_) => break,
++                SourceDiscoveryStep::NeedExpansion { request }
++                | SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                _ => panic!("result source namespace requires an unestablished preparation input"),
++            }
++        }
++        discovery.publish(&mut db).unwrap();
++    }
++    (db, view, definition)
++}
++fn source_admit(
++    db: &Database,
++    view: &PreparedSourceView,
++    definition: Digest,
++    request: ConstantRequest,
++) -> Result<ConstantSourceAdmission, Diagnostic> {
++    ConstantSourceAdmission::capture_current(db, view, definition, request, MAX_BYTES)
++}
++fn ready(
++    db: &Database,
++    view: &PreparedSourceView,
++    definition: Digest,
++    request: ConstantRequest,
++) -> Result<CurrentConstantResultType, Diagnostic> {
++    let admitted = source_admit(db, view, definition, request)?;
++    CurrentConstantResultType::capture_current(db, view, admitted, MAX_BYTES)
++}
++fn arg(value: u64) -> ConstValue {
++    ConstValue::from_scalar(
++        crate::runtime::value::ValueRepr::unsigned(
++            crate::runtime::shape::PrimitiveIdentity::from_recipe(PrimitiveType::U32)
++                .unwrap()
++                .id(),
++            value,
++        )
++        .unwrap(),
++    )
++    .unwrap()
++}
++fn array(primitive: PrimitiveType, length: u64) -> ConstantWireType {
++    ConstantWireType::Array {
++        element: Box::new(ConstantWireType::Scalar(primitive)),
++        length,
++    }
++}
++#[test]
++fn unchanged_named_scalar_header_all_editions_without_initializing() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, view, definition) = world(NESTED, "X", edition);
++        let before = db.trace.events.len();
++        let proof = ready(&db, &view, definition, ConstantRequest::Constant).unwrap();
++        let ExpectedResultReadiness::ReadyScalar(expected) = proof
++            .check_current_expected(&db, &view, &ConstantWireType::Scalar(PrimitiveType::U32))
++            .unwrap()
++        else {
++            panic!()
++        };
++        assert_eq!(expected.primitive(), PrimitiveType::U32);
++        assert_eq!(expected.source_identity(), proof.identity());
++        assert_eq!(
++            expected.wire_type().fingerprint_checked().unwrap(),
++            ConstantWireType::Scalar(PrimitiveType::U32)
++                .fingerprint_checked()
++                .unwrap()
++        );
++        assert_eq!(proof.admission().plan().owner_definition(), definition);
++        assert_eq!(proof.admission().plan().profile().edition, edition);
++        assert_eq!(before, db.trace.events.len());
++        assert!(proof.metadata_bytes() <= MAX_BYTES);
++        assert!(
++            proof
++                .check_current_expected(&db, &view, &ConstantWireType::Scalar(PrimitiveType::Bool))
++                .is_err()
++        );
++    }
++}
++#[test]
++fn unchanged_module_scalar_owns_source_scope_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, view, definition) = world(MODULE, "BITS", edition);
++        let proof = ready(&db, &view, definition, ConstantRequest::Constant).unwrap();
++        assert_eq!(proof.scalar().unwrap().primitive(), PrimitiveType::Usize);
++        assert_eq!(
++            proof.admission().plan().owner_context().scope.module_path,
++            vec!["u8"]
++        );
++        proof.revalidate(&db, &view).unwrap();
++    }
++}
++#[test]
++fn unchanged_const_fn_result_binds_current_signature_and_each_argument_packet() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, view, definition) = world(FUNCTIONS, "add", edition);
++        let before = db.trace.events.len();
++        let a = ready(
++            &db,
++            &view,
++            definition,
++            ConstantRequest::ConstCall(vec![arg(44), arg(22)]),
++        )
++        .unwrap();
++        let b = ready(
++            &db,
++            &view,
++            definition,
++            ConstantRequest::ConstCall(vec![arg(22), arg(44)]),
++        )
++        .unwrap();
++        assert_eq!(a.scalar().unwrap().primitive(), PrimitiveType::U32);
++        assert_ne!(a.identity(), b.identity());
++        assert_ne!(
++            a.admission().plan().identity(),
++            b.admission().plan().identity()
++        );
++        assert_eq!(
++            a.check_current_expected(&db, &view, &ConstantWireType::Scalar(PrimitiveType::Bool))
++                .unwrap_err()
++                .code,
++            "LRR-E-CONST-TYPE"
++        );
++        assert_eq!(before, db.trace.events.len());
++    }
++}
++#[test]
++fn unchanged_array_mismatch_retains_exact_header_demand_not_initializer_size() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, view, definition) = world(ARRAY_MISMATCH, "NUMBERS", edition);
++        let before = db.trace.events.len();
++        let proof = ready(&db, &view, definition, ConstantRequest::Constant).unwrap();
++        let (element, demand) = proof.array().unwrap();
++        assert_eq!(element.primitive(), PrimitiveType::U8);
++        assert_eq!(demand.definition(), definition);
++        assert_eq!(
++            &ARRAY_MISMATCH[demand.range().start as usize..demand.range().end as usize],
++            "3"
++        );
++        assert_eq!(demand.source(), view.selection());
++        assert_eq!(demand.context(), proof.admission().plan().owner_context());
++        assert_eq!(Some(demand.body()), proof.admission().plan().owner_body());
++        assert_eq!(
++            demand.parent_plan_identity(),
++            proof.admission().plan().identity()
++        );
++        assert_eq!(demand.identity(), proof.identity());
++        assert!(
++            matches!(demand.request(),ConstantRequest::ArrayLength(range) if range==demand.range())
++        );
++        assert_eq!(
++            demand.expected_wire().fingerprint_checked().unwrap(),
++            ConstantWireType::Scalar(PrimitiveType::Usize)
++                .fingerprint_checked()
++                .unwrap()
++        );
++        // Even the initializer's count2 cannot prove the written type's count.
++        for caller_count in [0, 2, 3, 99] {
++            assert!(
++                matches!(proof.check_current_expected(&db,&view,&array(PrimitiveType::U8,caller_count)).unwrap(),ExpectedResultReadiness::RequiredArrayLength(actual) if actual.range()==demand.range())
++            );
++        }
++        assert_eq!(before, db.trace.events.len());
++        // No E0308/static acceptance or initializer evaluation is claimed.
++    }
++}
++#[test]
++fn unchanged_oob_length_is_demanded_without_touching_referenced_constant_or_initializer() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, view, definition) = world(ARRAY_OOB, "BLUB", edition);
++        let before = db.trace.events.len();
++        let proof = ready(&db, &view, definition, ConstantRequest::Constant).unwrap();
++        let (_, demand) = proof.array().unwrap();
++        assert_eq!(
++            &ARRAY_OOB[demand.range().start as usize..demand.range().end as usize],
++            "FOO[4]"
++        );
++        assert!(matches!(
++            proof
++                .check_current_expected(&db, &view, &array(PrimitiveType::U32, 2))
++                .unwrap(),
++            ExpectedResultReadiness::RequiredArrayLength(_)
++        ));
++        assert_eq!(before, db.trace.events.len());
++    }
++}
++#[test]
++fn unchanged_wrong_length_operand_types_never_fabricate_a_usize_value() {
++    for name in ["A", "B"] {
++        let (db, view, definition) = world(BAD_LENGTH_TYPES, name, 2024);
++        let proof = ready(&db, &view, definition, ConstantRequest::Constant).unwrap();
++        let (element, demand) = proof.array().unwrap();
++        assert_eq!(element.primitive(), PrimitiveType::Unit);
++        let expected = if name == "A" { "0.1" } else { "b\"a\"" };
++        assert_eq!(
++            &BAD_LENGTH_TYPES[demand.range().start as usize..demand.range().end as usize],
++            expected
++        );
++        assert!(matches!(
++            proof
++                .check_current_expected(&db, &view, &array(PrimitiveType::Unit, 1))
++                .unwrap(),
++            ExpectedResultReadiness::RequiredArrayLength(_)
++        ));
++    }
++}
++#[test]
++fn known_shape_and_element_mismatch_refuse_before_any_length_work() {
++    let (db, view, definition) = world(ARRAY_OOB, "BLUB", 2024);
++    let proof = ready(&db, &view, definition, ConstantRequest::Constant).unwrap();
++    let before = db.trace.events.len();
++    for expected in [
++        ConstantWireType::Scalar(PrimitiveType::U32),
++        array(PrimitiveType::Bool, 2),
++        ConstantWireType::Array {
++            element: Box::new(array(PrimitiveType::U32, 1)),
++            length: 2,
++        },
++    ] {
++        assert_eq!(
++            proof
++                .check_current_expected(&db, &view, &expected)
++                .unwrap_err()
++                .code,
++            "LRR-E-CONST-TYPE"
++        );
++    }
++    assert_eq!(before, db.trace.events.len());
++    let (db, view, definition) = world(NESTED, "X", 2024);
++    let before = db.trace.events.len();
++    let proof = ready(&db, &view, definition, ConstantRequest::Constant).unwrap();
++    assert_eq!(
++        proof
++            .check_current_expected(&db, &view, &array(PrimitiveType::U32, 1))
++            .unwrap_err()
++            .code,
++        "LRR-E-CONST-TYPE"
++    );
++    assert_eq!(before, db.trace.events.len());
++}
++#[test]
++fn known_scalar_mismatch_precedes_reached_panic_or_unsupported_callee_frontiers() {
++    for source in [
++        "const X:u32=panic!();fn main(){}",
++        "const X:u32=not_a_const_fn();fn main(){}",
++    ] {
++        let (db, view, definition) = world(source, "X", 2024);
++        let before = db.trace.events.len();
++        let proof = ready(&db, &view, definition, ConstantRequest::Constant).unwrap();
++        assert_eq!(
++            proof
++                .check_current_expected(&db, &view, &ConstantWireType::Scalar(PrimitiveType::Bool))
++                .unwrap_err()
++                .code,
++            "LRR-E-CONST-TYPE"
++        );
++        assert_eq!(before, db.trace.events.len());
++    }
++}
++#[test]
++fn unsupported_alias_generic_and_associated_result_types_grant_no_scalar_authority() {
++    for source in [
++        "type i32=bool;const X:i32=true;fn main(){}",
++        "type Alias=u32;const X:Alias=1;fn main(){}",
++        "mod m{pub type Alias=u32;}const X:m::Alias=1;fn main(){}",
++        "const X:[[u8;1];1]=[[1]];fn main(){}",
++    ] {
++        let (db, view, definition) = world(source, "X", 2024);
++        assert!(ready(&db, &view, definition, ConstantRequest::Constant).is_err());
++    }
++    let (db, view, definition) = world(FUNCTIONS, "generic", 2024);
++    assert!(
++        ready(
++            &db,
++            &view,
++            definition,
++            ConstantRequest::ConstCall(vec![arg(1)])
++        )
++        .is_err()
++    );
++}
++#[test]
++fn array_const_fn_demand_preserves_arguments_and_explicit_missing_length_context() {
++    let source = "const fn f(x:u32)->[u8;2]{let _=x;[1,2]}fn main(){}";
++    let (db, view, definition) = world(source, "f", 2024);
++    let proof = ready(
++        &db,
++        &view,
++        definition,
++        ConstantRequest::ConstCall(vec![arg(7)]),
++    )
++    .unwrap();
++    let (_, demand) = proof.array().unwrap();
++    assert_eq!(
++        &source[demand.range().start as usize..demand.range().end as usize],
++        "2"
++    );
++    assert!(matches!(
++        proof
++            .check_current_expected(&db, &view, &array(PrimitiveType::U8, 2))
++            .unwrap(),
++        ExpectedResultReadiness::RequiredArrayLength(_)
++    ));
++    // Existing anonymous length planning refuses a fn parameter namespace.
++    // Root must supply that precise source context; readiness does not override it.
++    assert!(source_admit(&db, &view, definition, demand.request()).is_err());
++}
++#[test]
++fn private_scalar_and_length_tamper_controls_fail_against_exact_admitted_header() {
++    let (db, view, definition) = world(NESTED, "X", 2024);
++    let mut proof = ready(&db, &view, definition, ConstantRequest::Constant).unwrap();
++    let ResultReadiness::Scalar(scalar) = &mut proof.readiness else {
++        panic!()
++    };
++    scalar.primitive = PrimitiveType::Bool;
++    assert!(
++        proof
++            .check_current_expected(&db, &view, &ConstantWireType::Scalar(PrimitiveType::Bool))
++            .is_err()
++    );
++    let (db, view, definition) = world(ARRAY_MISMATCH, "NUMBERS", 2024);
++    let mut proof = ready(&db, &view, definition, ConstantRequest::Constant).unwrap();
++    let ResultReadiness::Array { length, .. } = &mut proof.readiness else {
++        panic!()
++    };
++    length.range.start += 1;
++    assert!(proof.revalidate(&db, &view).is_err());
++}
++#[test]
++fn stale_derived_epoch_or_public_header_body_pair_refuses_readiness() {
++    let (mut db, view, definition) = world(NESTED, "X", 2024);
++    let proof = ready(&db, &view, definition, ConstantRequest::Constant).unwrap();
++    let revision = db.source_revision();
++    db.begin_expansion_epoch(2).unwrap();
++    assert_eq!(revision, db.source_revision());
++    assert!(
++        proof
++            .check_current_expected(&db, &view, &ConstantWireType::Scalar(PrimitiveType::U32))
++            .is_err()
++    );
++    let (mut db, view, definition) = world(NESTED, "X", 2024);
++    let proof = ready(&db, &view, definition, ConstantRequest::Constant).unwrap();
++    let mut facts = view.prepared_inputs().clone();
++    let InputValue::DefinitionBody(body) = facts
++        .get_mut(&InputKey::DefinitionBody(definition))
++        .unwrap()
++    else {
++        panic!()
++    };
++    body.range.end -= 1;
++    db.publish_inputs(facts).unwrap();
++    assert!(proof.revalidate(&db, &view).is_err());
++}
++#[test]
++fn tiny_metadata_budget_rejects_before_attaching_result_or_running_query_work() {
++    let (db, view, definition) = world(NESTED, "X", 2024);
++    let admitted = source_admit(&db, &view, definition, ConstantRequest::Constant).unwrap();
++    let before = db.trace.events.len();
++    assert_eq!(
++        CurrentConstantResultType::capture_current(&db, &view, admitted, 1)
++            .unwrap_err()
++            .code,
++        "LRR-E-METADATA-LIMIT"
++    );
++    assert_eq!(before, db.trace.events.len());
++}
++
++#[test]
++fn unchanged_divide_zero_and_panic_header_mismatch_has_no_provider_or_initializer_work() {
++    for (original, name, editions) in [
++        (DIV_ZERO, "X", &[2015, 2018, 2021, 2024][..]),
++        (PANIC, "Z", &[2015, 2018, 2021][..]),
++    ] {
++        for edition in editions {
++            let (db, view, definition) = world(original, name, *edition);
++            let events = db.trace.events.len();
++            let counts = db.trace.counts.clone();
++            let proof = ready(&db, &view, definition, ConstantRequest::Constant).unwrap();
++            assert_eq!(
++                proof
++                    .check_current_expected(
++                        &db,
++                        &view,
++                        &ConstantWireType::Scalar(PrimitiveType::Bool)
++                    )
++                    .unwrap_err()
++                    .code,
++                "LRR-E-CONST-TYPE"
++            );
++            assert_eq!(db.trace.events.len(), events);
++            assert_eq!(db.trace.counts, counts);
++        }
++    }
++}
++#[test]
++fn exact_header_length_request_has_intrinsic_usize_role_without_evaluation_or_name_recovery() {
++    for (source, name) in [
++        (ARRAY_MISMATCH, "NUMBERS"),
++        ("type usize=bool;const X:[u8;3]=[1,2,3];fn main(){}", "X"),
++    ] {
++        let (db, view, definition) = world(source, name, 2024);
++        let parent = ready(&db, &view, definition, ConstantRequest::Constant).unwrap();
++        let (_, demand) = parent.array().unwrap();
++        let length = ready(&db, &view, definition, demand.request()).unwrap();
++        assert_eq!(length.scalar().unwrap().primitive(), PrimitiveType::Usize);
++        assert_eq!(
++            length
++                .check_current_expected(&db, &view, &ConstantWireType::Scalar(PrimitiveType::Bool))
++                .unwrap_err()
++                .code,
++            "LRR-E-CONST-TYPE"
++        );
++        assert!(db.trace.counts.is_empty());
++    }
++}
++#[path = "constant_result_query_tests.rs"]
++mod bridge_tests;
+diff --git a/crates/lrr/src/frontend/constant_result_query_tests.rs b/crates/lrr/src/frontend/constant_result_query_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_result_query_tests.rs
+@@ -0,0 +1,62 @@
++//! Root-hook acceptance only: genuine public query must refuse before fetch.
++//! Pending the parent's result-type readiness integration; not a provider edit.
++use super::*;
++use crate::db::poll::QueryPoll;
++#[test]
++fn official_faulting_initializer_is_not_entered_for_known_wrong_expected_type() {
++    for (source, name, editions) in [
++        (DIV_ZERO, "X", &[2015, 2018, 2021, 2024][..]),
++        (PANIC, "Z", &[2015, 2018, 2021][..]),
++    ] {
++        for edition in editions {
++            let (mut db, view, definition) = world(source, name, *edition);
++            let counts = db.trace.counts.clone();
++            let events = db.trace.events.len();
++            let result = crate::frontend::constants::query::constant(
++                &mut db,
++                &view,
++                definition,
++                &ConstantWireType::Scalar(PrimitiveType::Bool),
++                crate::frontend::constants::ConstLimits::default(),
++                1024,
++            );
++            let QueryPoll::Ready(Err(error)) = result else {
++                panic!("known source result mismatch must refuse before query entry")
++            };
++            assert_eq!(error.code, "LRR-E-CONST-TYPE");
++            assert_eq!(db.trace.counts, counts);
++            assert_eq!(db.trace.events.len(), events);
++            assert_eq!(
++                db.trace
++                    .counts
++                    .get("Constant:ProviderRun")
++                    .copied()
++                    .unwrap_or(0),
++                0
++            );
++        }
++    }
++}
++#[test]
++fn known_const_fn_result_mismatch_does_not_enter_current_query_provider() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, view, definition) = world(FUNCTIONS, "add", edition);
++        let counts = db.trace.counts.clone();
++        let events = db.trace.events.len();
++        let result = crate::frontend::constants::query::const_call(
++            &mut db,
++            &view,
++            definition,
++            vec![arg(44), arg(22)],
++            &ConstantWireType::Scalar(PrimitiveType::Bool),
++            crate::frontend::constants::ConstLimits::default(),
++            1024,
++        );
++        let QueryPoll::Ready(Err(error)) = result else {
++            panic!("known const fn result mismatch entered its provider")
++        };
++        assert_eq!(error.code, "LRR-E-CONST-TYPE");
++        assert_eq!(db.trace.counts, counts);
++        assert_eq!(db.trace.events.len(), events);
++    }
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs
+@@ -0,0 +1,12 @@
++//@ run-pass
++// Test a call whose argument is the result of another call.
++
++const fn sub(x: u32, y: u32) -> u32 {
++    x - y
++}
++
++const X: u32 = sub(sub(88, 44), 22);
++
++fn main() {
++    assert_eq!(X, 22);
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn.rs
+@@ -0,0 +1,38 @@
++//@ run-pass
++// A very basic test of const fn functionality.
++
++const fn add(x: u32, y: u32) -> u32 {
++    x + y
++}
++
++const fn sub(x: u32, y: u32) -> u32 {
++    x - y
++}
++
++const unsafe fn div(x: u32, y: u32) -> u32 {
++    x / y
++}
++
++const fn generic<T>(t: T) -> T {
++    t
++}
++
++const fn generic_arr<T: Copy>(t: [T; 1]) -> T {
++    t[0]
++}
++
++const SUM: u32 = add(44, 22);
++const DIFF: u32 = sub(44, 22);
++const DIV: u32 = unsafe{div(44, 22)};
++
++fn main() {
++    assert_eq!(SUM, 66);
++    assert!(SUM != 88);
++
++    assert_eq!(DIFF, 22);
++    assert_eq!(DIV, 2);
++
++    let _: [&'static str; sub(100, 99) as usize] = ["hi"];
++    let _: [&'static str; generic(1)] = ["hi"];
++    let _: [&'static str; generic_arr([1])] = ["hi"];
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs
+@@ -0,0 +1,16 @@
++//! Regression test for https://github.com/rust-lang/rust/issues/13763
++
++//@ run-pass
++#![allow(dead_code)]
++
++mod u8 {
++    pub const BITS: usize = 8;
++}
++
++const NUM: usize = u8::BITS;
++
++struct MyStruct { nums: [usize; 8] }
++
++fn main() {
++    let _s = MyStruct { nums: [0; NUM] };
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/const-array-oob.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-array-oob.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-array-oob.rs
+@@ -0,0 +1,10 @@
++const FOO: [usize; 3] = [1, 2, 3];
++const BAR: usize = FOO[5];
++//~^ ERROR: index out of bounds: the length is 3 but the index is 5
++
++const BLUB: [u32; FOO[4]] = [5, 6];
++//~^ ERROR index out of bounds: the length is 3 but the index is 4
++
++fn main() {
++    let _ = BAR;
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/const-array-oob.stderr b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-array-oob.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-array-oob.stderr
+@@ -0,0 +1,15 @@
++error[E0080]: index out of bounds: the length is 3 but the index is 4
++  --> $DIR/const-array-oob.rs:5:19
++   |
++LL | const BLUB: [u32; FOO[4]] = [5, 6];
++   |                   ^^^^^^ evaluation of `BLUB::{constant#0}` failed here
++
++error[E0080]: index out of bounds: the length is 3 but the index is 5
++  --> $DIR/const-array-oob.rs:2:20
++   |
++LL | const BAR: usize = FOO[5];
++   |                    ^^^^^^ evaluation of `BAR` failed here
++
++error: aborting due to 2 previous errors
++
++For more information about this error, try `rustc --explain E0080`.
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/array-literal-len-mismatch.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/array-literal-len-mismatch.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/array-literal-len-mismatch.rs
+@@ -0,0 +1,4 @@
++const NUMBERS: [u8; 3] = [10, 20];
++//~^ ERROR mismatched types
++//~^^ HELP consider specifying the actual array length
++fn main() {}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/array-literal-len-mismatch.stderr b/fixtures/upstream/rustc-checkout/tests/ui/consts/array-literal-len-mismatch.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/array-literal-len-mismatch.stderr
+@@ -0,0 +1,17 @@
++error[E0308]: mismatched types
++  --> $DIR/array-literal-len-mismatch.rs:1:26
++   |
++LL | const NUMBERS: [u8; 3] = [10, 20];
++   |                -------   ^^^^^^^^ expected an array with a size of 3, found one with a size of 2
++   |                |
++   |                expected because of the type of the constant
++   |
++help: consider specifying the actual array length
++   |
++LL - const NUMBERS: [u8; 3] = [10, 20];
++LL + const NUMBERS: [u8; 2] = [10, 20];
++   |
++
++error: aborting due to 1 previous error
++
++For more information about this error, try `rustc --explain E0308`.
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-69310-array-size-lit-wrong-ty.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-69310-array-size-lit-wrong-ty.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-69310-array-size-lit-wrong-ty.rs
+@@ -0,0 +1,11 @@
++// This is a regression test for #69310, which was injected by #68118.
++// The issue here was that as a performance optimization,
++// we call the query `lit_to_const(input);`.
++// However, the literal `input.lit` would not be of the type expected by `input.ty`.
++// As a result, we immediately called `bug!(...)` instead of bubbling up the problem
++// so that it could be handled by the caller of `lit_to_const` (`from_anon_const`).
++
++fn main() {}
++
++const A: [(); 0.1] = [()]; //~ ERROR mismatched types
++const B: [(); b"a"] = [()]; //~ ERROR mismatched types
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-69310-array-size-lit-wrong-ty.stderr b/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-69310-array-size-lit-wrong-ty.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-69310-array-size-lit-wrong-ty.stderr
+@@ -0,0 +1,19 @@
++error[E0308]: mismatched types
++  --> $DIR/issue-69310-array-size-lit-wrong-ty.rs:10:15
++   |
++LL | const A: [(); 0.1] = [()];
++   |               ^^^ expected `usize`, found floating-point number
++   |
++   = note: array length can only be `usize`
++
++error[E0308]: mismatched types
++  --> $DIR/issue-69310-array-size-lit-wrong-ty.rs:11:15
++   |
++LL | const B: [(); b"a"] = [()];
++   |               ^^^^ expected `usize`, found `&[u8; 1]`
++   |
++   = note: array length can only be `usize`
++
++error: aborting due to 2 previous errors
++
++For more information about this error, try `rustc --explain E0308`.
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const-eval-query-stack.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const-eval-query-stack.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const-eval-query-stack.rs
+@@ -0,0 +1,21 @@
++//@ compile-flags: -Ztreat-err-as-bug=1
++//@ failure-status: 101
++//@ rustc-env:RUST_BACKTRACE=1
++//@ normalize-stderr: "\nerror: .*unexpectedly panicked.*\n\n" -> ""
++//@ normalize-stderr: "note: we would appreciate a bug report.*\n\n" -> ""
++//@ normalize-stderr: "note: compiler flags.*\n\n" -> ""
++//@ normalize-stderr: "note: rustc.*running on.*\n\n" -> ""
++//@ normalize-stderr: "thread.*panicked.*:\n.*\n" -> ""
++//@ normalize-stderr: "stack backtrace:\n" -> ""
++//@ normalize-stderr: "\s\d{1,}: .*\n" -> ""
++//@ normalize-stderr: "\s at .*\n" -> ""
++//@ normalize-stderr: ".*note: Some details.*\n" -> ""
++//@ normalize-stderr: ".*omitted \d{1,} frame.*\n" -> ""
++#![allow(unconditional_panic)]
++
++const X: i32 = 1 / 0; //~ERROR attempt to divide `1_i32` by zero
++
++fn main() {
++    let x: &'static i32 = &X;
++    println!("x={}", x);
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const-eval-query-stack.stderr b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const-eval-query-stack.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const-eval-query-stack.stderr
+@@ -0,0 +1,15 @@
++error: internal compiler error[E0080]: attempt to divide `1_i32` by zero
++  --> $DIR/const-eval-query-stack.rs:16:16
++   |
++LL | const X: i32 = 1 / 0;
++   |                ^^^^^ evaluation of `X` failed here
++
++
++note: please make sure that you have updated to the latest nightly
++
++query stack during panic:
++#0 [eval_to_allocation_raw] const-evaluating + checking `X`
++#1 [eval_to_const_value_raw] simplifying constant for the type system `X`
++#2 [eval_to_const_value_raw] simplifying constant for the type system `X`
++#3 [analysis] running analysis passes on crate `const_eval_query_stack`
++end of query stack
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const_panic.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const_panic.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const_panic.rs
+@@ -0,0 +1,45 @@
++//@ edition:2015..2021
++#![feature(abort_immediate)]
++#![allow(non_fmt_panics)]
++#![crate_type = "lib"]
++
++const MSG: &str = "hello";
++
++const Z: () = std::panic!("cheese");
++//~^ ERROR evaluation panicked
++
++const Z2: () = std::panic!();
++//~^ ERROR evaluation panicked
++
++const Y: () = std::unreachable!();
++//~^ ERROR evaluation panicked
++
++const X: () = std::unimplemented!();
++//~^ ERROR evaluation panicked
++
++const W: () = std::panic!(MSG);
++//~^ ERROR evaluation panicked
++
++const W2: () = std::panic!("{}", MSG);
++//~^ ERROR evaluation panicked
++
++const Z_CORE: () = core::panic!("cheese");
++//~^ ERROR evaluation panicked
++
++const Z2_CORE: () = core::panic!();
++//~^ ERROR evaluation panicked
++
++const Y_CORE: () = core::unreachable!();
++//~^ ERROR evaluation panicked
++
++const X_CORE: () = core::unimplemented!();
++//~^ ERROR evaluation panicked
++
++const W_CORE: () = core::panic!(MSG);
++//~^ ERROR evaluation panicked
++
++const W2_CORE: () = core::panic!("{}", MSG);
++//~^ ERROR evaluation panicked
++
++const ABORT: () = core::process::abort_immediate();
++//~^ ERROR the program aborted execution
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const_panic.stderr b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const_panic.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const_panic.stderr
+@@ -0,0 +1,84 @@
++error[E0080]: evaluation panicked: cheese
++  --> $DIR/const_panic.rs:8:15
++   |
++LL | const Z: () = std::panic!("cheese");
++   |               ^^^^^^^^^^^^^^^^^^^^^ evaluation of `Z` failed here
++
++error[E0080]: evaluation panicked: explicit panic
++  --> $DIR/const_panic.rs:11:16
++   |
++LL | const Z2: () = std::panic!();
++   |                ^^^^^^^^^^^^^ evaluation of `Z2` failed here
++
++error[E0080]: evaluation panicked: internal error: entered unreachable code
++  --> $DIR/const_panic.rs:14:15
++   |
++LL | const Y: () = std::unreachable!();
++   |               ^^^^^^^^^^^^^^^^^^^ evaluation of `Y` failed here
++
++error[E0080]: evaluation panicked: not implemented
++  --> $DIR/const_panic.rs:17:15
++   |
++LL | const X: () = std::unimplemented!();
++   |               ^^^^^^^^^^^^^^^^^^^^^ evaluation of `X` failed here
++
++error[E0080]: evaluation panicked: hello
++  --> $DIR/const_panic.rs:20:15
++   |
++LL | const W: () = std::panic!(MSG);
++   |               ^^^^^^^^^^^^^^^^ evaluation of `W` failed here
++
++error[E0080]: evaluation panicked: hello
++  --> $DIR/const_panic.rs:23:16
++   |
++LL | const W2: () = std::panic!("{}", MSG);
++   |                ^^^^^^^^^^^^^^^^^^^^^^ evaluation of `W2` failed here
++
++error[E0080]: evaluation panicked: cheese
++  --> $DIR/const_panic.rs:26:20
++   |
++LL | const Z_CORE: () = core::panic!("cheese");
++   |                    ^^^^^^^^^^^^^^^^^^^^^^ evaluation of `Z_CORE` failed here
++
++error[E0080]: evaluation panicked: explicit panic
++  --> $DIR/const_panic.rs:29:21
++   |
++LL | const Z2_CORE: () = core::panic!();
++   |                     ^^^^^^^^^^^^^^ evaluation of `Z2_CORE` failed here
++
++error[E0080]: evaluation panicked: internal error: entered unreachable code
++  --> $DIR/const_panic.rs:32:20
++   |
++LL | const Y_CORE: () = core::unreachable!();
++   |                    ^^^^^^^^^^^^^^^^^^^^ evaluation of `Y_CORE` failed here
++
++error[E0080]: evaluation panicked: not implemented
++  --> $DIR/const_panic.rs:35:20
++   |
++LL | const X_CORE: () = core::unimplemented!();
++   |                    ^^^^^^^^^^^^^^^^^^^^^^ evaluation of `X_CORE` failed here
++
++error[E0080]: evaluation panicked: hello
++  --> $DIR/const_panic.rs:38:20
++   |
++LL | const W_CORE: () = core::panic!(MSG);
++   |                    ^^^^^^^^^^^^^^^^^ evaluation of `W_CORE` failed here
++
++error[E0080]: evaluation panicked: hello
++  --> $DIR/const_panic.rs:41:21
++   |
++LL | const W2_CORE: () = core::panic!("{}", MSG);
++   |                     ^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `W2_CORE` failed here
++
++error[E0080]: the program aborted execution
++  --> $DIR/const_panic.rs:44:19
++   |
++LL | const ABORT: () = core::process::abort_immediate();
++   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `ABORT` failed inside this call
++   |
++note: inside `std::process::abort_immediate`
++  --> $SRC_DIR/core/src/process.rs:LL:COL
++
++error: aborting due to 13 previous errors
++
++For more information about this error, try `rustc --explain E0080`.

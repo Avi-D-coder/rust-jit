@@ -1,0 +1,1273 @@
+--- a/crates/lrr/src/vm/frame.rs
++++ b/crates/lrr/src/vm/frame.rs
+@@ -1,4 +1,10 @@
+ //! Physical frame state. Syntax and query providers never mutate it.
++#[path = "frame_source_transfer.rs"]
++mod source_transfer;
++#[cfg(test)]
++#[path = "frame_source_transfer_tests.rs"]
++mod source_transfer_tests;
++use source_transfer::{RetainedSource, RetainedSourceTransfer};
+ #[path = "frame_aggregate_copy.rs"]
+ mod aggregate_copy_frame;
+ #[cfg(test)]
+@@ -250,6 +256,10 @@
+             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<super::call::CallStartFacts>>()))
+             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<aggregate_copy_frame::OpActivation>>()))
+             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<scope_cleanup_frame::Activation>>()))
++            // One private single-use source attachment owns both closed trees
++            // across a scalar read/write. Reserve this before frame admission.
++            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<RetainedSourceTransfer>()))
++            .and_then(|bytes| bytes.checked_add(source_heap.checked_mul(2)?))
+     }
+     pub fn new(body: BodyIndex, entry: PcKey, store: &mut GuestStore) -> Result<Self, Diagnostic> {
+         if entry.body != *body.body() {
+@@ -625,7 +635,13 @@
+             )
+         })?;
+         self.preflight_parameter_source(ordinal, ty, store)?;
+-        self.preflight_write_value(destination, value, store)
++        self.preflight_retained_source_transfer(
++            RetainedSource::Parameter(ordinal),
++            destination,
++            store,
++        )?;
++        self.preflight_write_value(destination, value, store)?;
++        store.preflight_owning_read_result(self.slot(destination)?.cell.is_none(), false)
+     }
+     pub(crate) fn read_parameter(
+         &mut self,
+@@ -635,14 +651,17 @@
+     ) -> Result<(), Diagnostic> {
+         self.preflight_parameter(ordinal, destination, store)?;
+         let cell = self.parameter(ordinal)?;
++        let source = self.prepare_retained_source_transfer(
++            RetainedSource::Parameter(ordinal),
++            destination,
++            store,
++        )?;
++        self.require_retained_source_transfer(&source, store)?;
+         store.reserve_owning_read_result(self.slot(destination)?.cell.is_none(), false)?;
+         self.prepare_write(destination, store)?;
+         let ticket = store.read_owning(cell)?;
+         self.write(destination, ticket, store)?;
+-        self.set_source_view(
+-            destination,
+-            self.parameter_sources.get(ordinal as usize).cloned(),
+-        )
++        self.attach_retained_source_after_write(source, store)
+     }
+     pub(crate) fn preflight_call_start(
+         &self,
+@@ -2983,6 +3002,7 @@
+         store: &GuestStore,
+     ) -> Result<(), Diagnostic> {
+         let value = store.admit_move(self.cell(source)?)?;
++        self.preflight_retained_source_transfer(RetainedSource::Slot(source), destination, store)?;
+         self.preflight_write_value(destination, value, store)
+     }
+     fn check_rigid_local_source(
+@@ -3025,7 +3045,9 @@
+     ) -> Result<(), Diagnostic> {
+         self.preflight_declaration(binding)?;
+         let value = store.admit_move(self.cell(source)?)?;
+-        store.admit_new_contract(hint, value)
++        self.preflight_retained_binding_source(source, store)?;
++        store.admit_new_contract(hint, value)?;
++        store.preflight_owning_read_result(true, false)
+     }
+     pub(crate) fn preflight_read_local(
+         &self,
+@@ -3041,7 +3063,19 @@
+         {
+             value = store.preview_scalar(cell, Some(hint))?;
+         }
+-        self.preflight_write_value(destination, value, store)
++        self.preflight_retained_source_transfer(
++            RetainedSource::Local(binding),
++            destination,
++            store,
++        )?;
++        self.preflight_write_value(destination, value, store)?;
++        let original = store.admit_move(cell)?;
++        let materializes = matches!(original.kind, 11 | 12)
++            && store
++                .effective_type(original)?
++                .or(self.hint(destination)?)
++                .is_some();
++        store.preflight_owning_read_result(self.slot(destination)?.cell.is_none(), materializes)
+     }
+     pub(crate) fn preflight_assign(
+         &self,
+@@ -3335,6 +3369,12 @@
+             .get(binding.0 as usize)
+             .and_then(|cell| *cell)
+             .ok_or_else(|| invalid("local read precedes executed binding"))?;
++        let source_view = self.prepare_retained_source_transfer(
++            RetainedSource::Local(binding),
++            destination,
++            store,
++        )?;
++        self.require_retained_source_transfer(&source_view, store)?;
+         let value = store.admit_move(cell)?;
+         let materializes_literal = matches!(value.kind, 11 | 12)
+             && store
+@@ -3360,10 +3400,7 @@
+             ticket
+         };
+         self.write(destination, ticket, store)?;
+-        self.set_source_view(
+-            destination,
+-            self.binding_sources[binding.0 as usize].clone(),
+-        )
++        self.attach_retained_source_after_write(source_view, store)
+     }
+     pub(crate) fn discard(
+         &mut self,
+@@ -3482,7 +3519,9 @@
+                 "reached return value does not match its declared primitive descriptor".into(),
+             ));
+         }
++        self.preflight_retained_binding_source(value, store)?;
+         self.certified_return_source(value, store)?;
++        self.preflight_rigid_return_source(value)?;
+         Ok(())
+     }
+     pub(crate) fn preflight_control(
+--- /dev/null
++++ b/crates/lrr/src/vm/frame_source_transfer.rs
+@@ -0,0 +1,430 @@
++//! Transfer of already-retained legacy terms, not SourceViewPlan namespace admission.
++use super::*;
++use crate::traits::term::TyTerm;
++#[derive(Debug, Clone, Copy, Eq, PartialEq)]
++pub(crate) enum RetainedSource {
++    Parameter(u32),
++    Local(NodeId),
++    Slot(SlotId),
++}
++/// No Clone or public constructor: one checked write consumes one attachment.
++/// This proves only storage transfer of the frame's existing term. It cannot
++/// admit a frontend SourceViewPlan or recover an absent identity from TypeId.
++pub(crate) struct RetainedSourceTransfer {
++    frame: FrameId,
++    pc: PcKey,
++    context: Option<crate::core::digest::Digest>,
++    endpoint: RetainedSource,
++    source_cell: CellId,
++    source_epoch: u32,
++    source_value: ValueRepr,
++    source: Option<TyTerm>,
++    destination: SlotId,
++    previous_cell: Option<CellId>,
++    previous_epoch: Option<u32>,
++    previous_source: Option<TyTerm>,
++    previous_hint: Option<TypeId>,
++    previous_strict: bool,
++    expected_value: ValueRepr,
++    expected_descriptor: Option<TypeId>,
++}
++fn source_fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-SOURCE-TYPE-CONTEXT", message.into())
++}
++// The admitted legacy trees are closed and at most two boxes deep. Measure
++// them without TyTerm::heap_bytes's temporary traversal Vec during preflight.
++fn closed_source_heap(source: &TyTerm) -> Option<usize> {
++    let node = std::mem::size_of::<TyTerm>();
++    match source {
++        TyTerm::Primitive(_) | TyTerm::Param(_) => Some(0),
++        TyTerm::Nominal(_, args) if args.is_empty() => args
++            .capacity()
++            .checked_mul(std::mem::size_of::<crate::traits::term::GenericArg>()),
++        TyTerm::Array(element, crate::traits::term::ConstTerm::Value(_))
++            if matches!(element.as_ref(), TyTerm::Primitive(_)) =>
++        {
++            Some(node)
++        }
++        TyTerm::Ref(_, _, target) => node.checked_add(closed_source_heap(target)?),
++        _ => None,
++    }
++}
++impl Frame {
++    fn retained_source_parts(
++        &self,
++        endpoint: RetainedSource,
++    ) -> Result<(CellId, Option<&TyTerm>, u32), Diagnostic> {
++        let (cell, source, physical) = match endpoint {
++            RetainedSource::Parameter(ordinal) => {
++                let physical = self
++                    .body
++                    .slot_count()
++                    .checked_add(
++                        u32::try_from(self.body.nodes().len())
++                            .map_err(|_| invalid("source parameter slot overflow"))?,
++                    )
++                    .and_then(|base| base.checked_add(ordinal))
++                    .ok_or_else(|| invalid("source parameter slot overflow"))?;
++                (
++                    self.parameter(ordinal)?,
++                    self.parameter_sources.get(ordinal as usize),
++                    physical,
++                )
++            }
++            RetainedSource::Local(binding) => (
++                self.binding(binding)?,
++                self.binding_sources
++                    .get(binding.0 as usize)
++                    .ok_or_else(|| invalid("source binding absent"))?
++                    .as_ref(),
++                self.body
++                    .slot_count()
++                    .checked_add(binding.0)
++                    .ok_or_else(|| invalid("source binding slot overflow"))?,
++            ),
++            RetainedSource::Slot(slot) => (self.cell(slot)?, self.source_view_ref(slot)?, slot.0),
++        };
++        Ok((cell, source, physical))
++    }
++    fn require_retained_source_descriptor(
++        &self,
++        source: Option<&TyTerm>,
++        actual: Option<TypeId>,
++        store: &GuestStore,
++    ) -> Result<(), Diagnostic> {
++        let Some(source) = source else {
++            return Ok(());
++        };
++        if !Self::supported_source(source) {
++            return Err(source_fault(
++                "retained source requires general SourceView table admission",
++            ));
++        }
++        if let TyTerm::Param(key) = source {
++            if key.definition != self.body.body().definition || key.ordinal >= 100_000 {
++                return Err(source_fault(
++                    "retained rigid source belongs to another definition",
++                ));
++            }
++            if let Some(context) = &self.context {
++                if context.definition().definition != key.definition
++                    || !context.definition().generics.iter().any(|parameter| {
++                        parameter.ordinal == key.ordinal
++                            && parameter.kind == crate::syntax::signatures::GenericKind::Type
++                    })
++                {
++                    return Err(source_fault(
++                        "retained rigid source differs from its owning environment",
++                    ));
++                }
++                if let Some(expected) = context.runtime_binding(*key)
++                    && Some(expected) != actual
++                {
++                    return Err(source_fault(
++                        "retained rigid source/runtime substitution differs",
++                    ));
++                }
++            }
++            return Ok(());
++        }
++        let actual = actual.ok_or_else(|| {
++            source_fault("retained declared source lacks a concrete storage descriptor")
++        })?;
++        match source {
++            TyTerm::Ref(_, mutable, target) => {
++                let crate::runtime::shape::TypeKey::Ref {
++                    mutable: found,
++                    target: descriptor,
++                } = store.type_descriptor(actual)?.key.as_ref()
++                else {
++                    return Err(source_fault(
++                        "retained reference source differs from descriptor",
++                    ));
++                };
++                if mutable != found {
++                    return Err(source_fault("retained reference source access differs"));
++                }
++                Self::require_borrow_source_target(Some(target), *descriptor, store)
++            }
++            _ => Self::require_borrow_source_target(Some(source), actual, store),
++        }
++    }
++    fn require_transfer_destination_source(
++        &self,
++        destination: SlotId,
++        incoming: Option<&TyTerm>,
++    ) -> Result<(), Diagnostic> {
++        let slot = self.slot(destination)?;
++        // Forwarded call/return context is checked at its reached boundary;
++        // an empty root result must retain the actual source until Return.
++        if !slot.strict_hint || Some(destination) == self.body.nodes()[0].value {
++            return Ok(());
++        }
++        let Some(expected) = slot.source.as_ref() else {
++            return Ok(());
++        };
++        if !Self::supported_source(expected) {
++            return Err(source_fault(
++                "strict source contract requires general table admission",
++            ));
++        }
++        if incoming.is_none() {
++            return if matches!(
++                expected,
++                TyTerm::Param(_) | TyTerm::Nominal(..) | TyTerm::Ref(..)
++            ) {
++                Err(source_fault(
++                    "strict source transfer cannot invent missing binding identity",
++                ))
++            } else {
++                Ok(())
++            };
++        }
++        // A written reference can shorten a region without changing its
++        // pointee/member identity; runtime lease/access checks remain separate.
++        fn same_identity(left: &TyTerm, right: &TyTerm) -> bool {
++            match (left, right) {
++                (TyTerm::Ref(_, left_mutable, left), TyTerm::Ref(_, right_mutable, right)) => {
++                    left_mutable == right_mutable && same_identity(left, right)
++                }
++                _ => left == right,
++            }
++        }
++        if !incoming.is_some_and(|incoming| same_identity(expected, incoming)) {
++            return Err(Diagnostic::new(
++                if matches!(
++                    (expected, incoming),
++                    (TyTerm::Param(_), Some(TyTerm::Param(_)))
++                ) {
++                    "LRR-E-GENERIC-BINDING"
++                } else {
++                    "LRR-E-SOURCE-TYPE-CONTEXT"
++                },
++                "strict source transfer preserves a distinct declared identity".into(),
++            ));
++        }
++        Ok(())
++    }
++    fn retained_source_expected_value(
++        &self,
++        endpoint: RetainedSource,
++        destination: SlotId,
++        store: &GuestStore,
++    ) -> Result<ValueRepr, Diagnostic> {
++        let (cell, _, _) = self.retained_source_parts(endpoint)?;
++        let value = store.admit_move(cell)?;
++        if matches!(endpoint, RetainedSource::Local(_))
++            && matches!(value.kind, 11 | 12)
++            && let Some(hint) = store.effective_type(value)?.or(self.hint(destination)?)
++        {
++            return store.preview_scalar(cell, Some(hint));
++        }
++        Ok(value)
++    }
++    pub(crate) fn preflight_retained_binding_source(
++        &self,
++        source: SlotId,
++        store: &GuestStore,
++    ) -> Result<(), Diagnostic> {
++        let (cell, term, physical) = self.retained_source_parts(RetainedSource::Slot(source))?;
++        if store.owner(cell)?
++            != (CellOwner::FrameSlot {
++                frame: self.anchor,
++                slot: physical,
++            })
++        {
++            return Err(source_fault("binding source cell has another owner"));
++        }
++        let actual = store.effective_type(store.admit_move(cell)?)?;
++        self.require_retained_source_descriptor(term, actual, store)?;
++        let closed_heap = std::mem::size_of::<TyTerm>()
++            .checked_mul(2)
++            .ok_or_else(crate::runtime::arena::resource)?;
++        if term.is_some_and(|term| closed_source_heap(term).is_none_or(|bytes| bytes > closed_heap))
++        {
++            return Err(crate::runtime::arena::resource());
++        }
++        Ok(())
++    }
++    /// Called by existing opcode preflight before fuel, owning ticket or write.
++    pub(crate) fn preflight_retained_source_transfer(
++        &self,
++        endpoint: RetainedSource,
++        destination: SlotId,
++        store: &GuestStore,
++    ) -> Result<(), Diagnostic> {
++        let (cell, source, physical) = self.retained_source_parts(endpoint)?;
++        if store.owner(cell)?
++            != (CellOwner::FrameSlot {
++                frame: self.anchor,
++                slot: physical,
++            })
++        {
++            return Err(source_fault("retained source cell has another owner"));
++        }
++        if self
++            .cell(destination)
++            .is_ok_and(|destination| destination == cell)
++        {
++            return Err(source_fault(
++                "source transfer destination aliases its source cell",
++            ));
++        }
++        let value = self.retained_source_expected_value(endpoint, destination, store)?;
++        self.require_retained_source_descriptor(source, store.effective_type(value)?, store)?;
++        self.require_transfer_destination_source(destination, source)?;
++        self.preflight_source_view(destination, source)?;
++        let closed_heap = std::mem::size_of::<TyTerm>()
++            .checked_mul(2)
++            .ok_or_else(crate::runtime::arena::resource)?;
++        for term in [source, self.source_view_ref(destination)?]
++            .into_iter()
++            .flatten()
++        {
++            if !Self::supported_source(term) {
++                return Err(source_fault(
++                    "retained destination source requires general table admission",
++                ));
++            }
++            if closed_source_heap(term).is_none_or(|bytes| bytes > closed_heap) {
++                return Err(crate::runtime::arena::resource());
++            }
++        }
++        self.preflight_write_value(destination, value, store)?;
++        Self::metadata_bytes(&self.body, self.parameter_metadata_count())
++            .and_then(|bytes| bytes.checked_add(self.constructor_mapping_bytes))
++            .and_then(|bytes| bytes.checked_add(self.projection_bytes))
++            .and_then(|bytes| bytes.checked_add(self.source_field_bytes()?))
++            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
++            .ok_or_else(crate::runtime::arena::resource)?;
++        Ok(())
++    }
++    /// Metadata reservation in Frame::metadata_bytes covers this bounded owner
++    /// and both cloned closed source trees before either is retained.
++    pub(crate) fn prepare_retained_source_transfer(
++        &self,
++        endpoint: RetainedSource,
++        destination: SlotId,
++        store: &GuestStore,
++    ) -> Result<RetainedSourceTransfer, Diagnostic> {
++        self.preflight_retained_source_transfer(endpoint, destination, store)?;
++        let (source_cell, source, _) = self.retained_source_parts(endpoint)?;
++        let slot = self.slot(destination)?;
++        let value = self.retained_source_expected_value(endpoint, destination, store)?;
++        Ok(RetainedSourceTransfer {
++            frame: self.anchor,
++            pc: self.pc.clone(),
++            context: self.context.as_ref().map(|context| context.signature_key()),
++            endpoint,
++            source_cell,
++            source_epoch: store.location_epoch(source_cell)?,
++            source_value: store.admit_move(source_cell)?,
++            source: source.cloned(),
++            destination,
++            previous_cell: slot.cell,
++            previous_epoch: slot
++                .cell
++                .map(|cell| store.location_epoch(cell))
++                .transpose()?,
++            previous_source: slot.source.clone(),
++            previous_hint: slot.hint,
++            previous_strict: slot.strict_hint,
++            expected_value: value,
++            expected_descriptor: store.effective_type(value)?,
++        })
++    }
++    pub(crate) fn require_retained_source_transfer(
++        &self,
++        proof: &RetainedSourceTransfer,
++        store: &GuestStore,
++    ) -> Result<(), Diagnostic> {
++        if proof.frame != self.anchor
++            || proof.pc != self.pc
++            || proof.context != self.context.as_ref().map(|context| context.signature_key())
++        {
++            return Err(source_fault(
++                "retained source transfer frame, PC or context changed",
++            ));
++        }
++        let (cell, source, _) = self.retained_source_parts(proof.endpoint)?;
++        let slot = self.slot(proof.destination)?;
++        if cell != proof.source_cell
++            || store.location_epoch(cell)? != proof.source_epoch
++            || store.admit_move(cell)? != proof.source_value
++            || source != proof.source.as_ref()
++            || slot.cell != proof.previous_cell
++            || slot.source != proof.previous_source
++            || slot.hint != proof.previous_hint
++            || slot.strict_hint != proof.previous_strict
++            || slot
++                .cell
++                .map(|cell| store.location_epoch(cell))
++                .transpose()?
++                != proof.previous_epoch
++        {
++            return Err(source_fault(
++                "retained source transfer storage or metadata changed",
++            ));
++        }
++        self.preflight_retained_source_transfer(proof.endpoint, proof.destination, store)
++    }
++    /// The value write already consumed its ticket. This consumes the private
++    /// witness only after exact frame/PC/descriptor/value/storage validation.
++    pub(crate) fn attach_retained_source_after_write(
++        &mut self,
++        proof: RetainedSourceTransfer,
++        store: &GuestStore,
++    ) -> Result<(), Diagnostic> {
++        if proof.frame != self.anchor
++            || proof.pc != self.pc
++            || proof.context != self.context.as_ref().map(|context| context.signature_key())
++        {
++            return Err(source_fault(
++                "retained source attachment frame, PC or context changed",
++            ));
++        }
++        let slot = self.slot(proof.destination)?;
++        let cell = self.cell(proof.destination)?;
++        if !self.active_scopes.contains(&slot.scope)
++            || slot.source.is_some()
++            || store.owner(cell)?
++                != (CellOwner::FrameSlot {
++                    frame: self.anchor,
++                    slot: proof.destination.0,
++                })
++            || proof.previous_cell.is_some_and(|previous| previous != cell)
++            || store.location_epoch(cell)? != proof.previous_epoch.unwrap_or(1)
++        {
++            return Err(source_fault(
++                "retained source attachment destination owner changed",
++            ));
++        }
++        let actual = store.admit_move(cell)?;
++        if actual != proof.expected_value
++            || store.effective_type(actual)? != proof.expected_descriptor
++        {
++            return Err(source_fault(
++                "retained source attachment actual value or descriptor differs",
++            ));
++        }
++        self.preflight_source_view(proof.destination, proof.source.as_ref())?;
++        self.slots[proof.destination.0 as usize].source = proof.source;
++        Ok(())
++    }
++    pub(crate) fn preflight_rigid_return_source(&self, value: SlotId) -> Result<(), Diagnostic> {
++        let Some(context) = &self.context else {
++            return Ok(());
++        };
++        if let (Some(TyTerm::Param(expected)), Some(TyTerm::Param(actual))) = (
++            context.definition().result_symbolic.as_ref(),
++            self.source_view_ref(value)?,
++        ) && expected != actual
++        {
++            return Err(Diagnostic::new(
++                "LRR-E-GENERIC-BINDING",
++                "reached return preserves a distinct rigid source parameter".into(),
++            ));
++        }
++        Ok(())
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/vm/frame_source_transfer_tests.rs
+@@ -0,0 +1,701 @@
++//! Original lowered recipe/storage controls; no whole-main or SourceViewId claim.
++use super::*;
++use crate::{
++    core::{digest::Digest, profile::ProfileIdentity},
++    frontend::call_contracts::PreparedCallContracts,
++    ir::{
++        op::{Op, PrimitiveType},
++        pc::Phase,
++        recipe::VerifiedRecipe,
++    },
++    source::snapshot::{CfgSet, SourceBlob},
++    syntax::{
++        outline::{BodyHandle, DeclarationContext},
++        parse::ParsedFile,
++    },
++    traits::term::{ParamKey, TyTerm},
++    vm::{
++        context::GenericEnv,
++        step::{StepOutcome, step},
++    },
++};
++const COPY: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/traits/copy-trait-implicit-copy.rs"
++);
++const INFER: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/generics/generic-fn-infer.rs"
++);
++struct Context {
++    parsed: ParsedFile,
++    handle: BodyHandle,
++    frame: Frame,
++    store: GuestStore,
++    recipe: VerifiedRecipe,
++    destination: SlotId,
++}
++fn context(
++    original: &str,
++    function: &str,
++    expression_at: usize,
++    edition: u16,
++    fuel: u64,
++) -> Context {
++    let parsed = ParsedFile::parse(
++        &SourceBlob::new(original.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++    )
++    .unwrap();
++    let outline = parsed
++        .outline(
++            Digest::of_bytes(b"LRR original frame source transfer"),
++            vec![],
++            &CfgSet::guest_default(),
++        )
++        .unwrap();
++    let item = outline
++        .items
++        .iter()
++        .find(|item| item.def_key.declared_name == function)
++        .unwrap();
++    let handle = item.body.as_ref().unwrap().clone();
++    let signature = parsed
++        .function_signature(
++            handle.def_key,
++            &item.header,
++            &DeclarationContext {
++                scope: item.scope.clone(),
++                range: item.declaration_span,
++            },
++            Some(&handle),
++        )
++        .unwrap();
++    let index = parsed.index_body(&handle, Default::default()).unwrap();
++    let at = u32::try_from(expression_at).unwrap() - handle.range.start;
++    let node = index
++        .nodes()
++        .iter()
++        .find(|node| node.range.start == at && node.range.end == at + 1)
++        .unwrap();
++    let pc = index.pc(node.id, Phase::Entry).unwrap();
++    let recipe = parsed.initial_thunk(&handle, &index, &pc).unwrap();
++    let destination = recipe
++        .recipe()
++        .operations
++        .iter()
++        .find_map(|op| match op {
++            Op::ReadParameter { destination, .. } => Some(*destination),
++            _ => None,
++        })
++        .unwrap();
++    let mut store = GuestStore::new(1, 64, 1024 * 1024).unwrap();
++    let mut frame = Frame::new(index, pc, &mut store).unwrap();
++    frame.set_fuel_limit(fuel).unwrap();
++    let parameter_source = signature.parameters[0].symbolic.clone().unwrap();
++    assert!(matches!(parameter_source, TyTerm::Param(_)));
++    let type_keys: Vec<_> = signature
++        .generics
++        .iter()
++        .filter(|parameter| parameter.kind == crate::syntax::signatures::GenericKind::Type)
++        .map(|parameter| ParamKey {
++            definition: signature.definition,
++            ordinal: parameter.ordinal,
++        })
++        .collect();
++    let contracts = PreparedCallContracts {
++        definition: signature.definition,
++        source_parameters: vec![parameter_source.clone()],
++        parameter_descriptors: vec![TypeId(6)],
++        source_substitution: type_keys
++            .iter()
++            .map(|key| (*key, TyTerm::Primitive(PrimitiveType::I32)))
++            .collect(),
++        runtime_substitution: type_keys.iter().map(|key| (*key, TypeId(6))).collect(),
++        source_result: signature.result_symbolic.clone(),
++        result_descriptor: Some(
++            if matches!(
++                signature.result_symbolic.as_ref(),
++                Some(TyTerm::Primitive(PrimitiveType::Unit))
++            ) {
++                TypeId(1)
++            } else {
++                TypeId(6)
++            },
++        ),
++        normalized_deferred_return: None,
++    };
++    frame
++        .install_context(GenericEnv::capture(&signature, &contracts).unwrap())
++        .unwrap();
++    frame
++        .install_parameter_sources(vec![parameter_source])
++        .unwrap();
++    let argument = store
++        .new_cell(
++            StorageContract::Exact(TypeId(6)),
++            false,
++            CellOwner::FrameSlot {
++                frame: frame.anchor,
++                slot: 100000,
++            },
++        )
++        .unwrap();
++    let ticket = store
++        .ticket(ValueRepr::signed(TypeId(6), 63).unwrap())
++        .unwrap();
++    store.initialize(argument, ticket).unwrap();
++    let packet =
++        super::super::call::ArgumentPacket::seal(&mut store, &[argument], &[TypeId(6)]).unwrap();
++    frame
++        .initialize_parameters(&packet, &[(TypeId(6), false)], &mut store)
++        .unwrap();
++    let node = &frame.body.nodes()[frame.pc.node as usize];
++    let mut scope = match recipe.recipe().operations.first() {
++        Some(Op::ScopeEnter { scope }) => frame.body.scopes()[scope.0 as usize].parent,
++        _ => Some(node.scope),
++    };
++    let mut ancestors = vec![];
++    while let Some(id) = scope {
++        ancestors.push(id);
++        scope = frame.body.scopes()[id.0 as usize].parent;
++    }
++    for id in ancestors.into_iter().rev() {
++        frame.enter(id).unwrap();
++    }
++    Context {
++        parsed,
++        handle,
++        frame,
++        store,
++        recipe,
++        destination,
++    }
++}
++fn copy(edition: u16, fuel: u64) -> Context {
++    let needle = "let _a = v;";
++    context(
++        COPY,
++        "can_copy_copy",
++        COPY.find(needle).unwrap() + needle.find("v;").unwrap(),
++        edition,
++        fuel,
++    )
++}
++fn identity(edition: u16) -> Context {
++    let needle = "return x;";
++    context(
++        INFER,
++        "id",
++        INFER.find(needle).unwrap() + needle.find("x;").unwrap(),
++        edition,
++        1000,
++    )
++}
++#[test]
++fn unchanged_copy_alias_commit_and_storage_read_preserve_rigid_term_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let mut c = copy(edition, 1000);
++        let parameter = c.frame.parameter(0).unwrap();
++        let state = c.store.state(parameter).unwrap();
++        let expected = TyTerm::Param(ParamKey {
++            definition: c.frame.body.body().definition,
++            ordinal: 0,
++        });
++        let StepOutcome::Next(commit) = step(&mut c.frame, &mut c.store, &c.recipe).unwrap() else {
++            panic!()
++        };
++        assert_eq!(
++            c.frame.source_view_ref(c.destination).unwrap(),
++            Some(&expected)
++        );
++        assert_eq!(c.store.state(parameter).unwrap(), state);
++        let committed = c
++            .parsed
++            .initial_thunk(&c.handle, &c.frame.body, &commit)
++            .unwrap();
++        let binding = committed
++            .recipe()
++            .operations
++            .iter()
++            .find_map(|op| match op {
++                Op::BindLocal { binding, .. } => Some(*binding),
++                _ => None,
++            })
++            .unwrap();
++        assert!(matches!(
++            step(&mut c.frame, &mut c.store, &committed).unwrap(),
++            StepOutcome::Next(_)
++        ));
++        assert_eq!(
++            c.frame.binding_sources[binding.0 as usize].as_ref(),
++            Some(&expected)
++        );
++        let value = c
++            .store
++            .admit_move(c.frame.binding(binding).unwrap())
++            .unwrap();
++        assert_eq!(value.type_id, 6);
++        assert_eq!(value.payload, 63);
++        // Direct storage control after the original commit: no invented extra
++        // source statement or whole-main execution is counted.
++        let destination = c.frame.body.nodes()[0].value.unwrap();
++        c.frame
++            .preflight_read_local(binding, destination, &c.store)
++            .unwrap();
++        c.frame
++            .read_local(binding, destination, &mut c.store)
++            .unwrap();
++        assert_eq!(
++            c.frame.source_view_ref(destination).unwrap(),
++            Some(&expected)
++        );
++        assert_eq!(
++            c.store
++                .admit_move(c.frame.cell(destination).unwrap())
++                .unwrap(),
++            value
++        );
++        assert_eq!(c.frame.counters.started_by_opcode[21], 1);
++        assert_eq!(c.frame.body.profile().edition, edition);
++        // Copy fixture main is empty: this explicitly selected original generic
++        // body/argument component does not claim main exercised those aliases.
++    }
++}
++#[test]
++fn unchanged_generic_id_reached_return_preserves_declared_rigid_source_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let mut c = identity(edition);
++        let expected = TyTerm::Param(ParamKey {
++            definition: c.frame.body.body().definition,
++            ordinal: 0,
++        });
++        let StepOutcome::Next(return_pc) = step(&mut c.frame, &mut c.store, &c.recipe).unwrap()
++        else {
++            panic!()
++        };
++        let returned = c
++            .parsed
++            .initial_thunk(&c.handle, &c.frame.body, &return_pc)
++            .unwrap();
++        assert!(matches!(
++            returned.recipe().exit,
++            crate::ir::recipe::RecipeExit::Control(crate::ir::recipe::ControlRecipe::Return { .. })
++        ));
++        let StepOutcome::Return(ticket) = step(&mut c.frame, &mut c.store, &returned).unwrap()
++        else {
++            panic!()
++        };
++        assert_eq!(c.frame.return_source.as_ref(), Some(&expected));
++        let value = c.store.peek_ticket(ticket).unwrap();
++        assert_eq!((value.type_id, value.payload), (6, 63));
++        c.store.discard(ticket).unwrap();
++        assert_eq!(c.frame.counters.started_by_opcode[21], 1);
++        assert_eq!(c.frame.counters.started_by_opcode[3], 1);
++        assert_eq!(c.frame.status(), FrameStatus::Returned);
++        // The source-selected id body was executed as a prepared component.
++        // Caller call/return-substitution, cleanup/resume and full main remain
++        // engine integration acceptance; no SourceViewPlan was attached.
++    }
++}
++#[test]
++fn distinct_rigid_strict_destination_with_same_descriptor_refuses_before_read_fuel_ticket() {
++    let mut c = copy(2024, 1000);
++    let source = c.frame.parameter(0).unwrap();
++    let before = (
++        c.store.state(source).unwrap(),
++        c.store.location_epoch(source).unwrap(),
++        c.store.budget().handles(),
++        c.store.budget().bytes(),
++    );
++    let wrong = TyTerm::Param(ParamKey {
++        definition: c.frame.body.body().definition,
++        ordinal: 1,
++    });
++    c.frame
++        .set_source_view(c.destination, Some(wrong.clone()))
++        .unwrap();
++    c.frame
++        .declared_hint(c.destination, Some(TypeId(6)))
++        .unwrap();
++    let prefix = c
++        .recipe
++        .recipe()
++        .operations
++        .iter()
++        .position(|op| matches!(op, Op::ReadParameter { .. }))
++        .unwrap();
++    let error = step(&mut c.frame, &mut c.store, &c.recipe).unwrap_err();
++    assert_eq!(error.code, "LRR-E-GENERIC-BINDING");
++    assert_eq!(c.frame.counters.started_by_opcode[21], 0);
++    assert_eq!(c.frame.fuel_snapshot().used, u64::try_from(prefix).unwrap());
++    assert_eq!(
++        c.frame.source_view_ref(c.destination).unwrap(),
++        Some(&wrong)
++    );
++    assert!(c.frame.cell(c.destination).is_err());
++    assert_eq!(
++        (
++            c.store.state(source).unwrap(),
++            c.store.location_epoch(source).unwrap(),
++            c.store.budget().handles(),
++            c.store.budget().bytes()
++        ),
++        before
++    );
++}
++#[test]
++fn forwarded_context_is_preserved_until_the_actual_return_boundary() {
++    let mut c = identity(2024);
++    let wrong = TyTerm::Param(ParamKey {
++        definition: c.frame.body.body().definition,
++        ordinal: 1,
++    });
++    c.frame.set_source_view(c.destination, Some(wrong)).unwrap();
++    c.frame.slots[c.destination.0 as usize].strict_hint = false;
++    let StepOutcome::Next(_) = step(&mut c.frame, &mut c.store, &c.recipe).unwrap() else {
++        panic!()
++    };
++    let expected = TyTerm::Param(ParamKey {
++        definition: c.frame.body.body().definition,
++        ordinal: 0,
++    });
++    assert_eq!(
++        c.frame.source_view_ref(c.destination).unwrap(),
++        Some(&expected)
++    );
++    // Separate LRR source gives both distinct parameters genuine ownership.
++    // It is a runtime boundary refusal control, not a rustc compile-pass case.
++    const WRONG_RETURN: &str = "fn bad<T,U>(x:U)->T{return x;}fn main(){}";
++    let mut c = context(
++        WRONG_RETURN,
++        "bad",
++        WRONG_RETURN.find("return x;").unwrap() + 7,
++        2024,
++        1000,
++    );
++    let StepOutcome::Next(return_pc) = step(&mut c.frame, &mut c.store, &c.recipe).unwrap() else {
++        panic!()
++    };
++    assert_eq!(
++        c.frame.source_view_ref(c.destination).unwrap(),
++        Some(&TyTerm::Param(ParamKey {
++            definition: c.frame.body.body().definition,
++            ordinal: 1
++        }))
++    );
++    let returned = c
++        .parsed
++        .initial_thunk(&c.handle, &c.frame.body, &return_pc)
++        .unwrap();
++    let before = c.frame.fuel_snapshot().used;
++    let error = step(&mut c.frame, &mut c.store, &returned).unwrap_err();
++    assert_eq!(error.code, "LRR-E-GENERIC-BINDING");
++    assert_eq!(
++        c.frame.fuel_snapshot().used,
++        before + u64::try_from(returned.recipe().operations.len()).unwrap()
++    );
++    assert_eq!(c.frame.counters.exits_completed, 1);
++    let root = match returned.recipe().exit {
++        crate::ir::recipe::RecipeExit::Control(crate::ir::recipe::ControlRecipe::Return {
++            value,
++        }) => value,
++        _ => panic!(),
++    };
++    assert!(matches!(
++        c.store.state(c.frame.cell(root).unwrap()).unwrap(),
++        CellState::Live(_)
++    ));
++    assert!(c.frame.return_source.is_none());
++}
++#[test]
++fn fuel_prefix_writes_once_and_replaying_original_read_does_not_attach_again() {
++    let mut c = copy(2024, 1);
++    let read_index = c
++        .recipe
++        .recipe()
++        .operations
++        .iter()
++        .position(|op| matches!(op, Op::ReadParameter { .. }))
++        .unwrap();
++    let limit = u64::try_from(read_index).unwrap();
++    c.frame.set_fuel_limit(limit).unwrap();
++    let before = (c.store.budget().handles(), c.store.budget().bytes());
++    let error = step(&mut c.frame, &mut c.store, &c.recipe).unwrap_err();
++    assert_eq!(error.code, "LRR-E-FUEL");
++    assert_eq!(c.frame.fuel_snapshot().used, limit);
++    assert_eq!(c.frame.counters.started_by_opcode[21], 0);
++    assert!(c.frame.cell(c.destination).is_err());
++    assert_eq!(
++        (c.store.budget().handles(), c.store.budget().bytes()),
++        before
++    );
++    let mut c = copy(2024, 1000);
++    assert!(matches!(
++        step(&mut c.frame, &mut c.store, &c.recipe).unwrap(),
++        StepOutcome::Next(_)
++    ));
++    let cell = c.frame.cell(c.destination).unwrap();
++    let state = c.store.state(cell).unwrap();
++    let source = c.frame.source_view(c.destination).unwrap();
++    let counters = (
++        c.frame.counters.operations_started,
++        c.frame.fuel_snapshot().used,
++    );
++    let before = (c.store.budget().handles(), c.store.budget().bytes());
++    assert!(step(&mut c.frame, &mut c.store, &c.recipe).is_err());
++    assert_eq!(
++        (
++            c.frame.counters.operations_started,
++            c.frame.fuel_snapshot().used
++        ),
++        counters
++    );
++    assert_eq!(c.store.state(cell).unwrap(), state);
++    assert_eq!(c.frame.source_view(c.destination).unwrap(), source);
++    assert_eq!(
++        (c.store.budget().handles(), c.store.budget().bytes()),
++        before
++    );
++}
++#[test]
++fn read_ticket_cell_quota_and_transient_metadata_refuse_without_unowned_ticket() {
++    let mut c = copy(2024, 1000);
++    while c.store.budget().handles() < 63 {
++        c.store
++            .new_cell(
++                StorageContract::Unbound,
++                true,
++                CellOwner::FrameSlot {
++                    frame: c.frame.anchor,
++                    slot: 100001 + c.store.budget().handles(),
++                },
++            )
++            .unwrap();
++    }
++    let before = (c.store.budget().handles(), c.store.budget().bytes());
++    let prefix = c
++        .recipe
++        .recipe()
++        .operations
++        .iter()
++        .position(|op| matches!(op, Op::ReadParameter { .. }))
++        .unwrap();
++    let error = step(&mut c.frame, &mut c.store, &c.recipe).unwrap_err();
++    assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
++    assert_eq!(c.frame.fuel_snapshot().used, u64::try_from(prefix).unwrap());
++    assert_eq!(c.frame.counters.started_by_opcode[21], 0);
++    assert!(c.frame.cell(c.destination).is_err());
++    assert_eq!(
++        (c.store.budget().handles(), c.store.budget().bytes()),
++        before
++    );
++    let mut c = copy(2024, 1000);
++    c.frame.constructor_mapping_bytes = 32 * 1024 * 1024;
++    let before = (c.store.budget().handles(), c.store.budget().bytes());
++    let error = c
++        .frame
++        .preflight_retained_source_transfer(RetainedSource::Parameter(0), c.destination, &c.store)
++        .unwrap_err();
++    assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
++    assert_eq!(
++        (c.store.budget().handles(), c.store.budget().bytes()),
++        before
++    );
++    assert!(c.frame.cell(c.destination).is_err());
++    assert_eq!(c.frame.counters.operations_started, 0);
++}
++#[test]
++fn private_source_witness_refuses_changed_cell_epoch_and_wrong_written_payload() {
++    let mut c = copy(2024, 1000);
++    let proof = c
++        .frame
++        .prepare_retained_source_transfer(RetainedSource::Parameter(0), c.destination, &c.store)
++        .unwrap();
++    let parameter = c.frame.parameter(0).unwrap();
++    let ticket = c.store.move_from(parameter).unwrap();
++    c.store.discard(ticket).unwrap();
++    assert_eq!(
++        c.frame
++            .require_retained_source_transfer(&proof, &c.store)
++            .unwrap_err()
++            .code,
++        "LRR-E-SOURCE-TYPE-CONTEXT"
++    );
++    assert!(c.frame.cell(c.destination).is_err());
++    assert_eq!(c.frame.counters.operations_started, 0);
++    let mut c = copy(2024, 1000);
++    let proof = c
++        .frame
++        .prepare_retained_source_transfer(RetainedSource::Parameter(0), c.destination, &c.store)
++        .unwrap();
++    let ticket = c
++        .store
++        .ticket(ValueRepr::signed(TypeId(6), 64).unwrap())
++        .unwrap();
++    c.frame.write(c.destination, ticket, &mut c.store).unwrap();
++    assert_eq!(
++        c.frame
++            .attach_retained_source_after_write(proof, &c.store)
++            .unwrap_err()
++            .code,
++        "LRR-E-SOURCE-TYPE-CONTEXT"
++    );
++    assert!(c.frame.source_view_ref(c.destination).unwrap().is_none());
++    assert_eq!(
++        c.store
++            .admit_move(c.frame.cell(c.destination).unwrap())
++            .unwrap()
++            .payload,
++        64
++    );
++    assert_eq!(c.frame.counters.operations_started, 0);
++}
++
++#[test]
++fn private_source_witness_refuses_changed_pc_frame_or_installed_context() {
++    let mut c = copy(2024, 1000);
++    let proof = c
++        .frame
++        .prepare_retained_source_transfer(RetainedSource::Parameter(0), c.destination, &c.store)
++        .unwrap();
++    let pc = c.frame.pc.clone();
++    c.frame.pc.phase = Phase::Commit.code().unwrap();
++    assert_eq!(
++        c.frame
++            .require_retained_source_transfer(&proof, &c.store)
++            .unwrap_err()
++            .code,
++        "LRR-E-SOURCE-TYPE-CONTEXT"
++    );
++    c.frame.pc = pc;
++    let context = c.frame.context.take();
++    assert_eq!(
++        c.frame
++            .require_retained_source_transfer(&proof, &c.store)
++            .unwrap_err()
++            .code,
++        "LRR-E-SOURCE-TYPE-CONTEXT"
++    );
++    c.frame.context = context;
++    let other = Frame::new(c.frame.body.clone(), c.frame.pc.clone(), &mut c.store).unwrap();
++    assert_ne!(other.anchor, c.frame.anchor);
++    assert_eq!(
++        other
++            .require_retained_source_transfer(&proof, &c.store)
++            .unwrap_err()
++            .code,
++        "LRR-E-SOURCE-TYPE-CONTEXT"
++    );
++    assert!(c.frame.cell(c.destination).is_err());
++    assert_eq!(c.frame.counters.operations_started, 0);
++}
++#[test]
++fn missing_local_source_is_not_reconstructed_from_the_equal_descriptor() {
++    let mut c = copy(2024, 1000);
++    let StepOutcome::Next(commit) = step(&mut c.frame, &mut c.store, &c.recipe).unwrap() else {
++        panic!()
++    };
++    let committed = c
++        .parsed
++        .initial_thunk(&c.handle, &c.frame.body, &commit)
++        .unwrap();
++    let binding = committed
++        .recipe()
++        .operations
++        .iter()
++        .find_map(|op| match op {
++            Op::BindLocal { binding, .. } => Some(*binding),
++            _ => None,
++        })
++        .unwrap();
++    step(&mut c.frame, &mut c.store, &committed).unwrap();
++    // LRR-specific omission injection tests absence, not a source proof factory.
++    c.frame.binding_sources[binding.0 as usize] = None;
++    c.frame
++        .declared_hint(c.destination, Some(TypeId(6)))
++        .unwrap();
++    let before = (
++        c.store.budget().handles(),
++        c.store.budget().bytes(),
++        c.frame.fuel_snapshot().used,
++    );
++    assert_eq!(
++        c.frame
++            .preflight_read_local(binding, c.destination, &c.store)
++            .unwrap_err()
++            .code,
++        "LRR-E-SOURCE-TYPE-CONTEXT"
++    );
++    assert_eq!(
++        (
++            c.store.budget().handles(),
++            c.store.budget().bytes(),
++            c.frame.fuel_snapshot().used
++        ),
++        before
++    );
++    let destination = c.frame.body.nodes()[0].value.unwrap();
++    c.frame
++        .read_local(binding, destination, &mut c.store)
++        .unwrap();
++    assert!(c.frame.source_view_ref(destination).unwrap().is_none());
++    assert_eq!(
++        c.store
++            .admit_move(c.frame.cell(destination).unwrap())
++            .unwrap()
++            .type_id,
++        6
++    );
++}
++
++#[test]
++fn strict_nominal_context_is_not_erased_by_an_equal_runtime_hint() {
++    let mut c = copy(2024, 1000);
++    let expected = TyTerm::Nominal(
++        Digest::of_bytes(b"LRR distinct source member owner"),
++        vec![],
++    );
++    c.frame
++        .set_source_view(c.destination, Some(expected.clone()))
++        .unwrap();
++    c.frame
++        .declared_hint(c.destination, Some(TypeId(6)))
++        .unwrap();
++    let before = (c.store.budget().handles(), c.store.budget().bytes());
++    let error = step(&mut c.frame, &mut c.store, &c.recipe).unwrap_err();
++    assert_eq!(error.code, "LRR-E-SOURCE-TYPE-CONTEXT");
++    assert_eq!(
++        c.frame.source_view_ref(c.destination).unwrap(),
++        Some(&expected)
++    );
++    assert_eq!(c.frame.counters.started_by_opcode[21], 0);
++    assert_eq!(
++        (c.store.budget().handles(), c.store.budget().bytes()),
++        before
++    );
++    assert!(c.frame.cell(c.destination).is_err());
++}
++#[test]
++fn actual_parameter_descriptor_must_match_the_owned_generic_runtime_binding() {
++    let mut c = copy(2024, 1000);
++    // Deliberate LRR storage corruption, after the genuine argument seal.
++    let owner = c.store.owner(c.frame.parameter(0).unwrap()).unwrap();
++    let bad = c
++        .store
++        .new_cell(StorageContract::Exact(TypeId(2)), false, owner)
++        .unwrap();
++    let ticket = c.store.ticket(ValueRepr::boolean(true)).unwrap();
++    c.store.initialize(bad, ticket).unwrap();
++    c.frame.parameters[0] = Some(bad);
++    let before = (c.store.budget().handles(), c.store.budget().bytes());
++    let error = step(&mut c.frame, &mut c.store, &c.recipe).unwrap_err();
++    assert_eq!(error.code, "LRR-E-SOURCE-TYPE-CONTEXT");
++    assert_eq!(c.frame.counters.started_by_opcode[21], 0);
++    assert_eq!(
++        (c.store.budget().handles(), c.store.budget().bytes()),
++        before
++    );
++    assert!(c.frame.cell(c.destination).is_err());
++}

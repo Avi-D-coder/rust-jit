@@ -1,0 +1,2396 @@
+diff --git a/crates/lrr/src/traits/candidate_transactions.rs b/crates/lrr/src/traits/candidate_transactions.rs
+--- a/crates/lrr/src/traits/candidate_transactions.rs
++++ b/crates/lrr/src/traits/candidate_transactions.rs
+@@ -187,6 +187,33 @@
+         self.substitution.apply(template)
+     }
+     pub fn attempt_constraints(&mut self, pairs: &[(TyTerm, TyTerm)]) -> ConstraintAttempt {
++        self.attempt_constraints_counted(pairs, self.limits.work).0
++    }
++    /// Demand-wide caller budget; successful/early-admission work is exact.
++    /// An inner Unifier failure does not return its partial count, so that path
++    /// conservatively consumes the remaining reservation rather than allowing
++    /// a failing candidate to reset another candidate's demand-wide ceiling.
++    pub fn attempt_constraints_counted(
++        &mut self,
++        pairs: &[(TyTerm, TyTerm)],
++        work_limit: usize,
++    ) -> (ConstraintAttempt, usize) {
++        if work_limit > self.limits.work {
++            return (
++                ConstraintAttempt::Invalid(invalid("candidate work budget exceeds fixed ceiling")),
++                0,
++            );
++        }
++        let mut charged = 0;
++        let result = self.attempt_constraints_inner(pairs, work_limit, &mut charged);
++        (result, charged)
++    }
++    fn attempt_constraints_inner(
++        &mut self,
++        pairs: &[(TyTerm, TyTerm)],
++        work_limit: usize,
++        charged: &mut usize,
++    ) -> ConstraintAttempt {
+         let mut requirements = std::collections::BTreeSet::new();
+         let mut admission_work = 0usize;
+         let mut input_bytes = 0usize;
+@@ -198,13 +225,14 @@
+                     ));
+                 };
+                 admission_work = match admission_work.checked_add(nodes) {
+-                    Some(n) if n <= self.limits.work => n,
++                    Some(n) if n <= work_limit => n,
+                     _ => {
+                         return ConstraintAttempt::Overflow(CanonicalError::Overflow(
+                             crate::traits::canonical::CanonicalLimit::Work,
+                         ));
+                     }
+                 };
++                *charged = admission_work;
+                 input_bytes = match input_bytes
+                     .checked_add(bytes)
+                     .and_then(|n| n.checked_add(std::mem::size_of::<TyTerm>()))
+@@ -260,7 +288,7 @@
+         let mut staged = self.unifier.clone();
+         let mut used = admission_work;
+         for (left, right) in pairs {
+-            let Some(remaining) = self.limits.work.checked_sub(used) else {
++            let Some(remaining) = work_limit.checked_sub(used) else {
+                 return ConstraintAttempt::Overflow(CanonicalError::Overflow(
+                     crate::traits::canonical::CanonicalLimit::Work,
+                 ));
+@@ -268,7 +296,7 @@
+             match staged.unify_with_work_limit(left, right, remaining) {
+                 Ok(steps) => {
+                     used = match used.checked_add(steps) {
+-                        Some(n) if n <= self.limits.work => n,
++                        Some(n) if n <= work_limit => n,
+                         _ => {
+                             return ConstraintAttempt::Overflow(CanonicalError::Overflow(
+                                 crate::traits::canonical::CanonicalLimit::Work,
+@@ -277,10 +305,15 @@
+                     };
+                 }
+                 Err(error) if error.code == "LRR-E-METADATA-LIMIT" => {
++                    *charged = work_limit;
+                     return ConstraintAttempt::Overflow(CanonicalError::SourceTerm(error));
+                 }
+-                Err(error) => return ConstraintAttempt::Conflict(error),
+-            }
++                Err(error) => {
++                    *charged = work_limit;
++                    return ConstraintAttempt::Conflict(error);
++                }
++            }
++            *charged = used;
+         }
+         if unifier_bytes(&staged)
+             .and_then(|n| n.checked_add(self.source_reservation))
+diff --git a/crates/lrr/src/traits/mod.rs b/crates/lrr/src/traits/mod.rs
+--- a/crates/lrr/src/traits/mod.rs
++++ b/crates/lrr/src/traits/mod.rs
+@@ -8,3 +8,5 @@
+ pub mod index;
+ 
+ pub mod canonical;
++
++pub mod table;
+diff --git a/crates/lrr/src/traits/table.rs b/crates/lrr/src/traits/table.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/traits/table.rs
+@@ -0,0 +1,1013 @@
++//! Bounded conditional/cycle data model. No result is an admitted trait witness.
++use super::{
++    canonical::{
++        CanonicalContextModel, CanonicalError, CanonicalGoalModel, CanonicalLimits,
++        CurrentGoalPrerequisite, GoalModel,
++    },
++    header::{HeaderKind, SourceTraitHeader},
++    index::CurrentImplCandidateIndex,
++    term::{Binder, InferVarKey, ParamEnv, TyTerm},
++    unify::candidate::{CandidateFactoryModel, CandidateTransaction, ConstraintAttempt},
++};
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::memo::Database,
++};
++use std::collections::{BTreeMap, BTreeSet, VecDeque};
++
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum TableState {
++    New,
++    Evaluating,
++    Suspended,
++    Complete,
++}
++/// Declared MODEL classification only. The approved structural source-rule
++/// producer is required before any production table may use coinduction.
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum CycleKindModel {
++    Ordinary,
++    Projection,
++    StructuralAuto,
++}
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum EdgeKindModel {
++    Ordinary,
++    Projection,
++    StructuralAuto,
++}
++#[derive(Clone, Copy, Debug)]
++pub struct PredicateChildModel {
++    pub ordinal: usize,
++    pub goal: Digest,
++    pub edge: EdgeKindModel,
++}
++pub struct CandidatePairModel {
++    pub template: TyTerm,
++    pub demand: TyTerm,
++}
++#[derive(Clone, Copy, Debug)]
++pub struct TableLimits {
++    pub tables: usize,
++    pub strands: usize,
++    pub work: usize,
++    pub depth: usize,
++    pub canonical_bytes: usize,
++    pub metadata_bytes: usize,
++}
++impl Default for TableLimits {
++    fn default() -> Self {
++        Self {
++            tables: 50_000,
++            strands: 200_000,
++            work: 1_000_000,
++            depth: 256,
++            canonical_bytes: 1024 * 1024,
++            metadata_bytes: 32 * 1024 * 1024,
++        }
++    }
++}
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum TableLimit {
++    Tables,
++    Strands,
++    Work,
++    Depth,
++    CanonicalBytes,
++    MetadataBytes,
++}
++#[derive(Clone, Copy, Debug, Default)]
++pub struct TableCounters {
++    pub tables: usize,
++    pub strands: usize,
++    pub work: usize,
++    pub canonical_bytes: usize,
++    pub metadata_bytes: usize,
++    pub visited: usize,
++}
++#[derive(Debug)]
++pub enum TableError {
++    Overflow(TableLimit, TableCounters),
++    Cancelled(TableCounters),
++    Stale,
++    Invalid(&'static str),
++    Canonical(CanonicalError),
++    Source(Diagnostic),
++}
++impl std::fmt::Display for TableError {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        match self {
++            Self::Overflow(l, c) => write!(f, "trait table overflow {l:?}: {c:?}"),
++            Self::Cancelled(c) => write!(f, "trait table cancelled: {c:?}"),
++            Self::Stale => f.write_str("trait table model context changed"),
++            Self::Invalid(s) => f.write_str(s),
++            Self::Canonical(e) => write!(f, "{e}"),
++            Self::Source(e) => f.write_str(&e.message),
++        }
++    }
++}
++impl std::error::Error for TableError {}
++/// Canonical answer/path DATA, never WitnessKey or permission. Child keys retain
++/// dependency paths; distinct source impl identities cannot collapse.
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub struct AnswerModel {
++    pub header: Digest,
++    pub children: Vec<Digest>,
++    pub provisional_auto: bool,
++}
++impl StableEncode for AnswerModel {
++    const DOMAIN: &'static str = "lrr/v5/conditional-table-answer-model/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.digest(self.header);
++        e.sequence(&self.children, |e, k| e.digest(*k));
++        e.bool(self.provisional_auto);
++    }
++}
++#[derive(Clone, Debug, Eq, PartialEq)]
++pub enum TableOutcomeModel {
++    Unique(AnswerModel),
++    Ambiguous(Vec<Digest>),
++    Unresolved(Vec<Digest>),
++    NoSolution,
++}
++impl StableEncode for TableOutcomeModel {
++    const DOMAIN: &'static str = "lrr/v5/conditional-table-outcome-model/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        match self {
++            Self::Unique(answer) => {
++                e.u8(0);
++                e.record(answer);
++            }
++            Self::Ambiguous(ids) => {
++                e.u8(1);
++                e.sequence(ids, |e, id| e.digest(*id));
++            }
++            Self::Unresolved(ids) => {
++                e.u8(2);
++                e.sequence(ids, |e, id| e.digest(*id));
++            }
++            Self::NoSolution => e.u8(3),
++        }
++    }
++}
++#[derive(Clone, Copy, Debug)]
++pub struct TableTransitionModel {
++    pub goal: Digest,
++    pub from: TableState,
++    pub to: TableState,
++}
++pub struct TableResultModel {
++    pub outcome: TableOutcomeModel,
++    pub counters: TableCounters,
++    pub transitions: Vec<TableTransitionModel>,
++}
++enum LocalMatch {
++    Matched,
++    Unresolved,
++    Conflict,
++}
++struct Strand {
++    header: Digest,
++    children: Vec<PredicateChildModel>,
++    matching: LocalMatch,
++    // Retain only this candidate's private staged substitution/pending headers.
++    // It is never published into a sibling or the caller's source environment.
++    _transaction: CandidateTransaction,
++}
++struct GoalTable {
++    _canonical: CanonicalGoalModel,
++    kind: CycleKindModel,
++    residual_inference: bool,
++    negative: bool,
++    strands: Vec<Strand>,
++    state: TableState,
++    outcome: Option<TableOutcomeModel>,
++}
++pub struct GoalTablesModel {
++    context: Digest,
++    limits: TableLimits,
++    canonical_limits: CanonicalLimits,
++    tables: BTreeMap<Digest, GoalTable>,
++    factory: CandidateFactoryModel,
++    counters: TableCounters,
++}
++fn context_identity(c: &CanonicalContextModel) -> Result<Digest, TableError> {
++    c.profile.validate_source().map_err(TableError::Source)?;
++    if c.epoch == 0 || c.excluded_dictionary_slots.len() > 50_000 {
++        return Err(TableError::Invalid("invalid table context"));
++    }
++    let mut e = StableEncoder::new("lrr/v5/conditional-table-context-model/v1");
++    e.u16(c.profile.edition);
++    e.string(&c.profile.semantics);
++    for d in [c.unit, c.world, c.catalog, c.cfg, c.source_namespace] {
++        e.digest(d);
++    }
++    e.u64(c.epoch);
++    e.u64(c.source_revision);
++    e.u64(c.query_revision);
++    e.u32(c.max_universe);
++    // Caller transaction nonce is deliberately absent, just as in canonical
++    // goal identity. Exclusions remain exact and ordered by their producer.
++    e.sequence(&c.excluded_dictionary_slots, |e, d| e.digest(*d));
++    Ok(e.finish())
++}
++impl GoalTablesModel {
++    pub fn new(
++        c: &CanonicalContextModel,
++        limits: TableLimits,
++        canonical_limits: CanonicalLimits,
++    ) -> Result<Self, TableError> {
++        let hard = TableLimits::default();
++        if limits.tables > hard.tables
++            || limits.strands > hard.strands
++            || limits.work > hard.work
++            || limits.depth > hard.depth
++            || limits.canonical_bytes > hard.canonical_bytes
++            || limits.metadata_bytes > hard.metadata_bytes
++        {
++            return Err(TableError::Invalid("table limits exceed fixed ceilings"));
++        }
++        let context = context_identity(c)?;
++        let canonical_limits = canonical_limits.validate().map_err(TableError::Canonical)?;
++        Ok(Self {
++            context,
++            limits,
++            canonical_limits,
++            tables: BTreeMap::new(),
++            factory: CandidateFactoryModel::new(context, canonical_limits)
++                .map_err(TableError::Canonical)?,
++            counters: TableCounters::default(),
++        })
++    }
++    fn check_current(&self, c: &CanonicalContextModel) -> Result<(), TableError> {
++        if context_identity(c)? != self.context {
++            Err(TableError::Stale)
++        } else {
++            Ok(())
++        }
++    }
++    fn reserve(
++        &self,
++        canonical: usize,
++        metadata: usize,
++        tables: usize,
++        strands: usize,
++    ) -> Result<TableCounters, TableError> {
++        let mut next = self.counters;
++        for (slot, amount, max, name) in [
++            (
++                &mut next.canonical_bytes,
++                canonical,
++                self.limits.canonical_bytes,
++                TableLimit::CanonicalBytes,
++            ),
++            (
++                &mut next.metadata_bytes,
++                metadata,
++                self.limits.metadata_bytes,
++                TableLimit::MetadataBytes,
++            ),
++            (
++                &mut next.tables,
++                tables,
++                self.limits.tables,
++                TableLimit::Tables,
++            ),
++            (
++                &mut next.strands,
++                strands,
++                self.limits.strands,
++                TableLimit::Strands,
++            ),
++        ] {
++            *slot = slot
++                .checked_add(amount)
++                .filter(|n| *n <= max)
++                .ok_or(TableError::Overflow(name, self.counters))?;
++        }
++        Ok(next)
++    }
++    pub fn intern(
++        &mut self,
++        c: &CanonicalContextModel,
++        goal: &Binder<GoalModel>,
++        env: &ParamEnv,
++        universes: &BTreeMap<InferVarKey, u32>,
++        kind: CycleKindModel,
++        residual_inference: bool,
++    ) -> Result<Digest, TableError> {
++        self.check_current(c)?;
++        // Closed versus residual-inference status is derived, not a caller's
++        // false flag hiding canonical inference variables.
++        let canonical = CanonicalGoalModel::capture(c, goal, env, universes, self.canonical_limits)
++            .map_err(TableError::Canonical)?;
++        let residual_inference = residual_inference || !canonical.variables().is_empty();
++        let key = canonical.fingerprint();
++        let work = self
++            .counters
++            .work
++            .checked_add(canonical.encoded().len())
++            .filter(|n| *n <= self.limits.work)
++            .ok_or(TableError::Overflow(TableLimit::Work, self.counters))?;
++        if let Some(old) = self.tables.get(&key) {
++            if old.kind != kind || old.residual_inference != residual_inference {
++                return Err(TableError::Invalid(
++                    "conflicting canonical table model classification",
++                ));
++            }
++            self.counters.work = work;
++            return Ok(key);
++        }
++        let mut counters = self.reserve(
++            canonical.metadata_bytes(),
++            std::mem::size_of::<GoalTable>() + 128,
++            1,
++            0,
++        )?;
++        counters.work = work;
++        self.tables.insert(
++            key,
++            GoalTable {
++                _canonical: canonical,
++                kind,
++                residual_inference,
++                negative: false,
++                strands: vec![],
++                state: TableState::New,
++                outcome: None,
++            },
++        );
++        self.counters = counters;
++        Ok(key)
++    }
++    pub fn state(&self, key: Digest) -> Option<TableState> {
++        self.tables.get(&key).map(|t| t.state)
++    }
++    pub fn outcome(&self, key: Digest) -> Option<&TableOutcomeModel> {
++        self.tables.get(&key).and_then(|t| t.outcome.as_ref())
++    }
++    pub fn counters(&self) -> TableCounters {
++        self.counters
++    }
++    pub fn add_candidate_model(
++        &mut self,
++        c: &CanonicalContextModel,
++        key: Digest,
++        header: &SourceTraitHeader,
++        pairs: &[CandidatePairModel],
++        children: Vec<PredicateChildModel>,
++    ) -> Result<(), TableError> {
++        self.check_current(c)?;
++        let table = self
++            .tables
++            .get(&key)
++            .ok_or(TableError::Invalid("unknown parent goal"))?;
++        if table.state != TableState::New {
++            return Err(TableError::Invalid("table candidates already evaluated"));
++        }
++        if !matches!(
++            header.kind(),
++            HeaderKind::Impl {
++                trait_type: Some(_),
++                negative: false,
++                default_impl: false,
++                ..
++            }
++        ) {
++            return Err(TableError::Invalid(
++                "ordinary positive source impl required",
++            ));
++        }
++        let id = header.exact_identity();
++        if table.strands.iter().any(|s| s.header == id) {
++            return Err(TableError::Invalid("duplicate source impl strand"));
++        }
++        // Each source predicate must have its own exact indexed child. Model
++        // callers cannot silently omit a pending condition or duplicate a slot.
++        if children.len() != header.predicates().len()
++            || children
++                .iter()
++                .enumerate()
++                .any(|(i, x)| x.ordinal != i || !self.tables.contains_key(&x.goal))
++        {
++            return Err(TableError::Invalid(
++                "pending source predicate child mapping incomplete",
++            ));
++        }
++        if pairs.len() > self.limits.strands {
++            return Err(TableError::Overflow(TableLimit::Strands, self.counters));
++        }
++        let mut pair_bytes = 0usize;
++        let mut pair_work = 0usize;
++        for p in pairs {
++            for t in [&p.template, &p.demand] {
++                let (nodes, bytes) = t.measure().ok_or(TableError::Overflow(
++                    TableLimit::MetadataBytes,
++                    self.counters,
++                ))?;
++                pair_bytes = pair_bytes
++                    .checked_add(bytes)
++                    .and_then(|n| n.checked_add(std::mem::size_of::<TyTerm>()))
++                    .filter(|n| *n <= self.limits.metadata_bytes / 4)
++                    .ok_or(TableError::Overflow(
++                        TableLimit::MetadataBytes,
++                        self.counters,
++                    ))?;
++                pair_work = pair_work
++                    .checked_add(nodes)
++                    .filter(|n| *n <= self.limits.work)
++                    .ok_or(TableError::Overflow(TableLimit::Work, self.counters))?;
++            }
++        }
++        let header_bytes = header
++            .candidate_snapshot_bytes()
++            .map_err(TableError::Source)?;
++        let bytes =
++            header_bytes
++                .checked_add(header.generics().len().checked_mul(512).ok_or(
++                    TableError::Overflow(TableLimit::MetadataBytes, self.counters),
++                )?)
++                .and_then(|n| {
++                    n.checked_add(
++                        children
++                            .capacity()
++                            .checked_mul(std::mem::size_of::<PredicateChildModel>())?,
++                    )
++                })
++                .and_then(|n| n.checked_add(std::mem::size_of::<Strand>() + 256))
++                .ok_or(TableError::Overflow(
++                    TableLimit::MetadataBytes,
++                    self.counters,
++                ))?;
++        let mut counters = self.reserve(0, bytes, 0, 1)?;
++        pair_work = pair_work
++            .checked_add(header_bytes)
++            .ok_or(TableError::Overflow(TableLimit::Work, self.counters))?;
++        counters.work = counters
++            .work
++            .checked_add(pair_work)
++            .filter(|n| *n <= self.limits.work)
++            .ok_or(TableError::Overflow(TableLimit::Work, self.counters))?;
++        if counters
++            .metadata_bytes
++            .checked_add(pair_bytes.checked_mul(4).ok_or(TableError::Overflow(
++                TableLimit::MetadataBytes,
++                self.counters,
++            ))?)
++            .filter(|n| *n <= self.limits.metadata_bytes)
++            .is_none()
++        {
++            return Err(TableError::Overflow(
++                TableLimit::MetadataBytes,
++                self.counters,
++            ));
++        }
++        let mut transaction = self.factory.start(header).map_err(TableError::Canonical)?;
++        let mut instantiated = Vec::new();
++        instantiated
++            .try_reserve_exact(pairs.len())
++            .map_err(|_| TableError::Overflow(TableLimit::MetadataBytes, self.counters))?;
++        for p in pairs {
++            instantiated.push((
++                transaction
++                    .instantiate_type_model(&p.template)
++                    .map_err(TableError::Source)?,
++                p.demand.clone(),
++            ));
++        }
++        let remaining = self
++            .limits
++            .work
++            .checked_sub(counters.work)
++            .ok_or(TableError::Overflow(TableLimit::Work, self.counters))?;
++        let (attempt, used) = transaction
++            .attempt_constraints_counted(&instantiated, remaining.min(self.canonical_limits.work));
++        counters.work = counters
++            .work
++            .checked_add(used)
++            .filter(|n| *n <= self.limits.work)
++            .ok_or(TableError::Overflow(TableLimit::Work, self.counters))?;
++        let matching = match attempt {
++            ConstraintAttempt::MatchedPending => LocalMatch::Matched,
++            ConstraintAttempt::Conflict(_) => LocalMatch::Conflict,
++            ConstraintAttempt::Unresolved(_) => LocalMatch::Unresolved,
++            ConstraintAttempt::Overflow(e) => return Err(TableError::Canonical(e)),
++            ConstraintAttempt::Invalid(e) => return Err(TableError::Source(e)),
++        };
++        let table = self.tables.get_mut(&key).expect("checked parent");
++        table
++            .strands
++            .try_reserve_exact(1)
++            .map_err(|_| TableError::Overflow(TableLimit::MetadataBytes, self.counters))?;
++        table.strands.push(Strand {
++            header: id,
++            children,
++            matching,
++            _transaction: transaction,
++        });
++        self.counters = counters;
++        Ok(())
++    }
++    /// An actual captured negative header can block the MODEL auto shortcut.
++    /// Its source goal relation remains unadmitted, including nightly syntax.
++    pub fn record_negative_header_model(
++        &mut self,
++        c: &CanonicalContextModel,
++        key: Digest,
++        header: &SourceTraitHeader,
++    ) -> Result<(), TableError> {
++        self.check_current(c)?;
++        if !matches!(header.kind(), HeaderKind::Impl { negative: true, .. }) {
++            return Err(TableError::Invalid("negative header fact required"));
++        }
++        let t = self
++            .tables
++            .get_mut(&key)
++            .ok_or(TableError::Invalid("unknown negative goal"))?;
++        if t.state != TableState::New {
++            return Err(TableError::Invalid("negative facts already evaluated"));
++        }
++        t.negative = true;
++        Ok(())
++    }
++    /// Invocation-local worklists and results commit together. Cancellation or
++    /// overflow leaves every previous table state/outcome unchanged.
++    pub fn evaluate_model(
++        &mut self,
++        c: &CanonicalContextModel,
++        root: Digest,
++        mut cancelled: impl FnMut() -> bool,
++    ) -> Result<TableResultModel, TableError> {
++        self.check_current(c)?;
++        if !self.tables.contains_key(&root) {
++            return Err(TableError::Invalid("unknown demand root"));
++        }
++        let mut work = Work {
++            counters: self.counters,
++            limits: self.limits,
++            cancelled: &mut cancelled,
++        };
++        work.poll()?;
++        // Conservative scratch preflight covers graph/reverse edges, SCC sets,
++        // simultaneous fixpoint snapshots, and result/path publication clones.
++        let scratch = self
++            .counters
++            .metadata_bytes
++            .checked_mul(8)
++            .filter(|n| *n <= self.limits.metadata_bytes)
++            .ok_or(TableError::Overflow(
++                TableLimit::MetadataBytes,
++                self.counters,
++            ))?;
++        let _scratch_reservation = scratch;
++        let graph = self.reached_graph(root, &mut work)?;
++        let mut transitions = Vec::new();
++        transitions
++            .try_reserve_exact(graph.len().checked_mul(2).ok_or(TableError::Overflow(
++                TableLimit::MetadataBytes,
++                work.counters,
++            ))?)
++            .map_err(|_| TableError::Overflow(TableLimit::MetadataBytes, work.counters))?;
++        for key in graph.keys() {
++            work.step()?;
++            transitions.push(TableTransitionModel {
++                goal: *key,
++                from: self.tables[key].state,
++                to: TableState::Evaluating,
++            });
++        }
++        let components = components(root, &graph, &mut work)?;
++        let mut outcomes = BTreeMap::new();
++        for component in components {
++            self.evaluate_component(&component, &graph, &mut outcomes, &mut work)?;
++        }
++        // Reserve bounded answer/path snapshots before publishing any state.
++        let mut answer_bytes = 0usize;
++        for value in outcomes.values() {
++            work.step()?;
++            let n = match value {
++                TableOutcomeModel::Unique(a) => a
++                    .children
++                    .len()
++                    .checked_mul(32)
++                    .and_then(|n| n.checked_add(128)),
++                TableOutcomeModel::Ambiguous(v) | TableOutcomeModel::Unresolved(v) => {
++                    v.len().checked_mul(32).and_then(|n| n.checked_add(64))
++                }
++                TableOutcomeModel::NoSolution => Some(64),
++            }
++            .ok_or(TableError::Overflow(
++                TableLimit::MetadataBytes,
++                work.counters,
++            ))?;
++            answer_bytes = answer_bytes
++                .checked_add(n)
++                .filter(|n| *n <= self.limits.metadata_bytes)
++                .ok_or(TableError::Overflow(
++                    TableLimit::MetadataBytes,
++                    work.counters,
++                ))?;
++        }
++        if self
++            .counters
++            .metadata_bytes
++            .checked_add(answer_bytes)
++            .filter(|n| *n <= self.limits.metadata_bytes)
++            .is_none()
++        {
++            return Err(TableError::Overflow(
++                TableLimit::MetadataBytes,
++                work.counters,
++            ));
++        }
++        let result = outcomes.get(&root).expect("reached root").clone();
++        work.poll()?;
++        work.counters.visited = graph.len();
++        for (key, value) in outcomes {
++            let t = self.tables.get_mut(&key).expect("reached table");
++            t.state = if matches!(value, TableOutcomeModel::Unresolved(_)) {
++                TableState::Suspended
++            } else {
++                TableState::Complete
++            };
++            transitions.push(TableTransitionModel {
++                goal: key,
++                from: TableState::Evaluating,
++                to: t.state,
++            });
++            t.outcome = Some(value);
++        }
++        self.counters.work = work.counters.work;
++        self.counters.visited = work.counters.visited;
++        Ok(TableResultModel {
++            outcome: result,
++            counters: work.counters,
++            transitions,
++        })
++    }
++    fn reached_graph(
++        &self,
++        root: Digest,
++        work: &mut Work<'_>,
++    ) -> Result<BTreeMap<Digest, Vec<Digest>>, TableError> {
++        let mut graph = BTreeMap::new();
++        let mut pending = VecDeque::from([root]);
++        let mut seen = BTreeSet::from([root]);
++        while let Some(key) = pending.pop_front() {
++            work.step()?;
++            let t = &self.tables[&key];
++            let mut children = BTreeSet::new();
++            for s in &t.strands {
++                work.step()?;
++                if matches!(s.matching, LocalMatch::Conflict) {
++                    continue;
++                }
++                for child in &s.children {
++                    work.step()?;
++                    children.insert(child.goal);
++                    if seen.insert(child.goal) {
++                        pending.push_back(child.goal);
++                    }
++                }
++            }
++            graph.insert(key, children.into_iter().collect());
++        }
++        Ok(graph)
++    }
++    fn evaluate_component(
++        &self,
++        keys: &[Digest],
++        graph: &BTreeMap<Digest, Vec<Digest>>,
++        outcomes: &mut BTreeMap<Digest, TableOutcomeModel>,
++        work: &mut Work<'_>,
++    ) -> Result<(), TableError> {
++        let members = keys.iter().copied().collect::<BTreeSet<_>>();
++        let cyclic = keys.len() > 1 || graph[&keys[0]].contains(&keys[0]);
++        let mut approved = cyclic;
++        for key in keys {
++            work.step()?;
++            let t = &self.tables[key];
++            approved &=
++                t.kind == CycleKindModel::StructuralAuto && !t.negative && !t.residual_inference;
++        }
++        for key in keys {
++            for s in &self.tables[key].strands {
++                work.step()?;
++                if matches!(s.matching, LocalMatch::Conflict) {
++                    continue;
++                }
++                for edge in &s.children {
++                    work.step()?;
++                    if edge.edge != EdgeKindModel::StructuralAuto
++                        || self.tables[&edge.goal].kind != CycleKindModel::StructuralAuto
++                    {
++                        approved = false;
++                    }
++                }
++            }
++        }
++        // Least fixpoint for ordinary goals, greatest provisional fixpoint only
++        // for the declared approved-auto MODEL. No stack backedge is an answer.
++        let mut grounded = if approved {
++            members.clone()
++        } else {
++            BTreeSet::new()
++        };
++        loop {
++            let mut next = grounded.clone();
++            for key in keys {
++                work.step()?;
++                let mut viable = false;
++                for s in &self.tables[key].strands {
++                    work.step()?;
++                    if !matches!(s.matching, LocalMatch::Matched) {
++                        continue;
++                    }
++                    let mut success = true;
++                    for e in &s.children {
++                        work.step()?;
++                        success &= if members.contains(&e.goal) {
++                            grounded.contains(&e.goal)
++                        } else {
++                            matches!(outcomes.get(&e.goal), Some(TableOutcomeModel::Unique(_)))
++                        };
++                    }
++                    viable |= success;
++                }
++                if approved {
++                    if !viable {
++                        next.remove(key);
++                    }
++                } else if viable {
++                    next.insert(*key);
++                }
++            }
++            if next == grounded {
++                break;
++            }
++            grounded = next;
++        }
++        // Propagate unresolved premises through a cyclic strand before
++        // concluding inductive absence. A relevant residual candidate cannot
++        // disappear merely because its canonical child is on this SCC.
++        let mut unresolved = BTreeSet::new();
++        for key in keys {
++            if cyclic && self.tables[key].residual_inference {
++                unresolved.insert(*key);
++            }
++        }
++        loop {
++            let mut next = unresolved.clone();
++            for key in keys {
++                for s in &self.tables[key].strands {
++                    work.step()?;
++                    if matches!(s.matching, LocalMatch::Conflict) {
++                        continue;
++                    }
++                    let mut hard_false = false;
++                    let mut pending = matches!(s.matching, LocalMatch::Unresolved);
++                    for edge in &s.children {
++                        work.step()?;
++                        if members.contains(&edge.goal) {
++                            pending |= unresolved.contains(&edge.goal);
++                        } else {
++                            match outcomes.get(&edge.goal).expect("child SCC finalized") {
++                                TableOutcomeModel::NoSolution => hard_false = true,
++                                TableOutcomeModel::Ambiguous(_)
++                                | TableOutcomeModel::Unresolved(_) => pending = true,
++                                TableOutcomeModel::Unique(_) => {}
++                            }
++                        }
++                    }
++                    if pending && !hard_false {
++                        next.insert(*key);
++                    }
++                }
++            }
++            if next == unresolved {
++                break;
++            }
++            unresolved = next;
++        }
++        let mut applicable: BTreeMap<Digest, Vec<&Strand>> = BTreeMap::new();
++        for key in keys {
++            let mut accepted = Vec::new();
++            for s in &self.tables[key].strands {
++                work.step()?;
++                if !matches!(s.matching, LocalMatch::Matched) {
++                    continue;
++                }
++                let mut success = true;
++                for edge in &s.children {
++                    work.step()?;
++                    success &= if members.contains(&edge.goal) {
++                        grounded.contains(&edge.goal)
++                    } else {
++                        matches!(outcomes.get(&edge.goal), Some(TableOutcomeModel::Unique(_)))
++                    };
++                }
++                if success {
++                    accepted.push(s);
++                }
++            }
++            accepted.sort_by_key(|s| s.header);
++            applicable.insert(*key, accepted);
++        }
++        let mut uncertain = unresolved.clone();
++        for key in keys {
++            if applicable[key].len() > 1 {
++                uncertain.insert(*key);
++            }
++        }
++        loop {
++            let mut next = uncertain.clone();
++            for key in keys {
++                for s in &applicable[key] {
++                    work.step()?;
++                    for edge in &s.children {
++                        work.step()?;
++                        if uncertain.contains(&edge.goal) {
++                            next.insert(*key);
++                        }
++                    }
++                }
++            }
++            if next == uncertain {
++                break;
++            }
++            uncertain = next;
++        }
++        for key in keys {
++            work.step()?;
++            let accepted = &applicable[key];
++            let value = if uncertain.contains(key) {
++                let ids = self.tables[key]
++                    .strands
++                    .iter()
++                    .filter(|s| !matches!(s.matching, LocalMatch::Conflict))
++                    .map(|s| s.header)
++                    .collect::<BTreeSet<_>>()
++                    .into_iter()
++                    .collect::<Vec<_>>();
++                if accepted.is_empty() {
++                    TableOutcomeModel::Unresolved(ids)
++                } else {
++                    TableOutcomeModel::Ambiguous(ids)
++                }
++            } else if let Some(s) = accepted.first() {
++                TableOutcomeModel::Unique(AnswerModel {
++                    header: s.header,
++                    children: s.children.iter().map(|e| e.goal).collect(),
++                    provisional_auto: approved,
++                })
++            } else {
++                TableOutcomeModel::NoSolution
++            };
++            outcomes.insert(*key, value);
++        }
++        Ok(())
++    }
++}
++struct Work<'a> {
++    counters: TableCounters,
++    limits: TableLimits,
++    cancelled: &'a mut dyn FnMut() -> bool,
++}
++impl Work<'_> {
++    fn poll(&mut self) -> Result<(), TableError> {
++        if (self.cancelled)() {
++            Err(TableError::Cancelled(self.counters))
++        } else {
++            Ok(())
++        }
++    }
++    fn step(&mut self) -> Result<(), TableError> {
++        self.counters.work = self
++            .counters
++            .work
++            .checked_add(1)
++            .filter(|n| *n <= self.limits.work)
++            .ok_or(TableError::Overflow(TableLimit::Work, self.counters))?;
++        if self.counters.work % 256 == 0 {
++            self.poll()?;
++        }
++        Ok(())
++    }
++}
++/// Iterative deterministic Kosaraju; reversed dependency order means children
++/// are finalized before callers. Stack depth is explicitly bounded even on a
++/// long acyclic goal chain; no recursive host call is used.
++fn components(
++    root: Digest,
++    graph: &BTreeMap<Digest, Vec<Digest>>,
++    work: &mut Work<'_>,
++) -> Result<Vec<Vec<Digest>>, TableError> {
++    let mut seen = BTreeSet::new();
++    let mut order = Vec::new();
++    // Every graph node is reachable from this actual demand root. Start there,
++    // rather than digest order accidentally shortening the active DFS path.
++    for root in std::iter::once(&root) {
++        if !seen.insert(*root) {
++            continue;
++        }
++        if work.limits.depth == 0 {
++            return Err(TableError::Overflow(TableLimit::Depth, work.counters));
++        }
++        let mut stack = vec![(*root, 0usize)];
++        while let Some((key, at)) = stack.last_mut() {
++            work.step()?;
++            if let Some(child) = graph[key].get(*at) {
++                *at += 1;
++                if seen.insert(*child) {
++                    if stack.len() >= work.limits.depth {
++                        return Err(TableError::Overflow(TableLimit::Depth, work.counters));
++                    }
++                    stack.push((*child, 0));
++                }
++            } else {
++                let (key, _) = stack.pop().expect("nonempty DFS");
++                order.push(key);
++            }
++        }
++    }
++    let mut reverse: BTreeMap<Digest, Vec<Digest>> = BTreeMap::new();
++    for key in graph.keys() {
++        work.step()?;
++        reverse.insert(*key, vec![]);
++    }
++    for (key, edges) in graph {
++        for child in edges {
++            work.step()?;
++            reverse.get_mut(child).expect("reached child").push(*key);
++        }
++    }
++    seen.clear();
++    let mut result = Vec::new();
++    for root in order.into_iter().rev() {
++        if !seen.insert(root) {
++            continue;
++        }
++        let mut component = vec![];
++        let mut pending = vec![root];
++        while let Some(key) = pending.pop() {
++            work.step()?;
++            component.push(key);
++            for parent in &reverse[&key] {
++                work.step()?;
++                if seen.insert(*parent) {
++                    pending.push(*parent);
++                }
++            }
++        }
++        component.sort_unstable();
++        result.push(component);
++    }
++    result.reverse();
++    Ok(result)
++}
++/// Genuine current source-header agreement only. It intentionally cannot mint
++/// a completed table/trait witness while M018/M019/normalization remain missing.
++pub struct CurrentTablePrerequisite {
++    header: CurrentGoalPrerequisite,
++}
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum TableAdmissionPrerequisite {
++    SourceSelectedGoal,
++    ResolvedPredicateChildren,
++    CanonicalAnswerInstantiation,
++    ApprovedStructuralAutoRules,
++    CurrentQueryDependencyPublication,
++}
++impl CurrentTablePrerequisite {
++    pub fn capture_header_current(
++        db: &Database,
++        index: &CurrentImplCandidateIndex,
++        header: Digest,
++    ) -> Result<Self, Diagnostic> {
++        Ok(Self {
++            header: CurrentGoalPrerequisite::capture_header_current(db, index, header)?,
++        })
++    }
++    pub fn revalidate(
++        &self,
++        db: &Database,
++        index: &CurrentImplCandidateIndex,
++    ) -> Result<(), Diagnostic> {
++        self.header.revalidate(db, index)
++    }
++    pub fn requirements(&self) -> &[super::canonical::GoalAdmissionPrerequisite] {
++        self.header.requirements()
++    }
++    pub fn table_requirements(&self) -> &[TableAdmissionPrerequisite] {
++        &[
++            TableAdmissionPrerequisite::SourceSelectedGoal,
++            TableAdmissionPrerequisite::ResolvedPredicateChildren,
++            TableAdmissionPrerequisite::CanonicalAnswerInstantiation,
++            TableAdmissionPrerequisite::ApprovedStructuralAutoRules,
++            TableAdmissionPrerequisite::CurrentQueryDependencyPublication,
++        ]
++    }
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/traits/cycle-type-trait.rs b/fixtures/upstream/rustc-checkout/tests/ui/traits/cycle-type-trait.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/traits/cycle-type-trait.rs
+@@ -0,0 +1,24 @@
++//@ run-pass
++#![allow(dead_code)]
++// Test a case where a supertrait references a type that references
++// the original trait. This poses no problem at the moment.
++
++
++trait Chromosome: Get<Struct<i32>> {
++}
++
++trait Get<A> {
++    fn get(&self) -> A;
++}
++
++struct Struct<C:Chromosome> { c: C }
++
++impl Chromosome for i32 { }
++
++impl Get<Struct<i32>> for i32 {
++    fn get(&self) -> Struct<i32> {
++        Struct { c: *self }
++    }
++}
++
++fn main() { }
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/traits/negative-impls/negated-auto-traits-rpass.rs b/fixtures/upstream/rustc-checkout/tests/ui/traits/negative-impls/negated-auto-traits-rpass.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/traits/negative-impls/negated-auto-traits-rpass.rs
+@@ -0,0 +1,19 @@
++//@ run-pass
++#![allow(unused_variables)]
++#![feature(negative_impls)]
++
++pub struct WaitToken;
++impl !Send for WaitToken {}
++
++pub struct Test<T>(#[allow(dead_code)] T);
++unsafe impl<T: 'static> Send for Test<T> {}
++
++pub fn spawn<F>(_: F) -> () where F: FnOnce(), F: Send + 'static {}
++
++fn main() {
++    let wt = Test(WaitToken);
++    spawn(move || {
++        let x = wt;
++        println!("Hello, World!");
++    });
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/traits/next-solver/cycles/inductive-cycle-discarded-coinductive-constraints.rs b/fixtures/upstream/rustc-checkout/tests/ui/traits/next-solver/cycles/inductive-cycle-discarded-coinductive-constraints.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/traits/next-solver/cycles/inductive-cycle-discarded-coinductive-constraints.rs
+@@ -0,0 +1,36 @@
++//@ check-pass
++//@ compile-flags: -Znext-solver
++#![feature(rustc_attrs, marker_trait_attr)]
++#[rustc_coinductive]
++trait Trait {}
++
++impl<T, U> Trait for (T, U)
++where
++    (U, T): Trait,
++    (T, U): Inductive,
++    (): ConstrainToU32<T>,
++{}
++
++trait ConstrainToU32<T> {}
++impl ConstrainToU32<u32> for () {}
++
++// We only prefer the candidate without an inductive cycle
++// once the inductive cycle has the same constraints as the
++// other goal.
++#[marker]
++trait Inductive {}
++impl<T, U> Inductive for (T, U)
++where
++    (T, U): Trait,
++{}
++
++impl Inductive for (u32, u32) {}
++
++fn impls_trait<T, U>()
++where
++    (T, U): Trait,
++{}
++
++fn main() {
++    impls_trait::<_, _>();
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/traits/solver-cycles/cycle-via-builtin-auto-trait-impl.rs b/fixtures/upstream/rustc-checkout/tests/ui/traits/solver-cycles/cycle-via-builtin-auto-trait-impl.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/traits/solver-cycles/cycle-via-builtin-auto-trait-impl.rs
+@@ -0,0 +1,34 @@
++// A regression test for #111729 checking that we correctly
++// track recursion depth for obligations returned by confirmation.
++use std::panic::RefUnwindSafe;
++
++trait Database {
++    type Storage;
++}
++trait Query<DB> {
++    type Data;
++}
++struct ParseQuery;
++struct RootDatabase {
++    _runtime: Runtime<RootDatabase>,
++}
++
++impl<T: RefUnwindSafe> Database for T {
++    type Storage = SalsaStorage;
++}
++impl Database for RootDatabase {
++    //~^ ERROR conflicting implementations of trait `Database` for type `RootDatabase`
++    type Storage = SalsaStorage;
++}
++
++struct Runtime<DB: Database> {
++    _storage: Box<DB::Storage>,
++}
++struct SalsaStorage {
++    _parse: <ParseQuery as Query<RootDatabase>>::Data,
++}
++
++impl<DB: Database> Query<DB> for ParseQuery {
++    type Data = RootDatabase;
++}
++fn main() {}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/traits/solver-cycles/cycle-via-builtin-auto-trait-impl.stderr b/fixtures/upstream/rustc-checkout/tests/ui/traits/solver-cycles/cycle-via-builtin-auto-trait-impl.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/traits/solver-cycles/cycle-via-builtin-auto-trait-impl.stderr
+@@ -0,0 +1,12 @@
++error[E0119]: conflicting implementations of trait `Database` for type `RootDatabase`
++  --> $DIR/cycle-via-builtin-auto-trait-impl.rs:19:1
++   |
++LL | impl<T: RefUnwindSafe> Database for T {
++   | ------------------------------------- first implementation here
++...
++LL | impl Database for RootDatabase {
++   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ conflicting implementation for `RootDatabase`
++
++error: aborting due to 1 previous error
++
++For more information about this error, try `rustc --explain E0119`.
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/traits/solver-cycles/inductive-canonical-cycle.rs b/fixtures/upstream/rustc-checkout/tests/ui/traits/solver-cycles/inductive-canonical-cycle.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/traits/solver-cycles/inductive-canonical-cycle.rs
+@@ -0,0 +1,69 @@
++//@ check-pass
++
++// This test checks that we're correctly dealing with inductive cycles
++// with canonical inference variables.
++
++trait Trait<T, U> {}
++
++trait IsNotU32 {}
++impl IsNotU32 for i32 {}
++impl<T: IsNotU32, U> Trait<T, U> for () // impl 1
++where
++    (): Trait<U, T>
++{}
++
++impl<T> Trait<u32, T> for () {} // impl 2
++
++// If we now check whether `(): Trait<?0, ?1>` holds this has to
++// result in ambiguity as both `for<T> (): Trait<u32, T>` and `(): Trait<i32, u32>`
++// applies. The remainder of this test asserts that.
++
++// If we were to error on inductive cycles with canonical inference variables
++// this would be wrong:
++
++// (): Trait<?0, ?1>
++//  - impl 1
++//      - ?0: IsNotU32 // ambig
++//      - (): Trait<?1, ?0> // canonical cycle -> err
++//      - ERR
++//  - impl 2
++//      - OK ?0 == u32
++//
++// Result: OK ?0 == u32.
++
++// (): Trait<i32, u32>
++//  - impl 1
++//      - i32: IsNotU32 // ok
++//      - (): Trait<u32, i32>
++//          - impl 1
++//              - u32: IsNotU32 // err
++//              - ERR
++//          - impl 2
++//              - OK
++//      - OK
++//  - impl 2 (trivial ERR)
++//
++// Result OK
++
++// This would mean that `(): Trait<?0, ?1>` is not complete,
++// which is unsound if we're in coherence.
++
++fn implements_trait<T, U>() -> (T, U)
++where
++    (): Trait<T, U>,
++{
++    todo!()
++}
++
++// A hack to only constrain the infer vars after first checking
++// the `(): Trait<_, _>`.
++trait Constrain<T> {}
++impl<T> Constrain<T> for  T {}
++fn constrain<T: Constrain<U>, U>(_: U) {}
++
++fn main() {
++    let (x, y) = implements_trait::<_, _>();
++
++    constrain::<i32, _>(x);
++    constrain::<u32, _>(y);
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/traits/trait-impl-overflow-with-where-clause-20413.rs b/fixtures/upstream/rustc-checkout/tests/ui/traits/trait-impl-overflow-with-where-clause-20413.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/traits/trait-impl-overflow-with-where-clause-20413.rs
+@@ -0,0 +1,42 @@
++// https://github.com/rust-lang/rust/issues/20413
++trait Foo {
++    fn answer(self);
++}
++
++struct NoData<T>;
++//~^ ERROR: parameter `T` is never used
++
++impl<T> Foo for T where NoData<T>: Foo {
++  //~^ ERROR: overflow evaluating the requirement
++  fn answer(self) {
++    let val: NoData<T> = NoData;
++  }
++}
++
++trait Bar {
++    fn answer(self);
++}
++
++trait Baz {
++    fn answer(self);
++}
++
++struct AlmostNoData<T>(Option<T>);
++
++struct EvenLessData<T>(Option<T>);
++
++impl<T> Bar for T where EvenLessData<T>: Baz {
++//~^ ERROR: overflow evaluating the requirement
++  fn answer(self) {
++    let val: EvenLessData<T> = EvenLessData(None);
++  }
++}
++
++impl<T> Baz for T where AlmostNoData<T>: Bar {
++//~^ ERROR: overflow evaluating the requirement
++  fn answer(self) {
++    let val: NoData<T> = AlmostNoData(None);
++  }
++}
++
++fn main() {}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/traits/trait-impl-overflow-with-where-clause-20413.stderr b/fixtures/upstream/rustc-checkout/tests/ui/traits/trait-impl-overflow-with-where-clause-20413.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/traits/trait-impl-overflow-with-where-clause-20413.stderr
+@@ -0,0 +1,68 @@
++error[E0392]: type parameter `T` is never used
++  --> $DIR/trait-impl-overflow-with-where-clause-20413.rs:6:15
++   |
++LL | struct NoData<T>;
++   |               ^ unused type parameter
++   |
++   = help: consider removing `T`, referring to it in a field, or using a marker such as `PhantomData`
++   = help: if you intended `T` to be a const parameter, use `const T: /* Type */` instead
++
++error[E0275]: overflow evaluating the requirement `NoData<NoData<NoData<NoData<NoData<NoData<NoData<_>>>>>>>: Foo`
++  --> $DIR/trait-impl-overflow-with-where-clause-20413.rs:9:36
++   |
++LL | impl<T> Foo for T where NoData<T>: Foo {
++   |                                    ^^^
++   |
++   = help: consider increasing the recursion limit by adding a `#![recursion_limit = "256"]` attribute to your crate (`trait_impl_overflow_with_where_clause_20413`)
++note: required for `NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<NoData<T>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>` to implement `Foo`
++  --> $DIR/trait-impl-overflow-with-where-clause-20413.rs:9:9
++   |
++LL | impl<T> Foo for T where NoData<T>: Foo {
++   |         ^^^     ^                  --- unsatisfied trait bound introduced here
++   = note: 126 redundant requirements hidden
++   = note: required for `NoData<T>` to implement `Foo`
++
++error[E0275]: overflow evaluating the requirement `AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<_>>>>>>>: Bar`
++  --> $DIR/trait-impl-overflow-with-where-clause-20413.rs:28:42
++   |
++LL | impl<T> Bar for T where EvenLessData<T>: Baz {
++   |                                          ^^^
++   |
++   = help: consider increasing the recursion limit by adding a `#![recursion_limit = "256"]` attribute to your crate (`trait_impl_overflow_with_where_clause_20413`)
++note: required for `EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<T>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>` to implement `Baz`
++  --> $DIR/trait-impl-overflow-with-where-clause-20413.rs:35:9
++   |
++LL | impl<T> Baz for T where AlmostNoData<T>: Bar {
++   |         ^^^     ^                        --- unsatisfied trait bound introduced here
++note: required for `AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<T>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>` to implement `Bar`
++  --> $DIR/trait-impl-overflow-with-where-clause-20413.rs:28:9
++   |
++LL | impl<T> Bar for T where EvenLessData<T>: Baz {
++   |         ^^^     ^                        --- unsatisfied trait bound introduced here
++   = note: 125 redundant requirements hidden
++   = note: required for `EvenLessData<T>` to implement `Baz`
++
++error[E0275]: overflow evaluating the requirement `EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<_>>>>>>>: Baz`
++  --> $DIR/trait-impl-overflow-with-where-clause-20413.rs:35:42
++   |
++LL | impl<T> Baz for T where AlmostNoData<T>: Bar {
++   |                                          ^^^
++   |
++   = help: consider increasing the recursion limit by adding a `#![recursion_limit = "256"]` attribute to your crate (`trait_impl_overflow_with_where_clause_20413`)
++note: required for `AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<T>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>` to implement `Bar`
++  --> $DIR/trait-impl-overflow-with-where-clause-20413.rs:28:9
++   |
++LL | impl<T> Bar for T where EvenLessData<T>: Baz {
++   |         ^^^     ^                        --- unsatisfied trait bound introduced here
++note: required for `EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<EvenLessData<AlmostNoData<T>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>` to implement `Baz`
++  --> $DIR/trait-impl-overflow-with-where-clause-20413.rs:35:9
++   |
++LL | impl<T> Baz for T where AlmostNoData<T>: Bar {
++   |         ^^^     ^                        --- unsatisfied trait bound introduced here
++   = note: 125 redundant requirements hidden
++   = note: required for `AlmostNoData<T>` to implement `Bar`
++
++error: aborting due to 4 previous errors
++
++Some errors have detailed explanations: E0275, E0392.
++For more information about an error, try `rustc --explain E0275`.
+diff --git a/xtask/tests/conditional_goal_tables.rs b/xtask/tests/conditional_goal_tables.rs
+new file mode 100644
+--- /dev/null
++++ b/xtask/tests/conditional_goal_tables.rs
+@@ -0,0 +1,931 @@
++//! M021/M022 component model controls, not source selection or stock execution.
++use lrr::{
++    core::{
++        digest::{Digest, StableEncode},
++        profile::ProfileIdentity,
++    },
++    ir::op::PrimitiveType,
++    source::snapshot::{CfgSet, SourceBlob, SourcePath},
++    syntax::{outline::ScopeKey, parse::ParsedFile},
++    traits::{
++        canonical::{CanonicalContextModel, CanonicalLimits, GoalModel},
++        header::{CapturedSourceHeaders, HeaderCaptureLimits, HeaderKind, SourceTraitHeader},
++        table::{
++            CandidatePairModel, CycleKindModel, EdgeKindModel, GoalTablesModel,
++            PredicateChildModel, TableError, TableLimit, TableLimits, TableOutcomeModel,
++            TableState,
++        },
++        term::{Binder, GenericArg, InferVarKey, ParamEnv, TraitRef, TyTerm},
++    },
++};
++use std::collections::BTreeMap;
++const ADAPTER: &str = "trait A {} trait B {} impl A for () where (): B {} impl B for () {} impl A for ((),) {} impl !B for u8 {}";
++fn headers(text: &str) -> CapturedSourceHeaders {
++    let mut profile = ProfileIdentity::current();
++    profile.edition = 2015;
++    ParsedFile::parse_declarations(&SourceBlob::new(text.as_bytes().to_vec()).unwrap(), profile)
++        .unwrap()
++        .capture_trait_headers(
++            SourcePath::new("table_fixture.rs").unwrap(),
++            ScopeKey {
++                crate_key: Digest([117; 32]),
++                module_path: vec![],
++                owner: None,
++            },
++            &CfgSet::guest_default(),
++            HeaderCaptureLimits::default(),
++        )
++        .unwrap()
++}
++fn cx() -> CanonicalContextModel {
++    CanonicalContextModel {
++        transaction: Digest([118; 32]),
++        profile: ProfileIdentity::current(),
++        unit: Digest([119; 32]),
++        world: Digest([120; 32]),
++        catalog: Digest([121; 32]),
++        cfg: Digest([122; 32]),
++        source_namespace: Digest([123; 32]),
++        epoch: 1,
++        source_revision: 1,
++        query_revision: 1,
++        max_universe: 1,
++        excluded_dictionary_slots: vec![],
++    }
++}
++fn table(limits: TableLimits) -> GoalTablesModel {
++    GoalTablesModel::new(&cx(), limits, CanonicalLimits::default()).unwrap()
++}
++fn goal(
++    t: &mut GoalTablesModel,
++    h: &CapturedSourceHeaders,
++    tag: PrimitiveType,
++    kind: CycleKindModel,
++    residual: bool,
++) -> Digest {
++    let definition = h
++        .headers()
++        .iter()
++        .find(|x| matches!(x.kind(), HeaderKind::Trait { .. }))
++        .unwrap()
++        .definition()
++        .fingerprint();
++    let env = ParamEnv::new(definition, vec![], vec![]).unwrap();
++    // The closed Primitive argument and cycle/child labels are explicit table
++    // model adapters, not actual source Type namespace or auto-rule authority.
++    t.intern(
++        &cx(),
++        &Binder {
++            variables: vec![],
++            value: GoalModel::Implemented(TraitRef {
++                trait_key: definition,
++                self_ty: TyTerm::Primitive(PrimitiveType::Unit),
++                args: vec![GenericArg::Type(TyTerm::Primitive(tag))],
++            }),
++        },
++        &env,
++        &BTreeMap::new(),
++        kind,
++        residual,
++    )
++    .unwrap()
++}
++fn positive(h: &CapturedSourceHeaders) -> &SourceTraitHeader {
++    h.headers()
++        .iter()
++        .find(|x| {
++            matches!(
++                x.kind(),
++                HeaderKind::Impl {
++                    negative: false,
++                    ..
++                }
++            ) && x.predicates().is_empty()
++        })
++        .unwrap()
++}
++fn conditional(h: &CapturedSourceHeaders) -> &SourceTraitHeader {
++    h.headers()
++        .iter()
++        .find(|x| {
++            matches!(
++                x.kind(),
++                HeaderKind::Impl {
++                    negative: false,
++                    ..
++                }
++            ) && !x.predicates().is_empty()
++        })
++        .unwrap()
++}
++fn add(
++    t: &mut GoalTablesModel,
++    key: Digest,
++    h: &SourceTraitHeader,
++    child: Option<Digest>,
++    edge: EdgeKindModel,
++) {
++    let children = h
++        .predicates()
++        .iter()
++        .enumerate()
++        .map(|(ordinal, _)| PredicateChildModel {
++            ordinal,
++            goal: child.unwrap(),
++            edge,
++        })
++        .collect();
++    t.add_candidate_model(&cx(), key, h, &[], children).unwrap();
++}
++#[test]
++fn m021_original_conditional_false_predicate_and_cold_unrelated_table() {
++    let original = headers(include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/traits/multidispatch-conditional-impl-not-considered.rs"
++    ));
++    let h = headers(ADAPTER);
++    let mut t = table(TableLimits::default());
++    let root = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U8,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    let missing = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U16,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    let cold = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U32,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    // Every genuine original pending header predicate remains mapped; the
++    // false child is a disclosed model, not a source-proven Clone judgment.
++    add(
++        &mut t,
++        root,
++        conditional(&original),
++        Some(missing),
++        EdgeKindModel::Ordinary,
++    );
++    assert!(matches!(
++        t.evaluate_model(&cx(), root, || false).unwrap().outcome,
++        TableOutcomeModel::NoSolution
++    ));
++    assert_eq!(t.state(cold), Some(TableState::New));
++    assert!(t.outcome(cold).is_none());
++}
++#[test]
++fn m021_conditional_success_does_not_skip_any_header_predicate() {
++    let h = headers(ADAPTER);
++    let mut t = table(TableLimits::default());
++    let root = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U8,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    let child = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U16,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    assert!(
++        t.add_candidate_model(&cx(), root, conditional(&h), &[], vec![])
++            .is_err()
++    );
++    assert_eq!(t.counters().strands, 0);
++    add(&mut t, child, positive(&h), None, EdgeKindModel::Ordinary);
++    add(
++        &mut t,
++        root,
++        conditional(&h),
++        Some(child),
++        EdgeKindModel::Ordinary,
++    );
++    let result = t.evaluate_model(&cx(), root, || false).unwrap();
++    let TableOutcomeModel::Unique(answer) = result.outcome else {
++        panic!("conditional model did not discharge")
++    };
++    assert_eq!(answer.header, conditional(&h).exact_identity());
++    assert_eq!(answer.children.len(), conditional(&h).predicates().len());
++    assert!(!answer.provisional_auto);
++    assert_eq!(result.counters.visited, 2);
++    assert_eq!(
++        result
++            .transitions
++            .iter()
++            .filter(|e| e.to == TableState::Evaluating)
++            .count(),
++        2
++    );
++    assert_eq!(
++        result
++            .transitions
++            .iter()
++            .filter(|e| e.to == TableState::Complete)
++            .count(),
++        2
++    );
++}
++#[test]
++fn m021_conflicting_candidate_never_forces_children_or_constrains_sibling() {
++    let h = headers(ADAPTER);
++    let mut t = table(TableLimits::default());
++    let root = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U8,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    let cold = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U16,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    let children = conditional(&h)
++        .predicates()
++        .iter()
++        .enumerate()
++        .map(|(ordinal, _)| PredicateChildModel {
++            ordinal,
++            goal: cold,
++            edge: EdgeKindModel::Ordinary,
++        })
++        .collect();
++    t.add_candidate_model(
++        &cx(),
++        root,
++        conditional(&h),
++        &[CandidatePairModel {
++            template: TyTerm::Tuple(vec![]),
++            demand: TyTerm::Tuple(vec![TyTerm::Primitive(PrimitiveType::Unit)]),
++        }],
++        children,
++    )
++    .unwrap();
++    add(&mut t, root, positive(&h), None, EdgeKindModel::Ordinary);
++    assert!(matches!(
++        t.evaluate_model(&cx(), root, || false).unwrap().outcome,
++        TableOutcomeModel::Unique(_)
++    ));
++    assert_eq!(t.state(cold), Some(TableState::New));
++}
++#[test]
++fn m021_distinct_impls_remain_ambiguous_and_order_independent() {
++    let h = headers(ADAPTER);
++    let candidates = h
++        .headers()
++        .iter()
++        .filter(|h| {
++            matches!(
++                h.kind(),
++                HeaderKind::Impl {
++                    negative: false,
++                    ..
++                }
++            ) && h.predicates().is_empty()
++        })
++        .collect::<Vec<_>>();
++    assert_eq!(candidates.len(), 2);
++    let run = |reverse| {
++        let mut t = table(TableLimits::default());
++        let key = goal(
++            &mut t,
++            &h,
++            PrimitiveType::U8,
++            CycleKindModel::Ordinary,
++            false,
++        );
++        let mut candidates = candidates.clone();
++        if reverse {
++            candidates.reverse();
++        }
++        for h in candidates {
++            add(&mut t, key, h, None, EdgeKindModel::Ordinary);
++        }
++        t.evaluate_model(&cx(), key, || false).unwrap().outcome
++    };
++    let a = run(false);
++    assert_eq!(a, run(true));
++    let TableOutcomeModel::Ambiguous(ids) = a else {
++        panic!("overlap model selected first impl")
++    };
++    assert_eq!(ids.len(), 2);
++    assert!(ids[0] < ids[1]);
++}
++#[test]
++fn m022_inductive_cycle_requires_finite_base_and_preserves_residual_inference() {
++    let original = headers(include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/traits/solver-cycles/inductive-canonical-cycle.rs"
++    ));
++    assert!(
++        original
++            .headers()
++            .iter()
++            .filter(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++            .count()
++            >= 3
++    );
++    let h = headers(ADAPTER);
++    for residual in [false, true] {
++        let mut t = table(TableLimits::default());
++        let key = goal(
++            &mut t,
++            &h,
++            PrimitiveType::U8,
++            CycleKindModel::Ordinary,
++            residual,
++        );
++        add(
++            &mut t,
++            key,
++            conditional(&h),
++            Some(key),
++            EdgeKindModel::Ordinary,
++        );
++        let result = t.evaluate_model(&cx(), key, || false).unwrap();
++        assert!(if residual {
++            matches!(result.outcome, TableOutcomeModel::Unresolved(_))
++        } else {
++            matches!(result.outcome, TableOutcomeModel::NoSolution)
++        });
++    }
++    let mut t = table(TableLimits::default());
++    let a = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U8,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    let b = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U16,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    add(&mut t, a, conditional(&h), Some(b), EdgeKindModel::Ordinary);
++    add(&mut t, b, positive(&h), None, EdgeKindModel::Ordinary);
++    assert!(matches!(
++        t.evaluate_model(&cx(), a, || false).unwrap().outcome,
++        TableOutcomeModel::Unique(_)
++    ));
++}
++#[test]
++fn m022_approved_auto_model_commits_only_successful_noncyclic_premises() {
++    let h = headers(
++        "trait A {} trait B {} trait C {} impl A for () where (): B, (): C {} impl B for () where (): A {} impl C for () {}",
++    );
++    let source = h
++        .headers()
++        .iter()
++        .filter(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++        .collect::<Vec<_>>();
++    for external_ok in [false, true] {
++        let mut t = table(TableLimits::default());
++        let a = goal(
++            &mut t,
++            &h,
++            PrimitiveType::U8,
++            CycleKindModel::StructuralAuto,
++            false,
++        );
++        let b = goal(
++            &mut t,
++            &h,
++            PrimitiveType::U16,
++            CycleKindModel::StructuralAuto,
++            false,
++        );
++        let c = goal(
++            &mut t,
++            &h,
++            PrimitiveType::U32,
++            CycleKindModel::StructuralAuto,
++            false,
++        );
++        assert_eq!(source[0].predicates().len(), 2);
++        t.add_candidate_model(
++            &cx(),
++            a,
++            source[0],
++            &[],
++            vec![
++                PredicateChildModel {
++                    ordinal: 0,
++                    goal: b,
++                    edge: EdgeKindModel::StructuralAuto,
++                },
++                PredicateChildModel {
++                    ordinal: 1,
++                    goal: c,
++                    edge: EdgeKindModel::StructuralAuto,
++                },
++            ],
++        )
++        .unwrap();
++        add(&mut t, b, source[1], Some(a), EdgeKindModel::StructuralAuto);
++        if external_ok {
++            add(&mut t, c, source[2], None, EdgeKindModel::StructuralAuto);
++        }
++        let result = t.evaluate_model(&cx(), a, || false).unwrap();
++        assert!(if external_ok {
++            matches!(result.outcome,TableOutcomeModel::Unique(ref a) if a.provisional_auto)
++        } else {
++            matches!(result.outcome, TableOutcomeModel::NoSolution)
++        });
++    }
++}
++#[test]
++fn m022_negative_mixed_and_escaping_edges_prevent_auto_shortcut() {
++    let original = headers(include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/traits/negative-impls/negated-auto-traits-rpass.rs"
++    ));
++    let negative = original
++        .headers()
++        .iter()
++        .find(|h| matches!(h.kind(), HeaderKind::Impl { negative: true, .. }))
++        .unwrap();
++    let h = headers(ADAPTER);
++    for mode in 0..4 {
++        let mut t = table(TableLimits::default());
++        let kind = CycleKindModel::StructuralAuto;
++        let a = goal(&mut t, &h, PrimitiveType::U8, kind, false);
++        let edge = if mode == 2 {
++            EdgeKindModel::Projection
++        } else {
++            EdgeKindModel::StructuralAuto
++        };
++        if mode == 1 {
++            let b = goal(
++                &mut t,
++                &h,
++                PrimitiveType::U16,
++                CycleKindModel::Ordinary,
++                false,
++            );
++            add(&mut t, a, conditional(&h), Some(b), EdgeKindModel::Ordinary);
++            add(
++                &mut t,
++                b,
++                conditional(&h),
++                Some(a),
++                EdgeKindModel::StructuralAuto,
++            );
++        } else {
++            add(&mut t, a, conditional(&h), Some(a), edge);
++        }
++        if mode == 0 {
++            t.record_negative_header_model(&cx(), a, negative).unwrap();
++        }
++        if mode == 3 {
++            let b = goal(
++                &mut t,
++                &h,
++                PrimitiveType::U16,
++                CycleKindModel::Ordinary,
++                false,
++            );
++            add(&mut t, b, positive(&h), None, EdgeKindModel::Ordinary);
++            let escape = headers("trait Z {} impl Z for () where (): Z, (): Z {}");
++            let hdr = conditional(&escape);
++            let children = hdr
++                .predicates()
++                .iter()
++                .enumerate()
++                .map(|(ordinal, _)| PredicateChildModel {
++                    ordinal,
++                    goal: if ordinal == 0 { a } else { b },
++                    edge: if ordinal == 0 {
++                        EdgeKindModel::StructuralAuto
++                    } else {
++                        EdgeKindModel::Ordinary
++                    },
++                })
++                .collect();
++            t.add_candidate_model(&cx(), a, hdr, &[], children).unwrap();
++        }
++        assert!(matches!(
++            t.evaluate_model(&cx(), a, || false).unwrap().outcome,
++            TableOutcomeModel::NoSolution
++        ));
++    }
++}
++#[test]
++fn m022_uncertain_external_premise_survives_ordinary_cycle() {
++    let h = headers(
++        "trait A {} trait B {} impl A for () where (): A, (): B {} impl B for () where (): B {}",
++    );
++    let source = h
++        .headers()
++        .iter()
++        .filter(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++        .collect::<Vec<_>>();
++    let mut t = table(TableLimits::default());
++    let a = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U8,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    let b = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U16,
++        CycleKindModel::Ordinary,
++        true,
++    );
++    t.add_candidate_model(
++        &cx(),
++        a,
++        source[0],
++        &[],
++        vec![
++            PredicateChildModel {
++                ordinal: 0,
++                goal: a,
++                edge: EdgeKindModel::Ordinary,
++            },
++            PredicateChildModel {
++                ordinal: 1,
++                goal: b,
++                edge: EdgeKindModel::Ordinary,
++            },
++        ],
++    )
++    .unwrap();
++    add(&mut t, b, source[1], Some(b), EdgeKindModel::Ordinary);
++    assert!(matches!(
++        t.evaluate_model(&cx(), a, || false).unwrap().outcome,
++        TableOutcomeModel::Unresolved(_)
++    ));
++}
++#[test]
++fn m022_cancellation_work_and_depth_never_publish_absence() {
++    let h = headers(ADAPTER);
++    let mut t = table(TableLimits::default());
++    let key = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U8,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    add(&mut t, key, positive(&h), None, EdgeKindModel::Ordinary);
++    let before = t.counters();
++    assert!(matches!(
++        t.evaluate_model(&cx(), key, || true),
++        Err(TableError::Cancelled(_))
++    ));
++    assert_eq!(t.state(key), Some(TableState::New));
++    assert!(t.outcome(key).is_none());
++    assert_eq!(t.counters().work, before.work);
++    let mut limits = TableLimits::default();
++    limits.depth = 0;
++    let mut t = table(limits);
++    let key = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U8,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    let child = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U16,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    add(
++        &mut t,
++        key,
++        conditional(&h),
++        Some(child),
++        EdgeKindModel::Ordinary,
++    );
++    assert!(matches!(
++        t.evaluate_model(&cx(), key, || false),
++        Err(TableError::Overflow(TableLimit::Depth, _))
++    ));
++    assert_eq!(t.state(key), Some(TableState::New));
++    let mut limits = TableLimits::default();
++    limits.depth = 2;
++    let mut t = table(limits);
++    let a = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U8,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    let b = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U16,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    let c = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U32,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    add(&mut t, a, conditional(&h), Some(b), EdgeKindModel::Ordinary);
++    add(&mut t, b, conditional(&h), Some(c), EdgeKindModel::Ordinary);
++    add(&mut t, c, positive(&h), None, EdgeKindModel::Ordinary);
++    assert!(matches!(
++        t.evaluate_model(&cx(), a, || false),
++        Err(TableError::Overflow(TableLimit::Depth, _))
++    ));
++    assert_eq!(t.state(a), Some(TableState::New));
++    let mut limits = TableLimits::default();
++    limits.work = 0;
++    let mut t = table(limits);
++    let env = ParamEnv::new(Digest([127; 32]), vec![], vec![]).unwrap();
++    assert!(matches!(
++        t.intern(
++            &cx(),
++            &Binder {
++                variables: vec![],
++                value: GoalModel::TypeEqual(
++                    TyTerm::Primitive(PrimitiveType::Unit),
++                    TyTerm::Primitive(PrimitiveType::Unit)
++                )
++            },
++            &env,
++            &BTreeMap::new(),
++            CycleKindModel::Ordinary,
++            false
++        ),
++        Err(TableError::Overflow(TableLimit::Work, _))
++    ));
++    assert_eq!(t.counters().tables, 0);
++}
++#[test]
++fn m021_currentness_and_small_admission_limits_remain_distinct() {
++    let h = headers(ADAPTER);
++    let mut t = table(TableLimits::default());
++    let key = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U8,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    for field in 0..7 {
++        let mut changed = cx();
++        match field {
++            0 => changed.epoch += 1,
++            1 => changed.source_revision += 1,
++            2 => changed.query_revision += 1,
++            3 => changed.world = Digest([128; 32]),
++            4 => changed.cfg = Digest([129; 32]),
++            5 => changed.profile.edition = 2018,
++            _ => changed.source_namespace = Digest([130; 32]),
++        }
++        assert!(matches!(
++            t.evaluate_model(&changed, key, || panic!("stale input reached work")),
++            Err(TableError::Stale)
++        ));
++    }
++    assert_eq!(t.state(key), Some(TableState::New));
++    let mut limits = TableLimits::default();
++    limits.strands = 0;
++    let mut t = table(limits);
++    let key = goal(
++        &mut t,
++        &h,
++        PrimitiveType::U8,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    assert!(matches!(
++        t.add_candidate_model(&cx(), key, positive(&h), &[], vec![]),
++        Err(TableError::Overflow(TableLimit::Strands, _))
++    ));
++    assert_eq!(t.counters().strands, 0);
++    for field in 0..3 {
++        let mut limits = TableLimits::default();
++        match field {
++            0 => limits.tables = 0,
++            1 => limits.canonical_bytes = 0,
++            _ => limits.metadata_bytes = 0,
++        }
++        let mut t = table(limits);
++        let env = ParamEnv::new(Digest([131; 32]), vec![], vec![]).unwrap();
++        let result = t.intern(
++            &cx(),
++            &Binder {
++                variables: vec![],
++                value: GoalModel::TypeEqual(
++                    TyTerm::Primitive(PrimitiveType::Unit),
++                    TyTerm::Primitive(PrimitiveType::Unit),
++                ),
++            },
++            &env,
++            &BTreeMap::new(),
++            CycleKindModel::Ordinary,
++            false,
++        );
++        assert!(matches!(result, Err(TableError::Overflow(_, _))));
++        assert_eq!(t.counters().tables, 0);
++    }
++}
++#[test]
++fn m022_canonical_inference_cannot_be_hidden_by_closed_cycle_label() {
++    let h = headers(ADAPTER);
++    let env = ParamEnv::new(h.headers()[0].definition().fingerprint(), vec![], vec![]).unwrap();
++    let mut t = table(TableLimits::default());
++    let var = InferVarKey {
++        transaction: cx().transaction,
++        ordinal: 0,
++    };
++    let key = t
++        .intern(
++            &cx(),
++            &Binder {
++                variables: vec![],
++                value: GoalModel::TypeEqual(TyTerm::Infer(var), TyTerm::Infer(var)),
++            },
++            &env,
++            &BTreeMap::from([(var, 0)]),
++            CycleKindModel::Ordinary,
++            false,
++        )
++        .unwrap();
++    add(
++        &mut t,
++        key,
++        conditional(&h),
++        Some(key),
++        EdgeKindModel::Ordinary,
++    );
++    assert!(matches!(
++        t.evaluate_model(&cx(), key, || false).unwrap().outcome,
++        TableOutcomeModel::Unresolved(_)
++    ));
++    assert_eq!(t.state(key), Some(TableState::Suspended));
++}
++
++#[test]
++fn m022_mid_work_cancellation_and_reduced_work_do_not_commit_partial_tables() {
++    use lrr::traits::term::ConstTerm;
++    let h = headers(ADAPTER);
++    let mut t = table(TableLimits::default());
++    let env = ParamEnv::new(h.headers()[0].definition().fingerprint(), vec![], vec![]).unwrap();
++    let mut keys = vec![];
++    for ordinal in 0..100 {
++        keys.push(
++            t.intern(
++                &cx(),
++                &Binder {
++                    variables: vec![],
++                    value: GoalModel::ConstEqual(
++                        ConstTerm::Value(ordinal),
++                        ConstTerm::Value(ordinal),
++                    ),
++                },
++                &env,
++                &BTreeMap::new(),
++                CycleKindModel::Ordinary,
++                false,
++            )
++            .unwrap(),
++        );
++    }
++    for pair in keys.windows(2) {
++        add(
++            &mut t,
++            pair[0],
++            conditional(&h),
++            Some(pair[1]),
++            EdgeKindModel::Ordinary,
++        );
++    }
++    add(
++        &mut t,
++        *keys.last().unwrap(),
++        positive(&h),
++        None,
++        EdgeKindModel::Ordinary,
++    );
++    let mut polls = 0;
++    let before = t.counters();
++    let result = t.evaluate_model(&cx(), keys[0], || {
++        polls += 1;
++        polls == 2
++    });
++    assert!(matches!(result, Err(TableError::Cancelled(_))));
++    assert_eq!(polls, 2);
++    assert_eq!(t.counters().work, before.work);
++    for key in keys {
++        assert_eq!(t.state(key), Some(TableState::New));
++        assert!(t.outcome(key).is_none());
++    }
++    // Closed leaf has a real candidate but the remaining evaluation budget is
++    // deliberately exhausted after admission. No cached absence is published.
++    let mut limits = TableLimits::default();
++    let mut probe = table(limits);
++    let key = goal(
++        &mut probe,
++        &h,
++        PrimitiveType::U8,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    add(&mut probe, key, positive(&h), None, EdgeKindModel::Ordinary);
++    limits.work = probe.counters().work;
++    let mut exact = table(limits);
++    let key = goal(
++        &mut exact,
++        &h,
++        PrimitiveType::U8,
++        CycleKindModel::Ordinary,
++        false,
++    );
++    add(&mut exact, key, positive(&h), None, EdgeKindModel::Ordinary);
++    assert!(matches!(
++        exact.evaluate_model(&cx(), key, || false),
++        Err(TableError::Overflow(TableLimit::Work, _))
++    ));
++    assert_eq!(exact.state(key), Some(TableState::New));
++    assert!(exact.outcome(key).is_none());
++}
++
++#[test]
++fn m021_real_readiness_refuses_missing_catalog_without_query_effects() {
++    use lrr::{
++        db::{
++            memo::Database,
++            seals::{SealDomain, SealKey},
++        },
++        traits::{index::CurrentImplCandidateIndex, table::CurrentTablePrerequisite},
++    };
++    let db = Database::default();
++    let request = SealKey {
++        domain: SealDomain::ImplCatalog {
++            id: Digest([133; 32]),
++        },
++        unit_graph: Digest([134; 32]),
++        epoch: 1,
++    };
++    assert!(
++        CurrentImplCandidateIndex::capture_current(&db, &request, HeaderCaptureLimits::default())
++            .is_err()
++    );
++    let _capture = CurrentTablePrerequisite::capture_header_current;
++    assert!(db.trace.counts.is_empty());
++    // No mock admitted goal, approved structural rule, ready SourceView or
++    // implementation witness constructor is used by these component controls.
++}
++
++#[test]
++fn m022_original_recursive_headers_keep_bodies_and_projection_goals_unforced() {
++    let originals = [
++        include_str!("../../fixtures/upstream/rustc-checkout/tests/ui/traits/cycle-type-trait.rs"),
++        include_str!(
++            "../../fixtures/upstream/rustc-checkout/tests/ui/traits/solver-cycles/cycle-via-builtin-auto-trait-impl.rs"
++        ),
++        include_str!(
++            "../../fixtures/upstream/rustc-checkout/tests/ui/traits/next-solver/cycles/inductive-cycle-discarded-coinductive-constraints.rs"
++        ),
++        include_str!(
++            "../../fixtures/upstream/rustc-checkout/tests/ui/traits/trait-impl-overflow-with-where-clause-20413.rs"
++        ),
++    ];
++    for original in originals {
++        let captured = headers(original);
++        assert!(
++            captured
++                .headers()
++                .iter()
++                .any(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++        );
++        assert!(
++            captured
++                .headers()
++                .iter()
++                .any(|h| matches!(h.kind(), HeaderKind::Trait { .. }))
++        );
++    }
++    // check-pass/nightly/compiler-error directives and stderr are unchanged.
++    // Header capture executes no body, const, goal normalization or Rust program.
++}

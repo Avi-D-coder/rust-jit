@@ -1,0 +1,2344 @@
+diff --git a/crates/lrr/src/expand/source_declarative.rs b/crates/lrr/src/expand/source_declarative.rs
+--- a/crates/lrr/src/expand/source_declarative.rs
++++ b/crates/lrr/src/expand/source_declarative.rs
+@@ -335,6 +335,11 @@
+     before: u64,
+ }
+ enum DeclarativeBody {
++    /// Original source-owned dialect/groups; never a rules-body rewrite.
++    Macro2 {
++        arguments: Option<TokenForest>,
++        body: TokenForest,
++    },
+     Procedural(std::sync::Arc<crate::service::function_macro_requests::PreparedFunctionRequest>),
+     OwnedGenerated(
+         std::sync::Arc<super::generated_items::GeneratedItems>,
+@@ -532,6 +537,40 @@
+     )
+     .map_err(adapter)
+ }
++
++fn original_definition_body(
++    source: &PreparedSourceView,
++    selected: SourceRange,
++    forest: &TokenForest,
++) -> Result<DeclarativeBody, Diagnostic> {
++    let shape = source.macro_definition_shape_at(selected)?;
++    if shape.dialect() == crate::syntax::macro_calls::MacroDefinitionDialect::Macro2
++        && shape.arguments().is_some()
++    {
++        // Each selected group keeps the owning forest's complete source tables.
++        // Reserve a conservative combined ceiling before cloning either group.
++        forest
++            .encoded_len()
++            .map_err(adapter)?
++            .checked_mul(2)
++            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
++            .ok_or_else(|| {
++                fault(
++                    "LRR-E-METADATA-LIMIT",
++                    "macro2 original definition groups exceed retained metadata budget",
++                )
++            })?;
++    }
++    let body = group(forest, shape.body())?;
++    Ok(match shape.dialect() {
++        crate::syntax::macro_calls::MacroDefinitionDialect::Rules => DeclarativeBody::Source(body),
++        crate::syntax::macro_calls::MacroDefinitionDialect::Macro2 => DeclarativeBody::Macro2 {
++            arguments: shape.arguments().map(|r| group(forest, r)).transpose()?,
++            body,
++        },
++    })
++}
++
+ impl SourceDeclarative {
+     pub(crate) fn item_name_context(
+         &self,
+@@ -1376,33 +1415,7 @@
+                         "captured enclosing macro body absent",
+                     )
+                 })?;
+-            let range = self.source.macro_token_group(item.declaration_span, true)?;
+-            let selection = self.source.selection();
+-            let source = wire::SourceIdentity {
+-                unit: Key(selection.outline.crate_key.0),
+-                content: Key(selection.outline.parse.content.0),
+-                path: selection.path.as_str().into(),
+-            };
+-            let context = wire::ContextRecord {
+-                parent: None,
+-                expansion: None,
+-                transparency: wire::Transparency::Opaque,
+-                defining_unit: source.unit,
+-                edition: edition(selection.outline.parse.profile.edition)?,
+-            };
+-            let forest = wire::parse_source(
+-                self.source.captured_macro_blob()?.text()?,
+-                source,
+-                context,
+-                Key(crate::db::key::QueryKey::Outline(selection.outline.clone())
+-                    .fingerprint()
+-                    .0),
+-            )
+-            .map_err(adapter)?;
+-            forest
+-                .encoded_len_with_limit(32 * 1024 * 1024)
+-                .map_err(adapter)?;
+-            DeclarativeBody::Source(group(&forest, range)?)
++            self.original_definition_body(item.declaration_span)?
+         };
+         let wire = input.encode().map_err(|e| fault(e.code, &e.message))?;
+         if wire.len() > 32 * 1024 * 1024 {
+@@ -2112,20 +2125,22 @@
+             crate::frontend::impl_index::DeclarationBodyOwner::Source(source) => {
+                 let header = source.definition(definition.identity)?;
+                 definition_range = Some(header.range);
+-                let range = self.source.macro_token_group(header.range, true)?;
++                let range = self.source.macro_definition_shape_at(header.range)?.body();
+                 if range != header.body {
+                     return Err(fault(
+                         "LRR-E-EXPANSION-INPUT",
+                         "cold macro body attachment differs",
+                     ));
+                 }
+-                group(&forest, range)?
++                self.original_definition_body(header.range)?
+             }
+             crate::frontend::impl_index::DeclarationBodyOwner::Argument(argument) => {
+-                argument.macro_definition(definition.identity)?.body.clone()
++                DeclarativeBody::Source(
++                    argument.macro_definition(definition.identity)?.body.clone(),
++                )
+             }
+             crate::frontend::impl_index::DeclarationBodyOwner::Generated(output) => {
+-                output.macro_definition(definition.identity)?.body.clone()
++                DeclarativeBody::Source(output.macro_definition(definition.identity)?.body.clone())
+             }
+         };
+         let input = group(
+@@ -2182,7 +2197,7 @@
+         Ok(SourceDeclarativeDemand::Ready(Box::new(
+             SourceDeclarativeRequest {
+                 key,
+-                body: DeclarativeBody::Source(body),
++                body,
+                 input,
+                 site,
+                 origin: Some(origin),
+@@ -2281,14 +2296,13 @@
+                 item.def_key.item_kind == ItemKind::Macro
+                     && item.def_key.fingerprint() == definition.identity
+             })
+-            .map(|item| owner.source.macro_token_group(item.declaration_span, true))
+-            .transpose()?;
++            .map(|item| item.declaration_span);
+         // This fallback admits only a captured source declaration. Generated and
+         // compiler/procedural owners retain their existing separate request paths.
+         let Some(range) = range else {
+             return Ok(SourceDeclarativeDemand::NeedInput(invocation));
+         };
+-        let body = DeclarativeBody::Source(group(&owner.owned_forest()?, range)?);
++        let body = owner.original_definition_body(range)?;
+         let input = group(
+             &self.owned_forest()?,
+             self.source.macro_token_group(producer.range, false)?,
+@@ -2468,19 +2482,16 @@
+         };
+         let mut definition_range = None;
+         let body = match index.body_owner(definition.identity)? {
+-            DeclarationBodyOwner::Argument(argument) => {
+-                argument.macro_definition(definition.identity)?.body.clone()
+-            }
++            DeclarationBodyOwner::Argument(argument) => DeclarativeBody::Source(
++                argument.macro_definition(definition.identity)?.body.clone(),
++            ),
+             DeclarationBodyOwner::Generated(output) => {
+-                output.macro_definition(definition.identity)?.body.clone()
++                DeclarativeBody::Source(output.macro_definition(definition.identity)?.body.clone())
+             }
+             DeclarationBodyOwner::Source(source) => {
+                 let header = source.definition(definition.identity)?;
+                 definition_range = Some(header.range);
+-                group(
+-                    &self.owned_forest()?,
+-                    self.source.macro_token_group(header.range, true)?,
+-                )?
++                self.original_definition_body(header.range)?
+             }
+         };
+         let call = index.argument().macro_call(invocation)?;
+@@ -2538,7 +2549,7 @@
+         Ok(SourceDeclarativeDemand::Ready(Box::new(
+             SourceDeclarativeRequest {
+                 key,
+-                body: DeclarativeBody::Source(body),
++                body,
+                 input: call.input.clone(),
+                 site: call.site,
+                 origin: Some(origin),
+@@ -2711,18 +2722,15 @@
+             HygienicLookup::Selection(MacroSelection::Defined(definition)) => definition,
+         };
+         let body = match index.body_owner(definition.identity)? {
+-            DeclarationBodyOwner::Argument(argument) => {
+-                argument.macro_definition(definition.identity)?.body.clone()
+-            }
++            DeclarationBodyOwner::Argument(argument) => DeclarativeBody::Source(
++                argument.macro_definition(definition.identity)?.body.clone(),
++            ),
+             DeclarationBodyOwner::Generated(output) => {
+-                output.macro_definition(definition.identity)?.body.clone()
++                DeclarativeBody::Source(output.macro_definition(definition.identity)?.body.clone())
+             }
+             DeclarationBodyOwner::Source(source) => {
+                 let header = source.definition(definition.identity)?;
+-                group(
+-                    &self.owned_forest()?,
+-                    self.source.macro_token_group(header.range, true)?,
+-                )?
++                self.original_definition_body(header.range)?
+             }
+         };
+         let output = index.output();
+@@ -2768,7 +2776,7 @@
+         Ok(SourceDeclarativeDemand::Ready(Box::new(
+             SourceDeclarativeRequest {
+                 key,
+-                body: DeclarativeBody::Source(body),
++                body,
+                 input: call.input.clone(),
+                 site: call.site,
+                 origin: None,
+@@ -3177,8 +3185,7 @@
+                 i.def_key.item_kind == ItemKind::Macro
+                     && i.def_key.fingerprint() == definition.identity
+             })
+-            .map(|i| owner.source.macro_token_group(i.declaration_span, true))
+-            .transpose()?;
++            .map(|i| i.declaration_span);
+         if body_range.is_none() && generated.is_none() {
+             return Err(fault("LRR-E-EXPANSION-INPUT", "resolved macro body absent"));
+         }
+@@ -3194,7 +3201,7 @@
+             .0,
+         );
+         let body = match body_range {
+-            Some(range) => DeclarativeBody::Source(group(&owner.owned_forest()?, range)?),
++            Some(range) => owner.original_definition_body(range)?,
+             None => DeclarativeBody::Generated {
+                 catalog: generated.expect("validated generated definition"),
+                 definition: definition.identity,
+@@ -3239,6 +3246,13 @@
+             },
+         )))
+     }
++    fn original_definition_body(
++        &self,
++        selected: SourceRange,
++    ) -> Result<DeclarativeBody, Diagnostic> {
++        original_definition_body(&self.source, selected, &self.owned_forest()?)
++    }
++
+     pub(crate) fn owned_forest(&self) -> Result<TokenForest, Diagnostic> {
+         let selection = self.source.selection();
+         let source = wire::SourceIdentity {
+@@ -3704,7 +3718,7 @@
+                     ));
+                 }
+                 let header = index.definition(selected.identity)?;
+-                let range = source.macro_token_group(header.range, true)?;
++                let range = source.macro_definition_shape_at(header.range)?.body();
+                 if range != header.body {
+                     return Err(fault(
+                         "LRR-E-EXPANSION-INPUT",
+@@ -3717,7 +3731,7 @@
+                 )?;
+                 let (location, name) = source.macro_definition_header_at(header.range)?;
+                 (
+-                    group(&forest, range)?,
++                    original_definition_body(source, header.range, &forest)?,
+                     DefinitionOrigin {
+                         identity: selected.identity,
+                         name,
+@@ -3752,7 +3766,7 @@
+                         )
+                     })?;
+                 (
+-                    capture.body.clone(),
++                    DeclarativeBody::Source(capture.body.clone()),
+                     captured_definition(
+                         capture,
+                         &header.name,
+@@ -3799,7 +3813,7 @@
+                     range: SourceRange::checked(span.start, span.end)?,
+                 };
+                 (
+-                    capture.body.clone(),
++                    DeclarativeBody::Source(capture.body.clone()),
+                     captured_definition(capture, &header.name, location)?,
+                 )
+             }
+@@ -3863,7 +3877,7 @@
+         }
+         let request = Self {
+             key: key.clone(),
+-            body: DeclarativeBody::Source(body),
++            body,
+             input,
+             site: Key(request.site().0),
+             owner: selected.defining_unit,
+@@ -3873,7 +3887,8 @@
+     }
+ 
+     pub fn expand(&self) -> Result<ExpansionRecord, Diagnostic> {
+-        let body = match &self.body {
++        let (body, arguments) = match &self.body {
++            DeclarativeBody::Macro2 { arguments, body } => (body, Some(arguments)),
+             DeclarativeBody::Procedural(_) => {
+                 return Err(fault(
+                     "LRR-E-MACRO-PERMISSION",
+@@ -3899,7 +3914,7 @@
+                     crate::syntax::token_wire::Key(self.site.0),
+                 );
+             }
+-            DeclarativeBody::Source(body) => body,
++            DeclarativeBody::Source(body) => (body, None),
+             DeclarativeBody::Generated {
+                 catalog,
+                 definition,
+@@ -3916,7 +3931,11 @@
+                 );
+             }
+         };
+-        let definition = DeclarativeMacro::new(body.clone()).map_err(adapter)?;
++        let definition = match arguments {
++            None => DeclarativeMacro::new(body.clone()),
++            Some(arguments) => DeclarativeMacro::new_macro2(arguments.clone(), body.clone()),
++        }
++        .map_err(adapter)?;
+         let (result, _) = definition
+             .expand_hygienic_with_limits(
+                 &self.input,
+diff --git a/crates/lrr/src/frontend/source_macro_routes.rs b/crates/lrr/src/frontend/source_macro_routes.rs
+--- a/crates/lrr/src/frontend/source_macro_routes.rs
++++ b/crates/lrr/src/frontend/source_macro_routes.rs
+@@ -339,7 +339,9 @@
+             charge(crate::syntax::imports::visibility_bytes(&import.visibility))?;
+         }
+         for event in &outline.textual_events {
+-            if let TextualEventKind::Definition { source_name, .. } = &event.kind {
++            if let TextualEventKind::Definition { source_name, .. }
++            | TextualEventKind::ModuleDefinition { source_name, .. } = &event.kind
++            {
+                 charge(source_name.len())?;
+                 charge(std::mem::size_of::<DefinitionRoute>())?;
+             }
+@@ -460,16 +462,35 @@
+                 .insert((scope.crate_key, module_names(&scope.module_path, edition)?));
+         }
+         for event in &outline.textual_events {
+-            let TextualEventKind::Definition {
++            let (TextualEventKind::Definition {
+                 identity,
+                 source_name,
+-            } = &event.kind
++            }
++            | TextualEventKind::ModuleDefinition {
++                identity,
++                source_name,
++            }) = &event.kind
+             else {
+                 continue;
+             };
+             let item = items
+                 .get(identity)
+                 .ok_or_else(|| error("export header is missing"))?;
++            if matches!(event.kind, TextualEventKind::ModuleDefinition { .. }) {
++                let mut path = module_names(&item.scope.module_path, edition)?;
++                path.push(MacroName::parse(source_name, edition)?);
++                result
++                    .definitions
++                    .try_reserve(1)
++                    .map_err(|_| error("module macro route allocation"))?;
++                result.definitions.push(DefinitionRoute {
++                    path: MacroPath::new(item.scope.crate_key, path)?,
++                    definition: definition(*identity)
++                        .ok_or_else(|| error("module macro definition missing"))?,
++                    visibility: item.header.visibility.clone(),
++                });
++                continue;
++            }
+             if item
+                 .header
+                 .attributes
+diff --git a/crates/lrr/src/frontend/source_macros.rs b/crates/lrr/src/frontend/source_macros.rs
+--- a/crates/lrr/src/frontend/source_macros.rs
++++ b/crates/lrr/src/frontend/source_macros.rs
+@@ -223,6 +223,10 @@
+                 TextualEventKind::Definition {
+                     identity,
+                     source_name,
++                }
++                | TextualEventKind::ModuleDefinition {
++                    identity,
++                    source_name,
+                 } => {
+                     let item = items
+                         .get(identity)
+@@ -239,12 +243,14 @@
+                         &index.facts,
+                         &index.ancestry,
+                     )?;
+-                    index.scopes.define(
+-                        scope,
+-                        event.at,
+-                        MacroName::parse(source_name, outline.profile.edition)?,
+-                        definition.clone(),
+-                    )?;
++                    if matches!(event.kind, TextualEventKind::Definition { .. }) {
++                        index.scopes.define(
++                            scope,
++                            event.at,
++                            MacroName::parse(source_name, outline.profile.edition)?,
++                            definition.clone(),
++                        )?;
++                    }
+                     index.definitions.insert(*identity, definition);
+                 }
+             }
+diff --git a/crates/lrr/src/source/changes.rs b/crates/lrr/src/source/changes.rs
+--- a/crates/lrr/src/source/changes.rs
++++ b/crates/lrr/src/source/changes.rs
+@@ -920,6 +920,17 @@
+             .ok_or_else(|| publication_fault("captured macro parse absent"))?
+             .parsed
+             .macro_token_group(selected, definition)
++    }
++    pub(crate) fn macro_definition_shape_at(
++        &self,
++        range: crate::syntax::spans::SourceRange,
++    ) -> Result<crate::syntax::macro_calls::MacroDefinitionShape, Diagnostic> {
++        self.state
++            .files
++            .get(&self.location)
++            .ok_or_else(|| publication_fault("captured macro definition parse absent"))?
++            .parsed
++            .macro_definition_shape_at(range)
+     }
+     pub(crate) fn macro_definition_header_at(
+         &self,
+diff --git a/crates/lrr/src/syntax/macro_calls.rs b/crates/lrr/src/syntax/macro_calls.rs
+--- a/crates/lrr/src/syntax/macro_calls.rs
++++ b/crates/lrr/src/syntax/macro_calls.rs
+@@ -75,6 +75,9 @@
+         self.executable
+     }
+ }
++#[path = "macro_definition_capture.rs"]
++mod definition_capture;
++pub(crate) use definition_capture::{MacroDefinitionDialect, MacroDefinitionShape};
+ impl ParsedFile {
+     /// Exact captured definition label, separate from the item's leading trivia.
+     /// This supplies syntax facts only, never a macro or source authority.
+@@ -82,49 +85,8 @@
+         &self,
+         selected: SourceRange,
+     ) -> Result<(SourceRange, String), Diagnostic> {
+-        let root = self.parsed.tree();
+-        if selected.is_empty()
+-            || selected.start > selected.end
+-            || !range(root.syntax().text_range()).contains(selected)
+-        {
+-            return Err(error("selected macro definition range is outside source"));
+-        }
+-        let element = root.syntax().covering_element(TextRange::new(
+-            TextSize::from(selected.start),
+-            TextSize::from(selected.end),
+-        ));
+-        let node = element
+-            .into_node()
+-            .ok_or_else(|| error("selected macro definition is not a node"))?;
+-        let definition = node
+-            .ancestors()
+-            .take(257)
+-            .find_map(|node| {
+-                let definition = ast::MacroRules::cast(node)?;
+-                (range(definition.syntax().text_range()) == selected).then_some(definition)
+-            })
+-            .ok_or_else(|| error("selected range is not an exact macro definition"))?;
+-        if self.errors.iter().any(|diagnostic| {
+-            selected.contains(diagnostic.range) || diagnostic.range.contains(selected)
+-        }) {
+-            return Err(error("selected macro definition has parse errors"));
+-        }
+-        let keyword = definition
+-            .macro_rules_token()
+-            .ok_or_else(|| error("captured macro definition keyword absent"))?;
+-        let name = definition
+-            .name()
+-            .ok_or_else(|| error("captured macro definition name absent"))?;
+-        let label = SourceRange::checked(
+-            u32::from(keyword.text_range().start()),
+-            u32::from(name.syntax().text_range().end()),
+-        )?;
+-        if !selected.contains(label) || label.is_empty() {
+-            return Err(error("macro definition label exceeds its captured owner"));
+-        }
+-        let name = semantic_name(&name.syntax().text().to_string())
+-            .ok_or_else(|| error("invalid captured macro definition name"))?;
+-        Ok((label, name))
++        let shape = self.macro_definition_shape_at(selected)?;
++        Ok((shape.label(), shape.name().into()))
+     }
+ 
+     /// Attach a captured opening delimiter to its actual source macro call.
+diff --git a/crates/lrr/src/syntax/macro_definition_capture.rs b/crates/lrr/src/syntax/macro_definition_capture.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/syntax/macro_definition_capture.rs
+@@ -0,0 +1,126 @@
++//! Exact original declaration groups. AST data only, never source authority.
++use super::*;
++use ra_ap_syntax::ast::HasName;
++#[derive(Debug, Clone, Copy, Eq, PartialEq)]
++pub(crate) enum MacroDefinitionDialect {
++    Rules,
++    Macro2,
++}
++#[derive(Debug, Clone)]
++pub(crate) struct MacroDefinitionShape {
++    dialect: MacroDefinitionDialect,
++    label: SourceRange,
++    name: String,
++    arguments: Option<SourceRange>,
++    body: SourceRange,
++}
++impl MacroDefinitionShape {
++    pub(crate) fn dialect(&self) -> MacroDefinitionDialect {
++        self.dialect
++    }
++    pub(crate) fn label(&self) -> SourceRange {
++        self.label
++    }
++    pub(crate) fn name(&self) -> &str {
++        &self.name
++    }
++    pub(crate) fn arguments(&self) -> Option<SourceRange> {
++        self.arguments
++    }
++    pub(crate) fn body(&self) -> SourceRange {
++        self.body
++    }
++}
++impl ParsedFile {
++    pub(crate) fn macro_definition_shape_at(
++        &self,
++        selected: SourceRange,
++    ) -> Result<MacroDefinitionShape, Diagnostic> {
++        let root = self.parsed.tree();
++        if selected.is_empty()
++            || selected.start > selected.end
++            || !range(root.syntax().text_range()).contains(selected)
++        {
++            return Err(error(
++                "macro declaration selection is outside captured source",
++            ));
++        }
++        let node = root
++            .syntax()
++            .covering_element(TextRange::new(
++                TextSize::from(selected.start),
++                TextSize::from(selected.end),
++            ))
++            .into_node()
++            .ok_or_else(|| error("macro declaration selection is not a node"))?;
++        if self.errors.iter().any(|d| {
++            selected.contains(d.range)
++                || (d.range.start < selected.end && selected.start < d.range.end)
++        }) {
++            return Err(error("macro declaration contains syntax diagnostics"));
++        }
++        for node in node.ancestors().take(257) {
++            if range(node.text_range()) != selected {
++                continue;
++            }
++            let (dialect, keyword, name, args, body) =
++                if let Some(m) = ast::MacroRules::cast(node.clone()) {
++                    (
++                        MacroDefinitionDialect::Rules,
++                        m.macro_rules_token(),
++                        m.name(),
++                        None,
++                        m.token_tree(),
++                    )
++                } else if let Some(m) = ast::MacroDef::cast(node) {
++                    if self.generated_origin.is_some() {
++                        return Err(Diagnostic::new(
++                            "LRR-E-MACRO2-SOURCE",
++                            "generated macro2 source dialect admission is not established".into(),
++                        ));
++                    }
++                    (
++                        MacroDefinitionDialect::Macro2,
++                        m.macro_token(),
++                        m.name(),
++                        m.args(),
++                        m.body(),
++                    )
++                } else {
++                    continue;
++                };
++            let keyword = keyword.ok_or_else(|| error("exact macro keyword absent"))?;
++            let name = name.ok_or_else(|| error("exact macro name absent"))?;
++            let label = SourceRange::checked(
++                u32::from(keyword.text_range().start()),
++                u32::from(name.syntax().text_range().end()),
++            )?;
++            let name = semantic_name(&name.syntax().text().to_string())
++                .ok_or_else(|| error("exact macro name invalid"))?;
++            let arguments = args.map(|a| range(a.syntax().text_range()));
++            let body = range(
++                body.ok_or_else(|| error("exact macro body absent"))?
++                    .syntax()
++                    .text_range(),
++            );
++            if !selected.contains(label)
++                || !selected.contains(body)
++                || arguments.is_some_and(|a| !selected.contains(a) || a.end > body.start)
++            {
++                return Err(error(
++                    "macro argument/body groups differ from declaration owner",
++                ));
++            }
++            return Ok(MacroDefinitionShape {
++                dialect,
++                label,
++                name,
++                arguments,
++                body,
++            });
++        }
++        Err(error(
++            "selection is not an exact original macro declaration",
++        ))
++    }
++}
+diff --git a/crates/lrr/src/syntax/outline.rs b/crates/lrr/src/syntax/outline.rs
+--- a/crates/lrr/src/syntax/outline.rs
++++ b/crates/lrr/src/syntax/outline.rs
+@@ -287,6 +287,11 @@
+ }
+ #[derive(Debug, Clone)]
+ pub enum TextualEventKind {
++    /// Module-scoped macro2 membership; never a textual macro_rules binding.
++    ModuleDefinition {
++        identity: Digest,
++        source_name: String,
++    },
+     Definition {
+         identity: Digest,
+         source_name: String,
+@@ -335,7 +340,7 @@
+     }
+ }
+ impl StableEncode for Outline {
+-    const DOMAIN: &'static str = "lrr/v2/outline";
++    const DOMAIN: &'static str = "lrr/v3/outline";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         e.digest(self.cfg);
+         e.record(&self.profile);
+@@ -369,7 +374,8 @@
+                     event.scope.heap_bytes()
+                         + match &event.kind {
+                             TextualEventKind::OpenScope { child, .. } => child.heap_bytes(),
+-                            TextualEventKind::Definition { source_name, .. } => {
++                            TextualEventKind::Definition { source_name, .. }
++                            | TextualEventKind::ModuleDefinition { source_name, .. } => {
+                                 source_name.capacity()
+                             }
+                             _ => 0,
+@@ -624,227 +630,234 @@
+             let mut executable: Option<SyntaxNode> = None;
+             let mut blocked = false;
+             let mut add_value_constructor = false;
+-            let (kind, namespace, name, index_name) =
+-                match &item {
+-                    ast::Item::Fn(i) => {
+-                        executable = node
+-                            .children()
+-                            .find_map(ast::BlockExpr::cast)
+-                            .map(|b| b.syntax().clone());
+-                        if let Some(body) = &executable {
+-                            let ends: Vec<_> = body
+-                                .descendants_with_tokens()
+-                                .filter_map(|e| e.into_token())
+-                                .filter(|t| !t.kind().is_trivia())
+-                                .collect();
+-                            blocked = !ends.first().is_some_and(|t| t.text() == "{")
+-                                || !ends.last().is_some_and(|t| t.text() == "}");
+-                        }
+-                        (
+-                            ItemKind::Function,
+-                            Namespace::Value,
+-                            i.name().map(|n| n.text().to_string()),
+-                            true,
+-                        )
++            let (kind, namespace, name, index_name) = match &item {
++                ast::Item::Fn(i) => {
++                    executable = node
++                        .children()
++                        .find_map(ast::BlockExpr::cast)
++                        .map(|b| b.syntax().clone());
++                    if let Some(body) = &executable {
++                        let ends: Vec<_> = body
++                            .descendants_with_tokens()
++                            .filter_map(|e| e.into_token())
++                            .filter(|t| !t.kind().is_trivia())
++                            .collect();
++                        blocked = !ends.first().is_some_and(|t| t.text() == "{")
++                            || !ends.last().is_some_and(|t| t.text() == "}");
+                     }
+-                    ast::Item::Const(i) => {
+-                        executable = node
+-                            .children()
+-                            .find_map(ast::Expr::cast)
+-                            .map(|e| e.syntax().clone());
+-                        (
+-                            ItemKind::Constant,
+-                            Namespace::Value,
+-                            i.name().map(|n| n.text().to_string()),
+-                            true,
+-                        )
+-                    }
+-                    ast::Item::Static(i) => {
+-                        executable = node
+-                            .children()
+-                            .find_map(ast::Expr::cast)
+-                            .map(|e| e.syntax().clone());
+-                        (
+-                            ItemKind::Static,
+-                            Namespace::Value,
+-                            i.name().map(|n| n.text().to_string()),
+-                            true,
+-                        )
+-                    }
+-                    ast::Item::Struct(i) => {
+-                        add_value_constructor = node
+-                            .children()
+-                            .any(|n| ast::TupleFieldList::can_cast(n.kind()))
+-                            || i.semicolon_token().is_some()
+-                                && !node
+-                                    .children()
+-                                    .any(|n| ast::RecordFieldList::can_cast(n.kind()));
+-                        (
+-                            ItemKind::Struct,
+-                            Namespace::Type,
+-                            i.name().map(|n| n.text().to_string()),
+-                            true,
+-                        )
+-                    }
+-                    ast::Item::Union(i) => (
+-                        ItemKind::Union,
++                    (
++                        ItemKind::Function,
++                        Namespace::Value,
++                        i.name().map(|n| n.text().to_string()),
++                        true,
++                    )
++                }
++                ast::Item::Const(i) => {
++                    executable = node
++                        .children()
++                        .find_map(ast::Expr::cast)
++                        .map(|e| e.syntax().clone());
++                    (
++                        ItemKind::Constant,
++                        Namespace::Value,
++                        i.name().map(|n| n.text().to_string()),
++                        true,
++                    )
++                }
++                ast::Item::Static(i) => {
++                    executable = node
++                        .children()
++                        .find_map(ast::Expr::cast)
++                        .map(|e| e.syntax().clone());
++                    (
++                        ItemKind::Static,
++                        Namespace::Value,
++                        i.name().map(|n| n.text().to_string()),
++                        true,
++                    )
++                }
++                ast::Item::Struct(i) => {
++                    add_value_constructor = node
++                        .children()
++                        .any(|n| ast::TupleFieldList::can_cast(n.kind()))
++                        || i.semicolon_token().is_some()
++                            && !node
++                                .children()
++                                .any(|n| ast::RecordFieldList::can_cast(n.kind()));
++                    (
++                        ItemKind::Struct,
+                         Namespace::Type,
+                         i.name().map(|n| n.text().to_string()),
+                         true,
+-                    ),
+-                    ast::Item::Enum(i) => (
+-                        ItemKind::Enum,
++                    )
++                }
++                ast::Item::Union(i) => (
++                    ItemKind::Union,
++                    Namespace::Type,
++                    i.name().map(|n| n.text().to_string()),
++                    true,
++                ),
++                ast::Item::Enum(i) => (
++                    ItemKind::Enum,
++                    Namespace::Type,
++                    i.name().map(|n| n.text().to_string()),
++                    true,
++                ),
++                ast::Item::TypeAlias(i) => (
++                    ItemKind::TypeAlias,
++                    Namespace::Type,
++                    i.name().map(|n| n.text().to_string()),
++                    true,
++                ),
++                ast::Item::Module(i) => {
++                    container = i.item_list().map(|n| n.syntax().clone());
++                    (
++                        ItemKind::Module,
+                         Namespace::Type,
+                         i.name().map(|n| n.text().to_string()),
+                         true,
+-                    ),
+-                    ast::Item::TypeAlias(i) => (
+-                        ItemKind::TypeAlias,
++                    )
++                }
++                ast::Item::Trait(i) => {
++                    container = i.assoc_item_list().map(|n| n.syntax().clone());
++                    (
++                        ItemKind::Trait,
+                         Namespace::Type,
+                         i.name().map(|n| n.text().to_string()),
+                         true,
+-                    ),
+-                    ast::Item::Module(i) => {
+-                        container = i.item_list().map(|n| n.syntax().clone());
+-                        (
+-                            ItemKind::Module,
+-                            Namespace::Type,
+-                            i.name().map(|n| n.text().to_string()),
+-                            true,
+-                        )
++                    )
++                }
++                ast::Item::Impl(i) => {
++                    container = i.assoc_item_list().map(|n| n.syntax().clone());
++                    (ItemKind::Impl, Namespace::Type, None, false)
++                }
++                ast::Item::MacroRules(i) => {
++                    container = i.token_tree().map(|n| n.syntax().clone());
++                    (
++                        ItemKind::Macro,
++                        Namespace::Macro,
++                        i.name().map(|n| n.text().to_string()),
++                        true,
++                    )
++                }
++                ast::Item::MacroDef(i) => {
++                    if self.generated_origin.is_some() || scope.owner.is_some() {
++                        return Err(fault(
++                            "LRR-E-MACRO2-SOURCE",
++                            "non-original-module macro2 declaration dialect admission is not established",
++                        ));
+                     }
+-                    ast::Item::Trait(i) => {
+-                        container = i.assoc_item_list().map(|n| n.syntax().clone());
+-                        (
+-                            ItemKind::Trait,
+-                            Namespace::Type,
+-                            i.name().map(|n| n.text().to_string()),
+-                            true,
+-                        )
+-                    }
+-                    ast::Item::Impl(i) => {
+-                        container = i.assoc_item_list().map(|n| n.syntax().clone());
+-                        (ItemKind::Impl, Namespace::Type, None, false)
+-                    }
+-                    ast::Item::MacroRules(i) => {
+-                        container = i.token_tree().map(|n| n.syntax().clone());
+-                        (
+-                            ItemKind::Macro,
+-                            Namespace::Macro,
+-                            i.name().map(|n| n.text().to_string()),
+-                            true,
+-                        )
+-                    }
+-                    ast::Item::MacroDef(i) => {
+-                        container = i
+-                            .syntax()
+-                            .children()
+-                            .filter_map(ast::TokenTree::cast)
+-                            .last()
+-                            .map(|n| n.syntax().clone());
+-                        (
+-                            ItemKind::Macro,
+-                            Namespace::Macro,
+-                            i.name().map(|n| n.text().to_string()),
+-                            true,
+-                        )
+-                    }
+-                    ast::Item::Use(_) => (ItemKind::Import, Namespace::Type, None, false),
+-                    ast::Item::ExternCrate(i) => {
+-                        let anonymous = i
+-                            .rename()
+-                            .is_some_and(|rename| rename.underscore_token().is_some());
+-                        (
+-                            ItemKind::Module,
+-                            Namespace::Type,
+-                            if anonymous {
+-                                None
+-                            } else {
+-                                i.rename()
+-                                    .and_then(|r| r.name())
+-                                    .map(|n| n.text().to_string())
+-                                    .or_else(|| i.name_ref().map(|n| n.text().to_string()))
+-                            },
+-                            !anonymous,
+-                        )
+-                    }
+-                    ast::Item::ExternBlock(i) => {
+-                        container = i.extern_item_list().map(|n| n.syntax().clone());
+-                        (ItemKind::ExternBlock, Namespace::Type, None, false)
+-                    }
+-                    ast::Item::MacroCall(_) | ast::Item::AsmExpr(_) => {
+-                        // Associated invocation slots belong to the retained
+-                        // declaration scan, never the module-item publisher.
+-                        if scope.owner.is_some() {
+-                            continue;
+-                        }
+-                        let ts = tokens(node, None);
+-                        let mut e = StableEncoder::new("lrr/v2/item-scope-blocker");
+-                        e.sequence(&ts, |e, t| e.record(t));
+-                        let syntax = e.finish();
+-                        let mut invocation = StableEncoder::new("lrr/v2/source-item-producer");
+-                        invocation.record(&scope);
+-                        invocation.digest(syntax);
+-                        // The local occurrence ordinal disambiguates repeated identical
+-                        // invocations without making a byte offset their identity.
+-                        invocation.u64(u64::try_from(outline.textual_events.len()).map_err(
+-                            |_| fault("LRR-E-SOURCE-LIMIT", "producer ordinal overflow"),
+-                        )?);
+-                        let identity = invocation.finish();
+-                        let transforming = attributes.iter().any(|attribute| {
+-                            matches!(
+-                                attribute.class,
+-                                AttributeClass::TransformUnsupported | AttributeClass::Derive
+-                            )
+-                        });
+-                        let attribute_input = if transforming {
+-                            let mut e = StableEncoder::new("lrr/v2/source-item-attribute-producer");
+-                            e.record(&scope);
+-                            e.digest(identity);
+-                            Some(e.finish())
++                    container = i
++                        .syntax()
++                        .children()
++                        .filter_map(ast::TokenTree::cast)
++                        .last()
++                        .map(|n| n.syntax().clone());
++                    (
++                        ItemKind::Macro,
++                        Namespace::Macro,
++                        i.name().map(|n| n.text().to_string()),
++                        true,
++                    )
++                }
++                ast::Item::Use(_) => (ItemKind::Import, Namespace::Type, None, false),
++                ast::Item::ExternCrate(i) => {
++                    let anonymous = i
++                        .rename()
++                        .is_some_and(|rename| rename.underscore_token().is_some());
++                    (
++                        ItemKind::Module,
++                        Namespace::Type,
++                        if anonymous {
++                            None
+                         } else {
+-                            None
+-                        };
+-                        if matches!(item, ast::Item::MacroCall(_)) {
+-                            outline.item_invocations.try_reserve(1).map_err(|_| {
+-                                fault("LRR-E-SOURCE-LIMIT", "item invocation allocation failed")
+-                            })?;
+-                            outline.item_invocations.push(ItemInvocation {
+-                                scope: scope.clone(),
+-                                range: range(node.text_range()),
+-                                item_input: identity,
+-                                frontier: syntax,
+-                                attribute_input,
+-                            });
+-                        }
+-                        outline.textual_events.push(TextualEvent {
+-                            scope: scope.clone(),
+-                            at: u64::from(range(node.text_range()).start),
+-                            kind: TextualEventKind::Producer {
+-                                identity: attribute_input.unwrap_or(identity),
+-                                kind: if attribute_input.is_some() {
+-                                    ProducerKind::Attribute
+-                                } else {
+-                                    ProducerKind::ItemMacro
+-                                },
+-                            },
+-                        });
+-                        outline
+-                            .scopes
+-                            .entry(scope)
+-                            .or_default()
+-                            .blockers
+-                            .push(ScopeBlocker {
+-                                kind: if attribute_input.is_some() {
+-                                    BlockerKind::Attribute
+-                                } else {
+-                                    BlockerKind::ItemMacro
+-                                },
+-                                syntax,
+-                            });
++                            i.rename()
++                                .and_then(|r| r.name())
++                                .map(|n| n.text().to_string())
++                                .or_else(|| i.name_ref().map(|n| n.text().to_string()))
++                        },
++                        !anonymous,
++                    )
++                }
++                ast::Item::ExternBlock(i) => {
++                    container = i.extern_item_list().map(|n| n.syntax().clone());
++                    (ItemKind::ExternBlock, Namespace::Type, None, false)
++                }
++                ast::Item::MacroCall(_) | ast::Item::AsmExpr(_) => {
++                    // Associated invocation slots belong to the retained
++                    // declaration scan, never the module-item publisher.
++                    if scope.owner.is_some() {
+                         continue;
+                     }
+-                };
++                    let ts = tokens(node, None);
++                    let mut e = StableEncoder::new("lrr/v2/item-scope-blocker");
++                    e.sequence(&ts, |e, t| e.record(t));
++                    let syntax = e.finish();
++                    let mut invocation = StableEncoder::new("lrr/v2/source-item-producer");
++                    invocation.record(&scope);
++                    invocation.digest(syntax);
++                    // The local occurrence ordinal disambiguates repeated identical
++                    // invocations without making a byte offset their identity.
++                    invocation.u64(
++                        u64::try_from(outline.textual_events.len()).map_err(|_| {
++                            fault("LRR-E-SOURCE-LIMIT", "producer ordinal overflow")
++                        })?,
++                    );
++                    let identity = invocation.finish();
++                    let transforming = attributes.iter().any(|attribute| {
++                        matches!(
++                            attribute.class,
++                            AttributeClass::TransformUnsupported | AttributeClass::Derive
++                        )
++                    });
++                    let attribute_input = if transforming {
++                        let mut e = StableEncoder::new("lrr/v2/source-item-attribute-producer");
++                        e.record(&scope);
++                        e.digest(identity);
++                        Some(e.finish())
++                    } else {
++                        None
++                    };
++                    if matches!(item, ast::Item::MacroCall(_)) {
++                        outline.item_invocations.try_reserve(1).map_err(|_| {
++                            fault("LRR-E-SOURCE-LIMIT", "item invocation allocation failed")
++                        })?;
++                        outline.item_invocations.push(ItemInvocation {
++                            scope: scope.clone(),
++                            range: range(node.text_range()),
++                            item_input: identity,
++                            frontier: syntax,
++                            attribute_input,
++                        });
++                    }
++                    outline.textual_events.push(TextualEvent {
++                        scope: scope.clone(),
++                        at: u64::from(range(node.text_range()).start),
++                        kind: TextualEventKind::Producer {
++                            identity: attribute_input.unwrap_or(identity),
++                            kind: if attribute_input.is_some() {
++                                ProducerKind::Attribute
++                            } else {
++                                ProducerKind::ItemMacro
++                            },
++                        },
++                    });
++                    outline
++                        .scopes
++                        .entry(scope)
++                        .or_default()
++                        .blockers
++                        .push(ScopeBlocker {
++                            kind: if attribute_input.is_some() {
++                                BlockerKind::Attribute
++                            } else {
++                                BlockerKind::ItemMacro
++                            },
++                            syntax,
++                        });
++                    continue;
++                }
++            };
+             let name = match name {
+                 Some(n) => super::ast_adapter::semantic_name(&n).ok_or_else(|| {
+                     fault(
+@@ -1037,6 +1050,22 @@
+                             .to_string(),
+                     },
+                 });
++            } else if let ast::Item::MacroDef(macro_definition) = &item {
++                outline.textual_events.push(TextualEvent {
++                    scope: scope.clone(),
++                    at: u64::from(span.start),
++                    kind: TextualEventKind::ModuleDefinition {
++                        identity: definition,
++                        source_name: macro_definition
++                            .name()
++                            .ok_or_else(|| {
++                                fault("LRR-E-PARSE-BLOCKS-ENTRY", "module macro name missing")
++                            })?
++                            .syntax()
++                            .text()
++                            .to_string(),
++                    },
++                });
+             }
+ 
+             let header_span = SourceRange {
+diff --git a/crates/lrr-expand-adapter/src/declarative.rs b/crates/lrr-expand-adapter/src/declarative.rs
+--- a/crates/lrr-expand-adapter/src/declarative.rs
++++ b/crates/lrr-expand-adapter/src/declarative.rs
+@@ -41,6 +41,7 @@
+     parsed: mbe::DeclarativeMacro,
+     parse_error: Option<MacroFailure>,
+     spans: SpanStore,
++    transparency: crate::token_wire::Transparency,
+ }
+ #[derive(Debug, Clone, Copy, Default, Serialize)]
+ pub struct TranscriptionStats {
+@@ -76,6 +77,53 @@
+             parsed,
+             parse_error,
+             spans,
++            transparency: crate::token_wire::Transparency::SemiTransparent,
++        })
++    }
++    /// Component parser for actual macro2 argument/body groups. This grants no
++    /// source or runtime authority; original source producers select both groups.
++    pub fn new_macro2(
++        arguments: Option<TokenForest>,
++        definition: TokenForest,
++    ) -> Result<Self, AdapterError> {
++        definition.validate()?;
++        let body_bytes = definition.encoded_len()?;
++        let argument_bytes = arguments
++            .as_ref()
++            .map(TokenForest::encoded_len)
++            .transpose()?
++            .unwrap_or(0);
++        body_bytes
++            .checked_add(argument_bytes)
++            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
++            .ok_or_else(|| AdapterError {
++                code: "LRR-E-MACRO-OUTPUT",
++                message: "macro2 definition groups exceed metadata limit".into(),
++            })?;
++        let mut spans = SpanStore::default();
++        let arguments = arguments
++            .as_ref()
++            .map(|args| {
++                args.validate()?;
++                spans.import(args)
++            })
++            .transpose()?;
++        let tree = spans.import(&definition)?;
++        let parsed = mbe::DeclarativeMacro::parse_macro2(arguments.as_ref(), &tree, |context| {
++            context.edition(spans.database())
++        });
++        let parse_span = spans.key(tree.top_subtree().delimiter.open)?;
++        let parse_error = parsed.err().map(|error| MacroFailure {
++            kind: FailureKind::DefinitionSyntax,
++            span: Some(parse_span),
++            message: error.to_string(),
++        });
++        Ok(Self {
++            definition,
++            parsed,
++            parse_error,
++            spans,
++            transparency: crate::token_wire::Transparency::Opaque,
+         })
+     }
+     pub fn definition(&self) -> &TokenForest {
+@@ -145,7 +193,7 @@
+         let mut spans = self.spans.clone();
+         let input = spans.import(input)?;
+         let marked = site
+-            .map(|site| spans.prepare_marks(&self.definition, call_site, site))
++            .map(|site| spans.prepare_marks(&self.definition, call_site, site, self.transparency))
+             .transpose()?;
+         let call_site = spans.span(call_site)?;
+         let wire_error = std::cell::RefCell::new(None);
+diff --git a/crates/lrr-expand-adapter/src/span_store.rs b/crates/lrr-expand-adapter/src/span_store.rs
+--- a/crates/lrr-expand-adapter/src/span_store.rs
++++ b/crates/lrr-expand-adapter/src/span_store.rs
+@@ -161,6 +161,7 @@
+         definition: &TokenForest,
+         call_site: Key,
+         site: DeclarativeSite,
++        transparency: crate::token_wire::Transparency,
+     ) -> Result<HashMap<Span, Span>, AdapterError> {
+         let call_context = self
+             .records
+@@ -178,7 +179,7 @@
+                 defining_unit: site.defining_unit,
+                 definition_edition: site.definition_edition,
+                 call_site: call_context,
+-                transparency: crate::token_wire::Transparency::SemiTransparent,
++                transparency,
+             })?;
+             marked_contexts.insert(record.context, context);
+         }
+diff --git a/crates/lrr/src/expand/source_declarative/macro2_tests.rs b/crates/lrr/src/expand/source_declarative/macro2_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/expand/source_declarative/macro2_tests.rs
+@@ -0,0 +1,653 @@
++//! Actual original declaration and invocation components; no full-fixture pass.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    db::key::OutlineKey,
++    frontend::{impl_index::DeclarationMacroIndex, source_macro_routes::SourceMacroRoutes},
++    source::{
++        changes::{PreparedSourceInputs, SourceSelection, SourceSelectionOutcome, SourceUnitInput},
++        dependencies::SourceDependency,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::{
++        declaration_scan::DeclarationScanLimits,
++        parse::{ParseKey, ParsedFile},
++    },
++};
++use std::sync::Arc;
++const REEXPORT: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/imports/reexport-from-multiple-namespaces.rs"
++);
++const PATTERN: &str =
++    include_str!("../../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/issue-44127.rs");
++const MODERN: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/dollar-crate-modern.rs"
++);
++const AUX: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/auxiliary/intercrate.rs"
++);
++const RULES: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/lint/unused/unused-macro-rules-decl.rs"
++);
++const NO_ARGS: &str =
++    include_str!("../../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/issue-63102.rs");
++
++fn source(text: &str, path: &str, unit: Digest, edition: u16) -> SourceUnitInput {
++    SourceUnitInput {
++        path: SourcePath::new(path).unwrap(),
++        crate_key: unit,
++        module_path: vec![],
++        profile: ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        cfg: CfgSet::guest_default(),
++        blob: SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++    }
++}
++fn providers(units: Vec<SourceUnitInput>, edges: Vec<SourceDependency>) -> Vec<SourceDeclarative> {
++    let selections: Vec<_> = units
++        .iter()
++        .map(|unit| SourceSelection {
++            path: unit.path.clone(),
++            outline: OutlineKey {
++                parse: ParseKey {
++                    content: unit.blob.content(),
++                    profile: unit.profile.clone(),
++                },
++                crate_key: unit.crate_key,
++                module_path: unit.module_path.clone(),
++                cfg: unit.cfg.fingerprint(),
++            },
++        })
++        .collect();
++    let inputs =
++        PreparedSourceInputs::refresh_with_dependencies(None, units, Default::default(), edges)
++            .unwrap();
++    selections
++        .iter()
++        .map(|selection| {
++            let SourceSelectionOutcome::Selected(view) = inputs.select(selection).unwrap() else {
++                panic!("actual original source absent")
++            };
++            SourceDeclarative::new(view).unwrap()
++        })
++        .collect()
++}
++fn graph(providers: &[SourceDeclarative]) -> crate::frontend::macro_names::MacroNamespaces {
++    let routes = providers
++        .iter()
++        .flat_map(|p| p.routes_in(providers).unwrap())
++        .collect::<Vec<_>>();
++    let mut names = SourceMacroRoutes::discovery_graph(&routes).unwrap();
++    names.resolve_imports().unwrap();
++    names
++}
++fn declaration_index(provider: &SourceDeclarative) -> Arc<DeclarationMacroIndex> {
++    let source = &provider.source;
++    let parsed = ParsedFile::parse(
++        source.captured_macro_blob().unwrap(),
++        source.selection().outline.parse.profile.clone(),
++    )
++    .unwrap();
++    Arc::new(
++        DeclarationMacroIndex::new(Arc::new(
++            parsed
++                .scan_declarations(
++                    source.selection().path.clone(),
++                    source.outline().root_scope.clone(),
++                    &CfgSet::guest_default(),
++                    DeclarationScanLimits::default(),
++                )
++                .unwrap(),
++        ))
++        .unwrap(),
++    )
++}
++fn body_request(
++    providers: &[SourceDeclarative],
++    owner: usize,
++    path_tail: &str,
++) -> SourceDeclarativeRequest {
++    let provider = &providers[owner];
++    let index = declaration_index(provider);
++    let producer = index
++        .scan()
++        .producers()
++        .iter()
++        .find(|p| p.path.last().is_some_and(|s| s.text == path_tail))
++        .unwrap();
++    let SourceDeclarativeDemand::Ready(request) = provider
++        .declaration_import_request(
++            &index,
++            producer.identity,
++            &graph(providers),
++            providers,
++            Digest::of_bytes(b"macro2 actual source compile environment"),
++            Digest::of_bytes(b"macro2 source producer acceptance"),
++        )
++        .unwrap()
++    else {
++        panic!("actual original module definition not selected")
++    };
++    *request
++}
++fn module_request(
++    providers: &[SourceDeclarative],
++    owner: usize,
++    path_tail: &str,
++) -> SourceDeclarativeRequest {
++    let provider = &providers[owner];
++    let call = provider.source.outline().item_invocations.iter().find(|c| {
++        provider.source.macro_call_at(c.range).unwrap().segments().last().is_some_and(|s| matches!(s, crate::syntax::imports::ImportSegment::Name(n) if n == path_tail))
++    }).unwrap();
++    let SourceDeclarativeDemand::Ready(request) = provider
++        .demand_for_discovery(
++            call.item_input,
++            Digest::of_bytes(b"macro2 actual source compile environment"),
++            Digest::of_bytes(b"macro2 source producer acceptance"),
++            &graph(providers),
++            providers,
++        )
++        .unwrap()
++    else {
++        panic!("actual original module invocation not selected")
++    };
++    *request
++}
++fn token_span<'a>(forest: &'a TokenForest, name: &str) -> &'a wire::SpanRecord {
++    let mut stack: Vec<_> = forest.roots().iter().collect();
++    while let Some(token) = stack.pop() {
++        let key = match token {
++            TokenTree::Group { children, .. } => {
++                stack.extend(children);
++                continue;
++            }
++            TokenTree::Ident { text, span, .. } if text == name => *span,
++            TokenTree::Literal {
++                token_text, span, ..
++            } if token_text == name => *span,
++            _ => continue,
++        };
++        return forest.spans().iter().find(|s| s.key() == key).unwrap();
++    }
++    panic!("missing actual output token {name}")
++}
++fn marked_context<'a>(forest: &'a TokenForest, name: &str) -> &'a wire::ContextRecord {
++    let span = token_span(forest, name);
++    forest
++        .contexts()
++        .iter()
++        .find(|c| c.key() == span.context)
++        .unwrap()
++}
++fn adapter_for(request: &SourceDeclarativeRequest) -> DeclarativeMacro {
++    let DeclarativeBody::Macro2 { arguments, body } = &request.body else {
++        panic!("actual macro2 dialect absent")
++    };
++    DeclarativeMacro::new_macro2(arguments.clone(), body.clone()).unwrap()
++}
++fn site(request: &SourceDeclarativeRequest) -> DeclarativeSite {
++    DeclarativeSite {
++        expansion: Key(request.key.fingerprint().0),
++        defining_unit: Key(request.owner.0),
++        definition_edition: edition(request.key.definition_edition).unwrap(),
++    }
++}
++
++#[test]
++fn unchanged_reexport_main_call_uses_exact_macro_member_all_editions() {
++    for owning in [2015, 2018, 2021, 2024] {
++        let p = providers(
++            vec![source(REEXPORT, "reexport.rs", Digest([71; 32]), owning)],
++            vec![],
++        );
++        let request = body_request(&p, 0, "A");
++        let selected = p[0]
++            .source
++            .outline()
++            .items
++            .iter()
++            .find(|i| i.def_key.item_kind == ItemKind::Macro && i.def_key.declared_name == "A")
++            .unwrap();
++        assert_eq!(
++            request.key.macro_identity,
++            MacroIdentity::Declaration {
++                definition: selected.def_key.fingerprint()
++            }
++        );
++        assert_eq!(request.key.call_edition, owning);
++        assert_eq!(request.key.definition_edition, owning);
++        let shape = p[0]
++            .source
++            .macro_definition_shape_at(selected.declaration_span)
++            .unwrap();
++        assert_eq!(
++            shape.dialect(),
++            crate::syntax::macro_calls::MacroDefinitionDialect::Macro2
++        );
++        let DeclarativeBody::Macro2 {
++            arguments: Some(arguments),
++            body,
++        } = &request.body
++        else {
++            panic!("exact original simple declaration groups absent")
++        };
++        assert_eq!(
++            arguments.encode().unwrap(),
++            group(&p[0].owned_forest().unwrap(), shape.arguments().unwrap())
++                .unwrap()
++                .encode()
++                .unwrap()
++        );
++        assert_eq!(
++            body.encode().unwrap(),
++            group(&p[0].owned_forest().unwrap(), shape.body())
++                .unwrap()
++                .encode()
++                .unwrap()
++        );
++        let output = request.expand().unwrap();
++        assert_eq!(output.key(), request.key());
++        assert_eq!(output.token_count(), 0);
++        assert_eq!(
++            p[0].source
++                .outline()
++                .items
++                .iter()
++                .filter(|i| i.def_key.declared_name == "A")
++                .count(),
++            3
++        );
++    }
++}
++#[test]
++fn unchanged_pattern_macro_retains_opaque_definition_and_captured_call_spans_all_editions() {
++    for owning in [2015, 2018, 2021, 2024] {
++        let p = providers(
++            vec![source(PATTERN, "issue-44127.rs", Digest([72; 32]), owning)],
++            vec![],
++        );
++        let request = body_request(&p, 0, "pattern");
++        assert_eq!(request.key.grammar, GrammarSlot::Pattern);
++        let original = token_span(&request.input, "3").clone();
++        let output = request.expand().unwrap().tokens().unwrap();
++        assert_eq!(token_span(&output, "3"), &original);
++        for template in ["Foo", "bar"] {
++            let context = marked_context(&output, template);
++            assert_eq!(context.transparency, wire::Transparency::Opaque);
++            assert_eq!(context.expansion, Some(Key(request.key.fingerprint().0)));
++            assert_eq!(context.defining_unit, Key(request.owner.0));
++            assert_eq!(context.edition, edition(owning).unwrap());
++            assert_eq!(
++                token_span(&output, template).source.content,
++                Key(p[0].source.selection().outline.parse.content.0)
++            );
++        }
++    }
++}
++#[test]
++fn unchanged_cross_crate_dollar_crate_retains_actual_provider_and_owning_editions() {
++    for (caller, owner) in [(2015, 2024), (2018, 2021), (2021, 2018), (2024, 2015)] {
++        let root = Digest([73; 32]);
++        let aux = Digest([74; 32]);
++        let p = providers(
++            vec![
++                source(MODERN, "dollar-crate-modern.rs", root, caller),
++                source(AUX, "intercrate.rs", aux, owner),
++            ],
++            vec![SourceDependency {
++                consumer: root,
++                alias: "intercrate".into(),
++                provider: aux,
++            }],
++        );
++        let request = module_request(&p, 0, "uses_dollar_crate_modern");
++        assert_eq!(request.owner, aux);
++        assert_eq!(request.key.call_edition, caller);
++        assert_eq!(request.key.definition_edition, owner);
++        let output = request.expand().unwrap().tokens().unwrap();
++        for name in ["$crate", "SomeType"] {
++            let context = marked_context(&output, name);
++            assert_eq!(context.transparency, wire::Transparency::Opaque);
++            assert_eq!(context.defining_unit, Key(aux.0));
++            assert_eq!(context.edition, edition(owner).unwrap());
++            assert_eq!(token_span(&output, name).source.unit, Key(aux.0));
++        }
++    }
++}
++#[test]
++fn unchanged_rules_syntax_macro_uses_actual_rule_body_without_argument_group() {
++    for owning in [2015, 2018, 2021, 2024] {
++        let p = providers(
++            vec![source(
++                RULES,
++                "unused-macro-rules-decl.rs",
++                Digest([75; 32]),
++                owning,
++            )],
++            vec![],
++        );
++        let request = body_request(&p, 0, "num");
++        assert!(matches!(
++            request.body,
++            DeclarativeBody::Macro2 {
++                arguments: None,
++                ..
++            }
++        ));
++        let output = request.expand().unwrap().tokens().unwrap();
++        assert_eq!(token_span(&output, "1").edition, edition(owning).unwrap());
++        let p = providers(
++            vec![source(NO_ARGS, "issue-63102.rs", Digest([76; 32]), owning)],
++            vec![],
++        );
++        let item = p[0]
++            .source
++            .outline()
++            .items
++            .iter()
++            .find(|i| i.def_key.item_kind == ItemKind::Macro)
++            .unwrap();
++        let shape = p[0]
++            .source
++            .macro_definition_shape_at(item.declaration_span)
++            .unwrap();
++        assert_eq!(shape.arguments(), None);
++        assert!(matches!(
++            p[0].original_definition_body(item.declaration_span)
++                .unwrap(),
++            DeclarativeBody::Macro2 {
++                arguments: None,
++                ..
++            }
++        ));
++    }
++}
++#[test]
++fn macro2_source_request_exact_byte_limit_refuses_before_materialization() {
++    let p = providers(
++        vec![source(PATTERN, "issue-44127.rs", Digest([77; 32]), 2024)],
++        vec![],
++    );
++    let request = body_request(&p, 0, "pattern");
++    let parser = adapter_for(&request);
++    let (result, stats) = parser
++        .expand_hygienic_with_limits(&request.input, request.site, site(&request), 100, 32768)
++        .unwrap();
++    let bytes = result.unwrap().tokens.encoded_len().unwrap();
++    assert_eq!(stats.materializations, 1);
++    assert_eq!(stats.admitted_bytes, bytes);
++    let (result, stats) = parser
++        .expand_hygienic_with_limits(&request.input, request.site, site(&request), 100, bytes - 1)
++        .unwrap();
++    assert_eq!(
++        result.err().unwrap().kind,
++        lrr_expand_adapter::declarative::FailureKind::Limit
++    );
++    assert_eq!(stats.materializations, 0);
++    assert_eq!(
++        parser
++            .expand_hygienic_with_limits(&request.input, request.site, site(&request), 100, bytes)
++            .unwrap()
++            .1
++            .materializations,
++        1
++    );
++}
++#[test]
++fn macro2_exact_range_and_changed_arguments_body_edition_are_not_interchangeable() {
++    let unit = Digest([78; 32]);
++    let before = providers(
++        vec![source(
++            "pub macro m($v:literal){$v}fn main(){m!(1);}",
++            "owner.rs",
++            unit,
++            2024,
++        )],
++        vec![],
++    );
++    let request = body_request(&before, 0, "m");
++    let item = before[0]
++        .source
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.item_kind == ItemKind::Macro)
++        .unwrap();
++    assert!(
++        before[0]
++            .original_definition_body(SourceRange {
++                start: item.declaration_span.start + 1,
++                end: item.declaration_span.end
++            })
++            .is_err()
++    );
++    assert!(
++        before[0]
++            .original_definition_body(SourceRange {
++                start: item.declaration_span.end,
++                end: item.declaration_span.start
++            })
++            .is_err()
++    );
++    for (text, owning) in [
++        ("pub macro m($v:literal){2}fn main(){m!(1);}", 2024),
++        ("pub macro m($v:expr){$v}fn main(){m!(1);}", 2024),
++        ("pub macro m($v:literal){$v}fn main(){m!(1);}", 2021),
++    ] {
++        let after = providers(vec![source(text, "owner.rs", unit, owning)], vec![]);
++        let changed = body_request(&after, 0, "m");
++        assert_ne!(request.key.fingerprint(), changed.key.fingerprint());
++        assert_ne!(
++            request.input.encode().unwrap(),
++            changed.input.encode().unwrap()
++        );
++    }
++}
++#[test]
++fn original_module_macro2_forward_binding_does_not_become_textual_macro_rules() {
++    let p = providers(
++        vec![source(
++            "fn main(){m!();}pub macro m(){1}",
++            "forward.rs",
++            Digest([79; 32]),
++            2024,
++        )],
++        vec![],
++    );
++    let index = declaration_index(&p[0]);
++    let producer = index
++        .scan()
++        .producers()
++        .iter()
++        .find(|p| p.path[0].text == "m")
++        .unwrap();
++    assert!(matches!(
++        index.lookup(producer.identity).unwrap(),
++        HygienicLookup::Selection(crate::frontend::macro_origins::MacroSelection::Absent)
++    ));
++    let request = body_request(&p, 0, "m");
++    assert!(matches!(request.body, DeclarativeBody::Macro2 { .. }));
++    assert_eq!(
++        token_span(&request.expand().unwrap().tokens().unwrap(), "1")
++            .source
++            .unit,
++        Key([79; 32])
++    );
++}
++#[test]
++fn original_wrong_definition_owner_cannot_use_private_source_groups() {
++    use crate::frontend::macro_names::{MacroNamespaces, MacroPath};
++    let p = providers(
++        vec![source(
++            "pub macro m(){1}fn main(){m!();}",
++            "owner.rs",
++            Digest([80; 32]),
++            2024,
++        )],
++        vec![],
++    );
++    let index = declaration_index(&p[0]);
++    let producer = index
++        .scan()
++        .producers()
++        .iter()
++        .find(|p| p.path[0].text == "m")
++        .unwrap();
++    let item = p[0]
++        .source
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.item_kind == ItemKind::Macro)
++        .unwrap();
++    let mut bad = MacroNamespaces::default();
++    bad.define(
++        MacroPath::new(
++            Digest([80; 32]),
++            vec![crate::expand::scopes::MacroName::parse("m", 2024).unwrap()],
++        )
++        .unwrap(),
++        crate::expand::scopes::MacroDefinition {
++            identity: item.def_key.fingerprint(),
++            defining_unit: Digest([81; 32]),
++            definition_edition: 2024,
++        },
++    )
++    .unwrap();
++    let result = p[0].declaration_import_request(
++        &index,
++        producer.identity,
++        &bad,
++        &p,
++        Digest([82; 32]),
++        Digest([83; 32]),
++    );
++    assert!(matches!(result,Err(ref d) if d.code=="LRR-E-EXPANSION-INPUT"));
++}
++
++#[test]
++fn genuine_original_macro2_output_cannot_publish_generated_macro2_as_rules() {
++    let root = Digest([84; 32]);
++    let aux = Digest([85; 32]);
++    let p = providers(
++        vec![
++            source(MODERN, "dollar-crate-modern.rs", root, 2024),
++            source(AUX, "intercrate.rs", aux, 2018),
++        ],
++        vec![SourceDependency {
++            consumer: root,
++            alias: "intercrate".into(),
++            provider: aux,
++        }],
++    );
++    let request = module_request(&p, 0, "define_uses_dollar_crate_modern_nested");
++    let output = request.expand().unwrap();
++    let items =
++        crate::expand::generated_items::GeneratedItems::admit(request.key(), Arc::new(output), 1)
++            .unwrap();
++    let parsed = ParsedFile::from_generated_items(&items).unwrap();
++    let refusal = parsed
++        .outline(root, vec![], &CfgSet::guest_default())
++        .unwrap_err();
++    assert_eq!(refusal.code, "LRR-E-MACRO2-SOURCE");
++    assert!(refusal.message.contains("non-original-module"));
++}
++
++#[test]
++fn private_module_macro2_is_not_a_public_definition_route() {
++    let p = providers(
++        vec![source(
++            "mod hidden{macro m(){1}}fn main(){hidden::m!();}",
++            "private.rs",
++            Digest([86; 32]),
++            2024,
++        )],
++        vec![],
++    );
++    let index = declaration_index(&p[0]);
++    let producer = index
++        .scan()
++        .producers()
++        .iter()
++        .find(|p| p.path.last().is_some_and(|p| p.text == "m"))
++        .unwrap();
++    let result = p[0].declaration_import_request(
++        &index,
++        producer.identity,
++        &graph(&p),
++        &p,
++        Digest([87; 32]),
++        Digest([88; 32]),
++    );
++    assert!(matches!(result,Err(ref d) if d.code=="LRR-E-MACRO-INACCESSIBLE"));
++}
++
++#[test]
++fn original_cfg_disabled_macro2_does_not_mint_a_module_definition() {
++    let p = providers(
++        vec![source(
++            "#[cfg(any())]pub macro m(){1}fn main(){m!();}",
++            "inactive.rs",
++            Digest([89; 32]),
++            2024,
++        )],
++        vec![],
++    );
++    assert!(
++        p[0].source
++            .outline()
++            .items
++            .iter()
++            .all(|i| i.def_key.item_kind != ItemKind::Macro)
++    );
++    let index = declaration_index(&p[0]);
++    let producer = index
++        .scan()
++        .producers()
++        .iter()
++        .find(|p| p.path[0].text == "m")
++        .unwrap();
++    let result = p[0]
++        .declaration_import_request(
++            &index,
++            producer.identity,
++            &graph(&p),
++            &p,
++            Digest([90; 32]),
++            Digest([91; 32]),
++        )
++        .unwrap();
++    assert!(matches!(result,SourceDeclarativeDemand::NeedInput(id) if id==producer.identity));
++    assert_eq!(
++        <crate::syntax::outline::Outline as StableEncode>::DOMAIN,
++        "lrr/v3/outline"
++    );
++}
++
++#[test]
++fn exact_macro2_invalid_matcher_is_cached_definition_failure_before_transcription() {
++    let p = providers(
++        vec![source(
++            "pub macro m($v:unknown_fragment){$v}fn main(){m!(1);}",
++            "invalid.rs",
++            Digest([92; 32]),
++            2024,
++        )],
++        vec![],
++    );
++    let request = body_request(&p, 0, "m");
++    let parser = adapter_for(&request);
++    for _ in 0..2 {
++        let (result, stats) = parser
++            .expand_hygienic_with_limits(&request.input, request.site, site(&request), 100, 32768)
++            .unwrap();
++        assert_eq!(
++            result.err().unwrap().kind,
++            lrr_expand_adapter::declarative::FailureKind::DefinitionSyntax
++        );
++        assert_eq!(stats.preflight_calls, 0);
++        assert_eq!(stats.materializations, 0);
++    }
++}
+diff --git a/crates/lrr/src/expand/source_declarative.rs b/crates/lrr/src/expand/source_declarative.rs
+--- a/crates/lrr/src/expand/source_declarative.rs
++++ b/crates/lrr/src/expand/source_declarative.rs
+@@ -4232,3 +4232,7 @@
+         }
+     }
+ }
++
++#[cfg(test)]
++#[path = "source_declarative/macro2_tests.rs"]
++mod macro2_tests;
+diff --git a/fixtures/upstream/rustc-checkout/LICENSE-APACHE b/fixtures/upstream/rustc-checkout/LICENSE-APACHE
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/LICENSE-APACHE
+@@ -0,0 +1,176 @@
++                              Apache License
++                        Version 2.0, January 2004
++                     http://www.apache.org/licenses/
++
++TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
++
++1. Definitions.
++
++   "License" shall mean the terms and conditions for use, reproduction,
++   and distribution as defined by Sections 1 through 9 of this document.
++
++   "Licensor" shall mean the copyright owner or entity authorized by
++   the copyright owner that is granting the License.
++
++   "Legal Entity" shall mean the union of the acting entity and all
++   other entities that control, are controlled by, or are under common
++   control with that entity. For the purposes of this definition,
++   "control" means (i) the power, direct or indirect, to cause the
++   direction or management of such entity, whether by contract or
++   otherwise, or (ii) ownership of fifty percent (50%) or more of the
++   outstanding shares, or (iii) beneficial ownership of such entity.
++
++   "You" (or "Your") shall mean an individual or Legal Entity
++   exercising permissions granted by this License.
++
++   "Source" form shall mean the preferred form for making modifications,
++   including but not limited to software source code, documentation
++   source, and configuration files.
++
++   "Object" form shall mean any form resulting from mechanical
++   transformation or translation of a Source form, including but
++   not limited to compiled object code, generated documentation,
++   and conversions to other media types.
++
++   "Work" shall mean the work of authorship, whether in Source or
++   Object form, made available under the License, as indicated by a
++   copyright notice that is included in or attached to the work
++   (an example is provided in the Appendix below).
++
++   "Derivative Works" shall mean any work, whether in Source or Object
++   form, that is based on (or derived from) the Work and for which the
++   editorial revisions, annotations, elaborations, or other modifications
++   represent, as a whole, an original work of authorship. For the purposes
++   of this License, Derivative Works shall not include works that remain
++   separable from, or merely link (or bind by name) to the interfaces of,
++   the Work and Derivative Works thereof.
++
++   "Contribution" shall mean any work of authorship, including
++   the original version of the Work and any modifications or additions
++   to that Work or Derivative Works thereof, that is intentionally
++   submitted to Licensor for inclusion in the Work by the copyright owner
++   or by an individual or Legal Entity authorized to submit on behalf of
++   the copyright owner. For the purposes of this definition, "submitted"
++   means any form of electronic, verbal, or written communication sent
++   to the Licensor or its representatives, including but not limited to
++   communication on electronic mailing lists, source code control systems,
++   and issue tracking systems that are managed by, or on behalf of, the
++   Licensor for the purpose of discussing and improving the Work, but
++   excluding communication that is conspicuously marked or otherwise
++   designated in writing by the copyright owner as "Not a Contribution."
++
++   "Contributor" shall mean Licensor and any individual or Legal Entity
++   on behalf of whom a Contribution has been received by Licensor and
++   subsequently incorporated within the Work.
++
++2. Grant of Copyright License. Subject to the terms and conditions of
++   this License, each Contributor hereby grants to You a perpetual,
++   worldwide, non-exclusive, no-charge, royalty-free, irrevocable
++   copyright license to reproduce, prepare Derivative Works of,
++   publicly display, publicly perform, sublicense, and distribute the
++   Work and such Derivative Works in Source or Object form.
++
++3. Grant of Patent License. Subject to the terms and conditions of
++   this License, each Contributor hereby grants to You a perpetual,
++   worldwide, non-exclusive, no-charge, royalty-free, irrevocable
++   (except as stated in this section) patent license to make, have made,
++   use, offer to sell, sell, import, and otherwise transfer the Work,
++   where such license applies only to those patent claims licensable
++   by such Contributor that are necessarily infringed by their
++   Contribution(s) alone or by combination of their Contribution(s)
++   with the Work to which such Contribution(s) was submitted. If You
++   institute patent litigation against any entity (including a
++   cross-claim or counterclaim in a lawsuit) alleging that the Work
++   or a Contribution incorporated within the Work constitutes direct
++   or contributory patent infringement, then any patent licenses
++   granted to You under this License for that Work shall terminate
++   as of the date such litigation is filed.
++
++4. Redistribution. You may reproduce and distribute copies of the
++   Work or Derivative Works thereof in any medium, with or without
++   modifications, and in Source or Object form, provided that You
++   meet the following conditions:
++
++   (a) You must give any other recipients of the Work or
++       Derivative Works a copy of this License; and
++
++   (b) You must cause any modified files to carry prominent notices
++       stating that You changed the files; and
++
++   (c) You must retain, in the Source form of any Derivative Works
++       that You distribute, all copyright, patent, trademark, and
++       attribution notices from the Source form of the Work,
++       excluding those notices that do not pertain to any part of
++       the Derivative Works; and
++
++   (d) If the Work includes a "NOTICE" text file as part of its
++       distribution, then any Derivative Works that You distribute must
++       include a readable copy of the attribution notices contained
++       within such NOTICE file, excluding those notices that do not
++       pertain to any part of the Derivative Works, in at least one
++       of the following places: within a NOTICE text file distributed
++       as part of the Derivative Works; within the Source form or
++       documentation, if provided along with the Derivative Works; or,
++       within a display generated by the Derivative Works, if and
++       wherever such third-party notices normally appear. The contents
++       of the NOTICE file are for informational purposes only and
++       do not modify the License. You may add Your own attribution
++       notices within Derivative Works that You distribute, alongside
++       or as an addendum to the NOTICE text from the Work, provided
++       that such additional attribution notices cannot be construed
++       as modifying the License.
++
++   You may add Your own copyright statement to Your modifications and
++   may provide additional or different license terms and conditions
++   for use, reproduction, or distribution of Your modifications, or
++   for any such Derivative Works as a whole, provided Your use,
++   reproduction, and distribution of the Work otherwise complies with
++   the conditions stated in this License.
++
++5. Submission of Contributions. Unless You explicitly state otherwise,
++   any Contribution intentionally submitted for inclusion in the Work
++   by You to the Licensor shall be under the terms and conditions of
++   this License, without any additional terms or conditions.
++   Notwithstanding the above, nothing herein shall supersede or modify
++   the terms of any separate license agreement you may have executed
++   with Licensor regarding such Contributions.
++
++6. Trademarks. This License does not grant permission to use the trade
++   names, trademarks, service marks, or product names of the Licensor,
++   except as required for reasonable and customary use in describing the
++   origin of the Work and reproducing the content of the NOTICE file.
++
++7. Disclaimer of Warranty. Unless required by applicable law or
++   agreed to in writing, Licensor provides the Work (and each
++   Contributor provides its Contributions) on an "AS IS" BASIS,
++   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
++   implied, including, without limitation, any warranties or conditions
++   of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
++   PARTICULAR PURPOSE. You are solely responsible for determining the
++   appropriateness of using or redistributing the Work and assume any
++   risks associated with Your exercise of permissions under this License.
++
++8. Limitation of Liability. In no event and under no legal theory,
++   whether in tort (including negligence), contract, or otherwise,
++   unless required by applicable law (such as deliberate and grossly
++   negligent acts) or agreed to in writing, shall any Contributor be
++   liable to You for damages, including any direct, indirect, special,
++   incidental, or consequential damages of any character arising as a
++   result of this License or out of the use or inability to use the
++   Work (including but not limited to damages for loss of goodwill,
++   work stoppage, computer failure or malfunction, or any and all
++   other commercial damages or losses), even if such Contributor
++   has been advised of the possibility of such damages.
++
++9. Accepting Warranty or Additional Liability. While redistributing
++   the Work or Derivative Works thereof, You may choose to offer,
++   and charge a fee for, acceptance of support, warranty, indemnity,
++   or other liability obligations and/or rights consistent with this
++   License. However, in accepting such obligations, You may act only
++   on Your own behalf and on Your sole responsibility, not on behalf
++   of any other Contributor, and only if You agree to indemnify,
++   defend, and hold each Contributor harmless for any liability
++   incurred by, or claims asserted against, such Contributor by reason
++   of your accepting any such warranty or additional liability.
++
++END OF TERMS AND CONDITIONS
+diff --git a/fixtures/upstream/rustc-checkout/LICENSE-MIT b/fixtures/upstream/rustc-checkout/LICENSE-MIT
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/LICENSE-MIT
+@@ -0,0 +1,25 @@
++Copyright (c) The Rust Project Contributors
++
++Permission is hereby granted, free of charge, to any
++person obtaining a copy of this software and associated
++documentation files (the "Software"), to deal in the
++Software without restriction, including without
++limitation the rights to use, copy, modify, merge,
++publish, distribute, sublicense, and/or sell copies of
++the Software, and to permit persons to whom the Software
++is furnished to do so, subject to the following
++conditions:
++
++The above copyright notice and this permission notice
++shall be included in all copies or substantial portions
++of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
++ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
++TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
++PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
++SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
++CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
++OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
++IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
++DEALINGS IN THE SOFTWARE.
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/hygiene/auxiliary/intercrate.rs b/fixtures/upstream/rustc-checkout/tests/ui/hygiene/auxiliary/intercrate.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/hygiene/auxiliary/intercrate.rs
+@@ -0,0 +1,46 @@
++#![feature(decl_macro)]
++
++pub mod foo {
++    pub use self::bar::m;
++    mod bar {
++        fn f() -> u32 { 1 }
++        pub macro m() {
++            f()
++        }
++    }
++}
++
++pub struct SomeType;
++
++// `$crate`
++pub macro uses_dollar_crate_modern() {
++    type Alias = $crate::SomeType;
++}
++
++pub macro define_uses_dollar_crate_modern_nested($uses_dollar_crate_modern_nested: ident) {
++    macro $uses_dollar_crate_modern_nested() {
++        type AliasCrateModernNested = $crate::SomeType;
++    }
++}
++
++#[macro_export]
++macro_rules! define_uses_dollar_crate_legacy_nested {
++    () => {
++        macro_rules! uses_dollar_crate_legacy_nested {
++            () => {
++                type AliasLegacyNested = $crate::SomeType;
++            }
++        }
++    }
++}
++
++// `crate`
++pub macro uses_crate_modern() {
++    type AliasCrate = crate::SomeType;
++}
++
++pub macro define_uses_crate_modern_nested($uses_crate_modern_nested: ident) {
++    macro $uses_crate_modern_nested() {
++        type AliasCrateModernNested = crate::SomeType;
++    }
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/hygiene/dollar-crate-modern.rs b/fixtures/upstream/rustc-checkout/tests/ui/hygiene/dollar-crate-modern.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/hygiene/dollar-crate-modern.rs
+@@ -0,0 +1,25 @@
++// Make sure `$crate` and `crate` work in for basic cases of nested macros.
++
++//@ check-pass
++//@ aux-build:intercrate.rs
++
++#![feature(decl_macro)]
++
++extern crate intercrate;
++
++// `$crate`
++intercrate::uses_dollar_crate_modern!();
++
++intercrate::define_uses_dollar_crate_modern_nested!(uses_dollar_crate_modern_nested);
++uses_dollar_crate_modern_nested!();
++
++intercrate::define_uses_dollar_crate_legacy_nested!();
++uses_dollar_crate_legacy_nested!();
++
++// `crate`
++intercrate::uses_crate_modern!();
++
++intercrate::define_uses_crate_modern_nested!(uses_crate_modern_nested);
++uses_crate_modern_nested!();
++
++fn main() {}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/imports/reexport-from-multiple-namespaces.rs b/fixtures/upstream/rustc-checkout/tests/ui/imports/reexport-from-multiple-namespaces.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/imports/reexport-from-multiple-namespaces.rs
+@@ -0,0 +1,40 @@
++//! Regression test for https://github.com/rust-lang/rust/issues/50187
++//@ check-pass
++
++#![feature(decl_macro)]
++
++mod type_ns {
++    pub type A = u8;
++}
++mod value_ns {
++    pub const A: u8 = 0;
++}
++mod macro_ns {
++    pub macro A() {}
++}
++
++mod merge2 {
++    pub use crate::type_ns::A;
++    pub use crate::value_ns::A;
++}
++mod merge3 {
++    pub use crate::type_ns::A;
++    pub use crate::value_ns::A;
++    pub use crate::macro_ns::A;
++}
++
++mod use2 {
++    pub use crate::merge2::A;
++}
++mod use3 {
++    pub use crate::merge3::A;
++}
++
++fn main() {
++    type B2 = use2::A;
++    let a2 = use2::A;
++
++    type B3 = use3::A;
++    let a3 = use3::A;
++    use3::A!();
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/lint/unused/unused-macro-rules-decl.rs b/fixtures/upstream/rustc-checkout/tests/ui/lint/unused/unused-macro-rules-decl.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/lint/unused/unused-macro-rules-decl.rs
+@@ -0,0 +1,49 @@
++#![feature(decl_macro)]
++#![deny(unused_macro_rules)]
++// To make sure we are not hitting this
++#![deny(unused_macros)]
++
++// Most simple case
++macro num {
++    (one) => { 1 },
++    (two) => { 2 }, //~ ERROR: rule #2 of macro
++    (three) => { 3 },
++    (four) => { 4 }, //~ ERROR: rule #4 of macro
++}
++const _NUM: u8 = num!(one) + num!(three);
++
++// Check that allowing the lint works
++#[allow(unused_macro_rules)]
++macro num_allowed {
++    (one) => { 1 },
++    (two) => { 2 },
++    (three) => { 3 },
++    (four) => { 4 },
++}
++const _NUM_ALLOWED: u8 = num_allowed!(one) + num_allowed!(three);
++
++// Check that macro calls inside the macro trigger as usage
++macro num_rec {
++    (one) => { 1 },
++    (two) => {
++        num_rec!(one) + num_rec!(one)
++    },
++    (three) => { //~ ERROR: rule #3 of macro
++        num_rec!(one) + num_rec!(two)
++    },
++    (four) => {
++        num_rec!(two) + num_rec!(two)
++    },
++}
++const _NUM_RECURSIVE: u8 = num_rec!(four);
++
++// No error if the macro is public
++pub macro num_public {
++    (one) => { 1 },
++    (two) => { 2 },
++    (three) => { 3 },
++    (four) => { 4 },
++}
++const _NUM_PUBLIC: u8 = num_public!(one) + num_public!(three);
++
++fn main() {}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/lint/unused/unused-macro-rules-decl.stderr b/fixtures/upstream/rustc-checkout/tests/ui/lint/unused/unused-macro-rules-decl.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/lint/unused/unused-macro-rules-decl.stderr
+@@ -0,0 +1,26 @@
++error: rule #2 of macro `num` is never used
++  --> $DIR/unused-macro-rules-decl.rs:9:5
++   |
++LL |     (two) => { 2 },
++   |     ^^^^^
++   |
++note: the lint level is defined here
++  --> $DIR/unused-macro-rules-decl.rs:2:9
++   |
++LL | #![deny(unused_macro_rules)]
++   |         ^^^^^^^^^^^^^^^^^^
++
++error: rule #4 of macro `num` is never used
++  --> $DIR/unused-macro-rules-decl.rs:11:5
++   |
++LL |     (four) => { 4 },
++   |     ^^^^^^
++
++error: rule #3 of macro `num_rec` is never used
++  --> $DIR/unused-macro-rules-decl.rs:31:5
++   |
++LL |     (three) => {
++   |     ^^^^^^^
++
++error: aborting due to 3 previous errors
++
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/macros/issue-44127.rs b/fixtures/upstream/rustc-checkout/tests/ui/macros/issue-44127.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/macros/issue-44127.rs
+@@ -0,0 +1,17 @@
++//@ run-pass
++
++#![feature(decl_macro)]
++
++pub struct Foo {
++    bar: u32,
++}
++pub macro pattern($a:pat) {
++    Foo { bar: $a }
++}
++
++fn main() {
++    match (Foo { bar: 3 }) {
++        pattern!(3) => println!("Test OK"),
++        _ => unreachable!(),
++    }
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/macros/issue-63102.rs b/fixtures/upstream/rustc-checkout/tests/ui/macros/issue-63102.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/macros/issue-63102.rs
+@@ -0,0 +1,8 @@
++//@ check-pass
++
++#![feature(decl_macro)]
++macro foo {
++    () => {},
++}
++
++fn main() {}

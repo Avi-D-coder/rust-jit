@@ -1,0 +1,1933 @@
+--- a/crates/lrr/src/engine/constant_source_publication_tests.rs
++++ b/crates/lrr/src/engine/constant_source_publication_tests.rs
+@@ -142,10 +142,30 @@
+             let prepared = frame
+                 .prepare_constant_publication(&proof, &immutable, joined.wire(), &store)
+                 .unwrap();
+-            frame.fuel.charge().unwrap();
+-            frame
+-                .publish_constant_to_temporary(prepared, &mut store)
++            let mut activation = frame
++                .begin_constant_publication_chunks(prepared, &mut store, |frame| {
++                    frame.fuel.charge()
++                })
+                 .unwrap();
++            let mut published = false;
++            for _ in 0..20000 {
++                match frame.advance_constant_publication_chunks(&mut activation, &proof, &mut store)
++                {
++                    crate::vm::frame::ConstantPublicationChunk::Dispatch {
++                        steps,
++                        bytes,
++                        cleaning,
++                    } => assert!(steps <= 256 && bytes <= 64 << 10 && !cleaning),
++                    crate::vm::frame::ConstantPublicationChunk::Published => {
++                        published = true;
++                        break;
++                    }
++                    crate::vm::frame::ConstantPublicationChunk::Fault { diagnostic, .. } => {
++                        panic!("{}: {}", diagnostic.code, diagnostic.message)
++                    }
++                }
++            }
++            assert!(published);
+             let name = if ordinal == 0 {
+                 "mut first"
+             } else {
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_constant_chunks.rs
+@@ -0,0 +1,561 @@
++//! Owned physical cursor only. No source, query, compiler or proof references.
++use super::{PendingConstantResult, *};
++use std::vec::IntoIter;
++const CHUNK_STEPS: usize = 256;
++const CHUNK_BYTES: usize = 64 << 10;
++// Conservative fixed state/ticket/cell/owner transfer traffic for each step.
++const STEP_BYTES: usize = std::mem::size_of::<Node>()
++    + std::mem::size_of::<Cell>() * 2
++    + std::mem::size_of::<ObjectRecord>() * 2
++    + std::mem::size_of::<ConstructionRecord>()
++    + std::mem::size_of::<TransferTicket>() * 2
++    + 128;
++struct Building {
++    ty: TypeId,
++    guard: ConstructionId,
++    storage: ReservedArrayStorage,
++    children: IntoIter<Node>,
++    next: u32,
++    child_started: bool,
++}
++struct Committing {
++    ty: TypeId,
++    element: TypeId,
++    guard: ConstructionId,
++    object: ObjectId,
++    fields: Vec<CellId>,
++    initialized: InitializedFields,
++    next: usize,
++    count: usize,
++}
++enum Cleanup {
++    Ticket(TicketId),
++    Value(ValueRepr),
++    Guard(ConstructionId),
++    Cells(IntoIter<CellId>),
++    Object(ObjectId),
++}
++/// Single-use owned activation. No Clone/serialization/raw ticket constructor.
++pub(crate) struct ConstantChunkActivation {
++    epoch: u32,
++    node: Option<Node>,
++    stack: Vec<Building>,
++    commit: Option<Committing>,
++    pending: Option<TicketId>,
++    cleanup: Vec<Cleanup>,
++    abandoned: Vec<Building>,
++    failure: Option<Diagnostic>,
++    finished: bool,
++    metadata: usize,
++    fields_charged: u64,
++}
++pub(crate) enum ConstantChunkPoll {
++    Dispatch {
++        steps: u16,
++        bytes: u32,
++        cleaning: bool,
++    },
++    Ready(PendingConstantResult),
++    Failed(Diagnostic),
++}
++impl ConstantChunkActivation {
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.metadata
++    }
++    pub(crate) fn fields_charged(&self) -> u64 {
++        self.fields_charged
++    }
++    pub(crate) fn finished_for_frame(&self) -> bool {
++        self.finished
++    }
++    pub(crate) fn cleaning(&self) -> bool {
++        self.failure.is_some()
++    }
++}
++impl GuestStore {
++    /// Complete table reservation includes the destination cell not allocated yet.
++    /// No opcode/field is charged here and no guest value/guard is installed.
++    pub(crate) fn prepare_constant_chunks(
++        &mut self,
++        plan: PreparedConstantInstantiation,
++        destination_cells: usize,
++    ) -> Result<ConstantChunkActivation, Diagnostic> {
++        if plan.epoch != self.budget.epoch() {
++            return Err(stale());
++        }
++        if destination_cells > 1 || STEP_BYTES > CHUNK_BYTES {
++            return Err(resource());
++        }
++        let mut stack = Vec::new();
++        let mut cleanup = Vec::new();
++        let mut abandoned = Vec::new();
++        stack.try_reserve_exact(MAX_DEPTH).map_err(|_| resource())?;
++        abandoned
++            .try_reserve_exact(MAX_DEPTH)
++            .map_err(|_| resource())?;
++        cleanup
++            .try_reserve_exact(MAX_DEPTH * 3)
++            .map_err(|_| resource())?;
++        let metadata = plan
++            .totals
++            .metadata
++            .checked_add(std::mem::size_of::<ConstantChunkActivation>())
++            .and_then(|n| {
++                n.checked_add(
++                    stack
++                        .capacity()
++                        .checked_mul(std::mem::size_of::<Building>())?,
++                )
++            })
++            .and_then(|n| {
++                n.checked_add(
++                    cleanup
++                        .capacity()
++                        .checked_mul(std::mem::size_of::<Cleanup>())?,
++                )
++            })
++            .and_then(|n| {
++                n.checked_add(
++                    abandoned
++                        .capacity()
++                        .checked_mul(std::mem::size_of::<Building>())?,
++                )
++            })
++            .filter(|n| *n <= MAX_METADATA)
++            .ok_or_else(resource)?;
++        self.reserve_constant_instantiation_with_destination(&plan.totals, destination_cells)?;
++        Ok(ConstantChunkActivation {
++            epoch: plan.epoch,
++            node: Some(plan.node),
++            stack,
++            commit: None,
++            pending: None,
++            cleanup,
++            abandoned,
++            failure: None,
++            finished: false,
++            metadata,
++            fields_charged: 0,
++        })
++    }
++    fn start_chunk_array(
++        &mut self,
++        ty: TypeId,
++        mut records: Vec<ConstructionRecord>,
++        storage: ReservedArrayStorage,
++        children: Vec<Node>,
++    ) -> Result<Building, Diagnostic> {
++        let record = records.pop().ok_or_else(ownership)?;
++        let bytes = record.owned_bytes().ok_or_else(resource)?;
++        let guard = ConstructionId::from(self.constructions.allocate(
++            record,
++            bytes,
++            &mut self.budget,
++        )?);
++        Ok(Building {
++            ty,
++            guard,
++            storage,
++            children: children.into_iter(),
++            next: 0,
++            child_started: false,
++        })
++    }
++    fn start_chunk_commit(
++        &mut self,
++        slot: &mut Option<Building>,
++    ) -> Result<Committing, Diagnostic> {
++        let building = slot.as_ref().ok_or_else(ownership)?;
++        let preflight = (|| {
++            let record = self.constructions.get(building.guard)?;
++            let TypeKey::Array { element, len } = self.types.descriptor(building.ty)?.key.as_ref()
++            else {
++                return Err(ownership());
++            };
++            let count = *len as usize;
++            if record.state != ConstructionState::Building
++                || record.nominal.is_some()
++                || record.fields.len() != count
++                || record.expected.len() != count
++                || record.completed.len() != count
++                || building.next as usize != count
++                || building.children.len() != 0
++                || building.child_started
++                || building.storage.count != count
++                || !building.storage.fields.is_empty()
++                || building.storage.fields.capacity() < count
++            {
++                return Err(ownership());
++            }
++            Ok((*element, count))
++        })();
++        let (element, count) = preflight?;
++        // The private plan already reserved exact empty field storage/bitmap.
++        // Moving this storage is constant work; no all-field scan is performed.
++        let owned = building.storage.owned_bytes()?;
++        let object = match self.objects.allocate(
++            ObjectRecord {
++                type_id: building.ty,
++                storage: ObjectStorage::Constructing,
++                owner: None,
++            },
++            owned,
++            &mut self.budget,
++        ) {
++            Ok(v) => ObjectId::from(v),
++            Err(e) => return Err(e),
++        };
++        let building = slot.take().ok_or_else(ownership)?;
++        let ReservedArrayStorage {
++            fields,
++            initialized,
++            ..
++        } = building.storage;
++        Ok(Committing {
++            ty: building.ty,
++            element,
++            guard: building.guard,
++            object,
++            fields,
++            initialized,
++            next: 0,
++            count,
++        })
++    }
++    fn chunk_commit_field(&mut self, c: &mut Committing) -> Result<(), Diagnostic> {
++        let index = c.next;
++        let record = self.constructions.get(c.guard)?;
++        if record.expected.get(index) != Some(&Some(c.element)) {
++            return Err(ownership());
++        }
++        let value = record
++            .fields
++            .get(index)
++            .copied()
++            .flatten()
++            .ok_or_else(ownership)?;
++        self.require_initialized_value(value)?;
++        self.object_owner(
++            value,
++            ValueOwner::Construction {
++                guard: c.guard,
++                field: u32::try_from(index).map_err(|_| resource())?,
++            },
++        )?;
++        if value.type_id != c.element.0 {
++            return Err(ownership());
++        }
++        let cell = self.new_cell(
++            StorageContract::Exact(c.element),
++            true,
++            CellOwner::Field {
++                object: c.object,
++                index: u32::try_from(index).map_err(|_| resource())?,
++            },
++        )?;
++        c.fields.push(cell);
++        self.set_owner(value, ValueOwner::Cell(cell))?;
++        self.cells.get_mut(cell)?.state = CellState::Live(value);
++        self.constructions.get_mut(c.guard)?.fields[index] = None;
++        c.next = c.next.checked_add(1).ok_or_else(resource)?;
++        Ok(())
++    }
++    fn finish_chunk_commit(
++        &mut self,
++        slot: &mut Option<Committing>,
++    ) -> Result<TicketId, Diagnostic> {
++        let c = slot.as_ref().ok_or_else(ownership)?;
++        if c.next != c.count || c.fields.len() != c.count {
++            return Err(ownership());
++        }
++        self.constructions.get(c.guard)?;
++        let object = self.objects.get(c.object)?;
++        if !matches!(object.storage, ObjectStorage::Constructing) {
++            return Err(ownership());
++        }
++        let value = ValueRepr {
++            kind: 8,
++            type_id: c.ty.0,
++            payload: c.object.bits(),
++        };
++        let ticket = match self
++            .tickets
++            .allocate(TransferTicket { value }, 0, &mut self.budget)
++        {
++            Ok(v) => TicketId::from(v),
++            Err(e) => return Err(e),
++        };
++        // The exact private cursor has consumed every guard field once. Nothing
++        // can observe Constructing storage; the final move installs complete data.
++        if let Err(e) = self.constructions.take(c.guard, &mut self.budget) {
++            let _ = self.tickets.take(ticket, &mut self.budget);
++            return Err(e);
++        }
++        let object = match self.objects.get_mut(c.object) {
++            Ok(v) => v,
++            Err(e) => {
++                let _ = self.tickets.take(ticket, &mut self.budget);
++                return Err(e);
++            }
++        };
++        let c = slot.take().ok_or_else(ownership)?;
++        object.storage = ObjectStorage::Aggregate(AggregateStorage {
++            fields: c.fields,
++            initialized: c.initialized,
++            next_cleanup: 0,
++            pending_cleanup: None,
++            variant: None,
++        });
++        object.owner = Some(ValueOwner::Ticket(ticket));
++        Ok(ticket)
++    }
++    fn constant_chunk_failure(
++        &mut self,
++        a: &mut ConstantChunkActivation,
++        error: Diagnostic,
++    ) -> Result<(), Diagnostic> {
++        if a.failure.is_some() {
++            return Ok(());
++        }
++        a.failure = Some(
++            if error
++                .heap_bytes()
++                .and_then(|n| n.checked_add(a.metadata))
++                .is_some_and(|n| n <= MAX_METADATA)
++            {
++                error
++            } else {
++                resource()
++            },
++        );
++        // Stage each pending owner during a later counted cleanup step. Avoid
++        // draining all active nesting/commit state in an already full chunk.
++
++        Ok(())
++    }
++    pub(crate) fn abort_constant_chunks(
++        &mut self,
++        a: &mut ConstantChunkActivation,
++        error: Diagnostic,
++    ) -> Result<(), Diagnostic> {
++        if a.epoch != self.budget.epoch() || a.finished {
++            return Err(stale());
++        }
++        self.constant_chunk_failure(a, error)
++    }
++    fn cleanup_constant_chunk_step(
++        &mut self,
++        a: &mut ConstantChunkActivation,
++    ) -> Result<(), Diagnostic> {
++        if a.cleanup.is_empty() {
++            if let Some(ticket) = a.pending.take() {
++                a.cleanup.push(Cleanup::Ticket(ticket));
++                return Ok(());
++            }
++            if let Some(c) = a.commit.take() {
++                a.cleanup.push(Cleanup::Object(c.object));
++                a.cleanup.push(Cleanup::Cells(c.fields.into_iter()));
++                a.cleanup.push(Cleanup::Guard(c.guard));
++                return Ok(());
++            }
++            if let Some(b) = a.stack.pop() {
++                a.cleanup.push(Cleanup::Guard(b.guard));
++                // Retain unused immutable blueprint/storage until fatal metadata
++                // teardown; don't drop a whole child tree inside a counted chunk.
++                a.abandoned.push(b);
++                return Ok(());
++            }
++            return Err(ownership());
++        }
++        let task = a.cleanup.pop().ok_or_else(ownership)?;
++        match task {
++            Cleanup::Ticket(ticket) => {
++                let value = self.tickets.take(ticket, &mut self.budget)?.value;
++                a.cleanup.push(Cleanup::Value(value));
++            }
++            Cleanup::Value(value) => {
++                if (1..=7).contains(&value.kind) {
++                    value.validate_scalar()?;
++                } else if value.kind == 8
++                    && matches!(
++                        self.types.descriptor(TypeId(value.type_id))?.key.as_ref(),
++                        TypeKey::Array { .. }
++                    )
++                {
++                    let object = self
++                        .objects
++                        .take(ObjectId::from_bits(value.payload), &mut self.budget)?;
++                    let ObjectStorage::Aggregate(storage) = object.storage else {
++                        return Err(ownership());
++                    };
++                    a.cleanup.push(Cleanup::Cells(storage.fields.into_iter()));
++                } else {
++                    return Err(ownership());
++                }
++            }
++            Cleanup::Guard(guard) => {
++                let field = self.constructions.get_mut(guard)?.completed.pop();
++                if let Some(field) = field {
++                    let value = self.constructions.get_mut(guard)?.fields[field as usize].take();
++                    a.cleanup.push(Cleanup::Guard(guard));
++                    if let Some(value) = value {
++                        a.cleanup.push(Cleanup::Value(value));
++                    }
++                } else {
++                    self.constructions.take(guard, &mut self.budget)?;
++                }
++            }
++            Cleanup::Cells(mut fields) => {
++                if let Some(cell) = fields.next_back() {
++                    let field = self.cells.take(cell, &mut self.budget)?;
++                    a.cleanup.push(Cleanup::Cells(fields));
++                    match field.state {
++                        CellState::Live(value) => a.cleanup.push(Cleanup::Value(value)),
++                        CellState::Uninit => {}
++                        _ => return Err(ownership()),
++                    }
++                }
++            }
++            Cleanup::Object(object) => {
++                let record = self.objects.take(object, &mut self.budget)?;
++                if !matches!(record.storage, ObjectStorage::Constructing) {
++                    return Err(ownership());
++                }
++            }
++        }
++        Ok(())
++    }
++    /// One bounded Dispatch chunk; initial opcode charge belongs to the caller.
++    /// Failure keeps private cleanup alive until drained, then returns its error.
++    pub(crate) fn advance_constant_chunks(
++        &mut self,
++        a: &mut ConstantChunkActivation,
++        fuel: &mut RunFuel,
++    ) -> ConstantChunkPoll {
++        if a.epoch != self.budget.epoch() || a.finished {
++            return ConstantChunkPoll::Failed(stale());
++        }
++        let mut steps = 0usize;
++        let mut bytes = 0usize;
++        while steps < CHUNK_STEPS
++            && bytes
++                .checked_add(STEP_BYTES)
++                .is_some_and(|n| n <= CHUNK_BYTES)
++        {
++            if a.failure.is_some() {
++                if a.cleanup.is_empty()
++                    && a.pending.is_none()
++                    && a.commit.is_none()
++                    && a.stack.is_empty()
++                {
++                    a.finished = true;
++                    return ConstantChunkPoll::Failed(a.failure.take().unwrap_or_else(ownership));
++                }
++                if let Err(e) = self.cleanup_constant_chunk_step(a) {
++                    return ConstantChunkPoll::Failed(e);
++                }
++            } else {
++                if let Err(e) = fuel.poll() {
++                    if let Err(e) = self.constant_chunk_failure(a, e) {
++                        return ConstantChunkPoll::Failed(e);
++                    };
++                    continue;
++                }
++                let result = (|| -> Result<Option<PendingConstantResult>, Diagnostic> {
++                    if let Some(c) = &mut a.commit {
++                        if c.next < c.count {
++                            self.chunk_commit_field(c)?;
++                        } else {
++                            a.pending = Some(self.finish_chunk_commit(&mut a.commit)?);
++                        }
++                    } else if let Some(node) = a.node.take() {
++                        match node {
++                            Node::Scalar(value) => a.pending = Some(self.ticket(value)?),
++                            Node::Array {
++                                ty,
++                                guard,
++                                storage,
++                                children,
++                            } => a
++                                .stack
++                                .push(self.start_chunk_array(ty, guard, storage, children)?),
++                        }
++                    } else if let Some(ticket) = a.pending.take() {
++                        if let Some(b) = a.stack.last_mut() {
++                            if !b.child_started {
++                                a.pending = Some(ticket);
++                                return Err(ownership());
++                            }
++                            if let Err(e) = self.construction_push(b.guard, b.next, ticket) {
++                                a.pending = Some(ticket);
++                                return Err(e);
++                            }
++                            b.next = b.next.checked_add(1).ok_or_else(resource)?;
++                            b.child_started = false;
++                        } else {
++                            a.finished = true;
++                            return Ok(Some(PendingConstantResult {
++                                epoch: a.epoch,
++                                ticket,
++                            }));
++                        }
++                    } else if let Some(b) = a.stack.last_mut() {
++                        if b.children.len() != 0 {
++                            if b.child_started {
++                                return Err(ownership());
++                            }
++                            fuel.charge()?;
++                            a.fields_charged =
++                                a.fields_charged.checked_add(1).ok_or_else(resource)?;
++                            b.child_started = true;
++                            a.node = Some(b.children.next().ok_or_else(ownership)?);
++                        } else {
++                            let mut b = Some(a.stack.pop().ok_or_else(ownership)?);
++                            match self.start_chunk_commit(&mut b) {
++                                Ok(c) => a.commit = Some(c),
++                                Err(e) => {
++                                    a.stack.push(b.take().ok_or_else(ownership)?);
++                                    return Err(e);
++                                }
++                            }
++                        }
++                    } else {
++                        return Err(ownership());
++                    }
++                    Ok(None)
++                })();
++                match result {
++                    Ok(Some(value)) => return ConstantChunkPoll::Ready(value),
++                    Ok(None) => {}
++                    Err(e) => {
++                        if let Err(e) = self.constant_chunk_failure(a, e) {
++                            return ConstantChunkPoll::Failed(e);
++                        }
++                    }
++                }
++            }
++            steps += 1;
++            bytes += STEP_BYTES;
++        }
++        ConstantChunkPoll::Dispatch {
++            steps: steps as u16,
++            bytes: bytes as u32,
++            cleaning: a.cleaning(),
++        }
++    }
++    pub(crate) fn cleanup_ready_constant_chunks(
++        &mut self,
++        a: &mut ConstantChunkActivation,
++        pending: PendingConstantResult,
++        error: Diagnostic,
++    ) -> Result<(), Diagnostic> {
++        self.validate_pending_constant(&pending)?;
++        a.finished = false;
++        a.pending = Some(pending.ticket);
++        self.constant_chunk_failure(a, error)
++    }
++}
++
++#[cfg(test)]
++#[path = "constant_chunk_tests.rs"]
++mod tests;
+--- a/crates/lrr/src/runtime/cell_constant_instantiation.rs
++++ b/crates/lrr/src/runtime/cell_constant_instantiation.rs
+@@ -4,10 +4,11 @@
+ mod pending;
+ use super::*;
+ use crate::{
+-    frontend::constants::{ConstValue, wire::ConstantWireType},
++    ir::constant_data::{ConstValue, wire::ConstantWireType},
+     runtime::shape::PrimitiveIdentity,
+     vm::fuel::RunFuel,
+ };
++pub(crate) use pending::chunks::{ConstantChunkActivation, ConstantChunkPoll};
+ const MAX_NODES: usize = 100_000;
+ const MAX_DEPTH: usize = 128;
+ const MAX_METADATA: usize = 32 << 20;
+@@ -247,15 +248,30 @@
+         })
+     }
+     fn reserve_constant_instantiation(&mut self, totals: &Totals) -> Result<(), Diagnostic> {
++        self.reserve_constant_instantiation_with_destination(totals, 0)
++    }
++    fn reserve_constant_instantiation_with_destination(
++        &mut self,
++        totals: &Totals,
++        destination_cells: usize,
++    ) -> Result<(), Diagnostic> {
++        let cells = totals
++            .fields
++            .checked_add(destination_cells)
++            .ok_or_else(resource)?;
++        let handles = totals
++            .handles()?
++            .checked_add(u32::try_from(destination_cells).map_err(|_| resource())?)
++            .ok_or_else(resource)?;
+         let capacities = self
+             .constructions
+             .reservation_bytes(totals.arrays)?
+             .checked_add(self.objects.reservation_bytes(totals.arrays)?)
+-            .and_then(|n| n.checked_add(self.cells.reservation_bytes(totals.fields).ok()?))
++            .and_then(|n| n.checked_add(self.cells.reservation_bytes(cells).ok()?))
+             .and_then(|n| n.checked_add(self.tickets.reservation_bytes(totals.nodes).ok()?))
+             .ok_or_else(resource)?;
+         self.budget.check(
+-            totals.handles()?,
++            handles,
+             capacities
+                 .checked_add(totals.payload)
+                 .ok_or_else(resource)?,
+@@ -263,10 +279,10 @@
+         self.constructions
+             .reserve(totals.arrays, &mut self.budget)?;
+         self.objects.reserve(totals.arrays, &mut self.budget)?;
+-        self.cells.reserve(totals.fields, &mut self.budget)?;
++        self.cells.reserve(cells, &mut self.budget)?;
+         self.tickets.reserve(totals.nodes, &mut self.budget)?;
+         // Replay using actual capacities; no value ownership has been published.
+-        self.budget.check(totals.handles()?, totals.payload)
++        self.budget.check(handles, totals.payload)
+     }
+     /// Physical scalar/array kernel, not a guest source admission path. Charges
+     /// one operation plus each processed array field, even zero-sized Unit.
+@@ -291,6 +307,22 @@
+             return Err(stale());
+         }
+         fuel.poll()?;
++        // Legacy physical kernel callers are bounded small controls only. Large
++        // arrays must retain an owned chunk activation; never loop it to finish
++        // inside a single interpreter dispatch.
++        if plan
++            .totals
++            .nodes
++            .checked_add(plan.totals.fields.checked_mul(4).ok_or_else(resource)?)
++            .and_then(|n| n.checked_add(plan.totals.arrays.checked_mul(4)?))
++            .is_none_or(|n| n > 256)
++            || plan.totals.metadata > 64 << 10
++        {
++            return Err(Diagnostic::new(
++                "LRR-E-UNSUPPORTED",
++                "constant aggregate requires resumable chunk activation".into(),
++            ));
++        }
+         self.reserve_constant_instantiation(&plan.totals)?;
+         self.instantiate_constant_node(plan.node, fuel)
+     }
+@@ -385,7 +417,7 @@
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+-    use crate::{frontend::constants::wire, ir::op::PrimitiveType};
++    use crate::{ir::constant_data::wire, ir::op::PrimitiveType};
+     fn nested_fixture() -> (ConstValue, ConstantWireType) {
+         let wire = ConstantWireType::Array {
+             element: Box::new(ConstantWireType::Array {
+--- a/crates/lrr/src/runtime/cell_constant_pending.rs
++++ b/crates/lrr/src/runtime/cell_constant_pending.rs
+@@ -1,5 +1,7 @@
+ //! Unpublished constant owner. Only actual construction can create this token.
+ use super::*;
++#[path = "cell_constant_chunks.rs"]
++pub(super) mod chunks;
+ /// No public fields, raw-ticket constructor, Clone or stable encoding.
+ pub(crate) struct PendingConstantResult {
+     epoch: u32,
+--- /dev/null
++++ b/crates/lrr/src/runtime/constant_chunk_tests.rs
+@@ -0,0 +1,330 @@
++//! Physical storage supplements, not source/type authority or original execution.
++use super::*;
++use crate::{
++    ir::{constant_data::wire, op::PrimitiveType},
++    runtime::{
++        place::{Place, PlaceRoot, Projection},
++        reference::Access,
++    },
++};
++const NRVO: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/nrvo.rs");
++fn data(unit: bool, outer: Option<u64>) -> (ConstValue, ConstantWireType) {
++    let primitive = if unit {
++        PrimitiveType::Unit
++    } else {
++        PrimitiveType::U8
++    };
++    let mut wire = ConstantWireType::Array {
++        element: Box::new(ConstantWireType::Scalar(primitive)),
++        length: 1024,
++    };
++    let mut bytes = b"LRRCNST\0".to_vec();
++    bytes.extend_from_slice(&1u16.to_le_bytes());
++    if let Some(count) = outer {
++        wire = ConstantWireType::Array {
++            element: Box::new(wire),
++            length: count,
++        };
++        bytes.push(1);
++        bytes.extend_from_slice(&count.to_le_bytes());
++    }
++    bytes.push(1);
++    bytes.extend_from_slice(&1024u64.to_le_bytes());
++    bytes.push(0);
++    bytes.extend_from_slice(&(if unit { 0u32 } else { 9u32 }).to_le_bytes());
++    let value = if unit {
++        ValueRepr::unit()
++    } else {
++        ValueRepr::unsigned(TypeId(9), 0).unwrap()
++    };
++    for _ in 0..1024 * outer.unwrap_or(1) {
++        bytes.extend_from_slice(&value.kind.to_le_bytes());
++        bytes.extend_from_slice(&value.type_id.to_le_bytes());
++        bytes.extend_from_slice(&value.payload.to_le_bytes());
++    }
++    (wire::decode(&bytes, &wire, 1 << 20).unwrap(), wire)
++}
++fn setup(unit: bool, outer: Option<u64>) -> (GuestStore, ConstantChunkActivation, TypeId) {
++    let mut store = GuestStore::new(1, 30000, 32 << 20).unwrap();
++    let (value, wire) = data(unit, outer);
++    let child = store
++        .intern_type(TypeKey::Array {
++            element: if unit { TypeId(1) } else { TypeId(9) },
++            len: 1024,
++        })
++        .unwrap();
++    let ty = if let Some(count) = outer {
++        store
++            .intern_type(TypeKey::Array {
++                element: child,
++                len: count as u32,
++            })
++            .unwrap()
++    } else {
++        child
++    };
++    let plan = store
++        .prepare_constant_instantiation(&value, &wire, ty)
++        .unwrap();
++    let act = store.prepare_constant_chunks(plan, 0).unwrap();
++    (store, act, ty)
++}
++fn complete(
++    store: &mut GuestStore,
++    a: &mut ConstantChunkActivation,
++    fuel: &mut RunFuel,
++) -> (PendingConstantResult, usize) {
++    let mut dispatches = 0;
++    for _ in 0..20000 {
++        match store.advance_constant_chunks(a, fuel) {
++            ConstantChunkPoll::Dispatch {
++                steps,
++                bytes,
++                cleaning,
++            } => {
++                assert!(steps <= 256 && bytes <= 64 << 10);
++                assert!(!cleaning);
++                dispatches += 1;
++            }
++            ConstantChunkPoll::Ready(pending) => return (pending, dispatches),
++            ConstantChunkPoll::Failed(e) => panic!("{}: {}", e.code, e.message),
++        }
++    }
++    panic!("bounded activation did not complete")
++}
++fn failure(
++    store: &mut GuestStore,
++    a: &mut ConstantChunkActivation,
++    fuel: &mut RunFuel,
++) -> Diagnostic {
++    let mut cleanup_dispatches = 0;
++    for _ in 0..20000 {
++        match store.advance_constant_chunks(a, fuel) {
++            ConstantChunkPoll::Dispatch {
++                steps,
++                bytes,
++                cleaning,
++            } => {
++                assert!(steps <= 256 && bytes <= 64 << 10);
++                assert!(cleaning);
++                cleanup_dispatches += 1;
++            }
++            ConstantChunkPoll::Failed(e) => {
++                assert!(a.finished_for_frame());
++                assert!(cleanup_dispatches > 0);
++                return e;
++            }
++            ConstantChunkPoll::Ready(_) => panic!("interruption became a value"),
++        }
++    }
++    panic!("private rollback did not drain")
++}
++fn retired(store: &GuestStore) {
++    for i in 1..=store.budget.handles() {
++        let bits = (1u64 << 32) | u64::from(i);
++        assert!(
++            store
++                .constructions
++                .get(Handle::<ConstructionRecord>::from_bits(bits))
++                .is_err()
++        );
++        assert!(
++            store
++                .objects
++                .get(Handle::<ObjectRecord>::from_bits(bits))
++                .is_err()
++        );
++        assert!(store.cells.get(Handle::<Cell>::from_bits(bits)).is_err());
++        assert!(
++            store
++                .tickets
++                .get(Handle::<TransferTicket>::from_bits(bits))
++                .is_err()
++        );
++    }
++}
++#[test]
++fn nrvo_1024_shape_physical_chunks_keep_mutation_cells_and_immutable_initial_image_separate() {
++    assert!(NRVO.contains("const BUF: [u8; 1024] = nrvo();"));
++    let (mut store, mut a, ty) = setup(false, None);
++    let mut fuel = RunFuel::new(2000).unwrap();
++    fuel.charge().unwrap();
++    let (pending, dispatches) = complete(&mut store, &mut a, &mut fuel);
++    assert!(dispatches > 1);
++    assert_eq!(a.fields_charged(), 1024);
++    assert_eq!(fuel.snapshot().used, 1025);
++    let frame = store.new_frame_anchor().unwrap();
++    let cell = store
++        .new_cell(
++            StorageContract::Exact(ty),
++            true,
++            CellOwner::FrameSlot { frame, slot: 0 },
++        )
++        .unwrap();
++    store.commit_pending_constant(pending, cell).unwrap();
++    for (index, value) in [(33, 3), (444, 4)] {
++        let place = Place {
++            root: PlaceRoot::Cell(cell),
++            projections: Box::new([Projection::Index(index)]),
++        };
++        let reference = store.borrow(&place, Access::Mutable).unwrap();
++        let ticket = store
++            .ticket(ValueRepr::unsigned(TypeId(9), value).unwrap())
++            .unwrap();
++        let old = store.replace_reference(reference, ticket).unwrap();
++        store.discard(old).unwrap();
++        assert_eq!(store.read_reference(reference).unwrap().payload, value);
++    }
++    let (image, _) = data(false, None);
++    assert_eq!(image.elements().unwrap()[33].scalar().unwrap().payload, 0);
++    // The original constfn borrows/init/index/assert source program is unexecuted.
++}
++#[test]
++fn unit_constant_chunks_charge_all_1024_zero_size_fields_once() {
++    let (mut s, mut a, _) = setup(true, None);
++    let mut f = RunFuel::new(2000).unwrap();
++    f.charge().unwrap();
++    let (p, d) = complete(&mut s, &mut a, &mut f);
++    assert!(d > 1);
++    assert_eq!(a.fields_charged(), 1024);
++    assert_eq!(f.snapshot().used, 1025);
++    s.cleanup_ready_constant_chunks(
++        &mut a,
++        p,
++        Diagnostic::new("LRR-E-CHUNK-CONTROL", "explicit private abort".into()),
++    )
++    .unwrap();
++    let error = failure(&mut s, &mut a, &mut f);
++    assert_eq!(error.code, "LRR-E-CHUNK-CONTROL");
++    retired(&s);
++}
++#[test]
++fn nested_constant_chunks_preserve_parent_child_charge_and_commit_cursors() {
++    let (mut s, mut a, ty) = setup(true, Some(2));
++    let mut f = RunFuel::new(3000).unwrap();
++    f.charge().unwrap();
++    let (p, d) = complete(&mut s, &mut a, &mut f);
++    assert!(d > 2);
++    assert_eq!(a.fields_charged(), 2050);
++    assert_eq!(f.snapshot().used, 2051);
++    assert_eq!(s.validate_pending_constant(&p).unwrap().type_id, ty.0);
++    s.cleanup_ready_constant_chunks(
++        &mut a,
++        p,
++        Diagnostic::new("LRR-E-CHUNK-CONTROL", "explicit private abort".into()),
++    )
++    .unwrap();
++    let error = failure(&mut s, &mut a, &mut f);
++    assert_eq!(error.code, "LRR-E-CHUNK-CONTROL");
++    retired(&s);
++}
++#[test]
++fn cancellation_in_constant_build_drains_private_rollback_in_bounded_dispatches() {
++    let (mut s, mut a, _) = setup(false, None);
++    let mut f = RunFuel::new(2000).unwrap();
++    f.charge().unwrap();
++    assert!(matches!(
++        s.advance_constant_chunks(&mut a, &mut f),
++        ConstantChunkPoll::Dispatch {
++            cleaning: false,
++            ..
++        }
++    ));
++    assert!(a.fields_charged() > 0 && a.fields_charged() < 1024);
++    f.cancellation().cancel();
++    let used = f.snapshot().used;
++    let e = failure(&mut s, &mut a, &mut f);
++    assert_eq!(e.code, "LRR-E-RUNTIME-RESOURCE");
++    assert_eq!(used, f.snapshot().used);
++    retired(&s);
++}
++#[test]
++fn cancellation_in_constant_commit_retires_partial_cells_guard_and_constructing_object() {
++    let (mut s, mut a, _) = setup(false, None);
++    let mut f = RunFuel::new(2000).unwrap();
++    f.charge().unwrap();
++    let mut reached = false;
++    for _ in 0..20000 {
++        match s.advance_constant_chunks(&mut a, &mut f) {
++            ConstantChunkPoll::Dispatch {
++                steps,
++                bytes,
++                cleaning: false,
++            } => {
++                assert!(steps <= 256 && bytes <= 64 << 10);
++                if a.commit
++                    .as_ref()
++                    .is_some_and(|c| c.next > 0 && c.next < c.count)
++                {
++                    reached = true;
++                    break;
++                }
++            }
++            _ => panic!("missed partial commit"),
++        }
++    }
++    assert!(reached);
++    assert_eq!(f.snapshot().used, 1025);
++    f.cancellation().cancel();
++    let e = failure(&mut s, &mut a, &mut f);
++    assert_eq!(e.code, "LRR-E-RUNTIME-RESOURCE");
++    assert_eq!(f.snapshot().used, 1025);
++    retired(&s);
++}
++#[test]
++fn exhausted_constant_field_is_not_recharged_during_owned_cleanup() {
++    let (mut s, mut a, _) = setup(false, None);
++    let mut f = RunFuel::new(50).unwrap();
++    f.charge().unwrap();
++    let mut failed = false;
++    for _ in 0..20000 {
++        match s.advance_constant_chunks(&mut a, &mut f) {
++            ConstantChunkPoll::Dispatch { steps, bytes, .. } => {
++                assert!(steps <= 256 && bytes <= 64 << 10)
++            }
++            ConstantChunkPoll::Failed(e) => {
++                assert_eq!(e.code, "LRR-E-RUNTIME-RESOURCE");
++                failed = true;
++                break;
++            }
++            ConstantChunkPoll::Ready(_) => panic!("exhaustion became success"),
++        }
++    }
++    assert!(failed && a.finished_for_frame());
++    assert_eq!(a.fields_charged(), 49);
++    assert_eq!(f.snapshot().used, 50);
++    retired(&s);
++}
++#[test]
++fn complete_constant_reservation_includes_extra_destination_and_refuses_before_entry() {
++    let (mut s, _a, ty) = setup(false, None);
++    let (value, wire) = data(false, None);
++    let plan = s.prepare_constant_instantiation(&value, &wire, ty).unwrap();
++    let before = s.budget.handles();
++    s.prepare_constant_chunks(plan, 1).unwrap();
++    assert_eq!(before, s.budget.handles());
++    let mut small = GuestStore::new(1, 2051, 32 << 20).unwrap();
++    let ty = small
++        .intern_type(TypeKey::Array {
++            element: TypeId(9),
++            len: 1024,
++        })
++        .unwrap();
++    let plan = small
++        .prepare_constant_instantiation(&value, &wire, ty)
++        .unwrap();
++    assert!(small.prepare_constant_chunks(plan, 1).is_err());
++    assert_eq!(small.budget.handles(), 0);
++}
++#[test]
++fn old_large_one_shot_constant_kernel_refuses_instead_of_hiding_dispatch_loop() {
++    let (mut s, _a, ty) = setup(false, None);
++    let (v, w) = data(false, None);
++    let p = s.prepare_constant_instantiation(&v, &w, ty).unwrap();
++    let before = s.budget.handles();
++    let mut f = RunFuel::new(2000).unwrap();
++    assert!(s.instantiate_constant(p, &mut f).is_err());
++    assert_eq!(f.snapshot().used, 1);
++    assert_eq!(before, s.budget.handles());
++}
+--- a/crates/lrr/src/runtime/constant_pending_tests.rs
++++ b/crates/lrr/src/runtime/constant_pending_tests.rs
+@@ -1,6 +1,6 @@
+ //! Physical unpublished-owner tests; no source authority or whole-fixture pass.
+ use super::*;
+-use crate::{frontend::constants::wire, ir::op::PrimitiveType};
++use crate::{ir::constant_data::wire, ir::op::PrimitiveType};
+ fn value() -> (ConstValue, ConstantWireType) {
+     let w = ConstantWireType::Array {
+         element: Box::new(ConstantWireType::Scalar(PrimitiveType::Unit)),
+--- a/crates/lrr/src/vm/constant_array_transfer_tests.rs
++++ b/crates/lrr/src/vm/constant_array_transfer_tests.rs
+@@ -4,7 +4,7 @@
+ use crate::{
+     core::{digest::Digest, profile::ProfileIdentity},
+     engine::constant_array_publication::physical_fixture_use,
+-    frontend::constants::wire,
++    ir::constant_data::wire,
+     ir::{
+         op::{Op, PrimitiveType},
+         pc::Phase,
+@@ -115,6 +115,32 @@
+ fn target(frame: &Frame) -> SlotId {
+     frame.body.nodes()[frame.pc.node as usize].value.unwrap()
+ }
++fn publish_chunks(
++    frame: &mut Frame,
++    prepared: PreparedConstantPublication<'_, '_>,
++    proof: &AdmittedConstantUse<'_>,
++    store: &mut GuestStore,
++) -> Result<(), Diagnostic> {
++    let mut activation =
++        frame.begin_constant_publication_chunks(prepared, store, |frame| frame.fuel.charge())?;
++    for _ in 0..20000 {
++        match frame.advance_constant_publication_chunks(&mut activation, proof, store) {
++            chunks::ConstantPublicationChunk::Dispatch { steps, bytes, .. } => {
++                assert!(steps <= 256 && bytes <= 64 << 10)
++            }
++            chunks::ConstantPublicationChunk::Published => return Ok(()),
++            chunks::ConstantPublicationChunk::Fault {
++                diagnostic,
++                cleanup_pending: false,
++            } => return Err(diagnostic),
++            chunks::ConstantPublicationChunk::Fault {
++                cleanup_pending: true,
++                ..
++            } => panic!("private control cleanup did not drain"),
++        }
++    }
++    panic!("constant control did not finish bounded dispatches")
++}
+ fn publish(frame: &mut Frame, store: &mut GuestStore, ty: TypeId) -> SlotId {
+     let (v, w) = value();
+     let dst = target(frame);
+@@ -122,10 +148,7 @@
+     let prepared = frame
+         .prepare_constant_publication(&proof, &v, &w, store)
+         .unwrap();
+-    frame.fuel.charge().unwrap();
+-    frame
+-        .publish_constant_to_temporary(prepared, store)
+-        .unwrap();
++    publish_chunks(frame, prepared, &proof, store).unwrap();
+     dst
+ }
+ fn element(cell: CellId) -> Place {
+@@ -289,11 +312,7 @@
+         .unwrap();
+     let before = (store.budget().handles(), store.budget().bytes());
+     frame.pc = frame.body.pc(paths[1], Phase::Entry).unwrap();
+-    assert!(
+-        frame
+-            .publish_constant_to_temporary(prepared, &mut store)
+-            .is_err()
+-    );
++    assert!(publish_chunks(&mut frame, prepared, &proof, &mut store).is_err());
+     assert_eq!(before, (store.budget().handles(), store.budget().bytes()));
+     let mut other = Frame::new(
+         frame.body.clone(),
+@@ -383,12 +402,7 @@
+         .prepare_constant_publication(&proof, &v, &w, &store)
+         .unwrap();
+     frame.fuel = RunFuel::new(1).unwrap();
+-    frame.fuel.charge().unwrap();
+-    assert!(
+-        frame
+-            .publish_constant_to_temporary(prepared, &mut store)
+-            .is_err()
+-    );
++    assert!(publish_chunks(&mut frame, prepared, &proof, &mut store).is_err());
+     assert_eq!(
+         store.state(frame.cell(dst).unwrap()).unwrap(),
+         CellState::Uninit
+@@ -429,7 +443,7 @@
+ }
+ 
+ #[test]
+-fn destination_resource_preparation_leaves_cleanup_owned_uninit_without_late_publication() {
++fn complete_destination_reservation_refuses_before_cell_or_entry_without_late_publication() {
+     let (mut frame, _, paths) = context(ADAPTER, 2024);
+     let mut store = GuestStore::new(1, 6, 32 << 20).unwrap();
+     // A real Frame allocated in the constrained store; no foreign owner ticket.
+@@ -452,18 +466,12 @@
+     let prepared = frame
+         .prepare_constant_publication(&proof, &v, &w, &store)
+         .unwrap();
+-    frame.fuel.charge().unwrap();
+-    assert!(
+-        frame
+-            .publish_constant_to_temporary(prepared, &mut store)
+-            .is_err()
+-    );
+-    assert_eq!(
+-        store.state(frame.cell(dst).unwrap()).unwrap(),
+-        CellState::Uninit
+-    );
++    assert!(publish_chunks(&mut frame, prepared, &proof, &mut store).is_err());
++    // Stronger complete admission: the old late-failure Uninit cell is no
++    // longer allocated, and the attempted opcode has not entered yet.
++    assert!(frame.cell(dst).is_err());
+     assert!(frame.source_view_ref(dst).unwrap().is_none());
+-    assert_eq!(frame.fuel.snapshot().used, 1);
++    assert_eq!(frame.fuel.snapshot().used, 0);
+     while !frame.active_scopes.is_empty() {
+         leave_current(&mut frame, &mut store);
+     }
+--- a/crates/lrr/src/vm/frame_constant_arrays.rs
++++ b/crates/lrr/src/vm/frame_constant_arrays.rs
+@@ -1,12 +1,15 @@
+ //! T054 physical publication into the existing ordinary temporary machine.
+ //! Only an opaque admitted use may reach production; its producer is prerequisite.
++#[path = "frame_constant_chunk_publication.rs"]
++mod chunks;
+ use super::*;
+ use crate::{
+     engine::constant_array_publication::AdmittedConstantUse,
+-    frontend::constants::{ConstValue, wire::ConstantWireType},
++    ir::constant_data::{ConstValue, wire::ConstantWireType},
+     runtime::cell::constant_instantiation::PreparedConstantInstantiation,
+     syntax::body_index::{ExpressionKind, NodeRole},
+ };
++pub(crate) use chunks::{ConstantPublicationActivation, ConstantPublicationChunk};
+ /// No public constructor, clone, raw result ticket or stable encoding.
+ pub(crate) struct PreparedConstantPublication<'a, 'world> {
+     admitted: &'a AdmittedConstantUse<'world>,
+@@ -139,6 +142,15 @@
+     ) -> Result<(), Diagnostic> {
+         let proof = prepared.admitted;
+         self.preflight_constant_use(proof, store)?;
++        if matches!(
++            store.type_descriptor(proof.ty())?.key.as_ref(),
++            crate::runtime::shape::TypeKey::Array { .. }
++        ) {
++            return Err(Diagnostic::new(
++                "LRR-E-UNSUPPORTED",
++                "constant array publication requires the resumable activation path".into(),
++            ));
++        }
+         if prepared.frame != self.anchor
+             || prepared.pc != self.pc
+             || prepared.destination != proof.destination()
+--- /dev/null
++++ b/crates/lrr/src/vm/frame_constant_chunk_publication.rs
+@@ -0,0 +1,305 @@
++//! Owned exact op data; current source authority is reborrowed on every advance.
++use super::*;
++use crate::runtime::cell::constant_instantiation::{ConstantChunkActivation, ConstantChunkPoll};
++/// No DB/proof borrow, raw constructor, Clone, serialized authority or caller flag.
++pub(crate) struct ConstantPublicationActivation {
++    frame: FrameId,
++    pc: PcKey,
++    destination: SlotId,
++    cell: CellId,
++    cell_epoch: u32,
++    scope: ScopeId,
++    epoch: u32,
++    span: crate::syntax::spans::BodySpan,
++    body_index: crate::core::digest::Digest,
++    source: crate::traits::term::TyTerm,
++    ty: TypeId,
++    content: crate::core::digest::Digest,
++    source_use: crate::core::digest::Digest,
++    charged_on_entry: bool,
++    physical: ConstantChunkActivation,
++    done: bool,
++}
++pub(crate) enum ConstantPublicationChunk {
++    Dispatch {
++        steps: u16,
++        bytes: u32,
++        cleaning: bool,
++    },
++    Published,
++    Fault {
++        diagnostic: Diagnostic,
++        cleanup_pending: bool,
++    },
++}
++impl ConstantPublicationActivation {
++    pub(crate) fn charged_on_entry(&self) -> bool {
++        self.charged_on_entry
++    }
++    pub(crate) fn fields_charged(&self) -> u64 {
++        self.physical.fields_charged()
++    }
++    pub(crate) fn cleaning(&self) -> bool {
++        self.physical.cleaning()
++    }
++}
++impl Frame {
++    /// Current source/metadata/table preflight precedes the single entry callback.
++    /// Return the owned activation to the uniform frame OpActivation attachment.
++    pub(crate) fn begin_constant_publication_chunks(
++        &mut self,
++        prepared: PreparedConstantPublication<'_, '_>,
++        store: &mut GuestStore,
++        charge: impl FnOnce(&mut Frame) -> Result<(), Diagnostic>,
++    ) -> Result<ConstantPublicationActivation, Diagnostic> {
++        let proof = prepared.admitted;
++        self.preflight_constant_use(proof, store)?;
++        if prepared.frame != self.anchor
++            || prepared.pc != self.pc
++            || prepared.destination != proof.destination()
++            || prepared.epoch != store.budget().epoch()
++            || prepared.prior != self.slot(prepared.destination)?.cell
++            || prepared.scope != self.slot(prepared.destination)?.scope
++            || prepared.ty != proof.ty()
++            || &prepared.source != proof.source()
++        {
++            return Err(invalid("constant chunk preparation is stale or foreign"));
++        }
++        let physical = store.prepare_constant_chunks(
++            prepared.construction,
++            usize::from(prepared.prior.is_none()),
++        )?;
++        let metadata = Self::metadata_bytes(&self.body, self.parameter_metadata_count())
++            .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
++            .and_then(|n| n.checked_add(self.projection_bytes))
++            .and_then(|n| n.checked_add(self.source_field_bytes()?))
++            .and_then(|n| n.checked_add(std::mem::size_of::<ConstantPublicationActivation>()))
++            .and_then(|n| n.checked_add(physical.metadata_bytes()))
++            .and_then(|n| n.checked_add(proof.metadata_bytes()?))
++            .and_then(|n| n.checked_add(prepared.source.heap_bytes()?))
++            .filter(|n| *n <= 32 << 20)
++            .ok_or_else(crate::runtime::arena::resource)?;
++        let _ = metadata;
++        self.fuel.poll()?;
++        let fuel_before = self.fuel.snapshot();
++        charge(self)?;
++        let fuel_after = self.fuel.snapshot();
++        if fuel_before.used.checked_add(1) != Some(fuel_after.used)
++            || fuel_before.limit != fuel_after.limit
++        {
++            return Err(invalid(
++                "constant chunk entry must charge exactly one original opcode",
++            ));
++        }
++        self.preflight_constant_use(proof, store)?;
++        // No active guard/value exists before this callback succeeds. This cell
++        // is an ordinary Uninit temporary, separately owned by its lexical scope.
++        let cell = self.prepare_write(prepared.destination, store)?;
++        let cell_epoch = store.location_epoch(cell)?;
++        Ok(ConstantPublicationActivation {
++            frame: self.anchor,
++            pc: self.pc.clone(),
++            destination: prepared.destination,
++            cell,
++            cell_epoch,
++            scope: prepared.scope,
++            epoch: store.budget().epoch(),
++            span: proof.span().clone(),
++            body_index: self.body.fingerprint(),
++            source: prepared.source,
++            ty: prepared.ty,
++            content: proof.content_identity(),
++            source_use: proof.source_use_identity(),
++            charged_on_entry: true,
++            physical,
++            done: false,
++        })
++    }
++    fn validate_constant_chunk_use(
++        &self,
++        a: &ConstantPublicationActivation,
++        proof: &AdmittedConstantUse<'_>,
++        store: &GuestStore,
++    ) -> Result<(), Diagnostic> {
++        // This is the actual full private source/query/frame proof, not an old
++        // digest or assumed completeness bit. Driver remints/reborrows it first.
++        self.preflight_constant_use(proof, store)?;
++        if a.done
++            || !a.charged_on_entry
++            || a.frame != self.anchor
++            || a.pc != self.pc
++            || a.destination != proof.destination()
++            || a.epoch != store.budget().epoch()
++            || a.span != *proof.span()
++            || a.body_index != self.body.fingerprint()
++            || a.ty != proof.ty()
++            || &a.source != proof.source()
++            || a.content != proof.content_identity()
++            || a.source_use != proof.source_use_identity()
++            || self.slot(a.destination)?.cell != Some(a.cell)
++            || self.slot(a.destination)?.scope != a.scope
++            || store.location_epoch(a.cell)? != a.cell_epoch
++            || !matches!(
++                store.state(a.cell)?,
++                crate::runtime::cell::CellState::Uninit
++            )
++        {
++            return Err(invalid(
++                "constant chunk source/site/content/storage binding differs",
++            ));
++        }
++        Ok(())
++    }
++    /// Authority-free abort only for this opaque activation's unpublished copies.
++    /// It starts rollback, never reports that cleanup is already complete.
++    pub(crate) fn abort_constant_publication_chunks(
++        &mut self,
++        a: &mut ConstantPublicationActivation,
++        store: &mut GuestStore,
++        error: Diagnostic,
++    ) -> Result<(), Diagnostic> {
++        if a.done || a.frame != self.anchor || a.epoch != store.budget().epoch() {
++            return Err(invalid("constant chunk abort is stale or foreign"));
++        }
++        store.abort_constant_chunks(&mut a.physical, error)
++    }
++    /// Called only with a legitimately current full source proof. Same PC stays
++    /// bound until Published; no entry charge or completed observation is repeated.
++    pub(crate) fn advance_constant_publication_chunks(
++        &mut self,
++        a: &mut ConstantPublicationActivation,
++        proof: &AdmittedConstantUse<'_>,
++        store: &mut GuestStore,
++    ) -> ConstantPublicationChunk {
++        if a.cleaning() {
++            return self.drain_constant_publication_chunks(a, store);
++        }
++        if let Err(error) = self.validate_constant_chunk_use(a, proof, store) {
++            if let Err(diagnostic) = self.abort_constant_publication_chunks(a, store, error) {
++                return ConstantPublicationChunk::Fault {
++                    diagnostic,
++                    cleanup_pending: true,
++                };
++            }
++            return self.drain_constant_publication_chunks(a, store);
++        }
++        self.step_constant_publication_chunks(a, store)
++    }
++    /// Source failure may make a fresh proof unavailable. Closed private physical
++    /// rollback uses only the existing opaque owner/cursor and cannot publish.
++    pub(crate) fn drain_constant_publication_chunks(
++        &mut self,
++        a: &mut ConstantPublicationActivation,
++        store: &mut GuestStore,
++    ) -> ConstantPublicationChunk {
++        if !a.cleaning() || a.done || a.frame != self.anchor || a.epoch != store.budget().epoch() {
++            return ConstantPublicationChunk::Fault {
++                diagnostic: invalid("constant private rollback state is unavailable"),
++                cleanup_pending: true,
++            };
++        }
++        self.step_constant_publication_chunks(a, store)
++    }
++    fn step_constant_publication_chunks(
++        &mut self,
++        a: &mut ConstantPublicationActivation,
++        store: &mut GuestStore,
++    ) -> ConstantPublicationChunk {
++        match store.advance_constant_chunks(&mut a.physical, &mut self.fuel) {
++            ConstantChunkPoll::Dispatch {
++                steps,
++                bytes,
++                cleaning,
++            } => ConstantPublicationChunk::Dispatch {
++                steps,
++                bytes,
++                cleaning,
++            },
++            ConstantChunkPoll::Failed(diagnostic) => {
++                // A successful private drain is marked finished by the physical
++                // cursor; stale/internal cleanup errors keep the activation owned.
++                let pending = !a.physical.finished_for_frame();
++                if !pending {
++                    a.done = true;
++                }
++                ConstantPublicationChunk::Fault {
++                    diagnostic,
++                    cleanup_pending: pending,
++                }
++            }
++            ConstantChunkPoll::Ready(pending) => {
++                if let Err(error) = self.preflight_source_view(a.destination, Some(&a.source)) {
++                    if let Err(diagnostic) =
++                        store.cleanup_ready_constant_chunks(&mut a.physical, pending, error)
++                    {
++                        return ConstantPublicationChunk::Fault {
++                            diagnostic,
++                            cleanup_pending: true,
++                        };
++                    }
++                    return ConstantPublicationChunk::Dispatch {
++                        steps: 0,
++                        bytes: 0,
++                        cleaning: true,
++                    };
++                }
++                if let Err(error) = self.fuel.poll() {
++                    if let Err(diagnostic) =
++                        store.cleanup_ready_constant_chunks(&mut a.physical, pending, error)
++                    {
++                        return ConstantPublicationChunk::Fault {
++                            diagnostic,
++                            cleanup_pending: true,
++                        };
++                    }
++                    return ConstantPublicationChunk::Dispatch {
++                        steps: 0,
++                        bytes: 0,
++                        cleaning: true,
++                    };
++                }
++                match store.commit_pending_constant(pending, a.cell) {
++                    Ok(()) => {
++                        // Move the already-admitted source term; no late clone or
++                        // array traversal occurs after the physical commit.
++                        let source = std::mem::replace(
++                            &mut a.source,
++                            crate::traits::term::TyTerm::Primitive(
++                                crate::ir::op::PrimitiveType::Unit,
++                            ),
++                        );
++                        match self.set_source_view(a.destination, Some(source)) {
++                            Ok(()) => {
++                                a.done = true;
++                                ConstantPublicationChunk::Published
++                            }
++                            Err(diagnostic) => ConstantPublicationChunk::Fault {
++                                diagnostic,
++                                cleanup_pending: true,
++                            },
++                        }
++                    }
++                    Err((error, pending)) => {
++                        if let Err(diagnostic) =
++                            store.cleanup_ready_constant_chunks(&mut a.physical, pending, error)
++                        {
++                            return ConstantPublicationChunk::Fault {
++                                diagnostic,
++                                cleanup_pending: true,
++                            };
++                        }
++                        ConstantPublicationChunk::Dispatch {
++                            steps: 0,
++                            bytes: 0,
++                            cleaning: true,
++                        }
++                    }
++                }
++            }
++        }
++    }
++}
++
++#[cfg(test)]
++#[path = "frame_constant_chunk_tests.rs"]
++mod tests;
+--- /dev/null
++++ b/crates/lrr/src/vm/frame_constant_chunk_tests.rs
+@@ -0,0 +1,397 @@
++//! Actual current source proof reborrows over disclosed ordinary frame phases.
++//! This is not automatic dispatcher/complete official nrvo execution.
++use super::*;
++use crate::{
++    frontend::{
++        constant_construction::{
++            CurrentConstantConstruction,
++            tests::{array, query, result, success, world},
++        },
++        constant_path_selection::{ConstantPathOutcome, ConstantPathSelection},
++    },
++    ir::op::PrimitiveType,
++    runtime::{
++        place::{Place, PlaceRoot, Projection},
++        reference::Access,
++        value::ValueRepr,
++    },
++    syntax::{body_index::BodyIndexLimits, outline::BodyHandle, spans::SourceRange},
++};
++const TEXT: &str =
++    "const BIG:[u8;1024]=[0;1024];fn chunk_use(){let first=BIG;let second=BIG;}fn main(){}";
++fn frame(
++    db: &crate::db::memo::Database,
++    view: &crate::source::changes::PreparedSourceView,
++    store: &mut GuestStore,
++) -> (Frame, BodyHandle, crate::ir::pc::NodeId) {
++    let body = view
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "chunk_use")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap()
++        .clone();
++    let parsed = db.prepared_parse(&view.selection().outline.parse).unwrap();
++    let index = parsed
++        .index_body(&body, BodyIndexLimits::default())
++        .unwrap();
++    let node = index
++        .nodes()
++        .iter()
++        .find(|node| {
++            if node.role != NodeRole::Expression(ExpressionKind::Path) {
++                return false;
++            }
++            let s = index.span(node.id).unwrap();
++            &TEXT[(body.range.start + s.relative_start) as usize
++                ..(body.range.start + s.relative_end) as usize]
++                == "BIG"
++        })
++        .unwrap()
++        .id;
++    let mut frame = Frame::new(
++        index.clone(),
++        index.pc(node, crate::ir::pc::Phase::Entry).unwrap(),
++        store,
++    )
++    .unwrap();
++    let mut current = Some(
++        frame
++            .constant_slot_scope_for_test(index.nodes()[node.0 as usize].value.unwrap())
++            .unwrap(),
++    );
++    let mut scopes = Vec::new();
++    while let Some(scope) = current {
++        scopes.push(scope);
++        current = index.scopes()[scope.0 as usize].parent;
++    }
++    for scope in scopes.into_iter().rev() {
++        frame.constant_enter_for_test(scope).unwrap();
++    }
++    (frame, body, node)
++}
++fn path(
++    db: &crate::db::memo::Database,
++    view: &crate::source::changes::PreparedSourceView,
++    frame: &Frame,
++    body: &BodyHandle,
++    node: crate::ir::pc::NodeId,
++    views: &[&crate::source::changes::PreparedSourceView],
++) -> ConstantPathSelection {
++    let s = frame.body.span(node).unwrap();
++    let range = SourceRange {
++        start: body.range.start + s.relative_start,
++        end: body.range.start + s.relative_end,
++    };
++    let ConstantPathOutcome::Selected(path) =
++        ConstantPathSelection::capture_current(db, view, body, range, views, 32 << 20).unwrap()
++    else {
++        panic!("BIG source not selected")
++    };
++    path
++}
++#[test]
++fn actual_array_source_proof_is_reborrowed_each_chunk_with_one_entry_and_stable_pc() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, view, definition) = world(TEXT, "BIG", edition);
++        let ready = result(&db, &view, definition);
++        let (_, d) = ready.array().unwrap();
++        let child = ready
++            .admission()
++            .reselect_array_length_current(&db, &view, d, 32 << 20)
++            .unwrap();
++        let length = query(&mut db, &view, &child, &d.expected_wire());
++        let parent = query(
++            &mut db,
++            &view,
++            ready.admission(),
++            &array(PrimitiveType::U8, 1024),
++        );
++        let mut store = GuestStore::new(1, 30000, 32 << 20).unwrap();
++        let (mut frame, body, node) = frame(&db, &view, &mut store);
++        let views = [&view];
++        let path = path(&db, &view, &frame, &body, node, &views);
++        let pc = frame.pc().clone();
++        let destination = frame.body.nodes()[node.0 as usize].value.unwrap();
++        let image = success(&parent).payload().decode_value().unwrap();
++        let mut charges = 0;
++        let mut act = {
++            let construction = CurrentConstantConstruction::capture_current(
++                &db,
++                &view,
++                &ready,
++                success(&parent),
++                Some((&child, success(&length))),
++                32 << 20,
++            )
++            .unwrap();
++            let binding = construction.bind_guest_descriptor(&mut store).unwrap();
++            let proof = AdmittedConstantUse::capture_current(
++                &frame,
++                destination,
++                &view,
++                &views,
++                &path,
++                binding,
++                &store,
++            )
++            .unwrap();
++            let prepared = frame
++                .prepare_constant_publication(&proof, &image, construction.wire(), &store)
++                .unwrap();
++            frame
++                .begin_constant_publication_chunks(prepared, &mut store, |frame| {
++                    charges += 1;
++                    frame.fuel.charge()
++                })
++                .unwrap()
++        };
++        assert_eq!(charges, 1);
++        assert!(act.charged_on_entry());
++        let mut dispatches = 0;
++        let mut published = false;
++        for _ in 0..20000 {
++            // Construction/descriptor/source use proof are scoped borrows. None
++            // is persisted in act; real current DB/dependencies are replayed.
++            let construction = CurrentConstantConstruction::capture_current(
++                &db,
++                &view,
++                &ready,
++                success(&parent),
++                Some((&child, success(&length))),
++                32 << 20,
++            )
++            .unwrap();
++            let binding = construction.bind_guest_descriptor(&mut store).unwrap();
++            let proof = AdmittedConstantUse::capture_current(
++                &frame,
++                destination,
++                &view,
++                &views,
++                &path,
++                binding,
++                &store,
++            )
++            .unwrap();
++            match frame.advance_constant_publication_chunks(&mut act, &proof, &mut store) {
++                ConstantPublicationChunk::Dispatch {
++                    steps,
++                    bytes,
++                    cleaning,
++                } => {
++                    assert!(steps <= 256 && bytes <= 64 << 10 && !cleaning);
++                    dispatches += 1;
++                    assert!(matches!(
++                        store.state(act.cell).unwrap(),
++                        crate::runtime::cell::CellState::Uninit
++                    ));
++                }
++                ConstantPublicationChunk::Published => {
++                    published = true;
++                    break;
++                }
++                ConstantPublicationChunk::Fault { diagnostic, .. } => {
++                    panic!("{}: {}", diagnostic.code, diagnostic.message)
++                }
++            }
++            assert_eq!(frame.pc(), &pc);
++        }
++        assert!(published && dispatches > 1);
++        assert_eq!(frame.pc(), &pc);
++        assert_eq!(charges, 1);
++        assert_eq!(act.fields_charged(), 1024);
++        assert_eq!(frame.fuel.snapshot().used, 1025);
++        assert!(act.done);
++        let place = Place {
++            root: PlaceRoot::Cell(frame.cell(destination).unwrap()),
++            projections: Box::new([Projection::Index(33)]),
++        };
++        let reference = store.borrow(&place, Access::Mutable).unwrap();
++        let ticket = store
++            .ticket(ValueRepr::unsigned(TypeId(9), 3).unwrap())
++            .unwrap();
++        let old = store.replace_reference(reference, ticket).unwrap();
++        store.discard(old).unwrap();
++        assert_eq!(store.read_reference(reference).unwrap().payload, 3);
++        assert_eq!(image.elements().unwrap()[33].scalar().unwrap().payload, 0);
++        // Root still owns clear-OpActivation/normal return PC/one success event.
++    }
++}
++#[test]
++fn source_loss_after_array_dispatch_keeps_cleanup_pending_until_private_owners_drained() {
++    let (mut db, view, definition) = world(TEXT, "BIG", 2024);
++    let ready = result(&db, &view, definition);
++    let (_, d) = ready.array().unwrap();
++    let child = ready
++        .admission()
++        .reselect_array_length_current(&db, &view, d, 32 << 20)
++        .unwrap();
++    let length = query(&mut db, &view, &child, &d.expected_wire());
++    let parent = query(
++        &mut db,
++        &view,
++        ready.admission(),
++        &array(PrimitiveType::U8, 1024),
++    );
++    let image = success(&parent).payload().decode_value().unwrap();
++    let mut store = GuestStore::new(1, 30000, 32 << 20).unwrap();
++    let (mut frame, body, node) = frame(&db, &view, &mut store);
++    let views = [&view];
++    let path = path(&db, &view, &frame, &body, node, &views);
++    let destination = frame.body.nodes()[node.0 as usize].value.unwrap();
++    let pc = frame.pc().clone();
++    let mut act = {
++        let c = CurrentConstantConstruction::capture_current(
++            &db,
++            &view,
++            &ready,
++            success(&parent),
++            Some((&child, success(&length))),
++            32 << 20,
++        )
++        .unwrap();
++        let b = c.bind_guest_descriptor(&mut store).unwrap();
++        let proof = AdmittedConstantUse::capture_current(
++            &frame,
++            destination,
++            &view,
++            &views,
++            &path,
++            b,
++            &store,
++        )
++        .unwrap();
++        let p = frame
++            .prepare_constant_publication(&proof, &image, c.wire(), &store)
++            .unwrap();
++        frame
++            .begin_constant_publication_chunks(p, &mut store, |frame| frame.fuel.charge())
++            .unwrap()
++    };
++    {
++        let c = CurrentConstantConstruction::capture_current(
++            &db,
++            &view,
++            &ready,
++            success(&parent),
++            Some((&child, success(&length))),
++            32 << 20,
++        )
++        .unwrap();
++        let b = c.bind_guest_descriptor(&mut store).unwrap();
++        let proof = AdmittedConstantUse::capture_current(
++            &frame,
++            destination,
++            &view,
++            &views,
++            &path,
++            b,
++            &store,
++        )
++        .unwrap();
++        assert!(matches!(
++            frame.advance_constant_publication_chunks(&mut act, &proof, &mut store),
++            ConstantPublicationChunk::Dispatch {
++                cleaning: false,
++                ..
++            }
++        ));
++    }
++    let source_revision = db.source_revision();
++    db.begin_expansion_epoch(2).unwrap();
++    assert_eq!(db.source_revision(), source_revision);
++    let actual_source_error = match CurrentConstantConstruction::capture_current(
++        &db,
++        &view,
++        &ready,
++        success(&parent),
++        Some((&child, success(&length))),
++        32 << 20,
++    ) {
++        Err(error) => error,
++        Ok(_) => panic!("changed source epoch unexpectedly admitted"),
++    };
++    let expected_code = actual_source_error.code;
++    frame
++        .abort_constant_publication_chunks(&mut act, &mut store, actual_source_error)
++        .unwrap();
++    assert!(act.cleaning() && !act.done);
++    let used = frame.fuel.snapshot().used;
++    let mut drained = false;
++    for _ in 0..20000 {
++        match frame.drain_constant_publication_chunks(&mut act, &mut store) {
++            ConstantPublicationChunk::Dispatch {
++                steps,
++                bytes,
++                cleaning,
++            } => assert!(steps <= 256 && bytes <= 64 << 10 && cleaning),
++            ConstantPublicationChunk::Fault {
++                diagnostic,
++                cleanup_pending: false,
++            } => {
++                assert_eq!(diagnostic.code, expected_code);
++                drained = true;
++                break;
++            }
++            _ => panic!("source failure became success or unfinished failure"),
++        }
++    }
++    assert!(drained && act.done);
++    assert_eq!(frame.pc(), &pc);
++    assert_eq!(frame.fuel.snapshot().used, used);
++    assert!(matches!(
++        store.state(act.cell).unwrap(),
++        crate::runtime::cell::CellState::Uninit
++    ));
++    assert_eq!(frame.source_view_ref(destination).unwrap(), None);
++}
++#[test]
++fn constant_array_entry_callback_must_really_charge_once_before_any_private_owner() {
++    let (mut db, view, definition) = world(TEXT, "BIG", 2024);
++    let ready = result(&db, &view, definition);
++    let (_, d) = ready.array().unwrap();
++    let child = ready
++        .admission()
++        .reselect_array_length_current(&db, &view, d, 32 << 20)
++        .unwrap();
++    let length = query(&mut db, &view, &child, &d.expected_wire());
++    let parent = query(
++        &mut db,
++        &view,
++        ready.admission(),
++        &array(PrimitiveType::U8, 1024),
++    );
++    let image = success(&parent).payload().decode_value().unwrap();
++    let mut store = GuestStore::new(1, 30000, 32 << 20).unwrap();
++    let (mut frame, body, node) = frame(&db, &view, &mut store);
++    let views = [&view];
++    let path = path(&db, &view, &frame, &body, node, &views);
++    let destination = frame.body.nodes()[node.0 as usize].value.unwrap();
++    let c = CurrentConstantConstruction::capture_current(
++        &db,
++        &view,
++        &ready,
++        success(&parent),
++        Some((&child, success(&length))),
++        32 << 20,
++    )
++    .unwrap();
++    let b = c.bind_guest_descriptor(&mut store).unwrap();
++    let proof =
++        AdmittedConstantUse::capture_current(&frame, destination, &view, &views, &path, b, &store)
++            .unwrap();
++    let p = frame
++        .prepare_constant_publication(&proof, &image, c.wire(), &store)
++        .unwrap();
++    let before = store.budget().handles();
++    assert!(
++        frame
++            .begin_constant_publication_chunks(p, &mut store, |_| Ok(()))
++            .is_err()
++    );
++    assert_eq!(before, store.budget().handles());
++    assert_eq!(frame.fuel.snapshot().used, 0);
++}
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/nrvo.rs
+@@ -0,0 +1,25 @@
++//@ run-pass
++
++// When the NRVO is applied, the return place (`_0`) gets treated like a normal local. For example,
++// its address may be taken and it may be written to indirectly. Ensure that the const-eval
++// interpreter can handle this.
++
++#[inline(never)] // Try to ensure that MIR optimizations don't optimize this away.
++const fn init(buf: &mut [u8; 1024]) {
++    buf[33] = 3;
++    buf[444] = 4;
++}
++
++const fn nrvo() -> [u8; 1024] {
++    let mut buf = [0; 1024];
++    init(&mut buf);
++    buf
++}
++
++const BUF: [u8; 1024] = nrvo();
++
++fn main() {
++    assert_eq!(BUF[33], 3);
++    assert_eq!(BUF[19], 0);
++    assert_eq!(BUF[444], 4);
++}

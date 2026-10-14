@@ -1,0 +1,3 @@
+Frozen source-only WT06-01/WT07-02 T060 managed Buffer slice-window packet. No canonical/targets/Cargo/compiler/guest build/run or full fixture pass. See ROOT-HOOKS.md for precise source-phase/selection/schema prerequisites and limits.
+
+Patch order after frozen Vec schema6 + Scalar correction: production.patch, shared-attachments.patch, acceptance.patch. complete.patch reproduces the same candidate against schema6-corrected-baseline. Five public + four private tests are uncompiled/unexecuted. Nine unchanged upstream sources/expected files/licenses retain ae0fe commit and hashes. Direct pinned rustfmt and exact patch reproduction are the only checks here.

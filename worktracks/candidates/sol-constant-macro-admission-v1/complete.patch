@@ -1,0 +1,1392 @@
+diff --git a/crates/lrr/src/syntax/pure_constants.rs b/crates/lrr/src/syntax/pure_constants.rs
+--- a/crates/lrr/src/syntax/pure_constants.rs
++++ b/crates/lrr/src/syntax/pure_constants.rs
+@@ -11,7 +11,10 @@
+         digest::{Digest, StableEncode, StableEncoder},
+         profile::ProfileIdentity,
+     },
+-    frontend::{constant_source_admission::CurrentConstantTypeCertificate, constants::ConstValue},
++    frontend::{
++        constant_macro_admission::AdmittedConstantPanic,
++        constant_source_admission::CurrentConstantTypeCertificate, constants::ConstValue,
++    },
+     ir::op::{DecodedLiteral, NumericBinary, NumericUnary, PrimitiveType},
+     source::{
+         changes::{PreparedSourceView, SourceSelection},
+@@ -69,6 +72,7 @@
+     selection: Option<SourceSelection>,
+     module_items: Vec<ast::Item>,
+     type_certificate: Option<CurrentConstantTypeCertificate>,
++    macro_proofs: BTreeMap<(u32, u32), AdmittedConstantPanic>,
+     declarations: Vec<ConstantDeclaration>,
+     items: BTreeMap<String, Vec<ast::Item>>,
+     owners: Vec<(SourceRange, Digest, Option<BodyHandle>)>,
+@@ -153,6 +157,7 @@
+     Array(Vec<ExprRef>),
+     Repeat(ExprRef, ExprRef),
+     Panic,
++    AdmittedPanic(AdmittedConstantPanic),
+     Unsupported,
+ }
+ impl ConstantSource {
+@@ -314,6 +319,7 @@
+             selection,
+             module_items,
+             type_certificate: None,
++            macro_proofs: BTreeMap::new(),
+             declarations,
+             items,
+             owners,
+@@ -344,6 +350,46 @@
+             return Err(fault("constant source certificate already attached"));
+         }
+         captured.type_certificate = Some(certificate);
++        Ok(self)
++    }
++    pub(crate) fn with_macro_proof(
++        mut self,
++        proof: AdmittedConstantPanic,
++    ) -> Result<Self, Diagnostic> {
++        let selection =
++            self.0.selection.as_ref().ok_or_else(|| {
++                fault("content-only constants cannot attach current macro authority")
++            })?;
++        let range = proof.range();
++        let body = self
++            .0
++            .owners
++            .iter()
++            .filter(|(owner, _, _)| owner.contains(range))
++            .min_by_key(|(owner, _, _)| owner.end - owner.start)
++            .and_then(|(_, _, body)| body.as_ref())
++            .ok_or_else(|| fault("constant macro proof owning body absent"))?;
++        if !proof.matches(selection, body, range) {
++            return Err(fault("constant macro proof source/body/range differs"));
++        }
++        if self.0.macro_proofs.len() >= 256 {
++            return Err(fault("constant macro proof count limit"));
++        }
++        let total = self
++            .metadata_bytes()?
++            .checked_add(proof.metadata_bytes())
++            .filter(|n| *n <= 32 * 1024 * 1024)
++            .ok_or_else(|| fault("constant macro proof metadata limit"))?;
++        let _ = total;
++        let captured = Rc::get_mut(&mut self.0)
++            .ok_or_else(|| fault("constant macro proof requires a fresh capture"))?;
++        if captured
++            .macro_proofs
++            .insert((range.start, range.end), proof)
++            .is_some()
++        {
++            return Err(fault("constant macro proof range was already attached"));
++        }
+         Ok(self)
+     }
+     pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
+@@ -370,6 +416,12 @@
+                 .and_then(|n| n.checked_add(declaration.name.capacity()))
+                 .and_then(|n| n.checked_add(declaration.context.scope.heap_bytes()))
+                 .ok_or_else(|| fault("constant source declaration metadata overflow"))?;
++        }
++        for proof in self.0.macro_proofs.values() {
++            bytes = bytes
++                .checked_add(proof.metadata_bytes())
++                .and_then(|n| n.checked_add(128))
++                .ok_or_else(|| fault("constant macro metadata overflow"))?;
+         }
+         bytes = bytes
+             .checked_add(
+@@ -544,8 +596,14 @@
+         if let Some(body) = owner_body {
+             body.require_entry()?;
+         }
+-        let mut e = StableEncoder::new("lrr/v2/pure-constant-source-plan");
++        let mut e = StableEncoder::new("lrr/v3/pure-constant-source-plan");
+         e.digest(self.0.crate_key);
++        e.u64(self.0.macro_proofs.len() as u64);
++        for ((start, end), proof) in &self.0.macro_proofs {
++            e.u32(*start);
++            e.u32(*end);
++            e.digest(proof.identity());
++        }
+         e.record(&self.0.scope);
+         e.option(self.0.selection.as_ref(), |e, selection| {
+             e.string(selection.path.as_str());
+@@ -1001,6 +1059,36 @@
+                 ast::ArrayExprKind::ElementList(es) => Node::Array(es.map(ExprRef).collect()),
+             },
+             E::MacroExpr(m) => {
++                if let Some(selection) = &self.0.selection {
++                    let at = e.range();
++                    let proof = self
++                        .0
++                        .macro_proofs
++                        .get(&(at.start, at.end))
++                        .ok_or_else(|| {
++                            Diagnostic::new(
++                                "LRR-E-CONST-MACRO-SOURCE",
++                                "reached constant macro requires current source/operand admission"
++                                    .into(),
++                            )
++                        })?;
++                    let body = self
++                        .0
++                        .owners
++                        .iter()
++                        .filter(|(owner, _, _)| owner.contains(at))
++                        .min_by_key(|(owner, _, _)| owner.end - owner.start)
++                        .and_then(|(_, _, body)| body.as_ref())
++                        .ok_or_else(|| fault("reached constant macro body identity absent"))?;
++                    if !proof.matches(selection, body, at) {
++                        return Err(fault(
++                            "reached constant macro proof owner/source/range differs",
++                        ));
++                    }
++                    return Ok(Node::AdmittedPanic(proof.clone()));
++                }
++                // Legacy content-only parsing retains its old syntactic classification;
++                // this branch never authorizes current publication or reached Rust semantics.
+                 let call = required(m.macro_call())?;
+                 if bare(required(call.path())?)? == "panic"
+                     && call.token_tree().is_some_and(|t| {
+diff --git a/crates/lrr/src/frontend/constant_source_admission.rs b/crates/lrr/src/frontend/constant_source_admission.rs
+--- a/crates/lrr/src/frontend/constant_source_admission.rs
++++ b/crates/lrr/src/frontend/constant_source_admission.rs
+@@ -89,6 +89,7 @@
+     stamps: BTreeMap<InputKey, Digest>,
+     bytes: usize,
+     byte_limit: usize,
++    macro_proofs: Vec<crate::frontend::constant_macro_admission::AdmittedConstantPanic>,
+ }
+ fn value_bytes(value: &ConstValue, depth: usize, nodes: &mut usize) -> Result<usize, Diagnostic> {
+     *nodes = nodes
+@@ -191,8 +192,42 @@
+         request: ConstantRequest,
+         byte_limit: usize,
+     ) -> Result<Self, Diagnostic> {
+-        if byte_limit < std::mem::size_of::<Self>() + 256 || byte_limit > MAX_BYTES {
++        Self::capture_current_impl(db, source, definition, request, byte_limit, &[])
++    }
++    pub(crate) fn capture_current_with_macro_proofs(
++        db: &Database,
++        source: &PreparedSourceView,
++        definition: Digest,
++        request: ConstantRequest,
++        byte_limit: usize,
++        proofs: &[crate::frontend::constant_macro_admission::AdmittedConstantPanic],
++    ) -> Result<Self, Diagnostic> {
++        Self::capture_current_impl(db, source, definition, request, byte_limit, proofs)
++    }
++    fn capture_current_impl(
++        db: &Database,
++        source: &PreparedSourceView,
++        definition: Digest,
++        request: ConstantRequest,
++        byte_limit: usize,
++        proofs: &[crate::frontend::constant_macro_admission::AdmittedConstantPanic],
++    ) -> Result<Self, Diagnostic> {
++        if proofs.len() > 256
++            || byte_limit < std::mem::size_of::<Self>() + 256
++            || byte_limit > MAX_BYTES
++        {
+             return Err(limit());
++        }
++        let mut proof_bytes = 0usize;
++        for proof in proofs {
++            proof_bytes = proof_bytes
++                .checked_add(proof.metadata_bytes())
++                .and_then(|n| n.checked_add(128))
++                .filter(|n| *n <= byte_limit)
++                .ok_or_else(limit)?;
++        }
++        for proof in proofs {
++            proof.revalidate(db, source)?;
+         }
+         source.require_original_hygiene()?;
+         source.require_declaration_syntax()?;
+@@ -234,7 +269,14 @@
+             }
+         }
+         let stamps = db.source_view_namespace_stamps()?;
+-        let mut bytes = std::mem::size_of::<Self>() + 256;
++        let mut bytes = std::mem::size_of::<Self>()
++            .checked_add(256)
++            .and_then(|n| {
++                n.checked_add(proofs.len().checked_mul(std::mem::size_of::<
++                    crate::frontend::constant_macro_admission::AdmittedConstantPanic,
++                >())?)
++            })
++            .ok_or_else(limit)?;
+         bytes = bytes
+             .checked_add(source.selection().metadata_bytes()?)
+             .and_then(|n| n.checked_add(request_bytes(&request).ok()?.checked_mul(2)?))
+@@ -341,6 +383,10 @@
+             scope: item.scope.clone(),
+             absent,
+         })?;
++        let mut captured = captured;
++        for proof in proofs {
++            captured = captured.with_macro_proof(proof.clone())?;
++        }
+         bytes = bytes
+             .checked_add(captured.metadata_bytes()?)
+             .filter(|n| *n <= byte_limit)
+@@ -370,6 +416,7 @@
+             stamps,
+             bytes,
+             byte_limit,
++            macro_proofs: proofs.to_vec(),
+         })
+     }
+     pub(crate) fn plan(&self) -> &ConstantPlan {
+@@ -393,12 +440,13 @@
+                 "constant admitted publication or input membership changed",
+             ));
+         }
+-        let fresh = Self::capture_current(
++        let fresh = Self::capture_current_impl(
+             db,
+             source,
+             self.definition,
+             self.request.clone(),
+             self.byte_limit,
++            &self.macro_proofs,
+         )?;
+         if self.identity() != fresh.identity() {
+             return Err(fault("constant source plan/certificate changed"));
+diff --git a/crates/lrr/src/frontend/constant_macro_admission.rs b/crates/lrr/src/frontend/constant_macro_admission.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_macro_admission.rs
+@@ -0,0 +1,341 @@
++//! T054 reached constant macro admission from current published selection evidence.
++//! NoItem certifies declarations; operand admission below certifies only the closed
++//! empty/static-string panic argument lane, never arbitrary const/format semantics.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::{
++        dependency::{InputKey, InputValue},
++        memo::Database,
++        seals::{SealDomain, SealKey},
++    },
++    facade::macros::RuntimeMacroKind,
++    frontend::{
++        constant_source_admission::ConstantSourceAdmission,
++        macro_names::PathLookup,
++        runtime_macro_catalog::RuntimeMacroCatalog,
++        runtime_macro_plan::{RuntimeMacroPreparation, RuntimeNoItemProof, StaticPanicLowering},
++    },
++    source::{
++        changes::{PreparedSourceView, SourceSelection},
++        manifest::{BodyKey, Namespace},
++    },
++    syntax::{
++        outline::{BodyHandle, DeclarationContext},
++        spans::SourceRange,
++    },
++};
++use std::{collections::BTreeMap, rc::Rc};
++const MAX_BYTES: usize = 32 * 1024 * 1024;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-CONST-MACRO-SOURCE", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "constant macro admission budget".into(),
++    )
++}
++#[derive(Debug)]
++pub(crate) struct CurrentConstantMacroProof {
++    selection: SourceSelection,
++    context: DeclarationContext,
++    body: BodyHandle,
++    range: SourceRange,
++    no_item: RuntimeNoItemProof,
++    arguments: Digest,
++    message: String,
++    seal: SealKey,
++    seal_fingerprint: Digest,
++    stamps: BTreeMap<InputKey, Digest>,
++    bytes: usize,
++    byte_limit: usize,
++}
++/// A cheap immutable syntax-node handle. Its private proof is not a runtime
++/// Macro PC and cannot be applied at another source/body/range or edition.
++#[derive(Debug, Clone)]
++pub(crate) struct AdmittedConstantPanic(Rc<CurrentConstantMacroProof>);
++impl AdmittedConstantPanic {
++    pub(crate) fn message(&self) -> &str {
++        &self.0.message
++    }
++    pub(crate) fn definition(&self) -> Digest {
++        self.0.no_item.definition().identity
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        self.0.identity()
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.0.bytes
++    }
++    pub(crate) fn range(&self) -> SourceRange {
++        self.0.range
++    }
++    pub(crate) fn matches(
++        &self,
++        selection: &SourceSelection,
++        body: &BodyHandle,
++        range: SourceRange,
++    ) -> bool {
++        &self.0.selection == selection && &self.0.body == body && self.0.range == range
++    }
++    pub(crate) fn revalidate(
++        &self,
++        db: &Database,
++        source: &PreparedSourceView,
++    ) -> Result<(), Diagnostic> {
++        self.0.revalidate(db, source)
++    }
++}
++impl CurrentConstantMacroProof {
++    pub(crate) fn capture_current(
++        db: &Database,
++        source: &PreparedSourceView,
++        constant: &ConstantSourceAdmission,
++        body: &BodyKey,
++        range: SourceRange,
++        byte_limit: usize,
++    ) -> Result<AdmittedConstantPanic, Diagnostic> {
++        if byte_limit < std::mem::size_of::<Self>() + 256 || byte_limit > MAX_BYTES {
++            return Err(limit());
++        }
++        constant.revalidate(db, source)?;
++        let proof = Self::mint(db, source, body, range, byte_limit)?;
++        if proof.context.scope != constant.plan().owner_context().scope {
++            return Err(fault("constant macro belongs to another captured module"));
++        }
++        Ok(AdmittedConstantPanic(Rc::new(proof)))
++    }
++    fn mint(
++        db: &Database,
++        source: &PreparedSourceView,
++        body: &BodyKey,
++        range: SourceRange,
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        if byte_limit < std::mem::size_of::<Self>() + 256 || byte_limit > MAX_BYTES {
++            return Err(limit());
++        }
++        source.require_original_hygiene()?;
++        source.require_declaration_syntax()?;
++        let item = source
++            .outline()
++            .items
++            .iter()
++            .find(|i| i.body.as_ref().is_some_and(|h| h.key() == *body))
++            .ok_or_else(|| fault("constant macro exact owning body is absent"))?;
++        if item.scope.owner.is_some() {
++            return Err(fault(
++                "lexical/associated constant macro requires separate admission",
++            ));
++        }
++        let handle = item
++            .body
++            .as_ref()
++            .ok_or_else(|| fault("constant macro body handle absent"))?;
++        handle.require_entry()?;
++        if range.is_empty() || !handle.range.contains(range) {
++            return Err(fault("constant macro range is outside exact body"));
++        }
++        let context = DeclarationContext {
++            scope: item.scope.clone(),
++            range: item.declaration_span,
++        };
++        let definition = item.def_key.fingerprint();
++        if !matches!(db.published_input(&InputKey::DefinitionSource(definition)),Some((InputValue::DefinitionSource(parse),_)) if parse==&source.selection().outline.parse)
++            || !matches!(db.published_input(&InputKey::DefinitionHeader(definition)),Some((InputValue::DefinitionHeader(header),_)) if header==&item.header)
++            || !matches!(db.published_input(&InputKey::DefinitionBody(definition)),Some((InputValue::DefinitionBody(actual),_)) if actual==handle)
++            || !matches!(db.published_input(&InputKey::DeclarationContext(definition)),Some((InputValue::DeclarationContext(actual),_)) if actual==&context)
++        {
++            return Err(fault(
++                "constant macro declaration/header/body context changed",
++            ));
++        }
++        for (key, value) in source.prepared_inputs() {
++            if db
++                .published_input(key)
++                .is_none_or(|(_, actual)| actual != value.fingerprint())
++            {
++                return Err(fault(
++                    "constant macro captured source/compiler input changed",
++                ));
++            }
++        }
++        let stamps = db.source_view_namespace_stamps()?;
++        let mut bytes = std::mem::size_of::<Self>()
++            .checked_add(256)
++            .and_then(|n| n.checked_add(source.selection().metadata_bytes().ok()?))
++            .and_then(|n| n.checked_add(context.scope.heap_bytes()))
++            .ok_or_else(limit)?;
++        for key in stamps.keys() {
++            bytes = bytes
++                .checked_add(std::mem::size_of::<(InputKey, Digest)>() + 128)
++                .and_then(|n| n.checked_add(key.heap_bytes()))
++                .filter(|n| *n <= byte_limit)
++                .ok_or_else(limit)?;
++        }
++        let published = db.source_view_scope_certificate(source.selection(), &item.scope)?;
++        let InputValue::DiscoverySeal(input) = published.as_ref() else {
++            return Err(fault("constant macro Value seal variant differs"));
++        };
++        let certified = input
++            .scope
++            .as_ref()
++            .ok_or_else(|| fault("constant macro scope certificate absent"))?;
++        let seal = input.seal.key();
++        seal.validate()?;
++        if certified.scope != item.scope
++            || certified.namespace != Namespace::Value
++            || certified.edition != source.selection().outline.parse.profile.edition
++            || !matches!(input.seal.domain(),SealDomain::Scope{id,namespace} if *id==item.scope.fingerprint() && *namespace==Namespace::Value)
++            || input.sources.len() != 1
++            || input.sources[0] != *source.selection()
++            || input.seal.unresolved_frontiers() != 0
++        {
++            return Err(fault(
++                "constant macro scope/world/edition/source is incomplete or differs",
++            ));
++        }
++        if !matches!(db.published_input(&InputKey::ExpansionEpoch),Some((InputValue::ExpansionEpoch(epoch),_)) if *epoch==seal.epoch)
++            || !matches!(db.published_input(&InputKey::SourceDependencies),Some((InputValue::SourceDependencies(graph),_)) if graph.fingerprint()==input.source_dependencies)
++        {
++            return Err(fault("constant macro source graph/epoch differs"));
++        }
++        if input.compiler_inputs.len() > 100_000 || input.runtime_no_item_proofs.len() > 100_000 {
++            return Err(limit());
++        }
++        for (key, fingerprint) in &input.compiler_inputs {
++            if db
++                .published_input(key)
++                .is_none_or(|(_, actual)| actual != *fingerprint)
++            {
++                return Err(fault("constant macro compiler publication changed"));
++            }
++        }
++        if !input.records.is_empty()
++            || !input.procedural_catalogs.is_empty()
++            || !input.helper_declarations.is_empty()
++            || !input.argument_summaries.is_empty()
++            || !input.argument_indexes.is_empty()
++            || !input.argument_fragments.is_empty()
++            || !input.source_replacements.is_empty()
++            || !input.declaration_fragments.is_empty()
++        {
++            return Err(fault(
++                "generated/procedural constant macro needs external source admission",
++            ));
++        }
++        let mut matching = input.runtime_no_item_proofs.iter().filter(|(_, proof)| {
++            proof.source() == &source.selection().outline.parse
++                && proof.body() == body
++                && proof.invocation() == range
++        });
++        let (_, proof) = matching
++            .next()
++            .ok_or_else(|| fault("exact published selected macro proof prerequisite"))?;
++        if matching.next().is_some() {
++            return Err(fault("constant macro selected proof is ambiguous"));
++        }
++        let catalog = RuntimeMacroCatalog::standard_for_definition(
++            &source.selection().outline.parse.profile,
++            proof.definition(),
++        )?;
++        if catalog.select(proof.definition())? != Some(RuntimeMacroKind::Panic) {
++            return Err(fault(
++                "selected macro requires a different constant operand/effect contract",
++            ));
++        }
++        // Definition is not selected from spelling or supplied by the caller: it
++        // came from the current published genuine SourceDiscovery proof above.
++        let RuntimeMacroPreparation::Intrinsic(plan) = source.prepare_runtime_macro(
++            range,
++            PathLookup::Defined(proof.definition().clone()),
++            &catalog,
++        )?
++        else {
++            return Err(fault(
++                "constant macro selected identity is not its compiler facet",
++            ));
++        };
++        let replay = plan
++            .no_item_proof(body)
++            .ok_or_else(|| fault("constant panic operands contain declaration/nested producers"))?;
++        if &replay != proof
++            || plan.arguments().kind() != RuntimeMacroKind::Panic
++            || plan.arguments().source() != &source.selection().outline.parse
++            || plan.arguments().invocation() != range
++        {
++            return Err(fault(
++                "constant macro source/argument/no-item replay differs",
++            ));
++        }
++        // Only empty arguments and one actual string literal are pure here.
++        // Nonstring values, captures, formatting and operand expressions remain
++        // precise integration frontiers; they never become a canned panic.
++        let StaticPanicLowering::Operation(operation) = plan.lower_static_panic()? else {
++            return Err(Diagnostic::new(
++                "LRR-E-CONST-MACRO-OPERANDS",
++                "constant panic needs formatting or nonliteral argument integration".into(),
++            ));
++        };
++        let crate::ir::op::Op::Panic { message } = *operation else {
++            return Err(fault("constant static panic lowering kind differs"));
++        };
++        bytes = bytes
++            .checked_add(proof.allocated_bytes().ok_or_else(limit)?)
++            .and_then(|n| n.checked_add(message.capacity()))
++            .and_then(|n| n.checked_add(plan.allocated_bytes().ok()?))
++            .filter(|n| *n <= byte_limit)
++            .ok_or_else(limit)?;
++        Ok(Self {
++            selection: source.selection().clone(),
++            context,
++            body: handle.clone(),
++            range,
++            no_item: proof.clone(),
++            arguments: plan.arguments().fingerprint(),
++            message,
++            seal,
++            seal_fingerprint: published.fingerprint(),
++            stamps,
++            bytes,
++            byte_limit,
++        })
++    }
++    fn revalidate(&self, db: &Database, source: &PreparedSourceView) -> Result<(), Diagnostic> {
++        if source.selection() != &self.selection
++            || db.source_view_namespace_stamps()? != self.stamps
++        {
++            return Err(fault("constant macro source/input membership changed"));
++        }
++        let fresh = Self::mint(db, source, &self.body.key(), self.range, self.byte_limit)?;
++        if self.identity() != fresh.identity() {
++            return Err(fault("constant macro current selection/operands changed"));
++        }
++        Ok(())
++    }
++    fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/current-constant-static-panic-source");
++        e.string(self.selection.path.as_str());
++        e.digest(self.selection.location_identity());
++        e.record(&self.selection.outline.parse);
++        e.digest(self.selection.outline.cfg);
++        e.record(&self.context);
++        e.record(&self.body);
++        e.u32(self.range.start);
++        e.u32(self.range.end);
++        e.record(&self.no_item);
++        e.digest(self.arguments);
++        e.string(&self.message);
++        e.record(&self.seal);
++        e.digest(self.seal_fingerprint);
++        e.u64(self.stamps.len() as u64);
++        for (key, value) in &self.stamps {
++            e.record(key);
++            e.digest(*value);
++        }
++        e.finish()
++    }
++}
+diff --git a/crates/lrr/src/frontend/mod.rs b/crates/lrr/src/frontend/mod.rs
+--- a/crates/lrr/src/frontend/mod.rs
++++ b/crates/lrr/src/frontend/mod.rs
+@@ -63,5 +63,6 @@
+ 
+ pub mod primitive_constants;
+ 
++pub(crate) mod constant_macro_admission;
+ pub(crate) mod constant_source_admission;
+ pub mod constants;
+diff --git a/crates/lrr/src/frontend/constant_source_admission_tests.rs b/crates/lrr/src/frontend/constant_source_admission_tests.rs
+--- a/crates/lrr/src/frontend/constant_source_admission_tests.rs
++++ b/crates/lrr/src/frontend/constant_source_admission_tests.rs
+@@ -467,3 +467,6 @@
+         );
+     }
+ }
++
++#[path = "constant_macro_admission_tests.rs"]
++mod macro_tests;
+diff --git a/crates/lrr/src/frontend/constant_macro_admission_tests.rs b/crates/lrr/src/frontend/constant_macro_admission_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_macro_admission_tests.rs
+@@ -0,0 +1,386 @@
++//! Nested under the genuine source-admission fixture helper; no guest execution.
++use super::*;
++use crate::frontend::constant_macro_admission::{AdmittedConstantPanic, CurrentConstantMacroProof};
++use crate::syntax::pure_constants::Node;
++const PANIC: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const_panic.rs"
++);
++const ARRAY: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/issue-66693-panic-in-array-len.rs"
++);
++const SHADOW_BUILTIN: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/imports/shadow_builtin_macros.rs"
++);
++const AMBIGUOUS: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/imports/ambiguous-panic-rename-panics.rs"
++);
++fn macro_range(view: &PreparedSourceView, definition: Digest) -> SourceRange {
++    let item = view
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.fingerprint() == definition)
++        .unwrap();
++    let body = item.body.as_ref().unwrap();
++    let proofs = view.entered_macro_facts(&body.key()).unwrap();
++    let selected = proofs
++        .invocations
++        .iter()
++        .find(|i| i.range.start >= body.range.start && i.range.end <= body.range.end)
++        .unwrap();
++    selected.range
++}
++fn proof(
++    text: &str,
++    name: &str,
++    edition: u16,
++) -> (
++    Database,
++    PreparedSourceView,
++    Digest,
++    ConstantSourceAdmission,
++    AdmittedConstantPanic,
++) {
++    let (db, view, definition) = world(text, name, edition, true);
++    let base = admit(&db, &view, definition).unwrap();
++    let handle = base.plan().owner_body().unwrap();
++    let range = macro_range(&view, definition);
++    let admitted = CurrentConstantMacroProof::capture_current(
++        &db,
++        &view,
++        &base,
++        &handle.key(),
++        range,
++        MAX_BYTES,
++    )
++    .unwrap();
++    (db, view, definition, base, admitted)
++}
++fn selected_node(admission: &ConstantSourceAdmission) -> Result<Node, Diagnostic> {
++    let (constant, _, length) = admission.plan().entry()?;
++    let expr = constant.map(|c| c.body).or(length).unwrap();
++    admission.plan().source().node(&expr)
++}
++#[test]
++fn unchanged_original_qualified_empty_and_string_panics_use_real_messages() {
++    // Original declared editions only; 2024 is separately a component extension
++    // and must never be relabelled the upstream edition configuration.
++    for edition in [2015, 2018, 2021] {
++        for (name, message) in [
++            ("Z", "cheese"),
++            ("Z2", "explicit panic"),
++            ("Z_CORE", "cheese"),
++            ("Z2_CORE", "explicit panic"),
++        ] {
++            let (db, view, definition, base, proof) = proof(PANIC, name, edition);
++            assert!(selected_node(&base).is_err());
++            assert_eq!(proof.message(), message);
++            let current = ConstantSourceAdmission::capture_current_with_macro_proofs(
++                &db,
++                &view,
++                definition,
++                ConstantRequest::Constant,
++                MAX_BYTES,
++                &[proof.clone()],
++            )
++            .unwrap();
++            let Node::AdmittedPanic(reached) = selected_node(&current).unwrap() else {
++                panic!("missing proven panic node")
++            };
++            assert_eq!(reached.message(), message);
++            assert_eq!(reached.identity(), proof.identity());
++            assert_eq!(reached.definition(), proof.definition());
++            assert_ne!(current.plan().identity(), base.plan().identity());
++            current.revalidate(&db, &view).unwrap();
++        }
++    }
++}
++#[test]
++fn unchanged_array_invalid_float_argument_is_not_a_canned_panic() {
++    for edition in [2015, 2018, 2021] {
++        let (db, view, definition) = world(ARRAY, "main", edition, true);
++        let range = macro_range(&view, definition);
++        let base = ConstantSourceAdmission::capture_current(
++            &db,
++            &view,
++            definition,
++            ConstantRequest::ArrayLength(range),
++            MAX_BYTES,
++        )
++        .unwrap();
++        let body = base.plan().owner_body().unwrap();
++        let result = CurrentConstantMacroProof::capture_current(
++            &db,
++            &view,
++            &base,
++            &body.key(),
++            range,
++            MAX_BYTES,
++        );
++        assert!(result.is_err());
++        assert_ne!(result.unwrap_err().code, "LRR-E-CONST-PANIC");
++    }
++}
++#[test]
++fn nonstring_operands_and_formatting_remain_exact_current_frontiers() {
++    for text in [
++        "const X:()=panic!(42);fn main(){}",
++        "const X:()=panic!(\"{}\",1);fn main(){}",
++        "const X:()=panic!(\"{missing}\");fn main(){}",
++    ] {
++        let (db, view, definition) = world(text, "X", 2024, true);
++        let base = admit(&db, &view, definition).unwrap();
++        let range = macro_range(&view, definition);
++        let error = CurrentConstantMacroProof::capture_current(
++            &db,
++            &view,
++            &base,
++            &base.plan().owner_body().unwrap().key(),
++            range,
++            MAX_BYTES,
++        )
++        .unwrap_err();
++        assert_eq!(error.code, "LRR-E-CONST-MACRO-OPERANDS");
++        assert!(selected_node(&base).is_err());
++    }
++}
++#[test]
++fn wrong_body_range_and_other_definition_cannot_reuse_selected_proof() {
++    let (db, view, definition, base, proof) = proof(
++        "const X:()=panic!();const Y:()=panic!();fn main(){}",
++        "X",
++        2024,
++    );
++    let y = view
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "Y")
++        .unwrap();
++    let result = ConstantSourceAdmission::capture_current_with_macro_proofs(
++        &db,
++        &view,
++        y.def_key.fingerprint(),
++        ConstantRequest::Constant,
++        MAX_BYTES,
++        &[proof.clone()],
++    );
++    // Same module proof may be retained for its own exact X range, but cannot
++    // authorize the reached Y macro. Source tables may include forward constants.
++    let current = result.unwrap();
++    assert!(selected_node(&current).is_err());
++    let range = SourceRange {
++        start: proof.range().start + 1,
++        end: proof.range().end,
++    };
++    assert!(
++        CurrentConstantMacroProof::capture_current(
++            &db,
++            &view,
++            &base,
++            &base.plan().owner_body().unwrap().key(),
++            range,
++            MAX_BYTES
++        )
++        .is_err()
++    );
++    assert!(
++        ConstantSourceAdmission::capture_current_with_macro_proofs(
++            &db,
++            &view,
++            definition,
++            ConstantRequest::Constant,
++            MAX_BYTES,
++            &[proof.clone(), proof]
++        )
++        .is_err()
++    );
++}
++#[test]
++fn macro_proof_currentness_catches_epoch_without_source_revision_change() {
++    let (mut db, view, _, _, proof) = proof("const X:()=panic!();fn main(){}", "X", 2024);
++    let revision = db.source_revision();
++    db.begin_expansion_epoch(2).unwrap();
++    assert_eq!(db.source_revision(), revision);
++    assert!(proof.revalidate(&db, &view).is_err());
++}
++#[test]
++fn copied_source_and_deleted_compiler_facts_cannot_authorize_macro() {
++    let (mut db, view, _, _, proof) = proof("const X:()=panic!();fn main(){}", "X", 2024);
++    let (_, other, _) = world(
++        "const X:()=panic!(\"changed\");fn main(){}",
++        "X",
++        2024,
++        true,
++    );
++    assert!(proof.revalidate(&db, &other).is_err());
++    let mut facts = view.prepared_inputs().clone();
++    facts.remove(&InputKey::SourceDependencies);
++    db.publish_inputs(facts).unwrap();
++    assert!(proof.revalidate(&db, &view).is_err());
++}
++#[test]
++fn macro_metadata_limit_precedes_attachment_and_has_no_query_effects() {
++    let (db, view, _, base, proof) = proof("const X:()=panic!();fn main(){}", "X", 2024);
++    let before = db.trace.events.len();
++    assert!(
++        CurrentConstantMacroProof::capture_current(
++            &db,
++            &view,
++            &base,
++            &base.plan().owner_body().unwrap().key(),
++            proof.range(),
++            1
++        )
++        .is_err()
++    );
++    assert_eq!(db.trace.events.len(), before);
++}
++#[test]
++fn user_named_panic_never_matches_a_standard_facet_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let text = "macro_rules! panic{()=>{()}}const X:()=panic!();fn main(){}";
++        // Structural original hygiene/lookup proves the user identity even when
++        // its expansion/NoItem publication remains an external prerequisite.
++        let unit = Digest::of_bytes(b"LRR user panic source");
++        let profile = ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        };
++        let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++        let parsed = crate::syntax::parse::ParsedFile::parse(&blob, profile.clone()).unwrap();
++        let outline = parsed
++            .outline(unit, vec![], &CfgSet::guest_default())
++            .unwrap();
++        let root = crate::expand::source_hygiene::source_root(unit, edition).unwrap();
++        let facts = crate::frontend::hygiene::HygieneFacts::new(root.contexts, root.rows)
++            .unwrap()
++            .with_name_contexts(root.names)
++            .unwrap();
++        let index = crate::frontend::source_macros::SourceMacroIndex::from_outline(
++            &outline,
++            root.context,
++            facts,
++        )
++        .unwrap();
++        let lookup = index
++            .lookup(&[], text.find("const X").unwrap() as u64, "panic")
++            .unwrap();
++        let crate::frontend::macro_scopes::HygienicLookup::Selection(
++            crate::frontend::macro_origins::MacroSelection::Defined(definition),
++        ) = lookup
++        else {
++            panic!("user panic identity unestablished")
++        };
++        let catalog =
++            crate::frontend::runtime_macro_catalog::RuntimeMacroCatalog::standard(&profile)
++                .unwrap();
++        assert_eq!(catalog.select(&definition).unwrap(), None);
++    }
++}
++#[test]
++fn unchanged_shadow_and_ambiguous_sources_are_preserved_as_prerequisites() {
++    // The unchanged files include auxiliary/generated/item macros and ambiguity;
++    // this bounded original constant lane cannot fabricate their expansion/seal.
++    for text in [SHADOW_BUILTIN, AMBIGUOUS] {
++        let profile = ProfileIdentity::current();
++        let parsed = crate::syntax::parse::ParsedFile::parse(
++            &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++            profile,
++        )
++        .unwrap();
++        let outline = parsed
++            .outline(
++                Digest::of_bytes(b"official macro prerequisite"),
++                vec![],
++                &CfgSet::guest_default(),
++            )
++            .unwrap();
++        assert!(!outline.imports.is_empty() || !outline.item_invocations.is_empty());
++    }
++}
++
++#[test]
++fn renamed_standard_panic_uses_the_selected_identity_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let text = "use std::panic as p;const X:()=p!(\"renamed\");fn main(){}";
++        let (db, view, definition, _, proof) = proof(text, "X", edition);
++        assert_eq!(proof.message(), "renamed");
++        let admitted = ConstantSourceAdmission::capture_current_with_macro_proofs(
++            &db,
++            &view,
++            definition,
++            ConstantRequest::Constant,
++            MAX_BYTES,
++            &[proof.clone()],
++        )
++        .unwrap();
++        let Node::AdmittedPanic(selected) = selected_node(&admitted).unwrap() else {
++            panic!("renamed source was not selected")
++        };
++        assert_eq!(selected.definition(), proof.definition());
++        assert_eq!(selected.message(), "renamed");
++    }
++}
++#[test]
++fn unchanged_lexical_user_shadow_has_exact_original_hygiene_identity() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let unit = Digest::of_bytes(b"original macro shadow fixture");
++        let profile = ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        };
++        let blob = SourceBlob::new(SHADOW_BUILTIN.as_bytes().to_vec()).unwrap();
++        let parsed = crate::syntax::parse::ParsedFile::parse(&blob, profile.clone()).unwrap();
++        let outline = parsed
++            .outline(unit, vec![], &CfgSet::guest_default())
++            .unwrap();
++        let root = crate::expand::source_hygiene::source_root(unit, edition).unwrap();
++        let facts = crate::frontend::hygiene::HygieneFacts::new(root.contexts, root.rows)
++            .unwrap()
++            .with_name_contexts(root.names)
++            .unwrap();
++        let index = crate::frontend::source_macros::SourceMacroIndex::from_outline(
++            &outline,
++            root.context,
++            facts,
++        )
++        .unwrap();
++        let start = SHADOW_BUILTIN.find("mod m4").unwrap();
++        let end = SHADOW_BUILTIN[start..].find("mod m5").unwrap() + start;
++        let at = SHADOW_BUILTIN[start..end].rfind("panic!();").unwrap() + start;
++        let selected = index.lookup(&["m4".into()], at as u64, "panic").unwrap();
++        let crate::frontend::macro_scopes::HygienicLookup::Selection(
++            crate::frontend::macro_origins::MacroSelection::Defined(definition),
++        ) = selected
++        else {
++            panic!("original user shadow proof missing")
++        };
++        assert_eq!(definition.defining_unit, unit);
++        assert_eq!(definition.definition_edition, edition);
++        assert_eq!(
++            crate::frontend::runtime_macro_catalog::RuntimeMacroCatalog::standard(&profile)
++                .unwrap()
++                .select(&definition)
++                .unwrap(),
++            None
++        );
++    }
++}
++#[test]
++fn genuine_other_intrinsic_no_item_proof_does_not_certify_panic_semantics() {
++    let (db, view, definition) = world("const X:()=assert!(true);fn main(){}", "X", 2024, true);
++    let base = admit(&db, &view, definition).unwrap();
++    let range = macro_range(&view, definition);
++    let error = CurrentConstantMacroProof::capture_current(
++        &db,
++        &view,
++        &base,
++        &base.plan().owner_body().unwrap().key(),
++        range,
++        MAX_BYTES,
++    )
++    .unwrap_err();
++    assert_eq!(error.code, "LRR-E-CONST-MACRO-SOURCE");
++    assert!(selected_node(&base).is_err());
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const_panic.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const_panic.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const_panic.rs
+@@ -0,0 +1,45 @@
++//@ edition:2015..2021
++#![feature(abort_immediate)]
++#![allow(non_fmt_panics)]
++#![crate_type = "lib"]
++
++const MSG: &str = "hello";
++
++const Z: () = std::panic!("cheese");
++//~^ ERROR evaluation panicked
++
++const Z2: () = std::panic!();
++//~^ ERROR evaluation panicked
++
++const Y: () = std::unreachable!();
++//~^ ERROR evaluation panicked
++
++const X: () = std::unimplemented!();
++//~^ ERROR evaluation panicked
++
++const W: () = std::panic!(MSG);
++//~^ ERROR evaluation panicked
++
++const W2: () = std::panic!("{}", MSG);
++//~^ ERROR evaluation panicked
++
++const Z_CORE: () = core::panic!("cheese");
++//~^ ERROR evaluation panicked
++
++const Z2_CORE: () = core::panic!();
++//~^ ERROR evaluation panicked
++
++const Y_CORE: () = core::unreachable!();
++//~^ ERROR evaluation panicked
++
++const X_CORE: () = core::unimplemented!();
++//~^ ERROR evaluation panicked
++
++const W_CORE: () = core::panic!(MSG);
++//~^ ERROR evaluation panicked
++
++const W2_CORE: () = core::panic!("{}", MSG);
++//~^ ERROR evaluation panicked
++
++const ABORT: () = core::process::abort_immediate();
++//~^ ERROR the program aborted execution
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const_panic.stderr b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const_panic.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/const_panic.stderr
+@@ -0,0 +1,84 @@
++error[E0080]: evaluation panicked: cheese
++  --> $DIR/const_panic.rs:8:15
++   |
++LL | const Z: () = std::panic!("cheese");
++   |               ^^^^^^^^^^^^^^^^^^^^^ evaluation of `Z` failed here
++
++error[E0080]: evaluation panicked: explicit panic
++  --> $DIR/const_panic.rs:11:16
++   |
++LL | const Z2: () = std::panic!();
++   |                ^^^^^^^^^^^^^ evaluation of `Z2` failed here
++
++error[E0080]: evaluation panicked: internal error: entered unreachable code
++  --> $DIR/const_panic.rs:14:15
++   |
++LL | const Y: () = std::unreachable!();
++   |               ^^^^^^^^^^^^^^^^^^^ evaluation of `Y` failed here
++
++error[E0080]: evaluation panicked: not implemented
++  --> $DIR/const_panic.rs:17:15
++   |
++LL | const X: () = std::unimplemented!();
++   |               ^^^^^^^^^^^^^^^^^^^^^ evaluation of `X` failed here
++
++error[E0080]: evaluation panicked: hello
++  --> $DIR/const_panic.rs:20:15
++   |
++LL | const W: () = std::panic!(MSG);
++   |               ^^^^^^^^^^^^^^^^ evaluation of `W` failed here
++
++error[E0080]: evaluation panicked: hello
++  --> $DIR/const_panic.rs:23:16
++   |
++LL | const W2: () = std::panic!("{}", MSG);
++   |                ^^^^^^^^^^^^^^^^^^^^^^ evaluation of `W2` failed here
++
++error[E0080]: evaluation panicked: cheese
++  --> $DIR/const_panic.rs:26:20
++   |
++LL | const Z_CORE: () = core::panic!("cheese");
++   |                    ^^^^^^^^^^^^^^^^^^^^^^ evaluation of `Z_CORE` failed here
++
++error[E0080]: evaluation panicked: explicit panic
++  --> $DIR/const_panic.rs:29:21
++   |
++LL | const Z2_CORE: () = core::panic!();
++   |                     ^^^^^^^^^^^^^^ evaluation of `Z2_CORE` failed here
++
++error[E0080]: evaluation panicked: internal error: entered unreachable code
++  --> $DIR/const_panic.rs:32:20
++   |
++LL | const Y_CORE: () = core::unreachable!();
++   |                    ^^^^^^^^^^^^^^^^^^^^ evaluation of `Y_CORE` failed here
++
++error[E0080]: evaluation panicked: not implemented
++  --> $DIR/const_panic.rs:35:20
++   |
++LL | const X_CORE: () = core::unimplemented!();
++   |                    ^^^^^^^^^^^^^^^^^^^^^^ evaluation of `X_CORE` failed here
++
++error[E0080]: evaluation panicked: hello
++  --> $DIR/const_panic.rs:38:20
++   |
++LL | const W_CORE: () = core::panic!(MSG);
++   |                    ^^^^^^^^^^^^^^^^^ evaluation of `W_CORE` failed here
++
++error[E0080]: evaluation panicked: hello
++  --> $DIR/const_panic.rs:41:21
++   |
++LL | const W2_CORE: () = core::panic!("{}", MSG);
++   |                     ^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `W2_CORE` failed here
++
++error[E0080]: the program aborted execution
++  --> $DIR/const_panic.rs:44:19
++   |
++LL | const ABORT: () = core::process::abort_immediate();
++   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `ABORT` failed inside this call
++   |
++note: inside `std::process::abort_immediate`
++  --> $SRC_DIR/core/src/process.rs:LL:COL
++
++error: aborting due to 13 previous errors
++
++For more information about this error, try `rustc --explain E0080`.
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/imports/ambiguous-panic-rename-builtin.rs b/fixtures/upstream/rustc-checkout/tests/ui/imports/ambiguous-panic-rename-builtin.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/imports/ambiguous-panic-rename-builtin.rs
+@@ -0,0 +1,15 @@
++//@ edition: 2024
++#![crate_type = "lib"]
++#![no_std]
++
++extern crate std;
++mod m1 {
++    pub use std::prelude::v1::env as panic;
++}
++use m1::*;
++
++fn xx() {
++    panic!();
++    //~^ ERROR: `env!()` takes 1 or 2 arguments
++    //~| ERROR: `panic` is ambiguous [E0659]
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/imports/ambiguous-panic-rename-builtin.stderr b/fixtures/upstream/rustc-checkout/tests/ui/imports/ambiguous-panic-rename-builtin.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/imports/ambiguous-panic-rename-builtin.stderr
+@@ -0,0 +1,26 @@
++error: `env!()` takes 1 or 2 arguments
++  --> $DIR/ambiguous-panic-rename-builtin.rs:12:5
++   |
++LL |     panic!();
++   |     ^^^^^^^^
++
++error[E0659]: `panic` is ambiguous
++  --> $DIR/ambiguous-panic-rename-builtin.rs:12:5
++   |
++LL |     panic!();
++   |     ^^^^^ ambiguous name
++   |
++   = note: ambiguous because of a conflict between a name from a glob import and an outer scope during import or macro resolution
++note: `panic` could refer to the macro imported here
++  --> $DIR/ambiguous-panic-rename-builtin.rs:9:5
++   |
++LL | use m1::*;
++   |     ^^^^^
++   = help: consider adding an explicit import of `panic` to disambiguate
++   = help: or use `crate::panic` to refer to this macro unambiguously
++note: `panic` could also refer to a macro from prelude
++  --> $SRC_DIR/core/src/prelude/mod.rs:LL:COL
++
++error: aborting due to 2 previous errors
++
++For more information about this error, try `rustc --explain E0659`.
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/imports/ambiguous-panic-rename-panics.rs b/fixtures/upstream/rustc-checkout/tests/ui/imports/ambiguous-panic-rename-panics.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/imports/ambiguous-panic-rename-panics.rs
+@@ -0,0 +1,17 @@
++//@ edition: 2024
++#![crate_type = "lib"]
++
++mod m1 {
++    pub use core::prelude::v1::panic as p;
++}
++
++mod m2 {
++    pub use std::prelude::v1::panic as p;
++}
++
++use m2::*;
++fn xx() {
++    use m1::*;
++
++    p!(); //~ ERROR: `p` is ambiguous [E0659]
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/imports/ambiguous-panic-rename-panics.stderr b/fixtures/upstream/rustc-checkout/tests/ui/imports/ambiguous-panic-rename-panics.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/imports/ambiguous-panic-rename-panics.stderr
+@@ -0,0 +1,23 @@
++error[E0659]: `p` is ambiguous
++  --> $DIR/ambiguous-panic-rename-panics.rs:16:5
++   |
++LL |     p!();
++   |     ^ ambiguous name
++   |
++   = note: ambiguous because of a conflict between a name from a glob import and an outer scope during import or macro resolution
++note: `p` could refer to the macro imported here
++  --> $DIR/ambiguous-panic-rename-panics.rs:14:9
++   |
++LL |     use m1::*;
++   |         ^^^^^
++   = help: consider adding an explicit import of `p` to disambiguate
++note: `p` could also refer to the macro imported here
++  --> $DIR/ambiguous-panic-rename-panics.rs:12:5
++   |
++LL | use m2::*;
++   |     ^^^^^
++   = help: use `crate::p` to refer to this macro unambiguously
++
++error: aborting due to 1 previous error
++
++For more information about this error, try `rustc --explain E0659`.
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/imports/shadow_builtin_macros.rs b/fixtures/upstream/rustc-checkout/tests/ui/imports/shadow_builtin_macros.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/imports/shadow_builtin_macros.rs
+@@ -0,0 +1,52 @@
++//@ aux-build:two_macros.rs
++
++mod foo {
++    extern crate two_macros;
++    pub use self::two_macros::m as panic;
++}
++
++mod m1 {
++    use crate::foo::panic; // ok
++    fn f() { panic!(); }
++}
++
++mod m2 {
++    use crate::foo::*;
++    fn f() { panic!(); } //~ ERROR ambiguous
++}
++
++mod m3 {
++    ::two_macros::m!(use crate::foo::panic;);
++    fn f() { panic!(); } //~ ERROR ambiguous
++}
++
++mod m4 {
++    macro_rules! panic { () => {} } // ok
++    panic!();
++}
++
++mod m5 {
++    macro_rules! m { () => {
++        macro_rules! panic { () => {} }
++    } }
++    m!();
++    panic!(); //~ ERROR `panic` is ambiguous
++}
++
++#[macro_use(n)]
++extern crate two_macros;
++mod bar {
++    pub use two_macros::m as n;
++}
++
++mod m6 {
++    use crate::bar::n; // ok
++    n!();
++}
++
++mod m7 {
++    use crate::bar::*;
++    n!(); //~ ERROR ambiguous
++}
++
++fn main() {}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/imports/shadow_builtin_macros.stderr b/fixtures/upstream/rustc-checkout/tests/ui/imports/shadow_builtin_macros.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/imports/shadow_builtin_macros.stderr
+@@ -0,0 +1,76 @@
++error[E0659]: `panic` is ambiguous
++  --> $DIR/shadow_builtin_macros.rs:15:14
++   |
++LL |     fn f() { panic!(); }
++   |              ^^^^^ ambiguous name
++   |
++   = note: ambiguous because of a conflict between a name from a glob import and an outer scope during import or macro resolution
++note: `panic` could refer to the macro imported here
++  --> $DIR/shadow_builtin_macros.rs:14:9
++   |
++LL |     use crate::foo::*;
++   |         ^^^^^^^^^^^^^
++   = help: consider adding an explicit import of `panic` to disambiguate
++   = help: or use `self::panic` to refer to this macro unambiguously
++note: `panic` could also refer to a macro from prelude
++  --> $SRC_DIR/std/src/prelude/mod.rs:LL:COL
++
++error[E0659]: `panic` is ambiguous
++  --> $DIR/shadow_builtin_macros.rs:33:5
++   |
++LL |     macro_rules! m { () => {
++...
++LL |     panic!();
++   |     ^^^^^ ambiguous name
++   |
++   = note: ambiguous because of a conflict between a macro-expanded name and a less macro-expanded name from outer scope during import or macro resolution
++note: `panic` could refer to the macro defined here
++  --> $DIR/shadow_builtin_macros.rs:30:9
++   |
++LL |         macro_rules! panic { () => {} }
++   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
++LL |     } }
++LL |     m!();
++   |     ---- in this macro invocation
++note: `panic` could also refer to a macro from prelude
++  --> $SRC_DIR/std/src/prelude/mod.rs:LL:COL
++
++error[E0659]: `n` is ambiguous
++  --> $DIR/shadow_builtin_macros.rs:49:5
++   |
++LL |     n!();
++   |     ^ ambiguous name
++   |
++   = note: ambiguous because of a conflict between a name from a glob import and an outer scope during import or macro resolution
++note: `n` could refer to the macro imported here
++  --> $DIR/shadow_builtin_macros.rs:48:9
++   |
++LL |     use crate::bar::*;
++   |         ^^^^^^^^^^^^^
++   = help: consider adding an explicit import of `n` to disambiguate
++   = help: or use `self::n` to refer to this macro unambiguously
++note: `n` could also refer to the macro imported here
++  --> $DIR/shadow_builtin_macros.rs:36:13
++   |
++LL | #[macro_use(n)]
++   |             ^
++
++error[E0659]: `panic` is ambiguous
++  --> $DIR/shadow_builtin_macros.rs:20:14
++   |
++LL |     fn f() { panic!(); }
++   |              ^^^^^ ambiguous name
++   |
++   = note: ambiguous because of a conflict between a macro-expanded name and a less macro-expanded name from outer scope during import or macro resolution
++note: `panic` could refer to the macro imported here
++  --> $DIR/shadow_builtin_macros.rs:19:26
++   |
++LL |     ::two_macros::m!(use crate::foo::panic;);
++   |                          ^^^^^^^^^^^^^^^^^
++   = help: use `self::panic` to refer to this macro unambiguously
++note: `panic` could also refer to a macro from prelude
++  --> $SRC_DIR/std/src/prelude/mod.rs:LL:COL
++
++error: aborting due to 4 previous errors
++
++For more information about this error, try `rustc --explain E0659`.

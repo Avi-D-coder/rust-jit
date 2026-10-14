@@ -1,0 +1,9 @@
+# Frozen bounded M021/M022 table successor
+
+Private `sol-conditional-goal-tables-v1`, layered on preserved M020. New traits/table.rs, narrow separately proposed candidate_transactions counted work attachment, table module export,14 dedicated controls and8 new unchanged original/expected files. All controls uncompiled/unexecuted; no Cargo/guest/compiler/canonical/targets changed. No task/full-stock/runtime-contract/release completion claim.
+
+Replay `complete.patch` from `baseline`, or production→candidate-work attachment→module→acceptance→originals. The baseline is exactly the small frozen M020 candidate overlay; M019 memo current-input reader remains its separate root prerequisite. MANIFEST.json/frozen-source.json bind exact members; STATIC-CHECKS.json and SOURCE-ONLY-RECEIPT.json record actual terminal commands/receipts. ROOT-HOOKS.md specifies all source-ready/table/query/answer/witness integration requirements and honest algorithm/model boundaries.
+
+Ordinary cycles do not self-prove; relevant unresolved cycles stay unresolved; approved-auto model assumptions disappear on failed external premise, mixed/negative/escaping edges. Candidate conflicts leave child tables cold and never constrain siblings; distinct impls preserve ambiguity. Evaluation publishes states/outcomes atomically, cancellation/named overflow remain errors. Source currentness agreement object retains genuine M019 capture and always reports missing real goal/answer/publication producers.
+
+Preregistered acceptance before implementation retained. Initial unfrozen formatter delimiter failure ab5176/exit1 is preserved under superseded-unfrozen-delimiter-v1 with exact failed test bytes; repaired before freezing. Successful static checks do not establish Rust typechecking or semantic acceptance. Parent owns actual assembly, appropriate async validation and integrated milestone gate.

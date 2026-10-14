@@ -1,0 +1,1089 @@
+--- a/crates/lrr/src/runtime/buffer_slice.rs
++++ b/crates/lrr/src/runtime/buffer_slice.rs
+@@ -0,0 +1,37 @@
++//! Run-owned Buffer slice metadata; never a source trait or native-layout witness.
++use super::{
++    cell::{ObjectId, RefId},
++    place::{CellStamp, Place},
++    reference::{Access, ReferenceRecord},
++    shape::TypeId,
++};
++/// An empty window has no first-element identity; its allocation still matters.
++pub(crate) struct BufferSliceWindow {
++    pub(super) object: ObjectId,
++    pub(super) generation: u32,
++    pub(super) element: TypeId,
++    pub(super) start: u32,
++    pub(super) length: u32,
++    pub(super) members: Vec<CellStamp>,
++}
++/// Private runtime request retained across preflight; no source authority inferred.
++pub(super) enum BufferBorrowRequest {
++    Vector(Place),
++    Window(RefId),
++}
++/// Opaque, single-use physical admission. Root must first select the exact source
++/// range/member and receiver context. This contains no opcode or callable witness.
++pub struct PreparedBufferBorrow {
++    pub(super) epoch: u32,
++    pub(super) request: BufferBorrowRequest,
++    pub(super) record: ReferenceRecord,
++    pub(super) result: TypeId,
++    pub(super) access: Access,
++}
++
++pub(crate) fn window_scalar_fault() -> crate::core::diagnostic::Diagnostic {
++    crate::core::diagnostic::Diagnostic::new(
++        "LRR-E-UNSUPPORTED",
++        "unsized Buffer window requires selected slice operations; it is not a scalar cell".into(),
++    )
++}
+--- a/crates/lrr/src/runtime/cell.rs
++++ b/crates/lrr/src/runtime/cell.rs
+@@ -1,6 +1,8 @@
+ //! Validate/reserve/commit guest storage. No guest callbacks during mutation.
+ #[path = "cell_aggregate_copy.rs"]
+ pub(crate) mod aggregate_copy;
++#[path = "cell_buffer_slice.rs"]
++mod buffer_slice;
+ #[path = "cell_construction_cleanup.rs"]
+ mod construction_cleanup;
+ #[path = "cell_vector.rs"]
+@@ -756,6 +758,9 @@
+         Ok((object_id, storage))
+     }
+     fn validate_reference_record(&self, reference: &ReferenceRecord) -> Result<(), Diagnostic> {
++        if let Some(window) = &reference.window {
++            return self.validate_buffer_window(window, reference.target);
++        }
+         let (mut parent, start) = if let Some(anchor) = reference.buffer_root {
+             (
+                 self.validate_vector_reference_anchor(reference, anchor)?,
+@@ -920,6 +925,9 @@
+             PlaceRoot::Deref(id) => {
+                 let reference = self.references.get(id)?;
+                 self.validate_reference_record(reference)?;
++                if reference.window.is_some() {
++                    return Err(super::buffer_slice::window_scalar_fault().into());
++                }
+                 (
+                     reference.root,
+                     reference.final_cell.cell,
+@@ -1474,6 +1482,9 @@
+     pub fn read_reference(&self, id: RefId) -> Result<ValueRepr, Diagnostic> {
+         let reference = self.references.get(id)?;
+         self.validate_reference_record(reference)?;
++        if reference.window.is_some() {
++            return Err(super::buffer_slice::window_scalar_fault());
++        }
+         // Intrinsic scalars and shared references may be read by Copy. Aggregate
+         // Copy and moves through dereferences require a later checked policy.
+         self.read_scalar(reference.final_cell.cell)
+@@ -1486,6 +1497,9 @@
+     ) -> Result<TicketId, Diagnostic> {
+         let reference = self.references.get(id)?;
+         self.validate_reference_record(reference)?;
++        if reference.window.is_some() {
++            return Err(super::buffer_slice::window_scalar_fault());
++        }
+         if reference.access != Access::Mutable {
+             return Err(access_fault());
+         }
+--- a/crates/lrr/src/runtime/cell_buffer_slice.rs
++++ b/crates/lrr/src/runtime/cell_buffer_slice.rs
+@@ -0,0 +1,554 @@
++//! Checked physical slice windows. Source member/Range admission belongs to the driver.
++use super::*;
++use crate::runtime::{
++    buffer_slice::{BufferBorrowRequest, BufferSliceWindow, PreparedBufferBorrow},
++    object::MAX_CONSTRUCTION_FIELDS,
++    place::checked_index,
++};
++fn checked_range(
++    start: ValueRepr,
++    end: ValueRepr,
++    length: u32,
++) -> Result<(u32, u32), PlaceFailure> {
++    let start = checked_index(start)?;
++    let end = checked_index(end)?;
++    if start > end || end > u64::from(length) {
++        return Err(PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds));
++    }
++    let start = u32::try_from(start).map_err(|_| resource())?;
++    let end = u32::try_from(end).map_err(|_| resource())?;
++    Ok((start, end.checked_sub(start).ok_or_else(resource)?))
++}
++impl GuestStore {
++    pub(super) fn validate_buffer_window(
++        &self,
++        window: &BufferSliceWindow,
++        target: TypeId,
++    ) -> Result<(), Diagnostic> {
++        self.validate_vector_buffer_owner(window.object, window.generation)?;
++        if !matches!(self.types.descriptor(target)?.key.as_ref(),TypeKey::Slice{element}if *element==window.element)
++            || self.types.descriptor(window.element)?.shape != ShapeCategory::Scalar
++            || window.element.0 == 16
++            || window.members.len() != window.length as usize
++        {
++            return Err(lease_fault());
++        }
++        let object = self.objects.get(window.object)?;
++        if !matches!(self.types.descriptor(object.type_id)?.key.as_ref(),TypeKey::Facade{family:crate::runtime::shape::FacadeType::Vec,args}if args.as_ref()==[window.element])
++        {
++            return Err(lease_fault());
++        }
++        let ObjectStorage::Vector(storage) = &object.storage else {
++            return Err(lease_fault());
++        };
++        let end = window
++            .start
++            .checked_add(window.length)
++            .ok_or_else(resource)?;
++        let capacity = storage.buffer.ok_or_else(lease_fault)?.capacity;
++        // Empty windows have no removed element to invalidate; the allocation
++        // and checked one-past position remain mandatory even after shrink.
++        if end > capacity || (window.length != 0 && end as usize > storage.fields.len()) {
++            return Err(lease_fault());
++        }
++        for (offset, stamp) in window.members.iter().enumerate() {
++            let ordinal = window
++                .start
++                .checked_add(u32::try_from(offset).map_err(|_| resource())?)
++                .ok_or_else(resource)?;
++            if storage.fields.get(ordinal as usize) != Some(&stamp.cell)
++                || self.cells.get(stamp.cell)?.owner
++                    != (CellOwner::Buffer {
++                        object: window.object,
++                        index: ordinal,
++                    })
++                || self.place_stamp(stamp.cell)? != *stamp
++                || self.place_type(stamp.cell)? != window.element
++            {
++                return Err(lease_fault());
++            }
++        }
++        Ok(())
++    }
++    fn capture_window(
++        &self,
++        object: ObjectId,
++        generation: u32,
++        element: TypeId,
++        start: u32,
++        length: u32,
++    ) -> Result<BufferSliceWindow, Diagnostic> {
++        self.validate_vector_buffer_owner(object, generation)?;
++        if length as usize > MAX_CONSTRUCTION_FIELDS {
++            return Err(resource());
++        }
++        if self.types.descriptor(element)?.shape != ShapeCategory::Scalar || element.0 == 16 {
++            return Err(Diagnostic::new(
++                "LRR-E-UNSUPPORTED",
++                "Buffer window element requires pending general source/layout/drop integration"
++                    .into(),
++            ));
++        }
++        let estimated = (length as usize)
++            .checked_mul(std::mem::size_of::<CellStamp>())
++            .filter(|n| *n <= 32 * 1024 * 1024)
++            .ok_or_else(resource)?;
++        self.budget.check(2, estimated)?;
++        let ObjectStorage::Vector(storage) = &self.objects.get(object)?.storage else {
++            return Err(lease_fault());
++        };
++        let end = start.checked_add(length).ok_or_else(resource)?;
++        if (length != 0 && end as usize > storage.fields.len())
++            || end > storage.buffer.ok_or_else(lease_fault)?.capacity
++        {
++            return Err(lease_fault());
++        }
++        let mut members = Vec::new();
++        members
++            .try_reserve_exact(length as usize)
++            .map_err(|_| resource())?;
++        for ordinal in start..end {
++            let cell = *storage
++                .fields
++                .get(ordinal as usize)
++                .ok_or_else(lease_fault)?;
++            if self.cells.get(cell)?.owner
++                != (CellOwner::Buffer {
++                    object,
++                    index: ordinal,
++                })
++                || self.place_type(cell)? != element
++            {
++                return Err(lease_fault());
++            }
++            members.push(self.place_stamp(cell)?);
++        }
++        let actual = members
++            .capacity()
++            .checked_mul(std::mem::size_of::<CellStamp>())
++            .filter(|n| *n <= 32 * 1024 * 1024)
++            .ok_or_else(resource)?;
++        self.budget.check(2, actual)?;
++        Ok(BufferSliceWindow {
++            object,
++            generation,
++            element,
++            start,
++            length,
++            members,
++        })
++    }
++    fn prepared_buffer_borrow(
++        &self,
++        request: BufferBorrowRequest,
++        record: ReferenceRecord,
++    ) -> Result<PreparedBufferBorrow, PlaceFailure> {
++        let result = self
++            .types
++            .find(&TypeKey::Ref {
++                mutable: record.access == Access::Mutable,
++                target: record.target,
++            })
++            .ok_or_else(|| {
++                Diagnostic::new(
++                    "LRR-E-UNSUPPORTED",
++                    "source-selected slice/reference result shape was not prepared".into(),
++                )
++            })?;
++        let plan = PreparedBufferBorrow {
++            epoch: self.budget.epoch(),
++            access: record.access,
++            request,
++            record,
++            result,
++        };
++        self.preflight_buffer_borrow(&plan)?;
++        Ok(plan)
++    }
++    /// Half-open runtime bounds only; no Index/Range/SliceIndex witness is selected here.
++    pub fn prepare_vector_window(
++        &self,
++        base: &Place,
++        start: ValueRepr,
++        end: ValueRepr,
++        access: Access,
++    ) -> Result<PreparedBufferBorrow, PlaceFailure> {
++        let resolved = self.resolve_place(base)?;
++        if access == Access::Mutable && !resolved.writable {
++            return Err(access_fault().into());
++        }
++        let element = match self.types.descriptor(resolved.ty)?.key.as_ref() {
++            TypeKey::Facade {
++                family: crate::runtime::shape::FacadeType::Vec,
++                args,
++            } if args.len() == 1 => args[0],
++            _ => return Err(invalid().into()),
++        };
++        let (object, storage) = self.place_object(resolved.target.cell)?;
++        if !matches!(self.objects.get(object)?.storage, ObjectStorage::Vector(_)) {
++            return Err(invalid().into());
++        }
++        let buffer = storage.buffer.ok_or_else(lease_fault)?;
++        let (start, length) = checked_range(
++            start,
++            end,
++            u32::try_from(storage.fields.len()).map_err(|_| resource())?,
++        )?;
++        let target = self
++            .types
++            .find(&TypeKey::Slice { element })
++            .ok_or_else(|| {
++                Diagnostic::new(
++                    "LRR-E-UNSUPPORTED",
++                    "source-selected slice target shape was not prepared".into(),
++                )
++            })?;
++        let window = self.capture_window(object, buffer.generation, element, start, length)?;
++        let count = base.projections.len();
++        let mut projections = Vec::new();
++        checked_chain_bytes(count)?;
++        projections
++            .try_reserve_exact(count)
++            .map_err(|_| resource())?;
++        projections.extend_from_slice(&base.projections);
++        checked_chain_bytes(projections.capacity())?;
++        let record = ReferenceRecord {
++            access,
++            owner: None,
++            target,
++            root: resolved.target,
++            enclosing: Vec::new(),
++            final_cell: resolved.target,
++            buffer_root: None,
++            window: Some(window),
++        };
++        self.prepared_buffer_borrow(
++            BufferBorrowRequest::Vector(Place {
++                root: base.root,
++                projections: projections.into_boxed_slice(),
++            }),
++            record,
++        )
++    }
++    pub fn buffer_slice_len(&self, reference: RefId) -> Result<u32, Diagnostic> {
++        let record = self.references.get(reference)?;
++        self.validate_reference_record(record)?;
++        Ok(record.window.as_ref().ok_or_else(invalid)?.length)
++    }
++    pub fn prepare_slice_window(
++        &self,
++        reference: RefId,
++        start: ValueRepr,
++        end: ValueRepr,
++        access: Access,
++    ) -> Result<PreparedBufferBorrow, PlaceFailure> {
++        let parent = self.references.get(reference)?;
++        self.validate_reference_record(parent)?;
++        if access == Access::Mutable && parent.access != Access::Mutable {
++            return Err(access_fault().into());
++        }
++        let parent_window = parent.window.as_ref().ok_or_else(invalid)?;
++        let (start, length) = checked_range(start, end, parent_window.length)?;
++        let start = parent_window
++            .start
++            .checked_add(start)
++            .ok_or_else(resource)?;
++        let window = self.capture_window(
++            parent_window.object,
++            parent_window.generation,
++            parent_window.element,
++            start,
++            length,
++        )?;
++        let record = ReferenceRecord {
++            access,
++            owner: None,
++            target: parent.target,
++            root: parent.root,
++            enclosing: Vec::new(),
++            final_cell: parent.final_cell,
++            buffer_root: None,
++            window: Some(window),
++        };
++        self.prepared_buffer_borrow(BufferBorrowRequest::Window(reference), record)
++    }
++    /// Creates an ordinary Buffer element lease from an exact window membership;
++    /// it never aliases the unsized window's container cell as its element.
++    pub fn prepare_slice_element(
++        &self,
++        reference: RefId,
++        index: ValueRepr,
++        access: Access,
++    ) -> Result<PreparedBufferBorrow, PlaceFailure> {
++        let parent = self.references.get(reference)?;
++        self.validate_reference_record(parent)?;
++        if access == Access::Mutable && parent.access != Access::Mutable {
++            return Err(access_fault().into());
++        }
++        let window = parent.window.as_ref().ok_or_else(invalid)?;
++        let index = checked_index(index)?;
++        if index >= u64::from(window.length) {
++            return Err(PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds));
++        }
++        let index = u32::try_from(index).map_err(|_| resource())?;
++        let ordinal = window.start.checked_add(index).ok_or_else(resource)?;
++        let target = *window.members.get(index as usize).ok_or_else(lease_fault)?;
++        if access == Access::Mutable && !self.cells.get(target.cell)?.writable {
++            return Err(access_fault().into());
++        }
++        let mut enclosing = Vec::new();
++        enclosing.try_reserve_exact(1).map_err(|_| resource())?;
++        enclosing.push(EnclosingObject {
++            parent: parent.root,
++            object: window.object,
++            field: ordinal,
++            child: target.cell,
++            variant: None,
++            buffer_epoch: Some(window.generation),
++        });
++        let record = ReferenceRecord {
++            access,
++            owner: None,
++            target: window.element,
++            root: parent.root,
++            enclosing,
++            final_cell: target,
++            buffer_root: Some(0),
++            window: None,
++        };
++        self.prepared_buffer_borrow(BufferBorrowRequest::Window(reference), record)
++    }
++    fn preflight_buffer_borrow(&self, plan: &PreparedBufferBorrow) -> Result<(), PlaceFailure> {
++        if plan.epoch != self.budget.epoch() || plan.access != plan.record.access {
++            return Err(lease_fault().into());
++        }
++        match &plan.request {
++            BufferBorrowRequest::Vector(base) => {
++                let resolved = self.resolve_place(base)?;
++                if plan.access == Access::Mutable && !resolved.writable {
++                    return Err(access_fault().into());
++                }
++                let window = plan.record.window.as_ref().ok_or_else(invalid)?;
++                let (object, _) = self.place_object(resolved.target.cell)?;
++                if object != window.object || resolved.target != plan.record.root {
++                    return Err(lease_fault().into());
++                }
++            }
++            BufferBorrowRequest::Window(id) => {
++                let parent = self.references.get(*id)?;
++                self.validate_reference_record(parent)?;
++                if plan.access == Access::Mutable && parent.access != Access::Mutable {
++                    return Err(access_fault().into());
++                }
++                if parent.window.is_none() {
++                    return Err(invalid().into());
++                }
++            }
++        }
++        self.validate_reference_record(&plan.record)?;
++        if !matches!(self.types.descriptor(plan.result)?.key.as_ref(),TypeKey::Ref{mutable,target}if *mutable==(plan.access==Access::Mutable)&&*target==plan.record.target)
++        {
++            return Err(invalid().into());
++        }
++        let bytes = plan
++            .record
++            .owned_bytes()?
++            .checked_add(self.references.reservation_bytes(1)?)
++            .and_then(|n| n.checked_add(self.tickets.reservation_bytes(1).ok()?))
++            .ok_or_else(resource)?;
++        self.budget.check(2, bytes)?;
++        Ok(())
++    }
++    /// No guest owner or reference is published. Capacities may be retained on refusal.
++    pub fn reserve_buffer_borrow(
++        &mut self,
++        plan: &PreparedBufferBorrow,
++    ) -> Result<(), PlaceFailure> {
++        self.preflight_buffer_borrow(plan)?;
++        self.references.reserve(1, &mut self.budget)?;
++        self.tickets.reserve(1, &mut self.budget)?;
++        self.preflight_buffer_borrow(plan)
++    }
++    /// Driver must charge exactly its ordinary selected operation once after
++    /// preflight/reserve and before this commit; cancellation cannot call commit.
++    pub fn commit_buffer_borrow(
++        &mut self,
++        plan: PreparedBufferBorrow,
++    ) -> Result<TicketId, PlaceFailure> {
++        self.reserve_buffer_borrow(&plan)?;
++        let bytes = plan.record.owned_bytes()?;
++        let reference = self
++            .references
++            .allocate(plan.record, bytes, &mut self.budget)?;
++        let value = ValueRepr {
++            kind: 9,
++            type_id: plan.result.0,
++            payload: reference.bits(),
++        };
++        let ticket = self
++            .tickets
++            .allocate(TransferTicket { value }, 0, &mut self.budget)
++            .map(TicketId::from)?;
++        self.set_owner(value, ValueOwner::Ticket(ticket))?;
++        Ok(ticket)
++    }
++}
++
++#[cfg(test)]
++mod window_invalidation_tests {
++    use super::*;
++    fn value(n: u64) -> ValueRepr {
++        ValueRepr::unsigned(TypeId(13), n).unwrap()
++    }
++    fn vector(element: TypeId, n: u32) -> (GuestStore, CellId) {
++        let mut store = GuestStore::new(1, 100_000, 16 << 20).unwrap();
++        let frame = store.new_frame_anchor().unwrap();
++        let (ty, guard) = store.begin_vector_construction(element, n).unwrap();
++        for i in 0..n {
++            let c = store
++                .new_cell(
++                    StorageContract::Exact(element),
++                    true,
++                    CellOwner::FrameSlot { frame, slot: i },
++                )
++                .unwrap();
++            let scalar = if element == TypeId(1) {
++                ValueRepr::unit()
++            } else {
++                ValueRepr::signed(element, i64::from(i)).unwrap()
++            };
++            let t = store.ticket(scalar).unwrap();
++            store.initialize(c, t).unwrap();
++            store.vector_move_from(guard, i, c).unwrap();
++        }
++        let t = store.commit_construction(guard, ty).unwrap();
++        let c = store
++            .new_cell(
++                StorageContract::Exact(ty),
++                true,
++                CellOwner::FrameSlot { frame, slot: 100 },
++            )
++            .unwrap();
++        store.initialize(c, t).unwrap();
++        let slice = store.intern_type(TypeKey::Slice { element }).unwrap();
++        for target in [slice, element] {
++            for mutable in [false, true] {
++                store.intern_type(TypeKey::Ref { mutable, target }).unwrap();
++            }
++        }
++        (store, c)
++    }
++    fn publish(store: &mut GuestStore, plan: PreparedBufferBorrow) -> RefId {
++        let t = store.commit_buffer_borrow(plan).unwrap();
++        RefId::from_bits(store.peek_ticket(t).unwrap().payload)
++    }
++    #[test]
++    fn buffer_window_generation_replay_refuses_old_window_and_prepared_request() {
++        let (mut s, c) = vector(TypeId(6), 2);
++        let plan = s
++            .prepare_vector_window(&Place::cell(c), value(0), value(2), Access::Shared)
++            .unwrap();
++        let r = publish(&mut s, plan);
++        let pending = s
++            .prepare_slice_window(r, value(1), value(2), Access::Shared)
++            .unwrap();
++        let record = s.references.get(r).unwrap();
++        let object = record.window.as_ref().unwrap().object;
++        let ObjectStorage::Vector(storage) = &mut s.objects.get_mut(object).unwrap().storage else {
++            panic!("actual Vec buffer")
++        };
++        storage.buffer.as_mut().unwrap().generation += 1;
++        let before = s.budget.handles();
++        assert!(s.buffer_slice_len(r).is_err());
++        assert!(s.commit_buffer_borrow(pending).is_err());
++        assert_eq!(s.budget.handles(), before);
++        // Epoch metadata transition only: allocation-growth execution is not claimed.
++    }
++    #[test]
++    fn buffer_window_replaced_member_never_resurrects_and_unaffected_prefix_survives() {
++        let (mut s, c) = vector(TypeId(6), 2);
++        let full = s
++            .prepare_vector_window(&Place::cell(c), value(0), value(2), Access::Shared)
++            .unwrap();
++        let full = publish(&mut s, full);
++        let prefix = s
++            .prepare_slice_window(full, value(0), value(1), Access::Shared)
++            .unwrap();
++        let prefix = publish(&mut s, prefix);
++        let empty = s
++            .prepare_slice_window(full, value(2), value(2), Access::Shared)
++            .unwrap();
++        let empty = publish(&mut s, empty);
++        let old = s
++            .references
++            .get(full)
++            .unwrap()
++            .window
++            .as_ref()
++            .unwrap()
++            .members[1]
++            .cell;
++        let old_value = s.begin_drop(old).unwrap();
++        s.discard(old_value).unwrap();
++        s.retire_cell(old).unwrap();
++        let fresh = s.replacement_location(old).unwrap();
++        let t = s.ticket(ValueRepr::signed(TypeId(6), 99).unwrap()).unwrap();
++        s.initialize(fresh, t).unwrap();
++        assert!(s.buffer_slice_len(full).is_err());
++        assert_eq!(s.buffer_slice_len(prefix).unwrap(), 1);
++        assert_eq!(s.buffer_slice_len(empty).unwrap(), 0);
++        // Controlled cell retirement/replacement tests lease identity, not Vec pop/push.
++    }
++    #[test]
++    fn buffer_window_empty_and_zero_sized_members_have_distinct_logical_cardinality() {
++        for n in [0, 3] {
++            let (mut s, c) = vector(TypeId(1), n);
++            let plan = s
++                .prepare_vector_window(
++                    &Place::cell(c),
++                    value(0),
++                    value(u64::from(n)),
++                    Access::Mutable,
++                )
++                .unwrap();
++            let r = publish(&mut s, plan);
++            assert_eq!(s.buffer_slice_len(r).unwrap(), n);
++            let plan = s
++                .prepare_slice_window(r, value(u64::from(n)), value(u64::from(n)), Access::Shared)
++                .unwrap();
++            let empty = publish(&mut s, plan);
++            assert_eq!(s.buffer_slice_len(empty).unwrap(), 0);
++            if n != 0 {
++                let element = s
++                    .prepare_slice_element(r, value(2), Access::Shared)
++                    .unwrap();
++                let element = publish(&mut s, element);
++                assert_eq!(s.read_reference(element).unwrap(), ValueRepr::unit());
++            }
++        }
++    }
++    #[test]
++    fn buffer_window_mutable_owner_moves_once_and_drop_releases_window_metadata() {
++        let (mut s, c) = vector(TypeId(6), 2);
++        let plan = s
++            .prepare_vector_window(&Place::cell(c), value(0), value(2), Access::Mutable)
++            .unwrap();
++        let ticket = s.commit_buffer_borrow(plan).unwrap();
++        let ty = TypeId(s.peek_ticket(ticket).unwrap().type_id);
++        let frame = s.new_frame_anchor().unwrap();
++        let cell = s
++            .new_cell(
++                StorageContract::Exact(ty),
++                true,
++                CellOwner::FrameSlot { frame, slot: 0 },
++            )
++            .unwrap();
++        s.initialize(cell, ticket).unwrap();
++        assert!(s.copy_from(cell).is_err());
++        let moved = s.move_from(cell).unwrap();
++        assert!(s.move_from(cell).is_err());
++        let before = s.budget.bytes();
++        s.discard(moved).unwrap();
++        assert!(s.budget.bytes() < before);
++    }
++}
+--- a/crates/lrr/src/runtime/cell_vector.rs
++++ b/crates/lrr/src/runtime/cell_vector.rs
+@@ -140,10 +140,35 @@
+         {
+             return Err(lease_fault());
+         }
++        self.validate_vector_buffer_owner(link.object, buffer.generation)?;
++        self.place_stamp(link.child)?;
++        Ok(link.child)
++    }
++    pub(super) fn validate_vector_buffer_owner(
++        &self,
++        object_id: ObjectId,
++        generation: u32,
++    ) -> Result<(), Diagnostic> {
++        let object = self.objects.get(object_id)?;
++        let ObjectStorage::Vector(storage) = &object.storage else {
++            return Err(lease_fault());
++        };
++        let buffer = storage.buffer.ok_or_else(lease_fault)?;
++        if !self.types.is_vector(object.type_id)
++            || generation == 0
++            || generation != buffer.generation
++            || buffer.dropping
++            || storage.variant.is_some()
++            || storage.next_cleanup != 0
++            || storage.pending_cleanup.is_some()
++            || storage.fields.len() > buffer.capacity as usize
++        {
++            return Err(lease_fault());
++        }
+         let value = ValueRepr {
+             kind: 8,
+             type_id: object.type_id.0,
+-            payload: link.object.bits(),
++            payload: object_id.bits(),
+         };
+         let owner = object.owner.ok_or_else(lease_fault)?;
+         match owner {
+@@ -168,8 +193,7 @@
+                 }
+             }
+         }
+-        self.place_stamp(link.child)?;
+-        Ok(link.child)
++        Ok(())
+     }
+     fn validate_vector_owner_chain(&self, mut cell: CellId) -> Result<(), Diagnostic> {
+         // Existing initialization-parent validation accepts a currently owned
+--- a/crates/lrr/src/runtime/mod.rs
++++ b/crates/lrr/src/runtime/mod.rs
+@@ -5,3 +5,5 @@
+ pub mod reference;
+ pub mod shape;
+ pub mod value;
++
++pub mod buffer_slice;
+--- a/crates/lrr/src/runtime/reference.rs
++++ b/crates/lrr/src/runtime/reference.rs
+@@ -22,6 +22,7 @@
+     pub(crate) final_cell: CellStamp,
+     /// Last exact heap-buffer link; stack ancestry before it is not a buffer lifetime.
+     pub(super) buffer_root: Option<usize>,
++    pub(super) window: Option<super::buffer_slice::BufferSliceWindow>,
+ }
+ impl ReferenceRecord {
+     pub(crate) fn from_place(place: ResolvedPlace, access: Access) -> Self {
+@@ -37,11 +38,24 @@
+             enclosing: place.enclosing,
+             final_cell: place.target,
+             buffer_root,
++            window: None,
+         }
+     }
+     pub(crate) fn owned_bytes(&self) -> Result<usize, Diagnostic> {
+         // GuestArena accounts for the record itself; charge only its owned buffer.
+-        checked_chain_bytes(self.enclosing.capacity())
++        checked_chain_bytes(self.enclosing.capacity())?
++            .checked_add(
++                self.window
++                    .as_ref()
++                    .map_or(Some(0), |w| {
++                        w.members
++                            .capacity()
++                            .checked_mul(std::mem::size_of::<CellStamp>())
++                    })
++                    .ok_or_else(super::arena::resource)?,
++            )
++            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
++            .ok_or_else(super::arena::resource)
+     }
+ }
+ pub(crate) fn access_fault() -> Diagnostic {
+--- a/xtask/tests/buffer_slice_windows.rs
++++ b/xtask/tests/buffer_slice_windows.rs
+@@ -0,0 +1,345 @@
++use lrr::{
++    runtime::{
++        cell::{CellId, CellOwner, CellState, GuestStore, RefId, StorageContract, TicketId},
++        place::{Place, PlaceFailure, PlacePanic},
++        reference::Access,
++        shape::{TypeId, TypeKey},
++        value::ValueRepr,
++    },
++    vm::{fuel::RunFuel, vector::VectorConstruction},
++};
++fn usize_value(n: u64) -> ValueRepr {
++    ValueRepr::unsigned(TypeId(13), n).unwrap()
++}
++fn setup(values: &[i64], writable: bool) -> (GuestStore, CellId) {
++    setup_limits(values, writable, 100_000)
++}
++fn setup_limits(values: &[i64], writable: bool, handles: u32) -> (GuestStore, CellId) {
++    setup_element(values, writable, handles, TypeId(6))
++}
++fn setup_element(
++    values: &[i64],
++    writable: bool,
++    handles: u32,
++    element: TypeId,
++) -> (GuestStore, CellId) {
++    let mut store = GuestStore::new(1, handles, 16 << 20).unwrap();
++    let frame = store.new_frame_anchor().unwrap();
++    let mut fuel = RunFuel::new(100).unwrap();
++    let mut vector = VectorConstruction::begin(
++        &mut store,
++        &mut fuel,
++        element,
++        values.len().try_into().unwrap(),
++    )
++    .unwrap();
++    for (i, n) in values.iter().enumerate() {
++        let c = store
++            .new_cell(
++                StorageContract::Exact(element),
++                true,
++                CellOwner::FrameSlot {
++                    frame,
++                    slot: i.try_into().unwrap(),
++                },
++            )
++            .unwrap();
++        let scalar = if element == TypeId(9) {
++            ValueRepr::unsigned(element, u64::try_from(*n).unwrap()).unwrap()
++        } else {
++            ValueRepr::signed(element, *n).unwrap()
++        };
++        let t = store.ticket(scalar).unwrap();
++        store.initialize(c, t).unwrap();
++        vector.push(&mut store, &mut fuel, c).unwrap();
++    }
++    let t = vector.finish(&mut store, &mut fuel).unwrap();
++    let ty = TypeId(store.peek_ticket(t).unwrap().type_id);
++    let c = store
++        .new_cell(
++            StorageContract::Exact(ty),
++            writable,
++            CellOwner::FrameSlot { frame, slot: 100 },
++        )
++        .unwrap();
++    store.initialize(c, t).unwrap();
++    let slice = store.intern_type(TypeKey::Slice { element }).unwrap();
++    for target in [slice, element] {
++        for mutable in [false, true] {
++            store.intern_type(TypeKey::Ref { mutable, target }).unwrap();
++        }
++    }
++    (store, c)
++}
++fn commit(
++    store: &mut GuestStore,
++    plan: lrr::runtime::buffer_slice::PreparedBufferBorrow,
++) -> TicketId {
++    store.reserve_buffer_borrow(&plan).unwrap();
++    let mut fuel = RunFuel::new(1).unwrap();
++    fuel.charge().unwrap();
++    store.commit_buffer_borrow(plan).unwrap()
++}
++fn reference(store: &mut GuestStore, ticket: TicketId) -> RefId {
++    let ty = TypeId(store.peek_ticket(ticket).unwrap().type_id);
++    let frame = store.new_frame_anchor().unwrap();
++    let cell = store
++        .new_cell(
++            StorageContract::Exact(ty),
++            true,
++            CellOwner::FrameSlot { frame, slot: 200 },
++        )
++        .unwrap();
++    store.initialize(cell, ticket).unwrap();
++    store.reference_from_cell(cell).unwrap()
++}
++#[test]
++fn buffer_slice_original_first_last_and_dynamic_subrange_contract() {
++    let original = include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/evec-slice.rs"
++    );
++    assert!(original.contains("assert_eq!(z[0], 1)") && original.contains("assert_eq!(z[4], 5)"));
++    let dynamic = include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/subslice-range-return-ref.rs"
++    );
++    assert!(dynamic.contains("&v[i..j]"));
++    let (mut s, c) = setup_element(&[1, 2, 3, 4, 5], true, 100_000, TypeId(8));
++    let plan = s
++        .prepare_vector_window(
++            &Place::cell(c),
++            usize_value(0),
++            usize_value(5),
++            Access::Shared,
++        )
++        .unwrap();
++    let t = commit(&mut s, plan);
++    let r = reference(&mut s, t);
++    assert_eq!(s.buffer_slice_len(r).unwrap(), 5);
++    for (i, n) in [(0, 1), (4, 5)] {
++        let plan = s
++            .prepare_slice_element(r, usize_value(i), Access::Shared)
++            .unwrap();
++        let t = commit(&mut s, plan);
++        let element = reference(&mut s, t);
++        assert_eq!(
++            s.read_reference(element).unwrap(),
++            ValueRepr::signed(TypeId(8), n).unwrap()
++        );
++    }
++    let plan = s
++        .prepare_slice_window(r, usize_value(1), usize_value(4), Access::Shared)
++        .unwrap();
++    let nested = commit(&mut s, plan);
++    let nested = reference(&mut s, nested);
++    assert_eq!(s.buffer_slice_len(nested).unwrap(), 3);
++    for n in [0, 3] {
++        let plan = s
++            .prepare_slice_window(nested, usize_value(n), usize_value(n), Access::Shared)
++            .unwrap();
++        let empty = commit(&mut s, plan);
++        let r = reference(&mut s, empty);
++        assert_eq!(s.buffer_slice_len(r).unwrap(), 0);
++        assert!(matches!(
++            s.prepare_slice_element(r, usize_value(0), Access::Shared),
++            Err(PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds))
++        ));
++    }
++    let (mut bytes, c) = setup_element(&[10, 20, 30, 40], true, 100_000, TypeId(9));
++    let plan = bytes
++        .prepare_vector_window(
++            &Place::cell(c),
++            usize_value(1),
++            usize_value(3),
++            Access::Shared,
++        )
++        .unwrap();
++    let ticket = commit(&mut bytes, plan);
++    let window = reference(&mut bytes, ticket);
++    assert_eq!(bytes.buffer_slice_len(window).unwrap(), 2);
++    let plan = bytes
++        .prepare_slice_element(window, usize_value(1), Access::Shared)
++        .unwrap();
++    let ticket = commit(&mut bytes, plan);
++    let element = reference(&mut bytes, ticket);
++    assert_eq!(
++        bytes.read_reference(element).unwrap(),
++        ValueRepr::unsigned(TypeId(9), 30).unwrap()
++    );
++    // Scalar buffer contract adapters only: array unsizing/calls/comparison/output originals are not executed.
++}
++#[test]
++fn buffer_slice_window_and_element_leases_survive_container_move_then_drop() {
++    let (mut s, c) = setup(&[7, 8], true);
++    let plan = s
++        .prepare_vector_window(
++            &Place::cell(c),
++            usize_value(0),
++            usize_value(2),
++            Access::Mutable,
++        )
++        .unwrap();
++    let t = commit(&mut s, plan);
++    let r = reference(&mut s, t);
++    let plan = s
++        .prepare_slice_element(r, usize_value(1), Access::Shared)
++        .unwrap();
++    let e = commit(&mut s, plan);
++    let e = reference(&mut s, e);
++    let StorageContract::Exact(ty) = s.declared(c).unwrap() else {
++        panic!("known Vec descriptor")
++    };
++    let moved = s.move_from(c).unwrap();
++    s.retire_cell(c).unwrap();
++    let frame = s.new_frame_anchor().unwrap();
++    let dest = s
++        .new_cell(
++            StorageContract::Exact(ty),
++            false,
++            CellOwner::FrameSlot { frame, slot: 0 },
++        )
++        .unwrap();
++    s.initialize(dest, moved).unwrap();
++    assert_eq!(s.buffer_slice_len(r).unwrap(), 2);
++    assert_eq!(
++        s.read_reference(e).unwrap(),
++        ValueRepr::signed(TypeId(6), 8).unwrap()
++    );
++    let plan = s
++        .prepare_slice_element(r, usize_value(1), Access::Mutable)
++        .unwrap();
++    let mutable = commit(&mut s, plan);
++    let mutable = reference(&mut s, mutable);
++    let incoming = s.ticket(ValueRepr::signed(TypeId(6), 9).unwrap()).unwrap();
++    let old = s.replace_reference(mutable, incoming).unwrap();
++    s.discard(old).unwrap();
++    assert_eq!(
++        s.read_reference(e).unwrap(),
++        ValueRepr::signed(TypeId(6), 9).unwrap()
++    );
++    let drop = s.begin_drop(dest).unwrap();
++    assert!(s.buffer_slice_len(r).is_err());
++    assert!(s.read_reference(e).is_err());
++    assert!(s.peek_ticket(drop).is_ok());
++}
++#[test]
++fn buffer_slice_permissions_bounds_and_no_scalar_window_read() {
++    let (mut s, c) = setup(&[1, 2], false);
++    assert!(
++        s.prepare_vector_window(
++            &Place::cell(c),
++            usize_value(0),
++            usize_value(2),
++            Access::Mutable
++        )
++        .is_err()
++    );
++    let plan = s
++        .prepare_vector_window(
++            &Place::cell(c),
++            usize_value(0),
++            usize_value(2),
++            Access::Shared,
++        )
++        .unwrap();
++    let t = commit(&mut s, plan);
++    let r = reference(&mut s, t);
++    assert!(
++        s.prepare_slice_element(r, usize_value(0), Access::Mutable)
++            .is_err()
++    );
++    assert!(
++        s.prepare_slice_window(r, usize_value(0), usize_value(1), Access::Mutable)
++            .is_err()
++    );
++    assert!(s.read_reference(r).is_err());
++    for (a, b) in [(2, 1), (0, 3), (u64::MAX, u64::MAX)] {
++        assert!(
++            s.prepare_slice_window(r, usize_value(a), usize_value(b), Access::Shared)
++                .is_err()
++        );
++    }
++    assert!(
++        s.prepare_slice_element(
++            r,
++            ValueRepr::unsigned(TypeId(12), 0).unwrap(),
++            Access::Shared
++        )
++        .is_err()
++    );
++}
++#[test]
++fn buffer_slice_fuel_cancellation_and_stale_prepare_preserve_existing_owners() {
++    let (mut s, c) = setup(&[1], true);
++    let plan = s
++        .prepare_vector_window(
++            &Place::cell(c),
++            usize_value(0),
++            usize_value(1),
++            Access::Shared,
++        )
++        .unwrap();
++    s.reserve_buffer_borrow(&plan).unwrap();
++    let handles = s.budget().handles();
++    let mut fuel = RunFuel::new(0).unwrap();
++    assert!(fuel.charge().is_err());
++    drop(plan);
++    assert_eq!(s.budget().handles(), handles);
++    assert!(matches!(s.state(c).unwrap(), CellState::Live(_)));
++    let plan = s
++        .prepare_vector_window(
++            &Place::cell(c),
++            usize_value(0),
++            usize_value(1),
++            Access::Shared,
++        )
++        .unwrap();
++    let mut fuel = RunFuel::new(10).unwrap();
++    fuel.cancellation().cancel();
++    assert!(fuel.charge().is_err());
++    drop(plan);
++    assert_eq!(s.vector_len(&Place::cell(c)).unwrap(), 1);
++    let plan = s
++        .prepare_vector_window(
++            &Place::cell(c),
++            usize_value(0),
++            usize_value(1),
++            Access::Shared,
++        )
++        .unwrap();
++    s.begin_drop(c).unwrap();
++    let handles = s.budget().handles();
++    assert!(s.commit_buffer_borrow(plan).is_err());
++    assert_eq!(s.budget().handles(), handles);
++}
++
++#[test]
++fn buffer_slice_quota_and_foreign_epoch_refuse_before_publication() {
++    let (s, _) = setup(&[1, 2], true);
++    let handles = s.budget().handles();
++    let (mut low, c) = setup_limits(&[1, 2], true, handles + 1);
++    let before = low.budget().handles();
++    assert!(
++        low.prepare_vector_window(
++            &Place::cell(c),
++            usize_value(0),
++            usize_value(2),
++            Access::Shared
++        )
++        .is_err()
++    );
++    assert_eq!(low.budget().handles(), before);
++    assert_eq!(low.vector_len(&Place::cell(c)).unwrap(), 2);
++    let (s, c) = setup(&[1, 2], true);
++    let plan = s
++        .prepare_vector_window(
++            &Place::cell(c),
++            usize_value(0),
++            usize_value(2),
++            Access::Shared,
++        )
++        .unwrap();
++    let mut other = GuestStore::new(2, 100_000, 16 << 20).unwrap();
++    let handles = other.budget().handles();
++    assert!(other.commit_buffer_borrow(plan).is_err());
++    assert_eq!(other.budget().handles(), handles);
++}

@@ -1,0 +1,11 @@
+schema_version=1
+id="E2407"
+category="strict"
+source="main.rs"
+entry="case"
+modes=["off","auto","force"]
+oracle=true
+[expect]
+status="passed"
+stdout="evaluate:0\nbody:iteration0\ncontinue\ndrop:iteration0\nevaluate:1\nbody:iteration1\nbreak\ndrop:iteration1\nafter_while\n"
+stderr=""

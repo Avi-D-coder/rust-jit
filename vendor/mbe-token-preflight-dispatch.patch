@@ -1,0 +1,54 @@
+--- a/crates/mbe/src/expander.rs
++++ b/crates/mbe/src/expander.rs
+@@ -21,6 +21,9 @@
+     marker: impl Fn(&mut Span) + Copy,
+     call_style: MacroCallStyle,
+     call_site: Span,
++    token_limit: Option<usize>,
++    byte_budget: Option<&crate::ByteBudget<'_>>,
++    stats: &mut crate::TranscriptionStats,
+ ) -> ExpandResult<(tt::TopSubtree, MatchedArmIndex)> {
+     let mut match_: Option<(matcher::Match<'_>, &crate::Rule, usize)> = None;
+     for (idx, rule) in rules.iter().enumerate() {
+@@ -35,8 +38,21 @@
+             // If we find a rule that applies without errors, we're done.
+             // Unconditionally returning the transcription here makes the
+             // `test_repeat_bad_var` test fail.
+-            let ExpandResult { value, err: transcribe_err } =
+-                transcriber::transcribe(&rule.rhs, &new_match.bindings, marker, call_site);
++            let ExpandResult { value, err: transcribe_err } = transcriber::transcribe(
++                &rule.rhs,
++                &new_match.bindings,
++                marker,
++                call_site,
++                token_limit,
++                byte_budget,
++                stats,
++            );
++            if transcribe_err
++                .as_ref()
++                .is_some_and(|error| matches!(error.inner.1, ExpandErrorKind::LimitExceeded))
++            {
++                return ExpandResult { value: (value, Some(idx as u32)), err: transcribe_err };
++            }
+             if transcribe_err.is_none() {
+                 return ExpandResult::ok((value, Some(idx as u32)));
+             }
+@@ -54,8 +70,15 @@
+     }
+     if let Some((match_, rule, idx)) = match_ {
+         // if we got here, there was no match without errors
+-        let ExpandResult { value, err: transcribe_err } =
+-            transcriber::transcribe(&rule.rhs, &match_.bindings, marker, call_site);
++        let ExpandResult { value, err: transcribe_err } = transcriber::transcribe(
++            &rule.rhs,
++            &match_.bindings,
++            marker,
++            call_site,
++            token_limit,
++            byte_budget,
++            stats,
++        );
+         ExpandResult { value: (value, idx.try_into().ok()), err: match_.err.or(transcribe_err) }
+     } else {
+         ExpandResult::new(

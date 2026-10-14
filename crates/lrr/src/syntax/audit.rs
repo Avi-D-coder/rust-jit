@@ -4,6 +4,7 @@ use ra_ap_syntax::{AstNode, Edition, SyntaxKind, ast};
 #[derive(Debug, Default)]
 pub struct SourceFacts {
     pub paths: Vec<String>,
+    pub method_names: Vec<String>,
     pub unsafe_tokens: usize,
     pub parse_errors: usize,
 }
@@ -55,6 +56,17 @@ pub fn source_facts(text: &str) -> SourceFacts {
     }
     facts.paths.sort();
     facts.paths.dedup();
+    for call in root
+        .syntax()
+        .descendants()
+        .filter_map(ast::MethodCallExpr::cast)
+    {
+        if let Some(name) = call.name_ref() {
+            facts.method_names.push(name.text().to_string());
+        }
+    }
+    facts.method_names.sort();
+    facts.method_names.dedup();
     facts.unsafe_tokens = root
         .syntax()
         .descendants_with_tokens()

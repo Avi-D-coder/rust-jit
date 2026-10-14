@@ -1,0 +1,1075 @@
+diff --git a/crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs b/crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs
+@@ -0,0 +1,286 @@
++//! Exact generated declaration owner to compiler-facet transfer; no effects.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    expand::{record::ExpansionRecord, source_declarative::SourceDeclarative},
++    frontend::{
++        compile_input_catalog::CompileInputCatalog, generated_macros::GeneratedMacroCatalog,
++    },
++    source::{
++        changes::{PreparedSourceView, SourceSelection},
++        module_syntax::ModuleSyntaxInput,
++    },
++    syntax::{outline::ScopeKey, token_wire::Key},
++};
++use std::sync::Arc;
++pub(super) struct PreparedGeneratedCompilerFacet {
++    caller: PreparedSourceView,
++    selection: SourceSelection,
++    scope: ScopeKey,
++    caller_root: Key,
++    record: Arc<ExpansionRecord>,
++    epoch: u64,
++    compiler: Arc<CompileInputCatalog>,
++    compiler_identity: Digest,
++    child: Option<(PreparedSourceView, SourceSelection, Digest)>,
++    bytes: usize,
++}
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-COMPILE-INPUT", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "generated compiler facet transfer budget".into(),
++    )
++}
++impl PreparedGeneratedCompilerFacet {
++    pub(super) fn capture_current(
++        parent: &SourceDeclarative,
++        generated: &GeneratedMacroCatalog,
++        epoch: u64,
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        let (items, scope, root) = generated.captured_owner();
++        let source = parent.module_source();
++        let selection = source.selection();
++        if epoch == 0
++            || items.epoch() != epoch
++            || items
++                .record()
++                .key()
++                .procedural_epoch
++                .is_some_and(|e| e != epoch)
++        {
++            return Err(fault("generated compiler facet current epoch differs"));
++        }
++        items.record().key().validate()?;
++        source.require_declaration_syntax()?;
++        if scope.owner.is_some()
++            || scope.crate_key != selection.outline.crate_key
++            || !scope
++                .module_path
++                .starts_with(&selection.outline.module_path)
++            || generated.owning_cfg() != source.captured_macro_cfg()?
++            || root.parent.is_some()
++            || root.defining_unit.0 != scope.crate_key.0
++            || parent.macro_index().hygiene_facts().context(root.key())? != root
++        {
++            return Err(fault(
++                "generated compiler facet exact caller scope/profile/hygiene differs",
++            ));
++        }
++        let compiler = parent
++            .compiler
++            .as_ref()
++            .ok_or_else(|| fault("generated compiler facet matched parent catalogue absent"))?;
++        let compiler_identity = compiler.owning_profile_identity()?;
++        if compiler.has_standard_facets()
++            && compiler
++                .canonical_standalone_member(&selection.outline.parse.profile)?
++                .is_none()
++        {
++            return Err(fault(
++                "generated compiler facet lacks matched owning-profile membership",
++            ));
++        }
++        let bytes = std::mem::size_of::<Self>()
++            .checked_add(256)
++            .and_then(|n| n.checked_add(selection.metadata_bytes().ok()?))
++            .and_then(|n| n.checked_add(scope.heap_bytes()))
++            .and_then(|n| n.checked_add(compiler.owning_profile_metadata_bytes().ok()?))
++            .filter(|n| byte_limit <= 64 * 1024 * 1024 && *n <= byte_limit)
++            .ok_or_else(limit)?;
++        Ok(Self {
++            caller: source.share(),
++            selection: selection.clone(),
++            scope: scope.clone(),
++            caller_root: root.key(),
++            record: items.record_input(),
++            epoch,
++            compiler: compiler.clone(),
++            compiler_identity,
++            child: None,
++            bytes,
++        })
++    }
++    pub(super) fn capture_module_current(
++        syntax: &ModuleSyntaxInput,
++        parent: &SourceDeclarative,
++        generated: &GeneratedMacroCatalog,
++        epoch: u64,
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        let mut proof = Self::capture_current(parent, generated, epoch, byte_limit)?;
++        proof.check_module_origin(syntax, generated)?;
++        let child = syntax.prepared_source();
++        let bytes = proof
++            .bytes
++            .checked_add(std::mem::size_of::<(
++                PreparedSourceView,
++                SourceSelection,
++                Digest,
++            )>())
++            .and_then(|n| n.checked_add(child.selection().metadata_bytes().ok()?))
++            .and_then(|n| n.checked_add(128))
++            .filter(|n| *n <= byte_limit)
++            .ok_or_else(limit)?;
++        proof.child = Some((child.share(), child.selection().clone(), syntax.identity()));
++        proof.bytes = bytes;
++        Ok(proof)
++    }
++    fn check_module_origin(
++        &self,
++        syntax: &ModuleSyntaxInput,
++        generated: &GeneratedMacroCatalog,
++    ) -> Result<(), Diagnostic> {
++        let origin = syntax.origin();
++        let child = syntax.prepared_source();
++        if !origin.caller().same_publication(&self.caller)
++            || origin.caller().selection() != &self.selection
++            || !origin.parent().record().same_record(&self.record)
++            || origin.parent().epoch() != self.epoch
++            || origin.parent_header().expansion != self.record.key().fingerprint()
++            || child.selection().outline.crate_key != self.selection.outline.crate_key
++            || child.selection().outline.parse.profile != self.selection.outline.parse.profile
++            || child.selection().outline.cfg != self.selection.outline.cfg
++            || !child
++                .selection()
++                .outline
++                .module_path
++                .starts_with(&self.scope.module_path)
++            || !generated.unresolved_module_sources().any(|d| {
++                d.producer() == origin.producer()
++                    && d.header() == origin.parent_header()
++                    && d.scope() == &child.outline().root_scope
++            })
++        {
++            return Err(fault(
++                "generated compiler facet module origin/member/source differs",
++            ));
++        }
++        // Absent file attributes cannot manufacture crate-wide no_std policy.
++        if self.caller.macro_prelude_policy()?.standard != child.macro_prelude_policy()?.standard {
++            return Err(fault(
++                "generated compiler facet requires retained crate-wide prelude policy",
++            ));
++        }
++        Ok(())
++    }
++    pub(super) fn revalidate_current(
++        &self,
++        parent: &SourceDeclarative,
++        generated: &GeneratedMacroCatalog,
++        epoch: u64,
++    ) -> Result<(), Diagnostic> {
++        let (items, scope, root) = generated.captured_owner();
++        if epoch != self.epoch
++            || items.epoch() != self.epoch
++            || !parent.module_source().same_publication(&self.caller)
++            || parent.module_source().selection() != &self.selection
++            || scope != &self.scope
++            || generated.owning_cfg() != parent.module_source().captured_macro_cfg()?
++            || root.key() != self.caller_root
++            || !items.record().same_record(&self.record)
++            || parent.macro_index().hygiene_facts().context(root.key())? != root
++            || parent
++                .compiler
++                .as_ref()
++                .map(|c| c.owning_profile_identity())
++                .transpose()?
++                != Some(self.compiler_identity)
++        {
++            return Err(fault(
++                "generated compiler facet current owner/record/epoch/catalogue differs",
++            ));
++        }
++        Ok(())
++    }
++    pub(super) fn install_module(
++        &self,
++        syntax: &ModuleSyntaxInput,
++        target: &mut SourceDeclarative,
++        parent: &SourceDeclarative,
++        generated: &GeneratedMacroCatalog,
++        epoch: u64,
++    ) -> Result<(), Diagnostic> {
++        self.revalidate_current(parent, generated, epoch)?;
++        self.check_module_origin(syntax, generated)?;
++        self.check_child(syntax, target)?;
++        if target.compiler.is_some() {
++            return Err(fault("generated compiler facet target already installed"));
++        }
++        target.compiler = Some(self.compiler.clone());
++        Ok(())
++    }
++    fn check_child(
++        &self,
++        syntax: &ModuleSyntaxInput,
++        target: &SourceDeclarative,
++    ) -> Result<(), Diagnostic> {
++        let (child, selection, identity) = self
++            .child
++            .as_ref()
++            .ok_or_else(|| fault("generated compiler facet has no admitted child"))?;
++        if syntax.identity() != *identity
++            || !syntax.prepared_source().same_publication(child)
++            || syntax.prepared_source().selection() != selection
++            || !target.module_source().same_publication(child)
++            || target.module_source().selection() != selection
++        {
++            return Err(fault(
++                "generated compiler facet target publication/projection differs",
++            ));
++        }
++        Ok(())
++    }
++    pub(super) fn revalidate_module(
++        &self,
++        syntax: &ModuleSyntaxInput,
++        target: &SourceDeclarative,
++        parent: &SourceDeclarative,
++        generated: &GeneratedMacroCatalog,
++        epoch: u64,
++    ) -> Result<(), Diagnostic> {
++        self.revalidate_current(parent, generated, epoch)?;
++        self.check_module_origin(syntax, generated)?;
++        self.check_child(syntax, target)?;
++        if target
++            .compiler
++            .as_ref()
++            .map(|c| c.owning_profile_identity())
++            .transpose()?
++            != Some(self.compiler_identity)
++        {
++            return Err(fault(
++                "generated compiler facet attached target catalogue differs",
++            ));
++        }
++        Ok(())
++    }
++    pub(super) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(super) fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/generated-source-compiler-facet");
++        e.digest(self.selection.location_identity());
++        e.record(&self.selection.outline.parse);
++        e.digest(self.selection.outline.cfg);
++        e.record(self.record.key());
++        e.digest(self.record.output());
++        e.record(&self.scope);
++        e.bytes(&self.caller_root.0);
++        e.u64(self.epoch);
++        e.digest(self.compiler_identity);
++        e.bool(self.child.is_some());
++        if let Some((_, selection, projection)) = &self.child {
++            e.digest(selection.location_identity());
++            e.record(&selection.outline.parse);
++            e.digest(selection.outline.cfg);
++            e.digest(*projection);
++        }
++        e.finish()
++    }
++}
+diff --git a/crates/lrr/src/expand/source_discovery.rs b/crates/lrr/src/expand/source_discovery.rs
+--- a/crates/lrr/src/expand/source_discovery.rs
++++ b/crates/lrr/src/expand/source_discovery.rs
+@@ -16,6 +16,8 @@
+ use std::collections::{BTreeMap, BTreeSet};
+ #[path = "source_discovery/compiler_profiles.rs"]
+ mod compiler_profiles;
++#[path = "source_discovery/generated_compiler_facets.rs"]
++mod generated_compiler_facets;
+ #[path = "source_discovery/original_inert.rs"]
+ mod original_inert;
+ pub enum SourceDiscoveryStep {
+@@ -391,6 +393,7 @@
+     Fragment(usize),
+ }
+ struct StagedModule {
++    compiler_facet: Option<generated_compiler_facets::PreparedGeneratedCompilerFacet>,
+     ordinary_modules: Vec<crate::frontend::source_module_declarations::SourceModuleDeclaration>,
+     provider: super::source_declarative::SourceDeclarative,
+     catalogs:
+@@ -5335,6 +5338,18 @@
+     ) -> crate::db::poll::QueryPoll<()> {
+         use crate::db::poll::QueryPoll;
+         let producer = syntax.producer();
++        if matches!(&syntax, StagedModuleSyntax::Generated(_)) {
++            let current = db.published_input(&crate::db::dependency::InputKey::ExpansionEpoch);
++            if !matches!(current, Some((crate::db::dependency::InputValue::ExpansionEpoch(epoch), _)) if *epoch == self.epoch)
++            {
++                return QueryPoll::Ready(Err(fault(
++                    "generated module compiler facet requires actual current expansion epoch",
++                )));
++            }
++            if let Err(error) = self.revalidate_staged_compiler_facets() {
++                return QueryPoll::Ready(Err(error));
++            }
++        }
+         if let Some(staged) = self.staged_modules.get(&producer) {
+             return QueryPoll::Ready(if staged.syntax.identity() == syntax.identity() {
+                 Ok(())
+@@ -5488,11 +5503,44 @@
+             {
+                 provider.install_procedural(catalog.clone())?;
+             }
+-            provider.compiler = providers
+-                .get(ordinal)
+-                .ok_or_else(|| fault("staged module compiler owner absent"))?
+-                .compiler
+-                .clone();
++            let compiler_facet = match &syntax {
++                StagedModuleSyntax::Generated(generated) => {
++                    let actual =
++                        self.generated_module_scope(generated.origin().parent_header().expansion)?;
++                    let residual = (320usize * 1024 * 1024)
++                        .checked_sub(bytes)
++                        .ok_or_else(|| fault("generated compiler facet residual metadata limit"))?
++                        .min(64 * 1024 * 1024);
++                    let proof = generated_compiler_facets::PreparedGeneratedCompilerFacet::capture_module_current(
++                        generated, actual.captured.provider, actual.catalog, self.epoch, residual,
++                    )?;
++                    proof.install_module(
++                        generated,
++                        &mut provider,
++                        actual.captured.provider,
++                        actual.catalog,
++                        self.epoch,
++                    )?;
++                    Some(proof)
++                }
++                StagedModuleSyntax::Ordinary { syntax, parent } => {
++                    let actual = &self
++                        .staged_modules
++                        .get(parent)
++                        .ok_or_else(|| fault("ordinary compiler facet immediate parent absent"))?
++                        .provider;
++                    if !actual
++                        .module_source()
++                        .same_publication(syntax.origin().declaration().source())
++                        || actual.module_source().selection()
++                            != syntax.origin().declaration().source().selection()
++                    {
++                        return Err(fault("ordinary compiler facet immediate caller differs"));
++                    }
++                    provider.compiler = actual.compiler.clone();
++                    None
++                }
++            };
+             let mut source_calls = BTreeMap::new();
+             for call in &outline.item_invocations {
+                 source_calls.insert(call.item_input, call.clone());
+@@ -5548,7 +5596,12 @@
+                     .ok_or_else(|| fault("staged module route metadata limit"))?;
+             }
+             let bytes = bytes
+-                .checked_add(route_bytes)
++                .checked_add(
++                    compiler_facet
++                        .as_ref()
++                        .map_or(0, |proof| proof.metadata_bytes()),
++                )
++                .and_then(|n| n.checked_add(route_bytes))
+                 .and_then(|n| n.checked_add(call_bytes))
+                 .and_then(|n| n.checked_add(provider.module_index_bytes().ok()?))
+                 .filter(|n| *n <= 320 * 1024 * 1024)
+@@ -5564,6 +5617,7 @@
+                 ordinary_modules,
+                 ordinal,
+                 source_calls,
++                compiler_facet,
+             ))
+         })();
+         let (
+@@ -5577,6 +5631,7 @@
+             ordinary_modules,
+             ordinal,
+             source_calls,
++            compiler_facet,
+         ) = match planned {
+             Ok(plan) => plan,
+             Err(error) => return QueryPoll::Ready(Err(error)),
+@@ -5645,6 +5700,7 @@
+         self.staged_modules.insert(
+             producer,
+             StagedModule {
++                compiler_facet,
+                 ordinary_modules,
+                 provider,
+                 catalogs: BTreeMap::new(),
+@@ -6193,6 +6249,16 @@
+     ) -> crate::db::poll::QueryPoll<ProjectionReadiness> {
+         use crate::db::poll::QueryPoll;
+         QueryPoll::Ready((|| {
++            self.revalidate_staged_compiler_facets()?;
++            if matches!(&syntax, StagedModuleSyntax::Generated(_)) {
++                let current = db.published_input(&crate::db::dependency::InputKey::ExpansionEpoch);
++                if !matches!(current, Some((crate::db::dependency::InputValue::ExpansionEpoch(epoch), _)) if *epoch == self.epoch)
++                {
++                    return Err(fault(
++                        "generated module readiness requires actual current expansion epoch",
++                    ));
++                }
++            }
+             for (key, fingerprint) in &self.compiler_inputs {
+                 if db
+                     .input(key)
+@@ -6406,11 +6472,17 @@
+                 return Err(fault("module readiness metadata limit"));
+             }
+             let macros = staged.provider.completed_published_index()?;
+-            let mut key = crate::core::digest::StableEncoder::new("lrr/v3/module-source-readiness");
++            let mut key = crate::core::digest::StableEncoder::new("lrr/v4/module-source-readiness");
+             key.record(&self.key);
+             if let Some(prepared) = &self.compiler_profiles {
+                 key.bool(true);
+                 key.digest(prepared.identity());
++            } else {
++                key.bool(false);
++            }
++            if let Some(proof) = &staged.compiler_facet {
++                key.bool(true);
++                key.digest(proof.identity());
+             } else {
+                 key.bool(false);
+             }
+@@ -9621,6 +9693,23 @@
+             }
+         }
+     }
++    fn revalidate_staged_compiler_facets(&self) -> Result<(), Diagnostic> {
++        for staged in self.staged_modules.values() {
++            if let Some(proof) = &staged.compiler_facet {
++                let syntax = staged.syntax.generated()?;
++                let actual =
++                    self.generated_module_scope(syntax.origin().parent_header().expansion)?;
++                proof.revalidate_module(
++                    syntax,
++                    &staged.provider,
++                    actual.captured.provider,
++                    actual.catalog,
++                    self.epoch,
++                )?;
++            }
++        }
++        Ok(())
++    }
+     /// Available pure candidates never become a certificate without strict replay.
+     fn revalidate_original_selections(
+         &self,
+@@ -9632,6 +9721,7 @@
+         if let Some(prepared) = &self.compiler_profiles {
+             prepared.revalidate(providers)?;
+         }
++        self.revalidate_staged_compiler_facets()?;
+         let mut records = Vec::new();
+         self.calls
+             .len()
+diff --git a/crates/lrr/src/frontend/generated_macros.rs b/crates/lrr/src/frontend/generated_macros.rs
+--- a/crates/lrr/src/frontend/generated_macros.rs
++++ b/crates/lrr/src/frontend/generated_macros.rs
+@@ -476,6 +476,9 @@
+         }
+         let parsed = ParsedFile::from_generated_items(&self.items)?;
+         crate::syntax::modules::inline_module_layout(&parsed.parsed.tree(), &self.cfg, suffix)
++    }
++    pub(crate) fn owning_cfg(&self) -> &CfgSet {
++        &self.cfg
+     }
+     pub(crate) fn captured_owner(
+         &self,
+diff --git a/crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs b/crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs
+@@ -0,0 +1,560 @@
++//! Source/expansion/adoption components only; originals are not full fixture passes.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    db::{
++        dependency::{InputKey, InputValue},
++        key::{OutlineKey, QueryKey},
++        memo::Database,
++        poll::InputRequest,
++    },
++    expand::{generated_items::GeneratedItems, source_declarative::SourceDeclarativeDemand},
++    source::{
++        changes::{PreparedSourceInputs, SourceSelectionOutcome, SourceUnitInput},
++        dependencies::SourceDependency,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::parse::ParseKey,
++};
++use std::{collections::BTreeMap, path::Path};
++const MODERN: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/dollar-crate-modern.rs"
++);
++const INTERCRATE: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/auxiliary/intercrate.rs"
++);
++const UNUSED: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-const-eval.rs"
++);
++const MODULE: &str =
++    include_str!("../../../../../fixtures/upstream/rustc-checkout/tests/ui/modules/issue-56411.rs");
++fn unit(text: &str, path: &str, key: Digest, edition: u16) -> SourceUnitInput {
++    SourceUnitInput {
++        path: SourcePath::new(path).unwrap(),
++        crate_key: key,
++        module_path: vec![],
++        profile: ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        cfg: CfgSet::guest_default(),
++        blob: SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++    }
++}
++fn prepare(
++    units: Vec<SourceUnitInput>,
++    edges: Vec<SourceDependency>,
++) -> (Database, Vec<PreparedSourceView>, Vec<SourceDeclarative>) {
++    let selections: Vec<_> = units
++        .iter()
++        .map(|u| SourceSelection {
++            path: u.path.clone(),
++            outline: OutlineKey {
++                parse: ParseKey {
++                    content: u.blob.content(),
++                    profile: u.profile.clone(),
++                },
++                crate_key: u.crate_key,
++                module_path: u.module_path.clone(),
++                cfg: u.cfg.fingerprint(),
++            },
++        })
++        .collect();
++    let inputs =
++        PreparedSourceInputs::refresh_with_dependencies(None, units, Default::default(), edges)
++            .unwrap();
++    let views: Vec<_> = selections
++        .iter()
++        .map(|s| {
++            let SourceSelectionOutcome::Selected(v) = inputs.select(s).unwrap() else {
++                panic!()
++            };
++            v
++        })
++        .collect();
++    let mut db = Database::default();
++    inputs.publish(&mut db).unwrap();
++    db.begin_expansion_epoch(1).unwrap();
++    let mut providers: Vec<_> = views
++        .iter()
++        .map(|v| SourceDeclarative::new(v.share()).unwrap())
++        .collect();
++    let supplied = Arc::new(
++        CompileInputCatalog::standalone(&views[0].selection().outline.parse.profile).unwrap(),
++    );
++    let facets = super::super::compiler_profiles::PreparedSourceCompilerFacets::prepare(
++        &providers,
++        supplied,
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    facets.install(&mut providers).unwrap();
++    (db, views, providers)
++}
++fn expansion(
++    view: &PreparedSourceView,
++    providers: &[SourceDeclarative],
++    index: usize,
++    tail: &str,
++) -> GeneratedItems {
++    let call = view
++        .outline()
++        .item_invocations
++        .iter()
++        .find(|c| {
++            view.macro_call_at(c.range)
++                .unwrap()
++                .segments()
++                .last()
++                .is_some_and(
++                    |s| matches!(s,crate::syntax::imports::ImportSegment::Name(n) if n==tail),
++                )
++        })
++        .unwrap();
++    let routes =
++        super::super::SourceDiscovery::completed_macro_routes(providers, &BTreeMap::new()).unwrap();
++    let graph = super::super::SourceDiscovery::compiler_import_graph(&routes, providers).unwrap();
++    let SourceDeclarativeDemand::Ready(request) = providers[index]
++        .demand_for_discovery(
++            call.item_input,
++            Digest([80; 32]),
++            crate::expand::source_declarative::engine_version(),
++            &graph,
++            providers,
++        )
++        .unwrap()
++    else {
++        panic!("genuine original request must be selected")
++    };
++    GeneratedItems::admit(request.key(), Arc::new(request.expand().unwrap()), 1).unwrap()
++}
++fn catalog(view: &PreparedSourceView, items: &GeneratedItems) -> GeneratedMacroCatalog {
++    GeneratedMacroCatalog::new(
++        items,
++        view.outline().root_scope.clone(),
++        Key(items.record().key().parent_context.0),
++        view.captured_macro_cfg().unwrap(),
++        items.epoch(),
++    )
++    .unwrap()
++}
++fn nested(
++    caller: u16,
++    definition: u16,
++) -> (
++    Vec<PreparedSourceView>,
++    Vec<SourceDeclarative>,
++    GeneratedItems,
++    GeneratedMacroCatalog,
++) {
++    let root = Digest([81; 32]);
++    let aux = Digest([82; 32]);
++    let (_, views, ps) = prepare(
++        vec![
++            unit(MODERN, "modern.rs", root, caller),
++            unit(INTERCRATE, "intercrate.rs", aux, definition),
++        ],
++        vec![SourceDependency {
++            consumer: root,
++            alias: "intercrate".into(),
++            provider: aux,
++        }],
++    );
++    let items = expansion(&views[0], &ps, 0, "define_uses_dollar_crate_modern_nested");
++    let cat = catalog(&views[0], &items);
++    (views, ps, items, cat)
++}
++#[test]
++fn unchanged_cross_edition_generated_macro2_keeps_owner_facet_and_token_editions_distinct() {
++    for (caller, definition) in [(2015, 2024), (2018, 2021), (2021, 2018), (2024, 2015)] {
++        let (views, ps, items, cat) = nested(caller, definition);
++        let proof =
++            PreparedGeneratedCompilerFacet::capture_current(&ps[0], &cat, 1, 64 * 1024 * 1024)
++                .unwrap();
++        proof.revalidate_current(&ps[0], &cat, 1).unwrap();
++        assert_eq!(proof.selection.outline.parse.profile.edition, caller);
++        assert_eq!(proof.record.key().call_edition, caller);
++        assert_eq!(proof.record.key().definition_edition, definition);
++        assert_eq!(
++            proof.compiler.runtime_prelude_unit(false),
++            crate::facade::unit(&views[0].outline().profile, "core")
++        );
++        assert!(items.tokens().contexts().iter().any(|c| c.defining_unit.0
++            == views[1].selection().outline.crate_key.0
++            && c.edition
++                == match definition {
++                    2015 => crate::syntax::token_wire::Edition::E2015,
++                    2018 => crate::syntax::token_wire::Edition::E2018,
++                    2021 => crate::syntax::token_wire::Edition::E2021,
++                    2024 => crate::syntax::token_wire::Edition::E2024,
++                    _ => panic!(),
++                }));
++        assert_eq!(proof.record.output(), items.record().output());
++        assert!(proof.child.is_none()); // No physical source publication or runtime grant.
++    }
++}
++#[test]
++fn current_parent_copy_epoch_missing_catalogue_and_foreign_facet_refuse() {
++    let (_, mut ps, _, cat) = nested(2024, 2015);
++    let proof =
++        PreparedGeneratedCompilerFacet::capture_current(&ps[0], &cat, 1, 64 * 1024 * 1024).unwrap();
++    assert!(proof.revalidate_current(&ps[1], &cat, 1).is_err());
++    assert!(proof.revalidate_current(&ps[0], &cat, 2).is_err());
++    let (_, copy, _, _) = nested(2024, 2015);
++    assert!(proof.revalidate_current(&copy[0], &cat, 1).is_err());
++    ps[0].compiler = None;
++    assert_eq!(
++        PreparedGeneratedCompilerFacet::capture_current(&ps[0], &cat, 1, 64 * 1024 * 1024)
++            .err()
++            .unwrap()
++            .code,
++        "LRR-E-COMPILE-INPUT"
++    );
++    ps[0].compiler = ps[1].compiler.clone();
++    assert!(
++        PreparedGeneratedCompilerFacet::capture_current(&ps[0], &cat, 1, 64 * 1024 * 1024).is_err()
++    );
++    assert!(proof.revalidate_current(&ps[0], &cat, 1).is_err());
++}
++#[test]
++fn another_real_original_expansion_cannot_replay_the_retained_record() {
++    let (views, ps, _, cat) = nested(2024, 2015);
++    let proof =
++        PreparedGeneratedCompilerFacet::capture_current(&ps[0], &cat, 1, 64 * 1024 * 1024).unwrap();
++    let different = expansion(&views[0], &ps, 0, "define_uses_dollar_crate_legacy_nested");
++    let different = catalog(&views[0], &different);
++    assert!(proof.revalidate_current(&ps[0], &different, 1).is_err());
++}
++#[test]
++fn transfer_budget_refuses_before_retaining_or_changing_the_owner() {
++    let (_, ps, _, cat) = nested(2024, 2015);
++    let before = ps[0]
++        .compiler
++        .as_ref()
++        .unwrap()
++        .owning_profile_identity()
++        .unwrap();
++    assert_eq!(
++        PreparedGeneratedCompilerFacet::capture_current(&ps[0], &cat, 1, 1)
++            .err()
++            .unwrap()
++            .code,
++        "LRR-E-METADATA-LIMIT"
++    );
++    assert_eq!(
++        ps[0]
++            .compiler
++            .as_ref()
++            .unwrap()
++            .owning_profile_identity()
++            .unwrap(),
++        before
++    );
++}
++type AdoptedFixture = (
++    Database,
++    Vec<PreparedSourceView>,
++    Vec<SourceDeclarative>,
++    GeneratedMacroCatalog,
++    Arc<ModuleSyntaxInput>,
++);
++fn adopted_module() -> AdoptedFixture {
++    adopted_module_source(MODULE, "issue-56411.rs", "import")
++}
++fn adopted_module_source(source: &str, source_path: &str, tail: &str) -> AdoptedFixture {
++    use crate::{
++        service::{
++            expansion::{DemandContext, ExpansionCoordinator, PhaseIdentity},
++            source_capture::SourceCapture,
++        },
++        source::{
++            include_paths::{IncludeAuthorities, IncludeLocation, IncludeRoot, IncludeRootKind},
++            module_capture::AdoptedModuleCapture,
++            module_view::CapturedModuleSourceView,
++        },
++    };
++    // The default caller uses unchanged upstream module source; policy negatives
++    // supply an independent LRR snapshot. The first owner remains distinct.
++    let root = Digest([83; 32]);
++    let other = Digest([84; 32]);
++    let (mut db, views, ps) = prepare(
++        vec![
++            unit(UNUSED, "unused.rs", other, 2015),
++            unit(source, source_path, root, 2024),
++        ],
++        vec![],
++    );
++    let items = expansion(&views[1], &ps, 1, tail);
++    let cat = catalog(&views[1], &items);
++    let demand = cat.unresolved_module_sources().next().unwrap().clone();
++    assert_eq!(
++        demand.header().expansion,
++        items.record().key().fingerprint()
++    );
++    let base = items
++        .tokens()
++        .spans()
++        .iter()
++        .find(|s| s.key() == demand.site())
++        .unwrap()
++        .clone();
++    let root_path = Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("../../fixtures/upstream/rustc-checkout/tests/ui/modules")
++        .canonicalize()
++        .unwrap();
++    let roots = IncludeAuthorities::new(
++        root,
++        Digest([85; 32]),
++        [IncludeRoot {
++            identity: Digest([86; 32]),
++            path: root_path,
++            kind: IncludeRootKind::Source,
++        }],
++    )
++    .unwrap();
++    let capture = SourceCapture::open(
++        IncludeAuthorities::new(
++            root,
++            Digest([85; 32]),
++            [roots.root(Digest([86; 32])).unwrap().clone()],
++        )
++        .unwrap(),
++        BTreeMap::new(),
++    )
++    .unwrap();
++    let from = IncludeLocation {
++        unit: root,
++        root: Digest([86; 32]),
++        path: views[1].selection().path.clone(),
++        origin: base.origin,
++    };
++    let request = roots
++        .module_request(
++            &from,
++            Path::new(""),
++            demand.request().clone(),
++            demand.producer(),
++            demand.site(),
++        )
++        .unwrap();
++    let record = capture.capture_module(&request).unwrap();
++    let input = InputRequest::CaptureModule {
++        request: Box::new(request),
++        compile_environment: items.record().key().consumer_compile_env,
++    };
++    let context = DemandContext {
++        request: Digest([87; 32]),
++        session: Digest([88; 32]),
++        unit: root,
++        revision: db.source_revision(),
++        epoch: 1,
++        source_generation: Digest([85; 32]),
++        native_generation: None,
++        compile_environment: items.record().key().consumer_compile_env,
++    };
++    let mut coordinator = ExpansionCoordinator::new(context.clone());
++    let body = views[1]
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap();
++    let token = coordinator
++        .issue(
++            QueryKey::Outline(views[1].selection().outline.clone()),
++            PhaseIdentity {
++                frame: Digest([89; 32]),
++                body: body.key(),
++                index: 0,
++            },
++            input.clone(),
++        )
++        .unwrap();
++    coordinator.start(&context, &token).unwrap();
++    coordinator
++        .accept_module(&context, &token, &record)
++        .unwrap();
++    coordinator
++        .adopt_module(&context, &token, &mut db, record)
++        .unwrap();
++    let actual = db
++        .input(&InputKey::ModuleRecord(input.fingerprint()))
++        .unwrap();
++    assert!(matches!(actual.as_ref(), InputValue::ModuleRecord { .. }));
++    let lease = Arc::new(AdoptedModuleCapture::new(actual).unwrap());
++    let origin = Arc::new(
++        CapturedModuleSourceView::new(lease, items, demand, views[1].share(), base).unwrap(),
++    );
++    let syntax = Arc::new(ModuleSyntaxInput::prepare(origin).unwrap());
++    (db, views, ps, cat, syntax)
++}
++#[test]
++fn unchanged_generated_module_adopted_source_uses_actual_second_owner_once() {
++    let (_, views, ps, cat, syntax) = adopted_module();
++    let proof = PreparedGeneratedCompilerFacet::capture_module_current(
++        &syntax,
++        &ps[1],
++        &cat,
++        1,
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    let mut child = SourceDeclarative::new(syntax.prepared_source().share()).unwrap();
++    proof
++        .install_module(&syntax, &mut child, &ps[1], &cat, 1)
++        .unwrap();
++    proof
++        .revalidate_module(&syntax, &child, &ps[1], &cat, 1)
++        .unwrap();
++    assert_ne!(
++        child
++            .compiler
++            .as_ref()
++            .unwrap()
++            .owning_profile_identity()
++            .unwrap(),
++        ps[0]
++            .compiler
++            .as_ref()
++            .unwrap()
++            .owning_profile_identity()
++            .unwrap()
++    );
++    assert_eq!(
++        child.module_source().selection().outline.parse.profile,
++        views[1].selection().outline.parse.profile
++    );
++    assert_eq!(
++        child.module_source().selection().outline.module_path,
++        vec!["issue_56411_aux"]
++    );
++    assert!(
++        proof
++            .install_module(&syntax, &mut child, &ps[1], &cat, 1)
++            .is_err()
++    );
++    assert!(
++        PreparedGeneratedCompilerFacet::capture_module_current(
++            &syntax,
++            &ps[0],
++            &cat,
++            1,
++            64 * 1024 * 1024
++        )
++        .is_err()
++    );
++    // Compile-error duplicate/private reexport assertions and main are not executed.
++}
++#[test]
++fn actual_child_wrong_catalogue_and_transient_quota_refuse_before_attachment() {
++    let (_, _, ps, cat, syntax) = adopted_module();
++    let mut child = SourceDeclarative::new(syntax.prepared_source().share()).unwrap();
++    assert_eq!(
++        PreparedGeneratedCompilerFacet::capture_module_current(&syntax, &ps[1], &cat, 1, 1)
++            .err()
++            .unwrap()
++            .code,
++        "LRR-E-METADATA-LIMIT"
++    );
++    assert!(child.compiler.is_none());
++    let proof = PreparedGeneratedCompilerFacet::capture_module_current(
++        &syntax,
++        &ps[1],
++        &cat,
++        1,
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    proof
++        .install_module(&syntax, &mut child, &ps[1], &cat, 1)
++        .unwrap();
++    child.compiler = ps[0].compiler.clone();
++    assert!(
++        proof
++            .revalidate_module(&syntax, &child, &ps[1], &cat, 1)
++            .is_err()
++    );
++}
++
++#[test]
++fn actual_retained_catalogue_cfg_cannot_be_replaced_by_caller_cfg() {
++    let (views, ps, items, cat) = nested(2024, 2015);
++    let mut changed = views[0].captured_macro_cfg().unwrap().clone();
++    changed.atoms.insert("wrong_owner_cfg".into());
++    let wrong = GeneratedMacroCatalog::new(
++        &items,
++        views[0].outline().root_scope.clone(),
++        Key(items.record().key().parent_context.0),
++        &changed,
++        1,
++    )
++    .unwrap();
++    let proof =
++        PreparedGeneratedCompilerFacet::capture_current(&ps[0], &cat, 1, 64 * 1024 * 1024).unwrap();
++    assert!(
++        PreparedGeneratedCompilerFacet::capture_current(&ps[0], &wrong, 1, 64 * 1024 * 1024)
++            .is_err()
++    );
++    assert!(proof.revalidate_current(&ps[0], &wrong, 1).is_err());
++}
++#[test]
++fn stale_owner_or_epoch_cannot_attach_an_old_certificate() {
++    let (_, _, mut ps, cat, syntax) = adopted_module();
++    let proof = PreparedGeneratedCompilerFacet::capture_module_current(
++        &syntax,
++        &ps[1],
++        &cat,
++        1,
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    let mut child = SourceDeclarative::new(syntax.prepared_source().share()).unwrap();
++    assert!(
++        proof
++            .install_module(&syntax, &mut child, &ps[1], &cat, 2)
++            .is_err()
++    );
++    assert!(child.compiler.is_none());
++    ps[1].compiler = ps[0].compiler.clone();
++    assert!(
++        proof
++            .install_module(&syntax, &mut child, &ps[1], &cat, 1)
++            .is_err()
++    );
++    assert!(child.compiler.is_none());
++}
++
++#[test]
++fn missing_crate_wide_no_std_policy_join_remains_a_precise_prerequisite() {
++    // Independent LRR policy-refusal control; no upstream file is rewritten.
++    let source = "#![no_std]macro_rules! emit{()=>{#[path=\"issue-56411-aux.rs\"]mod issue_56411_aux;}}emit!();fn main(){}";
++    let (_, _, ps, cat, syntax) = adopted_module_source(source, "no-std-negative.rs", "emit");
++    assert!(
++        !ps[1]
++            .module_source()
++            .macro_prelude_policy()
++            .unwrap()
++            .standard
++    );
++    assert!(
++        syntax
++            .prepared_source()
++            .macro_prelude_policy()
++            .unwrap()
++            .standard
++    );
++    let error = PreparedGeneratedCompilerFacet::capture_module_current(
++        &syntax,
++        &ps[1],
++        &cat,
++        1,
++        64 * 1024 * 1024,
++    )
++    .err()
++    .unwrap();
++    assert_eq!(error.code, "LRR-E-COMPILE-INPUT");
++    assert!(error.message.contains("retained crate-wide prelude policy"));
++}
+diff --git a/crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs b/crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs
+--- a/crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs
++++ b/crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs
+@@ -284,3 +284,7 @@
+         e.finish()
+     }
+ }
++
++#[cfg(test)]
++#[path = "generated_compiler_facets_tests.rs"]
++mod tests;

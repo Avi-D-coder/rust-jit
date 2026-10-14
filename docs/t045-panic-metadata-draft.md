@@ -1,0 +1,9 @@
+# T045 panic metadata draft
+
+Task/invariant: retain the first guest panic and every cleanup obligation until bounded cleanup finishes. Admission must include all suspended and pending call metadata under the existing checked ceiling. A root panic while evaluating an argument keeps a selected source call pending; its metadata must retire after cleanup and before terminal publication.
+
+Acceptance was written before production changes. The original panic-arg.rs program is unchanged and checks one selected call/no sealed call, completed root cleanup, and an empty pending map/counter. A supplemental frontier uses that original source call and the existing disclosed257-String structural stress owner. A ceiling exhausted by genuine selected-call metadata refuses panic admission without PC/fuel/owner/metadata mutation. Restoring the ceiling permits bounded cleanup; pending metadata survives its first incomplete chunk and retires at final publication.
+
+Production counts pending_bytes in checked panic admission and retires the final root pending map after completed cleanup. Nonzero leftover call metadata produces a typed internal fault while retaining the first panic. No new opcode, descriptor-based source selection, host/native execution, arbitrary symbol loading or unsafe block is introduced.
+
+This private draft is unvalidated and unintegrated. Expected488 library bodies/ten T045 controls; inventory174 cases/294 unchanged originals. The five original-source panic subprocess observations retain all source/directive/provenance checks, with native panic framing still a disclosed adapter difference. Full upstream compiletest passes remain0. User Drop, destructor second panic, cleanup-time guest calls, host panic/worker isolation, release and Linux remain incomplete. Frozen V5/V6 are unchanged.

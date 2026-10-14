@@ -1,0 +1,7 @@
+{
+  "git": {
+    "sha1": "bcf0514497034e1156f3cc2bb72b99cc9634a949",
+    "dirty": true
+  },
+  "path_in_vcs": "crates/syntax"
+}

@@ -1,0 +1,111 @@
+--- a/crates/hir-expand/src/builtin/fn_macro.rs
++++ b/crates/hir-expand/src/builtin/fn_macro.rs
+@@ -547,6 +547,20 @@
+     tt: &tt::TopSubtree,
+     call_site: Span,
+ ) -> ExpandResult<tt::TopSubtree> {
++    let (text, span, err) = concat_value_inner(tt, call_site);
++    ExpandResult { value: quote!(span =>#text), err }
++}
++
++/// Syntax-only calculation for explicit adapter callers; no source query occurs.
++pub fn concat_value_tokens(tt: &tt::TopSubtree, call_site: Span) -> Result<String, ExpandError> {
++    let (text, _, err) = concat_value_inner(tt, call_site);
++    match err {
++        Some(err) => Err(err),
++        None => Ok(text),
++    }
++}
++
++fn concat_value_inner(tt: &tt::TopSubtree, call_site: Span) -> (String, Span, Option<ExpandError>) {
+     let mut err = None;
+     let mut text = String::new();
+     let mut span: Option<Span> = None;
+@@ -580,9 +594,12 @@
+                         }
+                         record_span(it.span);
+                     }
+-                    tt::LitKind::Integer | tt::LitKind::Float => {
+-                        format_to!(text, "{}", it.text())
+-                    }
++                    tt::LitKind::Integer | tt::LitKind::Float => match concat_number_text(&it) {
++                        Ok(value) => text.push_str(&value),
++                        Err(error) => {
++                            err.get_or_insert(error);
++                        }
++                    },
+                     tt::LitKind::Str => {
+                         text.push_str(&unescape_str(it.text()));
+                         record_span(it.span);
+@@ -626,7 +643,15 @@
+                     TtElement::Leaf(tt::Leaf::Literal(it))
+                         if matches!(it.kind, tt::LitKind::Integer | tt::LitKind::Float) =>
+                     {
+-                        format_to!(text, "-{}", it.text());
++                        match concat_number_text(&it) {
++                            Ok(value) => {
++                                text.push('-');
++                                text.push_str(&value);
++                            }
++                            Err(error) => {
++                                err.get_or_insert(error);
++                            }
++                        }
+                         record_span(punct.span.cover(it.span));
+                     }
+                     _ => {
+@@ -645,7 +670,53 @@
+         i += 1;
+     }
+     let span = span.unwrap_or_else(|| tt.top_subtree().delimiter.open);
+-    ExpandResult { value: quote!(span =>#text), err }
++    (text, span, err)
++}
++
++// E-M011-002: Rust concat consumes semantic integers and separator-free floats.
++fn concat_number_text(literal: &tt::Literal) -> Result<String, ExpandError> {
++    let (text, suffix) = literal.text_and_suffix();
++    let integer_suffix = matches!(
++        suffix,
++        "" | "i8"
++            | "i16"
++            | "i32"
++            | "i64"
++            | "i128"
++            | "isize"
++            | "u8"
++            | "u16"
++            | "u32"
++            | "u64"
++            | "u128"
++            | "usize"
++            | "f32"
++            | "f64"
++    );
++    let valid_suffix = match literal.kind {
++        tt::LitKind::Integer => integer_suffix,
++        tt::LitKind::Float => matches!(suffix, "" | "f32" | "f64"),
++        _ => false,
++    };
++    if !valid_suffix {
++        return Err(ExpandError::other(literal.span, "invalid numeric suffix in concat"));
++    }
++    let text = text.replace('_', "");
++    if literal.kind == tt::LitKind::Float {
++        return Ok(text);
++    }
++    let (radix, digits) = if let Some(digits) = text.strip_prefix("0x") {
++        (16, digits)
++    } else if let Some(digits) = text.strip_prefix("0o") {
++        (8, digits)
++    } else if let Some(digits) = text.strip_prefix("0b") {
++        (2, digits)
++    } else {
++        (10, text.as_str())
++    };
++    u128::from_str_radix(digits, radix).map(|value| value.to_string()).map_err(|_| {
++        ExpandError::other(literal.span, "invalid or overflowing integer literal in concat")
++    })
+ }
+ 
+ fn concat_bytes_expand(

@@ -1,0 +1,23 @@
+[package]
+name = "lrr-prepared-macro-server"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT OR Apache-2.0"
+
+[workspace]
+
+[features]
+default = ["in-rust-tree"]
+in-rust-tree = []
+
+[dependencies]
+proc-macro-srv-cli = { path = "../../vendor/rust-analyzer-macros/crates/proc-macro-srv-cli", features = ["in-rust-tree"] }
+proc-macro-api = { path = "../../vendor/rust-analyzer-macros/crates/proc-macro-api", features = ["in-rust-tree"] }
+clap = { version = "=4.6.7", default-features = false, features = ["std"] }
+rustix = { version = "=1.1.5", features = ["stdio"] }
+unicode-ident = "=1.0.24"
+
+[[bin]]
+name = "rust-analyzer-proc-macro-srv"
+path = "src/main.rs"

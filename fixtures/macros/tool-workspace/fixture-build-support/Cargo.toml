@@ -1,0 +1,4 @@
+[package]
+name = "lrr_tool_probe_build_support"
+version = "0.1.0"
+edition = "2024"

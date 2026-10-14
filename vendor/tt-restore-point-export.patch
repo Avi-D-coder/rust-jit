@@ -1,0 +1,11 @@
+--- a/crates/tt/src/lib.rs
++++ b/crates/tt/src/lib.rs
+@@ -30,7 +30,7 @@
+ use crate::storage::TokenTreesSlice;
+ 
+ pub use self::iter::{TtElement, TtIter};
+-pub use self::storage::{TopSubtree, TopSubtreeBuilder};
++pub use self::storage::{SubtreeBuilderRestorePoint, TopSubtree, TopSubtreeBuilder};
+ 
+ pub const MAX_GLUED_PUNCT_LEN: usize = 3;
+ 

@@ -1,0 +1,2056 @@
+--- a/crates/lrr/src/frontend/source_view.rs
++++ b/crates/lrr/src/frontend/source_view.rs
+@@ -18,3 +18,7 @@
+     validate_binder_type(&predicate)?;
+     Ok(predicate)
+ }
++
++// Source-only M018 planner; not yet installed in VM/portable SourceView tables.
++#[allow(dead_code)]
++pub(crate) mod source_view_propagation;
+--- /dev/null
++++ b/crates/lrr/src/frontend/source_view_propagation.rs
+@@ -0,0 +1,787 @@
++// This narrow planner is intentionally not a VM SourceViewId table. Runtime
++// attachment, guest value admission and portable slot mappings remain M018.
++#[path = "../syntax/source_view_propagation.rs"]
++mod syntax_plans;
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::{
++        dependency::{InputKey, InputValue},
++        memo::Database,
++        poll::QueryPoll,
++    },
++    frontend::{
++        call_contracts::primitive_runtime_id,
++        callables::{CallResolver, CallSelection},
++        names::{NameLookup, NameNamespaces},
++        signature_names::{SignatureName, SignatureNames},
++        source_locals::{OrdinaryNameSite, SourceLocalIndex},
++    },
++    ir::pc::PcKey,
++    runtime::shape::TypeId,
++    source::{changes::PreparedSourceView, manifest::Namespace},
++    syntax::{body_index::BodyIndex, parse::ParsedFile, signatures::GenericKind},
++    traits::term::{ParamKey, TyTerm},
++    vm::context::GenericEnv,
++};
++use std::{collections::BTreeMap, sync::Arc};
++pub(crate) use syntax_plans::{
++    BindingReadPlan, DefinitionSourcePlan, LocalAliasPlan, NamedCallPlan,
++};
++const SOURCE_VIEW_BUDGET: usize = 32 * 1024 * 1024;
++fn source_fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-SOURCE-TYPE-CONTEXT", message.into())
++}
++fn metadata_fault() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "source view propagation metadata exceeds limit".into(),
++    )
++}
++#[derive(Debug, Clone, Eq, PartialEq)]
++pub(crate) enum SourcePropagation {
++    DeclaredBinding {
++        binding: Digest,
++        site: PcKey,
++    },
++    LocalAlias {
++        source: Digest,
++        destination: Digest,
++        pattern: u32,
++        site: PcKey,
++    },
++    NamedReturn {
++        callee: Digest,
++        signature: Digest,
++        declared: TyTerm,
++        site: PcKey,
++    },
++}
++/// Immutable symbolic propagation plan, never an admitted VM SourceViewId.
++/// Runtime installation must bind a matched current sealed namespace proof,
++/// actual guest descriptor/value, and checked slot/binding ownership separately.
++#[derive(Debug, Clone)]
++pub(crate) struct SourceViewPlan {
++    definition: Arc<DefinitionSourcePlan>,
++    term: TyTerm,
++    binding: Option<Digest>,
++    provenance: Box<[SourcePropagation]>,
++    dependencies: Box<[(InputKey, Digest)]>,
++    source_revision: u64,
++    query_revision: u64,
++    bytes: usize,
++}
++/// The independent descriptor is retained alongside, never substituted for the
++/// source term. VM integration must still check the actual guest value/store.
++#[derive(Debug, Clone)]
++pub(crate) struct SourceViewPairPlan {
++    source: SourceViewPlan,
++    runtime: TypeId,
++}
++impl SourceViewPlan {
++    pub(crate) fn term(&self) -> &TyTerm {
++        &self.term
++    }
++    pub(crate) fn definition(&self) -> &DefinitionSourcePlan {
++        &self.definition
++    }
++    pub(crate) fn provenance(&self) -> &[SourcePropagation] {
++        &self.provenance
++    }
++    pub(crate) fn binding(&self) -> Option<Digest> {
++        self.binding
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/source-view-binding-return-plan");
++        e.record(&self.definition.source);
++        e.record(&self.definition.body.key());
++        e.record(&self.definition.signature);
++        e.record(&self.definition.context.scope);
++        e.u32(self.definition.context.range.start);
++        e.u32(self.definition.context.range.end);
++        e.record(&self.term);
++        e.option(&self.binding, |e, b| e.digest(*b));
++        e.sequence(&self.provenance, |e, p| match p {
++            SourcePropagation::DeclaredBinding { binding, site } => {
++                e.u32(0);
++                e.digest(*binding);
++                e.record(site);
++            }
++            SourcePropagation::LocalAlias {
++                source,
++                destination,
++                pattern,
++                site,
++            } => {
++                e.u32(1);
++                e.digest(*source);
++                e.digest(*destination);
++                e.u32(*pattern);
++                e.record(site);
++            }
++            SourcePropagation::NamedReturn {
++                callee,
++                signature,
++                declared,
++                site,
++            } => {
++                e.u32(2);
++                e.digest(*callee);
++                e.digest(*signature);
++                e.record(declared);
++                e.record(site);
++            }
++        });
++        e.u64(self.source_revision);
++        e.u64(self.query_revision);
++        e.sequence(&self.dependencies, |e, (key, value)| {
++            e.record(key);
++            e.digest(*value);
++        });
++        e.finish()
++    }
++    /// Pure currentness: no query/provider/guest execution, including cold bodies.
++    pub(crate) fn require_current(&self, db: &Database) -> Result<(), Diagnostic> {
++        if db.source_revision() != self.source_revision || db.revision() != self.query_revision {
++            return Err(source_fault(
++                "source view owning source or derived epoch changed",
++            ));
++        }
++        for (key, fingerprint) in &self.dependencies {
++            if db
++                .input(key)
++                .is_none_or(|input| input.fingerprint() != *fingerprint)
++            {
++                return Err(source_fault("source view owning input changed"));
++            }
++        }
++        Ok(())
++    }
++}
++impl SourceViewPairPlan {
++    pub(crate) fn source(&self) -> &SourceViewPlan {
++        &self.source
++    }
++    pub(crate) fn runtime(&self) -> TypeId {
++        self.runtime
++    }
++    pub(crate) fn require_source(
++        &self,
++        expected: &TyTerm,
++        descriptor: TypeId,
++    ) -> Result<(), Diagnostic> {
++        if &self.source.term != expected || self.runtime != descriptor {
++            return Err(source_fault(
++                "source view or independent runtime contract differs",
++            ));
++        }
++        Ok(())
++    }
++}
++fn require_definition(
++    db: &Database,
++    source: &PreparedSourceView,
++    definition: &DefinitionSourcePlan,
++) -> Result<Vec<(InputKey, Digest)>, Diagnostic> {
++    let id = definition.signature.definition;
++    let item = source
++        .outline()
++        .items
++        .iter()
++        .find(|item| item.def_key.fingerprint() == id)
++        .ok_or_else(|| source_fault("source view definition absent from owning source"))?;
++    if source.selection().outline.parse != definition.source
++        || item.scope != definition.context.scope
++        || item.declaration_span != definition.context.range
++        || item.header != definition.signature.header
++        || item.body.as_ref() != Some(&definition.body)
++        || definition.context.scope.owner.is_some()
++    {
++        return Err(source_fault(
++            "source view exact declaration context differs",
++        ));
++    }
++    let mut dependencies = Vec::new();
++    for (key, expected) in [
++        (
++            InputKey::DefinitionSource(id),
++            InputValue::DefinitionSource(definition.source.clone()),
++        ),
++        (
++            InputKey::DefinitionHeader(id),
++            InputValue::DefinitionHeader(definition.signature.header.clone()),
++        ),
++        (
++            InputKey::DeclarationContext(id),
++            InputValue::DeclarationContext(definition.context.clone()),
++        ),
++        (
++            InputKey::DefinitionBody(id),
++            InputValue::DefinitionBody(definition.body.clone()),
++        ),
++        (
++            InputKey::CapturedSource(source.selection().location_identity()),
++            InputValue::CapturedSource(source.selection().clone()),
++        ),
++    ] {
++        let actual = db
++            .input(&key)
++            .ok_or_else(|| source_fault("source view owning publication absent"))?;
++        if actual.fingerprint() != expected.fingerprint() {
++            return Err(source_fault("source view owning publication differs"));
++        }
++        dependencies.push((key, actual.fingerprint()));
++    }
++    for key in [
++        InputKey::CrateCfg(definition.context.scope.crate_key),
++        InputKey::ExpansionEpoch,
++    ] {
++        if let Some(input) = db.input(&key) {
++            if matches!((&key,input.as_ref()),(InputKey::CrateCfg(_),InputValue::CrateCfg(cfg)) if cfg.fingerprint()!=source.selection().outline.cfg)
++            {
++                return Err(source_fault("source view owning cfg changed"));
++            }
++            dependencies.push((key, input.fingerprint()));
++        }
++    }
++    Ok(dependencies)
++}
++fn selected_binding(
++    locals: &SourceLocalIndex<'_>,
++    graph: &NameNamespaces,
++    source: &PreparedSourceView,
++    owner: &DefinitionSourcePlan,
++    read: &BindingReadPlan,
++) -> Result<Digest, Diagnostic> {
++    if read.definition != owner.signature.definition || read.site.body != owner.body.key() {
++        return Err(source_fault(
++            "source binding read belongs to another definition",
++        ));
++    }
++    match locals.lookup_ordinary(
++        OrdinaryNameSite {
++            source: source.selection(),
++            body: &owner.body.key(),
++            at: u64::from(read.range.start),
++            name: &read.name,
++            context: locals.context(),
++            namespace: Namespace::Value,
++        },
++        graph,
++        None,
++    )? {
++        NameLookup::LocalBinding(binding) => Ok(binding),
++        _ => Err(source_fault(
++            "source binding identity is missing, unresolved or ambiguous",
++        )),
++    }
++}
++fn merge_dependencies(
++    target: &mut Vec<(InputKey, Digest)>,
++    incoming: &[(InputKey, Digest)],
++) -> Result<(), Diagnostic> {
++    for (key, fingerprint) in incoming {
++        if let Some((_, old)) = target.iter().find(|(old, _)| old == key) {
++            if old != fingerprint {
++                return Err(source_fault(
++                    "source propagation dependency contracts disagree",
++                ));
++            }
++        } else {
++            if target.len() >= 32 {
++                return Err(metadata_fault());
++            }
++            target.try_reserve(1).map_err(|_| metadata_fault())?;
++            target.push((key.clone(), *fingerprint));
++        }
++    }
++    Ok(())
++}
++fn scalar_signature_term(
++    names: &SignatureNames<'_>,
++    symbolic: Option<&TyTerm>,
++    written: &[crate::syntax::ast_adapter::TokenRecipe],
++) -> Result<TyTerm, Diagnostic> {
++    if let Some(term) = symbolic {
++        return match term {
++            TyTerm::Param(_) | TyTerm::Primitive(_) => Ok(term.clone()),
++            _ => Err(source_fault(
++                "named source contract requires further M017 composite substitution",
++            )),
++        };
++    }
++    if written.len() != 1 {
++        return Err(source_fault(
++            "named source contract requires a declared simple term",
++        ));
++    }
++    match names.unqualified(&written[0].text, None)? {
++        SignatureName::Primitive(primitive) => Ok(TyTerm::Primitive(primitive)),
++        SignatureName::Parameter(parameter) => Ok(TyTerm::Param(parameter)),
++        _ => Err(source_fault(
++            "named source contract requires owning alias or nominal resolution",
++        )),
++    }
++}
++#[allow(clippy::too_many_arguments)]
++fn checked_pair(
++    db: &Database,
++    owner: Arc<DefinitionSourcePlan>,
++    term: &TyTerm,
++    binding: Option<Digest>,
++    steps: &[SourcePropagation],
++    next: SourcePropagation,
++    dependencies: Vec<(InputKey, Digest)>,
++    runtime: TypeId,
++    limit: usize,
++) -> Result<SourceViewPairPlan, Diagnostic> {
++    if steps.len() >= 256 || dependencies.len() > 32 {
++        return Err(metadata_fault());
++    }
++    if runtime.0 == 0 || crate::frontend::call_contracts::contains_transaction_term(term) {
++        return Err(source_fault(
++            "source view has unknown descriptor, unresolved term or propagation frontier",
++        ));
++    }
++    term.validate_opaque_shape()?;
++    let count = steps.len().checked_add(1).ok_or_else(metadata_fault)?;
++    let mut bytes = std::mem::size_of::<SourceViewPairPlan>()
++        .checked_add(owner.metadata_bytes())
++        .and_then(|n| n.checked_add(term.heap_bytes()?))
++        .and_then(|n| n.checked_add(count.checked_mul(std::mem::size_of::<SourcePropagation>())?))
++        .and_then(|n| {
++            n.checked_add(
++                dependencies
++                    .capacity()
++                    .checked_mul(std::mem::size_of::<(InputKey, Digest)>())?,
++            )
++        })
++        .ok_or_else(metadata_fault)?;
++    for step in steps.iter().chain(std::iter::once(&next)) {
++        if let SourcePropagation::NamedReturn { declared, .. } = step {
++            bytes = bytes
++                .checked_add(declared.heap_bytes().ok_or_else(metadata_fault)?)
++                .ok_or_else(metadata_fault)?;
++        }
++    }
++    if bytes > limit.min(SOURCE_VIEW_BUDGET) {
++        return Err(metadata_fault());
++    }
++    let mut provenance = Vec::new();
++    provenance
++        .try_reserve_exact(count)
++        .map_err(|_| metadata_fault())?;
++    provenance.extend_from_slice(steps);
++    provenance.push(next);
++    Ok(SourceViewPairPlan {
++        source: SourceViewPlan {
++            definition: owner,
++            term: term.clone(),
++            binding,
++            provenance: provenance.into_boxed_slice(),
++            dependencies: dependencies.into_boxed_slice(),
++            source_revision: db.source_revision(),
++            query_revision: db.revision(),
++            bytes,
++        },
++        runtime,
++    })
++}
++/// A written binding starts a source record only after hygienic identity and
++/// primitive/type-parameter namespace admission. Descriptor-only seeds refuse.
++#[allow(clippy::too_many_arguments)]
++pub(crate) fn declared_binding_view(
++    db: &Database,
++    parsed: &ParsedFile,
++    index: &BodyIndex,
++    source: &PreparedSourceView,
++    graph: &NameNamespaces,
++    locals: &SourceLocalIndex<'_>,
++    owner: Arc<DefinitionSourcePlan>,
++    read: &BindingReadPlan,
++    environment: Option<&GenericEnv>,
++    runtime: TypeId,
++    limit: usize,
++) -> Result<SourceViewPairPlan, Diagnostic> {
++    let dependencies = require_definition(db, source, &owner)?;
++    let selected = selected_binding(locals, graph, source, &owner, read)?;
++    let declaration = parsed.source_view_declared_binding_plan(&owner, index, read, selected)?;
++    // lower_type deliberately leaves named primitives deferred. Only exact
++    // Type-namespace absence can admit a builtin at this written local site.
++    let term = match declaration.term.as_ref() {
++        Some(term) => term.clone(),
++        None => {
++            let names = SignatureNames::new(graph, source, &owner.signature)?;
++            match names.unqualified(declaration.written.trim(), None)? {
++                SignatureName::Primitive(primitive) => TyTerm::Primitive(primitive),
++                _ => {
++                    return Err(source_fault(
++                        "binding source written name needs owning alias resolution",
++                    ));
++                }
++            }
++        }
++    };
++    match &term {
++        TyTerm::Param(key) => {
++            if key.definition != owner.signature.definition
++                || !owner.signature.generics.iter().any(|generic| {
++                    generic.ordinal == key.ordinal
++                        && generic.kind == GenericKind::Type
++                        && Some(generic.name.as_str())
++                            == crate::syntax::ast_adapter::semantic_name(declaration.written.trim())
++                                .as_deref()
++                })
++            {
++                return Err(source_fault(
++                    "source parameter does not belong to its defining type namespace",
++                ));
++            }
++            if declaration.form == crate::syntax::local_bindings::BindingForm::Let {
++                let found = locals.lookup_ordinary(
++                    OrdinaryNameSite {
++                        source: source.selection(),
++                        body: &owner.body.key(),
++                        at: u64::from(declaration.type_at),
++                        name: declaration.written.trim(),
++                        context: locals.context(),
++                        namespace: Namespace::Type,
++                    },
++                    graph,
++                    None,
++                )?;
++                if found != NameLookup::Absent {
++                    return Err(source_fault(
++                        "local written parameter requires exact owning type namespace",
++                    ));
++                }
++            }
++            let environment = environment.ok_or_else(|| {
++                source_fault("rigid source binding requires owning runtime substitution")
++            })?;
++            if environment.signature_key() != owner.signature.fingerprint()
++                || environment.runtime_binding(*key) != Some(runtime)
++            {
++                return Err(source_fault(
++                    "rigid source runtime binding differs from owning environment",
++                ));
++            }
++            // Keep Param(key). Never apply the concrete runtime substitution here.
++        }
++        TyTerm::Primitive(primitive) => {
++            if *primitive == crate::ir::op::PrimitiveType::Unit {
++                if declaration.written.trim() != "()"
++                    || primitive_runtime_id(*primitive)? != runtime
++                {
++                    return Err(source_fault(
++                        "declared unit source/runtime contract differs",
++                    ));
++                }
++            } else {
++                let name = declaration.written.trim();
++                let selected = locals.lookup_ordinary(
++                    OrdinaryNameSite {
++                        source: source.selection(),
++                        body: &owner.body.key(),
++                        at: u64::from(declaration.type_at),
++                        name,
++                        context: locals.context(),
++                        namespace: Namespace::Type,
++                    },
++                    graph,
++                    None,
++                )?;
++                if selected != NameLookup::Absent || primitive_runtime_id(*primitive)? != runtime {
++                    return Err(source_fault(
++                        "written primitive requires exact type namespace and descriptor",
++                    ));
++                }
++            }
++        }
++        _ => {
++            return Err(source_fault(
++                "declared binding source needs further symbolic owning resolution",
++            ));
++        }
++    }
++    checked_pair(
++        db,
++        owner,
++        &term,
++        Some(declaration.binding),
++        &[],
++        SourcePropagation::DeclaredBinding {
++            binding: declaration.binding,
++            site: declaration.read.site,
++        },
++        dependencies,
++        runtime,
++        limit,
++    )
++}
++#[allow(clippy::too_many_arguments)]
++pub(crate) fn local_alias_view(
++    db: &Database,
++    source: &PreparedSourceView,
++    graph: &NameNamespaces,
++    locals: &SourceLocalIndex<'_>,
++    owner: Arc<DefinitionSourcePlan>,
++    plan: &LocalAliasPlan,
++    value: &SourceViewPairPlan,
++    limit: usize,
++) -> Result<SourceViewPairPlan, Diagnostic> {
++    value.source.require_current(db)?;
++    let mut dependencies = require_definition(db, source, &owner)?;
++    merge_dependencies(&mut dependencies, &value.source.dependencies)?;
++    if plan.definition != owner.signature.definition
++        || plan.site.body != owner.body.key()
++        || value.source.definition.body.key() != owner.body.key()
++        || value.source.definition.signature.fingerprint() != owner.signature.fingerprint()
++    {
++        return Err(source_fault(
++            "alias source belongs to another definition context",
++        ));
++    }
++    let selected = selected_binding(locals, graph, source, &owner, &plan.source)?;
++    if value.source.binding != Some(selected) {
++        return Err(source_fault(
++            "alias read does not select the supplied source binding",
++        ));
++    }
++    let destination = locals.lookup_ordinary(
++        OrdinaryNameSite {
++            source: source.selection(),
++            body: &owner.body.key(),
++            at: plan.destination_at,
++            name: &plan.destination_name,
++            context: locals.context(),
++            namespace: Namespace::Value,
++        },
++        graph,
++        None,
++    )?;
++    if destination != NameLookup::LocalBinding(plan.destination) {
++        return Err(source_fault(
++            "alias destination lacks exact owning binding admission",
++        ));
++    }
++    checked_pair(
++        db,
++        owner,
++        &value.source.term,
++        Some(plan.destination),
++        &value.source.provenance,
++        SourcePropagation::LocalAlias {
++            source: selected,
++            destination: plan.destination,
++            pattern: plan.pattern.0,
++            site: plan.site.clone(),
++        },
++        dependencies,
++        value.runtime,
++        limit,
++    )
++}
++/// The selected declared result is instantiated from source arguments. This
++/// first lane supports only direct type parameters/primitives and module calls;
++/// general M017 binder/const/region/lexical admission stays an explicit frontier.
++#[allow(clippy::too_many_arguments)]
++pub(crate) fn named_function_return_view(
++    db: &mut Database,
++    source: &PreparedSourceView,
++    sources: &[&PreparedSourceView],
++    graph: &NameNamespaces,
++    locals: &SourceLocalIndex<'_>,
++    owner: Arc<DefinitionSourcePlan>,
++    plan: &NamedCallPlan,
++    arguments: &[&SourceViewPairPlan],
++    runtime: TypeId,
++    limit: usize,
++) -> QueryPoll<SourceViewPairPlan> {
++    let result = (|| -> Result<QueryPoll<SourceViewPairPlan>, Diagnostic> {
++        let mut dependencies = require_definition(db, source, &owner)?;
++        if plan.definition != owner.signature.definition
++            || plan.site.body != owner.body.key()
++            || plan.path.contains("::")
++            || arguments.len() != plan.arguments.len()
++        {
++            return Err(source_fault(
++                "named return needs exact reached module-call argument context",
++            ));
++        }
++        let selected = locals.lookup_ordinary(
++            OrdinaryNameSite {
++                source: source.selection(),
++                body: &owner.body.key(),
++                at: u64::from(plan.at),
++                name: &plan.path,
++                context: locals.context(),
++                namespace: Namespace::Value,
++            },
++            graph,
++            None,
++        )?;
++        let NameLookup::Defined(selected) = selected else {
++            return Err(source_fault(
++                "named return callee identity is not an admitted definition",
++            ));
++        };
++        let resolver = CallResolver::new(graph, sources)?;
++        let callee = match resolver.source_function(db, owner.signature.definition, &plan.path) {
++            QueryPoll::Ready(Ok(CallSelection::Source(callee))) => callee,
++            QueryPoll::Ready(Ok(_)) => {
++                return Err(source_fault(
++                    "named return callable needs further source admission",
++                ));
++            }
++            QueryPoll::Ready(Err(error)) => return Err(error),
++            QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
++        };
++        if callee.identity() != selected.identity
++            || callee.signature().parameters.len() != arguments.len()
++            || callee
++                .signature()
++                .generics
++                .iter()
++                .any(|generic| generic.kind != GenericKind::Type)
++        {
++            return Err(source_fault(
++                "named return selected signature or namespace differs",
++            ));
++        }
++        callee.revalidate(db)?;
++        let signature = callee.signature();
++        if callee.body().is_none()
++            || signature
++                .parameters
++                .iter()
++                .any(|parameter| parameter.receiver || parameter.variadic)
++            || signature
++                .header
++                .tokens
++                .iter()
++                .any(|token| matches!(token.text.as_str(), "async" | "gen" | "unsafe" | "extern"))
++        {
++            return Err(source_fault(
++                "named return needs an ordinary safe Rust source signature",
++            ));
++        }
++        let names = SignatureNames::from_database(db, graph, signature)?;
++        let mut bindings: BTreeMap<ParamKey, &SourceViewPairPlan> = BTreeMap::new();
++        for ((read, actual), parameter) in plan
++            .arguments
++            .iter()
++            .zip(arguments)
++            .zip(&signature.parameters)
++        {
++            actual.source.require_current(db)?;
++            if actual.source.definition.body.key() != owner.body.key()
++                || actual.source.binding
++                    != Some(selected_binding(locals, graph, source, &owner, read)?)
++            {
++                return Err(source_fault(
++                    "named return argument lacks exact caller binding provenance",
++                ));
++            }
++            let parameter_term =
++                scalar_signature_term(&names, parameter.symbolic.as_ref(), &parameter.ty)?;
++            match &parameter_term {
++                TyTerm::Param(key)
++                    if key.definition == signature.definition
++                        && signature.generics.iter().any(|generic| {
++                            generic.ordinal == key.ordinal && generic.kind == GenericKind::Type
++                        }) =>
++                {
++                    if let Some(previous) = bindings.get(key) {
++                        if previous.source.term() != actual.source.term()
++                            || previous.runtime != actual.runtime
++                        {
++                            return Err(source_fault(
++                                "named return arguments have distinct source bindings",
++                            ));
++                        }
++                    } else {
++                        bindings.insert(*key, actual);
++                    }
++                }
++                TyTerm::Primitive(primitive)
++                    if actual.source.term() == &TyTerm::Primitive(*primitive)
++                        && primitive_runtime_id(*primitive)? == actual.runtime => {}
++                _ => {
++                    return Err(source_fault(
++                        "named return parameter requires further symbolic call contract",
++                    ));
++                }
++            }
++        }
++        let declared = scalar_signature_term(
++            &names,
++            signature.result_symbolic.as_ref(),
++            &signature.result,
++        )?;
++        let (term, descriptor, steps) = match &declared {
++            TyTerm::Param(key) => {
++                let result = bindings
++                    .get(key)
++                    .copied()
++                    .ok_or_else(|| source_fault("named return source parameter remains unbound"))?;
++                merge_dependencies(&mut dependencies, &result.source.dependencies)?;
++                (
++                    result.source.term(),
++                    result.runtime,
++                    result.source.provenance(),
++                )
++            }
++            TyTerm::Primitive(primitive) => (&declared, primitive_runtime_id(*primitive)?, &[][..]),
++            _ => {
++                return Err(source_fault(
++                    "named return result requires further M017 substitution",
++                ));
++            }
++        };
++        if descriptor != runtime {
++            return Err(source_fault("named return independent descriptor differs"));
++        }
++        for key in [
++            InputKey::DefinitionSource(callee.identity()),
++            InputKey::DefinitionHeader(callee.identity()),
++            InputKey::DeclarationContext(callee.identity()),
++            InputKey::DefinitionBody(callee.identity()),
++        ] {
++            let input = db
++                .input(&key)
++                .ok_or_else(|| source_fault("named return owning callee input absent"))?;
++            dependencies.push((key, input.fingerprint()));
++        }
++        let next = SourcePropagation::NamedReturn {
++            callee: callee.identity(),
++            signature: signature.fingerprint(),
++            declared: declared.clone(),
++            site: plan.site.clone(),
++        };
++        checked_pair(
++            db,
++            owner,
++            term,
++            None,
++            steps,
++            next,
++            dependencies,
++            runtime,
++            limit,
++        )
++        .map(|view| QueryPoll::Ready(Ok(view)))
++    })();
++    match result {
++        Ok(result) => result,
++        Err(error) => QueryPoll::Ready(Err(error)),
++    }
++}
++#[cfg(test)]
++#[path = "source_view_propagation_tests.rs"]
++mod propagation_tests;
+--- /dev/null
++++ b/crates/lrr/src/syntax/source_view_propagation.rs
+@@ -0,0 +1,427 @@
++//! Immutable facts for reached binding/read/call sites, never a runtime view.
++use crate::{
++    core::{diagnostic::Diagnostic, digest::Digest},
++    ir::pc::{NodeId, PcKey, Phase},
++    syntax::{
++        ast_adapter::range,
++        body_index::BodyIndex,
++        local_bindings::BindingForm,
++        outline::{BodyHandle, DeclarationContext, HeaderRecipe},
++        parse::{ParseKey, ParsedFile},
++        signatures::{FunctionSignature, lower_type},
++        spans::SourceRange,
++    },
++    traits::term::TyTerm,
++};
++use ra_ap_syntax::{
++    AstNode, SyntaxNode, TextRange,
++    ast::{self, HasArgList, HasAttrs, HasGenericArgs},
++};
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-SOURCE-TYPE-CONTEXT", message.into())
++}
++#[derive(Debug, Clone)]
++pub(crate) struct DefinitionSourcePlan {
++    pub(super) source: ParseKey,
++    pub(super) body: BodyHandle,
++    pub(super) context: DeclarationContext,
++    pub(super) signature: FunctionSignature,
++    pub(super) bytes: usize,
++}
++#[derive(Debug, Clone)]
++pub(crate) struct BindingReadPlan {
++    pub(super) definition: Digest,
++    pub(super) site: PcKey,
++    pub(super) name: String,
++    pub(super) range: SourceRange,
++}
++#[derive(Debug, Clone)]
++pub(crate) struct DeclaredBindingPlan {
++    pub(super) read: BindingReadPlan,
++    pub(super) binding: Digest,
++    pub(super) form: BindingForm,
++    pub(super) term: Option<TyTerm>,
++    pub(super) written: String,
++    pub(super) type_at: u32,
++}
++#[derive(Debug, Clone)]
++pub(crate) struct LocalAliasPlan {
++    pub(super) definition: Digest,
++    pub(super) site: PcKey,
++    pub(super) source: BindingReadPlan,
++    pub(super) destination: Digest,
++    pub(super) destination_name: String,
++    pub(super) destination_at: u64,
++    pub(super) pattern: NodeId,
++}
++#[derive(Debug, Clone)]
++pub(crate) struct NamedCallPlan {
++    pub(super) definition: Digest,
++    pub(super) site: PcKey,
++    pub(super) path: String,
++    pub(super) at: u32,
++    pub(super) arguments: Vec<BindingReadPlan>,
++}
++impl DefinitionSourcePlan {
++    pub(crate) fn signature(&self) -> &FunctionSignature {
++        &self.signature
++    }
++    pub(crate) fn body(&self) -> &BodyHandle {
++        &self.body
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++}
++fn exact_node(
++    parsed: &ParsedFile,
++    owner: &DefinitionSourcePlan,
++    index: &BodyIndex,
++    site: &PcKey,
++) -> Result<SyntaxNode, Diagnostic> {
++    if parsed.key() != owner.source
++        || index.body() != &owner.body.key()
++        || site.body != owner.body.key()
++        || index.pc(NodeId(site.node), Phase::from_code(site.phase))? != *site
++    {
++        return Err(fault(
++            "source propagation site differs from its owning body",
++        ));
++    }
++    let node = index
++        .nodes()
++        .get(site.node as usize)
++        .ok_or_else(|| fault("source propagation node absent"))?;
++    let start = owner
++        .body
++        .range
++        .start
++        .checked_add(node.range.start)
++        .ok_or_else(|| fault("source propagation range overflow"))?;
++    let end = owner
++        .body
++        .range
++        .start
++        .checked_add(node.range.end)
++        .ok_or_else(|| fault("source propagation range overflow"))?;
++    let root = parsed.entered_body_root(&owner.body)?;
++    root.covering_element(TextRange::new(start.into(), end.into()))
++        .ancestors()
++        .find(|syntax| {
++            u32::from(syntax.text_range().start()) == start
++                && u32::from(syntax.text_range().end()) == end
++        })
++        .ok_or_else(|| fault("source propagation exact syntax absent"))
++}
++fn expression_key(
++    owner: &DefinitionSourcePlan,
++    index: &BodyIndex,
++    syntax: &SyntaxNode,
++) -> Result<PcKey, Diagnostic> {
++    let span = range(syntax.text_range());
++    let start = span
++        .start
++        .checked_sub(owner.body.range.start)
++        .ok_or_else(|| fault("source read before owner body"))?;
++    let end = span
++        .end
++        .checked_sub(owner.body.range.start)
++        .ok_or_else(|| fault("source read before owner body"))?;
++    let node = index
++        .nodes()
++        .iter()
++        .find(|node| {
++            node.range.start == start
++                && node.range.end == end
++                && matches!(
++                    node.role,
++                    crate::syntax::body_index::NodeRole::Expression(_)
++                )
++        })
++        .ok_or_else(|| fault("source read has no exact entered node"))?;
++    index.pc(node.id, Phase::Entry)
++}
++fn read_plan(
++    owner: &DefinitionSourcePlan,
++    index: &BodyIndex,
++    path: ast::PathExpr,
++) -> Result<BindingReadPlan, Diagnostic> {
++    let syntax = path
++        .path()
++        .ok_or_else(|| fault("source binding path absent"))?;
++    let segment = syntax
++        .segment()
++        .ok_or_else(|| fault("source binding segment absent"))?;
++    if syntax.qualifier().is_some()
++        || segment.coloncolon_token().is_some()
++        || segment.generic_arg_list().is_some()
++    {
++        return Err(fault(
++            "source binding requires one relative nongeneric name",
++        ));
++    }
++    let name = segment
++        .name_ref()
++        .ok_or_else(|| fault("source binding name absent"))?
++        .text()
++        .to_string();
++    if name.len() > 4096 {
++        return Err(fault("source binding name exceeds budget"));
++    }
++    Ok(BindingReadPlan {
++        definition: owner.signature.definition,
++        site: expression_key(owner, index, path.syntax())?,
++        name,
++        range: range(path.syntax().text_range()),
++    })
++}
++impl ParsedFile {
++    pub(crate) fn source_view_definition_plan(
++        &self,
++        body: &BodyHandle,
++        header: &HeaderRecipe,
++        context: &DeclarationContext,
++    ) -> Result<DefinitionSourcePlan, Diagnostic> {
++        if self.generated_origin.is_some() || context.scope.owner.is_some() {
++            return Err(fault(
++                "source view needs an original owning definition context",
++            ));
++        }
++        let signature = self.function_signature(body.def_key, header, context, Some(body))?;
++        self.entered_body_root(body)?;
++        let bytes = std::mem::size_of::<DefinitionSourcePlan>()
++            .checked_add(signature.estimated_bytes())
++            .and_then(|n| n.checked_add(context.scope.heap_bytes()))
++            .and_then(|n| n.checked_add(self.profile.semantics.len().checked_mul(2)?))
++            .filter(|n| *n <= 32 * 1024 * 1024)
++            .ok_or_else(|| fault("source definition metadata budget"))?;
++        Ok(DefinitionSourcePlan {
++            source: self.key(),
++            body: body.clone(),
++            context: context.clone(),
++            signature,
++            bytes,
++        })
++    }
++    pub(crate) fn source_view_read_plan(
++        &self,
++        owner: &DefinitionSourcePlan,
++        index: &BodyIndex,
++        site: &PcKey,
++    ) -> Result<BindingReadPlan, Diagnostic> {
++        if site.phase != Phase::Entry.code()? {
++            return Err(fault("source read is not an entered phase"));
++        }
++        let syntax = exact_node(self, owner, index, site)?;
++        let path = ast::PathExpr::cast(syntax)
++            .ok_or_else(|| fault("source view requires a direct binding read"))?;
++        read_plan(owner, index, path)
++    }
++    /// The frontend supplies only a binding selected by the existing hygienic index.
++    pub(crate) fn source_view_declared_binding_plan(
++        &self,
++        owner: &DefinitionSourcePlan,
++        index: &BodyIndex,
++        read: &BindingReadPlan,
++        selected: Digest,
++    ) -> Result<DeclaredBindingPlan, Diagnostic> {
++        self.source_view_read_plan(owner, index, &read.site)?;
++        let facts = self.entered_macro_facts(&owner.body, index.cfg(), &owner.context.scope)?;
++        let row = facts
++            .bindings
++            .iter()
++            .find(|binding| binding.identity == selected)
++            .ok_or_else(|| fault("source binding is absent from owning captured facts"))?;
++        let selected_range =
++            TextRange::new(row.pattern_range.start.into(), row.pattern_range.end.into());
++        let tree = self.parsed.tree();
++        let pattern = tree
++            .syntax()
++            .covering_element(selected_range)
++            .ancestors()
++            .find_map(|node| {
++                let pattern = ast::IdentPat::cast(node)?;
++                (range(pattern.syntax().text_range()) == row.pattern_range).then_some(pattern)
++            })
++            .ok_or_else(|| fault("declared source needs one exact identifier pattern"))?;
++        if pattern.ref_token().is_some()
++            || pattern.at_token().is_some()
++            || row.name != crate::syntax::ast_adapter::semantic_name(&read.name).unwrap_or_default()
++        {
++            return Err(fault("declared source binding shape or identity differs"));
++        }
++        let ty = match row.form {
++            BindingForm::Parameter => pattern
++                .syntax()
++                .parent()
++                .and_then(ast::Param::cast)
++                .and_then(|param| param.ty()),
++            BindingForm::Let => pattern
++                .syntax()
++                .parent()
++                .and_then(ast::LetStmt::cast)
++                .and_then(|statement| statement.ty()),
++            _ => None,
++        }
++        .ok_or_else(|| {
++            fault("binding source requires its reached written type or prior source view")
++        })?;
++        match &ty {
++            ast::Type::PathType(path) => {
++                let path = path
++                    .path()
++                    .ok_or_else(|| fault("written source path absent"))?;
++                let segment = path
++                    .segment()
++                    .ok_or_else(|| fault("written source segment absent"))?;
++                if path.qualifier().is_some()
++                    || segment.coloncolon_token().is_some()
++                    || segment.generic_arg_list().is_some()
++                {
++                    return Err(fault(
++                        "written binding source needs a simple owning type name",
++                    ));
++                }
++            }
++            ast::Type::TupleType(tuple) if tuple.fields().next().is_none() => {}
++            _ => {
++                return Err(fault(
++                    "written binding source requires further M017 composite integration",
++                ));
++            }
++        }
++        let term = lower_type(
++            &ty,
++            owner.signature.definition,
++            &owner.signature.generics,
++            0,
++        )?;
++        let written = ty.syntax().text().to_string();
++        if written.len() > 4096 {
++            return Err(fault("binding written type exceeds budget"));
++        }
++        Ok(DeclaredBindingPlan {
++            read: read.clone(),
++            binding: selected,
++            form: row.form,
++            term,
++            written,
++            type_at: u32::from(ty.syntax().text_range().start()),
++        })
++    }
++    pub(crate) fn source_view_alias_plan(
++        &self,
++        owner: &DefinitionSourcePlan,
++        index: &BodyIndex,
++        site: &PcKey,
++    ) -> Result<LocalAliasPlan, Diagnostic> {
++        if site.phase != Phase::Commit.code()? {
++            return Err(fault("alias propagation needs reached let commit"));
++        }
++        let syntax = exact_node(self, owner, index, site)?;
++        let statement = ast::LetStmt::cast(syntax)
++            .ok_or_else(|| fault("alias propagation is not a let statement"))?;
++        if statement.attrs().next().is_some()
++            || statement.ty().is_some()
++            || statement.let_else().is_some()
++        {
++            return Err(fault(
++                "alias propagation excludes attributed, written or let-else contracts",
++            ));
++        }
++        let Some(ast::Pat::IdentPat(pattern)) = statement.pat() else {
++            return Err(fault("alias propagation needs one owning identifier"));
++        };
++        if pattern.ref_token().is_some() || pattern.at_token().is_some() {
++            return Err(fault("alias propagation needs owning identity transfer"));
++        }
++        let Some(ast::Expr::PathExpr(path)) = statement.initializer() else {
++            return Err(fault("alias propagation requires a direct source binding"));
++        };
++        let facts = self.entered_macro_facts(&owner.body, index.cfg(), &owner.context.scope)?;
++        let row = facts
++            .bindings
++            .iter()
++            .find(|binding| {
++                binding.form == BindingForm::Let
++                    && binding.pattern_range == range(pattern.syntax().text_range())
++            })
++            .ok_or_else(|| fault("alias destination lacks exact source binding"))?;
++        let start = row
++            .pattern_range
++            .start
++            .checked_sub(owner.body.range.start)
++            .ok_or_else(|| fault("alias pattern outside owner"))?;
++        let end = row
++            .pattern_range
++            .end
++            .checked_sub(owner.body.range.start)
++            .ok_or_else(|| fault("alias pattern outside owner"))?;
++        let node = index
++            .pattern_locations()
++            .find(|node| node.range.start == start && node.range.end == end)
++            .ok_or_else(|| fault("alias pattern lacks exact entered location"))?;
++        Ok(LocalAliasPlan {
++            definition: owner.signature.definition,
++            site: site.clone(),
++            source: read_plan(owner, index, path)?,
++            destination: row.identity,
++            destination_name: row.raw_name.clone(),
++            destination_at: row.visible_from,
++            pattern: node.id,
++        })
++    }
++    pub(crate) fn source_view_named_call_plan(
++        &self,
++        owner: &DefinitionSourcePlan,
++        index: &BodyIndex,
++        site: &PcKey,
++    ) -> Result<NamedCallPlan, Diagnostic> {
++        if site.phase != Phase::Entry.code()? {
++            return Err(fault("named source return requires reached call entry"));
++        }
++        let call = ast::CallExpr::cast(exact_node(self, owner, index, site)?)
++            .ok_or_else(|| fault("named source result is not a call"))?;
++        let Some(ast::Expr::PathExpr(path)) = call.expr() else {
++            return Err(fault("named source result needs a direct function path"));
++        };
++        if path.syntax().descendants().count() > 256
++            || path
++                .syntax()
++                .descendants()
++                .any(|node| ast::GenericArgList::can_cast(node.kind()))
++        {
++            return Err(fault(
++                "named source return explicit arguments require matched M017 call proof",
++            ));
++        }
++        let at = u32::from(path.syntax().text_range().start());
++        let path = path.syntax().text().to_string();
++        if path.len() > 4096 {
++            return Err(fault("named source return path budget"));
++        }
++        let list = call
++            .arg_list()
++            .ok_or_else(|| fault("named source call arguments absent"))?;
++        let mut arguments = Vec::new();
++        for expression in list.args() {
++            if arguments.len() >= 256 {
++                return Err(fault("named source argument count budget"));
++            }
++            let ast::Expr::PathExpr(path) = expression else {
++                return Err(fault("named source arguments need existing binding views"));
++            };
++            arguments
++                .try_reserve(1)
++                .map_err(|_| fault("named source argument metadata allocation"))?;
++            arguments.push(read_plan(owner, index, path)?);
++        }
++        Ok(NamedCallPlan {
++            definition: owner.signature.definition,
++            site: site.clone(),
++            path,
++            at,
++            arguments,
++        })
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/frontend/source_view_propagation_tests.rs
+@@ -0,0 +1,823 @@
++//! Captured-source component controls only: no VM/stock-runtime pass claim.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    db::key::OutlineKey,
++    frontend::{
++        call_contracts::PreparedCallContracts, source_locals::PatternResolution,
++        source_macros::PublishedMacroIndex,
++    },
++    ir::{op::PrimitiveType, pc::Phase},
++    source::{
++        changes::{PreparedSourceInputs, SourceSelection, SourceSelectionOutcome, SourceUnitInput},
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::{outline::DeclarationContext, parse::ParseKey},
++};
++const COPY: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/traits/copy-trait-implicit-copy.rs"
++);
++const INFER: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/generics/generic-fn-infer.rs"
++);
++fn world(
++    text: &str,
++    function: &str,
++    edition: u16,
++) -> (
++    Database,
++    PreparedSourceView,
++    PublishedMacroIndex,
++    NameNamespaces,
++    ParsedFile,
++    BodyIndex,
++    Arc<DefinitionSourcePlan>,
++) {
++    let unit = Digest::of_bytes(b"LRR SourceView alias return component");
++    let profile = ProfileIdentity {
++        edition,
++        ..ProfileIdentity::current()
++    };
++    let cfg = CfgSet::guest_default();
++    let path = SourcePath::new("source-view-original.rs").unwrap();
++    let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++    let selection = SourceSelection {
++        path: path.clone(),
++        outline: OutlineKey {
++            parse: ParseKey {
++                content: blob.content(),
++                profile: profile.clone(),
++            },
++            crate_key: unit,
++            module_path: vec![],
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let inputs = PreparedSourceInputs::refresh(
++        None,
++        vec![SourceUnitInput {
++            path,
++            crate_key: unit,
++            module_path: vec![],
++            profile: profile.clone(),
++            cfg,
++            blob: blob.clone(),
++        }],
++        Default::default(),
++    )
++    .unwrap();
++    let SourceSelectionOutcome::Selected(view) = inputs.select(&selection).unwrap() else {
++        panic!()
++    };
++    let graph = NameNamespaces::from_outlines(&[view.outline()]).unwrap();
++    let mut db = Database::default();
++    db.trace.detailed = true;
++    inputs.publish(&mut db).unwrap();
++    let (context, hygiene) = crate::syntax::floating_fixture_hygiene::root(unit, edition);
++    let published = PublishedMacroIndex::from_view(view.share(), context, hygiene).unwrap();
++    let parsed = ParsedFile::parse(&blob, profile).unwrap();
++    let item = view
++        .outline()
++        .items
++        .iter()
++        .find(|item| item.def_key.declared_name == function)
++        .unwrap();
++    let handle = item.body.as_ref().unwrap();
++    let owner = Arc::new(
++        parsed
++            .source_view_definition_plan(
++                handle,
++                &item.header,
++                &DeclarationContext {
++                    scope: item.scope.clone(),
++                    range: item.declaration_span,
++                },
++            )
++            .unwrap(),
++    );
++    let index = parsed.index_body(handle, Default::default()).unwrap();
++    (db, view, published, graph, parsed, index, owner)
++}
++fn site(
++    text: &str,
++    owner: &DefinitionSourcePlan,
++    index: &BodyIndex,
++    needle: &str,
++    phase: Phase,
++) -> PcKey {
++    let start = u32::try_from(text.find(needle).unwrap()).unwrap() - owner.body.range.start;
++    let end = start + u32::try_from(needle.len()).unwrap();
++    let node = index
++        .nodes()
++        .iter()
++        .find(|node| node.range.start == start && node.range.end == end)
++        .unwrap();
++    index.pc(node.id, phase).unwrap()
++}
++fn read_in(
++    text: &str,
++    owner: &DefinitionSourcePlan,
++    index: &BodyIndex,
++    needle: &str,
++    name: &str,
++) -> PcKey {
++    let start = u32::try_from(text.find(needle).unwrap() + needle.rfind(name).unwrap()).unwrap()
++        - owner.body.range.start;
++    let end = start + u32::try_from(name.len()).unwrap();
++    let node = index
++        .nodes()
++        .iter()
++        .find(|node| node.range.start == start && node.range.end == end)
++        .unwrap();
++    index.pc(node.id, Phase::Entry).unwrap()
++}
++fn runtime_environment(owner: &DefinitionSourcePlan) -> GenericEnv {
++    let signature = owner.signature();
++    let mut symbolic = BTreeMap::new();
++    let mut runtime = BTreeMap::new();
++    for generic in signature
++        .generics
++        .iter()
++        .filter(|generic| generic.kind == GenericKind::Type)
++    {
++        let key = ParamKey {
++            definition: signature.definition,
++            ordinal: generic.ordinal,
++        };
++        symbolic.insert(key, TyTerm::Primitive(PrimitiveType::I32));
++        runtime.insert(key, TypeId(6));
++    }
++    let parameters: Vec<_> = signature
++        .parameters
++        .iter()
++        .map(|parameter| parameter.symbolic.clone().unwrap())
++        .collect();
++    let parameter_descriptors = parameters
++        .iter()
++        .map(|term| match term {
++            TyTerm::Param(_) => TypeId(6),
++            TyTerm::Primitive(primitive) => primitive_runtime_id(*primitive).unwrap(),
++            _ => panic!(),
++        })
++        .collect();
++    let result = signature.result_symbolic.clone();
++    let result_descriptor = match result.as_ref() {
++        Some(TyTerm::Primitive(primitive)) => Some(primitive_runtime_id(*primitive).unwrap()),
++        Some(TyTerm::Param(_)) => Some(TypeId(6)),
++        None => None,
++        _ => panic!(),
++    };
++    GenericEnv::capture(
++        signature,
++        &PreparedCallContracts {
++            definition: signature.definition,
++            source_parameters: parameters,
++            parameter_descriptors,
++            source_substitution: symbolic,
++            runtime_substitution: runtime,
++            source_result: result,
++            result_descriptor,
++            normalized_deferred_return: None,
++        },
++    )
++    .unwrap()
++}
++fn cold(db: &Database) {
++    assert!(db.trace.events.iter().all(|event| !matches!(
++        event.key,
++        crate::db::key::QueryKey::BodyStructure(_) | crate::db::key::QueryKey::Thunk(_)
++    )));
++}
++#[test]
++fn unchanged_copy_parameter_aliases_keep_rigid_owner_and_bounds_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, view, published, graph, parsed, index, owner) =
++            world(COPY, "can_copy_copy", edition);
++        let entered = published
++            .enter_body(view.selection(), &owner.body.key())
++            .unwrap();
++        let resolutions = entered
++            .facts()
++            .bindings
++            .iter()
++            .map(|binding| (binding.identity, PatternResolution::Binding))
++            .collect();
++        let locals = entered
++            .local_index(view.selection(), &owner.body.key(), &resolutions, &[])
++            .unwrap();
++        let environment = runtime_environment(&owner);
++        let read = parsed
++            .source_view_read_plan(
++                &owner,
++                &index,
++                &read_in(COPY, &owner, &index, "let _a = v;", "v"),
++            )
++            .unwrap();
++        let value = declared_binding_view(
++            &db,
++            &parsed,
++            &index,
++            &view,
++            &graph,
++            &locals,
++            owner.clone(),
++            &read,
++            Some(&environment),
++            TypeId(6),
++            SOURCE_VIEW_BUDGET,
++        )
++        .unwrap();
++        let key = ParamKey {
++            definition: owner.signature.definition,
++            ordinal: 0,
++        };
++        assert_eq!(value.source.term(), &TyTerm::Param(key));
++        assert_eq!(value.runtime(), TypeId(6));
++        assert!(
++            owner.signature.generics[0]
++                .bounds
++                .iter()
++                .any(|token| token.text == "Copy")
++        );
++        for needle in ["let _a = v;", "let _b = v;"] {
++            let plan = parsed
++                .source_view_alias_plan(
++                    &owner,
++                    &index,
++                    &site(COPY, &owner, &index, needle, Phase::Commit),
++                )
++                .unwrap();
++            let alias = local_alias_view(
++                &db,
++                &view,
++                &graph,
++                &locals,
++                owner.clone(),
++                &plan,
++                &value,
++                SOURCE_VIEW_BUDGET,
++            )
++            .unwrap();
++            assert_eq!(alias.source.term(), &TyTerm::Param(key));
++            assert_eq!(alias.runtime(), TypeId(6));
++            assert_eq!(
++                alias.source.definition().signature.header.profile.edition,
++                edition
++            );
++            assert!(
++                matches!(alias.source.provenance().last(),Some(SourcePropagation::LocalAlias{source,destination,..}) if Some(*source)==value.source.binding()&&Some(*destination)==alias.source.binding())
++            );
++            assert_ne!(alias.source.identity(), value.source.identity());
++            alias.source.require_current(&db).unwrap();
++        }
++        cold(&db);
++        // Original main is empty; these capture can_copy_copy as an entered
++        // source component and do not claim main executed that generic body.
++    }
++}
++#[test]
++fn unchanged_generic_id_named_result_uses_declared_symbolic_substitution_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, view, published, graph, parsed, index, owner) = world(INFER, "main", edition);
++        let entered = published
++            .enter_body(view.selection(), &owner.body.key())
++            .unwrap();
++        let resolutions = entered
++            .facts()
++            .bindings
++            .iter()
++            .map(|binding| (binding.identity, PatternResolution::Binding))
++            .collect();
++        let locals = entered
++            .local_index(view.selection(), &owner.body.key(), &resolutions, &[])
++            .unwrap();
++        let call = parsed
++            .source_view_named_call_plan(
++                &owner,
++                &index,
++                &site(INFER, &owner, &index, "id(x)", Phase::Entry),
++            )
++            .unwrap();
++        let value = declared_binding_view(
++            &db,
++            &parsed,
++            &index,
++            &view,
++            &graph,
++            &locals,
++            owner.clone(),
++            &call.arguments[0],
++            None,
++            TypeId(8),
++            SOURCE_VIEW_BUDGET,
++        )
++        .unwrap();
++        let QueryPoll::Ready(Ok(result)) = named_function_return_view(
++            &mut db,
++            &view,
++            &[&view],
++            &graph,
++            &locals,
++            owner.clone(),
++            &call,
++            &[&value],
++            TypeId(8),
++            SOURCE_VIEW_BUDGET,
++        ) else {
++            panic!()
++        };
++        assert_eq!(
++            result.source.term(),
++            &TyTerm::Primitive(PrimitiveType::Isize)
++        );
++        assert_eq!(result.runtime(), TypeId(8));
++        let id = view
++            .outline()
++            .items
++            .iter()
++            .find(|item| item.def_key.declared_name == "id")
++            .unwrap()
++            .def_key
++            .fingerprint();
++        assert!(
++            matches!(result.source.provenance().last(),Some(SourcePropagation::NamedReturn{callee,declared:TyTerm::Param(key),..}) if *callee==id&&key.definition==id)
++        );
++        assert!(matches!(
++            result.source.provenance().first(),
++            Some(SourcePropagation::DeclaredBinding { .. })
++        ));
++        result.source.require_current(&db).unwrap();
++        cold(&db);
++        // No id body was entered; this is an unchanged-source plan component,
++        // not the existing or a new whole-original runtime acceptance receipt.
++    }
++}
++#[test]
++fn rigid_alias_then_named_return_retains_caller_param_with_equal_actual_descriptor() {
++    let text = "fn id<U>(value:U)->U{value}fn forward<T>(value:T)->T{let alias=value;id(alias)}fn main(){}";
++    let (mut db, view, published, graph, parsed, index, owner) = world(text, "forward", 2024);
++    let entered = published
++        .enter_body(view.selection(), &owner.body.key())
++        .unwrap();
++    let resolutions = entered
++        .facts()
++        .bindings
++        .iter()
++        .map(|binding| (binding.identity, PatternResolution::Binding))
++        .collect();
++    let locals = entered
++        .local_index(view.selection(), &owner.body.key(), &resolutions, &[])
++        .unwrap();
++    let read = parsed
++        .source_view_read_plan(
++            &owner,
++            &index,
++            &read_in(text, &owner, &index, "let alias=value;", "value"),
++        )
++        .unwrap();
++    let environment = runtime_environment(&owner);
++    let value = declared_binding_view(
++        &db,
++        &parsed,
++        &index,
++        &view,
++        &graph,
++        &locals,
++        owner.clone(),
++        &read,
++        Some(&environment),
++        TypeId(6),
++        SOURCE_VIEW_BUDGET,
++    )
++    .unwrap();
++    let alias_plan = parsed
++        .source_view_alias_plan(
++            &owner,
++            &index,
++            &site(text, &owner, &index, "let alias=value;", Phase::Commit),
++        )
++        .unwrap();
++    let alias = local_alias_view(
++        &db,
++        &view,
++        &graph,
++        &locals,
++        owner.clone(),
++        &alias_plan,
++        &value,
++        SOURCE_VIEW_BUDGET,
++    )
++    .unwrap();
++    let call = parsed
++        .source_view_named_call_plan(
++            &owner,
++            &index,
++            &site(text, &owner, &index, "id(alias)", Phase::Entry),
++        )
++        .unwrap();
++    let QueryPoll::Ready(Ok(result)) = named_function_return_view(
++        &mut db,
++        &view,
++        &[&view],
++        &graph,
++        &locals,
++        owner.clone(),
++        &call,
++        &[&alias],
++        TypeId(6),
++        SOURCE_VIEW_BUDGET,
++    ) else {
++        panic!()
++    };
++    let caller = TyTerm::Param(ParamKey {
++        definition: owner.signature.definition,
++        ordinal: 0,
++    });
++    assert_eq!(result.source.term(), &caller);
++    assert_eq!(result.runtime(), TypeId(6));
++    assert!(
++        result
++            .source
++            .provenance()
++            .iter()
++            .any(|step| matches!(step, SourcePropagation::LocalAlias { .. }))
++    );
++    assert_eq!(
++        result
++            .require_source(&TyTerm::Primitive(PrimitiveType::I32), TypeId(6))
++            .unwrap_err()
++            .code,
++        "LRR-E-SOURCE-TYPE-CONTEXT"
++    );
++    cold(&db);
++}
++#[test]
++fn equal_descriptors_never_unify_distinct_rigid_arguments_at_named_return() {
++    let text =
++        "fn same<X>(a:X,b:X)->X{a}fn through<T,U>(left:T,right:U)->T{same(left,right)}fn main(){}";
++    let (mut db, view, published, graph, parsed, index, owner) = world(text, "through", 2024);
++    let entered = published
++        .enter_body(view.selection(), &owner.body.key())
++        .unwrap();
++    let resolutions = entered
++        .facts()
++        .bindings
++        .iter()
++        .map(|binding| (binding.identity, PatternResolution::Binding))
++        .collect();
++    let locals = entered
++        .local_index(view.selection(), &owner.body.key(), &resolutions, &[])
++        .unwrap();
++    let environment = runtime_environment(&owner);
++    let call = parsed
++        .source_view_named_call_plan(
++            &owner,
++            &index,
++            &site(text, &owner, &index, "same(left,right)", Phase::Entry),
++        )
++        .unwrap();
++    let left = declared_binding_view(
++        &db,
++        &parsed,
++        &index,
++        &view,
++        &graph,
++        &locals,
++        owner.clone(),
++        &call.arguments[0],
++        Some(&environment),
++        TypeId(6),
++        SOURCE_VIEW_BUDGET,
++    )
++    .unwrap();
++    let right = declared_binding_view(
++        &db,
++        &parsed,
++        &index,
++        &view,
++        &graph,
++        &locals,
++        owner.clone(),
++        &call.arguments[1],
++        Some(&environment),
++        TypeId(6),
++        SOURCE_VIEW_BUDGET,
++    )
++    .unwrap();
++    assert_ne!(left.source.term(), right.source.term());
++    assert_eq!(left.runtime(), right.runtime());
++    let QueryPoll::Ready(Err(error)) = named_function_return_view(
++        &mut db,
++        &view,
++        &[&view],
++        &graph,
++        &locals,
++        owner,
++        &call,
++        &[&left, &right],
++        TypeId(6),
++        SOURCE_VIEW_BUDGET,
++    ) else {
++        panic!("distinct rigid source parameters unified")
++    };
++    assert_eq!(error.code, "LRR-E-SOURCE-TYPE-CONTEXT");
++    cold(&db);
++}
++#[test]
++fn missing_local_source_and_wrong_alias_binding_never_recover_identity_from_descriptor() {
++    let text = "fn f<T>(value:T)->T{let value=1i32;let alias=value;alias}fn main(){}";
++    let (db, view, published, graph, parsed, index, owner) = world(text, "f", 2024);
++    let entered = published
++        .enter_body(view.selection(), &owner.body.key())
++        .unwrap();
++    let resolutions = entered
++        .facts()
++        .bindings
++        .iter()
++        .map(|binding| (binding.identity, PatternResolution::Binding))
++        .collect();
++    let locals = entered
++        .local_index(view.selection(), &owner.body.key(), &resolutions, &[])
++        .unwrap();
++    let read = parsed
++        .source_view_read_plan(
++            &owner,
++            &index,
++            &read_in(text, &owner, &index, "let alias=value;", "value"),
++        )
++        .unwrap();
++    let environment = runtime_environment(&owner);
++    let error = declared_binding_view(
++        &db,
++        &parsed,
++        &index,
++        &view,
++        &graph,
++        &locals,
++        owner,
++        &read,
++        Some(&environment),
++        TypeId(6),
++        SOURCE_VIEW_BUDGET,
++    )
++    .unwrap_err();
++    assert_eq!(error.code, "LRR-E-SOURCE-TYPE-CONTEXT");
++    assert!(error.message.contains("written type or prior source view"));
++    cold(&db);
++}
++#[test]
++fn source_record_metadata_and_derived_epoch_refuse_before_new_plan_ownership() {
++    let (mut db, view, published, graph, parsed, index, owner) = world(COPY, "can_copy_copy", 2024);
++    let entered = published
++        .enter_body(view.selection(), &owner.body.key())
++        .unwrap();
++    let resolutions = entered
++        .facts()
++        .bindings
++        .iter()
++        .map(|binding| (binding.identity, PatternResolution::Binding))
++        .collect();
++    let locals = entered
++        .local_index(view.selection(), &owner.body.key(), &resolutions, &[])
++        .unwrap();
++    let environment = runtime_environment(&owner);
++    let read = parsed
++        .source_view_read_plan(
++            &owner,
++            &index,
++            &read_in(COPY, &owner, &index, "let _a = v;", "v"),
++        )
++        .unwrap();
++    assert_eq!(
++        declared_binding_view(
++            &db,
++            &parsed,
++            &index,
++            &view,
++            &graph,
++            &locals,
++            owner.clone(),
++            &read,
++            Some(&environment),
++            TypeId(6),
++            0
++        )
++        .unwrap_err()
++        .code,
++        "LRR-E-METADATA-LIMIT"
++    );
++    let value = declared_binding_view(
++        &db,
++        &parsed,
++        &index,
++        &view,
++        &graph,
++        &locals,
++        owner.clone(),
++        &read,
++        Some(&environment),
++        TypeId(6),
++        SOURCE_VIEW_BUDGET,
++    )
++    .unwrap();
++    let identity = value.source.identity();
++    let revision = db.source_revision();
++    db.begin_expansion_epoch(1).unwrap();
++    assert_eq!(db.source_revision(), revision);
++    let alias = parsed
++        .source_view_alias_plan(
++            &owner,
++            &index,
++            &site(COPY, &owner, &index, "let _a = v;", Phase::Commit),
++        )
++        .unwrap();
++    assert_eq!(
++        local_alias_view(
++            &db,
++            &view,
++            &graph,
++            &locals,
++            owner,
++            &alias,
++            &value,
++            SOURCE_VIEW_BUDGET
++        )
++        .unwrap_err()
++        .code,
++        "LRR-E-SOURCE-TYPE-CONTEXT"
++    );
++    assert_eq!(value.source.identity(), identity);
++    cold(&db);
++}
++
++#[test]
++fn alias_rejects_wrong_source_binding_even_when_symbolic_and_runtime_terms_are_equal() {
++    let text = "fn f<T>(left:T,right:T)->T{let first=left;let alias=right;alias}fn main(){}";
++    let (db, view, published, graph, parsed, index, owner) = world(text, "f", 2024);
++    let entered = published
++        .enter_body(view.selection(), &owner.body.key())
++        .unwrap();
++    let resolutions = entered
++        .facts()
++        .bindings
++        .iter()
++        .map(|binding| (binding.identity, PatternResolution::Binding))
++        .collect();
++    let locals = entered
++        .local_index(view.selection(), &owner.body.key(), &resolutions, &[])
++        .unwrap();
++    let read = parsed
++        .source_view_read_plan(
++            &owner,
++            &index,
++            &read_in(text, &owner, &index, "let first=left;", "left"),
++        )
++        .unwrap();
++    let environment = runtime_environment(&owner);
++    let left = declared_binding_view(
++        &db,
++        &parsed,
++        &index,
++        &view,
++        &graph,
++        &locals,
++        owner.clone(),
++        &read,
++        Some(&environment),
++        TypeId(6),
++        SOURCE_VIEW_BUDGET,
++    )
++    .unwrap();
++    let alias = parsed
++        .source_view_alias_plan(
++            &owner,
++            &index,
++            &site(text, &owner, &index, "let alias=right;", Phase::Commit),
++        )
++        .unwrap();
++    assert_eq!(
++        local_alias_view(
++            &db,
++            &view,
++            &graph,
++            &locals,
++            owner,
++            &alias,
++            &left,
++            SOURCE_VIEW_BUDGET
++        )
++        .unwrap_err()
++        .code,
++        "LRR-E-SOURCE-TYPE-CONTEXT"
++    );
++    cold(&db);
++}
++
++#[test]
++fn async_unsafe_and_foreign_header_forms_cannot_become_ordinary_named_return_plans() {
++    for text in [
++        "async fn id<T>(value:T)->T{value}fn main(){let x:i32=1;id(x);}",
++        "unsafe fn id<T>(value:T)->T{value}fn main(){let x:i32=1;id(x);}",
++        "extern \"Rust\" fn id(value:i32)->i32{value}fn main(){let x:i32=1;id(x);}",
++    ] {
++        let (mut db, view, published, graph, parsed, index, owner) = world(text, "main", 2024);
++        let entered = published
++            .enter_body(view.selection(), &owner.body.key())
++            .unwrap();
++        let resolutions = entered
++            .facts()
++            .bindings
++            .iter()
++            .map(|binding| (binding.identity, PatternResolution::Binding))
++            .collect();
++        let locals = entered
++            .local_index(view.selection(), &owner.body.key(), &resolutions, &[])
++            .unwrap();
++        let call = parsed
++            .source_view_named_call_plan(
++                &owner,
++                &index,
++                &site(text, &owner, &index, "id(x)", Phase::Entry),
++            )
++            .unwrap();
++        let value = declared_binding_view(
++            &db,
++            &parsed,
++            &index,
++            &view,
++            &graph,
++            &locals,
++            owner.clone(),
++            &call.arguments[0],
++            None,
++            TypeId(6),
++            SOURCE_VIEW_BUDGET,
++        )
++        .unwrap();
++        let QueryPoll::Ready(Err(error)) = named_function_return_view(
++            &mut db,
++            &view,
++            &[&view],
++            &graph,
++            &locals,
++            owner,
++            &call,
++            &[&value],
++            TypeId(6),
++            SOURCE_VIEW_BUDGET,
++        ) else {
++            panic!("nonordinary source return admitted")
++        };
++        assert_eq!(error.code, "LRR-E-SOURCE-TYPE-CONTEXT");
++        assert_eq!(
++            error.message,
++            "named return needs an ordinary safe Rust source signature"
++        );
++        cold(&db);
++    }
++}
++#[test]
++fn written_alias_or_shadowed_local_type_cannot_be_recovered_from_a_matching_descriptor() {
++    let text = "fn f<T>(value:T){type T=i32;let other:T=value;let alias=other;}fn main(){}";
++    let (db, view, published, graph, parsed, index, owner) = world(text, "f", 2024);
++    let entered = published
++        .enter_body(view.selection(), &owner.body.key())
++        .unwrap();
++    let resolutions = entered
++        .facts()
++        .bindings
++        .iter()
++        .map(|binding| (binding.identity, PatternResolution::Binding))
++        .collect();
++    let locals = entered
++        .local_index(view.selection(), &owner.body.key(), &resolutions, &[])
++        .unwrap();
++    let read = parsed
++        .source_view_read_plan(
++            &owner,
++            &index,
++            &read_in(text, &owner, &index, "let alias=other;", "other"),
++        )
++        .unwrap();
++    let environment = runtime_environment(&owner);
++    let error = declared_binding_view(
++        &db,
++        &parsed,
++        &index,
++        &view,
++        &graph,
++        &locals,
++        owner,
++        &read,
++        Some(&environment),
++        TypeId(6),
++        SOURCE_VIEW_BUDGET,
++    )
++    .unwrap_err();
++    assert_eq!(error.code, "LRR-E-SOURCE-TYPE-CONTEXT");
++    assert_eq!(
++        error.message,
++        "local written parameter requires exact owning type namespace"
++    );
++    cold(&db);
++}

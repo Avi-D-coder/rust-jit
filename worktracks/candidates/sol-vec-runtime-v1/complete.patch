@@ -1,0 +1,2658 @@
+--- a/crates/lrr/src/runtime/cell.rs
++++ b/crates/lrr/src/runtime/cell.rs
+@@ -3,6 +3,8 @@
+ pub(crate) mod aggregate_copy;
+ #[path = "cell_construction_cleanup.rs"]
+ mod construction_cleanup;
++#[path = "cell_vector.rs"]
++mod vector;
+ use super::{
+     arena::{GuestArena, Handle, RunBudget, resource, stale},
+     object::{
+@@ -525,6 +527,9 @@
+         {
+             return Err(ownership());
+         }
++        if record.vector.is_some_and(|expected| expected != ty) {
++            return Err(ownership());
++        }
+         if ty == TypeId(1)
+             && record.fields.is_empty()
+             && record.nominal.is_none()
+@@ -555,6 +560,16 @@
+                     && *len as usize == record.expected.len()
+                     && record.expected.iter().all(|ty| *ty == Some(*element))
+             }
++            TypeKey::Facade {
++                family: super::shape::FacadeType::Vec,
++                args,
++            } => {
++                record.vector == Some(ty)
++                    && record.nominal.is_none()
++                    && record.observed_kind.is_none()
++                    && args.len() == 1
++                    && record.expected.iter().all(|t| *t == Some(args[0]))
++            }
+             TypeKey::Nominal { .. } => record.nominal.is_some_and(|(expected, _)| expected == ty),
+             _ => false,
+         };
+@@ -571,6 +586,7 @@
+                 },
+             )?;
+         }
++        let vector = record.vector == Some(ty);
+         let count = record.fields.len();
+         let handles = u32::try_from(count)
+             .ok()
+@@ -609,9 +625,16 @@
+             fields.push(self.new_cell(
+                 StorageContract::Exact(expected),
+                 true,
+-                CellOwner::Field {
+-                    object,
+-                    index: u32::try_from(field).map_err(|_| resource())?,
++                if vector {
++                    CellOwner::Buffer {
++                        object,
++                        index: u32::try_from(field).map_err(|_| resource())?,
++                    }
++                } else {
++                    CellOwner::Field {
++                        object,
++                        index: u32::try_from(field).map_err(|_| resource())?,
++                    }
+                 },
+             )?);
+         }
+@@ -632,13 +655,27 @@
+             self.cells.get_mut(*cell)?.state = CellState::Live(value);
+         }
+         let object = self.objects.get_mut(object)?;
+-        object.storage = ObjectStorage::Aggregate(AggregateStorage {
++        let storage = AggregateStorage {
+             fields,
+             initialized,
+             next_cleanup: 0,
+             pending_cleanup: None,
+             variant,
+-        });
++            buffer: if vector {
++                Some(super::object::VectorBuffer {
++                    capacity: u32::try_from(count).map_err(|_| resource())?,
++                    generation: 1,
++                    dropping: false,
++                })
++            } else {
++                None
++            },
++        };
++        object.storage = if vector {
++            ObjectStorage::Vector(storage)
++        } else {
++            ObjectStorage::Aggregate(storage)
++        };
+         object.owner = Some(ValueOwner::Ticket(ticket));
+         Ok(ticket)
+     }
+@@ -708,29 +745,38 @@
+             return Err(invalid());
+         }
+         let object_id = ObjectId::from_bits(value.payload);
+-        let ObjectStorage::Aggregate(storage) = &self.objects.get(object_id)?.storage else {
++        let (ObjectStorage::Aggregate(storage) | ObjectStorage::Vector(storage)) =
++            &self.objects.get(object_id)?.storage
++        else {
+             return Err(invalid());
+         };
+-        if storage.next_cleanup != 0 {
++        if storage.next_cleanup != 0 || storage.buffer.is_some_and(|b| b.dropping) {
+             return Err(lease_fault());
+         }
+         Ok((object_id, storage))
+     }
+     fn validate_reference_record(&self, reference: &ReferenceRecord) -> Result<(), Diagnostic> {
+-        if self.place_stamp(reference.root.cell)? != reference.root {
+-            return Err(lease_fault());
+-        }
+-        match self.cells.get(reference.root.cell)?.owner {
+-            CellOwner::FrameSlot { frame, .. } => {
+-                self.frames.get(frame)?;
+-            }
+-            CellOwner::Transfer(ticket) => {
+-                self.tickets.get(ticket)?;
+-            }
+-            CellOwner::Field { .. } | CellOwner::Buffer { .. } => return Err(lease_fault()),
+-        }
+-        let mut parent = reference.root.cell;
+-        for link in &reference.enclosing {
++        let (mut parent, start) = if let Some(anchor) = reference.buffer_root {
++            (
++                self.validate_vector_reference_anchor(reference, anchor)?,
++                anchor.checked_add(1).ok_or_else(resource)?,
++            )
++        } else {
++            if self.place_stamp(reference.root.cell)? != reference.root {
++                return Err(lease_fault());
++            }
++            match self.cells.get(reference.root.cell)?.owner {
++                CellOwner::FrameSlot { frame, .. } => {
++                    self.frames.get(frame)?;
++                }
++                CellOwner::Transfer(ticket) => {
++                    self.tickets.get(ticket)?;
++                }
++                CellOwner::Field { .. } | CellOwner::Buffer { .. } => return Err(lease_fault()),
++            }
++            (reference.root.cell, 0)
++        };
++        for link in reference.enclosing.get(start..).ok_or_else(lease_fault)? {
+             if link.parent.cell != parent || self.place_stamp(parent)? != link.parent {
+                 return Err(lease_fault());
+             }
+@@ -738,11 +784,9 @@
+             if object != link.object
+                 || storage.variant != link.variant
+                 || storage.fields.get(link.field as usize) != Some(&link.child)
++                || storage.buffer.map(|b| b.generation) != link.buffer_epoch
+                 || self.cells.get(link.child)?.owner
+-                    != (CellOwner::Field {
+-                        object,
+-                        index: link.field,
+-                    })
++                    != Self::storage_child_owner(storage, object, link.field)
+             {
+                 return Err(lease_fault());
+             }
+@@ -776,16 +820,16 @@
+                 self.tickets.get(ticket)?;
+                 Ok(None)
+             }
+-            CellOwner::Buffer { .. } => Err(Diagnostic::new(
+-                "LRR-E-UNSUPPORTED",
+-                "buffer references require a buffer lease".into(),
+-            )),
+-            CellOwner::Field { object, index } => {
++            CellOwner::Field { object, index } | CellOwner::Buffer { object, index } => {
+                 let Some(ValueOwner::Cell(parent)) = self.objects.get(object)?.owner else {
+                     return Err(lease_fault());
+                 };
+                 let (actual, storage) = self.place_object(parent)?;
+-                if actual != object || storage.fields.get(index as usize) != Some(&current) {
++                if actual != object
++                    || storage.fields.get(index as usize) != Some(&current)
++                    || self.cells.get(current)?.owner
++                        != Self::storage_child_owner(storage, object, index)
++                {
+                     return Err(lease_fault());
+                 }
+                 Ok(Some(EnclosingObject {
+@@ -794,6 +838,7 @@
+                     field: index,
+                     child: current,
+                     variant: storage.variant,
++                    buffer_epoch: storage.buffer.map(|b| b.generation),
+                 }))
+             }
+         }
+@@ -879,7 +924,8 @@
+                     reference.root,
+                     reference.final_cell.cell,
+                     reference.access == Access::Mutable
+-                        && self.cells.get(reference.root.cell)?.writable,
++                        && (reference.buffer_root.is_some()
++                            || self.cells.get(reference.root.cell)?.writable),
+                     {
+                         let mut prefix = Vec::new();
+                         checked_chain_bytes(reference.enclosing.len())?;
+@@ -909,6 +955,13 @@
+                 (Projection::Field(field), TypeKey::Nominal { .. }) => *field,
+                 (Projection::Tuple(field), TypeKey::Tuple(_)) => *field,
+                 (Projection::Index(index), TypeKey::Array { .. }) => *index,
++                (
++                    Projection::Index(index),
++                    TypeKey::Facade {
++                        family: super::shape::FacadeType::Vec,
++                        args,
++                    },
++                ) if args.len() == 1 => *index,
+                 _ => return Err(invalid().into()),
+             };
+             let (object, storage) = self.place_object(target)?;
+@@ -922,12 +975,7 @@
+                     ))
+                 }
+             })?;
+-            if self.cells.get(child)?.owner
+-                != (CellOwner::Field {
+-                    object,
+-                    index: field,
+-                })
+-            {
++            if self.cells.get(child)?.owner != Self::storage_child_owner(storage, object, field) {
+                 return Err(lease_fault().into());
+             }
+             enclosing.push(EnclosingObject {
+@@ -936,6 +984,7 @@
+                 field,
+                 child,
+                 variant: storage.variant,
++                buffer_epoch: storage.buffer.map(|b| b.generation),
+             });
+             target = child;
+             if usage == PlaceUse::OwningRead && matches!(place.root, PlaceRoot::Cell(_)) {
+@@ -1450,7 +1499,8 @@
+             return Err(invalid());
+         }
+         let object = self.objects.get(ObjectId::from_bits(value.payload))?;
+-        let ObjectStorage::Aggregate(storage) = &object.storage else {
++        let (ObjectStorage::Aggregate(storage) | ObjectStorage::Vector(storage)) = &object.storage
++        else {
+             return Err(ownership());
+         };
+         Ok(storage.variant)
+@@ -1462,7 +1512,8 @@
+             return Err(invalid());
+         }
+         let object = self.objects.get(ObjectId::from_bits(value.payload))?;
+-        let ObjectStorage::Aggregate(storage) = &object.storage else {
++        let (ObjectStorage::Aggregate(storage) | ObjectStorage::Vector(storage)) = &object.storage
++        else {
+             return Err(invalid());
+         };
+         if storage.next_cleanup != 0 {
+@@ -1506,6 +1557,10 @@
+             8 if self.types.is_string(TypeId(value.type_id)) => Ok(CleanupInventory::Leaf),
+             8 => match self.types.descriptor(TypeId(value.type_id))?.key.as_ref() {
+                 TypeKey::Tuple(_) | TypeKey::Array { .. } => Ok(CleanupInventory::Fields),
++                TypeKey::Facade {
++                    family: super::shape::FacadeType::Vec,
++                    args,
++                } if args.len() == 1 => Ok(CleanupInventory::Fields),
+                 _ => Ok(CleanupInventory::NeedWitness(TypeId(value.type_id))),
+             },
+             _ => Err(invalid()),
+@@ -1520,7 +1575,7 @@
+         if value.kind != 8 {
+             return Err(invalid());
+         }
+-        let ObjectStorage::Aggregate(storage) = &self
++        let (ObjectStorage::Aggregate(storage) | ObjectStorage::Vector(storage)) = &self
+             .objects
+             .get(ObjectId::from_bits(value.payload))?
+             .storage
+@@ -1558,7 +1613,9 @@
+             return Err(invalid());
+         }
+         let id = ObjectId::from_bits(value.payload);
+-        let ObjectStorage::Aggregate(storage) = &self.objects.get(id)?.storage else {
++        let (ObjectStorage::Aggregate(storage) | ObjectStorage::Vector(storage)) =
++            &self.objects.get(id)?.storage
++        else {
+             return Err(invalid());
+         };
+         if storage.pending_cleanup.is_some() {
+@@ -1587,9 +1644,14 @@
+             }
+             CellState::Dropping => return Err(ownership()),
+         };
+-        let ObjectStorage::Aggregate(storage) = &mut self.objects.get_mut(id)?.storage else {
++        let (ObjectStorage::Aggregate(storage) | ObjectStorage::Vector(storage)) =
++            &mut self.objects.get_mut(id)?.storage
++        else {
+             return Err(invalid());
+         };
++        if let Some(buffer) = storage.buffer.as_mut() {
++            buffer.dropping = true;
++        }
+         storage.next_cleanup = next_cleanup;
+         if retain_location && let AggregateCleanupTransfer::Field { cell, ticket } = step {
+             storage.pending_cleanup = Some((cell, ticket));
+@@ -1610,7 +1672,9 @@
+             return Err(invalid());
+         }
+         let id = ObjectId::from_bits(value.payload);
+-        let ObjectStorage::Aggregate(storage) = &self.objects.get(id)?.storage else {
++        let (ObjectStorage::Aggregate(storage) | ObjectStorage::Vector(storage)) =
++            &self.objects.get(id)?.storage
++        else {
+             return Err(invalid());
+         };
+         if storage.pending_cleanup != Some((field, ticket)) {
+@@ -1625,7 +1689,9 @@
+             return Err(ownership());
+         }
+         self.retire_cell(field)?;
+-        let ObjectStorage::Aggregate(storage) = &mut self.objects.get_mut(id)?.storage else {
++        let (ObjectStorage::Aggregate(storage) | ObjectStorage::Vector(storage)) =
++            &mut self.objects.get_mut(id)?.storage
++        else {
+             return Err(invalid());
+         };
+         storage.pending_cleanup = None;
+@@ -1771,6 +1837,15 @@
+                 }
+                 match &object.storage {
+                     ObjectStorage::String(_) if self.types.is_string(object.type_id) => Ok(()),
++                    ObjectStorage::Vector(storage)
++                        if self.types.is_vector(object.type_id)
++                            && storage.variant.is_none()
++                            && storage.buffer.is_some_and(|b| {
++                                b.generation != 0 && storage.fields.len() <= b.capacity as usize
++                            }) =>
++                    {
++                        Ok(())
++                    }
+                     ObjectStorage::Aggregate(storage)
+                         if match self.types.descriptor(object.type_id)?.key.as_ref() {
+                             TypeKey::Tuple(_) | TypeKey::Array { .. } => storage.variant.is_none(),
+@@ -2150,7 +2225,9 @@
+             .storage
+         {
+             ObjectStorage::String(_) => Ok(true),
+-            ObjectStorage::Aggregate(storage) => Ok(storage.initialized.complete_value()),
++            ObjectStorage::Aggregate(storage) | ObjectStorage::Vector(storage) => {
++                Ok(storage.initialized.complete_value())
++            }
+             ObjectStorage::Constructing => Err(ownership()),
+         }
+     }
+@@ -2188,17 +2265,22 @@
+                 self.tickets.get(ticket)?;
+                 Ok(None)
+             }
+-            CellOwner::Buffer { .. } => Err(Diagnostic::new(
+-                "LRR-E-UNSUPPORTED",
+-                "buffer initialization propagation requires its buffer integration".into(),
+-            )),
+-            CellOwner::Field { object, index } => {
++            CellOwner::Field { object, index } | CellOwner::Buffer { object, index } => {
+                 let record = self.objects.get(object)?;
+-                let ObjectStorage::Aggregate(storage) = &record.storage else {
++                let (ObjectStorage::Aggregate(storage) | ObjectStorage::Vector(storage)) =
++                    &record.storage
++                else {
+                     return Err(ownership());
+                 };
+                 let index = index as usize;
+-                if storage.fields.get(index) != Some(&id) {
++                if storage.fields.get(index) != Some(&id)
++                    || self.cells.get(id)?.owner
++                        != Self::storage_child_owner(
++                            storage,
++                            object,
++                            u32::try_from(index).map_err(|_| resource())?,
++                        )
++                {
+                     return Err(ownership());
+                 }
+                 storage.initialized.field(index)?;
+@@ -2254,7 +2336,9 @@
+                 .checked_add(1)
+                 .filter(|n| *n <= self.budget.max_handles())
+                 .ok_or_else(resource)?;
+-            let ObjectStorage::Aggregate(storage) = &self.objects.get(object)?.storage else {
++            let (ObjectStorage::Aggregate(storage) | ObjectStorage::Vector(storage)) =
++                &self.objects.get(object)?.storage
++            else {
+                 return Err(ownership());
+             };
+             if storage.initialized.field(index)? != self.cell_is_initialized(current)? {
+@@ -2291,7 +2375,8 @@
+         let mut current = id;
+         let mut initialized = initialized;
+         while let Some((object, index, parent)) = self.initialization_parent(current)? {
+-            let ObjectStorage::Aggregate(storage) = &mut self.objects.get_mut(object)?.storage
++            let (ObjectStorage::Aggregate(storage) | ObjectStorage::Vector(storage)) =
++                &mut self.objects.get_mut(object)?.storage
+             else {
+                 return Err(ownership());
+             };
+@@ -2395,7 +2480,10 @@
+             } else {
+                 IntrinsicRead::CopyScalar
+             }),
+-            TypeKey::Facade { .. } if self.types.is_string(TypeId(value.type_id)) => {
++            TypeKey::Facade { .. }
++                if self.types.is_string(TypeId(value.type_id))
++                    || self.types.is_vector(TypeId(value.type_id)) =>
++            {
+                 Ok(IntrinsicRead::Move)
+             }
+             // A structural NotCopy certificate is final even when another cold
+@@ -2926,7 +3014,8 @@
+         self.object_owner(value, ValueOwner::Ticket(ticket))?;
+         if value.kind == 8 {
+             let object = self.objects.get(ObjectId::from_bits(value.payload))?;
+-            if let ObjectStorage::Aggregate(storage) = &object.storage
++            if let (ObjectStorage::Aggregate(storage) | ObjectStorage::Vector(storage)) =
++                &object.storage
+                 && (storage.next_cleanup != storage.fields.len()
+                     || storage.pending_cleanup.is_some())
+             {
+@@ -2950,6 +3039,15 @@
+     pub fn begin_drop(&mut self, id: CellId) -> Result<TicketId, Diagnostic> {
+         let ticket = self.extract_from(id, true)?;
+         self.cells.get_mut(id)?.state = CellState::Dropping;
++        let value = self.peek_ticket(ticket)?;
++        if value.kind == 8
++            && let ObjectStorage::Vector(storage) = &mut self
++                .objects
++                .get_mut(ObjectId::from_bits(value.payload))?
++                .storage
++        {
++            storage.buffer.as_mut().ok_or_else(ownership)?.dropping = true;
++        }
+         Ok(ticket)
+     }
+     pub fn retire_cell(&mut self, id: CellId) -> Result<(), Diagnostic> {
+@@ -2973,8 +3071,10 @@
+         let writable = cell.writable;
+         let owner = cell.owner;
+         let field = match owner {
+-            CellOwner::Field { object, index } => {
+-                let ObjectStorage::Aggregate(storage) = &self.objects.get(object)?.storage else {
++            CellOwner::Field { object, index } | CellOwner::Buffer { object, index } => {
++                let (ObjectStorage::Aggregate(storage) | ObjectStorage::Vector(storage)) =
++                    &self.objects.get(object)?.storage
++                else {
+                     return Err(ownership());
+                 };
+                 if storage.next_cleanup != 0 || storage.fields.get(index as usize) != Some(&id) {
+@@ -2982,19 +3082,14 @@
+                 }
+                 Some((object, index))
+             }
+-            CellOwner::Buffer { .. } => {
+-                return Err(Diagnostic::new(
+-                    "LRR-E-UNSUPPORTED",
+-                    "buffer cell replacement requires its buffer lease integration".into(),
+-                ));
+-            }
+             _ => None,
+         };
+         // Allocate before publishing a new field identity; failures keep the
+         // retired location installed and cannot resurrect an older lease.
+         let replacement = self.new_cell(declared, writable, owner)?;
+         if let Some((object, index)) = field {
+-            let ObjectStorage::Aggregate(storage) = &mut self.objects.get_mut(object)?.storage
++            let (ObjectStorage::Aggregate(storage) | ObjectStorage::Vector(storage)) =
++                &mut self.objects.get_mut(object)?.storage
+             else {
+                 return Err(ownership());
+             };
+--- a/crates/lrr/src/runtime/cell_aggregate_copy.rs
++++ b/crates/lrr/src/runtime/cell_aggregate_copy.rs
+@@ -89,6 +89,7 @@
+                     next_cleanup: 0,
+                     pending_cleanup: None,
+                     variant: None,
++                    buffer: None,
+                 }),
+             },
+             owned,
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_vector.rs
+@@ -0,0 +1,288 @@
++//! Scalar Vec buffer admission. Facade storage is distinct from fixed array layout.
++use super::*;
++use crate::runtime::{object::MAX_CONSTRUCTION_FIELDS, shape::FacadeType};
++impl GuestStore {
++    pub(crate) fn preflight_vector_construction(
++        &self,
++        element: TypeId,
++        count: u32,
++    ) -> Result<(), Diagnostic> {
++        if self.types.descriptor(element)?.shape != ShapeCategory::Primitive || element.0 == 16 {
++            return Err(Diagnostic::new(
++                "LRR-E-UNSUPPORTED",
++                "Vec element requires pending non-scalar source/drop integration".into(),
++            ));
++        }
++        let count = usize::try_from(count).map_err(|_| resource())?;
++        if count > MAX_CONSTRUCTION_FIELDS {
++            return Err(resource());
++        }
++        let bytes = ConstructionRecord::estimated_bytes(count)
++            .and_then(|n| n.checked_add(self.constructions.reservation_bytes(1).ok()?))
++            .ok_or_else(resource)?;
++        self.budget.check(1, bytes)
++    }
++    pub fn begin_vector_construction(
++        &mut self,
++        element: TypeId,
++        count: u32,
++    ) -> Result<(TypeId, ConstructionId), Diagnostic> {
++        self.preflight_vector_construction(element, count)?;
++        let ty = self.types.intern(TypeKey::Facade {
++            family: FacadeType::Vec,
++            args: Box::new([element]),
++        })?;
++        let count = usize::try_from(count).map_err(|_| resource())?;
++        let mut expected = Vec::new();
++        expected.try_reserve_exact(count).map_err(|_| resource())?;
++        expected.resize(count, element);
++        let guard = self.begin_construction(&expected)?;
++        self.constructions.get_mut(guard)?.vector = Some(ty);
++        Ok((ty, guard))
++    }
++    pub(crate) fn preflight_vector_source(
++        &self,
++        guard: ConstructionId,
++        ordinal: u32,
++        source: CellId,
++    ) -> Result<(), Diagnostic> {
++        let record = self.constructions.get(guard)?;
++        if record.vector.is_none() || record.completed.len() != ordinal as usize {
++            return Err(ownership());
++        }
++        if !matches!(
++            self.cells.get(source)?.owner,
++            CellOwner::FrameSlot { .. } | CellOwner::Transfer(_)
++        ) {
++            return Err(Diagnostic::new(
++                "LRR-E-UNSUPPORTED",
++                "Vec field requires an already evaluated owning expression cell".into(),
++            ));
++        }
++        let value = self.admit_move(source)?;
++        if !matches!(value.kind, 1..=7) {
++            return Err(Diagnostic::new(
++                "LRR-E-UNSUPPORTED",
++                "Vec field requires reached concrete scalar/source-view integration".into(),
++            ));
++        }
++        self.admit_construction_move(guard, ordinal, source)?;
++        let bytes = self.tickets.reservation_bytes(1)?;
++        self.budget.check(1, bytes)
++    }
++    pub(crate) fn vector_move_from(
++        &mut self,
++        guard: ConstructionId,
++        ordinal: u32,
++        source: CellId,
++    ) -> Result<(), Diagnostic> {
++        self.preflight_vector_source(guard, ordinal, source)?;
++        self.tickets.reserve(1, &mut self.budget)?;
++        self.construction_move_from(guard, ordinal, source)
++    }
++    pub(crate) fn preflight_vector_finish(
++        &self,
++        guard: ConstructionId,
++        ty: TypeId,
++    ) -> Result<(), Diagnostic> {
++        let record = self.constructions.get(guard)?;
++        if record.vector != Some(ty)
++            || record.state != ConstructionState::Building
++            || record.pending_cleanup.is_some()
++            || record.completed.len() != record.fields.len()
++            || record.fields.iter().any(Option::is_none)
++        {
++            return Err(ownership());
++        }
++        if !self.types.is_vector(ty) {
++            return Err(ownership());
++        }
++        let count = record.fields.len();
++        let handles = u32::try_from(count)
++            .ok()
++            .and_then(|n| n.checked_add(2))
++            .ok_or_else(resource)?;
++        let bytes = count
++            .checked_mul(std::mem::size_of::<CellId>())
++            .and_then(|n| n.checked_add(InitializedFields::estimated_bytes(count)?))
++            .and_then(|n| n.checked_add(self.objects.reservation_bytes(1).ok()?))
++            .and_then(|n| n.checked_add(self.cells.reservation_bytes(count).ok()?))
++            .and_then(|n| n.checked_add(self.tickets.reservation_bytes(1).ok()?))
++            .ok_or_else(resource)?;
++        self.budget.check(handles, bytes)
++    }
++    /// Revalidate a private buffer anchor against its current live allocation,
++    /// independent of the old container cell. No raw pointers or type-tag fallback.
++    pub(super) fn validate_vector_reference_anchor(
++        &self,
++        reference: &ReferenceRecord,
++        anchor: usize,
++    ) -> Result<CellId, Diagnostic> {
++        let link = reference.enclosing.get(anchor).ok_or_else(lease_fault)?;
++        let object = self.objects.get(link.object)?;
++        let ObjectStorage::Vector(storage) = &object.storage else {
++            return Err(lease_fault());
++        };
++        let buffer = storage.buffer.ok_or_else(lease_fault)?;
++        if !self.types.is_vector(object.type_id)
++            || buffer.dropping
++            || buffer.generation == 0
++            || Some(buffer.generation) != link.buffer_epoch
++            || storage.variant != link.variant
++            || storage.next_cleanup != 0
++            || storage.pending_cleanup.is_some()
++            || storage.fields.get(link.field as usize) != Some(&link.child)
++            || self.cells.get(link.child)?.owner
++                != (CellOwner::Buffer {
++                    object: link.object,
++                    index: link.field,
++                })
++        {
++            return Err(lease_fault());
++        }
++        let value = ValueRepr {
++            kind: 8,
++            type_id: object.type_id.0,
++            payload: link.object.bits(),
++        };
++        let owner = object.owner.ok_or_else(lease_fault)?;
++        match owner {
++            ValueOwner::Cell(cell) => {
++                if self.admit_live_value(cell)? != value {
++                    return Err(lease_fault());
++                }
++                self.validate_vector_owner_chain(cell)?;
++            }
++            ValueOwner::Ticket(ticket) => {
++                if self.peek_ticket(ticket)? != value {
++                    return Err(lease_fault());
++                }
++            }
++            ValueOwner::Construction { guard, field } => {
++                let record = self.constructions.get(guard)?;
++                if record.state != ConstructionState::Building
++                    || record.pending_cleanup.is_some()
++                    || record.fields.get(field as usize) != Some(&Some(value))
++                {
++                    return Err(lease_fault());
++                }
++            }
++        }
++        self.place_stamp(link.child)?;
++        Ok(link.child)
++    }
++    fn validate_vector_owner_chain(&self, mut cell: CellId) -> Result<(), Diagnostic> {
++        // Existing initialization-parent validation accepts a currently owned
++        // enclosing aggregate ticket, unlike old stack-root lease traversal.
++        // The cumulative handle quota is also a strict bound on this walk.
++        for _ in 0..self.budget.max_handles() {
++            self.admit_live_value(cell)?;
++            match self.initialization_parent(cell)? {
++                Some((_, _, Some(parent))) => cell = parent,
++                Some((_, _, None)) | None => return Ok(()),
++            }
++        }
++        Err(resource())
++    }
++    pub(super) fn storage_child_owner(
++        storage: &AggregateStorage,
++        object: ObjectId,
++        index: u32,
++    ) -> CellOwner {
++        if storage.buffer.is_some() {
++            CellOwner::Buffer { object, index }
++        } else {
++            CellOwner::Field { object, index }
++        }
++    }
++    fn vector_storage(&self, place: &Place) -> Result<&AggregateStorage, PlaceFailure> {
++        let resolved = self.resolve_place(place)?;
++        let ty = resolved.ty;
++        if !self.types.is_vector(ty) {
++            return Err(invalid().into());
++        }
++        let (object, storage) = self.place_object(resolved.target.cell)?;
++        if !matches!(self.objects.get(object)?.storage, ObjectStorage::Vector(_))
++            || storage.buffer.is_none()
++        {
++            return Err(ownership().into());
++        }
++        Ok(storage)
++    }
++    pub fn vector_len(&self, place: &Place) -> Result<u32, PlaceFailure> {
++        u32::try_from(self.vector_storage(place)?.fields.len()).map_err(|_| resource().into())
++    }
++    pub fn vector_capacity(&self, place: &Place) -> Result<u32, PlaceFailure> {
++        Ok(self
++            .vector_storage(place)?
++            .buffer
++            .ok_or_else(ownership)?
++            .capacity)
++    }
++    /// Storage mechanism only. Source opcode preparation must select the exact facade Index member.
++    pub fn vector_index(&self, base: &Place, index: ValueRepr) -> Result<Place, PlaceFailure> {
++        let evaluated = super::super::place::checked_index(index)?;
++        let len = self.vector_len(base)?;
++        if evaluated >= u64::from(len) {
++            return Err(PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds));
++        }
++        let ordinal = u32::try_from(evaluated).map_err(|_| resource())?;
++        let place = base.projected(Projection::Index(ordinal))?;
++        self.resolve_place_for_use(&place, PlaceUse::Address)?;
++        Ok(place)
++    }
++}
++
++#[cfg(test)]
++mod vector_lease_tests {
++    use super::*;
++    #[test]
++    fn vector_buffer_generation_change_refuses_exact_old_lease() {
++        let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++        let frame = store.new_frame_anchor().unwrap();
++        let source = store
++            .new_cell(
++                StorageContract::Exact(TypeId(6)),
++                true,
++                CellOwner::FrameSlot { frame, slot: 0 },
++            )
++            .unwrap();
++        let ticket = store
++            .ticket(ValueRepr::signed(TypeId(6), 10).unwrap())
++            .unwrap();
++        store.initialize(source, ticket).unwrap();
++        let (ty, guard) = store.begin_vector_construction(TypeId(6), 1).unwrap();
++        store.vector_move_from(guard, 0, source).unwrap();
++        let ticket = store.commit_construction(guard, ty).unwrap();
++        let value = store.peek_ticket(ticket).unwrap();
++        let cell = store
++            .new_cell(
++                StorageContract::Exact(ty),
++                true,
++                CellOwner::FrameSlot { frame, slot: 1 },
++            )
++            .unwrap();
++        store.initialize(cell, ticket).unwrap();
++        let place = store
++            .vector_index(
++                &Place::cell(cell),
++                ValueRepr::unsigned(TypeId(13), 0).unwrap(),
++            )
++            .unwrap();
++        let lease = store.borrow(&place, Access::Shared).unwrap();
++        assert_eq!(store.read_reference(lease).unwrap().payload, 10);
++        // Private stale-epoch control only; growth/reallocation itself is pending.
++        let ObjectStorage::Vector(storage) = &mut store
++            .objects
++            .get_mut(ObjectId::from_bits(value.payload))
++            .unwrap()
++            .storage
++        else {
++            panic!("Vector")
++        };
++        storage.buffer.as_mut().unwrap().generation = 2;
++        assert!(store.read_reference(lease).is_err());
++        let fresh = store.borrow(&place, Access::Shared).unwrap();
++        assert_eq!(store.read_reference(fresh).unwrap().payload, 10);
++    }
++}
+--- a/crates/lrr/src/runtime/object.rs
++++ b/crates/lrr/src/runtime/object.rs
+@@ -31,6 +31,7 @@
+     pub(super) state: ConstructionState,
+     /// Only source-checked nominal admission may fill this immutable plan.
+     pub(super) nominal: Option<(TypeId, u32)>,
++    pub(super) vector: Option<TypeId>,
+     /// The transferred field's exact continuation blocks the next field and
+     /// guard retirement until its owned cleanup ticket has been consumed.
+     pub(super) pending_cleanup: Option<(u32, TicketId, ValueRepr)>,
+@@ -69,6 +70,7 @@
+             completed,
+             state: ConstructionState::Building,
+             nominal: None,
++            vector: None,
+             pending_cleanup: None,
+         })
+     }
+@@ -101,6 +103,7 @@
+     /// Invisible reservation until every field has been installed.
+     Constructing,
+     Aggregate(AggregateStorage),
++    Vector(AggregateStorage),
+ }
+ pub(super) struct AggregateStorage {
+     pub fields: Vec<CellId>,
+@@ -111,6 +114,7 @@
+     /// cannot overtake its exact owner/ticket completion.
+     pub pending_cleanup: Option<(CellId, super::cell::TicketId)>,
+     pub variant: Option<u32>,
++    pub buffer: Option<VectorBuffer>,
+ }
+ /// Run-local field state; never serialized as a host layout or native pointer.
+ /// A set bit means the entire owning child value is initialized, including its
+@@ -206,3 +210,10 @@
+         Ok(())
+     }
+ }
++
++#[derive(Debug, Clone, Copy)]
++pub(super) struct VectorBuffer {
++    pub capacity: u32,
++    pub generation: u32,
++    pub dropping: bool,
++}
+--- a/crates/lrr/src/runtime/place.rs
++++ b/crates/lrr/src/runtime/place.rs
+@@ -111,6 +111,7 @@
+     pub field: u32,
+     pub child: CellId,
+     pub variant: Option<u32>,
++    pub buffer_epoch: Option<u32>,
+ }
+ pub(crate) struct ResolvedPlace {
+     pub root: CellStamp,
+--- a/crates/lrr/src/runtime/reference.rs
++++ b/crates/lrr/src/runtime/reference.rs
+@@ -20,9 +20,15 @@
+     pub(crate) root: CellStamp,
+     pub(crate) enclosing: Vec<EnclosingObject>,
+     pub(crate) final_cell: CellStamp,
++    /// Last exact heap-buffer link; stack ancestry before it is not a buffer lifetime.
++    pub(super) buffer_root: Option<usize>,
+ }
+ impl ReferenceRecord {
+     pub(crate) fn from_place(place: ResolvedPlace, access: Access) -> Self {
++        let buffer_root = place
++            .enclosing
++            .iter()
++            .rposition(|link| link.buffer_epoch.is_some());
+         Self {
+             access,
+             owner: None,
+@@ -30,6 +36,7 @@
+             root: place.root,
+             enclosing: place.enclosing,
+             final_cell: place.target,
++            buffer_root,
+         }
+     }
+     pub(crate) fn owned_bytes(&self) -> Result<usize, Diagnostic> {
+--- a/crates/lrr/src/runtime/shape.rs
++++ b/crates/lrr/src/runtime/shape.rs
+@@ -373,7 +373,7 @@
+                 (
+                     ShapeCategory::Facade,
+                     None,
+-                    if *family == FacadeType::String {
++                    if matches!(family, FacadeType::String | FacadeType::Vec) {
+                         CopyStatus::NotCopy
+                     } else {
+                         CopyStatus::Deferred
+@@ -433,6 +433,9 @@
+             representation_version: 1,
+         });
+         Ok(id)
++    }
++    pub fn is_vector(&self, id: TypeId) -> bool {
++        self.descriptor(id).is_ok_and(|d|matches!(d.key.as_ref(),TypeKey::Facade{family:FacadeType::Vec,args} if args.len()==1))
+     }
+     pub fn intern_string(&mut self) -> Result<TypeId, Diagnostic> {
+         self.intern(TypeKey::Facade {
+--- a/crates/lrr/src/syntax/mod.rs
++++ b/crates/lrr/src/syntax/mod.rs
+@@ -68,3 +68,5 @@
+ pub(crate) mod floating_fixture_hygiene;
+ 
+ pub(crate) mod literal_decode;
++
++pub mod runtime_vec;
+--- /dev/null
++++ b/crates/lrr/src/syntax/runtime_vec.rs
+@@ -0,0 +1,733 @@
++//! Source-owned Vec macro phases. No guest storage, descriptor guesses or cold operand decoding.
++use crate::{
++    core::diagnostic::Diagnostic,
++    expand::scopes::MacroDefinition,
++    facade::macros::RuntimeMacroKind,
++    frontend::runtime_macro_plan::RuntimeIntrinsicPlan,
++    ir::{
++        op::{DecodedLiteral, HintRecipe, LiteralKind, Op, PrimitiveType},
++        pc::{NodeId, PcKey, Phase, SlotId, SlotKind},
++    },
++    source::manifest::BodyKey,
++    syntax::{
++        ast_adapter::range,
++        body_index::{BodyIndex, ExpressionKind, NodeRole},
++        outline::BodyHandle,
++        parse::{ParseKey, ParsedFile},
++        runtime_macro_arguments::VecForm,
++        spans::{BodySpan, SourceRange},
++        thunks::literal_recipe,
++    },
++};
++use ra_ap_syntax::{AstNode, Edition, TextRange, TextSize, ast};
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-RUNTIME-MACRO", message.into())
++}
++fn pending(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-UNSUPPORTED", message.into())
++}
++#[derive(Debug, Clone)]
++pub struct VectorOperand {
++    span: BodySpan,
++    range: SourceRange,
++    value: SlotId,
++    entry: PcKey,
++    transfer: PcKey,
++}
++impl VectorOperand {
++    pub fn span(&self) -> &BodySpan {
++        &self.span
++    }
++    pub fn value(&self) -> SlotId {
++        self.value
++    }
++    pub fn entry(&self) -> &PcKey {
++        &self.entry
++    }
++    pub fn transfer(&self) -> &PcKey {
++        &self.transfer
++    }
++}
++#[derive(Debug)]
++pub struct SourceVectorPlan {
++    source: ParseKey,
++    body: BodyKey,
++    node: NodeId,
++    definition: MacroDefinition,
++    operands: Vec<VectorOperand>,
++    result: SlotId,
++    entry: PcKey,
++    commit: PcKey,
++    literal_element: Option<PrimitiveType>,
++    cfg: crate::core::digest::Digest,
++}
++impl SourceVectorPlan {
++    pub fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
++        std::mem::size_of::<Self>()
++            .checked_add(self.source.profile.semantics.capacity())
++            .and_then(|n| {
++                n.checked_add(
++                    self.operands
++                        .capacity()
++                        .checked_mul(std::mem::size_of::<VectorOperand>())?,
++                )
++            })
++            .filter(|n| *n <= 32 * 1024 * 1024)
++            .ok_or_else(|| {
++                Diagnostic::new(
++                    "LRR-E-METADATA-LIMIT",
++                    "Vec source plan metadata budget".into(),
++                )
++            })
++    }
++    pub fn source(&self) -> &ParseKey {
++        &self.source
++    }
++    pub fn literal_element(&self) -> Option<PrimitiveType> {
++        self.literal_element
++    }
++    pub fn definition(&self) -> &MacroDefinition {
++        &self.definition
++    }
++    pub fn operands(&self) -> &[VectorOperand] {
++        &self.operands
++    }
++    pub fn entry(&self) -> &PcKey {
++        &self.entry
++    }
++    pub fn commit(&self) -> &PcKey {
++        &self.commit
++    }
++    pub fn result(&self) -> SlotId {
++        self.result
++    }
++    pub fn node(&self) -> NodeId {
++        self.node
++    }
++    /// Root must reserve a real macro construction guard and register ordinary cleanup.
++    /// No even value slot is silently repurposed as a guard.
++    pub fn require_guard(&self, index: &BodyIndex, guard: SlotId) -> Result<(), Diagnostic> {
++        if index.profile() != &self.source.profile
++            || crate::core::digest::StableEncode::fingerprint(index.cfg()) != self.cfg
++            || index.body() != &self.body
++            || index.slot_kind(guard)? != SlotKind::Guard
++            || index.constructor_node(guard)?.id != self.node
++        {
++            return Err(fault("Vec guard is not reserved for this exact macro node"));
++        }
++        Ok(())
++    }
++    pub fn transfer(
++        &self,
++        index: &BodyIndex,
++        ordinal: u32,
++    ) -> Result<VectorTransferProof, Diagnostic> {
++        let guard = index
++            .nodes()
++            .get(self.node.0 as usize)
++            .and_then(|n| n.constructor_guard)
++            .ok_or_else(|| fault("Vec transfer guard unreserved"))?;
++        self.require_guard(index, guard)?;
++        let operand = self
++            .operands
++            .get(ordinal as usize)
++            .ok_or_else(|| fault("Vec transfer ordinal absent"))?;
++        Ok(VectorTransferProof {
++            source: self.source.clone(),
++            body: self.body.clone(),
++            cfg: self.cfg,
++            definition: self.definition.clone(),
++            node: self.node,
++            guard,
++            ordinal,
++            value: operand.value,
++            pc: operand.transfer.clone(),
++            span: operand.span.clone(),
++        })
++    }
++    /// Lower exactly one reached phase; no successor is fetched and no later
++    /// operand is decoded. Root supplies current source dependencies and installs
++    /// the matching prepared frame constructor before executing Entry.
++    pub fn phase_recipe(
++        &self,
++        parsed: &ParsedFile,
++        index: &BodyIndex,
++        key: &PcKey,
++        element: PrimitiveType,
++        after: PcKey,
++        dependencies: Vec<crate::ir::recipe::FactDependency>,
++    ) -> Result<crate::ir::recipe::VerifiedRecipe, Diagnostic> {
++        use crate::ir::{
++            recipe::{Origin, RecipeDraft, RecipeExit},
++            validate::verify,
++        };
++        if parsed.key() != self.source || key.body != self.body || key.node != self.node.0 {
++            return Err(fault(
++                "Vec reached phase differs from prepared source/body/node",
++            ));
++        }
++        let guard = index
++            .nodes()
++            .get(self.node.0 as usize)
++            .and_then(|n| n.constructor_guard)
++            .ok_or_else(|| fault("Vec constructor guard absent"))?;
++        self.require_guard(index, guard)?;
++        let (operations, next) = if key == &self.entry {
++            (
++                vec![Op::ConstructStart { guard }],
++                self.operands
++                    .first()
++                    .map(|o| o.entry.clone())
++                    .unwrap_or_else(|| self.commit.clone()),
++            )
++        } else if key == &self.commit {
++            (
++                vec![Op::ConstructFinish {
++                    guard,
++                    destination: self.result,
++                }],
++                after,
++            )
++        } else {
++            let Phase::Operand(phase) = Phase::from_code(key.phase) else {
++                return Err(fault("Vec phase is not admitted"));
++            };
++            let ordinal = u32::from(phase) / 2;
++            let operand = self
++                .operands
++                .get(ordinal as usize)
++                .ok_or_else(|| fault("Vec reached operand absent"))?;
++            if phase % 2 == 0 {
++                if key != &operand.entry {
++                    return Err(fault("Vec operand Entry identity mismatch"));
++                }
++                (
++                    self.lower_scalar_operand(parsed, ordinal, element)?,
++                    operand.transfer.clone(),
++                )
++            } else {
++                if key != &operand.transfer {
++                    return Err(fault("Vec transfer identity mismatch"));
++                }
++                let next = self
++                    .operands
++                    .get(ordinal as usize + 1)
++                    .map(|o| o.entry.clone())
++                    .unwrap_or_else(|| self.commit.clone());
++                (
++                    vec![Op::VecConstructField {
++                        transfer: Box::new(self.transfer(index, ordinal)?),
++                    }],
++                    next,
++                )
++            }
++        };
++        verify(
++            crate::frontend::thunks::with_temporary_scope_entry(
++                index,
++                RecipeDraft {
++                    key: key.clone(),
++                    origin: Origin {
++                        span: index.span(self.node)?,
++                        expansion_ancestry: vec![],
++                    },
++                    operations,
++                    exits: vec![RecipeExit::Next(next)],
++                    dependencies,
++                },
++            )?,
++            index,
++        )
++    }
++    /// Only this reached field is parsed/decoded. General expression fragments
++    /// require the existing source/expansion continuation integration, not replay.
++    pub fn lower_scalar_operand(
++        &self,
++        parsed: &ParsedFile,
++        ordinal: u32,
++        element: PrimitiveType,
++    ) -> Result<Vec<Op>, Diagnostic> {
++        if parsed.key() != self.source {
++            return Err(fault("Vec operand source/profile is stale"));
++        }
++        crate::runtime::shape::PrimitiveIdentity::from_recipe(element)?;
++        let operand = self
++            .operands
++            .get(usize::try_from(ordinal).map_err(|_| fault("Vec operand ordinal overflow"))?)
++            .ok_or_else(|| fault("Vec reached operand absent"))?;
++        let tree = parsed.parsed.tree();
++        let text = tree
++            .syntax()
++            .text()
++            .slice(TextRange::new(
++                TextSize::from(operand.range.start),
++                TextSize::from(operand.range.end),
++            ))
++            .to_string();
++        let prefix = "fn __lrr_vec_operand(){let __value=";
++        let mut wrapped = String::new();
++        let bytes = prefix
++            .len()
++            .checked_add(text.len())
++            .and_then(|n| n.checked_add(2))
++            .ok_or_else(|| fault("Vec operand wrapper size overflow"))?;
++        wrapped
++            .try_reserve_exact(bytes)
++            .map_err(|_| fault("Vec operand wrapper allocation"))?;
++        wrapped.push_str(prefix);
++        wrapped.push_str(&text);
++        wrapped.push_str(";}");
++        let edition = match parsed.edition {
++            2015 => Edition::Edition2015,
++            2018 => Edition::Edition2018,
++            2021 => Edition::Edition2021,
++            2024 => Edition::Edition2024,
++            _ => return Err(fault("Vec operand edition unsupported")),
++        };
++        let syntax = ast::SourceFile::parse(&wrapped, edition);
++        if !syntax.errors().is_empty() {
++            return Err(fault("Vec operand syntax differs from captured source"));
++        }
++        let mut expression = syntax
++            .tree()
++            .syntax()
++            .descendants()
++            .find_map(ast::LetStmt::cast)
++            .and_then(|s| s.initializer())
++            .ok_or_else(|| fault("Vec operand wrapper initializer absent"))?;
++        let mut depth = 0usize;
++        while let ast::Expr::ParenExpr(p) = &expression {
++            depth += 1;
++            if depth >= 128 {
++                return Err(fault("Vec operand grouping limit"));
++            }
++            if expression
++                .syntax()
++                .children()
++                .any(|n| ast::Attr::can_cast(n.kind()))
++            {
++                return Err(pending(
++                    "Vec attributed operand awaits expansion continuation",
++                ));
++            }
++            expression = p
++                .expr()
++                .ok_or_else(|| fault("Vec operand group missing expression"))?;
++        }
++        let lexical_range = expression.syntax().text_range();
++        let lexical_spelling = expression.syntax().text().to_string();
++        let base = operand.span.relative_start;
++        let map = |offset: TextSize| {
++            u32::from(offset)
++                .checked_sub(
++                    u32::try_from(prefix.len())
++                        .map_err(|_| fault("Vec operand prefix overflow"))?,
++                )
++                .and_then(|n| base.checked_add(n))
++                .ok_or_else(|| fault("Vec literal origin overflow"))
++        };
++        let literal_span = BodySpan {
++            body_key: self.body.clone(),
++            relative_start: map(lexical_range.start())?,
++            relative_end: map(lexical_range.end())?,
++        };
++        let mut negative = false;
++        if let ast::Expr::PrefixExpr(p) = &expression {
++            if p.op_kind() != Some(ast::UnaryOp::Neg) {
++                return Err(pending(
++                    "Vec unary operand awaits general expression continuation",
++                ));
++            }
++            negative = true;
++            expression = p
++                .expr()
++                .ok_or_else(|| fault("Vec negated operand missing literal"))?;
++        }
++        if expression
++            .syntax()
++            .children()
++            .any(|n| ast::Attr::can_cast(n.kind()))
++        {
++            return Err(pending(
++                "Vec attributed operand awaits expansion continuation",
++            ));
++        }
++        if let ast::Expr::TupleExpr(t) = &expression
++            && t.fields().next().is_none()
++            && !negative
++        {
++            if element != PrimitiveType::Unit {
++                return Err(fault(
++                    "Vec unit operand conflicts with concrete element context",
++                ));
++            }
++            return Ok(vec![Op::Unit {
++                destination: operand.value,
++            }]);
++        }
++        let ast::Expr::Literal(literal) = expression else {
++            return Err(pending(
++                "Vec non-literal operand awaits source-owned expression continuation",
++            ));
++        };
++        if !matches!(
++            literal.kind(),
++            ast::LiteralKind::IntNumber(_)
++                | ast::LiteralKind::FloatNumber(_)
++                | ast::LiteralKind::Bool(_)
++                | ast::LiteralKind::Char(_)
++                | ast::LiteralKind::Byte(_)
++        ) {
++            return Err(pending(
++                "Vec owning/borrowed element awaits source/drop integration",
++            ));
++        }
++        let mut recipe = literal_recipe(&literal, literal_span)?;
++        // The whole original operand span is retained; the wrapper never creates a body.
++        recipe.spelling = lexical_spelling;
++        if negative {
++            if recipe.kind != LiteralKind::Integer {
++                return Err(pending(
++                    "Vec folded negation requires an integer literal in this slice",
++                ));
++            }
++            let Some(
++                DecodedLiteral::Integer { negative: flag, .. }
++                | DecodedLiteral::InvalidInteger { negative: flag, .. },
++            ) = recipe.decoded.as_mut()
++            else {
++                return Err(fault("Vec integer decoding unavailable"));
++            };
++            *flag = true;
++        }
++        Ok(vec![Op::Literal {
++            literal: recipe,
++            hint: HintRecipe::Primitive(element),
++            destination: operand.value,
++        }])
++    }
++}
++pub fn prepare_vector_structure(
++    parsed: &ParsedFile,
++    intrinsic: &RuntimeIntrinsicPlan,
++    handle: &BodyHandle,
++    index: &BodyIndex,
++) -> Result<SourceVectorPlan, Diagnostic> {
++    intrinsic.arguments().require_source(&parsed.key())?;
++    handle.require_entry()?;
++    if intrinsic.arguments().kind() != RuntimeMacroKind::Vec {
++        return Err(fault(
++            "Vec phase plan requires selected compiler Vec definition",
++        ));
++    }
++    if parsed.generated_origin.is_some() {
++        return Err(pending(
++            "generated Vec phase plan requires token-origin continuation",
++        ));
++    }
++    if handle.key() != *index.body() {
++        return Err(fault("Vec phase body identity differs"));
++    }
++    match intrinsic.arguments().vec_form() {
++        Some(VecForm::Empty | VecForm::List) => {}
++        Some(VecForm::Repeat) => {
++            return Err(pending(
++                "Vec repeat requires selected Clone and zero-length initializer/drop continuation",
++            ));
++        }
++        None => return Err(fault("Vec source form is absent")),
++    }
++    let invocation = intrinsic.invocation().range();
++    let node = index
++        .nodes()
++        .iter()
++        .find(|n| {
++            n.role == NodeRole::Expression(ExpressionKind::Macro)
++                && n.range.start.checked_add(handle.range.start) == Some(invocation.start)
++                && n.range.end.checked_add(handle.range.start) == Some(invocation.end)
++        })
++        .ok_or_else(|| fault("Vec source range is not this exact entered macro"))?;
++    if !handle.range.contains(invocation) {
++        return Err(fault("Vec invocation escapes body"));
++    }
++    intrinsic
++        .arguments()
++        .operands()
++        .len()
++        .checked_mul(std::mem::size_of::<VectorOperand>())
++        .and_then(|n| n.checked_add(std::mem::size_of::<SourceVectorPlan>()))
++        .filter(|n| *n <= 32 * 1024 * 1024)
++        .ok_or_else(|| {
++            Diagnostic::new(
++                "LRR-E-METADATA-LIMIT",
++                "Vec source operand metadata budget".into(),
++            )
++        })?;
++    let mut operands = Vec::new();
++    operands
++        .try_reserve_exact(intrinsic.arguments().operands().len())
++        .map_err(|_| fault("Vec operand plan allocation"))?;
++    for (ordinal, r) in intrinsic.arguments().operands().iter().enumerate() {
++        if !invocation.contains(*r) {
++            return Err(fault("Vec operand escapes invocation"));
++        }
++        let value = *node
++            .runtime_scalar_slots
++            .get(ordinal)
++            .ok_or_else(|| fault("Vec scalar reservation is exhausted"))?;
++        if index.slot_kind(value)? != SlotKind::Value {
++            return Err(fault("Vec operand reservation is not a value"));
++        }
++        let phase = u16::try_from(ordinal)
++            .ok()
++            .and_then(|n| n.checked_mul(2))
++            .ok_or_else(|| fault("Vec operand phase overflow"))?;
++        if u32::from(node.runtime_scalar_phases) < u32::from(phase) + 2 {
++            return Err(fault(
++                "Vec operand phases exceed original structural reservation",
++            ));
++        }
++        operands.push(VectorOperand {
++            span: BodySpan {
++                body_key: index.body().clone(),
++                relative_start: r
++                    .start
++                    .checked_sub(handle.range.start)
++                    .ok_or_else(|| fault("Vec operand origin overflow"))?,
++                relative_end: r
++                    .end
++                    .checked_sub(handle.range.start)
++                    .ok_or_else(|| fault("Vec operand origin overflow"))?,
++            },
++            range: *r,
++            value,
++            entry: index.pc(node.id, Phase::Operand(phase))?,
++            transfer: index.pc(
++                node.id,
++                Phase::Operand(
++                    phase
++                        .checked_add(1)
++                        .ok_or_else(|| fault("Vec operand phase overflow"))?,
++                ),
++            )?,
++        });
++    }
++    let plan = SourceVectorPlan {
++        source: parsed.key(),
++        body: index.body().clone(),
++        node: node.id,
++        definition: intrinsic.definition().clone(),
++        operands,
++        result: node.value.ok_or_else(|| fault("Vec result value absent"))?,
++        entry: index.pc(node.id, Phase::Entry)?,
++        commit: index.pc(node.id, Phase::Commit)?,
++        literal_element: literal_element_context(parsed, intrinsic.arguments().operands())?,
++        cfg: crate::core::digest::StableEncode::fingerprint(index.cfg()),
++    };
++    plan.metadata_bytes()?;
++    Ok(plan)
++}
++
++// Type-only lexical constraint: suffix/primitive kind, never numeric conversion,
++// name lookup, const evaluation or a callee body query. Unknown shapes need a root source view.
++fn literal_element_context(
++    parsed: &ParsedFile,
++    ranges: &[SourceRange],
++) -> Result<Option<PrimitiveType>, Diagnostic> {
++    let mut category: Option<u8> = None;
++    let mut suffix = None;
++    for r in ranges {
++        let source = parsed
++            .parsed
++            .tree()
++            .syntax()
++            .text()
++            .slice(TextRange::new(
++                TextSize::from(r.start),
++                TextSize::from(r.end),
++            ))
++            .to_string();
++        let wrapped = format!("fn __lrr_vec_type(){{let __x={source};}}");
++        let edition = match parsed.edition {
++            2015 => Edition::Edition2015,
++            2018 => Edition::Edition2018,
++            2021 => Edition::Edition2021,
++            2024 => Edition::Edition2024,
++            _ => return Err(fault("Vec context edition unsupported")),
++        };
++        let ast = ast::SourceFile::parse(&wrapped, edition);
++        if !ast.errors().is_empty() {
++            return Err(fault("Vec context syntax differs"));
++        }
++        let Some(mut expression) = ast
++            .tree()
++            .syntax()
++            .descendants()
++            .find_map(ast::LetStmt::cast)
++            .and_then(|s| s.initializer())
++        else {
++            return Err(fault("Vec type wrapper lacks initializer"));
++        };
++        let mut depth = 0;
++        loop {
++            depth += 1;
++            if depth > 128 {
++                return Err(fault("Vec type grouping limit"));
++            }
++            if expression
++                .syntax()
++                .children()
++                .any(|n| ast::Attr::can_cast(n.kind()))
++            {
++                return Ok(None);
++            }
++            match expression {
++                ast::Expr::ParenExpr(p) => {
++                    expression = p.expr().ok_or_else(|| fault("Vec type group absent"))?
++                }
++                ast::Expr::PrefixExpr(p) if p.op_kind() == Some(ast::UnaryOp::Neg) => {
++                    expression = p.expr().ok_or_else(|| fault("Vec type prefix absent"))?
++                }
++                _ => break,
++            }
++        }
++        use PrimitiveType as P;
++        let (kind, ty) = match expression {
++            ast::Expr::TupleExpr(t) if t.fields().next().is_none() => (5, Some(P::Unit)),
++            ast::Expr::Literal(l) => match l.kind() {
++                ast::LiteralKind::IntNumber(n) => {
++                    let ty = match n.suffix() {
++                        None => None,
++                        Some("i8") => Some(P::I8),
++                        Some("i16") => Some(P::I16),
++                        Some("i32") => Some(P::I32),
++                        Some("i64") => Some(P::I64),
++                        Some("isize") => Some(P::Isize),
++                        Some("u8") => Some(P::U8),
++                        Some("u16") => Some(P::U16),
++                        Some("u32") => Some(P::U32),
++                        Some("u64") => Some(P::U64),
++                        Some("usize") => Some(P::Usize),
++                        _ => return Ok(None),
++                    };
++                    (0, ty)
++                }
++                ast::LiteralKind::FloatNumber(n) => (
++                    1,
++                    match n.suffix() {
++                        None => None,
++                        Some("f32") => Some(P::F32),
++                        Some("f64") => Some(P::F64),
++                        _ => return Ok(None),
++                    },
++                ),
++                ast::LiteralKind::Bool(_) => (2, Some(P::Bool)),
++                ast::LiteralKind::Char(_) => (3, Some(P::Char)),
++                ast::LiteralKind::Byte(_) => (4, Some(P::U8)),
++                _ => return Ok(None),
++            },
++            _ => return Ok(None),
++        };
++        if category.is_some_and(|old| old != kind)
++            || suffix.is_some_and(|old| ty.is_some_and(|t| t != old))
++        {
++            return Ok(None);
++        }
++        category = Some(kind);
++        if ty.is_some() {
++            suffix = ty;
++        }
++    }
++    Ok(suffix.or(match category {
++        Some(0) => Some(PrimitiveType::I32),
++        Some(1) => Some(PrimitiveType::F64),
++        _ => None,
++    }))
++}
++
++/// Exact private source descriptor for a macro-token operand, not an arbitrary
++/// relaxation of the ordinary constructor's indexed-child rule.
++#[derive(Debug, Clone, Eq, PartialEq)]
++pub struct VectorTransferProof {
++    source: ParseKey,
++    body: BodyKey,
++    cfg: crate::core::digest::Digest,
++    definition: MacroDefinition,
++    node: NodeId,
++    guard: SlotId,
++    ordinal: u32,
++    value: SlotId,
++    pc: PcKey,
++    span: BodySpan,
++}
++impl VectorTransferProof {
++    pub fn guard(&self) -> SlotId {
++        self.guard
++    }
++    pub fn ordinal(&self) -> u32 {
++        self.ordinal
++    }
++    pub fn value(&self) -> SlotId {
++        self.value
++    }
++    pub(crate) fn allocated_bytes(&self) -> Option<usize> {
++        std::mem::size_of::<Self>().checked_add(self.source.profile.semantics.capacity())
++    }
++    pub(crate) fn matches(
++        &self,
++        index: &BodyIndex,
++        draft: &crate::ir::recipe::RecipeDraft,
++    ) -> Result<bool, Diagnostic> {
++        if index.body() != &self.body
++            || draft.key != self.pc
++            || self.source.profile != *index.profile()
++            || crate::core::digest::StableEncode::fingerprint(index.cfg()) != self.cfg
++            || draft.origin.span != index.span(self.node)?
++        {
++            return Ok(false);
++        }
++        let Some(node) = index.nodes().get(self.node.0 as usize) else {
++            return Ok(false);
++        };
++        let expected_phase = self
++            .ordinal
++            .checked_mul(2)
++            .and_then(|n| n.checked_add(1))
++            .and_then(|n| u16::try_from(n).ok())
++            .and_then(|n| Phase::Operand(n).code().ok());
++        if node.role != NodeRole::Expression(ExpressionKind::Macro)
++            || node.constructor_guard != Some(self.guard)
++            || node.runtime_scalar_slots.get(self.ordinal as usize) != Some(&self.value)
++            || expected_phase != Some(draft.key.phase)
++            || self.span.body_key != self.body
++            || self.span.relative_start < node.range.start
++            || self.span.relative_end > node.range.end
++        {
++            return Ok(false);
++        }
++        let catalog =
++            crate::frontend::runtime_macro_catalog::RuntimeMacroCatalog::standard_for_definition(
++                index.profile(),
++                &self.definition,
++            )?;
++        Ok(catalog.select(&self.definition)? == Some(RuntimeMacroKind::Vec))
++    }
++}
++impl crate::core::digest::StableEncode for VectorTransferProof {
++    const DOMAIN: &'static str = "lrr/v1/source-vec-field-transfer";
++    fn encode_fields(&self, e: &mut crate::core::digest::StableEncoder) {
++        e.record(&self.source);
++        e.record(&self.body);
++        e.digest(self.cfg);
++        e.digest(self.definition.identity);
++        e.digest(self.definition.defining_unit);
++        e.u16(self.definition.definition_edition);
++        e.u32(self.node.0);
++        e.u32(self.guard.0);
++        e.u32(self.ordinal);
++        e.u32(self.value.0);
++        e.record(&self.pc);
++        e.u32(self.span.relative_start);
++        e.u32(self.span.relative_end);
++    }
++}
+--- a/crates/lrr/src/vm/mod.rs
++++ b/crates/lrr/src/vm/mod.rs
+@@ -14,3 +14,5 @@
+ pub mod pattern;
+ 
+ pub mod cleanup;
++
++pub mod vector;
+--- /dev/null
++++ b/crates/lrr/src/vm/vector.rs
+@@ -0,0 +1,128 @@
++//! One-transition Vec construction helper. Integration uses the same opcode fuel admission.
++use crate::{
++    core::diagnostic::Diagnostic,
++    runtime::{
++        cell::{CellId, ConstructionCleanupTransfer, ConstructionId, GuestStore, TicketId},
++        shape::TypeId,
++    },
++    vm::fuel::RunFuel,
++};
++#[derive(Debug)]
++pub struct VectorConstruction {
++    guard: ConstructionId,
++    ty: TypeId,
++    next: u32,
++    count: u32,
++    done: bool,
++}
++fn invalid() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-OWNERSHIP",
++        "Vec construction continuation differs".into(),
++    )
++}
++impl VectorConstruction {
++    pub fn begin(
++        store: &mut GuestStore,
++        fuel: &mut RunFuel,
++        element: TypeId,
++        count: u32,
++    ) -> Result<Self, Diagnostic> {
++        store.preflight_vector_construction(element, count)?;
++        fuel.charge()?;
++        Self::begin_admitted(store, element, count)
++    }
++    /// Called only after the authoritative step loop charged ConstructStart once.
++    pub(crate) fn begin_admitted(
++        store: &mut GuestStore,
++        element: TypeId,
++        count: u32,
++    ) -> Result<Self, Diagnostic> {
++        let (ty, guard) = store.begin_vector_construction(element, count)?;
++        Ok(Self {
++            guard,
++            ty,
++            next: 0,
++            count,
++            done: false,
++        })
++    }
++    pub fn push(
++        &mut self,
++        store: &mut GuestStore,
++        fuel: &mut RunFuel,
++        source: CellId,
++    ) -> Result<(), Diagnostic> {
++        if self.done || self.next >= self.count {
++            return Err(invalid());
++        }
++        store.preflight_vector_source(self.guard, self.next, source)?;
++        fuel.charge()?;
++        self.push_admitted(store, source)
++    }
++    pub(crate) fn push_admitted(
++        &mut self,
++        store: &mut GuestStore,
++        source: CellId,
++    ) -> Result<(), Diagnostic> {
++        if self.done || self.next >= self.count {
++            return Err(invalid());
++        }
++        let next = self.next.checked_add(1).ok_or_else(invalid)?;
++        store.vector_move_from(self.guard, self.next, source)?;
++        self.next = next;
++        Ok(())
++    }
++    pub fn finish(
++        &mut self,
++        store: &mut GuestStore,
++        fuel: &mut RunFuel,
++    ) -> Result<TicketId, Diagnostic> {
++        if self.done || self.next != self.count {
++            return Err(invalid());
++        }
++        store.preflight_vector_finish(self.guard, self.ty)?;
++        fuel.charge()?;
++        self.finish_admitted(store)
++    }
++    pub(crate) fn finish_admitted(
++        &mut self,
++        store: &mut GuestStore,
++    ) -> Result<TicketId, Diagnostic> {
++        if self.done || self.next != self.count {
++            return Err(invalid());
++        }
++        store.preflight_vector_finish(self.guard, self.ty)?;
++        let ticket = store.commit_construction(self.guard, self.ty)?;
++        self.done = true;
++        Ok(ticket)
++    }
++    /// Kernel convenience for admitted scalar-only guards. The frame must retain
++    /// this guard in ordinary cleanup; cancellation does not discard its owners.
++    /// This executes one existing cleanup transition, never an uninterruptible loop.
++    pub fn cleanup_scalar_step(
++        &mut self,
++        store: &mut GuestStore,
++    ) -> Result<Option<u32>, Diagnostic> {
++        if self.done {
++            return Err(invalid());
++        }
++        match store.construction_cleanup_transfer(self.guard)? {
++            ConstructionCleanupTransfer::Field { ordinal, ticket } => {
++                store.discard(ticket)?;
++                store.finish_construction_cleanup_field(self.guard, ordinal, ticket)?;
++                Ok(Some(ordinal))
++            }
++            ConstructionCleanupTransfer::Complete => {
++                self.done = true;
++                Ok(None)
++            }
++        }
++    }
++    pub fn guard(&self) -> ConstructionId {
++        self.guard
++    }
++    pub fn result_type(&self) -> TypeId {
++        self.ty
++    }
++}
+--- a/crates/lrr/src/frontend/primitive_float_recipe_tests.rs
++++ b/crates/lrr/src/frontend/primitive_float_recipe_tests.rs
+@@ -110,7 +110,7 @@
+         assert_eq!(constant.edition(), edition);
+         assert_eq!(constant.hygiene_context(), locals.context());
+         assert_eq!(constant.opcode_tag(), 41);
+-        assert_eq!(OPCODE_COUNT, 42);
++        assert_eq!(OPCODE_COUNT, 43);
+         let RecipeExit::Next(next) = &recipe.exit else {
+             panic!("missing structural next")
+         };
+--- a/crates/lrr/src/ir/op.rs
++++ b/crates/lrr/src/ir/op.rs
+@@ -102,7 +102,7 @@
+     }
+ }
+ /// Explicit recipe/cache compatibility, independent of host enum layout.
+-pub const LRIR_RECIPE_SCHEMA: u32 = 5;
++pub const LRIR_RECIPE_SCHEMA: u32 = 6;
+ pub const DECODED_INTEGER_SCHEMA: u32 = 1;
+ #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+ pub enum IntegerLexicalError {
+@@ -216,7 +216,7 @@
+     Mutable,
+ }
+ /// Stable opcode inventory. Runtime counter storage must use this bound.
+-pub const OPCODE_COUNT: usize = 42;
++pub const OPCODE_COUNT: usize = 43;
+ pub type OpcodeCounters = [u64; OPCODE_COUNT];
+ 
+ /// Closed source-bound floating value. Public callers can inspect or clone a
+@@ -447,6 +447,9 @@
+     ConstructFinish {
+         guard: SlotId,
+         destination: SlotId,
++    },
++    VecConstructField {
++        transfer: Box<crate::syntax::runtime_vec::VectorTransferProof>,
+     },
+     /// Conditional guest panic after the frontend has evaluated a boolean operand.
+     Assert {
+@@ -616,6 +619,7 @@
+             Self::Assert { .. } => 26,
+             Self::ConstructStart { .. } => 27,
+             Self::ConstructField { .. } => 28,
++            Self::VecConstructField { .. } => 42,
+             Self::ConstructFinish { .. } => 29,
+         }
+     }
+@@ -659,6 +663,7 @@
+             | Self::CallPrepare { .. }
+             | Self::ConstructStart { .. }
+             | Self::ConstructField { .. }
++            | Self::VecConstructField { .. }
+             | Self::ConstructFinish { .. }
+             | Self::CallAdvance { .. }
+             | Self::ReadParameter { .. }
+--- a/crates/lrr/src/ir/recipe.rs
++++ b/crates/lrr/src/ir/recipe.rs
+@@ -129,7 +129,7 @@
+     }
+ }
+ impl StableEncode for Recipe {
+-    const DOMAIN: &'static str = "lrr/v5/lrir-recipe";
++    const DOMAIN: &'static str = "lrr/v6/lrir-recipe";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         e.record(&self.key);
+         span(e, &self.origin.span);
+@@ -233,6 +233,10 @@
+                 e.u32(guard.0);
+                 e.u32(*field);
+                 e.u32(source.0);
++            }
++            Op::VecConstructField { transfer } => {
++                e.u32(42);
++                e.record(transfer.as_ref());
+             }
+             Op::ConstructFinish { guard, destination } => {
+                 e.u32(29);
+--- a/crates/lrr/src/ir/validate.rs
++++ b/crates/lrr/src/ir/validate.rs
+@@ -415,6 +415,22 @@
+                 if node.constructor_guard != Some(*guard) || *field >= 100_000 || !operand_matches {
+                     return Err(invalid("constructor field guard/source identity mismatch"));
+                 }
++                None
++            }
++            Op::VecConstructField { transfer } => {
++                slot(body, transfer.guard(), SlotKind::Guard)?;
++                slot(body, transfer.value(), SlotKind::Value)?;
++                if !transfer.matches(body, &draft)? {
++                    return Err(invalid(
++                        "Vec field private source/guard/ordinal identity mismatch",
++                    ));
++                }
++                charge(
++                    &mut bytes,
++                    transfer
++                        .allocated_bytes()
++                        .ok_or_else(|| invalid("Vec transfer metadata overflow"))?,
++                )?;
+                 None
+             }
+             Op::ConstructFinish { guard, destination } => {
+--- a/crates/lrr/src/syntax/body_index.rs
++++ b/crates/lrr/src/syntax/body_index.rs
+@@ -285,8 +285,10 @@
+         })
+     }
+ }
++/// New macro guard reservations require a structural producer cache miss.
++pub const BODY_STRUCTURE_SCHEMA: u32 = 3;
+ impl StableEncode for BodyIndex {
+-    const DOMAIN: &'static str = "lrr/v2/original-body-structure";
++    const DOMAIN: &'static str = "lrr/v3/original-body-structure";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         e.record(&self.body);
+         e.record(&self.profile);
+@@ -1088,7 +1090,10 @@
+             let constructor_guard = if expr.as_ref().is_some_and(|expr| {
+                 matches!(
+                     expr,
+-                    ast::Expr::TupleExpr(_) | ast::Expr::ArrayExpr(_) | ast::Expr::RecordExpr(_)
++                    ast::Expr::TupleExpr(_)
++                        | ast::Expr::ArrayExpr(_)
++                        | ast::Expr::RecordExpr(_)
++                        | ast::Expr::MacroExpr(_)
+                 )
+             }) {
+                 // Keep the established value/place parity for every other slot.
+--- a/crates/lrr/src/vm/frame.rs
++++ b/crates/lrr/src/vm/frame.rs
+@@ -142,6 +142,10 @@
+ }
+ enum ConstructorBinding {
+     Structural(TypeId),
++    Vector {
++        element: TypeId,
++        count: u32,
++    },
+     Observed {
+         kind: crate::runtime::object::StructuralConstructionKind,
+         fields: usize,
+@@ -2157,6 +2161,87 @@
+         }
+         Ok(())
+     }
++    /// Source plan is private/exact; the concrete element comes from a root source
++    /// view or this plan's closed literal-only default. No descriptor-based inference.
++    pub fn prepare_vector_constructor(
++        &mut self,
++        plan: &crate::syntax::runtime_vec::SourceVectorPlan,
++        element: crate::ir::op::PrimitiveType,
++        store: &GuestStore,
++    ) -> Result<(), Diagnostic> {
++        if plan.entry() != &self.pc
++            || plan.source().profile != *self.body.profile()
++            || self.constructor_start.is_some()
++        {
++            return Err(invalid(
++                "Vec preparation differs from exact source/profile/Entry",
++            ));
++        }
++        let node = self
++            .body
++            .nodes()
++            .get(plan.node().0 as usize)
++            .ok_or_else(|| invalid("Vec macro node absent"))?;
++        let guard = node
++            .constructor_guard
++            .ok_or_else(|| invalid("Vec macro guard unreserved"))?;
++        plan.require_guard(&self.body, guard)?;
++        self.preflight_constructor_start(guard)?;
++        if self.source_view(plan.result())?.is_some() {
++            return Err(Diagnostic::new(
++                "LRR-E-GENERIC-BINDING",
++                "Vec result source view requires normalized facade type integration".into(),
++            ));
++        }
++        let element = crate::runtime::shape::PrimitiveIdentity::from_recipe(element)?.id();
++        if let Some(expected) = self.hint(plan.result())? {
++            if !matches!(store.type_descriptor(expected)?.key.as_ref(),crate::runtime::shape::TypeKey::Facade{family:crate::runtime::shape::FacadeType::Vec,args} if args.as_ref()==[element])
++            {
++                return Err(invalid("Vec result concrete context differs"));
++            }
++        } else if plan
++            .literal_element()
++            .and_then(|p| crate::runtime::shape::PrimitiveIdentity::from_recipe(p).ok())
++            .map(|p| p.id())
++            != Some(element)
++        {
++            return Err(Diagnostic::new(
++                "LRR-E-TYPE-CONTEXT",
++                "Vec requires an exact source element context or closed literal default".into(),
++            ));
++        }
++        let count =
++            u32::try_from(plan.operands().len()).map_err(|_| crate::runtime::arena::resource())?;
++        store.preflight_vector_construction(element, count)?;
++        let mut hints = Vec::new();
++        hints
++            .try_reserve_exact(plan.operands().len())
++            .map_err(|_| crate::runtime::arena::resource())?;
++        for operand in plan.operands() {
++            hints.push((operand.value(), element));
++        }
++        self.admit_constructor_hints(&hints, 0)?;
++        self.constructor_start = Some(PreparedConstructor {
++            pc: self.pc.clone(),
++            guard,
++            binding: ConstructorBinding::Vector { element, count },
++            hints,
++        });
++        Ok(())
++    }
++    pub(crate) fn preflight_vector_prepared_constructor(
++        &self,
++        guard: SlotId,
++        store: &GuestStore,
++    ) -> Result<(), Diagnostic> {
++        if let Some(facts) = &self.constructor_start
++            && facts.guard == guard
++            && let ConstructorBinding::Vector { element, count } = facts.binding
++        {
++            store.preflight_vector_construction(element, count)?;
++        }
++        Ok(())
++    }
+     pub(crate) fn preflight_prepared_constructor(&self, guard: SlotId) -> Result<(), Diagnostic> {
+         self.preflight_constructor_start(guard)?;
+         if self
+@@ -2202,11 +2287,21 @@
+         store: &mut GuestStore,
+     ) -> Result<(), Diagnostic> {
+         self.preflight_prepared_constructor(guard)?;
++        self.preflight_vector_prepared_constructor(guard, store)?;
+         let facts = self
+             .constructor_start
+             .take()
+             .ok_or_else(|| invalid("constructor facts absent"))?;
+         match facts.binding {
++            ConstructorBinding::Vector { element, count } => {
++                let (ty, owned) = store.begin_vector_construction(element, count)?;
++                self.slots[guard.0 as usize].construction = Some(ActiveConstruction {
++                    guard: owned,
++                    result: ConstructionResult::Bound(ty),
++                    cleaning: false,
++                    mapping: None,
++                });
++            }
+             ConstructorBinding::Structural(ty) => {
+                 self.begin_structural_constructor(guard, ty, store)?
+             }
+@@ -2345,11 +2440,23 @@
+             .clone()
+             .filter(|active| !active.cleaning)
+             .ok_or_else(|| invalid("building construction guard absent"))?;
+-        store.construction_move_from(
+-            active.guard,
+-            active.storage_field(field)?,
+-            self.cell(source)?,
+-        )?;
++        if let ConstructionResult::Bound(ty) = active.result
++            && matches!(
++                store.type_descriptor(ty)?.key.as_ref(),
++                crate::runtime::shape::TypeKey::Facade {
++                    family: crate::runtime::shape::FacadeType::Vec,
++                    ..
++                }
++            )
++        {
++            store.vector_move_from(active.guard, field, self.cell(source)?)?;
++        } else {
++            store.construction_move_from(
++                active.guard,
++                active.storage_field(field)?,
++                self.cell(source)?,
++            )?;
++        }
+         self.set_source_view(source, None)
+     }
+     pub(crate) fn preflight_constructor_field(
+@@ -2373,6 +2480,23 @@
+                 "LRR-E-GENERIC-BINDING",
+                 "rigid field source requires a matching constructor binding".into(),
+             ));
++        }
++        if let ConstructionResult::Bound(ty) = active.result
++            && matches!(
++                store.type_descriptor(ty)?.key.as_ref(),
++                crate::runtime::shape::TypeKey::Facade {
++                    family: crate::runtime::shape::FacadeType::Vec,
++                    ..
++                }
++            )
++        {
++            if self
++                .source_view(source)?
++                .is_some_and(|s| !matches!(s, crate::traits::term::TyTerm::Primitive(_)))
++            {
++                return Err(invalid("Vec field source is not a concrete primitive"));
++            }
++            return store.preflight_vector_source(active.guard, field, self.cell(source)?);
+         }
+         store.admit_construction_move(
+             active.guard,
+@@ -2443,6 +2567,15 @@
+                     store.type_descriptor(ty)?.key.as_ref()
+                 {
+                     self.require_nominal_result_source(id, definition.fingerprint(), false)?;
++                }
++                if matches!(
++                    store.type_descriptor(ty)?.key.as_ref(),
++                    crate::runtime::shape::TypeKey::Facade {
++                        family: crate::runtime::shape::FacadeType::Vec,
++                        ..
++                    }
++                ) {
++                    store.preflight_vector_finish(active.guard, ty)?;
+                 }
+                 self.preflight_write_type(destination, ty, store)?;
+                 if let Some(cell) = self.slot(destination)?.cell {
+--- a/crates/lrr/src/vm/step.rs
++++ b/crates/lrr/src/vm/step.rs
+@@ -478,12 +478,21 @@
+             binding,
+             destination,
+         } => frame.preflight_make_place(*binding, *destination, store),
+-        Op::ConstructStart { guard } => frame.preflight_prepared_constructor(*guard),
++        Op::ConstructStart { guard } => {
++            frame.preflight_prepared_constructor(*guard)?;
++            frame.preflight_vector_prepared_constructor(*guard, store)
++        }
+         Op::ConstructField {
+             guard,
+             field,
+             source,
+         } => frame.preflight_constructor_field(*guard, *field, *source, store),
++        Op::VecConstructField { transfer } => frame.preflight_constructor_field(
++            transfer.guard(),
++            transfer.ordinal(),
++            transfer.value(),
++            store,
++        ),
+         Op::ConstructFinish { guard, destination } => {
+             frame.preflight_constructor_finish(*guard, *destination, store)
+         }
+@@ -863,6 +872,12 @@
+             field,
+             source,
+         } => frame.constructor_field(*guard, *field, *source, store),
++        Op::VecConstructField { transfer } => frame.constructor_field(
++            transfer.guard(),
++            transfer.ordinal(),
++            transfer.value(),
++            store,
++        ),
+         Op::ConstructFinish { guard, destination } => {
+             frame.finish_constructor(*guard, *destination, store)
+         }
+--- /dev/null
++++ b/xtask/tests/vector_source_phases.rs
+@@ -0,0 +1,221 @@
++use lrr::{
++    core::{digest::Digest, profile::ProfileIdentity},
++    facade::macros::RuntimeMacroKind,
++    frontend::{
++        macro_names::PathLookup,
++        runtime_macro_catalog::RuntimeMacroCatalog,
++        runtime_macro_plan::{RuntimeMacroPreparation, prepare_runtime_macro},
++    },
++    ir::{
++        op::{DecodedLiteral, Op, PrimitiveType},
++        pc::{Phase, SlotKind},
++    },
++    source::snapshot::{CfgSet, SourceBlob},
++    syntax::{parse::ParsedFile, runtime_vec::prepare_vector_structure, spans::SourceRange},
++};
++#[test]
++fn vector_original_test_box_literal_plan_is_source_exact_and_phase_lazy() {
++    let text =
++        include_str!("../../fixtures/upstream/rustc-checkout/tests/ui/binding/expr-match-panic.rs");
++    for edition in [2015, 2018, 2021, 2024] {
++        let mut profile = ProfileIdentity::current();
++        profile.edition = edition;
++        let parsed = ParsedFile::parse(
++            &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++            profile.clone(),
++        )
++        .unwrap();
++        let outline = parsed
++            .outline(Digest([216; 32]), vec![], &CfgSet::guest_default())
++            .unwrap();
++        let handle = outline
++            .items
++            .iter()
++            .find(|i| i.def_key.declared_name == "test_box")
++            .unwrap()
++            .body
++            .as_ref()
++            .unwrap();
++        let body = parsed.index_body(handle, Default::default()).unwrap();
++        let start = u32::try_from(text.find("vec![10]").unwrap()).unwrap();
++        let range = SourceRange {
++            start,
++            end: start + 8,
++        };
++        let call = parsed.macro_call_at(range).unwrap();
++        let catalog = RuntimeMacroCatalog::standard(&profile).unwrap();
++        let def = catalog
++            .definitions()
++            .find(|d| catalog.select(d).unwrap() == Some(RuntimeMacroKind::Vec))
++            .unwrap()
++            .clone();
++        let RuntimeMacroPreparation::Intrinsic(intrinsic) =
++            prepare_runtime_macro(&parsed, call, PathLookup::Defined(def.clone()), &catalog)
++                .unwrap()
++        else {
++            panic!("intrinsic")
++        };
++        let plan = prepare_vector_structure(&parsed, &intrinsic, handle, &body).unwrap();
++        assert_eq!(plan.definition(), &def);
++        assert_eq!(plan.operands().len(), 1);
++        let operand = &plan.operands()[0];
++        assert_eq!(
++            operand.span().relative_start + handle.range.start,
++            start + 5
++        );
++        assert_eq!(operand.span().relative_end + handle.range.start, start + 7);
++        assert_eq!(body.slot_kind(operand.value()).unwrap(), SlotKind::Value);
++        assert_eq!(operand.entry().phase, Phase::Operand(0).code().unwrap());
++        assert_eq!(operand.transfer().phase, Phase::Operand(1).code().unwrap());
++        let guard = body.nodes()[plan.node().0 as usize]
++            .constructor_guard
++            .unwrap();
++        plan.require_guard(&body, guard).unwrap();
++        let after = body.pc(lrr::ir::pc::NodeId(0), Phase::Exit).unwrap();
++        let transfer = plan
++            .phase_recipe(
++                &parsed,
++                &body,
++                operand.transfer(),
++                PrimitiveType::I32,
++                after.clone(),
++                vec![],
++            )
++            .unwrap();
++        assert!(
++            matches!(transfer.recipe().operations.as_ref(),[Op::VecConstructField{transfer}] if transfer.guard()==guard && transfer.ordinal()==0 && transfer.value()==operand.value())
++        );
++        assert_eq!(
++            transfer.recipe().origin.span,
++            body.span(plan.node()).unwrap()
++        );
++        assert!(plan.transfer(&body, 1).is_err());
++        let rebuild = |key, origin, operations| lrr::ir::recipe::RecipeDraft {
++            key,
++            origin,
++            operations,
++            exits: vec![lrr::ir::recipe::RecipeExit::Next(plan.commit().clone())],
++            dependencies: vec![],
++        };
++        assert!(
++            lrr::ir::validate::verify(
++                rebuild(
++                    operand.entry().clone(),
++                    transfer.recipe().origin.clone(),
++                    transfer.recipe().operations.to_vec()
++                ),
++                &body
++            )
++            .is_err()
++        );
++        let mut wrong_origin = transfer.recipe().origin.clone();
++        wrong_origin.span.relative_end -= 1;
++        assert!(
++            lrr::ir::validate::verify(
++                rebuild(
++                    operand.transfer().clone(),
++                    wrong_origin,
++                    transfer.recipe().operations.to_vec()
++                ),
++                &body
++            )
++            .is_err()
++        );
++        assert!(
++            lrr::ir::validate::verify(
++                rebuild(
++                    operand.transfer().clone(),
++                    transfer.recipe().origin.clone(),
++                    vec![Op::ConstructField {
++                        guard,
++                        field: 0,
++                        source: operand.value()
++                    }]
++                ),
++                &body
++            )
++            .is_err()
++        );
++        let ops = plan
++            .lower_scalar_operand(&parsed, 0, PrimitiveType::I32)
++            .unwrap();
++        assert!(
++            matches!(ops.as_slice(),[Op::Literal{literal,hint:lrr::ir::op::HintRecipe::Primitive(PrimitiveType::I32),..}] if matches!(literal.decoded,Some(DecodedLiteral::Integer{magnitude:10,..})))
++        );
++        // Directly enter this original macro's indexed scope chain. This is a
++        // source segment kernel, not execution of test_box's match or function.
++        let mut store = lrr::runtime::cell::GuestStore::new(1, 10000, 4 << 20).unwrap();
++        let root = body.pc(lrr::ir::pc::NodeId(0), Phase::Entry).unwrap();
++        let mut frame = lrr::vm::frame::Frame::new(body.clone(), root.clone(), &mut store).unwrap();
++        let mut scopes = vec![];
++        let mut scope = Some(body.nodes()[plan.node().0 as usize].scope);
++        while let Some(id) = scope {
++            scopes.push(id);
++            scope = body.scopes()[id.0 as usize].parent;
++        }
++        scopes.reverse();
++        assert!(scopes.len() <= 8);
++        let enter = lrr::ir::validate::verify(
++            lrr::ir::recipe::RecipeDraft {
++                key: root,
++                origin: lrr::ir::recipe::Origin {
++                    span: body.span(lrr::ir::pc::NodeId(0)).unwrap(),
++                    expansion_ancestry: vec![],
++                },
++                operations: scopes
++                    .into_iter()
++                    .map(|scope| Op::ScopeEnter { scope })
++                    .collect(),
++                exits: vec![lrr::ir::recipe::RecipeExit::Next(plan.entry().clone())],
++                dependencies: vec![],
++            },
++            &body,
++        )
++        .unwrap();
++        lrr::vm::step::step(&mut frame, &mut store, &enter).unwrap();
++        frame
++            .prepare_vector_constructor(&plan, PrimitiveType::I32, &store)
++            .unwrap();
++        for pc in [
++            plan.entry(),
++            operand.entry(),
++            operand.transfer(),
++            plan.commit(),
++        ] {
++            assert_eq!(frame.pc(), pc);
++            let recipe = plan
++                .phase_recipe(
++                    &parsed,
++                    &body,
++                    pc,
++                    PrimitiveType::I32,
++                    after.clone(),
++                    vec![],
++                )
++                .unwrap();
++            assert!(matches!(
++                lrr::vm::step::step(&mut frame, &mut store, &recipe).unwrap(),
++                lrr::vm::step::StepOutcome::Next(_)
++            ));
++        }
++        let result = lrr::runtime::place::Place::cell(frame.cell(plan.result()).unwrap());
++        assert_eq!(store.vector_len(&result).unwrap(), 1);
++        let indexed = store
++            .vector_index(
++                &result,
++                lrr::runtime::value::ValueRepr::unsigned(lrr::runtime::shape::TypeId(13), 0)
++                    .unwrap(),
++            )
++            .unwrap();
++        assert_eq!(
++            store.read_place(&indexed).unwrap(),
++            lrr::runtime::value::ValueRepr::signed(lrr::runtime::shape::TypeId(6), 10).unwrap()
++        );
++        assert_eq!(
++            frame.fuel_snapshot().used,
++            frame.counters().operations_started + frame.counters().exits_completed
++        );
++        assert_eq!(frame.counters().started_by_opcode[42], 1);
++    }
++    // Constructor/index helper plan only; full original requires root source guard/type/Index integration.
++}
+--- /dev/null
++++ b/xtask/tests/vector_storage_kernel.rs
+@@ -0,0 +1,303 @@
++use lrr::{
++    runtime::{
++        cell::{AggregateCleanupTransfer, CellOwner, CellState, GuestStore, StorageContract},
++        place::{Place, PlaceFailure, PlacePanic},
++        reference::Access,
++        shape::{CopyStatus, FacadeType, TypeId, TypeKey},
++        value::ValueRepr,
++    },
++    vm::{fuel::RunFuel, vector::VectorConstruction},
++};
++fn store() -> GuestStore {
++    GuestStore::new(1, 100000, 16 << 20).unwrap()
++}
++fn cell(s: &mut GuestStore, n: i64) -> lrr::runtime::cell::CellId {
++    let frame = s.new_frame_anchor().unwrap();
++    let c = s
++        .new_cell(
++            StorageContract::Exact(TypeId(6)),
++            true,
++            CellOwner::FrameSlot { frame, slot: 0 },
++        )
++        .unwrap();
++    let t = s.ticket(ValueRepr::signed(TypeId(6), n).unwrap()).unwrap();
++    s.initialize(c, t).unwrap();
++    c
++}
++fn finish(s: &mut GuestStore, values: &[i64]) -> lrr::runtime::cell::TicketId {
++    let mut fuel = RunFuel::new(100).unwrap();
++    let mut v =
++        VectorConstruction::begin(s, &mut fuel, TypeId(6), values.len().try_into().unwrap())
++            .unwrap();
++    for n in values {
++        let c = cell(s, *n);
++        v.push(s, &mut fuel, c).unwrap();
++    }
++    v.finish(s, &mut fuel).unwrap()
++}
++#[test]
++fn vector_core_empty_and_list_have_real_facade_buffer_and_noncopy_ownership() {
++    for values in [&[][..], &[10, 20][..]] {
++        let mut s = store();
++        let ticket = finish(&mut s, values);
++        let repr = s.peek_ticket(ticket).unwrap();
++        let ty = TypeId(repr.type_id);
++        assert!(
++            matches!(s.type_descriptor(ty).unwrap().key.as_ref(),TypeKey::Facade{family:FacadeType::Vec,args} if args.as_ref()==[TypeId(6)])
++        );
++        assert_eq!(s.type_descriptor(ty).unwrap().copy, CopyStatus::NotCopy);
++        let frame = s.new_frame_anchor().unwrap();
++        let c = s
++            .new_cell(
++                StorageContract::Exact(ty),
++                true,
++                CellOwner::FrameSlot { frame, slot: 0 },
++            )
++            .unwrap();
++        s.initialize(c, ticket).unwrap();
++        assert_eq!(s.vector_len(&Place::cell(c)).unwrap(), values.len() as u32);
++        assert_eq!(
++            s.vector_capacity(&Place::cell(c)).unwrap(),
++            values.len() as u32
++        );
++        assert!(s.copy_from(c).is_err());
++        for (i, n) in values.iter().enumerate() {
++            let p = s
++                .vector_index(
++                    &Place::cell(c),
++                    ValueRepr::unsigned(TypeId(13), i as u64).unwrap(),
++                )
++                .unwrap();
++            assert_eq!(
++                s.read_place(&p).unwrap(),
++                ValueRepr::signed(TypeId(6), *n).unwrap()
++            );
++        }
++    }
++}
++#[test]
++fn vector_source_transfers_once_and_low_fuel_or_type_fault_preserves_next_owner() {
++    let mut s = store();
++    let a = cell(&mut s, 10);
++    let b = cell(&mut s, 20);
++    let mut fuel = RunFuel::new(2).unwrap();
++    let mut v = VectorConstruction::begin(&mut s, &mut fuel, TypeId(6), 2).unwrap();
++    v.push(&mut s, &mut fuel, a).unwrap();
++    assert_eq!(s.state(a).unwrap(), CellState::Moved);
++    assert!(v.push(&mut s, &mut fuel, b).is_err());
++    assert!(matches!(s.state(b).unwrap(), CellState::Live(_)));
++    assert_eq!(fuel.snapshot().used, 2);
++    assert_eq!(v.cleanup_scalar_step(&mut s).unwrap(), Some(0));
++    assert_eq!(v.cleanup_scalar_step(&mut s).unwrap(), None);
++    let mut s = store();
++    let a = cell(&mut s, 10);
++    let mut fuel = RunFuel::new(10).unwrap();
++    let mut v = VectorConstruction::begin(&mut s, &mut fuel, TypeId(6), 2).unwrap();
++    v.push(&mut s, &mut fuel, a).unwrap();
++    let used = fuel.snapshot().used;
++    assert!(v.push(&mut s, &mut fuel, a).is_err());
++    assert_eq!(fuel.snapshot().used, used);
++    assert_eq!(v.cleanup_scalar_step(&mut s).unwrap(), Some(0));
++    assert_eq!(v.cleanup_scalar_step(&mut s).unwrap(), None);
++}
++#[test]
++fn vector_index_bounds_type_and_buffer_leases_survive_move_then_reject_drop() {
++    let mut s = store();
++    let ticket = finish(&mut s, &[10]);
++    let ty = TypeId(s.peek_ticket(ticket).unwrap().type_id);
++    let frame = s.new_frame_anchor().unwrap();
++    let c = s
++        .new_cell(
++            StorageContract::Exact(ty),
++            true,
++            CellOwner::FrameSlot { frame, slot: 0 },
++        )
++        .unwrap();
++    s.initialize(c, ticket).unwrap();
++    assert!(matches!(
++        s.vector_index(
++            &Place::cell(c),
++            ValueRepr::unsigned(TypeId(13), u64::MAX).unwrap()
++        ),
++        Err(PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds))
++    ));
++    assert!(
++        matches!(s.vector_index(&Place::cell(c),ValueRepr::unsigned(TypeId(11),0).unwrap()),Err(PlaceFailure::RuntimeFault(d)) if d.code=="LRR-E-INDEX-TYPE")
++    );
++    let p = s
++        .vector_index(&Place::cell(c), ValueRepr::unsigned(TypeId(13), 0).unwrap())
++        .unwrap();
++    let lease = s.borrow(&p, Access::Mutable).unwrap();
++    let incoming = s.ticket(ValueRepr::signed(TypeId(6), 20).unwrap()).unwrap();
++    let old = s.replace_reference(lease, incoming).unwrap();
++    s.discard(old).unwrap();
++    assert_eq!(
++        s.read_reference(lease).unwrap(),
++        ValueRepr::signed(TypeId(6), 20).unwrap()
++    );
++    let shared = s.borrow(&p, Access::Shared).unwrap();
++    let moved = s.move_from(c).unwrap();
++    assert_eq!(s.read_reference(lease).unwrap().payload, 20);
++    assert_eq!(s.read_reference(shared).unwrap().payload, 20);
++    s.retire_cell(c).unwrap();
++    assert_eq!(s.read_reference(lease).unwrap().payload, 20);
++    let rebound = s
++        .new_cell(
++            StorageContract::Exact(ty),
++            true,
++            CellOwner::FrameSlot { frame, slot: 1 },
++        )
++        .unwrap();
++    s.initialize(rebound, moved).unwrap();
++    assert_eq!(s.read_reference(shared).unwrap().payload, 20);
++    let incoming = s.ticket(ValueRepr::signed(TypeId(6), 30).unwrap()).unwrap();
++    let old = s.replace_reference(lease, incoming).unwrap();
++    s.discard(old).unwrap();
++    assert_eq!(s.read_reference(shared).unwrap().payload, 30);
++    let dropped = s.begin_drop(rebound).unwrap();
++    assert!(s.read_reference(lease).is_err());
++    assert!(s.read_reference(shared).is_err());
++    let AggregateCleanupTransfer::Field {
++        cell,
++        ticket: child,
++    } = s.aggregate_cleanup_transfer(dropped).unwrap()
++    else {
++        panic!("field")
++    };
++    s.discard(child).unwrap();
++    s.finish_aggregate_cleanup_field(dropped, cell, child)
++        .unwrap();
++    assert!(matches!(
++        s.aggregate_cleanup_transfer(dropped).unwrap(),
++        AggregateCleanupTransfer::Complete
++    ));
++    s.discard(dropped).unwrap();
++}
++#[test]
++fn vector_normal_drop_order_and_partial_rollback_are_separate() {
++    let mut s = store();
++    let ticket = finish(&mut s, &[10, 20]);
++    let mut values = vec![];
++    loop {
++        match s.aggregate_cleanup_transfer(ticket).unwrap() {
++            AggregateCleanupTransfer::Field {
++                cell,
++                ticket: child,
++            } => {
++                values.push(s.peek_ticket(child).unwrap().payload);
++                s.discard(child).unwrap();
++                s.finish_aggregate_cleanup_field(ticket, cell, child)
++                    .unwrap();
++            }
++            AggregateCleanupTransfer::Skipped => panic!("unexpected skip"),
++            AggregateCleanupTransfer::Complete => break,
++        }
++    }
++    assert_eq!(values, [10, 20]);
++    s.discard(ticket).unwrap();
++    let mut s = store();
++    let mut fuel = RunFuel::new(100).unwrap();
++    let mut v = VectorConstruction::begin(&mut s, &mut fuel, TypeId(6), 3).unwrap();
++    for n in [10, 20] {
++        let c = cell(&mut s, n);
++        v.push(&mut s, &mut fuel, c).unwrap();
++    }
++    assert_eq!(v.cleanup_scalar_step(&mut s).unwrap(), Some(1));
++    assert_eq!(v.cleanup_scalar_step(&mut s).unwrap(), Some(0));
++    assert_eq!(v.cleanup_scalar_step(&mut s).unwrap(), None);
++}
++#[test]
++fn vector_quota_and_unknown_element_refuse_before_guest_ownership() {
++    let mut s = GuestStore::new(1, 100, 64).unwrap();
++    let mut fuel = RunFuel::new(100).unwrap();
++    assert!(VectorConstruction::begin(&mut s, &mut fuel, TypeId(6), 100000).is_err());
++    assert_eq!(fuel.snapshot().used, 0);
++    let mut s = store();
++    let mut fuel = RunFuel::new(0).unwrap();
++    assert!(VectorConstruction::begin(&mut s, &mut fuel, TypeId(6), 0).is_err());
++    assert_eq!(fuel.snapshot().used, 0);
++    let mut fuel = RunFuel::new(100).unwrap();
++    let string = s
++        .intern_type(TypeKey::Facade {
++            family: FacadeType::String,
++            args: Box::new([]),
++        })
++        .unwrap();
++    assert_eq!(
++        VectorConstruction::begin(&mut s, &mut fuel, string, 0)
++            .unwrap_err()
++            .code,
++        "LRR-E-UNSUPPORTED"
++    );
++    assert_eq!(fuel.snapshot().used, 0);
++}
++
++#[test]
++fn vector_guard_cannot_commit_as_array_and_cancellation_preserves_pending_owner() {
++    let mut s = store();
++    let mut fuel = RunFuel::new(100).unwrap();
++    let mut v = VectorConstruction::begin(&mut s, &mut fuel, TypeId(6), 0).unwrap();
++    let array = s
++        .intern_type(TypeKey::Array {
++            element: TypeId(6),
++            len: 0,
++        })
++        .unwrap();
++    assert_eq!(
++        s.commit_construction(v.guard(), array).unwrap_err().code,
++        "LRR-E-OWNERSHIP"
++    );
++    assert!(v.finish(&mut s, &mut fuel).is_ok());
++    let mut s = store();
++    let a = cell(&mut s, 10);
++    let b = cell(&mut s, 20);
++    let mut fuel = RunFuel::new(100).unwrap();
++    let mut v = VectorConstruction::begin(&mut s, &mut fuel, TypeId(6), 2).unwrap();
++    v.push(&mut s, &mut fuel, a).unwrap();
++    fuel.cancellation().cancel();
++    let used = fuel.snapshot().used;
++    assert_eq!(
++        v.push(&mut s, &mut fuel, b).unwrap_err().code,
++        "LRR-E-RUNTIME-RESOURCE"
++    );
++    assert_eq!(fuel.snapshot().used, used);
++    assert!(matches!(s.state(b).unwrap(), CellState::Live(_)));
++    assert_eq!(v.cleanup_scalar_step(&mut s).unwrap(), Some(0));
++    assert_eq!(v.cleanup_scalar_step(&mut s).unwrap(), None);
++}
++
++#[test]
++fn vector_refused_new_construction_preserves_existing_buffer_and_leases() {
++    let mut s = store();
++    let ticket = finish(&mut s, &[10]);
++    let ty = TypeId(s.peek_ticket(ticket).unwrap().type_id);
++    let frame = s.new_frame_anchor().unwrap();
++    let cell = s
++        .new_cell(
++            StorageContract::Exact(ty),
++            true,
++            CellOwner::FrameSlot { frame, slot: 0 },
++        )
++        .unwrap();
++    s.initialize(cell, ticket).unwrap();
++    let place = s
++        .vector_index(
++            &Place::cell(cell),
++            ValueRepr::unsigned(TypeId(13), 0).unwrap(),
++        )
++        .unwrap();
++    let lease = s.borrow(&place, Access::Shared).unwrap();
++    let mut fuel = RunFuel::new(0).unwrap();
++    assert!(VectorConstruction::begin(&mut s, &mut fuel, TypeId(6), 1).is_err());
++    assert_eq!(fuel.snapshot().used, 0);
++    assert_eq!(s.read_reference(lease).unwrap().payload, 10);
++    let mut fuel = RunFuel::new(100).unwrap();
++    fuel.cancellation().cancel();
++    assert!(VectorConstruction::begin(&mut s, &mut fuel, TypeId(6), 1).is_err());
++    assert_eq!(fuel.snapshot().used, 0);
++    assert_eq!(s.read_reference(lease).unwrap().payload, 10);
++    let mut fuel = RunFuel::new(100).unwrap();
++    assert!(VectorConstruction::begin(&mut s, &mut fuel, TypeId(6), 100001).is_err());
++    assert_eq!(fuel.snapshot().used, 0);
++    assert_eq!(s.read_reference(lease).unwrap().payload, 10);
++}

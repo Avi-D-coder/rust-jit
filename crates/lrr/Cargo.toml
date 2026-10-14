@@ -17,8 +17,11 @@ blake3.workspace = true
 clap.workspace = true
 toml.workspace = true
 cap-std.workspace = true
+rustix.workspace = true
 libloading.workspace = true
 toml_edit.workspace = true
+unicode-normalization.workspace = true
+lrr-expand-adapter = { path = "../lrr-expand-adapter" }
 
 [dev-dependencies]
 proptest.workspace = true

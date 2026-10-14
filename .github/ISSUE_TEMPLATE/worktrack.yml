@@ -1,0 +1,57 @@
+name: Worktrack claim
+description: Coordinate a bounded contribution with tasks, ownership and acceptance
+title: "[WTxx] Bounded contribution"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read worktracks/README.md, the chosen track, AGENTS.md and active claims first.
+        A track is an ownership plan; the spec and docs/tasks.json govern order and acceptance.
+        A maintainer will coordinate overlapping claims before concurrent implementation.
+  - type: input
+    id: worktrack
+    attributes:
+      label: Worktrack and item
+      description: Stable track/item IDs, for example WT05 / WT05-01.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Task, invariant and deliverable
+      description: T/H/M cards, current source witness and the bounded behavior this slice will implement.
+    validations:
+      required: true
+  - type: textarea
+    id: ownership
+    attributes:
+      label: Exact files, symbols and agent ownership
+      description: Human owner, separate agent slices, shared APIs and related active claims. Suggested track paths are not exclusive locks.
+    validations:
+      required: true
+  - type: textarea
+    id: prerequisites
+    attributes:
+      label: Prerequisites and related work
+      description: Dependency issues/PRs, interfaces and unresolved spec decisions. State whether this is ready implementation or preparatory work.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Upstream fixtures and acceptance plan
+      description: Original paths/pin/helpers/revisions, asserted runtime versus diagnostic/tooling contracts, exact commands, macOS/edition/configuration and frozen-source validation plan.
+    validations:
+      required: true
+  - type: input
+    id: branch
+    attributes:
+      label: Fork or isolated branch
+      description: Repository/branch or planned checkout. Do not edit another owner's tested checkout.
+  - type: input
+    id: review_date
+    attributes:
+      label: Next progress or handoff date
+      description: A review date for coordination, not automatic expiration or a required delivery promise.
+    validations:
+      required: true

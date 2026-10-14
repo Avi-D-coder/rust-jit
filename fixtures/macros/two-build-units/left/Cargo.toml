@@ -1,0 +1,12 @@
+[package]
+name = "lrr_two_output_left"
+version = "1.2.3-alpha.1+build.9"
+edition = "2024"
+authors = ["Avi", "Zoë"]
+description = "left unit environment"
+homepage = "https://example.invalid/left"
+repository = "https://example.invalid/repository"
+license = "MIT"
+readme = "README.md"
+rust-version = "1.99"
+license-file = "LICENSE"

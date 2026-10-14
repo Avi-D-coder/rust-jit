@@ -1,0 +1,4 @@
+borrowed:scrutinee
+drop:consequent
+drop:scrutinee
+after_if

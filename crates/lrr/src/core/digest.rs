@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, fmt};
 pub struct Digest(pub [u8; 32]);
 impl Digest {
     pub fn of_bytes(bytes: &[u8]) -> Self {
-        let mut encoder = StableEncoder::new("lrr/v1/source-bytes");
+        let mut encoder = StableEncoder::new("lrr/v2/source-bytes");
         encoder.bytes(bytes);
         encoder.finish()
     }
@@ -58,7 +58,7 @@ impl<'de> Deserialize<'de> for Digest {
                         _ => Err(E::custom("digest must be lowercase hexadecimal")),
                     }
                 }
-                for (i, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+                for (i, pair) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
                     bytes[i] = (nibble::<E>(pair[0])? << 4) | nibble::<E>(pair[1])?;
                 }
                 Ok(Digest(bytes))
@@ -159,7 +159,7 @@ mod tests {
     }
     #[test]
     fn stable_encoding_has_explicit_widths_and_lengths() {
-        let mut encoder = StableEncoder::new("lrr/v1/test");
+        let mut encoder = StableEncoder::new("lrr/v2/test");
         encoder.u8(3);
         encoder.u16(0x0102);
         encoder.u32(0x03040506);
@@ -167,7 +167,7 @@ mod tests {
         encoder.string("é");
         let mut bytes = Vec::new();
         bytes.extend(11_u64.to_le_bytes());
-        bytes.extend(b"lrr/v1/test");
+        bytes.extend(b"lrr/v2/test");
         bytes.push(3);
         bytes.extend(0x0102_u16.to_le_bytes());
         bytes.extend(0x03040506_u32.to_le_bytes());
@@ -181,7 +181,7 @@ mod tests {
         let a = BTreeMap::from([("b", 2_u32), ("a", 1)]);
         let b = BTreeMap::from([("a", 1_u32), ("b", 2)]);
         let fingerprint = |map: &BTreeMap<&str, u32>| {
-            let mut e = StableEncoder::new("lrr/v1/map-test");
+            let mut e = StableEncoder::new("lrr/v2/map-test");
             e.map(map, |e, k, v| {
                 e.string(k);
                 e.u32(*v);
@@ -199,16 +199,16 @@ mod tests {
             e.finish()
         };
         assert_ne!(
-            encode("lrr/v1/test", "ab", "c"),
-            encode("lrr/v1/test", "a", "bc")
+            encode("lrr/v2/test", "ab", "c"),
+            encode("lrr/v2/test", "a", "bc")
         );
         assert_ne!(
-            encode("lrr/v1/test", "a", "b"),
-            encode("lrr/v1/test", "b", "a")
+            encode("lrr/v2/test", "a", "b"),
+            encode("lrr/v2/test", "b", "a")
         );
         assert_ne!(
-            encode("lrr/v1/test", "a", "b"),
-            encode("lrr/v1/other", "a", "b")
+            encode("lrr/v2/test", "a", "b"),
+            encode("lrr/v2/other", "a", "b")
         );
         assert_ne!(
             encode("lrr/v1/test", "a", "b"),

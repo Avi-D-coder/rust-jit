@@ -1,0 +1,613 @@
+diff --git a/crates/lrr/src/frontend/constant_path_selection.rs b/crates/lrr/src/frontend/constant_path_selection.rs
+--- a/crates/lrr/src/frontend/constant_path_selection.rs
++++ b/crates/lrr/src/frontend/constant_path_selection.rs
+@@ -182,6 +182,11 @@
+         for view in views {
+             view.require_original_hygiene()?;
+             view.require_declaration_syntax()?;
++            if view.selection().canonical()? != *view.selection() {
++                return Err(fault(
++                    "constant path original source selection is not canonical",
++                ));
++            }
+             if !selections.insert(view.selection().location_identity()) {
+                 return Err(fault(
+                     "constant path source selection is duplicate/ambiguous",
+@@ -212,6 +217,34 @@
+                 .and_then(|n| n.checked_add(key.heap_bytes()))
+                 .filter(|n| *n <= byte_limit)
+                 .ok_or_else(limit)?;
++        }
++        // A scope seal can disclose a subset. Foreign selection must not treat
++        // unretained published original sources as irrelevant name evidence.
++        // Membership comes from actual inputs, never a caller completeness flag.
++        let mut captured_count = 0usize;
++        for key in stamps.keys() {
++            if let InputKey::CapturedSource(location) = key {
++                captured_count = captured_count
++                    .checked_add(1)
++                    .filter(|n| *n <= 256)
++                    .ok_or_else(limit)?;
++                let Some((InputValue::CapturedSource(selection), _)) = db.published_input(key)
++                else {
++                    return Err(fault("constant path captured source input variant differs"));
++                };
++                if selection.location_identity() != *location
++                    || !views.iter().any(|view| view.selection() == selection)
++                {
++                    return Err(fault(
++                        "constant path complete current original source set is not retained",
++                    ));
++                }
++            }
++        }
++        if captured_count != views.len() {
++            return Err(fault(
++                "constant path retained set differs from actual current source membership",
++            ));
+         }
+         let mut structural_reservation = 0usize;
+         for view in views {
+@@ -325,15 +358,17 @@
+         if definition.namespace != Namespace::Value {
+             return Err(fault("constant path lookup returned another namespace"));
+         }
+-        if definition.defining_unit != caller.selection().outline.crate_key {
+-            return Ok(ConstantPathOutcome::RequiredForeignConstant(definition));
+-        }
++        let foreign = definition.defining_unit != caller.selection().outline.crate_key;
+         let mut targets = views
+             .iter()
+             .flat_map(|view| view.outline().items.iter().map(move |item| (*view, item)))
+             .filter(|(_, item)| item.def_key.fingerprint() == definition.identity);
+         let Some((target, item)) = targets.next() else {
+-            return Ok(ConstantPathOutcome::RequiredLexicalConstant(definition));
++            return Ok(if foreign {
++                ConstantPathOutcome::RequiredForeignConstant(definition)
++            } else {
++                ConstantPathOutcome::RequiredLexicalConstant(definition)
++            });
+         };
+         if targets.next().is_some() {
+             return Err(fault("constant path target source identity is duplicated"));
+@@ -456,14 +491,9 @@
+         {
+             return Err(fault("constant path caller/input membership changed"));
+         }
+-        let mut sources = views
+-            .iter()
+-            .map(|v| v.selection().clone())
+-            .collect::<Vec<_>>();
+-        sources.sort_by_key(SourceSelection::location_identity);
+-        if sources != self.sources {
+-            return Err(fault("constant path retained source world changed"));
+-        }
++        // capture_current checks the bounded complete source set before
++        // copying selections. The reminted identity below compares that set;
++        // do not allocate an unbounded caller view list before this admission.
+         let ConstantPathOutcome::Selected(fresh) = Self::capture_current(
+             db,
+             caller,
+@@ -483,7 +513,7 @@
+         Ok(())
+     }
+     pub(crate) fn identity(&self) -> Digest {
+-        let mut e = StableEncoder::new("lrr/v1/current-source-constant-path-selection");
++        let mut e = StableEncoder::new("lrr/v2/current-source-constant-path-selection");
+         e.record(&self.site);
+         e.string(self.target.path.as_str());
+         e.digest(self.target.location_identity());
+diff --git a/crates/lrr/src/frontend/constant_foreign_path_tests.rs b/crates/lrr/src/frontend/constant_foreign_path_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_foreign_path_tests.rs
+@@ -0,0 +1,499 @@
++//! Source-selected cross-unit original request; no evaluator/runtime acceptance.
++use crate::{
++    core::{diagnostic::Diagnostic, digest::Digest, profile::ProfileIdentity},
++    db::{
++        dependency::{InputKey, InputValue},
++        key::OutlineKey,
++        memo::Database,
++    },
++    expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    frontend::{
++        constant_path_selection::{ConstantPathOutcome, ConstantPathSelection},
++        constant_source_admission::ConstantRequest,
++    },
++    source::{
++        changes::{
++            PreparedSourceInputs, PreparedSourceView, SourceSelection, SourceSelectionOutcome,
++            SourceUnitInput,
++        },
++        dependencies::SourceDependency,
++        manifest::Namespace,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::{outline::BodyHandle, parse::ParseKey, spans::SourceRange},
++};
++use std::sync::Arc;
++const LIMIT: usize = 32 * 1024 * 1024;
++const ROOT: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/cross-crate/const-fn-evaluated-cross-crate.rs"
++);
++const PROVIDER: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/cross-crate/auxiliary/const-fn-evaluated-cross-crate.rs"
++);
++const LENGTH_ROOT: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/cross-crate/cross-crate-array-len.rs"
++);
++const LENGTH_PROVIDER: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/cross-crate/auxiliary/cross-crate-array-len.rs"
++);
++fn unit(text: &str, path: &str, key: Digest, edition: u16) -> SourceUnitInput {
++    SourceUnitInput {
++        path: SourcePath::new(path).unwrap(),
++        crate_key: key,
++        module_path: vec![],
++        profile: ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        cfg: CfgSet::guest_default(),
++        blob: SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++    }
++}
++fn universe(
++    units: Vec<SourceUnitInput>,
++    edges: Vec<SourceDependency>,
++) -> (Database, Vec<PreparedSourceView>) {
++    let selections: Vec<_> = units
++        .iter()
++        .map(|u| SourceSelection {
++            path: u.path.clone(),
++            outline: OutlineKey {
++                parse: ParseKey {
++                    content: u.blob.content(),
++                    profile: u.profile.clone(),
++                },
++                crate_key: u.crate_key,
++                module_path: u.module_path.clone(),
++                cfg: u.cfg.fingerprint(),
++            },
++        })
++        .collect();
++    let inputs =
++        PreparedSourceInputs::refresh_with_dependencies(None, units, Default::default(), edges)
++            .unwrap();
++    let mut db = Database::default();
++    inputs.publish(&mut db).unwrap();
++    db.begin_expansion_epoch(1).unwrap();
++    let views = selections
++        .iter()
++        .map(|selection| {
++            let SourceSelectionOutcome::Selected(view) = inputs.select(selection).unwrap() else {
++                panic!("genuine prepared original absent")
++            };
++            view
++        })
++        .collect();
++    (db, views)
++}
++fn definition(view: &PreparedSourceView, name: &str) -> Digest {
++    view.outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == name)
++        .unwrap()
++        .def_key
++        .fingerprint()
++}
++fn seal(
++    db: &mut Database,
++    views: &[&PreparedSourceView],
++    target: &PreparedSourceView,
++    name: &str,
++    world: Digest,
++) {
++    let item = target
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == name)
++        .unwrap();
++    let mut discovery = SourceDiscovery::new(
++        views.iter().map(|v| v.share()).collect(),
++        item.scope.clone(),
++        Namespace::Value,
++        world,
++        1,
++    )
++    .unwrap()
++    .with_declarative_compiler(
++        Digest::of_bytes(b"foreign constant compile environment"),
++        crate::expand::source_declarative::engine_version(),
++        Arc::new(
++            crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                &target.selection().outline.parse.profile,
++            )
++            .unwrap(),
++        ),
++    )
++    .unwrap();
++    loop {
++        match discovery.poll().unwrap() {
++            SourceDiscoveryStep::Sealed(_) => break,
++            SourceDiscoveryStep::NeedExpansion { request } => discovery
++                .admit_expansion(Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                .admit_expansion(Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::Incomplete { diagnostic, .. } => panic!(
++                "actual source discovery incomplete: {} {}",
++                diagnostic.code, diagnostic.message
++            ),
++            _ => panic!("actual source discovery requires unestablished authority"),
++        }
++    }
++    discovery.publish(db).unwrap();
++}
++fn world(
++    root: &str,
++    provider: &str,
++    alias: &str,
++    root_edition: u16,
++    provider_edition: u16,
++) -> (Database, Vec<PreparedSourceView>) {
++    let consumer = Digest::of_bytes(b"current constant root");
++    let provider_key = Digest::of_bytes(b"current constant provider");
++    let (mut db, views) = universe(
++        vec![
++            unit(root, "root.rs", consumer, root_edition),
++            unit(provider, "provider.rs", provider_key, provider_edition),
++        ],
++        vec![SourceDependency {
++            consumer,
++            alias: alias.into(),
++            provider: provider_key,
++        }],
++    );
++    let refs: Vec<_> = views.iter().collect();
++    let world = Digest::of_bytes(b"exact original constant world");
++    seal(&mut db, &refs, &views[0], "main", world);
++    seal(&mut db, &refs, &views[1], "FOO", world);
++    (db, views)
++}
++fn site(view: &PreparedSourceView, text: &str, needle: &str) -> (BodyHandle, SourceRange) {
++    let body = view
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap()
++        .clone();
++    let start = text.find(needle).unwrap();
++    (
++        body,
++        SourceRange {
++            start: start as u32,
++            end: (start + needle.len()) as u32,
++        },
++    )
++}
++fn capture(
++    db: &Database,
++    views: &[PreparedSourceView],
++    text: &str,
++    needle: &str,
++) -> Result<ConstantPathOutcome, Diagnostic> {
++    let (body, range) = site(&views[0], text, needle);
++    let refs: Vec<_> = views.iter().collect();
++    ConstantPathSelection::capture_current(db, &views[0], &body, range, &refs, LIMIT)
++}
++fn selected(outcome: ConstantPathOutcome) -> ConstantPathSelection {
++    let ConstantPathOutcome::Selected(selected) = outcome else {
++        panic!("actual original constant not selected: {outcome:?}")
++    };
++    selected
++}
++#[test]
++fn unchanged_cross_crate_main_selects_actual_auxiliary_request_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, views) = world(
++            ROOT,
++            PROVIDER,
++            "const_fn_evaluated_cross_crate",
++            edition,
++            edition,
++        );
++        let before = db.trace.events.len();
++        let revision = db.revision();
++        let selected = selected(capture(&db, &views, ROOT, "lib::FOO").unwrap());
++        assert_eq!(selected.definition(), definition(&views[1], "FOO"));
++        assert_ne!(
++            selected.target().outline.crate_key,
++            views[0].selection().outline.crate_key
++        );
++        assert_eq!(selected.target(), views[1].selection());
++        assert_eq!(
++            selected.context().scope.crate_key,
++            views[1].selection().outline.crate_key
++        );
++        assert_eq!(
++            selected.body(),
++            views[1]
++                .outline()
++                .items
++                .iter()
++                .find(|i| i.def_key.declared_name == "FOO")
++                .unwrap()
++                .body
++                .as_ref()
++                .unwrap()
++        );
++        assert_eq!(selected.site().source(), views[0].selection());
++        assert!(matches!(selected.request(), ConstantRequest::Constant));
++        assert!(
++            selected
++                .dependencies()
++                .contains_key(&InputKey::DefinitionBody(selected.definition()))
++        );
++        selected
++            .revalidate(&db, &views[0], &[&views[0], &views[1]])
++            .unwrap();
++        assert_eq!(db.trace.events.len(), before);
++        assert_eq!(db.revision(), revision);
++    }
++}
++#[test]
++fn unchanged_cross_crate_length_path_selects_source_without_evaluating_length() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, views) = world(
++            LENGTH_ROOT,
++            LENGTH_PROVIDER,
++            "cross_crate_array_len",
++            edition,
++            edition,
++        );
++        let before = db.trace.events.len();
++        let a = selected(capture(&db, &views, LENGTH_ROOT, "cross_crate_array_len::FOO").unwrap());
++        assert_eq!(a.definition(), definition(&views[1], "FOO"));
++        assert_eq!(a.target(), views[1].selection());
++        a.revalidate(&db, &views[0], &[&views[1], &views[0]])
++            .unwrap();
++        assert_eq!(db.trace.events.len(), before);
++    }
++}
++#[test]
++fn selected_foreign_owner_retains_distinct_owning_editions() {
++    for (root_edition, provider_edition) in [(2015, 2024), (2024, 2015), (2018, 2021), (2021, 2018)]
++    {
++        let (db, views) = world(
++            ROOT,
++            PROVIDER,
++            "const_fn_evaluated_cross_crate",
++            root_edition,
++            provider_edition,
++        );
++        let a = selected(capture(&db, &views, ROOT, "lib::FOO").unwrap());
++        assert_eq!(
++            a.site().source().outline.parse.profile.edition,
++            root_edition
++        );
++        assert_eq!(a.target().outline.parse.profile.edition, provider_edition);
++        a.revalidate(&db, &views[0], &[&views[0], &views[1]])
++            .unwrap();
++    }
++}
++#[test]
++fn actual_renamed_foreign_reexport_preserves_defining_member_not_import_owner() {
++    // Supplemental route control; official unchanged extern alias is the positive witness above.
++    let text = "extern crate const_fn_evaluated_cross_crate as lib;mod exported{pub use crate::lib::FOO as RENAMED;}fn main(){let _=exported::RENAMED;}";
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, views) = world(
++            text,
++            PROVIDER,
++            "const_fn_evaluated_cross_crate",
++            edition,
++            edition,
++        );
++        let a = selected(capture(&db, &views, text, "exported::RENAMED").unwrap());
++        assert_eq!(a.definition(), definition(&views[1], "FOO"));
++        assert_eq!(a.target(), views[1].selection());
++    }
++}
++#[test]
++fn identical_spelling_in_another_retained_provider_never_selects_wrong_owner() {
++    let root = Digest::of_bytes(b"current constant root");
++    let right = Digest::of_bytes(b"right provider");
++    let wrong = Digest::of_bytes(b"wrong provider");
++    let (mut db, views) = universe(
++        vec![
++            unit(ROOT, "root.rs", root, 2024),
++            unit(PROVIDER, "right.rs", right, 2024),
++            unit(PROVIDER, "wrong.rs", wrong, 2024),
++        ],
++        vec![SourceDependency {
++            consumer: root,
++            alias: "const_fn_evaluated_cross_crate".into(),
++            provider: right,
++        }],
++    );
++    let refs: Vec<_> = views.iter().collect();
++    let world = Digest::of_bytes(b"exact original constant world");
++    seal(&mut db, &refs, &views[0], "main", world);
++    seal(&mut db, &refs, &views[1], "FOO", world);
++    seal(&mut db, &refs, &views[2], "FOO", world);
++    let a = selected(capture(&db, &views, ROOT, "lib::FOO").unwrap());
++    assert_eq!(a.definition(), definition(&views[1], "FOO"));
++    assert_ne!(a.definition(), definition(&views[2], "FOO"));
++    assert_eq!(a.target(), views[1].selection());
++    assert!(
++        a.revalidate(&db, &views[0], &[&views[0], &views[2]])
++            .is_err()
++    );
++}
++#[test]
++fn published_original_source_missing_from_scope_subset_cannot_mint_selection() {
++    let root = Digest::of_bytes(b"current constant root");
++    let provider = Digest::of_bytes(b"current constant provider");
++    let (mut db, views) = universe(
++        vec![
++            unit(ROOT, "root.rs", root, 2024),
++            unit(PROVIDER, "provider.rs", provider, 2024),
++            unit(
++                LENGTH_PROVIDER,
++                "unretained.rs",
++                Digest::of_bytes(b"unretained original"),
++                2024,
++            ),
++        ],
++        vec![SourceDependency {
++            consumer: root,
++            alias: "const_fn_evaluated_cross_crate".into(),
++            provider,
++        }],
++    );
++    let refs = [&views[0], &views[1]];
++    let world = Digest::of_bytes(b"exact original constant world");
++    seal(&mut db, &refs, &views[0], "main", world);
++    seal(&mut db, &refs, &views[1], "FOO", world);
++    let (body, range) = site(&views[0], ROOT, "lib::FOO");
++    let before = db.trace.events.len();
++    let e = ConstantPathSelection::capture_current(&db, &views[0], &body, range, &refs, LIMIT)
++        .unwrap_err();
++    assert_eq!(e.code, "LRR-E-CONST-PATH-SOURCE");
++    assert!(e.message.contains("complete current original source set"));
++    assert_eq!(before, db.trace.events.len());
++}
++#[test]
++fn missing_actual_foreign_scope_seal_refuses_before_request() {
++    let root = Digest::of_bytes(b"current constant root");
++    let provider = Digest::of_bytes(b"current constant provider");
++    let (mut db, views) = universe(
++        vec![
++            unit(ROOT, "root.rs", root, 2024),
++            unit(PROVIDER, "provider.rs", provider, 2024),
++        ],
++        vec![SourceDependency {
++            consumer: root,
++            alias: "const_fn_evaluated_cross_crate".into(),
++            provider,
++        }],
++    );
++    let refs: Vec<_> = views.iter().collect();
++    seal(
++        &mut db,
++        &refs,
++        &views[0],
++        "main",
++        Digest::of_bytes(b"exact original constant world"),
++    );
++    assert!(capture(&db, &views, ROOT, "lib::FOO").is_err());
++}
++#[test]
++fn foreign_target_world_cannot_be_joined_to_current_caller() {
++    let (mut db, views) = world(ROOT, PROVIDER, "const_fn_evaluated_cross_crate", 2024, 2024);
++    let refs: Vec<_> = views.iter().collect();
++    seal(
++        &mut db,
++        &refs,
++        &views[1],
++        "FOO",
++        Digest::of_bytes(b"another selected world"),
++    );
++    let e = capture(&db, &views, ROOT, "lib::FOO").unwrap_err();
++    assert_eq!(e.code, "LRR-E-CONST-PATH-SOURCE");
++    assert!(e.message.contains("world/epoch"));
++}
++#[test]
++fn stale_derived_epoch_and_compile_membership_refuse_without_query_work() {
++    let (mut db, views) = world(ROOT, PROVIDER, "const_fn_evaluated_cross_crate", 2024, 2024);
++    let a = selected(capture(&db, &views, ROOT, "lib::FOO").unwrap());
++    let revision = db.source_revision();
++    let before = db.trace.events.len();
++    db.begin_expansion_epoch(2).unwrap();
++    assert_eq!(revision, db.source_revision());
++    assert!(
++        a.revalidate(&db, &views[0], &[&views[0], &views[1]])
++            .is_err()
++    );
++    assert_eq!(before, db.trace.events.len());
++    let (mut db, views) = world(ROOT, PROVIDER, "const_fn_evaluated_cross_crate", 2024, 2024);
++    let a = selected(capture(&db, &views, ROOT, "lib::FOO").unwrap());
++    let mut facts = views[0].prepared_inputs().clone();
++    facts.insert(
++        InputKey::CompileEnv("changed".into()),
++        InputValue::CompileEnv("yes".into()),
++    );
++    db.publish_inputs(facts).unwrap();
++    assert!(
++        a.revalidate(&db, &views[0], &[&views[0], &views[1]])
++            .is_err()
++    );
++}
++#[test]
++fn copied_foreign_body_publication_and_wrong_owner_never_reuse_proof() {
++    let (mut db, views) = world(ROOT, PROVIDER, "const_fn_evaluated_cross_crate", 2024, 2024);
++    let a = selected(capture(&db, &views, ROOT, "lib::FOO").unwrap());
++    let mut facts = views[0].prepared_inputs().clone();
++    let def = definition(&views[1], "FOO");
++    let InputValue::DefinitionBody(body) = facts.get_mut(&InputKey::DefinitionBody(def)).unwrap()
++    else {
++        panic!()
++    };
++    body.def_key = Digest::of_bytes(b"forged foreign body owner");
++    db.publish_inputs(facts).unwrap();
++    assert!(
++        a.revalidate(&db, &views[0], &[&views[0], &views[1]])
++            .is_err()
++    );
++}
++#[test]
++fn path_range_and_metadata_limits_refuse_without_provider_or_source_mutation() {
++    let (db, views) = world(ROOT, PROVIDER, "const_fn_evaluated_cross_crate", 2024, 2024);
++    let (body, range) = site(&views[0], ROOT, "lib::FOO");
++    let refs = [&views[0], &views[1]];
++    let before = db.trace.events.len();
++    let revision = db.revision();
++    let e =
++        ConstantPathSelection::capture_current(&db, &views[0], &body, range, &refs, 1).unwrap_err();
++    assert_eq!(e.code, "LRR-E-METADATA-LIMIT");
++    let wrong = SourceRange {
++        start: range.start + 1,
++        ..range
++    };
++    assert!(
++        ConstantPathSelection::capture_current(&db, &views[0], &body, wrong, &refs, LIMIT).is_err()
++    );
++    let a = selected(capture(&db, &views, ROOT, "lib::FOO").unwrap());
++    let many = vec![&views[0]; 257];
++    assert!(a.revalidate(&db, &views[0], &many).is_err());
++    assert_eq!(db.trace.events.len(), before);
++    assert_eq!(db.revision(), revision);
++}
++
++#[test]
++fn reached_foreign_value_function_is_not_a_constant_request() {
++    let provider = "pub fn FOO()->i32{unentered_missing_name}";
++    let (db, views) = world(ROOT, provider, "const_fn_evaluated_cross_crate", 2024, 2024);
++    let before = db.trace.events.len();
++    let ConstantPathOutcome::OtherValueMember(member) =
++        capture(&db, &views, ROOT, "lib::FOO").unwrap()
++    else {
++        panic!("a function source member must remain distinct from a constant")
++    };
++    assert_eq!(member.identity, definition(&views[1], "FOO"));
++    assert_eq!(member.defining_unit, views[1].selection().outline.crate_key);
++    assert_eq!(db.trace.events.len(), before);
++}
+diff --git a/crates/lrr/src/frontend/mod.rs b/crates/lrr/src/frontend/mod.rs
+--- a/crates/lrr/src/frontend/mod.rs
++++ b/crates/lrr/src/frontend/mod.rs
+@@ -72,3 +72,6 @@
+ pub(crate) mod constant_path_selection;
+ 
+ pub(crate) mod constant_construction;
++
++#[cfg(test)]
++mod constant_foreign_path_tests;

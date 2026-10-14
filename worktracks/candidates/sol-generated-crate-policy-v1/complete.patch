@@ -1,0 +1,958 @@
+diff --git a/crates/lrr/src/source/changes/crate_policy.rs b/crates/lrr/src/source/changes/crate_policy.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/source/changes/crate_policy.rs
+@@ -0,0 +1,362 @@
++//! Retained owning-crate policy, separate from namespace/macro authority.
++use super::*;
++use crate::{
++    core::digest::{Digest, StableEncode, StableEncoder},
++    syntax::{macro_prelude::MacroPreludePolicy, parse::ParsedFile},
++};
++struct Row {
++    source: PreparedSourceView,
++    selection: SourceSelection,
++    origin: Digest,
++}
++pub(crate) struct PreparedCratePreludePolicy {
++    endpoint: PreparedSourceView,
++    root: PreparedSourceView,
++    rows: Vec<Row>,
++    standard: bool,
++    disabled: Vec<Vec<String>>,
++    retained_epoch: Option<u64>,
++    current_epoch: Option<u64>,
++    bytes: usize,
++}
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-CATALOG-INCOMPLETE", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new("LRR-E-METADATA-LIMIT", "owning crate policy budget".into())
++}
++fn charge(bytes: &mut usize, n: usize, maximum: usize) -> Result<(), Diagnostic> {
++    *bytes = bytes
++        .checked_add(n)
++        .filter(|n| *n <= maximum)
++        .ok_or_else(limit)?;
++    Ok(())
++}
++fn mapped_disabled(
++    out: &mut Vec<Vec<String>>,
++    policy: &MacroPreludePolicy,
++    base: &[String],
++    target: &[String],
++    bytes: &mut usize,
++    maximum: usize,
++) -> Result<(), Diagnostic> {
++    for relative in &policy.disabled {
++        let count = base
++            .len()
++            .checked_add(relative.len())
++            .filter(|n| *n <= 256)
++            .ok_or_else(limit)?;
++        let path = base.iter().chain(relative).collect::<Vec<_>>();
++        let inherited = path.len() <= target.len() && path.iter().zip(target).all(|(a, b)| *a == b);
++        let below = target.len() <= path.len() && path.iter().zip(target).all(|(a, b)| *a == b);
++        if !inherited && !below {
++            continue;
++        }
++        if out.len() >= 100_000 {
++            return Err(limit());
++        }
++        let suffix = if inherited {
++            &path[count..]
++        } else {
++            &path[target.len()..]
++        };
++        let n = suffix
++            .iter()
++            .try_fold(128usize, |n, s| {
++                n.checked_add(s.capacity())
++                    .and_then(|n| n.checked_add(std::mem::size_of::<String>()))
++            })
++            .ok_or_else(limit)?;
++        charge(bytes, n, maximum)?;
++        out.try_reserve(1).map_err(|_| limit())?;
++        out.push(suffix.iter().map(|s| (*s).clone()).collect());
++    }
++    Ok(())
++}
++impl PreparedCratePreludePolicy {
++    pub(crate) fn capture_retained(
++        view: &PreparedSourceView,
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        if byte_limit > 32 * 1024 * 1024 {
++            return Err(limit());
++        }
++        let mut bytes = std::mem::size_of::<Self>()
++            .checked_add(256)
++            .and_then(|n| n.checked_add(256 * std::mem::size_of::<&String>()))
++            .and_then(|n| n.checked_add(256 * std::mem::size_of::<(&PreparedSourceView, Digest)>()))
++            .filter(|n| *n <= byte_limit)
++            .ok_or_else(limit)?;
++        let target = &view.selection().outline.module_path;
++        let unit = view.selection().outline.crate_key;
++        let profile = &view.selection().outline.parse.profile;
++        let cfg = view.selection().outline.cfg;
++        let mut cursor = view;
++        let mut borrowed = Vec::<(&PreparedSourceView, Digest)>::new();
++        let mut disabled = Vec::new();
++        let mut retained_epoch = None;
++        loop {
++            if borrowed.len() >= 256
++                || borrowed.iter().any(|(old, _)| {
++                    old.same_publication(cursor) && old.selection() == cursor.selection()
++                })
++            {
++                return Err(fault("owning crate lineage absent/cyclic or over budget"));
++            }
++            cursor.require_declaration_syntax()?;
++            if cursor.selection().outline.crate_key != unit
++                || &cursor.selection().outline.parse.profile != profile
++                || cursor.selection().outline.cfg != cfg
++                || !target.starts_with(&cursor.selection().outline.module_path)
++            {
++                return Err(fault(
++                    "owning crate lineage unit/profile/cfg/module differs",
++                ));
++            }
++            let row_bytes = cursor
++                .selection()
++                .metadata_bytes()?
++                .checked_mul(3)
++                .and_then(|n| n.checked_add(std::mem::size_of::<Row>() + 128))
++                .ok_or_else(limit)?;
++            charge(&mut bytes, row_bytes, byte_limit)?;
++            borrowed.try_reserve(1).map_err(|_| limit())?;
++            let local = cursor.local_macro_prelude_policy()?;
++            mapped_disabled(
++                &mut disabled,
++                &local,
++                &cursor.selection().outline.module_path,
++                target,
++                &mut bytes,
++                byte_limit,
++            )?;
++            let mut e = StableEncoder::new("lrr/v1/crate-policy-lineage-row");
++            e.digest(cursor.selection().location_identity());
++            e.record(&cursor.selection().outline.parse);
++            e.digest(cfg);
++            match (
++                &cursor.state._module_origin,
++                &cursor.state._ordinary_module_origin,
++            ) {
++                (Some(origin), None) => {
++                    let demand = origin.declaration();
++                    let items = origin.parent();
++                    let parent = origin.caller();
++                    if items.epoch() == 0
++                        || retained_epoch.is_some_and(|epoch| epoch != items.epoch())
++                        || items
++                            .record()
++                            .key()
++                            .procedural_epoch
++                            .is_some_and(|epoch| epoch != items.epoch())
++                    {
++                        return Err(fault("owning crate generated lineage epoch differs"));
++                    }
++                    retained_epoch = Some(items.epoch());
++                    items.record().key().validate()?;
++                    if demand.scope() != &cursor.outline().root_scope
++                        || demand.header() != origin.parent_header()
++                        || demand.producer() != origin.producer()
++                        || !items.items().iter().any(|h| &h.key == demand.header())
++                    {
++                        return Err(fault(
++                            "owning crate generated declaration/header lineage differs",
++                        ));
++                    }
++                    let suffix = &demand.request().module_path;
++                    let base = demand
++                        .scope()
++                        .module_path
++                        .strip_suffix(suffix.as_slice())
++                        .filter(|base| {
++                            !suffix.is_empty()
++                                && base.starts_with(&parent.selection().outline.module_path)
++                        })
++                        .ok_or_else(|| {
++                            fault("owning crate generated module scope/request differs")
++                        })?;
++                    let selected = origin.capture().record().selected()?;
++                    if selected.location().unit != unit
++                        || selected.location().path != cursor.selection().path
++                        || selected.blob().content() != cursor.selection().outline.parse.content
++                    {
++                        return Err(fault("owning crate generated capture/source differs"));
++                    }
++                    let parsed = ParsedFile::from_generated_items(items)?;
++                    let generated = parsed.macro_prelude_policy(parent.captured_macro_cfg()?)?;
++                    if !generated.standard || generated.disabled.iter().any(Vec::is_empty) {
++                        return Err(fault(
++                            "generated crate-level policy requires an owning declaration contract",
++                        ));
++                    }
++                    mapped_disabled(
++                        &mut disabled,
++                        &generated,
++                        base,
++                        target,
++                        &mut bytes,
++                        byte_limit,
++                    )?;
++                    e.u8(1);
++                    e.record(items.record().key());
++                    e.digest(items.record().output());
++                    e.u64(items.epoch());
++                    e.record(demand.header());
++                    e.digest(demand.producer());
++                    e.bytes(&demand.site().0);
++                    e.digest(origin.capture().record().identity());
++                    borrowed.push((cursor, e.finish()));
++                    cursor = parent;
++                }
++                (None, Some(origin)) => {
++                    let declaration = origin.declaration();
++                    let parent = declaration.source();
++                    let selected = origin.capture().record().selected()?;
++                    if declaration.scope() != &cursor.outline().root_scope
++                        || selected.location().unit != unit
++                        || selected.location().path != cursor.selection().path
++                        || selected.blob().content() != cursor.selection().outline.parse.content
++                    {
++                        return Err(fault(
++                            "owning crate ordinary declaration/capture lineage differs",
++                        ));
++                    }
++                    e.u8(2);
++                    e.record(declaration);
++                    e.digest(origin.capture().record().identity());
++                    e.digest(origin.compile_environment());
++                    borrowed.push((cursor, e.finish()));
++                    cursor = parent;
++                }
++                (None, None) => {
++                    if !cursor.selection().outline.module_path.is_empty() {
++                        return Err(fault("owning crate root requires retained module origin"));
++                    }
++                    let file = cursor
++                        .state
++                        .files
++                        .get(&cursor.location)
++                        .ok_or_else(|| fault("owning crate original source absent"))?;
++                    if file.parsed.generated_origin.is_some() {
++                        return Err(fault("owning crate original root has generated origin"));
++                    }
++                    let graph = cursor.source_dependencies()?;
++                    if graph.root_for(unit) != Some(cursor.selection()) {
++                        return Err(fault(
++                            "owning crate root not selected by actual source dependency graph",
++                        ));
++                    }
++                    e.u8(0);
++                    e.digest(graph.fingerprint());
++                    borrowed.push((cursor, e.finish()));
++                    break;
++                }
++                _ => {
++                    return Err(fault(
++                        "owning crate source has conflicting retained origins",
++                    ));
++                }
++            }
++        }
++        charge(
++            &mut bytes,
++            view.selection()
++                .metadata_bytes()?
++                .checked_mul(2)
++                .ok_or_else(limit)?,
++            byte_limit,
++        )?;
++        charge(
++            &mut bytes,
++            cursor
++                .selection()
++                .metadata_bytes()?
++                .checked_mul(2)
++                .ok_or_else(limit)?,
++            byte_limit,
++        )?;
++        let standard = cursor.local_macro_prelude_policy()?.standard;
++        disabled.sort();
++        disabled.dedup();
++        let mut rows = Vec::new();
++        rows.try_reserve_exact(borrowed.len())
++            .map_err(|_| limit())?;
++        for (source, origin) in borrowed {
++            rows.push(Row {
++                source: source.share(),
++                selection: source.selection().clone(),
++                origin,
++            })
++        }
++        Ok(Self {
++            endpoint: view.share(),
++            root: cursor.share(),
++            rows,
++            standard,
++            disabled,
++            retained_epoch,
++            current_epoch: None,
++            bytes,
++        })
++    }
++    pub(crate) fn capture_current(
++        view: &PreparedSourceView,
++        epoch: u64,
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        if epoch == 0 {
++            return Err(fault("owning crate policy current epoch absent"));
++        }
++        let mut prepared = Self::capture_retained(view, byte_limit)?;
++        if prepared.retained_epoch.is_some_and(|e| e != epoch) {
++            return Err(fault("owning crate policy current generated epoch differs"));
++        }
++        prepared.current_epoch = Some(epoch);
++        Ok(prepared)
++    }
++    pub(crate) fn revalidate_current(
++        &self,
++        view: &PreparedSourceView,
++        epoch: u64,
++    ) -> Result<(), Diagnostic> {
++        let current = Self::capture_current(view, epoch, self.bytes)?;
++        if self.current_epoch != Some(epoch)
++            || !self.endpoint.same_publication(view)
++            || self.endpoint.selection() != view.selection()
++            || !self.root.same_publication(&current.root)
++            || self.root.selection() != current.root.selection()
++            || self.rows.len() != current.rows.len()
++            || !self.rows.iter().zip(&current.rows).all(|(a, b)| {
++                a.source.same_publication(&b.source)
++                    && a.selection == b.selection
++                    && a.origin == b.origin
++            })
++            || self.identity() != current.identity()
++        {
++            return Err(fault("owning crate policy source/current lineage changed"));
++        }
++        Ok(())
++    }
++    pub(crate) fn policy(&self) -> MacroPreludePolicy {
++        MacroPreludePolicy {
++            standard: self.standard,
++            disabled: self.disabled.clone(),
++        }
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/owning-crate-prelude-policy");
++        e.bool(self.standard);
++        e.sequence(&self.disabled, |e, path| {
++            e.sequence(path, |e, name| e.string(name))
++        });
++        e.option(&self.current_epoch, |e, n| e.u64(*n));
++        e.u64(self.rows.len() as u64);
++        for row in &self.rows {
++            e.digest(row.origin)
++        }
++        e.finish()
++    }
++}
+diff --git a/crates/lrr/src/source/changes.rs b/crates/lrr/src/source/changes.rs
+--- a/crates/lrr/src/source/changes.rs
++++ b/crates/lrr/src/source/changes.rs
+@@ -2,6 +2,8 @@
+ use super::snapshot::{Snapshot, SourceBlob, SourcePath};
+ use crate::core::diagnostic::Diagnostic;
+ use std::collections::BTreeSet;
++#[path = "changes/crate_policy.rs"]
++pub(crate) mod crate_policy;
+ 
+ /// A complete source/module context selected by the immutable source resolver.
+ /// Includes used as bytes are not parsing contexts. Generated contexts join this
+@@ -504,7 +506,16 @@
+             .parsed
+             .macro_call_at(range)
+     }
++    /// Retained structural policy; current authority additionally needs epoch/seal replay.
+     pub(crate) fn macro_prelude_policy(
++        &self,
++    ) -> Result<crate::syntax::macro_prelude::MacroPreludePolicy, Diagnostic> {
++        Ok(
++            crate_policy::PreparedCratePreludePolicy::capture_retained(self, 32 * 1024 * 1024)?
++                .policy(),
++        )
++    }
++    pub(crate) fn local_macro_prelude_policy(
+         &self,
+     ) -> Result<crate::syntax::macro_prelude::MacroPreludePolicy, Diagnostic> {
+         let file = self
+diff --git a/crates/lrr/src/source/module_view.rs b/crates/lrr/src/source/module_view.rs
+--- a/crates/lrr/src/source/module_view.rs
++++ b/crates/lrr/src/source/module_view.rs
+@@ -76,6 +76,9 @@
+     pub fn outline(&self) -> &Outline {
+         &self.outline
+     }
++    pub(crate) fn declaration(&self) -> &GeneratedModuleSource {
++        &self.demand
++    }
+     pub fn parent_header(&self) -> &GeneratedItemKey {
+         self.demand.header()
+     }
+diff --git a/crates/lrr/src/source/dependencies.rs b/crates/lrr/src/source/dependencies.rs
+--- a/crates/lrr/src/source/dependencies.rs
++++ b/crates/lrr/src/source/dependencies.rs
+@@ -99,6 +99,9 @@
+             .collect();
+         Ok(graph)
+     }
++    pub(crate) fn root_for(&self, unit: Digest) -> Option<&SourceSelection> {
++        self.roots.get(&unit)
++    }
+     pub(crate) fn aliases_for(
+         &self,
+         consumer: Digest,
+diff --git a/crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs b/crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs
+--- a/crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs
++++ b/crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs
+@@ -9,6 +9,7 @@
+         compile_input_catalog::CompileInputCatalog, generated_macros::GeneratedMacroCatalog,
+     },
+     source::{
++        changes::crate_policy::PreparedCratePreludePolicy,
+         changes::{PreparedSourceView, SourceSelection},
+         module_syntax::ModuleSyntaxInput,
+     },
+@@ -26,6 +27,8 @@
+     compiler_identity: Digest,
+     child: Option<(PreparedSourceView, SourceSelection, Digest)>,
+     bytes: usize,
++    policy: PreparedCratePreludePolicy,
++    child_policy: Option<PreparedCratePreludePolicy>,
+ }
+ fn fault(message: &str) -> Diagnostic {
+     Diagnostic::new("LRR-E-COMPILE-INPUT", message.into())
+@@ -93,7 +96,18 @@
+             .and_then(|n| n.checked_add(compiler.owning_profile_metadata_bytes().ok()?))
+             .filter(|n| byte_limit <= 64 * 1024 * 1024 && *n <= byte_limit)
+             .ok_or_else(limit)?;
++        let residual = byte_limit
++            .checked_sub(bytes)
++            .ok_or_else(limit)?
++            .min(32 * 1024 * 1024);
++        let policy = PreparedCratePreludePolicy::capture_current(source, epoch, residual)?;
++        let bytes = bytes
++            .checked_add(policy.metadata_bytes())
++            .filter(|n| *n <= byte_limit)
++            .ok_or_else(limit)?;
+         Ok(Self {
++            policy,
++            child_policy: None,
+             caller: source.share(),
+             selection: selection.clone(),
+             scope: scope.clone(),
+@@ -127,6 +141,16 @@
+             .and_then(|n| n.checked_add(128))
+             .filter(|n| *n <= byte_limit)
+             .ok_or_else(limit)?;
++        let residual = byte_limit
++            .checked_sub(bytes)
++            .ok_or_else(limit)?
++            .min(32 * 1024 * 1024);
++        let policy = PreparedCratePreludePolicy::capture_current(child, epoch, residual)?;
++        let bytes = bytes
++            .checked_add(policy.metadata_bytes())
++            .filter(|n| *n <= byte_limit)
++            .ok_or_else(limit)?;
++        proof.child_policy = Some(policy);
+         proof.child = Some((child.share(), child.selection().clone(), syntax.identity()));
+         proof.bytes = bytes;
+         Ok(proof)
+@@ -175,6 +199,8 @@
+         generated: &GeneratedMacroCatalog,
+         epoch: u64,
+     ) -> Result<(), Diagnostic> {
++        self.policy
++            .revalidate_current(parent.module_source(), epoch)?;
+         let (items, scope, root) = generated.captured_owner();
+         if epoch != self.epoch
+             || items.epoch() != self.epoch
+@@ -209,6 +235,10 @@
+         self.revalidate_current(parent, generated, epoch)?;
+         self.check_module_origin(syntax, generated)?;
+         self.check_child(syntax, target)?;
++        self.child_policy
++            .as_ref()
++            .ok_or_else(|| fault("generated child owning policy absent"))?
++            .revalidate_current(syntax.prepared_source(), epoch)?;
+         if target.compiler.is_some() {
+             return Err(fault("generated compiler facet target already installed"));
+         }
+@@ -247,6 +277,10 @@
+         self.revalidate_current(parent, generated, epoch)?;
+         self.check_module_origin(syntax, generated)?;
+         self.check_child(syntax, target)?;
++        self.child_policy
++            .as_ref()
++            .ok_or_else(|| fault("generated child owning policy absent"))?
++            .revalidate_current(syntax.prepared_source(), epoch)?;
+         if target
+             .compiler
+             .as_ref()
+@@ -264,7 +298,7 @@
+         self.bytes
+     }
+     pub(super) fn identity(&self) -> Digest {
+-        let mut e = StableEncoder::new("lrr/v1/generated-source-compiler-facet");
++        let mut e = StableEncoder::new("lrr/v2/generated-source-compiler-facet");
+         e.digest(self.selection.location_identity());
+         e.record(&self.selection.outline.parse);
+         e.digest(self.selection.outline.cfg);
+@@ -274,6 +308,11 @@
+         e.bytes(&self.caller_root.0);
+         e.u64(self.epoch);
+         e.digest(self.compiler_identity);
++        e.digest(self.policy.identity());
++        e.bool(self.child_policy.is_some());
++        if let Some(policy) = &self.child_policy {
++            e.digest(policy.identity());
++        }
+         e.bool(self.child.is_some());
+         if let Some((_, selection, projection)) = &self.child {
+             e.digest(selection.location_identity());
+diff --git a/crates/lrr/src/source/changes/crate_policy_tests.rs b/crates/lrr/src/source/changes/crate_policy_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/source/changes/crate_policy_tests.rs
+@@ -0,0 +1,286 @@
++//! Structural owning-policy components; no body/diagnostic/full-fixture claims.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity, db::key::OutlineKey, source::snapshot::CfgSet,
++    syntax::parse::ParseKey,
++};
++const NO_STD: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/no-std-macros.rs"
++);
++const NO_IMPLICIT: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/no_implicit_prelude.rs"
++);
++const NO_IMPLICIT_18: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/no_implicit_prelude-2018.rs"
++);
++const CFG: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-comma-behavior-rpass.rs"
++);
++fn original(text: &str, edition: u16, cfg: CfgSet, module: Vec<String>) -> PreparedSourceView {
++    let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++    let path = SourcePath::new("policy.rs").unwrap();
++    let unit = Digest([101; 32]);
++    let profile = ProfileIdentity {
++        edition,
++        ..ProfileIdentity::current()
++    };
++    let selection = SourceSelection {
++        path: path.clone(),
++        outline: OutlineKey {
++            parse: ParseKey {
++                content: blob.content(),
++                profile: profile.clone(),
++            },
++            crate_key: unit,
++            module_path: module.clone(),
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let inputs = PreparedSourceInputs::refresh(
++        None,
++        vec![SourceUnitInput {
++            path,
++            crate_key: unit,
++            module_path: module,
++            profile,
++            cfg,
++            blob,
++        }],
++        Default::default(),
++    )
++    .unwrap();
++    let SourceSelectionOutcome::Selected(view) = inputs.select(&selection).unwrap() else {
++        panic!()
++    };
++    view
++}
++#[test]
++fn unchanged_no_std_original_keeps_actual_crate_root_all_owning_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let view = original(NO_STD, edition, CfgSet::guest_default(), vec![]);
++        let proof =
++            PreparedCratePreludePolicy::capture_current(&view, 1, 32 * 1024 * 1024).unwrap();
++        assert!(!proof.policy().standard);
++        assert_eq!(proof.root.selection(), view.selection());
++        assert_eq!(
++            proof.root.selection().outline.parse.profile.edition,
++            edition
++        );
++        proof.revalidate_current(&view, 1).unwrap();
++        assert!(!view.macro_prelude_policy().unwrap().standard);
++    }
++}
++#[test]
++fn unchanged_original_module_local_disabling_keeps_exact_source_scope() {
++    for (text, edition) in [(NO_IMPLICIT, 2015), (NO_IMPLICIT_18, 2018)] {
++        let view = original(text, edition, CfgSet::guest_default(), vec![]);
++        let proof =
++            PreparedCratePreludePolicy::capture_current(&view, 1, 32 * 1024 * 1024).unwrap();
++        assert!(proof.policy().standard);
++        assert_eq!(proof.policy().disabled, vec![vec!["bar".to_owned()]]);
++        proof.revalidate_current(&view, 1).unwrap();
++    }
++}
++#[test]
++fn unchanged_cfg_revision_source_selects_core_without_rewriting_original() {
++    for edition in [2015, 2018, 2021, 2024] {
++        for core in [false, true] {
++            let mut cfg = CfgSet::guest_default();
++            cfg.atoms.insert(if core { "core" } else { "std" }.into());
++            let view = original(CFG, edition, cfg, vec![]);
++            let proof =
++                PreparedCratePreludePolicy::capture_current(&view, 1, 32 * 1024 * 1024).unwrap();
++            assert_eq!(proof.policy().standard, !core);
++            assert_eq!(
++                proof.root.selection().outline.cfg,
++                view.selection().outline.cfg
++            );
++        }
++    }
++}
++#[test]
++fn missing_actual_original_root_never_becomes_default_std_authority() {
++    let view = original(
++        "fn local(){}",
++        2024,
++        CfgSet::guest_default(),
++        vec!["child".into()],
++    );
++    let error = PreparedCratePreludePolicy::capture_current(&view, 1, 32 * 1024 * 1024)
++        .err()
++        .unwrap();
++    assert_eq!(error.code, "LRR-E-CATALOG-INCOMPLETE");
++    assert!(error.message.contains("retained module origin"));
++    assert!(view.macro_prelude_policy().is_err());
++}
++#[test]
++fn current_epoch_and_copied_publication_require_new_policy_mint() {
++    let view = original(NO_STD, 2015, CfgSet::guest_default(), vec![]);
++    let proof = PreparedCratePreludePolicy::capture_current(&view, 1, 32 * 1024 * 1024).unwrap();
++    assert!(proof.revalidate_current(&view, 2).is_err());
++    assert!(PreparedCratePreludePolicy::capture_current(&view, 0, 32 * 1024 * 1024).is_err());
++    let copy = original(NO_STD, 2015, CfgSet::guest_default(), vec![]);
++    assert!(proof.revalidate_current(&copy, 1).is_err());
++}
++#[test]
++fn changed_actual_cfg_profile_and_quota_do_not_copy_policy_authority() {
++    let mut cfg = CfgSet::guest_default();
++    cfg.atoms.insert("std".into());
++    let view = original(CFG, 2018, cfg, vec![]);
++    let proof = PreparedCratePreludePolicy::capture_current(&view, 1, 32 * 1024 * 1024).unwrap();
++    let mut core = CfgSet::guest_default();
++    core.atoms.insert("core".into());
++    let changed = original(CFG, 2018, core, vec![]);
++    assert!(proof.revalidate_current(&changed, 1).is_err());
++    let foreign = original(CFG, 2024, CfgSet::guest_default(), vec![]);
++    assert!(proof.revalidate_current(&foreign, 1).is_err());
++    assert_eq!(
++        PreparedCratePreludePolicy::capture_current(&view, 1, 1)
++            .err()
++            .unwrap()
++            .code,
++        "LRR-E-METADATA-LIMIT"
++    );
++}
++const NESTED: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/modules/mod_dir_recursive.rs"
++);
++fn ordinary_child(parent: &PreparedSourceView) -> PreparedSourceView {
++    use crate::{
++        db::{dependency::InputKey, key::QueryKey, memo::Database, poll::InputRequest},
++        frontend::source_module_declarations::SourceModuleDeclaration,
++        service::{
++            expansion::{DemandContext, ExpansionCoordinator, PhaseIdentity},
++            source_capture::SourceCapture,
++        },
++        source::{
++            include_paths::{IncludeAuthorities, IncludeRoot, IncludeRootKind},
++            module_capture::AdoptedModuleCapture,
++            ordinary_module::{OrdinaryModuleSourceView, OrdinaryModuleSyntaxInput},
++        },
++    };
++    use std::{collections::BTreeMap, path::Path, sync::Arc};
++    let declaration = SourceModuleDeclaration::from_captured(parent)
++        .unwrap()
++        .into_iter()
++        .next()
++        .unwrap();
++    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("../../fixtures/upstream/rustc-checkout/tests/ui/modules")
++        .canonicalize()
++        .unwrap();
++    let unit = parent.selection().outline.crate_key;
++    let authorities = IncludeAuthorities::new(
++        unit,
++        Digest([103; 32]),
++        [IncludeRoot {
++            identity: Digest([104; 32]),
++            path: root,
++            kind: IncludeRootKind::Source,
++        }],
++    )
++    .unwrap();
++    let capture = SourceCapture::open(
++        IncludeAuthorities::new(
++            unit,
++            Digest([103; 32]),
++            [authorities.root(Digest([104; 32])).unwrap().clone()],
++        )
++        .unwrap(),
++        BTreeMap::new(),
++    )
++    .unwrap();
++    let directory = Path::new(parent.selection().path.as_str())
++        .parent()
++        .unwrap_or(Path::new(""));
++    let environment = crate::expand::builtins::FrozenCompileEnvironment::new(
++        unit,
++        &crate::project::tool_manifest::CompileEnv {
++            unit,
++            host: "aarch64-apple-darwin".into(),
++            target: "aarch64-apple-darwin".into(),
++            cfg: parent.captured_macro_cfg().unwrap().clone(),
++            cargo: BTreeMap::new(),
++            rustc_env: BTreeMap::new(),
++            declared: BTreeMap::new(),
++            out_dir: None,
++        },
++    )
++    .unwrap()
++    .fingerprint();
++    let input = declaration
++        .capture_request(&authorities, directory, environment)
++        .unwrap();
++    let InputRequest::CaptureModule { request, .. } = &input else {
++        panic!()
++    };
++    let captured = capture.capture_module(request).unwrap();
++    let mut db = Database::default();
++    db.begin_expansion_epoch(1).unwrap();
++    let context = DemandContext {
++        request: Digest([106; 32]),
++        session: Digest([107; 32]),
++        unit,
++        revision: db.source_revision(),
++        epoch: 1,
++        source_generation: Digest([103; 32]),
++        native_generation: None,
++        compile_environment: environment,
++    };
++    let body = parent
++        .outline()
++        .items
++        .iter()
++        .find_map(|i| i.body.as_ref())
++        .map(|b| b.key())
++        .unwrap_or(crate::source::manifest::BodyKey {
++            definition: declaration.definition().fingerprint(),
++            exact_body_bytes: parent.selection().outline.parse.content,
++        });
++    let mut coordinator = ExpansionCoordinator::new(context.clone());
++    let token = coordinator
++        .issue(
++            QueryKey::Outline(parent.selection().outline.clone()),
++            PhaseIdentity {
++                frame: Digest([108; 32]),
++                body,
++                index: 0,
++            },
++            input.clone(),
++        )
++        .unwrap();
++    coordinator.start(&context, &token).unwrap();
++    coordinator
++        .accept_module(&context, &token, &captured)
++        .unwrap();
++    coordinator
++        .adopt_module(&context, &token, &mut db, captured)
++        .unwrap();
++    let adopted = Arc::new(
++        AdoptedModuleCapture::new(
++            db.input(&InputKey::ModuleRecord(input.fingerprint()))
++                .unwrap(),
++        )
++        .unwrap(),
++    );
++    let origin = Arc::new(OrdinaryModuleSourceView::new(&declaration, &input, adopted).unwrap());
++    OrdinaryModuleSyntaxInput::prepare(origin)
++        .unwrap()
++        .prepared_source()
++        .share()
++}
++#[test]
++fn unchanged_nested_module_actual_captures_retain_the_same_original_root() {
++    let root = original(NESTED, 2024, CfgSet::guest_default(), vec![]);
++    let first = ordinary_child(&root);
++    let second = ordinary_child(&first);
++    let proof = PreparedCratePreludePolicy::capture_current(&second, 1, 32 * 1024 * 1024).unwrap();
++    assert_eq!(proof.root.selection(), root.selection());
++    assert_eq!(proof.rows.len(), 3);
++    assert_eq!(
++        second.selection().outline.module_path,
++        vec!["mod_dir_simple", "load_another_mod", "test"]
++    );
++    assert!(proof.policy().standard);
++    proof.revalidate_current(&second, 1).unwrap();
++}
+diff --git a/crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs b/crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs
+--- a/crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs
++++ b/crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs
+@@ -528,10 +528,10 @@
+ }
+ 
+ #[test]
+-fn missing_crate_wide_no_std_policy_join_remains_a_precise_prerequisite() {
+-    // Independent LRR policy-refusal control; no upstream file is rewritten.
+-    let source = "#![no_std]macro_rules! emit{()=>{#[path=\"issue-56411-aux.rs\"]mod issue_56411_aux;}}emit!();fn main(){}";
+-    let (_, _, ps, cat, syntax) = adopted_module_source(source, "no-std-negative.rs", "emit");
++fn genuine_generated_child_inherits_captured_no_std_root_before_facet_attachment() {
++    // Independent LRR lineage control with unchanged official captured child.
++    let source = r##"#![no_std]macro_rules! emit{()=>{#[path="issue-56411-aux.rs"]mod issue_56411_aux;}}emit!();fn main(){}"##;
++    let (_, _, ps, cat, syntax) = adopted_module_source(source, "no-std-policy.rs", "emit");
+     assert!(
+         !ps[1]
+             .module_source()
+@@ -542,19 +542,101 @@
+     assert!(
+         syntax
+             .prepared_source()
++            .local_macro_prelude_policy()
++            .unwrap()
++            .standard
++    );
++    assert!(
++        !syntax
++            .prepared_source()
+             .macro_prelude_policy()
+             .unwrap()
+             .standard
+     );
+-    let error = PreparedGeneratedCompilerFacet::capture_module_current(
++    let proof = PreparedGeneratedCompilerFacet::capture_module_current(
+         &syntax,
+         &ps[1],
+         &cat,
+         1,
+         64 * 1024 * 1024,
+     )
+-    .err()
+-    .unwrap();
+-    assert_eq!(error.code, "LRR-E-COMPILE-INPUT");
+-    assert!(error.message.contains("retained crate-wide prelude policy"));
+-}
++    .unwrap();
++    let mut child = SourceDeclarative::new(syntax.prepared_source().share()).unwrap();
++    proof
++        .install_module(&syntax, &mut child, &ps[1], &cat, 1)
++        .unwrap();
++    proof
++        .revalidate_module(&syntax, &child, &ps[1], &cat, 1)
++        .unwrap();
++    assert_eq!(
++        child.compiler.as_ref().unwrap().runtime_prelude_unit(
++            child
++                .module_source()
++                .macro_prelude_policy()
++                .unwrap()
++                .standard
++        ),
++        crate::facade::unit(&ps[1].module_source().outline().profile, "core")
++    );
++    assert!(
++        proof
++            .revalidate_module(&syntax, &child, &ps[1], &cat, 2)
++            .is_err()
++    );
++}
++#[test]
++fn genuine_generated_declaration_local_disable_does_not_change_root_standard_policy() {
++    let source = r##"macro_rules! emit{()=>{#[no_implicit_prelude]#[path="issue-56411-aux.rs"]mod issue_56411_aux;}}emit!();fn main(){}"##;
++    let (_, _, ps, cat, syntax) = adopted_module_source(source, "generated-disable.rs", "emit");
++    assert!(
++        ps[1]
++            .module_source()
++            .macro_prelude_policy()
++            .unwrap()
++            .disabled
++            .is_empty()
++    );
++    let policy = syntax.prepared_source().macro_prelude_policy().unwrap();
++    assert!(policy.standard);
++    assert_eq!(policy.disabled, vec![Vec::<String>::new()]);
++    let proof = PreparedGeneratedCompilerFacet::capture_module_current(
++        &syntax,
++        &ps[1],
++        &cat,
++        1,
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    let mut child = SourceDeclarative::new(syntax.prepared_source().share()).unwrap();
++    proof
++        .install_module(&syntax, &mut child, &ps[1], &cat, 1)
++        .unwrap();
++    proof
++        .revalidate_module(&syntax, &child, &ps[1], &cat, 1)
++        .unwrap();
++}
++#[test]
++fn genuine_captured_root_disabled_prelude_is_inherited_by_its_generated_child() {
++    let source = r##"#![no_implicit_prelude]macro_rules! emit{()=>{#[path="issue-56411-aux.rs"]mod issue_56411_aux;}}emit!();fn main(){}"##;
++    let (_, _, ps, cat, syntax) = adopted_module_source(source, "root-disable.rs", "emit");
++    assert_eq!(
++        syntax
++            .prepared_source()
++            .macro_prelude_policy()
++            .unwrap()
++            .disabled,
++        vec![Vec::<String>::new()]
++    );
++    let proof = PreparedGeneratedCompilerFacet::capture_module_current(
++        &syntax,
++        &ps[1],
++        &cat,
++        1,
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    let mut child = SourceDeclarative::new(syntax.prepared_source().share()).unwrap();
++    proof
++        .install_module(&syntax, &mut child, &ps[1], &cat, 1)
++        .unwrap();
++}
+diff --git a/crates/lrr/src/source/changes/crate_policy.rs b/crates/lrr/src/source/changes/crate_policy.rs
+--- a/crates/lrr/src/source/changes/crate_policy.rs
++++ b/crates/lrr/src/source/changes/crate_policy.rs
+@@ -360,3 +360,7 @@
+         e.finish()
+     }
+ }
++
++#[cfg(test)]
++#[path = "crate_policy_tests.rs"]
++mod tests;

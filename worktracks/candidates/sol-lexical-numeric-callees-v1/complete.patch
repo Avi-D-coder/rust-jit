@@ -1,0 +1,1654 @@
+--- a/crates/lrr/src/syntax/mod.rs
++++ b/crates/lrr/src/syntax/mod.rs
+@@ -66,3 +66,5 @@
+ 
+ #[cfg(test)]
+ pub(crate) mod floating_fixture_hygiene;
++
++pub(crate) mod lexical_numeric_callees;
+--- a/crates/lrr/src/syntax/thunks.rs
++++ b/crates/lrr/src/syntax/thunks.rs
+@@ -2303,13 +2303,16 @@
+                                 _ => false,
+                             })
+                         });
+-                if local_item
+-                    || (relative
+-                        && self.enclosing_import_may_bind(
+-                            path.syntax(),
+-                            &root_name,
+-                            index.cfg(),
+-                        )?)
++                // This probe only permits an ordinary call recipe. The
++                // dispatcher must resolve the exact entered lexical definition
++                // before any argument or call opcode; it is not a name proof.
++                let lexical_function = relative
++                    && !qualified
++                    && self.generated_origin.is_none()
++                    && self.lexical_function_recipe_candidate(&path, index.cfg())?;
++                if local_item && !lexical_function
++                    || relative
++                        && self.enclosing_import_may_bind(path.syntax(), &root_name, index.cfg())?
+                 {
+                     return unsupported("lexical item callee requires body namespace integration");
+                 }
+@@ -3882,3 +3885,104 @@
+         // execution of invalid FOO(), or complete compile-fail acceptance.
+     }
+ }
++
++impl ParsedFile {
++    /// Require the exact entered namespace context whenever lowering admitted a
++    /// lexical function spelling. This guard cannot select a callable itself.
++    pub(crate) fn entered_call_requires_lexical_context(
++        &self,
++        body: &BodyHandle,
++        index: &BodyIndex,
++        key: &PcKey,
++        expected_name: &str,
++    ) -> Result<bool, Diagnostic> {
++        if self.generated_origin.is_some() || expected_name.contains("::") {
++            return Ok(false);
++        }
++        if body.key() != *index.body() || key.body != body.key() {
++            return Err(error("lexical dispatch caller body identity differs"));
++        }
++        if index.pc(NodeId(key.node), Phase::from_code(key.phase))? != *key {
++            return Err(error("lexical dispatch exact PC differs"));
++        }
++        let node = &index.nodes()[key.node as usize];
++        let start = body
++            .range
++            .start
++            .checked_add(node.range.start)
++            .ok_or_else(|| error("lexical dispatch source start overflow"))?;
++        let end = body
++            .range
++            .start
++            .checked_add(node.range.end)
++            .ok_or_else(|| error("lexical dispatch source end overflow"))?;
++        let root = self.entered_body_root(body)?;
++        let call = root
++            .covering_element(ra_ap_syntax::TextRange::new(start.into(), end.into()))
++            .ancestors()
++            .find_map(|syntax| {
++                let call = ast::CallExpr::cast(syntax)?;
++                let range = call.syntax().text_range();
++                (u32::from(range.start()) == start && u32::from(range.end()) == end).then_some(call)
++            })
++            .ok_or_else(|| error("lexical dispatch exact call syntax absent"))?;
++        let Some(ast::Expr::PathExpr(path)) = call.expr() else {
++            return Err(error("lexical dispatch direct source path absent"));
++        };
++        let name = path
++            .path()
++            .and_then(|path| path.segment())
++            .and_then(|segment| segment.name_ref())
++            .ok_or_else(|| error("lexical dispatch source name absent"))?;
++        if MacroName::parse(name.text(), self.edition)?
++            != MacroName::parse(expected_name, self.edition)?
++        {
++            return Err(error("lexical dispatch recipe name differs from source"));
++        }
++        self.lexical_function_recipe_candidate(&path, index.cfg())
++    }
++    fn lexical_function_recipe_candidate(
++        &self,
++        path: &ast::PathExpr,
++        cfg: &crate::source::snapshot::CfgSet,
++    ) -> Result<bool, Diagnostic> {
++        let Some(p) = path.path() else {
++            return Ok(false);
++        };
++        if p.qualifier().is_some() {
++            return Ok(false);
++        }
++        let Some(name) = p.segment().and_then(|part| part.name_ref()) else {
++            return Ok(false);
++        };
++        let wanted = MacroName::parse(name.text(), self.edition)?;
++        let mut work = 0usize;
++        for (depth, scope) in path.syntax().ancestors().enumerate() {
++            if depth >= 256 {
++                return Err(error("lexical function recipe scope depth budget"));
++            }
++            let Some(list) = ast::StmtList::cast(scope) else {
++                continue;
++            };
++            for statement in list.statements() {
++                work = work
++                    .checked_add(1)
++                    .filter(|n| *n <= 100_000)
++                    .ok_or_else(|| error("lexical function recipe source work budget"))?;
++                let ast::Stmt::Item(ast::Item::Fn(function)) = statement else {
++                    continue;
++                };
++                let (enabled, attributed) = statement_cfg(function.syntax(), cfg)?;
++                if enabled
++                    && !attributed
++                    && function.name().is_some_and(|name| {
++                        MacroName::parse(name.text(), self.edition).is_ok_and(|name| name == wanted)
++                    })
++                {
++                    return Ok(true);
++                }
++            }
++        }
++        Ok(false)
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/syntax/lexical_numeric_callees.rs
+@@ -0,0 +1,386 @@
++//! Immutable original-source lexical function facts for a reached direct call.
++//! Namespace selection and admission remain dispatcher/frontend responsibilities.
++use super::{
++    body_index::BodyIndex,
++    outline::{BodyHandle, DeclarationContext, HeaderRecipe, ItemOutline},
++    parse::{ParseKey, ParsedFile},
++    signatures::{FunctionSignature, GenericKind},
++    spans::SourceRange,
++};
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    expand::scopes::MacroName,
++    ir::{
++        op::PrimitiveType,
++        pc::{PcKey, Phase},
++    },
++    source::manifest::ItemKind,
++    traits::term::TyTerm,
++};
++use ra_ap_syntax::{
++    AstNode, TextRange, TextSize,
++    ast::{self, HasArgList},
++};
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-CALL-CONTEXT", message.into())
++}
++/// Private fields prohibit callers from replacing a selected header/body pair.
++/// Root admission must additionally verify current parent inputs/namespace facts.
++#[derive(Debug, Clone)]
++pub(crate) struct LexicalFunctionPlan {
++    source: ParseKey,
++    caller: BodyHandle,
++    caller_header: HeaderRecipe,
++    caller_context: DeclarationContext,
++    site: PcKey,
++    path_range: SourceRange,
++    scope: u32,
++    item: ItemOutline,
++    signature: FunctionSignature,
++    primitive_names: Vec<&'static str>,
++    source_revision: u64,
++    query_revision: u64,
++    metadata_bytes: usize,
++}
++fn primitive_name(ty: &TyTerm) -> Option<&'static str> {
++    Some(match ty {
++        TyTerm::Primitive(PrimitiveType::I8) => "i8",
++        TyTerm::Primitive(PrimitiveType::I16) => "i16",
++        TyTerm::Primitive(PrimitiveType::I32) => "i32",
++        TyTerm::Primitive(PrimitiveType::I64) => "i64",
++        TyTerm::Primitive(PrimitiveType::Isize) => "isize",
++        TyTerm::Primitive(PrimitiveType::U8) => "u8",
++        TyTerm::Primitive(PrimitiveType::U16) => "u16",
++        TyTerm::Primitive(PrimitiveType::U32) => "u32",
++        TyTerm::Primitive(PrimitiveType::U64) => "u64",
++        TyTerm::Primitive(PrimitiveType::Usize) => "usize",
++        TyTerm::Primitive(PrimitiveType::F32) => "f32",
++        TyTerm::Primitive(PrimitiveType::F64) => "f64",
++        _ => return None,
++    })
++}
++impl LexicalFunctionPlan {
++    pub(crate) fn source(&self) -> &ParseKey {
++        &self.source
++    }
++    pub(crate) fn caller(&self) -> &BodyHandle {
++        &self.caller
++    }
++    pub(crate) fn caller_header(&self) -> &HeaderRecipe {
++        &self.caller_header
++    }
++    pub(crate) fn caller_context(&self) -> &DeclarationContext {
++        &self.caller_context
++    }
++    pub(crate) fn site(&self) -> &PcKey {
++        &self.site
++    }
++    pub(crate) fn path_range(&self) -> SourceRange {
++        self.path_range
++    }
++    pub(crate) fn scope(&self) -> u32 {
++        self.scope
++    }
++    pub(crate) fn item(&self) -> &ItemOutline {
++        &self.item
++    }
++    pub(crate) fn signature(&self) -> &FunctionSignature {
++        &self.signature
++    }
++    pub(crate) fn primitive_names(&self) -> &[&'static str] {
++        &self.primitive_names
++    }
++    pub(crate) fn source_revision(&self) -> u64 {
++        self.source_revision
++    }
++    pub(crate) fn query_revision(&self) -> u64 {
++        self.query_revision
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.metadata_bytes
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/reached-lexical-numeric-function-plan");
++        e.record(&self.source);
++        e.record(&self.caller.key());
++        e.record(&self.caller_header);
++        e.record(&self.caller_context.scope);
++        e.u32(self.caller_context.range.start);
++        e.u32(self.caller_context.range.end);
++        e.record(&self.site);
++        e.u32(self.path_range.start);
++        e.u32(self.path_range.end);
++        e.u32(self.scope);
++        e.record(&self.item.def_key);
++        e.record(&self.item.header);
++        e.record(&self.item.scope);
++        e.record(&self.signature);
++        e.u32(self.item.declaration_span.start);
++        e.u32(self.item.declaration_span.end);
++        e.record(&self.item.body.as_ref().expect("checked lexical body").key());
++        e.u64(self.source_revision);
++        e.u64(self.query_revision);
++        e.finish()
++    }
++}
++impl ParsedFile {
++    /// Rebuild exact immutable declaration facts from this captured caller only.
++    /// No callee body index/thunk, future call or provider is demanded.
++    #[allow(clippy::too_many_arguments)]
++    pub(crate) fn lexical_numeric_function_plan(
++        &self,
++        caller: &BodyHandle,
++        index: &BodyIndex,
++        site: &PcKey,
++        caller_header: &HeaderRecipe,
++        caller_context: &DeclarationContext,
++        selected: Digest,
++        expected_name: &str,
++        source_revision: u64,
++        query_revision: u64,
++    ) -> Result<LexicalFunctionPlan, Diagnostic> {
++        if self.generated_origin.is_some()
++            || caller.key() != *index.body()
++            || site.body != caller.key()
++            || site.phase != Phase::Entry.code()?
++        {
++            return Err(fault(
++                "lexical numeric call requires original exact caller entry",
++            ));
++        }
++        index.pc(crate::ir::pc::NodeId(site.node), Phase::Entry)?;
++        let node = &index.nodes()[site.node as usize];
++        let start = caller
++            .range
++            .start
++            .checked_add(node.range.start)
++            .ok_or_else(|| fault("lexical call source start overflow"))?;
++        let end = caller
++            .range
++            .start
++            .checked_add(node.range.end)
++            .ok_or_else(|| fault("lexical call source end overflow"))?;
++        let root = self.entered_body_root(caller)?;
++        let call = root
++            .covering_element(TextRange::new(TextSize::from(start), TextSize::from(end)))
++            .ancestors()
++            .find_map(|node| {
++                let call = ast::CallExpr::cast(node)?;
++                let range = call.syntax().text_range();
++                (u32::from(range.start()) == start && u32::from(range.end()) == end).then_some(call)
++            })
++            .ok_or_else(|| fault("lexical call exact syntax absent"))?;
++        if call.arg_list().is_none() {
++            return Err(fault("lexical call arguments absent"));
++        }
++        let Some(ast::Expr::PathExpr(path)) = call.expr() else {
++            return Err(fault("lexical call is not a direct source path"));
++        };
++        let p = path
++            .path()
++            .ok_or_else(|| fault("lexical call path absent"))?;
++        let segment = p
++            .segment()
++            .ok_or_else(|| fault("lexical call segment absent"))?;
++        if p.qualifier().is_some() || segment.coloncolon_token().is_some() {
++            return Err(fault(
++                "lexical numeric callee requires one relative source name",
++            ));
++        }
++        let name = segment
++            .name_ref()
++            .ok_or_else(|| fault("lexical call name absent"))?;
++        let wanted = MacroName::parse(expected_name, self.edition)?;
++        if MacroName::parse(name.text(), self.edition)? != wanted {
++            return Err(fault(
++                "lexical call recipe name differs from exact source path",
++            ));
++        }
++        let caller_signature =
++            self.function_signature(caller.def_key, caller_header, caller_context, Some(caller))?;
++        let facts = self.entered_macro_facts(caller, index.cfg(), &caller_context.scope)?;
++        if facts.items.len() > 100_000 {
++            return Err(fault("lexical declaration source work budget"));
++        }
++        let mut found = facts
++            .items
++            .iter()
++            .filter(|row| row.item.def_key.fingerprint() == selected);
++        let row = found
++            .next()
++            .ok_or_else(|| fault("selected lexical declaration absent from exact caller"))?;
++        if found.next().is_some()
++            || row.item.def_key.item_kind != ItemKind::Function
++            || MacroName::parse(&row.item.def_key.declared_name, self.edition)? != wanted
++            || row.attribute_input.is_some()
++            || row.item.header.profile != self.profile
++            || row.item.scope.owner.is_none()
++        {
++            return Err(fault(
++                "lexical function source declaration identity differs",
++            ));
++        }
++        let body = row
++            .item
++            .body
++            .as_ref()
++            .ok_or_else(|| fault("lexical function body handle absent"))?;
++        body.require_entry()?;
++        let function = self
++            .parsed
++            .tree()
++            .syntax()
++            .covering_element(TextRange::new(
++                TextSize::from(row.item.declaration_span.start),
++                TextSize::from(row.item.declaration_span.end),
++            ))
++            .ancestors()
++            .find_map(ast::Fn::cast)
++            .ok_or_else(|| fault("lexical function exact syntax absent"))?;
++        if function.async_token().is_some()
++            || function.gen_token().is_some()
++            || function.abi().is_some()
++            || function.unsafe_token().is_some()
++            || function.param_list().is_some_and(|list| {
++                list.params().any(|parameter| {
++                    parameter
++                        .syntax()
++                        .children()
++                        .any(|node| ast::Attr::can_cast(node.kind()))
++                })
++            })
++        {
++            return Err(fault(
++                "lexical function modifiers or parameter attributes require later integration",
++            ));
++        }
++
++        let context = DeclarationContext {
++            scope: row.item.scope.clone(),
++            range: row.item.declaration_span,
++        };
++        let signature =
++            self.function_signature(selected, &row.item.header, &context, Some(body))?;
++        if !signature.generics.is_empty()
++            || !signature.predicates.is_empty()
++            || signature.parameters.len() > 256
++        {
++            return Err(fault(
++                "lexical generic source signature awaits owning context integration",
++            ));
++        }
++        let mut names = Vec::new();
++        names
++            .try_reserve_exact(signature.parameters.len() + 1)
++            .map_err(|_| fault("lexical primitive source proof allocation"))?;
++        for parameter in &signature.parameters {
++            if parameter.receiver || parameter.variadic {
++                return Err(fault(
++                    "lexical scalar parameter shape requires later integration",
++                ));
++            }
++            names.push(
++                parameter
++                    .symbolic
++                    .as_ref()
++                    .and_then(primitive_name)
++                    .ok_or_else(|| {
++                        fault("lexical parameter requires symbolic type namespace integration")
++                    })?,
++            );
++        }
++        names.push(
++            signature
++                .result_symbolic
++                .as_ref()
++                .and_then(primitive_name)
++                .ok_or_else(|| {
++                    fault("lexical result requires symbolic type namespace integration")
++                })?,
++        );
++        names.sort_unstable();
++        names.dedup();
++        for parameter in &caller_signature.generics {
++            if parameter.kind == GenericKind::Type
++                && names.iter().any(|name| {
++                    MacroName::parse(&parameter.name, self.edition).ok()
++                        == MacroName::parse(name, self.edition).ok()
++                })
++            {
++                return Err(fault(
++                    "lexical primitive spelling is a caller type parameter",
++                ));
++            }
++        }
++        let charge = |bytes: usize, n: usize| {
++            bytes
++                .checked_add(n)
++                .filter(|n| *n <= 32 * 1024 * 1024)
++                .ok_or_else(|| fault("lexical function plan metadata budget"))
++        };
++        let mut metadata_bytes = std::mem::size_of::<LexicalFunctionPlan>();
++        for n in [
++            caller_header.estimated_bytes(),
++            row.item.header.estimated_bytes(),
++            signature.estimated_bytes(),
++            row.item.def_key.declared_name.len(),
++            names
++                .capacity()
++                .checked_mul(std::mem::size_of::<&str>())
++                .ok_or_else(|| fault("lexical name proof size overflow"))?,
++        ] {
++            metadata_bytes = charge(metadata_bytes, n)?;
++        }
++        for path in [
++            &caller_context.scope.module_path,
++            &row.item.scope.module_path,
++            &row.item.def_key.module_path,
++            &signature.scope.module_path,
++        ] {
++            metadata_bytes = charge(
++                metadata_bytes,
++                path.len()
++                    .checked_mul(std::mem::size_of::<String>())
++                    .ok_or_else(|| fault("lexical plan path size overflow"))?,
++            )?;
++            for component in path {
++                metadata_bytes = charge(metadata_bytes, component.len())?;
++            }
++        }
++        // Parse/header/signature profiles each retain their owned semantics string.
++        metadata_bytes = charge(
++            metadata_bytes,
++            self.profile
++                .semantics
++                .len()
++                .checked_mul(4)
++                .ok_or_else(|| fault("lexical plan profile size overflow"))?,
++        )?;
++        let r = path.syntax().text_range();
++        Ok(LexicalFunctionPlan {
++            source: self.key(),
++            caller: caller.clone(),
++            caller_header: caller_header.clone(),
++            caller_context: caller_context.clone(),
++            site: site.clone(),
++            path_range: SourceRange {
++                start: u32::from(r.start()),
++                end: u32::from(r.end()),
++            },
++            scope: row.scope,
++            item: row.item.clone(),
++            signature,
++            primitive_names: names,
++            source_revision,
++            query_revision,
++            metadata_bytes,
++        })
++    }
++}
++
++#[cfg(test)]
++#[path = "lexical_numeric_callees_tests.rs"]
++mod tests;
+--- a/crates/lrr/src/engine/run.rs
++++ b/crates/lrr/src/engine/run.rs
+@@ -471,6 +471,108 @@
+             QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
+             QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
+         };
++        self.prepare_selected_argument_call(db, callee, syntax, argument_slots)
++    }
++    fn select_reached_argument_call(
++        &self,
++        db: &mut Database,
++        contexts: &[super::runtime_macros::RuntimeMacroContext<'_>],
++        site: crate::ir::recipe::CallSiteId,
++        name: &str,
++        syntax: &[String],
++        arguments: &[SlotId],
++    ) -> QueryPoll<SelectedArgumentCall> {
++        if self.frame.pc().node != site.0 {
++            return QueryPoll::Ready(Err(call_fault("reached lexical call site differs")));
++        }
++        let Some(graph) = &self.graph else {
++            return QueryPoll::Ready(Err(call_fault(
++                "source calls require a checked source catalogue",
++            )));
++        };
++        for context in contexts {
++            if !matches!(db.input(&crate::db::dependency::InputKey::DefinitionSource(self.frame.pc().body.definition)).as_deref(),
++                Some(crate::db::dependency::InputValue::DefinitionSource(source))
++                if source==&context.source().selection().outline.parse)
++            {
++                continue;
++            }
++            match context.bind_lexical_numeric_function(
++                db,
++                graph,
++                &self.frame.body,
++                self.frame.pc(),
++                name,
++                self.runtime_no_item_proofs.values(),
++            ) {
++                QueryPoll::Ready(Ok(Some(callee))) => {
++                    return self.prepare_selected_argument_call(db, callee, syntax, arguments);
++                }
++                QueryPoll::Ready(Ok(None)) => {}
++                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
++                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
++            }
++        }
++        // A lowered lexical source path must never fall back to a same-named
++        // module callable when its entered namespace context was not supplied.
++        if !name.contains("::") {
++            use crate::db::dependency::{InputKey, InputValue};
++            let definition = self.frame.pc().body.definition;
++            let source = match db.input(&InputKey::DefinitionSource(definition)).as_deref() {
++                Some(InputValue::DefinitionSource(source)) => source.clone(),
++                _ => return QueryPoll::Ready(Err(call_fault("reached caller source absent"))),
++            };
++            let handle = match db.input(&InputKey::DefinitionBody(definition)).as_deref() {
++                Some(InputValue::DefinitionBody(handle))
++                    if handle.key() == self.frame.pc().body =>
++                {
++                    handle.clone()
++                }
++                _ => {
++                    return QueryPoll::Ready(Err(call_fault(
++                        "reached caller body identity differs",
++                    )));
++                }
++            };
++            let parsed = match db.fetch(&SyntaxProvider, QueryKey::ParseFile(source)) {
++                QueryPoll::Ready(Ok(value)) => value,
++                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
++                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
++            };
++            let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
++                return QueryPoll::Ready(Err(call_fault("reached caller parse kind differs")));
++            };
++            match parsed.entered_call_requires_lexical_context(
++                &handle,
++                &self.frame.body,
++                self.frame.pc(),
++                name,
++            ) {
++                Ok(true) => {
++                    return QueryPoll::Ready(Err(Diagnostic::new(
++                        "LRR-E-CALL-CONTEXT",
++                        "lexical callee requires exact entered source context".into(),
++                    )));
++                }
++                Ok(false) => {}
++                Err(error) => return QueryPoll::Ready(Err(error)),
++            }
++        }
++        self.select_argument_call(db, name, syntax, arguments)
++    }
++    fn prepare_selected_argument_call(
++        &self,
++        db: &mut Database,
++        callee: Box<SourceCallable>,
++        syntax: &[String],
++        argument_slots: &[SlotId],
++    ) -> QueryPoll<SelectedArgumentCall> {
++        let Some(graph) = &self.graph else {
++            return QueryPoll::Ready(Err(call_fault(
++                "source calls require a checked source catalogue",
++            )));
++        };
++        let sources: Vec<_> = self.sources.iter().collect();
+         let mut explicit = Vec::new();
+         if !syntax.is_empty() {
+             let parameters: Vec<_> = callee
+@@ -620,6 +722,7 @@
+             .len()
+             .checked_mul(std::mem::size_of::<(u32, ArgumentType)>())
+             .and_then(|n| n.checked_add(callee.signature().estimated_bytes()))
++            .and_then(|n| n.checked_add(callee.retained_lexical_metadata_bytes()))
+             .and_then(|n| {
+                 n.checked_add(if result_hint.is_some() {
+                     std::mem::size_of::<ArgumentType>()
+@@ -1700,7 +1803,9 @@
+                         arguments,
+                     } => {
+                         if !self.pending.contains_key(&site.0) {
+-                            match self.select_argument_call(db, &name, &explicit, &arguments) {
++                            match self.select_reached_argument_call(
++                                db, contexts, site, &name, &explicit, &arguments,
++                            ) {
+                                 QueryPoll::Ready(Ok(call)) => {
+                                     self.pending_bytes =
+                                         match self.pending_bytes.checked_add(call.bytes) {
+@@ -1777,6 +1882,33 @@
+                         explicit,
+                         arguments,
+                     } if self.prepared_call.is_none() => {
++                        // Zero-argument calls have no CallPrepare opcode. They
++                        // must still select lexical identity at this reached
++                        // entry, never fall back to a same-named module item.
++                        if !self.pending.contains_key(&site.0) {
++                            match self.select_reached_argument_call(
++                                db, contexts, site, &name, &explicit, &arguments,
++                            ) {
++                                QueryPoll::Ready(Ok(call)) => {
++                                    self.pending_bytes =
++                                        match self.pending_bytes.checked_add(call.bytes) {
++                                            Some(bytes) => bytes,
++                                            None => {
++                                                self.terminal = true;
++                                                return RunPoll::Fault(call_fault(
++                                                    "pending call size overflow",
++                                                ));
++                                            }
++                                        };
++                                    self.pending.insert(site.0, call);
++                                }
++                                QueryPoll::Ready(Err(error)) => {
++                                    self.terminal = true;
++                                    return RunPoll::Fault(error);
++                                }
++                                QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
++                            }
++                        }
+                         if let Some(selected) = self.pending.get(&site.0)
+                             && selected.callee.signature().parameters.len() != arguments.len()
+                         {
+@@ -2046,3 +2178,7 @@
+         }
+     }
+ }
++
++#[cfg(test)]
++#[path = "lexical_numeric_callees_tests.rs"]
++mod lexical_numeric_callees_tests;
+--- a/crates/lrr/src/engine/runtime_macros.rs
++++ b/crates/lrr/src/engine/runtime_macros.rs
+@@ -17,6 +17,9 @@
+ };
+ #[path = "runtime_floating_constants.rs"]
+ pub(crate) mod floating_constants;
++
++#[path = "runtime_lexical_calls.rs"]
++mod lexical_calls;
+ 
+ fn fault(code: &'static str, message: &str) -> Diagnostic {
+     Diagnostic::new(code, message.into())
+--- /dev/null
++++ b/crates/lrr/src/engine/runtime_lexical_calls.rs
+@@ -0,0 +1,210 @@
++//! Reached original lexical callable selection; no guest or macro execution.
++use super::RuntimeMacroContext;
++use crate::{
++    core::{diagnostic::Diagnostic, digest::StableEncode},
++    db::{
++        dependency::{InputKey, InputValue},
++        key::QueryKey,
++        memo::Database,
++        poll::QueryPoll,
++        provider::SyntaxProvider,
++        value::QueryValue,
++    },
++    expand::scopes::MacroName,
++    frontend::{
++        callables::SourceCallable,
++        names::{NameLookup, NameNamespaces},
++        source_locals::OrdinaryNameSite,
++    },
++    ir::pc::PcKey,
++    source::manifest::{ItemKind, Namespace},
++    syntax::{body_index::BodyIndex, outline::DeclarationContext},
++};
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-CALL-CONTEXT", message.into())
++}
++impl RuntimeMacroContext<'_> {
++    pub(crate) fn bind_lexical_numeric_function<'p>(
++        &self,
++        db: &mut Database,
++        graph: &NameNamespaces,
++        body: &BodyIndex,
++        key: &PcKey,
++        name: &str,
++        proofs: impl Iterator<Item = &'p crate::frontend::runtime_macro_plan::RuntimeNoItemProof>,
++    ) -> QueryPoll<Option<Box<SourceCallable>>> {
++        macro_rules! ready {
++            ($value:expr) => {
++                match $value {
++                    Ok(value) => value,
++                    Err(error) => return QueryPoll::Ready(Err(error)),
++                }
++            };
++        }
++        if name.contains("::") {
++            return QueryPoll::Ready(Ok(None));
++        }
++        let Some(caller) = self.source.outline().items.iter().find(|item| {
++            item.body
++                .as_ref()
++                .is_some_and(|handle| handle.key() == *body.body())
++        }) else {
++            // No context-chain guessing for a newly admitted lexical caller.
++            return QueryPoll::Ready(Ok(None));
++        };
++        if caller.scope.owner.is_some() {
++            return QueryPoll::Ready(Ok(None));
++        }
++        if key.body != *body.body() || self.source.outline().cfg != body.cfg().fingerprint() {
++            return QueryPoll::Ready(Err(fault("lexical caller PC/cfg/source context differs")));
++        }
++        let expected = ready!(MacroName::parse(
++            name,
++            self.source.selection().outline.parse.profile.edition
++        ));
++        let mut entered = ready!(self.index.enter_body(self.source.selection(), body.body()));
++        if !entered.facts().items.iter().any(|row| {
++            row.item.def_key.item_kind == ItemKind::Function
++                && MacroName::parse(
++                    &row.item.def_key.declared_name,
++                    self.source.selection().outline.parse.profile.edition,
++                )
++                .is_ok_and(|candidate| candidate == expected)
++        }) {
++            return QueryPoll::Ready(Ok(None));
++        }
++        for proof in proofs.filter(|proof| proof.body() == body.body()) {
++            ready!(entered.accept_no_item_proof(
++                self.source.selection(),
++                body.body(),
++                proof,
++                self.catalog
++            ));
++        }
++        let locals = ready!(entered.local_index(
++            self.source.selection(),
++            body.body(),
++            &Default::default(),
++            &[]
++        ));
++        let node = match body.nodes().get(key.node as usize) {
++            Some(node) => node,
++            None => return QueryPoll::Ready(Err(fault("lexical reached node absent"))),
++        };
++        let handle = caller.body.as_ref().expect("matched owning caller body");
++        let at = match handle.range.start.checked_add(node.range.start) {
++            Some(at) => at,
++            None => return QueryPoll::Ready(Err(fault("lexical call offset overflow"))),
++        };
++        let found = ready!(locals.lookup_ordinary(
++            OrdinaryNameSite {
++                source: self.source.selection(),
++                body: body.body(),
++                at: u64::from(at),
++                name,
++                context: locals.context(),
++                namespace: Namespace::Value,
++            },
++            graph,
++            None
++        ));
++        let NameLookup::Defined(selected) = found else {
++            return QueryPoll::Ready(Err(fault(
++                "lexical callable identity is incomplete, shadowed or ambiguous",
++            )));
++        };
++        let Some(item) = entered
++            .facts()
++            .items
++            .iter()
++            .find(|row| row.item.def_key.fingerprint() == selected.identity)
++        else {
++            // Existing namespace lookup explicitly selected a module definition.
++            return QueryPoll::Ready(Ok(None));
++        };
++        if item.item.def_key.item_kind != ItemKind::Function {
++            return QueryPoll::Ready(Err(fault(
++                "lexical selected value is not an ordinary function",
++            )));
++        }
++        // Exact public parent rows must match before any private retained plan is minted.
++        let context = DeclarationContext {
++            scope: caller.scope.clone(),
++            range: caller.declaration_span,
++        };
++        for (input, expected) in [
++            (
++                InputKey::DefinitionSource(body.body().definition),
++                InputValue::DefinitionSource(self.source.selection().outline.parse.clone()),
++            ),
++            (
++                InputKey::DefinitionHeader(body.body().definition),
++                InputValue::DefinitionHeader(caller.header.clone()),
++            ),
++            (
++                InputKey::DeclarationContext(body.body().definition),
++                InputValue::DeclarationContext(context.clone()),
++            ),
++            (
++                InputKey::DefinitionBody(body.body().definition),
++                InputValue::DefinitionBody(handle.clone()),
++            ),
++        ] {
++            if db
++                .input(&input)
++                .is_none_or(|actual| actual.fingerprint() != expected.fingerprint())
++            {
++                return QueryPoll::Ready(Err(fault("lexical owning caller publication differs")));
++            }
++        }
++        let outcome = match db.fetch(
++            &SyntaxProvider,
++            QueryKey::ParseFile(self.source.selection().outline.parse.clone()),
++        ) {
++            QueryPoll::Ready(Ok(outcome)) => outcome,
++            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
++            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
++        };
++        let QueryValue::ParseFile(parsed) = outcome.value.as_ref() else {
++            return QueryPoll::Ready(Err(fault("lexical captured parser outcome differs")));
++        };
++        let plan = ready!(parsed.lexical_numeric_function_plan(
++            handle,
++            body,
++            key,
++            &caller.header,
++            &context,
++            selected.identity,
++            name,
++            db.source_revision(),
++            db.revision()
++        ));
++        for name in plan.primitive_names() {
++            let found = ready!(locals.lookup_ordinary(
++                OrdinaryNameSite {
++                    source: self.source.selection(),
++                    body: body.body(),
++                    at: u64::from(plan.item().declaration_span.start),
++                    name,
++                    context: locals.context(),
++                    namespace: Namespace::Type,
++                },
++                graph,
++                None
++            ));
++            if found != NameLookup::Absent {
++                return QueryPoll::Ready(Err(fault(
++                    "lexical numeric header requires owning type namespace resolution",
++                )));
++            }
++        }
++        // Root-owned hook verifies current private facts and publishes only
++        // matched derived Definition* rows, retaining source_revision. It must
++        // fetch FunctionSignature only; body structure/thunks begin at entry.
++        match crate::frontend::callables::admit_lexical_function(db, self.source, &plan) {
++            QueryPoll::Ready(Ok(callee)) => QueryPoll::Ready(Ok(Some(callee))),
++            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
++            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
++        }
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/syntax/lexical_numeric_callees_tests.rs
+@@ -0,0 +1,173 @@
++//! Source-owned lexical plan controls; namespace/admission runtime tests are separate.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    source::snapshot::{CfgSet, SourceBlob},
++};
++const ORIGINAL: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs"
++);
++fn plan(
++    text: &str,
++    edition: u16,
++    call: &str,
++    target: &str,
++) -> Result<LexicalFunctionPlan, Diagnostic> {
++    let parsed = ParsedFile::parse(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++    )
++    .unwrap();
++    let outline = parsed
++        .outline(
++            Digest::of_bytes(b"LRR lexical plan exact source"),
++            vec![],
++            &CfgSet::guest_default(),
++        )
++        .unwrap();
++    let item = outline
++        .items
++        .iter()
++        .find(|row| row.def_key.declared_name == "main")
++        .unwrap();
++    let body = item.body.as_ref().unwrap();
++    let index = parsed.index_body(body, Default::default()).unwrap();
++    let at = u32::try_from(text.find(call).unwrap()).unwrap() - body.range.start;
++    let node = index
++        .nodes()
++        .iter()
++        .find(|node| {
++            node.range.start == at && node.range.end == at + u32::try_from(call.len()).unwrap()
++        })
++        .unwrap();
++    let facts = parsed
++        .entered_macro_facts(body, index.cfg(), &item.scope)
++        .unwrap();
++    let selected = facts
++        .items
++        .iter()
++        .find(|row| row.item.def_key.declared_name == target)
++        .unwrap()
++        .item
++        .def_key
++        .fingerprint();
++    parsed.lexical_numeric_function_plan(
++        body,
++        &index,
++        &index.pc(node.id, Phase::Entry).unwrap(),
++        &item.header,
++        &DeclarationContext {
++            scope: item.scope.clone(),
++            range: item.declaration_span,
++        },
++        selected,
++        target,
++        11,
++        19,
++    )
++}
++#[test]
++fn all_nine_unchanged_original_lexical_headers_and_body_handles_are_exact_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        for (name, ty) in [
++            ("id_i8", PrimitiveType::I8),
++            ("id_i16", PrimitiveType::I16),
++            ("id_i32", PrimitiveType::I32),
++            ("id_i64", PrimitiveType::I64),
++            ("id_uint", PrimitiveType::Usize),
++            ("id_u8", PrimitiveType::U8),
++            ("id_u16", PrimitiveType::U16),
++            ("id_u32", PrimitiveType::U32),
++            ("id_u64", PrimitiveType::U64),
++        ] {
++            let call = format!("{name}(j)");
++            let p = plan(ORIGINAL, edition, &call, name).unwrap();
++            assert_eq!(p.signature().parameters.len(), 1);
++            assert_eq!(
++                p.signature().parameters[0].symbolic,
++                Some(TyTerm::Primitive(ty))
++            );
++            assert_eq!(p.signature().result_symbolic, Some(TyTerm::Primitive(ty)));
++            assert_eq!(p.signature().definition, p.item().def_key.fingerprint());
++            assert_eq!(p.source().profile.edition, edition);
++            assert_eq!(p.item().header.profile.edition, edition);
++            let child = p.item().body.as_ref().unwrap();
++            assert_eq!(child.def_key, p.item().def_key.fingerprint());
++            assert_eq!(
++                Digest::of_bytes(
++                    ORIGINAL[child.range.start as usize..child.range.end as usize].as_bytes()
++                ),
++                child.body_hash
++            );
++            assert_eq!(
++                &ORIGINAL[p.path_range().start as usize..p.path_range().end as usize],
++                name
++            );
++            assert_eq!(p.site().body, p.caller().key());
++            assert!(p.metadata_bytes() <= 32 * 1024 * 1024);
++            assert_eq!(p.source_revision(), 11);
++            assert_eq!(p.query_revision(), 19);
++            assert_ne!(p.identity(), Digest::of_bytes(b"not a lexical plan"));
++        }
++    }
++}
++#[test]
++fn generic_nominal_deferred_async_and_parameter_attribute_headers_are_not_erased() {
++    for text in [
++        "fn main(){fn id<T>(n:T)->T{n}id(1);}",
++        "fn main(){struct I;fn id(n:I)->I{n}id(1);}",
++        "fn main(){async fn id(n:i8)->i8{n}id(1);}",
++        "fn main(){fn id(#[cfg(any())]n:i8)->i8{n}id(1);}",
++        "fn main(){fn id(n:i8){n;}id(1);}",
++        "fn main<i8>(){fn id(n:i8)->i8{n}id(1);}",
++    ] {
++        assert_eq!(
++            plan(text, 2024, "id(1)", "id").unwrap_err().code,
++            "LRR-E-CALL-CONTEXT"
++        );
++    }
++}
++#[test]
++fn original_local_call_recipe_keeps_argument_thunks_cold_and_contains_no_unsupported_skip() {
++    let parsed = ParsedFile::parse(
++        &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity::current(),
++    )
++    .unwrap();
++    let outline = parsed
++        .outline(
++            Digest::of_bytes(b"LRR lexical recipe source"),
++            vec![],
++            &CfgSet::guest_default(),
++        )
++        .unwrap();
++    let main = outline
++        .items
++        .iter()
++        .find(|item| item.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap();
++    let index = parsed.index_body(main, Default::default()).unwrap();
++    let start = u32::try_from(ORIGINAL.find("id_i8(j)").unwrap()).unwrap() - main.range.start;
++    let node = index
++        .nodes()
++        .iter()
++        .find(|node| node.range.start == start && node.range.end == start + 8)
++        .unwrap();
++    let recipe = parsed
++        .initial_thunk(main, &index, &index.pc(node.id, Phase::Entry).unwrap())
++        .unwrap();
++    assert!(
++        matches!(recipe.recipe().operations.as_ref(),[crate::ir::op::Op::CallPrepare {name,..}]if name=="id_i8")
++    );
++    assert_eq!(
++        recipe.recipe().exit,
++        crate::ir::recipe::RecipeExit::Next(index.pc(node.operands[1], Phase::Entry).unwrap())
++    );
++    // Pure preparation of this entry only; no argument/callee index or execution.
++}
+--- /dev/null
++++ b/crates/lrr/src/engine/lexical_numeric_callees_tests.rs
+@@ -0,0 +1,301 @@
++//! Genuine sealed-source lexical identity controls; no whole-stock pass receipt.
++use super::*;
++use crate::{
++    core::{digest::Digest, profile::ProfileIdentity},
++    db::key::OutlineKey,
++    expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    source::{
++        changes::{
++            PreparedSourceInputs, PreparedSourceView, SourceSelection, SourceSelectionOutcome,
++            SourceUnitInput,
++        },
++        manifest::Namespace,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::{body_index::ExpressionKind, parse::ParseKey},
++};
++const ORIGINAL: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs"
++);
++fn setup(text: &str, edition: u16) -> (Database, PreparedSourceView, SourceDiscovery) {
++    let profile = ProfileIdentity {
++        edition,
++        ..ProfileIdentity::current()
++    };
++    let cfg = CfgSet::guest_default();
++    let path = SourcePath::new("lexical-numeric-original.rs").unwrap();
++    let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++    let unit = Digest::of_bytes(b"LRR lexical numeric source");
++    let selection = SourceSelection {
++        path: path.clone(),
++        outline: OutlineKey {
++            parse: ParseKey {
++                content: blob.content(),
++                profile: profile.clone(),
++            },
++            crate_key: unit,
++            module_path: vec![],
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let inputs = PreparedSourceInputs::refresh(
++        None,
++        vec![SourceUnitInput {
++            path,
++            crate_key: unit,
++            module_path: vec![],
++            profile: profile.clone(),
++            cfg,
++            blob,
++        }],
++        Default::default(),
++    )
++    .unwrap();
++    let SourceSelectionOutcome::Selected(view) = inputs.select(&selection).unwrap() else {
++        panic!()
++    };
++    let mut db = Database::default();
++    db.trace.detailed = true;
++    inputs.publish(&mut db).unwrap();
++    let mut discovery = SourceDiscovery::new(
++        vec![view.share()],
++        view.outline().root_scope.clone(),
++        Namespace::Value,
++        Digest::of_bytes(b"LRR lexical numeric discovery"),
++        1,
++    )
++    .unwrap()
++    .with_declarative_compiler(
++        Digest::of_bytes(b"LRR lexical numeric declarative"),
++        Digest::of_bytes(b"LRR lexical numeric compiler"),
++        std::sync::Arc::new(
++            crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(&profile)
++                .unwrap(),
++        ),
++    )
++    .unwrap();
++    loop {
++        match discovery.poll().unwrap() {
++            SourceDiscoveryStep::Sealed(_) => break,
++            SourceDiscoveryStep::NeedExpansion { request } => discovery
++                .admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                .admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            _ => panic!("lexical source discovery requires unsupported authority"),
++        }
++    }
++    (db, view, discovery)
++}
++#[test]
++fn unchanged_original_local_headers_admit_exact_bodies_without_child_body_queries_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, view, discovery) = setup(ORIGINAL, edition);
++        let macros =
++            crate::engine::standalone_macros::CompletedStandaloneRuntimeMacros::from_discovery(
++                &view, &discovery,
++            )
++            .unwrap();
++        let contexts = macros.contexts().unwrap();
++        let main = view
++            .outline()
++            .items
++            .iter()
++            .find(|row| row.def_key.declared_name == "main")
++            .unwrap()
++            .body
++            .as_ref()
++            .unwrap()
++            .key();
++        db.begin_run().unwrap();
++        let QueryPoll::Ready(Ok(machine)) = crate::engine::run::RunMachine::start_with_discovery(
++            &mut db,
++            main.clone(),
++            100000,
++            discovery,
++        ) else {
++            panic!()
++        };
++        let context = contexts
++            .iter()
++            .find(|context| context.source().selection() == view.selection())
++            .unwrap();
++        let parent = view
++            .outline()
++            .items
++            .iter()
++            .find(|row| row.def_key.declared_name == "main")
++            .unwrap()
++            .body
++            .as_ref()
++            .unwrap();
++        let source_revision = db.source_revision();
++        for name in [
++            "id_i8", "id_i16", "id_i32", "id_i64", "id_uint", "id_u8", "id_u16", "id_u32", "id_u64",
++        ] {
++            let call = format!("{name}(j)");
++            let at = u32::try_from(ORIGINAL.find(&call).unwrap()).unwrap() - parent.range.start;
++            let node = machine
++                .frame
++                .body
++                .nodes()
++                .iter()
++                .find(|node| {
++                    node.range.start == at
++                        && node.range.end == at + u32::try_from(call.len()).unwrap()
++                })
++                .unwrap();
++            assert_eq!(
++                node.role,
++                crate::syntax::body_index::NodeRole::Expression(ExpressionKind::Call)
++            );
++            let key = machine
++                .frame
++                .body
++                .pc(node.id, crate::ir::pc::Phase::Entry)
++                .unwrap();
++            let QueryPoll::Ready(Ok(Some(callee))) = context.bind_lexical_numeric_function(
++                &mut db,
++                machine.graph.as_ref().unwrap(),
++                &machine.frame.body,
++                &key,
++                name,
++                machine.runtime_no_item_proofs.values(),
++            ) else {
++                panic!("original lexical header did not admit")
++            };
++            assert_eq!(callee.definition().declared_name, name);
++            assert!(callee.signature().scope.owner.is_some());
++            callee.revalidate(&mut db).unwrap();
++            let child = callee.body().unwrap();
++            assert_eq!(
++                Digest::of_bytes(
++                    ORIGINAL[child.range.start as usize..child.range.end as usize].as_bytes()
++                ),
++                child.body_hash
++            );
++            assert_eq!(db.source_revision(), source_revision);
++            assert!(db.trace.events.iter().all(|event| match &event.key {
++                QueryKey::BodyStructure(body) => body == &main,
++                QueryKey::Thunk(_) => false,
++                _ => true,
++            }));
++        }
++        assert_eq!(machine.opcode_counters().unwrap().operations_started, 0);
++        db.finish_run().unwrap();
++        // Explicit captured-call-site component setup only; no original let or
++        // child body was executed, and this is not a full original pass.
++    }
++}
++#[test]
++fn source_alias_generic_value_shadow_and_ambiguity_refuse_before_child_body_or_argument_queries() {
++    for text in [
++        "type i8=bool;fn main(){fn id(n:i8)->i8{n}id(side());}fn side()->i8{missing();}",
++        "fn main(){fn id<T>(n:T)->T{n}id(side());}fn side()->i8{missing();}",
++        "fn main(){fn id(n:i8)->i8{n}let id=1i8;id(side());}fn side()->i8{missing();}",
++        "fn main(){fn id(n:i8)->i8{n}fn id(n:i16)->i16{n}id(side());}fn side()->i8{missing();}",
++    ] {
++        let (mut db, view, discovery) = setup(text, 2024);
++        let macros =
++            crate::engine::standalone_macros::CompletedStandaloneRuntimeMacros::from_discovery(
++                &view, &discovery,
++            )
++            .unwrap();
++        let contexts = macros.contexts().unwrap();
++        let main = view
++            .outline()
++            .items
++            .iter()
++            .find(|row| row.def_key.declared_name == "main")
++            .unwrap()
++            .body
++            .as_ref()
++            .unwrap();
++        db.begin_run().unwrap();
++        let QueryPoll::Ready(Ok(machine)) = crate::engine::run::RunMachine::start_with_discovery(
++            &mut db,
++            main.key(),
++            100000,
++            discovery,
++        ) else {
++            panic!()
++        };
++        let at = u32::try_from(text.find("id(side())").unwrap()).unwrap() - main.range.start;
++        let node = machine
++            .frame
++            .body
++            .nodes()
++            .iter()
++            .find(|node| node.range.start == at && node.range.end == at + 10)
++            .unwrap();
++        let key = machine
++            .frame
++            .body
++            .pc(node.id, crate::ir::pc::Phase::Entry)
++            .unwrap();
++        let context = contexts
++            .iter()
++            .find(|context| context.source().selection() == view.selection())
++            .unwrap();
++        let QueryPoll::Ready(Err(error)) = context.bind_lexical_numeric_function(
++            &mut db,
++            machine.graph.as_ref().unwrap(),
++            &machine.frame.body,
++            &key,
++            "id",
++            machine.runtime_no_item_proofs.values(),
++        ) else {
++            panic!("incomplete source identity was admitted")
++        };
++        assert_eq!(error.code, "LRR-E-CALL-CONTEXT");
++        assert!(db.trace.events.iter().all(|event| match &event.key {
++            QueryKey::BodyStructure(body) => body == &main.key(),
++            QueryKey::Thunk(_) => false,
++            _ => true,
++        }));
++        assert_eq!(machine.opcode_counters().unwrap().operations_started, 0);
++        db.finish_run().unwrap();
++    }
++}
++
++#[test]
++fn absent_entered_context_refuses_before_same_named_module_body_or_arguments() {
++    for text in [
++        "fn id()->i8{panic!(\"wrong module entered\");}fn main(){fn id()->i8{2i8}id();}",
++        "fn id(n:i8)->i8{panic!(\"wrong module entered\");}fn main(){fn id(n:i8)->i8{n}id(3i8);}",
++    ] {
++        let (mut db, view, discovery) = setup(text, 2024);
++        let main = view
++            .outline()
++            .items
++            .iter()
++            .find(|item| item.def_key.declared_name == "main")
++            .unwrap()
++            .body
++            .as_ref()
++            .unwrap()
++            .key();
++        db.begin_run().unwrap();
++        let QueryPoll::Ready(Ok(mut machine)) =
++            RunMachine::start_with_discovery(&mut db, main.clone(), 100000, discovery)
++        else {
++            panic!()
++        };
++        let RunPoll::Fault(error) = machine.poll(&mut db) else {
++            panic!("missing entered context selected a callable")
++        };
++        assert_eq!(error.code, "LRR-E-CALL-CONTEXT");
++        assert_eq!(
++            error.message,
++            "lexical callee requires exact entered source context"
++        );
++        assert_eq!(machine.opcode_counters().unwrap().started_by_opcode[0], 0);
++        assert!(db.trace.events.iter().all(|event| match &event.key {
++            QueryKey::BodyStructure(body) | QueryKey::Thunk(crate::ir::pc::PcKey { body, .. }) =>
++                body == &main,
++            _ => true,
++        }));
++        db.finish_run().unwrap();
++    }
++}
+--- /dev/null
++++ b/xtask/tests/stock_lexical_numeric_callees_v1.rs
+@@ -0,0 +1,246 @@
++//! Unchanged whole-main lexical numeric call acceptance, pending actual execution.
++//! A natural unsupported frontier is a failure, never a selected-fixture pass.
++use lrr::{
++    core::{
++        digest::{Digest, StableEncode},
++        profile::ProfileIdentity,
++    },
++    db::{key::OutlineKey, memo::Database, poll::QueryPoll},
++    engine::run::{RunMachine, RunPoll, ValueSummary},
++    expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    source::{
++        changes::{PreparedSourceInputs, SourceSelection, SourceSelectionOutcome, SourceUnitInput},
++        manifest::Namespace,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::parse::ParseKey,
++};
++
++#[derive(Clone, Copy)]
++enum Expected {
++    Unit,
++    Fault(&'static str, &'static str),
++}
++
++fn run_program(source: &str, label: &str, expected: Expected) {
++    run_world(source, label, expected, &[]);
++}
++
++fn run_world(source: &str, label: &str, expected: Expected, modules: &[(&str, &str, &str)]) {
++    for edition in [2015, 2018, 2021, 2024] {
++        let owner = Digest::of_bytes(label.as_bytes());
++        let cfg = CfgSet::guest_default();
++        let profile = ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        };
++        let mut units = Vec::new();
++        let mut selections = Vec::new();
++        let mut sources = vec![("original.rs", None, source)];
++        sources.extend(
++            modules
++                .iter()
++                .map(|(path, module, text)| (*path, Some(*module), *text)),
++        );
++        for (path, module, text) in sources {
++            let path = SourcePath::new(path).unwrap();
++            let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++            let module_path = module.into_iter().map(str::to_owned).collect::<Vec<_>>();
++            selections.push(SourceSelection {
++                path: path.clone(),
++                outline: OutlineKey {
++                    parse: ParseKey {
++                        content: blob.content(),
++                        profile: profile.clone(),
++                    },
++                    crate_key: owner,
++                    module_path: module_path.clone(),
++                    cfg: cfg.fingerprint(),
++                },
++            });
++            units.push(SourceUnitInput {
++                path,
++                crate_key: owner,
++                module_path,
++                profile: profile.clone(),
++                cfg: cfg.clone(),
++                blob,
++            });
++        }
++        let inputs = PreparedSourceInputs::refresh(None, units, Default::default()).unwrap();
++        let views = selections
++            .iter()
++            .map(|selection| {
++                let SourceSelectionOutcome::Selected(view) = inputs.select(selection).unwrap()
++                else {
++                    panic!("recorded original source world unavailable");
++                };
++                view
++            })
++            .collect::<Vec<_>>();
++        let view = &views[0];
++        let main = view
++            .outline()
++            .items
++            .iter()
++            .find(|item| item.def_key.declared_name == "main")
++            .unwrap()
++            .body
++            .as_ref()
++            .unwrap()
++            .key();
++        let mut db = Database::default();
++        db.trace.detailed = true;
++        inputs.publish(&mut db).unwrap();
++        let mut discovery = SourceDiscovery::new(
++            views.iter().map(|view| view.share()).collect(),
++            view.outline().root_scope.clone(),
++            Namespace::Value,
++            Digest::of_bytes(b"LRR stock numeric discovery"),
++            1,
++        )
++        .unwrap()
++        .with_declarative_compiler(
++            Digest::of_bytes(b"LRR stock numeric declarative environment"),
++            Digest::of_bytes(b"LRR stock numeric compiler facade"),
++            std::sync::Arc::new(
++                lrr::frontend::compile_input_catalog::CompileInputCatalog::standalone(&profile)
++                    .unwrap(),
++            ),
++        )
++        .unwrap();
++        loop {
++            match discovery.poll().unwrap() {
++                SourceDiscoveryStep::Sealed(_) => break,
++                SourceDiscoveryStep::NeedExpansion { request } => {
++                    discovery
++                        .admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
++                        .unwrap();
++                }
++                SourceDiscoveryStep::NeedGeneratedExpansion { request } => {
++                    discovery
++                        .admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
++                        .unwrap();
++                }
++                SourceDiscoveryStep::Incomplete {
++                    diagnostic,
++                    blocked,
++                } => {
++                    panic!("{label} edition{edition} original discovery: {diagnostic}; {blocked:?}")
++                }
++                _ => panic!("original requires unsupported procedural/derive authority"),
++            }
++        }
++        let macros =
++            lrr::engine::standalone_macros::CompletedStandaloneRuntimeMacros::from_discovery(
++                view, &discovery,
++            )
++            .unwrap();
++        let contexts = macros.contexts().unwrap();
++        db.begin_run().unwrap();
++        let mut machine =
++            match RunMachine::start_with_discovery(&mut db, main.clone(), 100_000, discovery) {
++                QueryPoll::Ready(Ok(machine)) => machine,
++                QueryPoll::Ready(Err(error)) => {
++                    panic!("{label} edition{edition} original startup: {error}")
++                }
++                QueryPoll::NeedInput(input) => {
++                    panic!("{label} edition{edition} original startup requested {input:?}")
++                }
++            };
++        let report = match machine.poll_with_runtime_macros(&mut db, &contexts) {
++            RunPoll::Completed(report) => {
++                assert!(
++                    matches!(expected, Expected::Unit),
++                    "{label} edition{edition}: expected arithmetic panic did not occur"
++                );
++                report
++            }
++            RunPoll::Fault(error) if matches!(expected, Expected::Fault(_, _)) => {
++                let Expected::Fault(code, message) = expected else {
++                    unreachable!()
++                };
++                assert_eq!(
++                    error.code, code,
++                    "{label} edition{edition} exact refusal code"
++                );
++                assert_eq!(
++                    error.message, message,
++                    "{label} edition{edition} exact refusal message"
++                );
++                let counters = machine.opcode_counters().unwrap();
++                assert_eq!(
++                    counters.started_by_opcode[10], 0,
++                    "refused source inference must precede arithmetic"
++                );
++                assert_eq!(
++                    counters.started_by_opcode[0], 0,
++                    "operator operands remain cold"
++                );
++                assert_eq!(counters.panic_scopes_cleaned, 0);
++                db.finish_run().unwrap();
++                continue;
++            }
++            RunPoll::Fault(error) => panic!(
++                "{label} edition{edition} original fault: {error}; counters {:?}; last queries {:?}",
++                machine.opcode_counters().unwrap(),
++                db.trace
++                    .events
++                    .iter()
++                    .rev()
++                    .take(8)
++                    .map(|event| &event.key)
++                    .collect::<Vec<_>>()
++            ),
++            RunPoll::Panicked(report) => {
++                panic!(
++                    "{label} edition{edition}: unexpected guest panic {:?}",
++                    report.panic.kind
++                );
++            }
++            RunPoll::NeedInput(input) => {
++                panic!("{label} edition{edition} original requested {input:?}")
++            }
++        };
++        assert!(matches!(report.value, ValueSummary::Unit));
++        assert_eq!(report.live_edition, edition);
++        assert_eq!(
++            report.opcode_counters.operations_started,
++            report.opcode_counters.operations_completed
++        );
++        assert_eq!(report.opcode_counters.panic_scopes_cleaned, 0);
++        assert!(report.opcode_counters.operations_completed > 0);
++        db.finish_run().unwrap();
++    }
++}
++
++const ORIGINAL: &str = include_str!(
++    "../../fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs"
++);
++#[test]
++fn original_nine_lexical_numeric_callees_whole_main_all_editions() {
++    run_program(
++        ORIGINAL,
++        "stock exact lexical numeric callee whole main",
++        Expected::Unit,
++    );
++}
++#[test]
++fn zero_argument_local_function_identity_shadows_cold_module_function_all_editions() {
++    run_program(
++        "fn id()->i8{panic!(\"wrong module identity entered\");}fn main(){fn id()->i8{2i8}let selected:i8=id();}",
++        "LRR reached zero-argument lexical identity",
++        Expected::Unit,
++    );
++}
++#[test]
++fn generic_lexical_identity_remains_explicit_source_frontier_before_arguments_all_editions() {
++    run_program(
++        "fn main(){fn id<T>(n:T)->T{n}id(1i8);}",
++        "LRR generic lexical context incomplete",
++        Expected::Fault(
++            "LRR-E-CALL-CONTEXT",
++            "lexical generic source signature awaits owning context integration",
++        ),
++    );
++}

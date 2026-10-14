@@ -1,0 +1,2096 @@
+--- /dev/null
++++ b/crates/lrr/src/syntax/generated_type_site.rs
+@@ -0,0 +1,410 @@
++//! Exact generated type sites from pinned owned syntax, never printed-source reparsing.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    expand::{
++        generated_items::GeneratedItems, identity::GeneratedItemKey, record::ExpansionRecord,
++    },
++    source::snapshot::CfgSet,
++    syntax::{
++        ast_adapter::{range, semantic_name},
++        outline::ScopeKey,
++        parse::ParsedFile,
++        spans::SourceRange,
++        token_wire::{SpanRecord, TokenTree},
++    },
++};
++use ra_ap_syntax::{
++    AstNode,
++    ast::{self, HasGenericArgs},
++};
++use std::sync::Arc;
++const MAX_BYTES: usize = 32 * 1024 * 1024;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-GENERATED-TYPE-SITE", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "generated written type budget".into(),
++    )
++}
++fn charge(bytes: &mut usize, n: usize, maximum: usize) -> Result<(), Diagnostic> {
++    *bytes = bytes
++        .checked_add(n)
++        .filter(|n| *n <= maximum)
++        .ok_or_else(limit)?;
++    Ok(())
++}
++#[derive(Debug, Clone, Copy, Eq, PartialEq)]
++pub(crate) enum GeneratedTypeRole {
++    Declaration,
++    ArrayElement,
++    AliasTarget,
++}
++#[derive(Debug, Clone, Copy, Eq, PartialEq)]
++pub(crate) enum TypeKeyword {
++    Crate,
++    SelfModule,
++    SuperModule,
++    DollarCrate,
++}
++pub(crate) enum GeneratedTypeSegmentKind {
++    Name(String),
++    Keyword(TypeKeyword),
++}
++pub(crate) struct GeneratedTypeSegment {
++    kind: GeneratedTypeSegmentKind,
++    range: SourceRange,
++    span: SpanRecord,
++}
++impl GeneratedTypeSegment {
++    pub(crate) fn kind(&self) -> &GeneratedTypeSegmentKind {
++        &self.kind
++    }
++    pub(crate) fn span(&self) -> &SpanRecord {
++        &self.span
++    }
++    pub(crate) fn range(&self) -> SourceRange {
++        self.range
++    }
++}
++pub(crate) enum GeneratedTypeSyntax {
++    Unit,
++    Path(Vec<GeneratedTypeSegment>),
++    GenericOrProjection,
++    AbsolutePath,
++    Unsupported,
++}
++pub(crate) struct WrittenGeneratedType {
++    record: Arc<ExpansionRecord>,
++    member: GeneratedItemKey,
++    scope: ScopeKey,
++    role: GeneratedTypeRole,
++    declaration: SourceRange,
++    declaration_fingerprint: Digest,
++    header_fingerprint: Digest,
++    range: SourceRange,
++    shape: GeneratedTypeSyntax,
++    bytes: usize,
++}
++fn actual_dollar_token(
++    nodes: &[TokenTree],
++    wanted: crate::syntax::token_wire::Key,
++    depth: usize,
++) -> Result<bool, Diagnostic> {
++    if depth > 256 {
++        return Err(limit());
++    }
++    for node in nodes {
++        match node {
++            TokenTree::Ident { text, raw, span }
++                if *span == wanted && !*raw && text == "$crate" =>
++            {
++                return Ok(true);
++            }
++            TokenTree::Group { children, .. }
++                if actual_dollar_token(children, wanted, depth + 1)? =>
++            {
++                return Ok(true);
++            }
++            _ => {}
++        }
++    }
++    Ok(false)
++}
++impl WrittenGeneratedType {
++    pub(crate) fn capture(
++        items: &GeneratedItems,
++        owner: &ScopeKey,
++        cfg: &CfgSet,
++        member: &GeneratedItemKey,
++        role: GeneratedTypeRole,
++        maximum: usize,
++    ) -> Result<Self, Diagnostic> {
++        if maximum > MAX_BYTES || maximum < std::mem::size_of::<Self>() {
++            return Err(limit());
++        }
++        member.validate()?;
++        let header = items
++            .items()
++            .iter()
++            .find(|h| h.key == *member)
++            .ok_or_else(|| fault("written type actual generated member absent"))?;
++        let mut bytes = std::mem::size_of::<Self>();
++        charge(&mut bytes, items.metadata_bytes()?, maximum)?;
++        charge(&mut bytes, owner.heap_bytes(), maximum)?;
++        charge(
++            &mut bytes,
++            member
++                .structural_path
++                .len()
++                .checked_mul(4)
++                .ok_or_else(limit)?,
++            maximum,
++        )?;
++        let transient = items
++            .text()
++            .len()
++            .checked_mul(128)
++            .and_then(|n| n.checked_add(items.syntax_events().len().checked_mul(128)?))
++            .and_then(|n| n.checked_add(items.items().len().checked_mul(4096)?))
++            .ok_or_else(limit)?;
++        charge(&mut bytes, transient, maximum)?;
++        let parsed = ParsedFile::from_generated_items(items)?;
++        let outline = parsed.outline(owner.crate_key, owner.module_path.clone(), cfg)?;
++        if parsed
++            .estimated_bytes()
++            .checked_add(outline.estimated_bytes())
++            .is_none_or(|n| n > transient)
++        {
++            return Err(limit());
++        }
++        let item = outline
++            .items
++            .iter()
++            .find(|i| {
++                i.declaration_span.start == header.start && i.declaration_span.end == header.end
++            })
++            .ok_or_else(|| fault("written type exact generated declaration absent"))?;
++        let syntax = parsed
++            .parsed
++            .tree()
++            .syntax()
++            .descendants()
++            .find(|n| {
++                range(n.text_range()) == item.declaration_span
++                    && (ast::Const::can_cast(n.kind()) || ast::TypeAlias::can_cast(n.kind()))
++            })
++            .ok_or_else(|| fault("written type declaration syntax prerequisite"))?;
++        let generic_owner = syntax.children().any(|n| {
++            ast::GenericParamList::can_cast(n.kind()) || ast::WhereClause::can_cast(n.kind())
++        });
++        let ty = match role {
++            GeneratedTypeRole::Declaration | GeneratedTypeRole::ArrayElement => {
++                ast::Const::cast(syntax).and_then(|c| c.ty())
++            }
++            GeneratedTypeRole::AliasTarget => ast::TypeAlias::cast(syntax).and_then(|a| a.ty()),
++        }
++        .ok_or_else(|| fault("written type exact owning role absent"))?;
++        let ty = if role == GeneratedTypeRole::ArrayElement {
++            let ast::Type::ArrayType(array) = ty else {
++                return Err(fault("written type is not an array element demand"));
++            };
++            array
++                .ty()
++                .ok_or_else(|| fault("written array element absent"))?
++        } else {
++            ty
++        };
++        let site = range(ty.syntax().text_range());
++        if !item.declaration_span.contains(site) {
++            return Err(fault("written type escapes actual declaration"));
++        }
++        let shape = if generic_owner {
++            GeneratedTypeSyntax::GenericOrProjection
++        } else {
++            match ty {
++                ast::Type::TupleType(tuple) if tuple.fields().next().is_none() => {
++                    GeneratedTypeSyntax::Unit
++                }
++                ast::Type::PathType(path) => {
++                    let mut cursor = path
++                        .path()
++                        .ok_or_else(|| fault("written generated path absent"))?;
++                    let mut segments = Vec::new();
++                    let mut unsupported = false;
++                    let mut absolute = false;
++                    loop {
++                        if segments.len() == 256 {
++                            return Err(limit());
++                        }
++                        let part = cursor
++                            .segment()
++                            .ok_or_else(|| fault("written path segment absent"))?;
++                        if part.generic_arg_list().is_some()
++                            || part.parenthesized_arg_list().is_some()
++                            || part.ret_type().is_some()
++                            || matches!(
++                                part.kind(),
++                                Some(ast::PathSegmentKind::Type { .. })
++                                    | Some(ast::PathSegmentKind::SelfTypeKw)
++                                    | None
++                            )
++                        {
++                            unsupported = true;
++                            break;
++                        }
++                        let segment_range = range(part.syntax().text_range());
++                        charge(
++                            &mut bytes,
++                            std::mem::size_of::<GeneratedTypeSegment>()
++                                .checked_add(
++                                    64usize
++                                        .checked_mul(std::mem::size_of::<&SpanRecord>())
++                                        .ok_or_else(limit)?,
++                                )
++                                .ok_or_else(limit)?,
++                            maximum,
++                        )?;
++                        let projected = items.project_source_spans(segment_range)?;
++                        if projected.len() != 1 {
++                            return Err(fault(
++                                "generated path segment lacks one exact token origin",
++                            ));
++                        }
++                        let span = projected[0];
++                        charge(&mut bytes, span.source.path.capacity(), maximum)?;
++                        let kind = match part.kind() {
++                            Some(ast::PathSegmentKind::Name(name)) => {
++                                let raw = name.syntax().text().to_string();
++                                charge(&mut bytes, raw.capacity(), maximum)?;
++                                if raw == "$crate" {
++                                    if !actual_dollar_token(items.tokens().roots(), span.key(), 0)?
++                                    {
++                                        return Err(fault(
++                                            "printed dollar-crate segment lacks actual retained special token",
++                                        ));
++                                    }
++                                    GeneratedTypeSegmentKind::Keyword(TypeKeyword::DollarCrate)
++                                } else {
++                                    let normalized = semantic_name(&raw).ok_or_else(|| {
++                                        fault("written type semantic identifier absent")
++                                    })?;
++                                    charge(&mut bytes, normalized.capacity(), maximum)?;
++                                    GeneratedTypeSegmentKind::Name(normalized)
++                                }
++                            }
++                            Some(ast::PathSegmentKind::CrateKw) => {
++                                GeneratedTypeSegmentKind::Keyword(TypeKeyword::Crate)
++                            }
++                            Some(ast::PathSegmentKind::SelfKw) => {
++                                GeneratedTypeSegmentKind::Keyword(TypeKeyword::SelfModule)
++                            }
++                            Some(ast::PathSegmentKind::SuperKw) => {
++                                GeneratedTypeSegmentKind::Keyword(TypeKeyword::SuperModule)
++                            }
++                            _ => {
++                                unsupported = true;
++                                GeneratedTypeSegmentKind::Name(String::new())
++                            }
++                        };
++                        segments.try_reserve_exact(1).map_err(|_| limit())?;
++                        segments.push(GeneratedTypeSegment {
++                            kind,
++                            range: segment_range,
++                            span: span.clone(),
++                        });
++                        if let Some(parent) = cursor.qualifier() {
++                            cursor = parent;
++                        } else {
++                            absolute = cursor.colon_colon_token().is_some();
++                            break;
++                        }
++                    }
++                    segments.reverse();
++                    if unsupported {
++                        GeneratedTypeSyntax::GenericOrProjection
++                    } else if absolute {
++                        GeneratedTypeSyntax::AbsolutePath
++                    } else {
++                        GeneratedTypeSyntax::Path(segments)
++                    }
++                }
++                _ => GeneratedTypeSyntax::Unsupported,
++            }
++        };
++        charge(&mut bytes, item.scope.heap_bytes(), maximum)?;
++        Ok(Self {
++            record: items.record_input(),
++            member: member.clone(),
++            scope: item.scope.clone(),
++            role,
++            declaration: item.declaration_span,
++            declaration_fingerprint: item.def_key.fingerprint(),
++            header_fingerprint: item.header.fingerprint(),
++            range: site,
++            shape,
++            bytes,
++        })
++    }
++    pub(crate) fn shape(&self) -> &GeneratedTypeSyntax {
++        &self.shape
++    }
++    pub(crate) fn scope(&self) -> &ScopeKey {
++        &self.scope
++    }
++    pub(crate) fn member(&self) -> &GeneratedItemKey {
++        &self.member
++    }
++    pub(crate) fn record(&self) -> &ExpansionRecord {
++        &self.record
++    }
++    pub(crate) fn role(&self) -> GeneratedTypeRole {
++        self.role
++    }
++    pub(crate) fn declaration(&self) -> SourceRange {
++        self.declaration
++    }
++    pub(crate) fn declaration_fingerprint(&self) -> Digest {
++        self.declaration_fingerprint
++    }
++    pub(crate) fn header_fingerprint(&self) -> Digest {
++        self.header_fingerprint
++    }
++    pub(crate) fn range(&self) -> SourceRange {
++        self.range
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/generated-written-type");
++        e.record(&self.record.descriptor());
++        e.record(&self.member);
++        e.record(&self.scope);
++        e.u8(match self.role {
++            GeneratedTypeRole::Declaration => 0,
++            GeneratedTypeRole::ArrayElement => 1,
++            GeneratedTypeRole::AliasTarget => 2,
++        });
++        e.u32(self.declaration.start);
++        e.u32(self.declaration.end);
++        e.digest(self.declaration_fingerprint);
++        e.digest(self.header_fingerprint);
++        e.u32(self.range.start);
++        e.u32(self.range.end);
++        match &self.shape {
++            GeneratedTypeSyntax::Unit => e.u8(0),
++            GeneratedTypeSyntax::GenericOrProjection => e.u8(2),
++            GeneratedTypeSyntax::Unsupported => e.u8(3),
++            GeneratedTypeSyntax::AbsolutePath => e.u8(4),
++            GeneratedTypeSyntax::Path(parts) => {
++                e.u8(1);
++                e.sequence(parts, |e, p| {
++                    match &p.kind {
++                        GeneratedTypeSegmentKind::Name(n) => {
++                            e.u8(0);
++                            e.string(n)
++                        }
++                        GeneratedTypeSegmentKind::Keyword(k) => {
++                            e.u8(1);
++                            e.u8(match k {
++                                TypeKeyword::Crate => 0,
++                                TypeKeyword::SelfModule => 1,
++                                TypeKeyword::SuperModule => 2,
++                                TypeKeyword::DollarCrate => 3,
++                            })
++                        }
++                    };
++                    e.u32(p.range.start);
++                    e.u32(p.range.end);
++                    e.digest(Digest(p.span.key().0));
++                });
++            }
++        }
++        e.finish()
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/frontend/generated_type_admission.rs
+@@ -0,0 +1,1018 @@
++//! Readonly generated type selection; no provider lookup, descriptor or layout authority.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::{
++        dependency::{InputKey, InputValue},
++        key::BucketKey,
++        memo::Database,
++        seals::{SealDomain, SealKey},
++    },
++    expand::{
++        generated_syntax::GeneratedSyntaxInput, identity::MacroIdentity,
++        source_declarative::SourceDeclarative,
++    },
++    frontend::{
++        generated_constant_provenance::{CurrentGeneratedConstant, GeneratedConstantForm},
++        names::{NameDefinition, NameLookup},
++    },
++    ir::op::PrimitiveType,
++    source::manifest::ItemKind,
++    syntax::{
++        generated_type_site::{
++            GeneratedTypeRole, GeneratedTypeSegment, GeneratedTypeSegmentKind, GeneratedTypeSyntax,
++            TypeKeyword, WrittenGeneratedType,
++        },
++        outline::{DeclarationContext, HeaderRecipe, ScopeKey},
++        token_wire::{Key, Transparency},
++    },
++};
++use ra_ap_syntax::{
++    AstNode,
++    ast::{self, HasGenericParams},
++};
++use std::collections::BTreeMap;
++const MAX_BYTES: usize = 32 * 1024 * 1024;
++const MAX_ROWS: usize = 100_000;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-GENERATED-TYPE-CONTEXT", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "generated source type budget".into(),
++    )
++}
++fn charge(bytes: &mut usize, n: usize, maximum: usize) -> Result<(), Diagnostic> {
++    *bytes = bytes
++        .checked_add(n)
++        .filter(|n| *n <= maximum)
++        .ok_or_else(limit)?;
++    Ok(())
++}
++#[derive(Debug, Clone, Eq, PartialEq)]
++pub(crate) enum GeneratedTypePrerequisite {
++    GenericOrAssociated,
++    UnsupportedWrittenType,
++    QualifiedModuleRoute,
++    DefinitionSiteSource,
++    TypeNamespace(ScopeKey),
++    TypeName(NameLookup),
++    PrimitiveEnvironment,
++    AliasTargetHygiene,
++    TraitOrForeignType,
++    ReplacementOrGeneratedMember,
++}
++pub(crate) enum GeneratedTypeOutcome {
++    Selected(SelectedGeneratedType),
++    Need(GeneratedTypePrerequisite),
++}
++/// Alias identity stays in the proof even when its source-owned target is unit.
++pub(crate) enum SelectedSourceType {
++    IntrinsicUnit,
++    AliasUnit(NameDefinition),
++    AliasHeader(NameDefinition),
++    NominalHeader(NameDefinition),
++}
++#[derive(Clone, Copy)]
++enum RouteKind {
++    CallSite,
++    DefinitionSite,
++    DollarCrate,
++}
++pub(crate) struct SelectedGeneratedType {
++    parent: Digest,
++    site: WrittenGeneratedType,
++    result: SelectedSourceType,
++    route: RouteKind,
++    selected_header: Option<(HeaderRecipe, DeclarationContext)>,
++    alias_site: Option<WrittenGeneratedType>,
++    stamps: BTreeMap<InputKey, Digest>,
++    revision: u64,
++    bytes: usize,
++}
++fn stamp(
++    db: &Database,
++    out: &mut BTreeMap<InputKey, Digest>,
++    key: &InputKey,
++    bytes: &mut usize,
++    maximum: usize,
++) -> Result<(), Diagnostic> {
++    let (_, value) = db
++        .published_input(key)
++        .ok_or_else(|| fault("generated type current published input absent"))?;
++    if let Some(old) = out.get(key) {
++        return if *old == value {
++            Ok(())
++        } else {
++            Err(fault("generated type input changed"))
++        };
++    }
++    if out.len() >= MAX_ROWS {
++        return Err(limit());
++    }
++    charge(
++        bytes,
++        std::mem::size_of::<(InputKey, Digest)>()
++            .checked_add(128)
++            .and_then(|n| n.checked_add(key.heap_bytes()))
++            .ok_or_else(limit)?,
++        maximum,
++    )?;
++    out.insert(key.clone(), value);
++    Ok(())
++}
++fn source_owner<'a>(
++    db: &Database,
++    id: Digest,
++    owner: &'a SourceDeclarative,
++    providers: &[&'a SourceDeclarative],
++) -> Result<Option<&'a SourceDeclarative>, Diagnostic> {
++    let Some((InputValue::DefinitionSource(parse), _)) =
++        db.published_input(&InputKey::DefinitionSource(id))
++    else {
++        return Ok(None);
++    };
++    let mut selected: Option<&SourceDeclarative> = None;
++    for provider in std::iter::once(owner).chain(providers.iter().copied()) {
++        let source = provider.module_source();
++        if &source.selection().outline.parse != parse
++            || !source
++                .outline()
++                .items
++                .iter()
++                .any(|i| i.def_key.fingerprint() == id)
++        {
++            continue;
++        }
++        source.require_original_hygiene()?;
++        if !matches!(db.published_input(&InputKey::CapturedSource(source.selection().location_identity())), Some((InputValue::CapturedSource(actual), _)) if actual == source.selection())
++        {
++            return Err(fault(
++                "generated type exact declaration owner source changed",
++            ));
++        }
++        if let Some(old) = selected {
++            if !old.module_source().same_publication(source)
++                || old.module_source().selection() != source.selection()
++            {
++                return Err(fault("generated type retained source owner is ambiguous"));
++            }
++        } else {
++            selected = Some(provider);
++        }
++    }
++    Ok(selected)
++}
++#[allow(clippy::too_many_arguments)]
++fn origin_scope(
++    db: &Database,
++    owner: &SourceDeclarative,
++    providers: &[&SourceDeclarative],
++    unit: &GeneratedSyntaxInput,
++    call_scope: &ScopeKey,
++    part: &GeneratedTypeSegment,
++    stamps: &mut BTreeMap<InputKey, Digest>,
++    bytes: &mut usize,
++    maximum: usize,
++) -> Result<Result<(ScopeKey, RouteKind), GeneratedTypePrerequisite>, Diagnostic> {
++    let facts = unit.items.hygiene_facts();
++    let call = Key(unit.items.record().key().parent_context.0);
++    if facts.name_item(part.span().context)? == facts.name_item(call)? {
++        charge(bytes, call_scope.heap_bytes(), maximum)?;
++        return Ok(Ok((call_scope.clone(), RouteKind::CallSite)));
++    }
++    let normalized = facts.item(part.span().context)?;
++    let mark = facts.context(normalized)?;
++    let Some(expansion) = mark.expansion else {
++        return Ok(Err(GeneratedTypePrerequisite::DefinitionSiteSource));
++    };
++    if mark.transparency != Transparency::Opaque {
++        return Ok(Err(GeneratedTypePrerequisite::DefinitionSiteSource));
++    }
++    let key = InputKey::ExpansionRecord(Digest(expansion.0));
++    let Some((InputValue::ExpansionRecord(record), _)) = db.published_input(&key) else {
++        return Ok(Err(GeneratedTypePrerequisite::DefinitionSiteSource));
++    };
++    if record.key().fingerprint().0 != expansion.0 {
++        return Err(fault("generated definition-site mark record differs"));
++    }
++    let definition = match &record.key().macro_identity {
++        MacroIdentity::Declaration { definition } => *definition,
++        _ => return Ok(Err(GeneratedTypePrerequisite::DefinitionSiteSource)),
++    };
++    let Some(provider) = source_owner(db, definition, owner, providers)? else {
++        return Ok(Err(GeneratedTypePrerequisite::DefinitionSiteSource));
++    };
++    let source = provider.module_source();
++    let declaration = source
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.fingerprint() == definition)
++        .ok_or_else(|| fault("generated type definition-site declaration absent"))?;
++    if declaration.def_key.item_kind != ItemKind::Macro
++        || declaration.scope.owner.is_some()
++        || declaration.scope.crate_key.0 != mark.defining_unit.0
++        || source.outline().profile.edition != record.key().definition_edition
++    {
++        return Ok(Err(GeneratedTypePrerequisite::DefinitionSiteSource));
++    }
++    charge(
++        bytes,
++        declaration
++            .scope
++            .heap_bytes()
++            .checked_mul(2)
++            .ok_or_else(limit)?,
++        maximum,
++    )?;
++    let actual_context = DeclarationContext {
++        scope: declaration.scope.clone(),
++        range: declaration.declaration_span,
++    };
++    if !matches!(db.published_input(&InputKey::DefinitionHeader(definition)), Some((InputValue::DefinitionHeader(actual), _)) if actual == &declaration.header)
++        || !matches!(db.published_input(&InputKey::DeclarationContext(definition)), Some((InputValue::DeclarationContext(actual), _)) if actual == &actual_context)
++    {
++        return Err(fault(
++            "generated type definition-site header/context differs",
++        ));
++    }
++    for key in [
++        key,
++        InputKey::DefinitionSource(definition),
++        InputKey::DefinitionHeader(definition),
++        InputKey::DeclarationContext(definition),
++        InputKey::CapturedSource(source.selection().location_identity()),
++    ] {
++        stamp(db, stamps, &key, bytes, maximum)?;
++    }
++    Ok(Ok((declaration.scope.clone(), RouteKind::DefinitionSite)))
++}
++impl SelectedGeneratedType {
++    pub(crate) fn capture_current(
++        db: &Database,
++        owner: &SourceDeclarative,
++        parent: &CurrentGeneratedConstant,
++        maximum: usize,
++    ) -> Result<GeneratedTypeOutcome, Diagnostic> {
++        Self::capture_with_providers(db, owner, parent, &[], maximum)
++    }
++    /// Providers are genuine retained owner evidence, never a completeness list.
++    /// Their selected definition/source must independently match published facts.
++    pub(crate) fn capture_with_providers(
++        db: &Database,
++        owner: &SourceDeclarative,
++        parent: &CurrentGeneratedConstant,
++        providers: &[&SourceDeclarative],
++        maximum: usize,
++    ) -> Result<GeneratedTypeOutcome, Diagnostic> {
++        if maximum > MAX_BYTES
++            || providers.len() > MAX_ROWS
++            || parent
++                .metadata_bytes()
++                .checked_mul(2)
++                .is_none_or(|n| n > maximum)
++        {
++            return Err(limit());
++        }
++        parent.revalidate(db, owner)?;
++        let definition = parent.retained().member().fingerprint();
++        let Some((InputValue::DefinitionSource(parse), _)) =
++            db.published_input(&InputKey::DefinitionSource(definition))
++        else {
++            return Err(fault("generated written type registered source absent"));
++        };
++        let Some((InputValue::GeneratedSyntax(unit), _)) =
++            db.published_input(&InputKey::GeneratedSyntax(parse.content))
++        else {
++            return Err(fault("generated written type actual syntax unit absent"));
++        };
++        let role = match parent.retained().form() {
++            GeneratedConstantForm::Scalar { .. } => GeneratedTypeRole::Declaration,
++            GeneratedConstantForm::Array { .. } => GeneratedTypeRole::ArrayElement,
++        };
++        let residual = maximum
++            .checked_sub(parent.metadata_bytes())
++            .ok_or_else(limit)?;
++        let site = WrittenGeneratedType::capture(
++            &unit.items,
++            &unit.scope,
++            &unit.cfg,
++            parent.retained().member(),
++            role,
++            residual,
++        )?;
++        if site.scope().owner.is_some() {
++            return Ok(GeneratedTypeOutcome::Need(
++                GeneratedTypePrerequisite::GenericOrAssociated,
++            ));
++        }
++        if !unit
++            .definitions
++            .get(&definition)
++            .is_some_and(|d| d.fingerprint() == site.declaration_fingerprint())
++            || !matches!(db.published_input(&InputKey::DefinitionHeader(definition)), Some((InputValue::DefinitionHeader(header), _)) if header.fingerprint() == site.header_fingerprint())
++            || !matches!(db.published_input(&InputKey::DeclarationContext(definition)), Some((InputValue::DeclarationContext(ctx), _)) if ctx.scope == *site.scope() && ctx.range == site.declaration())
++        {
++            return Err(fault("generated written type actual registration changed"));
++        }
++        let mut bytes = parent
++            .metadata_bytes()
++            .checked_add(site.metadata_bytes())
++            .and_then(|n| n.checked_add(std::mem::size_of::<Self>()))
++            .filter(|n| *n <= maximum)
++            .ok_or_else(limit)?;
++        let mut stamps = BTreeMap::new();
++        for key in [
++            InputKey::GeneratedSyntax(parse.content),
++            InputKey::DefinitionSource(definition),
++            InputKey::DefinitionHeader(definition),
++            InputKey::DeclarationContext(definition),
++            InputKey::ExpansionEpoch,
++        ] {
++            stamp(db, &mut stamps, &key, &mut bytes, maximum)?;
++        }
++        let parts = match site.shape() {
++            GeneratedTypeSyntax::Unit => {
++                return Ok(GeneratedTypeOutcome::Selected(Self {
++                    parent: parent.identity(),
++                    site,
++                    result: SelectedSourceType::IntrinsicUnit,
++                    route: RouteKind::CallSite,
++                    selected_header: None,
++                    alias_site: None,
++                    stamps,
++                    revision: db.revision(),
++                    bytes,
++                }));
++            }
++            GeneratedTypeSyntax::GenericOrProjection => {
++                return Ok(GeneratedTypeOutcome::Need(
++                    GeneratedTypePrerequisite::GenericOrAssociated,
++                ));
++            }
++            GeneratedTypeSyntax::AbsolutePath => {
++                return Ok(GeneratedTypeOutcome::Need(
++                    GeneratedTypePrerequisite::QualifiedModuleRoute,
++                ));
++            }
++            GeneratedTypeSyntax::Unsupported => {
++                return Ok(GeneratedTypeOutcome::Need(
++                    GeneratedTypePrerequisite::UnsupportedWrittenType,
++                ));
++            }
++            GeneratedTypeSyntax::Path(parts) => parts,
++        };
++        let Some(last) = parts.last() else {
++            return Err(fault("generated type path empty"));
++        };
++        let GeneratedTypeSegmentKind::Name(name) = last.kind() else {
++            return Ok(GeneratedTypeOutcome::Need(
++                GeneratedTypePrerequisite::QualifiedModuleRoute,
++            ));
++        };
++        if parts.len() > 2 {
++            return Ok(GeneratedTypeOutcome::Need(
++                GeneratedTypePrerequisite::QualifiedModuleRoute,
++            ));
++        }
++        let first = &parts[0];
++        let (mut scope, mut route) = match origin_scope(
++            db,
++            owner,
++            providers,
++            unit,
++            site.scope(),
++            first,
++            &mut stamps,
++            &mut bytes,
++            maximum,
++        )? {
++            Ok(found) => found,
++            Err(need) => return Ok(GeneratedTypeOutcome::Need(need)),
++        };
++        if matches!(route, RouteKind::DefinitionSite)
++            && site.scope() != &unit.scope
++            && !matches!(
++                first.kind(),
++                GeneratedTypeSegmentKind::Keyword(TypeKeyword::DollarCrate)
++            )
++        {
++            return Ok(GeneratedTypeOutcome::Need(
++                GeneratedTypePrerequisite::DefinitionSiteSource,
++            ));
++        }
++        if parts.len() == 2 {
++            match first.kind() {
++                GeneratedTypeSegmentKind::Keyword(TypeKeyword::SelfModule) => {}
++                GeneratedTypeSegmentKind::Keyword(TypeKeyword::SuperModule) => {
++                    if scope.module_path.pop().is_none() {
++                        return Ok(GeneratedTypeOutcome::Need(
++                            GeneratedTypePrerequisite::QualifiedModuleRoute,
++                        ));
++                    }
++                }
++                GeneratedTypeSegmentKind::Keyword(TypeKeyword::Crate) => scope.module_path.clear(),
++                GeneratedTypeSegmentKind::Keyword(TypeKeyword::DollarCrate) => {
++                    let facts = unit.items.hygiene_facts();
++                    // Requires the frozen pin-backed dollar_crate parent-chain
++                    // attachment. A spelling or direct newest mark is insufficient.
++                    let origin = facts.dollar_crate_origin(first.span().context)?;
++                    if origin.normalized_context() != facts.local(first.span().context)? {
++                        return Err(fault("dollar-crate normalized origin differs"));
++                    }
++                    let mark = facts.context(origin.mark())?;
++                    let record_key = InputKey::ExpansionRecord(Digest(origin.expansion().0));
++                    let Some((InputValue::ExpansionRecord(record), _)) =
++                        db.published_input(&record_key)
++                    else {
++                        return Ok(GeneratedTypeOutcome::Need(
++                            GeneratedTypePrerequisite::DefinitionSiteSource,
++                        ));
++                    };
++                    if record.key().fingerprint().0 != origin.expansion().0
++                        || mark.expansion != Some(origin.expansion())
++                        || mark.defining_unit != origin.unit()
++                    {
++                        return Err(fault("dollar-crate selected mark/record/owner differs"));
++                    }
++                    let MacroIdentity::Declaration {
++                        definition: macro_definition,
++                    } = &record.key().macro_identity
++                    else {
++                        return Ok(GeneratedTypeOutcome::Need(
++                            GeneratedTypePrerequisite::DefinitionSiteSource,
++                        ));
++                    };
++                    let Some(definition_owner) =
++                        source_owner(db, *macro_definition, owner, providers)?
++                    else {
++                        return Ok(GeneratedTypeOutcome::Need(
++                            GeneratedTypePrerequisite::DefinitionSiteSource,
++                        ));
++                    };
++                    let macro_source = definition_owner.module_source();
++                    let macro_item = macro_source
++                        .outline()
++                        .items
++                        .iter()
++                        .find(|i| i.def_key.fingerprint() == *macro_definition)
++                        .ok_or_else(|| fault("dollar-crate actual macro declaration absent"))?;
++                    if macro_item.def_key.item_kind != ItemKind::Macro
++                        || macro_item.scope.owner.is_some()
++                        || macro_item.scope.crate_key.0 != origin.unit().0
++                        || macro_source.outline().profile.edition != record.key().definition_edition
++                    {
++                        return Ok(GeneratedTypeOutcome::Need(
++                            GeneratedTypePrerequisite::DefinitionSiteSource,
++                        ));
++                    }
++                    charge(&mut bytes, macro_item.scope.heap_bytes(), maximum)?;
++                    let macro_context = DeclarationContext {
++                        scope: macro_item.scope.clone(),
++                        range: macro_item.declaration_span,
++                    };
++                    if !matches!(db.published_input(&InputKey::DefinitionHeader(*macro_definition)), Some((InputValue::DefinitionHeader(actual), _)) if actual == &macro_item.header)
++                        || !matches!(db.published_input(&InputKey::DeclarationContext(*macro_definition)), Some((InputValue::DeclarationContext(actual), _)) if actual == &macro_context)
++                    {
++                        return Err(fault(
++                            "dollar-crate selected original header/context differs",
++                        ));
++                    }
++                    for key in [
++                        record_key,
++                        InputKey::DefinitionSource(*macro_definition),
++                        InputKey::DefinitionHeader(*macro_definition),
++                        InputKey::DeclarationContext(*macro_definition),
++                        InputKey::CapturedSource(macro_source.selection().location_identity()),
++                    ] {
++                        stamp(db, &mut stamps, &key, &mut bytes, maximum)?;
++                    }
++                    // The context's owning edition remains independent of the
++                    // caller and is checked against the actual declaration source.
++                    if mark.edition
++                        != crate::expand::source_declarative::edition(
++                            record.key().definition_edition,
++                        )?
++                    {
++                        return Err(fault("dollar-crate selected mark owning edition differs"));
++                    }
++                    scope.crate_key = macro_item.scope.crate_key;
++                    scope.module_path.clear();
++                    route = RouteKind::DollarCrate;
++                }
++                _ => {
++                    return Ok(GeneratedTypeOutcome::Need(
++                        GeneratedTypePrerequisite::QualifiedModuleRoute,
++                    ));
++                }
++            }
++        }
++        let seal_key = SealKey {
++            domain: SealDomain::Scope {
++                id: scope.fingerprint(),
++                namespace: crate::source::manifest::Namespace::Type,
++            },
++            unit_graph: unit.seal.unit_graph,
++            epoch: unit.seal.epoch,
++        };
++        let Some((InputValue::DiscoverySeal(input), _)) =
++            db.published_input(&InputKey::DiscoverySeal(seal_key.clone()))
++        else {
++            return Ok(GeneratedTypeOutcome::Need(
++                GeneratedTypePrerequisite::TypeNamespace(scope),
++            ));
++        };
++        let certified = input
++            .scope
++            .as_ref()
++            .ok_or_else(|| fault("generated selected Type scope absent"))?;
++        if input.seal.key() != seal_key
++            || certified.scope != scope
++            || certified.namespace != crate::source::manifest::Namespace::Type
++            || !matches!(db.published_input(&InputKey::ExpansionEpoch), Some((InputValue::ExpansionEpoch(epoch),_)) if *epoch==seal_key.epoch)
++            || !matches!(db.published_input(&InputKey::SourceDependencies), Some((InputValue::SourceDependencies(graph),_)) if graph.fingerprint()==input.source_dependencies)
++        {
++            return Err(fault(
++                "generated selected Type scope current world/epoch differs",
++            ));
++        }
++        stamp(
++            db,
++            &mut stamps,
++            &InputKey::DiscoverySeal(seal_key),
++            &mut bytes,
++            maximum,
++        )?;
++        stamp(
++            db,
++            &mut stamps,
++            &InputKey::SourceDependencies,
++            &mut bytes,
++            maximum,
++        )?;
++        if input.compiler_inputs.len() > MAX_ROWS || input.records.len() > MAX_ROWS {
++            return Err(limit());
++        }
++        for (key, expected) in &input.compiler_inputs {
++            if db
++                .published_input(key)
++                .is_none_or(|(_, actual)| actual != *expected)
++            {
++                return Err(fault("generated type scope compiler input changed"));
++            }
++            stamp(db, &mut stamps, key, &mut bytes, maximum)?;
++        }
++        charge(
++            &mut bytes,
++            scope
++                .heap_bytes()
++                .checked_add(name.capacity().checked_mul(2).ok_or_else(limit)?)
++                .ok_or_else(limit)?,
++            maximum,
++        )?;
++        for descriptor in &input.records {
++            let key = InputKey::ExpansionRecord(descriptor.key.fingerprint());
++            if !matches!(db.published_input(&key),Some((InputValue::ExpansionRecord(record),_)) if record.descriptor().fingerprint()==descriptor.fingerprint())
++            {
++                return Err(fault("selected Type namespace retained record changed"));
++            }
++            stamp(db, &mut stamps, &key, &mut bytes, maximum)?;
++        }
++        let bucket = BucketKey {
++            scope: scope.clone(),
++            namespace: crate::source::manifest::Namespace::Type,
++            name: name.clone(),
++        };
++        let found = match certified.lookup(&bucket)? {
++            NameLookup::Defined(found) => found,
++            NameLookup::Absent => {
++                return Ok(GeneratedTypeOutcome::Need(
++                    GeneratedTypePrerequisite::PrimitiveEnvironment,
++                ));
++            }
++            other => {
++                return Ok(GeneratedTypeOutcome::Need(
++                    GeneratedTypePrerequisite::TypeName(other),
++                ));
++            }
++        };
++        let Some(provider) = source_owner(db, found.identity, owner, providers)? else {
++            let comparison = unit.items.item_class(last.span().context)?;
++            return Self::capture_generated_alias(
++                db, parent, site, found, comparison, route, input, stamps, bytes, maximum,
++            );
++        };
++        let source = provider.module_source();
++        let actual = source
++            .outline()
++            .items
++            .iter()
++            .find(|i| i.def_key.fingerprint() == found.identity)
++            .ok_or_else(|| fault("generated selected source member absent"))?;
++        if actual.scope.owner.is_some() {
++            return Ok(GeneratedTypeOutcome::Need(
++                GeneratedTypePrerequisite::GenericOrAssociated,
++            ));
++        }
++        if found.namespace != crate::source::manifest::Namespace::Type
++            || found.defining_unit != actual.scope.crate_key
++            || found.definition_edition != source.outline().profile.edition
++            || !input.sources.contains(source.selection())
++        {
++            return Err(fault(
++                "generated selected member owning source/profile differs",
++            ));
++        }
++        let header = &actual.header;
++        let context = DeclarationContext {
++            scope: actual.scope.clone(),
++            range: actual.declaration_span,
++        };
++        if !matches!(db.published_input(&InputKey::DefinitionHeader(found.identity)), Some((InputValue::DefinitionHeader(h), _)) if h == header)
++            || !matches!(db.published_input(&InputKey::DeclarationContext(found.identity)), Some((InputValue::DeclarationContext(c),_)) if c == &context)
++        {
++            return Err(fault("generated selected source header/context changed"));
++        }
++        // A qualified route still needs the final segment's comparison class to
++        // equal the genuine selected source owner's original item root class.
++        let (definition_root_key, provider_facts) =
++            provider.macro_index().original_root_hygiene()?;
++        let definition_root = provider_facts.context(definition_root_key)?;
++        if definition_root.parent.is_some()
++            || definition_root.defining_unit.0 != actual.scope.crate_key.0
++        {
++            return Err(fault(
++                "generated selected declaration original root fact differs",
++            ));
++        }
++        let generated_facts = unit.items.hygiene_facts();
++        let comparison = generated_facts.name_item(last.span().context)?;
++        let comparable = match route {
++            RouteKind::CallSite => comparison == provider_facts.name_item(definition_root_key)?,
++            RouteKind::DefinitionSite | RouteKind::DollarCrate => {
++                comparison == generated_facts.name_item(first.span().context)?
++            }
++        };
++        if !comparable {
++            return Ok(GeneratedTypeOutcome::Need(
++                GeneratedTypePrerequisite::DefinitionSiteSource,
++            ));
++        }
++        charge(
++            &mut bytes,
++            header
++                .estimated_bytes()
++                .checked_add(context.scope.heap_bytes())
++                .ok_or_else(limit)?,
++            maximum,
++        )?;
++        for key in [
++            InputKey::DefinitionSource(found.identity),
++            InputKey::DefinitionHeader(found.identity),
++            InputKey::DeclarationContext(found.identity),
++            InputKey::CapturedSource(source.selection().location_identity()),
++            InputKey::SourceBlob(source.selection().outline.parse.content),
++            InputKey::CrateCfg(source.selection().outline.crate_key),
++        ] {
++            stamp(db, &mut stamps, &key, &mut bytes, maximum)?;
++        }
++        let retained_parse = db
++            .prepared_parse(&source.selection().outline.parse)
++            .ok_or_else(|| fault("selected type retained original syntax prerequisite"))?;
++        let retained_node = retained_parse
++            .parsed
++            .tree()
++            .syntax()
++            .descendants()
++            .find(|n| {
++                crate::syntax::ast_adapter::range(n.text_range()) == context.range
++                    && (ast::TypeAlias::can_cast(n.kind())
++                        || ast::Struct::can_cast(n.kind())
++                        || ast::Enum::can_cast(n.kind())
++                        || ast::Union::can_cast(n.kind()))
++            })
++            .ok_or_else(|| fault("selected type exact retained header node absent"))?;
++        if retained_node.children().any(|n| {
++            ast::GenericParamList::can_cast(n.kind()) || ast::WhereClause::can_cast(n.kind())
++        }) {
++            return Ok(GeneratedTypeOutcome::Need(
++                GeneratedTypePrerequisite::GenericOrAssociated,
++            ));
++        }
++        let result = match actual.def_key.item_kind {
++            ItemKind::TypeAlias => {
++                let parsed = db
++                    .prepared_parse(&source.selection().outline.parse)
++                    .ok_or_else(|| {
++                        fault("generated selected alias retained original syntax prerequisite")
++                    })?;
++                let alias = parsed
++                    .parsed
++                    .tree()
++                    .syntax()
++                    .descendants()
++                    .filter_map(ast::TypeAlias::cast)
++                    .find(|a| {
++                        crate::syntax::ast_adapter::range(a.syntax().text_range()) == context.range
++                    })
++                    .ok_or_else(|| fault("generated selected alias exact source node absent"))?;
++                if alias.generic_param_list().is_some() || alias.where_clause().is_some() {
++                    return Ok(GeneratedTypeOutcome::Need(
++                        GeneratedTypePrerequisite::GenericOrAssociated,
++                    ));
++                }
++                if alias.ty().is_some_and(
++                    |t| matches!(t, ast::Type::TupleType(u) if u.fields().next().is_none()),
++                ) {
++                    SelectedSourceType::AliasUnit(found)
++                } else {
++                    SelectedSourceType::AliasHeader(found)
++                }
++            }
++            ItemKind::Struct | ItemKind::Enum | ItemKind::Union => {
++                SelectedSourceType::NominalHeader(found)
++            }
++            _ => {
++                return Ok(GeneratedTypeOutcome::Need(
++                    GeneratedTypePrerequisite::TraitOrForeignType,
++                ));
++            }
++        };
++        Ok(GeneratedTypeOutcome::Selected(Self {
++            parent: parent.identity(),
++            site,
++            result,
++            route,
++            selected_header: Some((header.clone(), context)),
++            alias_site: None,
++            stamps,
++            revision: db.revision(),
++            bytes,
++        }))
++    }
++    #[allow(clippy::too_many_arguments)]
++    fn capture_generated_alias(
++        db: &Database,
++        parent: &CurrentGeneratedConstant,
++        site: WrittenGeneratedType,
++        found: NameDefinition,
++        comparison: crate::syntax::token_wire::NameContextKey,
++        route: RouteKind,
++        input: &crate::db::seals::DiscoveryInput,
++        mut stamps: BTreeMap<InputKey, Digest>,
++        mut bytes: usize,
++        maximum: usize,
++    ) -> Result<GeneratedTypeOutcome, Diagnostic> {
++        let Some((InputValue::DefinitionSource(parse), _)) =
++            db.published_input(&InputKey::DefinitionSource(found.identity))
++        else {
++            return Ok(GeneratedTypeOutcome::Need(
++                GeneratedTypePrerequisite::ReplacementOrGeneratedMember,
++            ));
++        };
++        let Some((InputValue::GeneratedSyntax(target), _)) =
++            db.published_input(&InputKey::GeneratedSyntax(parse.content))
++        else {
++            return Ok(GeneratedTypeOutcome::Need(
++                GeneratedTypePrerequisite::ReplacementOrGeneratedMember,
++            ));
++        };
++        if target.key != *parse
++            || target.seal.epoch != input.seal.key().epoch
++            || target.seal.unit_graph != input.seal.key().unit_graph
++            || target.items.epoch() != target.seal.epoch
++            || target.scope.crate_key != found.defining_unit
++            || target.key.profile.edition != found.definition_edition
++        {
++            return Err(fault(
++                "generated selected alias current unit/profile/world differs",
++            ));
++        }
++        let Some(definition) = target.definitions.get(&found.identity) else {
++            return Err(fault(
++                "generated selected alias registered definition absent",
++            ));
++        };
++        if definition.item_kind != ItemKind::TypeAlias {
++            return Ok(GeneratedTypeOutcome::Need(
++                GeneratedTypePrerequisite::ReplacementOrGeneratedMember,
++            ));
++        }
++        let header = target
++            .items
++            .items()
++            .iter()
++            .find(|h| h.key.fingerprint() == found.identity)
++            .ok_or_else(|| fault("generated alias actual structural header absent"))?;
++        let name = header
++            .name
++            .as_ref()
++            .ok_or_else(|| fault("generated alias actual name origin absent"))?;
++        let origin = target
++            .items
++            .tokens()
++            .spans()
++            .iter()
++            .find(|s| s.key() == name.span)
++            .ok_or_else(|| fault("generated alias name token span absent"))?;
++        if target.items.item_class(origin.context)? != comparison {
++            return Ok(GeneratedTypeOutcome::Need(
++                GeneratedTypePrerequisite::DefinitionSiteSource,
++            ));
++        }
++        let descriptor = target.items.record().descriptor();
++        if input
++            .records
++            .iter()
++            .filter(|r| r.fingerprint() == descriptor.fingerprint())
++            .count()
++            != 1
++            || input
++                .seal
++                .input_dependencies()
++                .binary_search(&(
++                    target.items.record().key().fingerprint(),
++                    descriptor.fingerprint(),
++                ))
++                .is_err()
++        {
++            return Err(fault(
++                "generated alias record absent from exact current Type world",
++            ));
++        }
++        let record_key = InputKey::ExpansionRecord(target.items.record().key().fingerprint());
++        if !matches!(db.published_input(&record_key), Some((InputValue::ExpansionRecord(record),_)) if record.same_record(target.items.record()))
++        {
++            return Err(fault("generated alias actual retained record changed"));
++        }
++        let residual = maximum.checked_sub(bytes).ok_or_else(limit)?;
++        let alias_site = WrittenGeneratedType::capture(
++            &target.items,
++            &target.scope,
++            &target.cfg,
++            &header.key,
++            GeneratedTypeRole::AliasTarget,
++            residual,
++        )?;
++        if alias_site.scope().owner.is_some()
++            || matches!(alias_site.shape(), GeneratedTypeSyntax::GenericOrProjection)
++        {
++            return Ok(GeneratedTypeOutcome::Need(
++                GeneratedTypePrerequisite::GenericOrAssociated,
++            ));
++        }
++        if definition.fingerprint() != alias_site.declaration_fingerprint() {
++            return Err(fault("generated selected alias full declaration differs"));
++        }
++        let Some((InputValue::DefinitionHeader(header), _)) =
++            db.published_input(&InputKey::DefinitionHeader(found.identity))
++        else {
++            return Err(fault("generated alias published header absent"));
++        };
++        let Some((InputValue::DeclarationContext(context), _)) =
++            db.published_input(&InputKey::DeclarationContext(found.identity))
++        else {
++            return Err(fault("generated alias published context absent"));
++        };
++        if header.fingerprint() != alias_site.header_fingerprint()
++            || context.scope != *alias_site.scope()
++            || context.range != alias_site.declaration()
++        {
++            return Err(fault("generated alias published header/context differs"));
++        }
++        charge(&mut bytes, alias_site.metadata_bytes(), maximum)?;
++        charge(
++            &mut bytes,
++            header
++                .estimated_bytes()
++                .checked_add(context.scope.heap_bytes())
++                .ok_or_else(limit)?,
++            maximum,
++        )?;
++        for key in [
++            record_key,
++            InputKey::GeneratedSyntax(parse.content),
++            InputKey::DefinitionSource(found.identity),
++            InputKey::DefinitionHeader(found.identity),
++            InputKey::DeclarationContext(found.identity),
++            InputKey::DiscoverySeal(target.seal.clone()),
++        ] {
++            stamp(db, &mut stamps, &key, &mut bytes, maximum)?;
++        }
++        let result = if matches!(alias_site.shape(), GeneratedTypeSyntax::Unit) {
++            SelectedSourceType::AliasUnit(found)
++        } else {
++            SelectedSourceType::AliasHeader(found)
++        };
++        Ok(GeneratedTypeOutcome::Selected(Self {
++            parent: parent.identity(),
++            site,
++            result,
++            route,
++            selected_header: Some((header.clone(), context.clone())),
++            alias_site: Some(alias_site),
++            stamps,
++            revision: db.revision(),
++            bytes,
++        }))
++    }
++    pub(crate) fn result(&self) -> &SelectedSourceType {
++        &self.result
++    }
++    pub(crate) fn unit_primitive(&self) -> Option<PrimitiveType> {
++        match &self.result {
++            SelectedSourceType::IntrinsicUnit | SelectedSourceType::AliasUnit(_) => {
++                Some(PrimitiveType::Unit)
++            }
++            _ => None,
++        }
++    }
++    pub(crate) fn site(&self) -> &WrittenGeneratedType {
++        &self.site
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn dependencies(&self) -> &BTreeMap<InputKey, Digest> {
++        &self.stamps
++    }
++    pub(crate) fn target_prerequisite(&self) -> Option<GeneratedTypePrerequisite> {
++        match &self.result {
++            SelectedSourceType::AliasHeader(_) => {
++                Some(GeneratedTypePrerequisite::AliasTargetHygiene)
++            }
++            _ => None,
++        }
++    }
++    pub(crate) fn revalidate(
++        &self,
++        db: &Database,
++        owner: &SourceDeclarative,
++        parent: &CurrentGeneratedConstant,
++        providers: &[&SourceDeclarative],
++    ) -> Result<(), Diagnostic> {
++        if self.revision != db.revision() || self.parent != parent.identity() {
++            return Err(fault(
++                "generated type publication/parent changed; remint required",
++            ));
++        }
++        for (key, expected) in &self.stamps {
++            if db
++                .published_input(key)
++                .is_none_or(|(_, current)| current != *expected)
++            {
++                return Err(fault("generated selected source type dependency changed"));
++            }
++        }
++        let residual = MAX_BYTES.checked_sub(self.bytes).ok_or_else(limit)?;
++        match Self::capture_with_providers(db, owner, parent, providers, residual)? {
++            GeneratedTypeOutcome::Selected(fresh) if fresh.identity() == self.identity() => Ok(()),
++            _ => Err(fault("generated selected source type replay changed")),
++        }
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/generated-current-source-type");
++        e.digest(self.parent);
++        e.digest(self.site.identity());
++        e.u8(match self.route {
++            RouteKind::CallSite => 0,
++            RouteKind::DefinitionSite => 1,
++            RouteKind::DollarCrate => 2,
++        });
++        match &self.result {
++            SelectedSourceType::IntrinsicUnit => e.u8(0),
++            SelectedSourceType::AliasUnit(d) => {
++                e.u8(1);
++                e.record(d)
++            }
++            SelectedSourceType::AliasHeader(d) => {
++                e.u8(2);
++                e.record(d)
++            }
++            SelectedSourceType::NominalHeader(d) => {
++                e.u8(3);
++                e.record(d)
++            }
++        };
++        e.option(&self.alias_site, |e, site| e.digest(site.identity()));
++        e.option(&self.selected_header, |e, (h, c)| {
++            e.record(h);
++            e.record(&c.scope);
++            e.u32(c.range.start);
++            e.u32(c.range.end)
++        });
++        e.u64(self.stamps.len() as u64);
++        for (key, value) in &self.stamps {
++            e.record(key);
++            e.digest(*value)
++        }
++        e.finish()
++    }
++}
++#[cfg(test)]
++#[path = "generated_type_admission_tests.rs"]
++mod tests;
+--- /dev/null
++++ b/crates/lrr/src/frontend/generated_type_admission_tests.rs
+@@ -0,0 +1,524 @@
++//! Real source/expansion/header components only; no evaluator, layout or main execution.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    db::key::OutlineKey,
++    expand::{
++        generated_items::GeneratedItems,
++        source_declarative::SourceDeclarativeDemand,
++        source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    },
++    frontend::generated_macros::GeneratedMacroCatalog,
++    source::{
++        changes::{
++            PreparedSourceInputs, PreparedSourceView, SourceSelection, SourceSelectionOutcome,
++            SourceUnitInput,
++        },
++        dependencies::SourceDependency,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::{generated_type_site::GeneratedTypeRole, parse::ParseKey},
++};
++use std::sync::Arc;
++const VIS: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-pub-matcher.rs"
++);
++const RAW: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/parser/raw/raw-idents.rs");
++const MODERN: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/dollar-crate-modern.rs"
++);
++const INTERCRATE: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/auxiliary/intercrate.rs"
++);
++fn input(text: &str, path: &str, unit: Digest, edition: u16) -> SourceUnitInput {
++    SourceUnitInput {
++        path: SourcePath::new(path).unwrap(),
++        crate_key: unit,
++        module_path: vec![],
++        profile: ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        cfg: CfgSet::guest_default(),
++        blob: SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++    }
++}
++fn prepare(
++    units: Vec<SourceUnitInput>,
++    edges: Vec<SourceDependency>,
++) -> (Database, Vec<PreparedSourceView>, Vec<SourceDeclarative>) {
++    let selections = units
++        .iter()
++        .map(|u| SourceSelection {
++            path: u.path.clone(),
++            outline: OutlineKey {
++                parse: ParseKey {
++                    content: u.blob.content(),
++                    profile: u.profile.clone(),
++                },
++                crate_key: u.crate_key,
++                module_path: u.module_path.clone(),
++                cfg: u.cfg.fingerprint(),
++            },
++        })
++        .collect::<Vec<_>>();
++    let inputs =
++        PreparedSourceInputs::refresh_with_dependencies(None, units, Default::default(), edges)
++            .unwrap();
++    let views = selections
++        .iter()
++        .map(|s| {
++            let SourceSelectionOutcome::Selected(v) = inputs.select(s).unwrap() else {
++                panic!()
++            };
++            v
++        })
++        .collect::<Vec<_>>();
++    let mut db = Database::default();
++    inputs.publish(&mut db).unwrap();
++    db.begin_expansion_epoch(1).unwrap();
++    let providers = views
++        .iter()
++        .map(|v| SourceDeclarative::new(v.share()).unwrap())
++        .collect();
++    (db, views, providers)
++}
++fn component(
++    text: &str,
++    edition: u16,
++    chosen: &str,
++) -> (SourceDeclarative, GeneratedItems, GeneratedMacroCatalog) {
++    let (_, views, providers) = prepare(
++        vec![input(text, "type-original.rs", Digest([171; 32]), edition)],
++        vec![],
++    );
++    let call = views[0]
++        .outline()
++        .item_invocations
++        .iter()
++        .find(|c| c.range.start as usize == text.find(chosen).unwrap())
++        .unwrap();
++    let routes = providers
++        .iter()
++        .flat_map(|p| p.routes_in(&providers).unwrap())
++        .collect::<Vec<_>>();
++    let graph =
++        crate::frontend::source_macro_routes::SourceMacroRoutes::discovery_graph(&routes).unwrap();
++    let SourceDeclarativeDemand::Ready(request) = providers[0]
++        .demand_for_discovery(
++            call.item_input,
++            Digest::of_bytes(b"type component compile env"),
++            crate::expand::source_declarative::engine_version(),
++            &graph,
++            &providers,
++        )
++        .unwrap()
++    else {
++        panic!("actual original type expansion prerequisite")
++    };
++    let items =
++        GeneratedItems::admit(request.key(), Arc::new(request.expand().unwrap()), 1).unwrap();
++    let catalog = GeneratedMacroCatalog::new(
++        &items,
++        call.scope.clone(),
++        Key(items.record().key().parent_context.0),
++        views[0].captured_macro_cfg().unwrap(),
++        1,
++    )
++    .unwrap();
++    (providers.into_iter().next().unwrap(), items, catalog)
++}
++fn world(
++    text: &str,
++    edition: u16,
++    module: &[&str],
++) -> (Database, SourceDeclarative, CurrentGeneratedConstant) {
++    let (mut db, views, providers) = prepare(
++        vec![input(text, "type-current.rs", Digest([172; 32]), edition)],
++        vec![],
++    );
++    let mut scope = views[0].outline().root_scope.clone();
++    scope.module_path.extend(module.iter().map(|m| (*m).into()));
++    let mut definition = None;
++    for namespace in [
++        crate::source::manifest::Namespace::Value,
++        crate::source::manifest::Namespace::Type,
++    ] {
++        let mut discovery = SourceDiscovery::new(
++            vec![views[0].share()],
++            scope.clone(),
++            namespace,
++            Digest::of_bytes(b"type current world"),
++            1,
++        )
++        .unwrap()
++        .with_declarative_compiler(
++            Digest::of_bytes(b"type current compile env"),
++            crate::expand::source_declarative::engine_version(),
++            Arc::new(
++                crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                    &views[0].selection().outline.parse.profile,
++                )
++                .unwrap(),
++            ),
++        )
++        .unwrap();
++        loop {
++            match discovery.poll().unwrap() {
++                SourceDiscoveryStep::Sealed(_) => break,
++                SourceDiscoveryStep::NeedExpansion { request } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                SourceDiscoveryStep::Incomplete { diagnostic, .. } => panic!(
++                    "actual type preparation frontier: {} {}",
++                    diagnostic.code, diagnostic.message
++                ),
++                _ => panic!("type source preparation is unestablished"),
++            }
++        }
++        if namespace == crate::source::manifest::Namespace::Value {
++            let NameLookup::Defined(found) = discovery.lookup("A").unwrap() else {
++                panic!()
++            };
++            definition = Some(found.identity);
++        }
++        discovery.publish(&mut db).unwrap();
++    }
++    let owner = providers.into_iter().next().unwrap();
++    let parent =
++        CurrentGeneratedConstant::capture(&db, &owner, definition.unwrap(), MAX_BYTES).unwrap();
++    (db, owner, parent)
++}
++#[test]
++fn unchanged_raw_generated_unit_and_alias_sites_keep_all_four_origin_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (_, items, catalog) = component(RAW, edition, "tests!(r#break);");
++        let (_, scope, _) = catalog.captured_owner();
++        let constant = items
++            .items()
++            .iter()
++            .find(|h| h.kind == crate::expand::generated_items::GeneratedHeaderKind::Const)
++            .unwrap();
++        let site = WrittenGeneratedType::capture(
++            &items,
++            scope,
++            catalog.cfg(),
++            &constant.key,
++            GeneratedTypeRole::Declaration,
++            MAX_BYTES,
++        )
++        .unwrap();
++        assert!(matches!(site.shape(), GeneratedTypeSyntax::Unit));
++        assert_eq!(site.record().key().call_edition, edition);
++        assert_eq!(site.record().key().definition_edition, edition);
++        let alias = items
++            .items()
++            .iter()
++            .find(|h| {
++                h.kind == crate::expand::generated_items::GeneratedHeaderKind::Type
++                    && items.text()[h.start as usize..h.end as usize].contains("=")
++            })
++            .unwrap();
++        let site = WrittenGeneratedType::capture(
++            &items,
++            scope,
++            catalog.cfg(),
++            &alias.key,
++            GeneratedTypeRole::AliasTarget,
++            MAX_BYTES,
++        )
++        .unwrap();
++        assert!(matches!(site.shape(), GeneratedTypeSyntax::Unit));
++        assert_eq!(site.scope().module_path.len(), 2);
++    }
++}
++#[test]
++fn unchanged_vis_alias_target_is_origin_data_never_a_primitive_spelling_grant() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (_, items, catalog) = component(VIS, edition, "vis_passthru! { pub type H = i32; }");
++        let (_, scope, _) = catalog.captured_owner();
++        let alias = items
++            .items()
++            .iter()
++            .find(|h| h.kind == crate::expand::generated_items::GeneratedHeaderKind::Type)
++            .unwrap();
++        let site = WrittenGeneratedType::capture(
++            &items,
++            scope,
++            catalog.cfg(),
++            &alias.key,
++            GeneratedTypeRole::AliasTarget,
++            MAX_BYTES,
++        )
++        .unwrap();
++        let GeneratedTypeSyntax::Path(parts) = site.shape() else {
++            panic!()
++        };
++        assert!(matches!(parts[0].kind(),GeneratedTypeSegmentKind::Name(n) if n=="i32"));
++        assert_eq!(
++            parts[0].span().edition,
++            crate::expand::source_declarative::edition(edition).unwrap()
++        );
++        assert_eq!(site.role(), GeneratedTypeRole::AliasTarget);
++    }
++}
++#[test]
++fn unchanged_scalar_type_absence_keeps_explicit_primitive_environment_frontier() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, owner, parent) = world(VIS, edition, &["with_pub"]);
++        assert!(matches!(
++            SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap(),
++            GeneratedTypeOutcome::Need(GeneratedTypePrerequisite::PrimitiveEnvironment)
++        ));
++    }
++}
++#[test]
++fn generated_alias_unit_joins_exact_header_without_original_source_fabrication() {
++    let text = "macro_rules!m{()=>{type U=();const A:U=();}}m!();fn main(){}";
++    let (db, owner, parent) = world(text, 2024, &[]);
++    let GeneratedTypeOutcome::Selected(selected) =
++        SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap()
++    else {
++        panic!()
++    };
++    let SelectedSourceType::AliasUnit(alias) = selected.result() else {
++        panic!()
++    };
++    assert_ne!(alias.identity, parent.retained().member().fingerprint());
++    assert_eq!(selected.unit_primitive(), Some(PrimitiveType::Unit));
++    assert!(selected.alias_site.is_some());
++    assert!(
++        selected
++            .dependencies()
++            .contains_key(&InputKey::DefinitionHeader(alias.identity))
++    );
++    selected.revalidate(&db, &owner, &parent, &[]).unwrap();
++}
++#[test]
++fn original_alias_unit_retains_member_identity_and_genuine_cached_header() {
++    let text = "type U=();macro_rules!m{()=>{const A:U=();}}m!();fn main(){}";
++    let (db, owner, parent) = world(text, 2024, &[]);
++    let GeneratedTypeOutcome::Selected(selected) =
++        SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap()
++    else {
++        panic!()
++    };
++    let SelectedSourceType::AliasUnit(alias) = selected.result() else {
++        panic!()
++    };
++    let actual = owner
++        .module_source()
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "U")
++        .unwrap();
++    assert_eq!(alias.identity, actual.def_key.fingerprint());
++    assert!(selected.alias_site.is_none());
++    assert_eq!(selected.unit_primitive(), Some(PrimitiveType::Unit));
++}
++#[test]
++fn primitive_shadow_and_nonunit_alias_never_collapse_to_a_descriptor() {
++    for (text, nominal) in [
++        (
++            "struct i32;macro_rules!m{()=>{const A:i32=i32;}}m!();fn main(){}",
++            true,
++        ),
++        (
++            "type i32=bool;macro_rules!m{()=>{const A:i32=true;}}m!();fn main(){}",
++            false,
++        ),
++    ] {
++        let (db, owner, parent) = world(text, 2024, &[]);
++        let GeneratedTypeOutcome::Selected(selected) =
++            SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap()
++        else {
++            panic!()
++        };
++        assert_eq!(selected.unit_primitive(), None);
++        if nominal {
++            assert!(matches!(
++                selected.result(),
++                SelectedSourceType::NominalHeader(_)
++            ));
++        } else {
++            assert!(matches!(
++                selected.result(),
++                SelectedSourceType::AliasHeader(_)
++            ));
++            assert_eq!(
++                selected.target_prerequisite(),
++                Some(GeneratedTypePrerequisite::AliasTargetHygiene)
++            );
++        }
++    }
++}
++#[test]
++fn generated_generic_alias_and_absolute_path_keep_exact_prerequisites() {
++    let (db, owner, parent) = world(
++        "macro_rules!m{()=>{type U<T>=();const A:U=();}}m!();fn main(){}",
++        2024,
++        &[],
++    );
++    assert!(matches!(
++        SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap(),
++        GeneratedTypeOutcome::Need(GeneratedTypePrerequisite::GenericOrAssociated)
++    ));
++    let (db, owner, parent) = world(
++        "type U=();macro_rules!m{()=>{const A: ::U = ();}}m!();fn main(){}",
++        2024,
++        &[],
++    );
++    assert!(matches!(
++        SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap(),
++        GeneratedTypeOutcome::Need(GeneratedTypePrerequisite::QualifiedModuleRoute)
++    ));
++}
++#[test]
++fn actual_epoch_parent_and_quota_refusal_precede_source_type_mint() {
++    let (mut db, owner, parent) = world(
++        "macro_rules!m{()=>{const A:()=();}}m!();fn main(){}",
++        2024,
++        &[],
++    );
++    assert!(SelectedGeneratedType::capture_current(&db, &owner, &parent, 0).is_err());
++    let GeneratedTypeOutcome::Selected(selected) =
++        SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap()
++    else {
++        panic!()
++    };
++    db.begin_expansion_epoch(2).unwrap();
++    assert!(selected.revalidate(&db, &owner, &parent, &[]).is_err());
++    assert!(SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).is_err());
++}
++#[test]
++fn unchanged_cross_edition_dollar_crate_retains_actual_selected_mark_and_record() {
++    for (call, definition) in [(2015, 2024), (2018, 2021), (2021, 2018), (2024, 2015)] {
++        let root = Digest([173; 32]);
++        let aux = Digest([174; 32]);
++        let (_, views, providers) = prepare(
++            vec![
++                input(MODERN, "modern.rs", root, call),
++                input(INTERCRATE, "intercrate.rs", aux, definition),
++            ],
++            vec![SourceDependency {
++                consumer: root,
++                alias: "intercrate".into(),
++                provider: aux,
++            }],
++        );
++        let call_site=views[0].outline().item_invocations.iter().find(|c| views[0].macro_call_at(c.range).unwrap().segments().last().is_some_and(|s|matches!(s,crate::syntax::imports::ImportSegment::Name(n) if n=="uses_dollar_crate_modern"))).unwrap();
++        let routes = providers
++            .iter()
++            .flat_map(|p| p.routes_in(&providers).unwrap())
++            .collect::<Vec<_>>();
++        let graph =
++            crate::frontend::source_macro_routes::SourceMacroRoutes::discovery_graph(&routes)
++                .unwrap();
++        let SourceDeclarativeDemand::Ready(request) = providers[0]
++            .demand_for_discovery(
++                call_site.item_input,
++                Digest::of_bytes(b"cross type component compile env"),
++                crate::expand::source_declarative::engine_version(),
++                &graph,
++                &providers,
++            )
++            .unwrap()
++        else {
++            panic!()
++        };
++        let items =
++            GeneratedItems::admit(request.key(), Arc::new(request.expand().unwrap()), 1).unwrap();
++        let member = items
++            .items()
++            .iter()
++            .find(|h| h.kind == crate::expand::generated_items::GeneratedHeaderKind::Type)
++            .unwrap();
++        let site = WrittenGeneratedType::capture(
++            &items,
++            &call_site.scope,
++            views[0].captured_macro_cfg().unwrap(),
++            &member.key,
++            GeneratedTypeRole::AliasTarget,
++            MAX_BYTES,
++        )
++        .unwrap();
++        let GeneratedTypeSyntax::Path(parts) = site.shape() else {
++            panic!()
++        };
++        assert!(matches!(
++            parts[0].kind(),
++            GeneratedTypeSegmentKind::Keyword(TypeKeyword::DollarCrate)
++        ));
++        let facts = items.hygiene_facts();
++        let origin = facts.dollar_crate_origin(parts[0].span().context).unwrap();
++        assert_eq!(origin.unit(), Key(aux.0));
++        assert_eq!(origin.expansion(), Key(request.key().fingerprint().0));
++        assert_eq!(
++            facts.context(origin.mark()).unwrap().expansion,
++            Some(origin.expansion())
++        );
++        assert_eq!(site.record().key().call_edition, call);
++        assert_eq!(site.record().key().definition_edition, definition);
++        assert!(facts.dollar_crate_origin(Key([175; 32])).is_err());
++        // Component provenance is not a completed provider Type seal or alias result.
++    }
++}
++#[test]
++fn unchanged_nominal_primitive_shadow_and_local_macro_scope_are_not_spelling_authority() {
++    let text = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/shadowed/primitive-type-shadowing.rs"
++    );
++    let (_, views, _) = prepare(
++        vec![input(text, "primitive-shadow.rs", Digest([176; 32]), 2024)],
++        vec![],
++    );
++    let nominal = views[0]
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "bool" && i.def_key.item_kind == ItemKind::Struct)
++        .unwrap();
++    assert_eq!(nominal.scope.crate_key, Digest([176; 32]));
++    assert_ne!(nominal.header.fingerprint(), nominal.def_key.fingerprint());
++    let text = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/generate-mod.rs"
++    );
++    let (_, views, _) = prepare(
++        vec![input(text, "generate-mod.rs", Digest([177; 32]), 2024)],
++        vec![],
++    );
++    let parsed = crate::syntax::parse::ParsedFile::parse(
++        views[0].captured_macro_blob().unwrap(),
++        views[0].outline().profile.clone(),
++    )
++    .unwrap();
++    let selected = parsed
++        .parsed
++        .tree()
++        .syntax()
++        .descendants()
++        .filter_map(ast::MacroCall::cast)
++        .find(|c| {
++            c.path()
++                .is_some_and(|p| p.syntax().text().to_string() == "genmod")
++        })
++        .unwrap();
++    let call = views[0]
++        .macro_call_at(crate::syntax::ast_adapter::range(
++            selected.syntax().text_range(),
++        ))
++        .unwrap();
++    assert!(call.requires_body_entry());
++    assert!(
++        !views[0]
++            .outline()
++            .item_invocations
++            .iter()
++            .any(|c| c.range == call.range())
++    );
++}
+--- a/crates/lrr/src/frontend/mod.rs
++++ b/crates/lrr/src/frontend/mod.rs
+@@ -75,3 +75,6 @@
+ 
+ #[cfg(test)]
+ mod constant_foreign_path_tests;
++
++/// Exact generated source type metadata; no evaluator/runtime authority.
++pub(crate) mod generated_type_admission;
+--- a/crates/lrr/src/syntax/mod.rs
++++ b/crates/lrr/src/syntax/mod.rs
+@@ -76,3 +76,6 @@
+ pub(crate) mod constant_paths;
+ 
+ pub(crate) mod original_inert;
++
++/// Exact generated source type metadata; no evaluator/runtime authority.
++pub(crate) mod generated_type_site;
+--- a/crates/lrr/src/frontend/hygiene.rs
++++ b/crates/lrr/src/frontend/hygiene.rs
+@@ -222,7 +222,13 @@
+     pub fn dollar_crate(&self, key: Key) -> Result<Key, Diagnostic> {
+         dollar_crate::select(self, key)
+     }
++    /// Exact retained semantic mark, not an owner-only/name-derived route.
++    pub(crate) fn dollar_crate_origin(&self, key: Key) -> Result<DollarCrateOrigin, Diagnostic> {
++        dollar_crate::select_origin(self, key)
++    }
+ }
+ 
+ #[path = "dollar_crate.rs"]
+ mod dollar_crate;
++
++pub(crate) use dollar_crate::DollarCrateOrigin;
+--- a/crates/lrr/src/frontend/dollar_crate.rs
++++ b/crates/lrr/src/frontend/dollar_crate.rs
+@@ -1,24 +1,68 @@
+ //! Pinned rustc_resolve::resolve_crate_root mark selection (ae0fe lib.rs:2351).
+ //! Uses actual adapter-normalized ancestry; no mark/source/context is erased.
+ use super::*;
++pub(crate) struct DollarCrateOrigin {
++    normalized: Key,
++    mark: Key,
++    expansion: Key,
++    unit: Key,
++}
++impl DollarCrateOrigin {
++    pub(crate) fn normalized_context(&self) -> Key {
++        self.normalized
++    }
++    pub(crate) fn mark(&self) -> Key {
++        self.mark
++    }
++    pub(crate) fn expansion(&self) -> Key {
++        self.expansion
++    }
++    pub(crate) fn unit(&self) -> Key {
++        self.unit
++    }
++}
+ pub(super) fn select(facts: &HygieneFacts, key: Key) -> Result<Key, Diagnostic> {
+-    let mut cursor = facts.local(key)?; // pinned normalize_to_macro_rules row
++    Ok(select_origin(facts, key)?.unit())
++}
++fn finish(
++    facts: &HygieneFacts,
++    normalized: Key,
++    selected: Option<Key>,
++) -> Result<DollarCrateOrigin, Diagnostic> {
++    let mark =
++        selected.ok_or_else(|| error("dollar-crate token lacks definition-site authority"))?;
++    let record = facts.context(mark)?;
++    let expansion = record
++        .expansion
++        .ok_or_else(|| error("dollar-crate selected mark expansion absent"))?;
++    Ok(DollarCrateOrigin {
++        normalized,
++        mark,
++        expansion,
++        unit: record.defining_unit,
++    })
++}
++pub(super) fn select_origin(
++    facts: &HygieneFacts,
++    key: Key,
++) -> Result<DollarCrateOrigin, Diagnostic> {
++    let normalized = facts.local(key)?;
++    let mut cursor = normalized; // pinned normalize_to_macro_rules row
+     let mut selected = None;
+     let mut opaque_suffix = true;
+     for _ in 0..=256 {
+         let record = facts.context(cursor)?;
+         if record.expansion.is_none() {
+-            return selected
+-                .ok_or_else(|| error("dollar-crate token lacks definition-site authority"));
++            return finish(facts, normalized, selected);
+         }
+         match record.transparency {
+-            Transparency::Opaque if opaque_suffix => selected = Some(record.defining_unit),
++            Transparency::Opaque if opaque_suffix => selected = Some(cursor),
+             Transparency::SemiTransparent => {
+                 opaque_suffix = false;
+-                selected = Some(record.defining_unit);
++                selected = Some(cursor);
+             }
+             Transparency::Opaque => {
+-                return selected.ok_or_else(|| error("dollar-crate mark selection is absent"));
++                return finish(facts, normalized, selected);
+             }
+             Transparency::Transparent => {
+                 return Err(error(
+--- a/crates/lrr/src/frontend/source_macros.rs
++++ b/crates/lrr/src/frontend/source_macros.rs
+@@ -442,6 +442,21 @@
+     pub(crate) fn hygiene_facts(&self) -> &HygieneFacts {
+         &self.facts
+     }
++    /// Borrow only the genuine captured original root/context facts.
++    pub(crate) fn original_root_hygiene(&self) -> Result<(Key, &HygieneFacts), Diagnostic> {
++        let root = self.facts.context(self.context)?;
++        if root.parent.is_some()
++            || root.expansion.is_some()
++            || root.transparency != crate::syntax::token_wire::Transparency::Opaque
++            || root.defining_unit.0 != self.root.crate_key.0
++            || edition(root.edition) != self.source_key.profile.edition
++        {
++            return Err(error(
++                "captured original root hygiene source/profile differs",
++            ));
++        }
++        Ok((self.context, &self.facts))
++    }
+     pub(crate) fn expansion_ancestry(&self) -> &ExpansionAncestry {
+         &self.ancestry
+     }

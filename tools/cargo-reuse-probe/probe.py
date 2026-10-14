@@ -23,8 +23,15 @@ def main():
     args = parser.parse_args()
     if not args.allow_native_build:
         parser.error('--allow-native-build is required for Cargo and generated native execution')
-    if platform.system() != 'Linux' or platform.machine() != 'x86_64':
-        parser.error('the controlled experiment requires Linux x86-64')
+    system, machine = platform.system(), platform.machine()
+    if not ((system == 'Darwin' and machine in ('arm64', 'aarch64', 'x86_64'))
+            or (system == 'Linux' and machine == 'x86_64')):
+        parser.error('the controlled experiment requires macOS ARM64/x86-64 or Linux x86-64')
+    library_suffix = '.dylib' if system == 'Darwin' else '.so'
+    for name in ('RUSTC', 'RUSTC_WRAPPER', 'RUSTC_WORKSPACE_WRAPPER', 'RUSTC_BOOTSTRAP',
+                 'CARGO_BUILD_TARGET'):
+        if os.environ.get(name):
+            parser.error(f'conflicting ambient {name}; this fixture requires the pinned host compiler')
     work = args.work_dir.resolve()
     if work.exists() and (not work.is_dir() or any(work.iterdir())):
         parser.error('work directory must be new or empty; existing evidence is never replaced')
@@ -32,6 +39,8 @@ def main():
     evidence = work / 'evidence'
     evidence.mkdir()
     report = {'schema': 1, 'passed': False, 'commands': [], 'stages': [],
+              'platform': {'system': system, 'architecture': machine,
+                           'library_suffix': library_suffix, 'target_mode': 'host'},
               'errors': [], 'scope': 'Cargo artifact reuse only; no live execution or production ABI'}
 
     def write(path, text):
@@ -41,7 +50,9 @@ def main():
 
     def run(label, command, role='native_preparation'):
         started = time.monotonic()
-        overrides = {'CARGO_LOG': 'cargo::core::compiler::fingerprint=trace'} if args.trace_fingerprints and command[:2] == ['cargo', 'build'] else {}
+        overrides = {'RUSTUP_TOOLCHAIN': '1.99.0', 'CARGO_TARGET_DIR': str(work / 'target')}
+        if args.trace_fingerprints and command[:2] == ['cargo', 'build']:
+            overrides['CARGO_LOG'] = 'cargo::core::compiler::fingerprint=trace'
         result = subprocess.run(command, cwd=work, capture_output=True, timeout=180, env={**os.environ, **overrides})
         ordinal = len(report['commands'])
         stdout = evidence / f'{ordinal:02d}-{label}.stdout'
@@ -105,6 +116,13 @@ print(json.dumps(result))
     try:
         report['toolchain'] = {'cargo': run('cargo-version', ['cargo', '--version']),
                                'rustc': run('rustc-version', ['rustc', '-vV'])}
+        assert 'release: 1.99.0\n' in report['toolchain']['rustc'], 'project compiler differs from Rust 1.99.0'
+        compiler_host = next(line.removeprefix('host: ') for line in
+                             report['toolchain']['rustc'].splitlines() if line.startswith('host: '))
+        assert compiler_host in ('aarch64-apple-darwin', 'x86_64-apple-darwin',
+                                 'x86_64-unknown-linux-gnu'), 'unsupported compiler host'
+        assert (system == 'Darwin') == compiler_host.endswith('apple-darwin'), 'compiler/OS mismatch'
+        report['platform']['compiler_host'] = compiler_host
         manifest = '[workspace]\nmembers = ["native_math", "live_app"]\nresolver = "3"\n'
         write('Cargo.toml', manifest)
         write('native_math/Cargo.toml', '[package]\nname = "native_math"\nversion = "0.1.0"\nedition = "2024"\n')
@@ -125,14 +143,14 @@ print(json.dumps(result))
         run('bridge-lock', ['cargo', 'generate-lockfile', '--offline'])
         events = build('first-bridge', 'lrr_probe_bridge')
         dependency = artifact(events, 'native_math', '.rlib')
-        bridge = artifact(events, 'lrr_probe_bridge', '.so')
+        bridge = artifact(events, 'lrr_probe_bridge', library_suffix)
         assert dependency['fresh'] and dependency['sha256'] == baseline['sha256'], 'first bridge failed baseline dependency reuse'
         assert not bridge['fresh'], 'new bridge was not compiled'
         load('first-load', bridge)
 
         events = build('unchanged-bridge', 'lrr_probe_bridge')
         dependency = artifact(events, 'native_math', '.rlib')
-        unchanged = artifact(events, 'lrr_probe_bridge', '.so')
+        unchanged = artifact(events, 'lrr_probe_bridge', library_suffix)
         assert dependency['fresh'] and unchanged['fresh'], 'unchanged units rebuilt'
         assert unchanged['sha256'] == bridge['sha256'], 'unchanged bridge bytes changed'
         cargo_before = sum(r['arguments'][0] == 'cargo' for r in report['commands'])
@@ -145,7 +163,7 @@ print(json.dumps(result))
         write('lrr_probe_bridge/src/lib.rs', bridge_source + '#[unsafe(no_mangle)]\npub extern "C" fn lrr_probe_twice(value: i64) -> i64 { native_math::twice::<i64>(value) }\n')
         events = build('generic-wrapper-edit', 'lrr_probe_bridge')
         dependency = artifact(events, 'native_math', '.rlib')
-        bridge = artifact(events, 'lrr_probe_bridge', '.so')
+        bridge = artifact(events, 'lrr_probe_bridge', library_suffix)
         assert dependency['fresh'] and dependency['sha256'] == baseline['sha256'], 'wrapper edit rebuilt dependency'
         assert not bridge['fresh'], 'edited bridge was unexpectedly fresh'
         load('generic-load', bridge, generic=True)
@@ -153,7 +171,7 @@ print(json.dumps(result))
         write('native_math/src/lib.rs', native_source.replace('value * 3', 'value * 4'))
         events = build('native-edit', 'lrr_probe_bridge')
         dependency = artifact(events, 'native_math', '.rlib')
-        bridge = artifact(events, 'lrr_probe_bridge', '.so')
+        bridge = artifact(events, 'lrr_probe_bridge', library_suffix)
         assert not dependency['fresh'] and not bridge['fresh'], 'native edit failed to rebuild closure'
         assert dependency['sha256'] != baseline['sha256'], 'native edit did not change dependency bytes'
         load('native-edit-load', bridge, generic=True, expected=24)

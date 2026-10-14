@@ -1,0 +1,1102 @@
+diff --git a/crates/lrr/src/frontend/box_compiler_contract.rs b/crates/lrr/src/frontend/box_compiler_contract.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/box_compiler_contract.rs
+@@ -0,0 +1,582 @@
++//! Finite compiler-owned Box semantics joined to *actual selected source*.
++//! This is not a runtime constructor, trait witness or native permission.
++use super::{CurrentBoxSourceCatalog, RequiredBoxCompilerFacet, RequiredBoxOperation};
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++        profile::ProfileIdentity,
++    },
++    db::{
++        dependency::{DependencyStamp, InputKey, InputValue},
++        memo::Database,
++    },
++    frontend::compile_input_catalog::CompileInputCatalog,
++    source::{
++        box_contract_headers::{BoxTargetHeader, BoxTargetHeaders},
++        changes::PreparedSourceView,
++        manifest::DefKey,
++    },
++    syntax::{
++        box_source_headers::{BoxHeaderRole as Role, BoxSourceHeaders},
++        outline::BodyHandle,
++    },
++    traits::term::{GenericArg, TraitRef, TyTerm},
++};
++use std::{collections::BTreeMap, sync::Arc};
++const MAX_BYTES: usize = 32 << 20;
++const REVIEWED_COMMIT: &str = "ae0fe511b15ab760d7e963b13389d1bc2ab42b18";
++const BOXED: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/library/alloc/src/boxed.rs");
++const GLOBAL: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/library/alloc/src/alloc.rs");
++const DEREF: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/library/core/src/ops/deref.rs");
++const ALLOCATOR: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/library/core/src/alloc/mod.rs");
++const MARKER: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/library/core/src/marker.rs");
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-BOX-COMPILER-CONTRACT", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "Box compiler contract metadata bound".into(),
++    )
++}
++/// Compiler semantics tags are independent of runtime values/descriptors/source
++/// crate identities. There is no arbitrary registration or deserialize path.
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub(crate) enum BoxRule {
++    New,
++    SharedProjection,
++    MutableProjection,
++}
++impl BoxRule {
++    fn tag(self) -> u32 {
++        match self {
++            Self::New => 0,
++            Self::SharedProjection => 1,
++            Self::MutableProjection => 2,
++        }
++    }
++    fn from_required(operation: RequiredBoxOperation) -> Self {
++        match operation {
++            RequiredBoxOperation::New => Self::New,
++            RequiredBoxOperation::SharedProjection => Self::SharedProjection,
++            RequiredBoxOperation::MutableProjection => Self::MutableProjection,
++        }
++    }
++    fn member(self) -> (Role, &'static str) {
++        match self {
++            Self::New => (Role::NewImpl, "new"),
++            Self::SharedProjection => (Role::DerefImpl, "deref"),
++            Self::MutableProjection => (Role::DerefMutImpl, "deref_mut"),
++        }
++    }
++}
++/// Reviewed compiler-owned semantics only. It approves fresh owning managed
++/// allocation/one argument transfer, or checked shared/mutable stable heap
++/// projection. It approves neither allocator/native calls nor arbitrary Drop.
++/// Actual source/Type/impl/member/goal/publication agreement is another layer.
++pub(crate) struct BoxCompilerFacet {
++    profile: ProfileIdentity,
++    compiler: Digest,
++}
++impl BoxCompilerFacet {
++    pub(crate) fn from_compiler(
++        profile: &ProfileIdentity,
++        compiler: &CompileInputCatalog,
++    ) -> Result<Self, Diagnostic> {
++        profile.validate_source()?;
++        let actual = compiler_identity(profile, compiler)?;
++        let expected = CompileInputCatalog::standalone(profile)?;
++        if actual != compiler_identity(profile, &expected)? {
++            return Err(fault(
++                "actual finite compiler facet inventory/profile differs",
++            ));
++        }
++        Ok(Self {
++            profile: profile.clone(),
++            compiler: actual,
++        })
++    }
++    fn require_current(
++        &self,
++        profile: &ProfileIdentity,
++        compiler: &CompileInputCatalog,
++    ) -> Result<(), Diagnostic> {
++        if &self.profile != profile || self.compiler != compiler_identity(profile, compiler)? {
++            return Err(fault(
++                "Box compiler facet current profile/inventory differs",
++            ));
++        }
++        Ok(())
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        std::mem::size_of::<Self>() + self.profile.semantics.capacity()
++    }
++    pub(crate) fn rule(&self, rule: BoxRule) -> Digest {
++        let mut e = StableEncoder::new("lrr/v1/finite-compiler-box-rule");
++        e.digest(self.fingerprint());
++        e.u32(rule.tag());
++        e.finish()
++    }
++    /// Data-only reviewed generation agreement. Actual source authority must
++    /// additionally come from CurrentBoxSourceCatalog and current publications.
++    fn require_reviewed_source(&self, headers: &BoxSourceHeaders) -> Result<(), Diagnostic> {
++        let source = headers.source();
++        let reviewed = reviewed_document(source.path.as_str()).ok_or_else(|| {
++            fault("selected Box source document has no reviewed finite semantic contract")
++        })?;
++        if source.outline.parse.profile.edition != 2024
++            || source.outline.parse.profile.semantics != self.profile.semantics
++            || source.outline.parse.content != Digest::of_bytes(reviewed.as_bytes())
++        {
++            return Err(fault(
++                "selected live Box source generation differs from reviewed contract; no host/native equivalence inferred",
++            ));
++        }
++        Ok(())
++    }
++}
++impl StableEncode for BoxCompilerFacet {
++    const DOMAIN: &'static str = "lrr/v1/finite-compiler-box-contract";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.record(&self.profile);
++        e.digest(self.compiler);
++        e.string(REVIEWED_COMMIT);
++        for path in [
++            "library/alloc/src/boxed.rs",
++            "library/alloc/src/alloc.rs",
++            "library/core/src/ops/deref.rs",
++            "library/core/src/alloc/mod.rs",
++            "library/core/src/marker.rs",
++        ] {
++            e.string(path);
++            e.digest(Digest::of_bytes(
++                reviewed_document(path)
++                    .expect("fixed source inventory")
++                    .as_bytes(),
++            ));
++        }
++        // Closed operation policy: non-Copy owner/stable heap/one transfer,
++        // checked lease permissions; no raw/allocator/general trait execution.
++        e.u32(3);
++        for rule in [
++            BoxRule::New,
++            BoxRule::SharedProjection,
++            BoxRule::MutableProjection,
++        ] {
++            e.u32(rule.tag());
++        }
++        e.string("managed-global/stable-heap/noncopy/once-transfer/checked-shared-mut");
++    }
++}
++fn reviewed_document(path: &str) -> Option<&'static str> {
++    match path {
++        "library/alloc/src/boxed.rs" => Some(BOXED),
++        "library/alloc/src/alloc.rs" => Some(GLOBAL),
++        "library/core/src/ops/deref.rs" => Some(DEREF),
++        "library/core/src/alloc/mod.rs" => Some(ALLOCATOR),
++        "library/core/src/marker.rs" => Some(MARKER),
++        _ => None,
++    }
++}
++fn compiler_identity(
++    profile: &ProfileIdentity,
++    compiler: &CompileInputCatalog,
++) -> Result<Digest, Diagnostic> {
++    if compiler.runtime_prelude_unit(false) != crate::facade::unit(profile, "core")
++        || compiler.runtime_prelude_unit(true) != crate::facade::unit(profile, "std")
++    {
++        return Err(fault("actual standard compiler facade/profile absent"));
++    }
++    let mut e = StableEncoder::new("lrr/v1/box-actual-compiler-facet");
++    e.record(profile);
++    let mut count = 0u32;
++    for (name, unit) in compiler.facade_aliases() {
++        count = count.checked_add(1).filter(|n| *n <= 2).ok_or_else(limit)?;
++        e.string(name);
++        e.digest(unit);
++    }
++    if count != 2 {
++        return Err(fault("actual compiler standard alias inventory differs"));
++    }
++    count = 0;
++    for definition in compiler.definitions() {
++        count = count.checked_add(1).filter(|n| *n <= 6).ok_or_else(limit)?;
++        let descriptor = compiler
++            .select(definition)?
++            .ok_or_else(|| fault("actual compiler descriptor absent"))?;
++        e.digest(definition.identity);
++        e.digest(definition.defining_unit);
++        e.u16(definition.definition_edition);
++        e.digest(descriptor.definition_identity());
++    }
++    if count != 6 {
++        return Err(fault("actual finite compiler input inventory differs"));
++    }
++    let globals = compiler.compiler_globals()?;
++    if globals.len() > 32 {
++        return Err(limit());
++    }
++    e.u32(u32::try_from(globals.len()).map_err(|_| limit())?);
++    for (name, definition) in globals {
++        e.string(name.as_str());
++        e.digest(definition.identity);
++        e.digest(definition.defining_unit);
++        e.u16(definition.definition_edition);
++    }
++    let runtime = compiler
++        .runtime_catalog()?
++        .ok_or_else(|| fault("actual compiler runtime facade absent"))?;
++    count = 0;
++    for definition in runtime.definitions() {
++        count = count
++            .checked_add(1)
++            .filter(|n| *n <= 32)
++            .ok_or_else(limit)?;
++        e.digest(definition.identity);
++        e.digest(definition.defining_unit);
++        e.u16(definition.definition_edition);
++    }
++    e.u32(count);
++    Ok(e.finish())
++}
++/// Actual source member + current compiler semantics approval. All borrows are
++/// driver-local; do not retain this across a mutable DB query/suspension. It is
++/// deliberately not a runtime-use, Type readiness or selected trait witness.
++pub(crate) struct CurrentBoxSemanticContract<'a> {
++    facet: &'a BoxCompilerFacet,
++    catalog: &'a CurrentBoxSourceCatalog,
++    request: &'a RequiredBoxCompilerFacet,
++    targets: &'a [Arc<BoxTargetHeaders>],
++    compiler_inputs: BTreeMap<InputKey, Digest>,
++    target_inputs: Vec<DependencyStamp>,
++    member_body: &'a BodyHandle,
++    trait_target: &'a BoxTargetHeader,
++    impl_target: &'a BoxTargetHeader,
++    identity: Digest,
++    bytes: usize,
++}
++/// This enum describes genuine remaining production joins, not a caller Boolean
++/// or opaque success wrapper. The goal-engine must consume the actual request's
++/// source goals/candidates; runtime layouts never supply those source facts.
++pub(crate) enum BoxReadinessPrerequisite<'a> {
++    SourceTypeAndGoals {
++        pointee: &'a TyTerm,
++        result: &'a TyTerm,
++        goals: &'a [TraitRef],
++        candidates: &'a [Digest],
++    },
++}
++impl<'a> CurrentBoxSemanticContract<'a> {
++    pub(crate) fn capture_current(
++        db: &Database,
++        source: &PreparedSourceView,
++        compiler: &CompileInputCatalog,
++        facet: &'a BoxCompilerFacet,
++        catalog: &'a CurrentBoxSourceCatalog,
++        request: &'a RequiredBoxCompilerFacet,
++        targets: &'a [Arc<BoxTargetHeaders>],
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        request.revalidate_source(db, catalog, source)?;
++        facet.require_current(&source.selection().outline.parse.profile, compiler)?;
++        if byte_limit > MAX_BYTES || targets.len() > 5 {
++            return Err(limit());
++        }
++        // Replay source observation and owning unit/namespace certificates, not
++        // name/path matching. Exact reviewed bytes constrain intrinsic semantics
++        // but cannot replace these genuine source/coordinator records.
++        for headers in &catalog.headers {
++            facet.require_reviewed_source(headers)?;
++        }
++        let rule = BoxRule::from_required(request.operation);
++        let (role, name) = rule.member();
++        let header = catalog.header(role)?;
++        let member = header.member(name)?;
++        if request.box_definition != *catalog.header(Role::OwnedBox)?.definition()
++            || request.member != *member.definition()
++            || Some(request.implementation) != header.impl_source()
++        {
++            return Err(fault("requested Box source member/active impl differs"));
++        }
++        let body = member
++            .body()
++            .ok_or_else(|| fault("selected Box method body identity absent"))?;
++        if body.entry_blocked {
++            return Err(fault(
++                "selected Box body attachment is structurally blocked",
++            ));
++        }
++        // The required source packet currently has only the genuine reached
++        // empty-tuple pointee. Larger source inference/array length is not guessed.
++        if request.pointee != TyTerm::Primitive(crate::ir::op::PrimitiveType::Unit) {
++            return Err(fault(
++                "Box pointee requires its actual source type readiness producer",
++            ));
++        }
++        let global_definition = catalog.header(Role::Global)?.definition().fingerprint();
++        let result_matches = if rule == BoxRule::New {
++            match &request.source_result {
++                TyTerm::Nominal(def, args)
++                    if *def == request.box_definition.fingerprint() && args.len() == 2 =>
++                {
++                    matches!(&args[0],GenericArg::Type(pointee) if pointee==&request.pointee)
++                        && matches!(&args[1],GenericArg::Type(TyTerm::Nominal(def,args)) if *def==global_definition && args.is_empty())
++                }
++                _ => false,
++            }
++        } else {
++            request.source_result == request.pointee
++        };
++        let goals_match = request.required_goals.len() == 2
++            && request.required_goals[0].trait_key
++                == catalog.header(Role::Sized)?.definition().fingerprint()
++            && request.required_goals[0].self_ty == request.pointee
++            && request.required_goals[0].args.is_empty()
++            && request.required_goals[1].trait_key
++                == catalog.header(Role::Allocator)?.definition().fingerprint()
++            && matches!(&request.required_goals[1].self_ty,TyTerm::Nominal(def,args) if *def==global_definition && args.is_empty())
++            && request.required_goals[1].args.is_empty();
++        if !result_matches || !goals_match {
++            return Err(fault(
++                "actual Box/Global source type and predicate identities differ",
++            ));
++        }
++        let impl_target = find_target(targets, Role::DerefImpl)?;
++        let trait_target = find_target(targets, Role::DerefTrait)?;
++        if impl_target.value() != Some("T")
++            || !impl_target.bounds().is_empty()
++            || trait_target.value().is_some()
++            || trait_target.bounds() != "?Sized"
++        {
++            return Err(fault("actual Box associated Target contract differs"));
++        }
++        let compiler_bytes = db.compiler_input_stamps_metadata_bytes()?;
++        // First bound existing universe before cloning it. The DB helper is
++        // read-only and independently capped; complete retained metadata charged.
++        let mut bytes = std::mem::size_of::<Self>()
++            .checked_add(catalog.metadata_bytes())
++            .and_then(|n| n.checked_add(facet.metadata_bytes()))
++            .and_then(|n| n.checked_add(8 * std::mem::size_of::<DependencyStamp>()))
++            .and_then(|n| n.checked_add(compiler_bytes))
++            .ok_or_else(limit)?;
++        for capture in targets {
++            bytes = bytes
++                .checked_add(capture.metadata_bytes())
++                .filter(|n| *n <= byte_limit)
++                .ok_or_else(limit)?;
++        }
++        if bytes > byte_limit {
++            return Err(limit());
++        }
++        let compiler_inputs = db.compiler_input_stamps()?;
++        let mut target_inputs = Vec::new();
++        target_inputs.try_reserve_exact(8).map_err(|_| limit())?;
++        for target in [impl_target, trait_target] {
++            validate_target(
++                db,
++                catalog,
++                targets,
++                target,
++                &mut target_inputs,
++                &mut bytes,
++                byte_limit,
++            )?;
++        }
++        let mut e = StableEncoder::new("lrr/v1/current-box-semantic-source-join");
++        e.digest(facet.rule(rule));
++        e.digest(catalog.identity());
++        e.record(request);
++        e.record(body);
++        e.record(impl_target);
++        e.record(trait_target);
++        e.sequence(&target_inputs, |e, stamp| e.record(stamp));
++        for (key, fingerprint) in &compiler_inputs {
++            e.record(key);
++            e.digest(*fingerprint);
++        }
++        Ok(Self {
++            facet,
++            catalog,
++            request,
++            targets,
++            compiler_inputs,
++            target_inputs,
++            member_body: body,
++            trait_target,
++            impl_target,
++            identity: e.finish(),
++            bytes,
++        })
++    }
++    pub(crate) fn revalidate(
++        &self,
++        db: &Database,
++        source: &PreparedSourceView,
++        compiler: &CompileInputCatalog,
++    ) -> Result<(), Diagnostic> {
++        self.request.revalidate_source(db, self.catalog, source)?;
++        self.facet
++            .require_current(&source.selection().outline.parse.profile, compiler)?;
++        if db.compiler_input_stamps()? != self.compiler_inputs {
++            return Err(fault(
++                "Box semantic compiler input universe changed; fresh capture required",
++            ));
++        }
++        for stamp in &self.target_inputs {
++            let DependencyStamp::Input { key, fingerprint } = stamp else {
++                return Err(fault(
++                    "Box Target dependencies require genuine input publications",
++                ));
++            };
++            if db
++                .published_input(key)
++                .is_none_or(|(_, current)| current != *fingerprint)
++            {
++                return Err(fault("Box associated Target publication changed"));
++            }
++        }
++        Ok(())
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        self.identity
++    }
++    pub(crate) fn compiler_rule(&self) -> Digest {
++        self.facet
++            .rule(BoxRule::from_required(self.request.operation))
++    }
++    pub(crate) fn source_box_definition(&self) -> &DefKey {
++        &self.request.box_definition
++    }
++    pub(crate) fn source_global_definition(&self) -> Result<&DefKey, Diagnostic> {
++        Ok(self.catalog.header(Role::Global)?.definition())
++    }
++    pub(crate) fn source_allocator_impl(&self) -> Result<Digest, Diagnostic> {
++        self.catalog
++            .header(Role::GlobalAllocatorImpl)?
++            .impl_source()
++            .ok_or_else(|| fault("actual Global allocator implementation absent"))
++    }
++    pub(crate) fn selected_impl(&self) -> Digest {
++        self.request.implementation
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn selected_member(&self) -> &DefKey {
++        self.request.member()
++    }
++    pub(crate) fn selected_body(&self) -> &BodyHandle {
++        self.member_body
++    }
++    pub(crate) fn trait_target(&self) -> &BoxTargetHeader {
++        self.trait_target
++    }
++    pub(crate) fn implementation_target(&self) -> &BoxTargetHeader {
++        self.impl_target
++    }
++    pub(crate) fn captured_targets(&self) -> &[Arc<BoxTargetHeaders>] {
++        self.targets
++    }
++    pub(crate) fn remaining_readiness(&self) -> BoxReadinessPrerequisite<'_> {
++        BoxReadinessPrerequisite::SourceTypeAndGoals {
++            pointee: self.request.pointee(),
++            result: self.request.source_result(),
++            goals: self.request.required_goals(),
++            candidates: self.request.unknown_candidates(),
++        }
++    }
++}
++fn find_target(
++    targets: &[Arc<BoxTargetHeaders>],
++    role: Role,
++) -> Result<&BoxTargetHeader, Diagnostic> {
++    let mut found = targets.iter().filter_map(|capture| capture.target(role));
++    let target = found
++        .next()
++        .ok_or_else(|| fault("actual source associated Target header is required"))?;
++    if found.next().is_some() {
++        return Err(fault(
++            "associated Target comes from ambiguous source captures",
++        ));
++    }
++    Ok(target)
++}
++fn validate_target(
++    db: &Database,
++    catalog: &CurrentBoxSourceCatalog,
++    targets: &[Arc<BoxTargetHeaders>],
++    target: &BoxTargetHeader,
++    deps: &mut Vec<DependencyStamp>,
++    bytes: &mut usize,
++    byte_limit: usize,
++) -> Result<(), Diagnostic> {
++    let parent = catalog.header(target.role())?;
++    let capture = targets
++        .iter()
++        .find(|capture| {
++            capture
++                .target(target.role())
++                .is_some_and(|row| std::ptr::eq(row, target))
++        })
++        .ok_or_else(|| fault("Target retained exact capture differs"))?;
++    let source = capture.source();
++    let actual_file = catalog
++        .headers
++        .iter()
++        .find(|file| file.source() == source)
++        .ok_or_else(|| fault("Box Target lacks selected current source-library attachment"))?;
++    if catalog.library.observed_source(&source.path) != Some(source.outline.parse.content)
++        || target.parent() != parent.definition()
++        || target.parent_header() != parent.header().fingerprint()
++    {
++        return Err(fault(
++            "actual associated Target owning source/impl/header differs",
++        ));
++    }
++    let actual = actual_file
++        .outline()
++        .items
++        .iter()
++        .find(|item| item.def_key == *target.definition())
++        .ok_or_else(|| fault("associated Target is not enabled in selected source outline"))?;
++    if actual.header != *target.header() || actual.declaration_span != target.range() {
++        return Err(fault("associated Target header/span differs"));
++    }
++    for key in [
++        InputKey::DefinitionSource(target.definition().fingerprint()),
++        InputKey::DefinitionHeader(target.definition().fingerprint()),
++        InputKey::DeclarationContext(target.definition().fingerprint()),
++    ] {
++        *bytes = bytes
++            .checked_add(key.heap_bytes())
++            .filter(|n| *n <= byte_limit)
++            .ok_or_else(limit)?;
++        let (value, fingerprint) = db.published_input(&key).ok_or_else(|| {
++            fault("actual associated Target source/header/context publication absent")
++        })?;
++        let matches = match value {
++            InputValue::DefinitionSource(parse) => parse == &source.outline.parse,
++            InputValue::DefinitionHeader(header) => header == target.header(),
++            InputValue::DeclarationContext(context) => {
++                context.scope == actual.scope && context.range == actual.declaration_span
++            }
++            _ => false,
++        };
++        if !matches {
++            return Err(fault(
++                "associated Target published value/source context differs",
++            ));
++        }
++        deps.push(DependencyStamp::Input { key, fingerprint });
++    }
++    Ok(())
++}
++#[cfg(test)]
++#[path = "box_compiler_contract_tests.rs"]
++mod tests;
+diff --git a/crates/lrr/src/frontend/box_compiler_contract_tests.rs b/crates/lrr/src/frontend/box_compiler_contract_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/box_compiler_contract_tests.rs
+@@ -0,0 +1,110 @@
++//! Preregistered finite semantic data/refusal checks; no runtime Box execution.
++use super::*;
++use crate::{
++    db::key::OutlineKey,
++    source::{
++        changes::SourceSelection,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::{box_source_headers::capture_box_headers, parse::ParsedFile},
++};
++const BOXED: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/library/alloc/src/boxed.rs");
++fn fixture_headers(text: &str) -> BoxSourceHeaders {
++    let cfg = CfgSet::guest_default();
++    let parsed = ParsedFile::parse_declarations(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity::current(),
++    )
++    .unwrap();
++    let selection = SourceSelection {
++        path: SourcePath::new("library/alloc/src/boxed.rs").unwrap(),
++        outline: OutlineKey {
++            parse: parsed.key(),
++            crate_key: Digest::of_bytes(b"disclosed pure fixture alloc unit"),
++            module_path: vec!["boxed".into()],
++            cfg: cfg.fingerprint(),
++        },
++    };
++    capture_box_headers(&parsed, &selection, &cfg).unwrap()
++}
++#[test]
++fn finite_box_compiler_contract_is_profile_bound_in_all_official_editions() {
++    let mut identities = std::collections::BTreeSet::new();
++    for edition in [2015, 2018, 2021, 2024] {
++        let profile = ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        };
++        let compiler = CompileInputCatalog::standalone(&profile).unwrap();
++        let facet = BoxCompilerFacet::from_compiler(&profile, &compiler).unwrap();
++        assert!(identities.insert(facet.fingerprint()));
++        assert_ne!(
++            facet.rule(BoxRule::New),
++            facet.rule(BoxRule::SharedProjection)
++        );
++        assert_ne!(
++            facet.rule(BoxRule::SharedProjection),
++            facet.rule(BoxRule::MutableProjection)
++        );
++    }
++}
++#[test]
++fn empty_user_compiler_catalog_cannot_register_box_by_name_or_digest() {
++    let profile = ProfileIdentity::current();
++    for unit in [
++        crate::facade::unit(&profile, "core"),
++        Digest::of_bytes(b"Box Global native symbols"),
++    ] {
++        let compiler = CompileInputCatalog::new(unit, profile.edition, []).unwrap();
++        assert!(BoxCompilerFacet::from_compiler(&profile, &compiler).is_err());
++    }
++}
++#[test]
++fn compiler_catalog_for_another_profile_is_not_box_permission() {
++    let profile = ProfileIdentity::current();
++    let compiler = CompileInputCatalog::standalone(&profile).unwrap();
++    let other = ProfileIdentity {
++        edition: 2018,
++        ..profile
++    };
++    assert!(BoxCompilerFacet::from_compiler(&other, &compiler).is_err());
++}
++#[test]
++fn original_box_source_generation_is_data_not_selected_source_permission() {
++    let profile = ProfileIdentity::current();
++    let compiler = CompileInputCatalog::standalone(&profile).unwrap();
++    let facet = BoxCompilerFacet::from_compiler(&profile, &compiler).unwrap();
++    let headers = fixture_headers(BOXED);
++    facet.require_reviewed_source(&headers).unwrap();
++    // Pure document/descriptor agreement has no CurrentBoxSemanticContract ctor.
++    assert_eq!(headers.source().outline.parse.profile.edition, 2024);
++}
++#[test]
++fn changed_selected_method_body_never_inherits_the_reviewed_intrinsic_semantics() {
++    let profile = ProfileIdentity::current();
++    let compiler = CompileInputCatalog::standalone(&profile).unwrap();
++    let facet = BoxCompilerFacet::from_compiler(&profile, &compiler).unwrap();
++    let original = fixture_headers(BOXED);
++    let changed = fixture_headers(&BOXED.replacen(
++        "unsafe { mem::transmute(ptr) }",
++        "panic!(\"edited Box new\")",
++        1,
++    ));
++    let before = original
++        .header(Role::NewImpl)
++        .unwrap()
++        .member("new")
++        .unwrap();
++    let after = changed
++        .header(Role::NewImpl)
++        .unwrap()
++        .member("new")
++        .unwrap();
++    assert_eq!(before.signature(), after.signature());
++    assert_ne!(
++        before.body().unwrap().body_hash,
++        after.body().unwrap().body_hash
++    );
++    assert!(facet.require_reviewed_source(&changed).is_err());
++}
+diff --git a/crates/lrr/src/frontend/box_source_admission.rs b/crates/lrr/src/frontend/box_source_admission.rs
+--- a/crates/lrr/src/frontend/box_source_admission.rs
++++ b/crates/lrr/src/frontend/box_source_admission.rs
+@@ -898,3 +898,6 @@
+         QueryPoll::Ready(prepare())
+     }
+ }
++
++#[path = "box_compiler_contract.rs"]
++pub(crate) mod compiler_contract;
+diff --git a/crates/lrr/src/source/box_contract_headers.rs b/crates/lrr/src/source/box_contract_headers.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/source/box_contract_headers.rs
+@@ -0,0 +1,249 @@
++//! Original associated Target headers, captured data only. Compiler/source/goal
++//! admission is separate; this module never mints an executable witness.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::key::QueryKey,
++    source::{changes::SourceSelection, manifest::DefKey, snapshot::CfgSet},
++    syntax::{
++        ast_adapter::range,
++        box_source_headers::{BoxHeaderRole as Role, BoxSourceHeaders},
++        outline::HeaderRecipe,
++        parse::ParsedFile,
++        spans::SourceRange,
++    },
++};
++use ra_ap_syntax::{
++    AstNode, SyntaxNode,
++    ast::{self, HasGenericParams, HasName, HasTypeBounds},
++};
++const MAX_BYTES: usize = 32 << 20;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-BOX-SOURCE", message.into())
++}
++#[derive(Debug)]
++pub struct BoxTargetHeader {
++    role: Role,
++    parent: DefKey,
++    parent_header: Digest,
++    definition: DefKey,
++    header: HeaderRecipe,
++    range: SourceRange,
++    bounds: String,
++    value: Option<String>,
++}
++impl BoxTargetHeader {
++    pub fn role(&self) -> Role {
++        self.role
++    }
++    pub fn parent(&self) -> &DefKey {
++        &self.parent
++    }
++    pub fn parent_header(&self) -> Digest {
++        self.parent_header
++    }
++    pub fn definition(&self) -> &DefKey {
++        &self.definition
++    }
++    pub fn header(&self) -> &HeaderRecipe {
++        &self.header
++    }
++    pub fn range(&self) -> SourceRange {
++        self.range
++    }
++    pub fn bounds(&self) -> &str {
++        &self.bounds
++    }
++    pub fn value(&self) -> Option<&str> {
++        self.value.as_deref()
++    }
++}
++#[derive(Debug)]
++pub struct BoxTargetHeaders {
++    source: SourceSelection,
++    targets: Vec<BoxTargetHeader>,
++    bytes: usize,
++}
++impl BoxTargetHeaders {
++    pub fn source(&self) -> &SourceSelection {
++        &self.source
++    }
++    pub fn targets(&self) -> &[BoxTargetHeader] {
++        &self.targets
++    }
++    pub fn target(&self, role: Role) -> Option<&BoxTargetHeader> {
++        self.targets.iter().find(|row| row.role == role)
++    }
++    pub fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++}
++fn definition_bytes(def: &DefKey) -> Result<usize, Diagnostic> {
++    let mut bytes = def
++        .declared_name
++        .len()
++        .checked_add(
++            def.module_path
++                .len()
++                .checked_mul(std::mem::size_of::<String>())
++                .ok_or_else(|| fault("Box Target definition metadata"))?,
++        )
++        .ok_or_else(|| fault("Box Target definition metadata"))?;
++    for segment in &def.module_path {
++        bytes = bytes
++            .checked_add(segment.len())
++            .ok_or_else(|| fault("Box Target definition metadata"))?;
++    }
++    Ok(bytes)
++}
++fn compact(node: &SyntaxNode) -> Result<String, Diagnostic> {
++    let mut out = String::new();
++    for token in node
++        .descendants_with_tokens()
++        .filter_map(|e| e.into_token())
++        .filter(|t| !t.kind().is_trivia())
++    {
++        let bytes = out
++            .len()
++            .checked_add(token.text().len())
++            .filter(|n| *n <= 65536)
++            .ok_or_else(|| fault("Box Target token bound"))?;
++        out.try_reserve(bytes - out.len())
++            .map_err(|_| fault("Box Target token allocation"))?;
++        out.push_str(token.text());
++    }
++    Ok(out)
++}
++/// Exact top-level original parent + enabled associated declaration. No method
++/// bodies, evaluation, query or caller-supplied normalized type is consulted.
++pub fn capture_box_targets(
++    parsed: &ParsedFile,
++    headers: &BoxSourceHeaders,
++    cfg: &CfgSet,
++) -> Result<BoxTargetHeaders, Diagnostic> {
++    let source = headers.source();
++    if parsed.generated_origin.is_some()
++        || parsed.key() != source.outline.parse
++        || cfg.fingerprint() != source.outline.cfg
++    {
++        return Err(fault("Box Target source/profile/cfg attachment differs"));
++    }
++    let tree = parsed.parsed.tree();
++    if tree.syntax().descendants().take(1_000_001).count() > 1_000_000 {
++        return Err(fault("Box Target structural node bound"));
++    }
++    let mut bytes = std::mem::size_of::<BoxTargetHeaders>()
++        .checked_add(source.metadata_bytes()?)
++        .filter(|n| *n <= MAX_BYTES)
++        .ok_or_else(|| fault("Box Target metadata overflow"))?;
++    let mut targets = Vec::new();
++    for row in headers.headers().iter().filter(|row| {
++        matches!(
++            row.role(),
++            Role::DerefImpl | Role::DerefTrait | Role::DerefMutTrait
++        )
++    }) {
++        let parent = tree
++            .syntax()
++            .children()
++            .find(|node| range(node.text_range()) == row.range())
++            .ok_or_else(|| fault("actual Box Target owning declaration absent"))?;
++        if !(ast::Impl::can_cast(parent.kind()) || ast::Trait::can_cast(parent.kind())) {
++            return Err(fault("Box Target parent is not original impl/trait"));
++        }
++        let associated = parent
++            .children()
++            .find_map(ast::AssocItemList::cast)
++            .ok_or_else(|| fault("Box Target associated header list absent"))?;
++        for alias in associated
++            .syntax()
++            .children()
++            .filter_map(ast::TypeAlias::cast)
++            .filter(|alias| alias.name().is_some_and(|name| name.text() == "Target"))
++        {
++            let span = range(alias.syntax().text_range());
++            let Some(actual) = headers
++                .outline()
++                .items
++                .iter()
++                .find(|item| item.declaration_span == span)
++            else {
++                continue;
++            };
++            if targets
++                .iter()
++                .any(|target: &BoxTargetHeader| target.role == row.role())
++            {
++                return Err(fault("duplicate enabled Box associated Target"));
++            }
++            if alias.generic_param_list().is_some()
++                || alias.where_clause().is_some()
++                || parsed
++                    .errors
++                    .iter()
++                    .any(|e| e.range.start < span.end && e.range.end > span.start)
++            {
++                return Err(fault(
++                    "Box Target generic/predicate/header syntax outside closed contract",
++                ));
++            }
++            let bounds = alias
++                .type_bound_list()
++                .map(|list| compact(list.syntax()))
++                .transpose()?
++                .unwrap_or_default();
++            let value = alias.ty().map(|ty| compact(ty.syntax())).transpose()?;
++            bytes = bytes
++                .checked_add(std::mem::size_of::<BoxTargetHeader>())
++                .and_then(|n| n.checked_add(actual.header.estimated_bytes()))
++                .and_then(|n| n.checked_add(definition_bytes(&actual.def_key).ok()?))
++                .and_then(|n| n.checked_add(definition_bytes(row.definition()).ok()?))
++                .and_then(|n| n.checked_add(bounds.capacity()))
++                .and_then(|n| n.checked_add(value.as_ref().map_or(0, String::capacity)))
++                .filter(|n| *n <= MAX_BYTES)
++                .ok_or_else(|| fault("Box Target metadata bound"))?;
++            targets
++                .try_reserve_exact(1)
++                .map_err(|_| fault("Box Target allocation"))?;
++            targets.push(BoxTargetHeader {
++                role: row.role(),
++                parent: row.definition().clone(),
++                parent_header: row.header().fingerprint(),
++                definition: actual.def_key.clone(),
++                header: actual.header.clone(),
++                range: span,
++                bounds,
++                value,
++            });
++        }
++    }
++    Ok(BoxTargetHeaders {
++        source: source.clone(),
++        targets,
++        bytes,
++    })
++}
++impl StableEncode for BoxTargetHeader {
++    const DOMAIN: &'static str = "lrr/v1/box-associated-target-header";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.u32(self.role.tag());
++        e.record(&self.parent);
++        e.digest(self.parent_header);
++        e.record(&self.definition);
++        e.record(&self.header);
++        e.u32(self.range.start);
++        e.u32(self.range.end);
++        e.string(&self.bounds);
++        e.option(&self.value, |e, value| e.string(value));
++    }
++}
++impl StableEncode for BoxTargetHeaders {
++    const DOMAIN: &'static str = "lrr/v1/box-associated-target-capture";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.string(self.source.path.as_str());
++        e.record(&QueryKey::Outline(self.source.outline.clone()));
++        e.sequence(&self.targets, |e, row| e.record(row));
++    }
++}
+diff --git a/crates/lrr/src/source/mod.rs b/crates/lrr/src/source/mod.rs
+--- a/crates/lrr/src/source/mod.rs
++++ b/crates/lrr/src/source/mod.rs
+@@ -18,3 +18,5 @@
+ pub mod module_syntax;
+ 
+ pub mod ordinary_module;
++
++pub mod box_contract_headers;
+diff --git a/xtask/tests/box_compiler_targets.rs b/xtask/tests/box_compiler_targets.rs
+new file mode 100644
+--- /dev/null
++++ b/xtask/tests/box_compiler_targets.rs
+@@ -0,0 +1,122 @@
++//! Unchanged source Target capture; fixture identities are disclosed data only.
++use lrr::{
++    core::{
++        digest::{Digest, StableEncode},
++        profile::ProfileIdentity,
++    },
++    db::key::OutlineKey,
++    source::{
++        box_contract_headers::capture_box_targets,
++        changes::SourceSelection,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::{
++        box_source_headers::{BoxHeaderRole as Role, capture_box_headers},
++        parse::ParsedFile,
++    },
++};
++const BOXED: &str =
++    include_str!("../../fixtures/upstream/rustc-checkout/library/alloc/src/boxed.rs");
++const DEREF: &str =
++    include_str!("../../fixtures/upstream/rustc-checkout/library/core/src/ops/deref.rs");
++fn capture(
++    text: &str,
++    module: &[&str],
++    cfg: &CfgSet,
++) -> lrr::source::box_contract_headers::BoxTargetHeaders {
++    let parsed = ParsedFile::parse_declarations(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity::current(),
++    )
++    .unwrap();
++    let source = SourceSelection {
++        path: SourcePath::new(format!(
++            "library/{}/src/{}.rs",
++            module[0],
++            module[1..].join("/")
++        ))
++        .unwrap(),
++        outline: OutlineKey {
++            parse: parsed.key(),
++            crate_key: Digest::of_bytes(module[0].as_bytes()),
++            module_path: module[1..].iter().map(|s| s.to_string()).collect(),
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let headers = capture_box_headers(&parsed, &source, cfg).unwrap();
++    capture_box_targets(&parsed, &headers, cfg).unwrap()
++}
++#[test]
++fn original_box_impl_target_has_exact_source_parent_definition_and_type() {
++    let targets = capture(BOXED, &["alloc", "boxed"], &CfgSet::guest_default());
++    let target = targets.target(Role::DerefImpl).unwrap();
++    assert_eq!(target.definition().declared_name, "Target");
++    assert_eq!(target.bounds(), "");
++    assert_eq!(target.value(), Some("T"));
++    assert_eq!(
++        target.definition().enclosing_impl,
++        Some(target.parent_header())
++    );
++    assert_ne!(target.header().fingerprint(), target.parent_header());
++}
++#[test]
++fn original_deref_trait_target_is_distinct_from_impl_target_and_has_no_default() {
++    let targets = capture(DEREF, &["core", "ops", "deref"], &CfgSet::guest_default());
++    let target = targets.target(Role::DerefTrait).unwrap();
++    assert_eq!(target.bounds(), "?Sized");
++    assert_eq!(target.value(), None);
++    assert!(targets.target(Role::DerefMutTrait).is_none());
++}
++#[test]
++fn cfg_disabled_associated_target_is_not_replaced_by_spelled_default() {
++    let targets = capture(
++        "impl<T:?Sized,A:Allocator> Deref for Box<T,A>{#[cfg(any())] type Target=T;fn deref(&self)->&T{self}}",
++        &["alloc", "boxed"],
++        &CfgSet::guest_default(),
++    );
++    assert!(targets.target(Role::DerefImpl).is_none());
++}
++#[test]
++fn duplicate_enabled_target_is_a_real_ambiguity_not_first_name_wins() {
++    let text = "impl<T:?Sized,A:Allocator> Deref for Box<T,A>{type Target=T;type Target=();fn deref(&self)->&T{self}}";
++    let cfg = CfgSet::guest_default();
++    let parsed = ParsedFile::parse_declarations(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity::current(),
++    )
++    .unwrap();
++    let source = SourceSelection {
++        path: SourcePath::new("library/alloc/src/boxed.rs").unwrap(),
++        outline: OutlineKey {
++            parse: parsed.key(),
++            crate_key: Digest::of_bytes(b"fixture alloc"),
++            module_path: vec!["boxed".into()],
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let headers = capture_box_headers(&parsed, &source, &cfg).unwrap();
++    assert!(capture_box_targets(&parsed, &headers, &cfg).is_err());
++}
++
++#[test]
++fn associated_target_capture_refuses_changed_cfg_attachment() {
++    let cfg = CfgSet::guest_default();
++    let parsed = ParsedFile::parse_declarations(
++        &SourceBlob::new(BOXED.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity::current(),
++    )
++    .unwrap();
++    let source = SourceSelection {
++        path: SourcePath::new("library/alloc/src/boxed.rs").unwrap(),
++        outline: OutlineKey {
++            parse: parsed.key(),
++            crate_key: Digest::of_bytes(b"pure fixture alloc"),
++            module_path: vec!["boxed".into()],
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let headers = capture_box_headers(&parsed, &source, &cfg).unwrap();
++    let mut changed = cfg;
++    changed.atoms.insert("no_global_oom_handling".into());
++    assert!(capture_box_targets(&parsed, &headers, &changed).is_err());
++}

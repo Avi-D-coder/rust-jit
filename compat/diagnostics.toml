@@ -1,13 +1,43 @@
 schema = 1
 
 [[diagnostic]]
+code = "LRR-E-MACRO-EXPANSION"
+phase = "query"
+invariant = "I-EXPANSION"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "The selected one_arg_macro!() invocation in stock macro-invocation-span-error-7970.rs supplies no expression for its $fmt:expr matcher."
+corrective_command = "Inspect the selected invocation, definition and captured matcher failure; supply arguments matching a rule or correct the definition. Prior effects are retained; an error grants no retry authority."
+fixtures = ["M016-STOCK-INVOCATION", "M016-STOCK-NESTED-INVOCATION", "M016-STOCK-FRAGMENT-BOUNDARIES"]
+
+[[diagnostic]]
+code = "LRR-E-TOOL-PREPARE-STALE"
+phase = "preparation"
+invariant = "I-TOOLS"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "Recorded sources, external files, or declared environment changed before manifest publication."
+corrective_command = "Repeat explicit tool preparation with stable inputs."
+fixtures = ["TOOL-MANIFEST-ATOMIC"]
+
+[[diagnostic]]
+code = "LRR-E-GENERATED-SOURCE"
+phase = "preparation"
+invariant = "I-TOOLS"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "Captured generated output has an escaping path, wrong producer, invalid content digest, or unsupported file kind."
+corrective_command = "Repeat explicit preparation with a valid unit-scoped OUT_DIR."
+fixtures = ["GENERATED-UNIT-SCOPE", "GENERATED-PATH-MEMBERSHIP", "GENERATED-CONTENT-VALIDATION", "GENERATED-ROOT-ROLE"]
+
+[[diagnostic]]
 code = "LRR-E-HOST-TARGET"
 phase = "startup"
 invariant = "I-MEMORY"
 effects_may_have_occurred = false
 cleanup_runs = false
-example = "Starting lrr on aarch64-apple-darwin fails before guest execution."
-corrective_command = "Use x86_64-unknown-linux-gnu with Rust 1.99.0."
+example = "Starting lrr on an unsupported platform fails before guest execution."
+corrective_command = "Use 64-bit little-endian macOS ARM64/x86-64 with Rust 1.99.0; Linux support is a later port."
 fixtures = ["BOOT-HOST"]
 
 [[diagnostic]]
@@ -129,3 +159,503 @@ cleanup_runs = false
 example = "A module path attribute is not a literal string."
 corrective_command = "Use a literal relative path or repair the module declaration."
 fixtures = ["SOURCE-SOURCE-MODULE"]
+
+[[diagnostic]]
+code = "LRR-E-LIVE-EDITION"
+phase = "query"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "A live unit uses a non-2024 edition."
+corrective_command = "Inspect the reported profile, source, or query dependency path."
+fixtures = ["PROFILE-EDITION"]
+
+[[diagnostic]]
+code = "LRR-E-SEMANTICS-PROFILE"
+phase = "query"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "A revision-3 live profile is rejected."
+corrective_command = "Inspect the reported profile, source, or query dependency path."
+fixtures = ["PROFILE-MIGRATION"]
+
+[[diagnostic]]
+code = "LRR-E-PARSE-BLOCKS-ENTRY"
+phase = "query"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "An unreliable body delimiter blocks entry."
+corrective_command = "Inspect the reported profile, source, or query dependency path."
+fixtures = ["OUTLINE-ENTRY"]
+
+[[diagnostic]]
+code = "LRR-E-CONST-CYCLE"
+phase = "query"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "The pure query graph has an active constant cycle."
+corrective_command = "Inspect the reported profile, source, or query dependency path."
+fixtures = ["QUERY-CYCLE"]
+
+[[diagnostic]]
+code = "LRR-E-INTERNAL-SNAPSHOT"
+phase = "query"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "A query returns a mismatched value variant."
+corrective_command = "Inspect the reported profile, source, or query dependency path."
+fixtures = ["QUERY-INTERNAL"]
+
+[[diagnostic]]
+code = "LRR-E-UNIT-GRAPH"
+phase = "preparation"
+invariant = "I-TOOLS"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "Cargo unit graph has unsupported fields or a cyclic dependency."
+corrective_command = "Use the pinned planner and inspect the rejected compilation-unit graph."
+fixtures = ["UNIT-GRAPH-SCHEMA"]
+
+[[diagnostic]]
+code = "LRR-E-MACRO-PERMISSION"
+phase = "preparation"
+invariant = "I-TOOLS"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "Prepared macro execution has no separate macro authority."
+corrective_command = "Authorize macro execution separately from tool preparation."
+fixtures = ["MACRO-PERMISSION"]
+
+[[diagnostic]]
+code = "LRR-E-MACRO-SERVER-MISMATCH"
+phase = "preparation"
+invariant = "I-TOOLS"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "Recorded compiler/server/protocol/artifact identity differs, or the matched tuple lacks required compiled helper metadata. Earlier authorized library loading or macro work may have occurred."
+corrective_command = "Check the recorded tuple and required capabilities; repeat authorized preparation after an identity mismatch. Missing helper metadata requires E-M010-001 resolution."
+fixtures = ["MACRO-SERVER-HASH", "M010-HELPER-METADATA-GAP"]
+
+[[diagnostic]]
+code = "LRR-E-MACRO-TOKEN-WIRE"
+phase = "expansion"
+invariant = "I-QUERY"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "Owned token table references an unknown span or parent context."
+corrective_command = "Rebuild the owned token record from the captured source and checked context table."
+fixtures = ["TOKEN-OWNED-STRICT"]
+
+[[diagnostic]]
+code = "LRR-E-MACRO-OUTPUT"
+phase = "expansion"
+invariant = "I-QUERY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "Owned macro output exceeds the 2,000,000-token or 32 MiB wire budget."
+corrective_command = "Reduce generated output or request a lower explicit expansion limit."
+fixtures = ["TOKEN-BINARY-BOUNDS", "TOKEN-BINARY-PENDING", "M009-NOISY-CHANNELS", "M009-CHILD-GROUP"]
+
+[[diagnostic]]
+code = "LRR-E-EXPANSION-CYCLE"
+phase = "expansion"
+invariant = "I-QUERY"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "A recursive declarative invocation exceeds the admitted frame limit."
+corrective_command = "Reduce macro recursion or use a lower explicit frame limit."
+fixtures = ["DECLARATIVE-RECURSION"]
+
+[[diagnostic]]
+code = "LRR-E-MACRO-SCOPE"
+phase = "expansion"
+invariant = "I-HYGIENE"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "Malformed identifier, stale generated declaration batch, conflicting dependency alias, invalid normalization input, ambiguous compatible expansion origins, or exhausted macro index."
+corrective_command = "Correct the source macro declaration/import or supply current generated expansion input."
+fixtures = ["MACRO-RAW-NAME", "MACRO-SCOPE-ATOMIC", "MACRO-NAMESPACE-ROUTES", "MACRO-NAMESPACE-OUTCOMES"]
+
+[[diagnostic]]
+code = "LRR-E-MACRO-PANIC"
+phase = "expansion"
+invariant = "I-TOOLS"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "The controlled native macro panics during expansion."
+corrective_command = "Fix the macro or its limits, then start a new explicit run; never retry the invocation in this session."
+fixtures = ["M009-SESSION-08", "M016-STOCK-ATTRIBUTE-PANIC"]
+
+[[diagnostic]]
+code = "LRR-E-MACRO-CRASH"
+phase = "expansion"
+invariant = "I-TOOLS"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "The native macro helper exits or is cancelled after possible macro effects."
+corrective_command = "Fix the macro or its limits, then start a new explicit run; never retry the invocation in this session."
+fixtures = ["M009-SESSION-08"]
+
+[[diagnostic]]
+code = "LRR-E-MACRO-TIMEOUT"
+phase = "expansion"
+invariant = "I-TOOLS"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "The native macro exceeds its request deadline; the helper is terminated and reaped."
+corrective_command = "Fix the macro or its limits, then start a new explicit run; never retry the invocation in this session."
+fixtures = ["M009-SESSION-08"]
+
+[[diagnostic]]
+code = "LRR-E-MACRO-TRANSFORM"
+phase = "expansion"
+invariant = "I-QUERY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A transformation reply or replacement reanalysis is stale, has a mismatched exact identity, reuses an invocation, or exceeds the owned worklist limits."
+corrective_command = "Resolve the current item under its exact owner/cfg and supply the admitted expansion output; start a new explicit run after source changes."
+fixtures = ["M010-WORKLIST-REPLAN", "M010-WORKLIST-APPEND", "M010-WORKLIST-BOUNDS", "M010-WORKLIST-NATIVE"]
+
+[[diagnostic]]
+code = "LRR-E-COMPILE-INPUT"
+phase = "expansion"
+invariant = "I-QUERY"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "A required captured compile-time environment value is absent, or its unit/name/metadata is invalid. Uncaptured names produce a demand instead of an absence diagnostic."
+corrective_command = "Capture the required compile input for the exact consuming unit during explicit preparation and resume with the new immutable environment."
+fixtures = ["M011-ENV-FROZEN", "M011-ENV-BOUNDS", "M011-ENV-NATIVE"]
+
+[[diagnostic]]
+code = "LRR-E-BODY-INDEX"
+phase = "query"
+invariant = "I-QUERY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A reached body handle has stale content/ranges, or its symbolic PC names an absent node or phase. Earlier guest effects are possible; the pure indexer itself executes none."
+corrective_command = "Refresh the selected source/body revision and report an invalid symbolic PC as an implementation defect. Runtime cleanup integration is required by later tasks."
+fixtures = ["T021-SOURCE-SPANS", "T021-SCOPES-PC"]
+
+[[diagnostic]]
+code = "LRR-E-BODY-INDEX-LIMIT"
+phase = "query"
+invariant = "I-LAZY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "An explicitly reached body exceeds its fixed 100,000-node or 200,000-slot ceiling or its metadata budget. Outlining an uncalled body does not consume these budgets."
+corrective_command = "Reduce the reached body; fixed node/slot ceilings cannot be increased. Runtime cleanup integration remains a later acceptance requirement."
+fixtures = ["T021-REACHED-BUDGET"]
+
+[[diagnostic]]
+code = "LRR-E-INTERNAL-IR"
+phase = "query"
+invariant = "I-QUERY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A constructed recipe has invalid slots, PC/source origin, repeated writes, missing/duplicate exits or invalid metadata. This is a structural implementation defect; the verifier performs no guest execution."
+corrective_command = "Report the recipe and source witness; do not install or execute the malformed recipe. Runtime fault cleanup is later integration."
+fixtures = ["T022-SLOT-VERIFIER", "T022-EXIT-VERIFIER", "T022-ORIGIN-DEPENDENCIES"]
+
+[[diagnostic]]
+code = "LRR-E-UNSUPPORTED"
+phase = "execution"
+invariant = "I-LAZY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "An Unsupported opcode faults only when reached. Its recipe is structurally legal; cold successors are not requested by the verifier."
+corrective_command = "Use the supported profile or implement the selected feature under its assigned task. Actual VM execution/cleanup acceptance is required in later tasks."
+fixtures = ["T022-DEFERRED-UNSUPPORTED", "T022-LAZY-BRANCH"]
+
+[[diagnostic]]
+code = "LRR-E-STALE-HANDLE"
+phase = "execution"
+invariant = "I-MEMORY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "An arena access has a wrong run epoch, zero/out-of-range index or tombstone. Typed wrappers prevent crossing record arenas."
+corrective_command = "Refresh the run-owned handle; report a VM/helper stale access. Runtime faults do not invoke further guest cleanup."
+fixtures = ["T023-ARENA-DECODE", "T023-RUN-RESET"]
+
+[[diagnostic]]
+code = "LRR-E-RUNTIME-RESOURCE"
+phase = "execution"
+invariant = "I-MEMORY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A handle/memory reservation fails before transferring existing guest ownership. Tombstones count against cumulative handles."
+corrective_command = "Reduce resource use or choose a bounded permitted run limit; no automatic limit increase."
+fixtures = ["T023-RESERVATION-ATOMIC"]
+
+[[diagnostic]]
+code = "LRR-E-VALUE-REPR"
+phase = "execution"
+invariant = "I-MEMORY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A host entry value has invalid scalar width, bool/char bits, kind/descriptor identity or an invalid typed payload."
+corrective_command = "Report the VM/helper value producer; do not reinterpret invalid bits."
+fixtures = ["T023-SCALARS"]
+
+[[diagnostic]]
+code = "LRR-E-OWNERSHIP"
+phase = "execution"
+invariant = "I-MEMORY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "An owning value is copied without policy, a ticket is consumed twice, or a cell state/contract denies a mutation. Validation precedes commitment."
+corrective_command = "Use checked transfer/copy operations and matching declared contracts."
+fixtures = ["T023-OWNING-BITCOPY", "T023-CELL-TRANSACTIONS"]
+
+[[diagnostic]]
+code = "LRR-E-TYPE-CONTEXT"
+phase = "execution"
+invariant = "I-LAZY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A numeric literal has no reached concrete width; no implicit i32/f64 default is chosen. Aliases share one binding."
+corrective_command = "Add an explicit literal suffix, local annotation or reached argument/return hint."
+fixtures = ["T023-LITERAL-ALIASES"]
+
+[[diagnostic]]
+code = "LRR-E-OP-TYPE"
+phase = "execution"
+invariant = "I-MEMORY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "An executed primitive operator has incompatible descriptors or no supported operand-kind implementation. usize/u64 and isize/i64 remain distinct."
+corrective_command = "Use matching supported operand descriptors; no implicit widening or operator guessing."
+fixtures = ["T025-TYPE-CONTEXT", "T025-SHIFT-CONTRACTS", "T025-CAST-MATRIX"]
+
+[[diagnostic]]
+code = "LRR-E-CALL-SIGNATURE"
+phase = "query"
+invariant = "I-LAZY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A reached function declaration lacks required parameter/result syntax or repeats a definition parameter identity. Unrelated declarations and body semantics remain unexamined."
+corrective_command = "Correct the reached function declaration."
+fixtures = ["T032-SIGNATURE-ADMISSION"]
+
+[[diagnostic]]
+code = "LRR-E-GENERIC-BINDING"
+phase = "call_contract"
+invariant = "I-LAZY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "Reached symbolic signature constraints disagree, cross inference transactions, or produce a recursive substitution. No numeric widening, nominal layout guessing or unused-bound solving occurs."
+corrective_command = "Use matching reached type contracts or explicit generic arguments."
+fixtures = ["T032-OCCURS-CHECK", "T032-RIGID-IDENTITY", "T032-UNIFICATION-ATOMIC", "T032-SOURCE-SUBSTITUTION"]
+
+[[diagnostic]]
+code = "LRR-E-TYPE-ALIAS-CYCLE"
+phase = "type_normalization"
+invariant = "I-LAZY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A demanded alias revisits a defining identity; the bounded diagnostic includes its reached cycle path. Cold cycles remain untouched."
+corrective_command = "Break the reached alias cycle."
+fixtures = ["T032-ALIAS-CYCLE"]
+
+[[diagnostic]]
+code = "LRR-E-CALL-ARITY"
+phase = "call_seal"
+invariant = "I-LAZY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "The fully evaluated argument list does not match the prepared concrete boundary; sealing moves none of its cells."
+corrective_command = "Pass the required number of arguments."
+fixtures = ["T032-PACKET-ADMISSION"]
+
+[[diagnostic]]
+code = "LRR-E-CALL-ARG-TYPE"
+phase = "call_seal"
+invariant = "I-LAZY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "An evaluated argument descriptor disagrees with the prepared boundary before ownership transfer."
+corrective_command = "Use a compatible reached argument contract."
+fixtures = ["T032-PACKET-ADMISSION"]
+
+[[diagnostic]]
+code = "LRR-E-CALL-CONTEXT"
+phase = "call_selection"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A selected callable or its caller no longer matches the immutable source catalogue, declaration context or captured source revision."
+corrective_command = "Select the callable again in the current run's coherent source context."
+fixtures = ["T032-CALL-SELECTION-GUARDS"]
+
+[[diagnostic]]
+code = "LRR-E-CALL-RETURN-TYPE"
+phase = "return_contract"
+invariant = "I-LAZY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A reached return descriptor disagrees with an already-concrete prepared output contract."
+corrective_command = "Return a value matching the reached output contract."
+fixtures = ["T032-CALL-CONTRACT-VIEWS"]
+
+[[diagnostic]]
+code = "LRR-E-MACRO-ABSENT"
+phase = "runtime_macro_resolution"
+invariant = "I-LAZY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A reached invocation has no definition in the supplied source macro namespace."
+corrective_command = "Resolve the selected source macro name in its owning namespace."
+fixtures = ["T034-LAZY-MACRO-CONTEXT-3"]
+
+[[diagnostic]]
+code = "LRR-E-MACRO-AMBIGUOUS"
+phase = "runtime_macro_resolution"
+invariant = "I-LAZY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A reached invocation retains more than one source macro definition."
+corrective_command = "Resolve the selected source macro name in its owning namespace."
+fixtures = ["T034-LAZY-MACRO-CONTEXT-3"]
+
+[[diagnostic]]
+code = "LRR-E-EDITION-PATTERN"
+phase = "reached_pattern"
+invariant = "I-EDITION"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A reached Rust2024 pattern uses an explicit binding modifier or reference pattern while its inherited binding mode is not Move."
+corrective_command = "Use a fully explicit reference pattern or an unmodified inherited binding."
+fixtures = ["H003-PATTERN-2", "H003-PATTERN-3"]
+
+[[diagnostic]]
+code = "LRR-E-FEATURE-ASYNC"
+phase = "reached_trait_execution"
+invariant = "I-EDITION"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A reached executable request selects a reserved async facade trait."
+corrective_command = "Use supported synchronous live code or an explicit synchronous native wrapper."
+fixtures = ["H003-PRELUDE-2", "H003-PRELUDE-4"]
+
+[[diagnostic]]
+code = "LRR-E-FACADE-IDENTITY"
+phase = "resolution"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A reserved async facade identity has mismatched namespace or definition provenance."
+corrective_command = "Discard stale or invalid facade facts and rebuild the immutable source publication."
+fixtures = ["H003-PRELUDE-2"]
+
+[[diagnostic]]
+code = "LRR-E-DISCOVERY-LIMIT"
+phase = "discovery"
+invariant = "I-COMPLETE"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "Discovery growth exceeds its reduced job/header/metadata allowance before candidate state allocation."
+corrective_command = "Reduce generated declaration volume or start a fresh request within the fixed limits."
+fixtures = ["M013-WORKLIST-4"]
+
+[[diagnostic]]
+code = "LRR-E-CATALOG-INCOMPLETE"
+phase = "discovery"
+invariant = "I-COMPLETE"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "A stable discovery pass still has unresolved import or macro producers; no partial seal is published."
+corrective_command = "Resolve the blocked producer chain or provide the required authorized macro input."
+fixtures = ["M013-WORKLIST-2", "M013-WORKLIST-5"]
+
+[[diagnostic]]
+code = "LRR-E-EXPANSION-SEAL-VIOLATION"
+phase = "publication"
+invariant = "I-SNAPSHOT"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A later discovery job attempts to mutate already sealed catalog membership."
+corrective_command = "Preserve completed effects, fix producer classification, and start a new run."
+fixtures = ["M013-WORKLIST-3"]
+
+[[diagnostic]]
+code = "LRR-E-NAME-AMBIGUOUS"
+phase = "preparation"
+invariant = "I-DISCOVERY"
+effects_may_have_occurred = false
+cleanup_runs = false
+example = "Completed root namespace contains multiple original/generated main declarations."
+corrective_command = "Provide one unambiguous root main declaration after expansion."
+fixtures = ["M013-ENTRY-SELECTION-4", "M013-ENTRY-SELECTION-7"]
+
+[[diagnostic]]
+code = "LRR-E-INCLUDE-PARSE"
+phase = "expansion"
+invariant = "I-QUERY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "The unchanged include-single-expr helper contains multiple expressions and cannot be adopted as the selected expression output; admitted include parents retain their captured producer anchors."
+corrective_command = "Fix the included source to match the invocation grammar, refresh captured sources, and start a new explicit run."
+fixtures = ["M016-STOCK-INCLUDE-PARSE", "M016-INCLUDE-FAILURE-CAPTURE"]
+
+[[diagnostic]]
+code = "LRR-E-TYPE-SCHEMA"
+phase = "query"
+invariant = "I-LAZY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A reached record constructor names a field twice, omits a declared field, or demands a schema with duplicate fields."
+corrective_command = "Check the selected aggregate declaration and constructor fields. Unused schemas stay deferred; a failed constructor does not authorize repeating prior effects."
+fixtures = ["T040-STOCK-REACHED-FIELDS", "T040-STOCK-COLD-SCHEMA"]
+
+[[diagnostic]]
+code = "LRR-E-INDEX-TYPE"
+phase = "execution"
+invariant = "I-MEMORY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A reached place index has an operand descriptor other than usize, including a same-width u64 or isize."
+corrective_command = "Supply the exact supported source contract; runtime faults do not invoke guest cleanup. Private T041 controls are unexecuted."
+fixtures = ["T041-STOCK-INDEX-OUTCOMES"]
+
+[[diagnostic]]
+code = "LRR-E-REFERENCE-ACCESS"
+phase = "execution"
+invariant = "I-MEMORY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "Mutable borrowing or a write through a shared reference would exceed the root/ancestor permission."
+corrective_command = "Supply the exact supported source contract; runtime faults do not invoke guest cleanup. Private T041 controls are unexecuted."
+fixtures = ["T041-STOCK-MUTABLE-ALIASES", "T041-STOCK-IMMUTABLE-BORROW", "T041-STOCK-INLINE-LOCATION-LEASE"]
+
+[[diagnostic]]
+code = "LRR-E-PLACE-FIELD"
+phase = "execution"
+invariant = "I-MEMORY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A checked nominal/tuple field projection does not identify an installed field."
+corrective_command = "Supply the exact supported source contract; runtime faults do not invoke guest cleanup. Private T041 controls are unexecuted."
+fixtures = ["T041-STOCK-INLINE-LOCATION-LEASE"]
+
+[[diagnostic]]
+code = "LRR-E-USE-AFTER-MOVE"
+phase = "runtime"
+invariant = "I-MEMORY"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "The original String or mutable-reference owning read uses a location whose value already transferred; a whole tuple read encounters a moved field."
+corrective_command = "Use the current owning location, or initialize the moved location before a new owning read. The failed read spends no opcode fuel and transfers no additional owner."
+fixtures = ["T042-STOCK-STRING-MOVE", "T042-STOCK-STRING-LOCAL-READ", "T042-STOCK-MUTABLE-PARAMETER-MOVE", "T042-STOCK-TUPLE-REFERENCE-MOVE"]
+
+[[diagnostic]]
+code = "LRR-E-DOUBLE-PANIC"
+phase = "execution"
+invariant = "I-DROP"
+effects_may_have_occurred = true
+cleanup_runs = false
+example = "A second ordinary guest panic is presented while the first unwind continuation remains active."
+corrective_command = "Correct the panicking destructor. The fatal second panic cannot be an expected-panic success."
+fixtures = ["T045-PANIC-SECOND-ADMISSION"]

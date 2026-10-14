@@ -1,0 +1,11 @@
+> Historical return-packet evidence below predates the October13 edition amendment. The former bare2015 root refusal is superseded: all official editions are now required. New unchanged whole-program acceptance is tracked in E-EDITION-001 and remains separate from these packet controls.
+
+# M017 retained return-source identity — repaired scope pending
+
+The unchanged official generic-fn-infer.rs id<T> header is captured in two recorded dependency worlds with its original2015 edition; an empty2024 infrastructure consumer grants no runtime/build/macro authority. Bare2015 live entry remains refused. The case main/assertion is unexecuted. The LRR packet control gives two distinct rigid source parameters the same checked Unit runtime descriptor; the descriptor is not a source equality witness.
+
+Baseline actual66547/1d2c1b outer1, child101,0passed/1failed reproduced admission of the wrong source identity. Exact baseline3571f26f and raw logs were archived before production changed. The repair validates the retained source substitution after the existing known return-descriptor check. The shared generic bind path also rejects a different retained source identity before updating either map, including a deferred result descriptor. The original acceptance preceded the first production edit; a second deferred-state corruption assertion preceded its additional bind-path edit. All failed paths preserve source/runtime/result contracts.
+
+Known primitive descriptor diagnostics retain their order; no trait solving, coercion, source/runtime identity merging, live-source compilation or new unsafe is introduced. Original source/editions/licenses remain unchanged. Full TR001/TR002/M017, source-view propagation, original whole-program/compiletest, release and Linux acceptance remain incomplete. Repaired scope and subsequent MAIN milestone pending; full stock fixture passes0.
+
+Root accepted exact scoped semantics and provenance before integration. Return scope:550 Rust bodies/7 complete unfiltered bins/3 Python,38 selected M017 controls once; original alpha scope8 bodies,2 extended controls once. All209 cases/350 originals retained. The fresh integrated MAIN milestone remains pending; prior MAIN ENOSPC failure is preserved.

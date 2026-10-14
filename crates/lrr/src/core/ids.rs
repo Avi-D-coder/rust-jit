@@ -46,9 +46,11 @@ impl<I: WorkerId> Default for IdAllocator<I> {
 }
 impl<I: WorkerId> IdAllocator<I> {
     pub fn allocate(&mut self) -> Result<I, Diagnostic> {
-        let index = self.next.ok_or_else(|| Diagnostic {
-            code: "LRR-E-ID-EXHAUSTED",
-            message: "worker identity exhausted; retire worker between runs".into(),
+        let index = self.next.ok_or_else(|| {
+            Diagnostic::new(
+                "LRR-E-ID-EXHAUSTED",
+                "worker identity exhausted; retire worker between runs".into(),
+            )
         })?;
         self.next = index.get().checked_add(1).and_then(NonZeroU32::new);
         Ok(I::from_index(index))

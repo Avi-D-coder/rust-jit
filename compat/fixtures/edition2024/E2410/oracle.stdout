@@ -1,0 +1,6 @@
+drop:scrutinee
+else_entered
+after_if
+drop:tail
+drop:local
+after:7

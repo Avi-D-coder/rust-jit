@@ -1,0 +1,1 @@
+Controlled package metadata fixture.

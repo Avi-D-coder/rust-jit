@@ -1,0 +1,8 @@
+[package]
+name = "lrr_two_output_app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+lrr_two_output_left = { path = "../left" }
+lrr_two_output_right = { path = "../right" }

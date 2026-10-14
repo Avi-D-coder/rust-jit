@@ -1,0 +1,284 @@
+[
+  {
+    "packet": "sol-box-compiler-contract-v1",
+    "patch_sha256": "aaa6a96563900b67c9409c04f7f62cd5fb34aaa6b60bcde62a850000a942a050",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-box-source-admission-v1",
+    "patch_sha256": "50f083099903ae547db5a06adb6c8b0628ad2f8a786ffe96d9f1e39fc22ec786",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-box-source-propagation-v1",
+    "patch_sha256": "6f09f596d678eae77150d86e2eee2cd02ed2436f617e62fb073f245acac99463",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-box-type-readiness-v1",
+    "patch_sha256": "bc022464ecbe3a0da645dff14f441c67af1f4dfe87963e79a023805a000f81d6",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-buffer-slice-windows-v1",
+    "patch_sha256": "a803b13318120555cbd8217d2c414a0d15fb911cf7deb1ab84c04d40ca710b73",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-canonical-candidate-transactions-v1",
+    "patch_sha256": "db29a21756d0cb3dabaf4ac80f0af9e15cc93351f5a6caf33216d418486349d4",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-compound-assignment-numeric-v1",
+    "patch_sha256": "9680634a91b8e293b2cbb01a8e4c032af60cca9b4f5724d0fac83294928ec9ef",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-conditional-goal-tables-v1",
+    "patch_sha256": "5d79e2ac86de127159cd17221a98c9eb7923b33e70bc3ac94f7d4f348f56c085",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-constant-array-instantiation-v1",
+    "patch_sha256": "3b472f28a03006d297d8c6f0307cd284dc52ff913734d5513976f82937281d95",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-constant-array-source-publication-v1",
+    "patch_sha256": "b27136b66e97e44d0e3d88f26c2730f3dbc3ac81874597d91bda327819682851",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-constant-array-transfer-v1",
+    "patch_sha256": "ba9d0e9106fad1547275e750213e2e31bbf3e4784cc400bd9b9bb91fcc64bba2",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-constant-authentic-preparation-v1",
+    "patch_sha256": "c19e3a920a9ce05299269b751c39a0beea973e11395b7d581e3b8094cbc90c98",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-constant-child-admission-v1",
+    "patch_sha256": "2b890988af62ff3cc5dd5c1bbf96303394712b3c7796b94ef5f8b8353d098616",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-constant-foreign-path-selection-v1",
+    "patch_sha256": "a720cb90f6e8e112e73d47e672f8a957443408407bb2f0578b245751ef94357b",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-constant-macro-admission-v1",
+    "patch_sha256": "694872b14d6d863086dc4fab17d2ef93dabf2b154010745bb67aeeb4965190f7",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-constant-multisource-admission-v1",
+    "patch_sha256": "1e710df92355e1f9d37b3de74d14017d599231867b9e440713b25922f581baeb",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-constant-parameter-length-v1",
+    "patch_sha256": "eea9ac0621e11d3c1c75d17af0c83041db29b47dc9fcd9521411529bef6f12fd",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-constant-path-selection-v1",
+    "patch_sha256": "fcfa3e843570919472ed74349cee203e26afc59d4c95dde5260b5a5804a71fbf",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-constant-result-type-v1",
+    "patch_sha256": "745942429d4fecb9d7ee326c4192f0cf650eb9cd0306ef7819cead2df327ce96",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-constant-source-admission-v1",
+    "patch_sha256": "b04b9e31b843c02aabc2a233f5f8f45e8d4333023eb21024fa18a996b34250f2",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-declarative-macro2-source-v1",
+    "patch_sha256": "ef8956618086bbcc98676b41a6441f647425886d62ff13e1e21c4a4dcb6acb42",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-frame-source-view-transfer-v1",
+    "patch_sha256": "5459ffae1a81ab59902784764176a4cacfadf36d3889fc45669343a8a2b62192",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-generated-constant-provenance-v1",
+    "patch_sha256": "1ed30fbf17fc5abebbc74d903158ce2006e6a18af309ea923ad7a96d41e5b7b3",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-generated-crate-policy-v1",
+    "patch_sha256": "587ba9f74f364b3c7c69e073c3e40e7c676a28e4fd337404217a4af9b3f8c508",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-generated-hygienic-source-type-v1",
+    "patch_sha256": "cf983ec6ecf1dac967adea08305c18bfc057f5bc916675ea66abb3975387f3b7",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-generated-module-macro2-v1",
+    "patch_sha256": "00e0de7dc905f46b3ba0933980c02de353546a07c154a1602199afb3b92e2307",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-generated-primitive-admission-v1",
+    "patch_sha256": "dad9a826a2a75c283ebf2922c000dc31c8fcfa9f6e070a88f386f39bb9fe034b",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-generated-source-compiler-facets-v1",
+    "patch_sha256": "9fcddccddfef9bd9ed3ec87d4674e2b0b2893462d3eecdd6d5ef2d02b45283bd",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-later-call-numeric-constraints-v1",
+    "patch_sha256": "fcb7a5dd6cb6616b706f247b7f6f525c098543071ada67490aaf4eed7014d1dd",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-lexical-numeric-callees-v1",
+    "patch_sha256": "30675161024c5d55cfb41477f5bfc35f3eaa0cd353752d7d495edb157d846429",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-managed-box-v1",
+    "patch_sha256": "4c121c3bce58f448c04952f601743360b2be4cc26667f7b9ed4bb809dd0a96f6",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-mixed-edition-attribute-facets-v1",
+    "patch_sha256": "8610d1748a5e8eaeed2f5d8c99ba90d1db7e73a5dba19b3c8dd13e584257c262",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-module-import-ambiguity-v1",
+    "patch_sha256": "eebd24fff177f5cf2de912b8881963ffe931e8a2d29f769ecdb825062357b644",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-original-inert-source-preparation-v1",
+    "patch_sha256": "9d62943d5036edd908786fd25f68537758a001488043de7306efd9b0767b41bc",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-pure-constants-v1",
+    "patch_sha256": "0a8dc0eed96e60529a40271f3c008c4f719141b1f0dba18262b39cebc0b548f1",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-resumable-constant-arrays-v1",
+    "patch_sha256": "47b6e230b1c95477137684ddc4194860cb388595aa9650cef003feb3ed1734b7",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-scalar-constant-use-v1",
+    "patch_sha256": "2c4f9774cd623858f6a9e575377e0154ce8b48a1627b483da1c942302a454cee",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-source-trait-cycle-policy-v1",
+    "patch_sha256": "0ad890c3bd369bc93988cfad171266c1db6bc470c1d11d36a3fb2028527f9184",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-source-view-alias-return-v1",
+    "patch_sha256": "a2a43df0729916fe62f6d82d507fa403bfb95a79e0b18319d0121265ea0b0e15",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-source-view-current-admission-v1",
+    "patch_sha256": "ece82e07a9a568c4e511e4d401282790f733c1ace38257328876401c1f33e9dd",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-trait-header-index-v1",
+    "patch_sha256": "1561338f4ab1edf113e929083d81ecc46b095f382d6f7e5ac697c3947e0c5f81",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-value-library-generation-v1",
+    "patch_sha256": "162bd97fccf430abbac04cebc97f06623f26ca58acd6edd6bbd9b81dffbfd324",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-value-prelude-admission-v1",
+    "patch_sha256": "4e610e64af37145e040e7aa9b43c76f7773745dd42bfdb8213d627f8e047da9b",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-vec-declaration-facet-v1",
+    "patch_sha256": "7e308db1b8407e37d39541be186268a03e1023b47dcb5d579d25276834c2fe86",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-vec-push-pop-v1",
+    "patch_sha256": "e10d48eae0ecee83b307361f61b00f2ccb816952a0c0361729d5f9247cbad644",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-vec-runtime-v1",
+    "patch_sha256": "76b3ac85af252aefa27ca0eac3a410c64ee96c60a2a2d9474feb3ec8ba0224dd",
+    "source_only": true,
+    "compiled_acceptance": false
+  },
+  {
+    "packet": "sol-vec-source-index-v1",
+    "patch_sha256": "4bb5aa8bc583ed458ac65b3eeb9bb3eb9620f291a4c4bbfb541b663b038637b6",
+    "source_only": true,
+    "compiled_acceptance": false
+  }
+]

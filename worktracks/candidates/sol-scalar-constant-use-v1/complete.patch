@@ -1,0 +1,1014 @@
+--- a/crates/lrr/src/engine/mod.rs
++++ b/crates/lrr/src/engine/mod.rs
+@@ -19,3 +19,6 @@
+ pub mod standalone_macros;
+ 
+ pub(crate) mod declarative_runtime;
++
++pub(crate) mod constant_array_publication;
++pub(crate) mod scalar_constant_use;
+--- /dev/null
++++ b/crates/lrr/src/engine/scalar_constant_use.rs
+@@ -0,0 +1,399 @@
++//! T054 reached scalar recipe adapter. It never fetches a query or prepares source.
++//! Borrowed suspension remains distinct; only a genuine current success owns a recipe.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode},
++    },
++    db::{
++        dependency::DependencyStamp,
++        key::QueryKey,
++        memo::{Database, Outcome},
++        poll::{InputRequest, QueryPoll},
++        value::QueryValue,
++    },
++    engine::constant_array_publication::AdmittedConstantUse,
++    frontend::{
++        constant_construction::CurrentConstantConstruction,
++        constant_path_selection::ConstantPathSelection,
++        constant_result_type::CurrentConstantResultType,
++        constants::{ConstLimits, ConstValue, query::fetch_current_constant},
++    },
++    ir::pc::{PcKey, Phase, SlotId},
++    runtime::{
++        cell::{FrameId, GuestStore},
++        shape::{CopyStatus, PrimitiveIdentity},
++    },
++    source::changes::PreparedSourceView,
++    syntax::{
++        body_index::{ExpressionKind, NodeRole},
++        spans::BodySpan,
++    },
++    traits::term::TyTerm,
++    vm::frame::{Frame, FrameStatus},
++};
++const MAX_BYTES: usize = 32 << 20;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-CONST-USE", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "scalar constant use metadata limit".into(),
++    )
++}
++/// Input bundle is not a certificate. Capture privately replays each real proof.
++#[derive(Clone, Copy)]
++pub(crate) struct ScalarUseSources<'a> {
++    pub caller: &'a PreparedSourceView,
++    pub views: &'a [&'a PreparedSourceView],
++    pub target: &'a PreparedSourceView,
++    pub result: &'a CurrentConstantResultType,
++    pub path: &'a ConstantPathSelection,
++}
++/// Does not borrow the DB, so the driver can perform/resume its authorized query.
++/// No serializer, raw digest constructor, complete flag or guest value is exposed.
++pub(crate) struct ScalarConstantUseSite<'a> {
++    sources: ScalarUseSources<'a>,
++    frame: FrameId,
++    pc: PcKey,
++    span: BodySpan,
++    body_index: Digest,
++    destination: SlotId,
++    epoch: u32,
++    revision: u64,
++    result_identity: Digest,
++    scalar_identity: Digest,
++    universe: Digest,
++    bytes: usize,
++    byte_limit: usize,
++}
++pub(crate) enum ScalarUsePreparation<'a> {
++    NeedInput(&'a InputRequest),
++    Ready(Result<PreparedScalarConstantUse<'a>, Diagnostic>),
++}
++pub(crate) struct PreparedScalarConstantUse<'a> {
++    site: &'a ScalarConstantUseSite<'a>,
++    construction: CurrentConstantConstruction<'a>,
++    value: ConstValue,
++}
++impl<'a> ScalarConstantUseSite<'a> {
++    pub(crate) fn capture_current(
++        db: &Database,
++        frame: &Frame,
++        store: &GuestStore,
++        sources: ScalarUseSources<'a>,
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        let bytes = std::mem::size_of::<Self>()
++            .checked_add(sources.result.metadata_bytes())
++            .and_then(|n| n.checked_add(sources.path.metadata_bytes()))
++            .and_then(|n| {
++                n.checked_add(
++                    sources
++                        .views
++                        .len()
++                        .checked_mul(std::mem::size_of::<&PreparedSourceView>())?,
++                )
++            })
++            .filter(|n| *n <= byte_limit && byte_limit <= MAX_BYTES)
++            .ok_or_else(limit)?;
++        sources.result.revalidate(db, sources.target)?;
++        sources.path.revalidate(db, sources.caller, sources.views)?;
++        let scalar = sources
++            .result
++            .scalar()
++            .ok_or_else(|| fault("scalar use requires exact closed source scalar readiness"))?;
++        let plan = sources.result.admission().plan();
++        let (constant, call, length) = plan.entry()?;
++        if constant.is_none()
++            || call.is_some()
++            || length.is_some()
++            || sources.path.target() != sources.target.selection()
++            || sources.path.definition() != plan.owner_definition()
++            || sources.path.context() != plan.owner_context()
++            || Some(sources.path.body()) != plan.owner_body()
++            || frame.status != FrameStatus::Running
++            || frame.pc().body != sources.path.site().body().key()
++            || frame.pc().phase != Phase::Entry.code()?
++            || frame.body.profile() != &sources.caller.selection().outline.parse.profile
++            || frame.body.cfg().fingerprint() != sources.caller.selection().outline.cfg
++        {
++            return Err(fault(
++                "scalar source/caller/role/body/profile/cfg/phase differs",
++            ));
++        }
++        let node = frame
++            .body
++            .nodes()
++            .get(frame.pc().node as usize)
++            .ok_or_else(|| fault("scalar reached node absent"))?;
++        let destination = node
++            .value
++            .ok_or_else(|| fault("scalar source path has no result slot"))?;
++        let span = frame.body.span(node.id)?;
++        let body = sources.path.site().body();
++        let range = sources.path.site().range();
++        if node.role != NodeRole::Expression(ExpressionKind::Path)
++            || body.range.start.checked_add(span.relative_start) != Some(range.start)
++            || body.range.start.checked_add(span.relative_end) != Some(range.end)
++        {
++            return Err(fault("scalar selected original path/span differs"));
++        }
++        // Descriptor agreement follows the actual enclosing source proof; it is
++        // never a member/type selector or a substitute for that proof.
++        let selected = PrimitiveIdentity::from_recipe(scalar.primitive())?.id();
++        if store.type_descriptor(selected)?.copy != CopyStatus::Copy {
++            return Err(fault("scalar use requires admitted Copy storage"));
++        }
++        let source = TyTerm::Primitive(scalar.primitive());
++        frame.preflight_source_view(destination, Some(&source))?;
++        if frame
++            .source_view_ref(destination)?
++            .is_some_and(|actual| actual != &source)
++            || frame
++                .hint(destination)?
++                .is_some_and(|actual| actual != selected)
++        {
++            return Err(fault(
++                "scalar source result differs from reached destination context",
++            ));
++        }
++        frame.preflight_write_type(destination, selected, store)?;
++        Ok(Self {
++            sources,
++            frame: frame.constant_frame_anchor(),
++            pc: frame.pc().clone(),
++            span,
++            body_index: frame.body.fingerprint(),
++            destination,
++            epoch: store.budget().epoch(),
++            revision: db.revision(),
++            result_identity: sources.result.identity(),
++            scalar_identity: scalar.source_identity(),
++            universe: db.constant_input_universe()?,
++            bytes,
++            byte_limit,
++        })
++    }
++    fn revalidate(
++        &self,
++        db: &Database,
++        frame: &Frame,
++        store: &GuestStore,
++    ) -> Result<(), Diagnostic> {
++        if db.revision() != self.revision
++            || db.constant_input_universe()? != self.universe
++            || store.budget().epoch() != self.epoch
++            || frame.constant_frame_anchor() != self.frame
++            || frame.pc() != &self.pc
++            || frame.body.fingerprint() != self.body_index
++        {
++            return Err(fault(
++                "scalar use site is stale or foreign; resume requires fresh source capture",
++            ));
++        }
++        let replay = Self::capture_current(db, frame, store, self.sources, self.byte_limit)?;
++        if replay.destination != self.destination
++            || replay.span != self.span
++            || replay.bytes != self.bytes
++            || replay.result_identity != self.result_identity
++            || replay.scalar_identity != self.scalar_identity
++        {
++            return Err(fault("scalar use current source/site changed"));
++        }
++        Ok(())
++    }
++    /// Authorized coordinator query step, never a provider/source/guest effect.
++    /// The site owns no DB borrow; the returned poll is an owned query result.
++    pub(crate) fn fetch_current(
++        &self,
++        db: &mut Database,
++        frame: &Frame,
++        store: &GuestStore,
++        limits: ConstLimits,
++    ) -> QueryPoll<Outcome> {
++        if let Err(error) = self.revalidate(db, frame, store) {
++            return QueryPoll::Ready(Err(error));
++        }
++        let Some(scalar) = self.sources.result.scalar() else {
++            return QueryPoll::Ready(Err(fault("scalar source readiness absent")));
++        };
++        let Some(bytes) = self.byte_limit.checked_sub(self.bytes).filter(|n| *n != 0) else {
++            return QueryPoll::Ready(Err(limit()));
++        };
++        fetch_current_constant(
++            db,
++            self.sources.target,
++            self.sources.result.admission(),
++            &scalar.wire_type(),
++            limits,
++            bytes.min(1 << 20),
++        )
++    }
++    fn diagnostic(&self, error: &Diagnostic) -> Diagnostic {
++        if error
++            .heap_bytes()
++            .and_then(|n| n.checked_add(std::mem::size_of::<Diagnostic>()))
++            .and_then(|n| n.checked_add(self.bytes))
++            .is_none_or(|n| n > self.byte_limit)
++        {
++            limit()
++        } else {
++            error.clone()
++        }
++    }
++    /// No query call, input publication, trace/pin mutation, fuel or guest allocation.
++    pub(crate) fn accept_poll<'b>(
++        &'b self,
++        db: &'b Database,
++        frame: &Frame,
++        store: &GuestStore,
++        poll: &'b QueryPoll<Outcome>,
++    ) -> ScalarUsePreparation<'b> {
++        if let Err(error) = self.revalidate(db, frame, store) {
++            return ScalarUsePreparation::Ready(Err(error));
++        }
++        let outcome = match poll {
++            QueryPoll::NeedInput(input) => {
++                return match input.validate() {
++                    Ok(()) => ScalarUsePreparation::NeedInput(input),
++                    Err(error) => ScalarUsePreparation::Ready(Err(error)),
++                };
++            }
++            QueryPoll::Ready(Err(error)) => {
++                return ScalarUsePreparation::Ready(Err(self.diagnostic(error)));
++            }
++            QueryPoll::Ready(Ok(outcome)) => outcome,
++        };
++        let selected = || -> Result<PreparedScalarConstantUse<'b>, Diagnostic> {
++            let key = match outcome.value.as_ref() {
++                QueryValue::Constant(value) => value.key(),
++                QueryValue::ConstantFailure(value) => value.key(),
++                QueryValue::Error(error) => return Err(self.diagnostic(error)),
++                _ => return Err(fault("scalar query returned another value variant")),
++            };
++            key.validate()?;
++            let admission = self.sources.result.admission();
++            let plan = admission.plan();
++            let expected = self
++                .sources
++                .result
++                .scalar()
++                .ok_or_else(|| fault("scalar source readiness absent"))?
++                .wire_type();
++            if key.definition() != plan.owner_definition()
++                || key.selection() != plan.identity()
++                || key.source() != plan.source().source()
++                || key.cfg() != plan.source().cfg()
++                || key.profile() != plan.profile()
++                || key.admission() != admission.identity()
++                || key.result_type() != expected.fingerprint_checked()?
++                || key.universe() != Some(self.universe)
++            {
++                return Err(fault(
++                    "scalar outcome is not its exact current selected query",
++                ));
++            }
++            let memo = db
++                .memo(&QueryKey::Constant(key.clone()))
++                .ok_or_else(|| fault("scalar use requires actual current query memo"))?;
++            if !outcome.cacheable
++                || memo.verified_revision != db.revision()
++                || outcome.fingerprint != outcome.value.fingerprint()
++                || outcome.fingerprint != memo.fingerprint
++                || memo.fingerprint != memo.value.fingerprint()
++                || memo.dependencies.len() != admission.dependencies().len()
++            {
++                return Err(fault("scalar returned outcome/current memo differs"));
++            }
++            for (key, fingerprint) in admission.dependencies() {
++                if !memo.dependencies.contains(&DependencyStamp::Input {
++                    key: key.clone(),
++                    fingerprint: *fingerprint,
++                }) || db
++                    .published_input(key)
++                    .is_none_or(|(_, actual)| actual != *fingerprint)
++                {
++                    return Err(fault("scalar current admitted input dependency differs"));
++                }
++            }
++            let value = match outcome.value.as_ref() {
++                QueryValue::Constant(value) => value,
++                QueryValue::ConstantFailure(failure) => {
++                    return Err(self.diagnostic(failure.diagnostic()));
++                }
++                _ => unreachable!("checked constant query variants"),
++            };
++            let remaining = self
++                .byte_limit
++                .checked_sub(self.bytes)
++                .and_then(|n| n.checked_sub(std::mem::size_of::<PreparedScalarConstantUse<'_>>()))
++                .ok_or_else(limit)?;
++            let construction = CurrentConstantConstruction::capture_current(
++                db,
++                self.sources.target,
++                self.sources.result,
++                value,
++                None,
++                remaining,
++            )?;
++            let value = value.payload().decode_value()?;
++            value
++                .scalar()
++                .ok_or_else(|| fault("successful scalar recipe contains an aggregate"))?
++                .validate_scalar()?;
++            Ok(PreparedScalarConstantUse {
++                site: self,
++                construction,
++                value,
++            })
++        };
++        ScalarUsePreparation::Ready(selected())
++    }
++}
++impl PreparedScalarConstantUse<'_> {
++    /// Conservative retained source/query/recipe bytes for the driver budget.
++    pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
++        std::mem::size_of::<Self>()
++            .checked_add(self.site.bytes)
++            .and_then(|n| n.checked_add(self.construction.metadata_bytes()))
++            .filter(|n| *n <= self.site.byte_limit)
++            .ok_or_else(limit)
++    }
++
++    /// Preparation precedes the dispatcher's single ordinary charge callback.
++    /// Existing field charges/reservation/abort/temporary transaction stay unchanged.
++    /// No borrowed proof/transaction escapes the local synchronous scope.
++    pub(crate) fn publish_with_opcode_charge(
++        &self,
++        frame: &mut Frame,
++        store: &mut GuestStore,
++        charge: impl FnOnce(&mut Frame) -> Result<(), Diagnostic>,
++    ) -> Result<(), Diagnostic> {
++        self.metadata_bytes()?;
++        self.site
++            .revalidate(self.construction.database(), frame, store)?;
++        let binding = self.construction.bind_guest_descriptor(store)?;
++        let proof = AdmittedConstantUse::capture_current(
++            frame,
++            self.site.destination,
++            self.site.sources.caller,
++            self.site.sources.views,
++            self.site.sources.path,
++            binding,
++            store,
++        )?;
++        let prepared = frame.prepare_constant_publication(
++            &proof,
++            &self.value,
++            self.construction.wire(),
++            store,
++        )?;
++        charge(frame)?;
++        frame.publish_constant_to_temporary(prepared, store)
++    }
++}
++#[cfg(test)]
++#[path = "scalar_constant_use_tests.rs"]
++mod tests;
+--- /dev/null
++++ b/crates/lrr/src/engine/scalar_constant_use_tests.rs
+@@ -0,0 +1,566 @@
++//! Original declarations are unchanged; caller/phase controls are disclosed adapters.
++//! No automatic dispatcher or complete upstream fixture is exercised by this file.
++use super::*;
++use crate::{
++    db::poll::InputRequest,
++    expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    frontend::{
++        constant_construction::tests::{result, world},
++        constant_path_selection::ConstantPathOutcome,
++        constants::ConstLimits,
++    },
++    runtime::cell::CellState,
++    source::manifest::Namespace,
++    syntax::{body_index::BodyIndexLimits, outline::BodyHandle, spans::SourceRange},
++};
++use std::{collections::BTreeSet, sync::Arc};
++const MODULE: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs"
++);
++const NESTED: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs");
++fn source(text: &str, name: &str, edition: u16) -> (Database, PreparedSourceView, Digest) {
++    let (mut db, view, definition) = world(text, name, edition);
++    let selected = view
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.fingerprint() == definition)
++        .unwrap()
++        .scope
++        .clone();
++    let scopes = view
++        .outline()
++        .items
++        .iter()
++        .map(|i| i.scope.clone())
++        .collect::<BTreeSet<_>>();
++    for scope in scopes.into_iter().filter(|scope| *scope != selected) {
++        for namespace in [Namespace::Value, Namespace::Type] {
++            let mut discovery = SourceDiscovery::new(
++                vec![view.share()],
++                scope.clone(),
++                namespace,
++                Digest::of_bytes(b"result type current world"),
++                1,
++            )
++            .unwrap()
++            .with_declarative_compiler(
++                Digest::of_bytes(b"result type declarative"),
++                Digest::of_bytes(b"result type compiler"),
++                Arc::new(
++                    crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                        &view.selection().outline.parse.profile,
++                    )
++                    .unwrap(),
++                ),
++            )
++            .unwrap();
++            loop {
++                match discovery.poll().unwrap() {
++                    SourceDiscoveryStep::Sealed(_) => break,
++                    SourceDiscoveryStep::NeedExpansion { request } => discovery
++                        .admit_expansion(Arc::new(request.expand().unwrap()))
++                        .unwrap(),
++                    SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                        .admit_expansion(Arc::new(request.expand().unwrap()))
++                        .unwrap(),
++                    _ => {
++                        panic!("scalar source requires unestablished source preparation authority")
++                    }
++                }
++            }
++            discovery.publish(&mut db).unwrap();
++        }
++    }
++    (db, view, definition)
++}
++fn source_frame(
++    db: &Database,
++    view: &PreparedSourceView,
++    text: &str,
++    needle: &str,
++    store: &mut GuestStore,
++) -> (Frame, BodyHandle, SourceRange) {
++    let body = view
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "scalar_use")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap()
++        .clone();
++    let parsed = db.prepared_parse(&view.selection().outline.parse).unwrap();
++    let index = parsed
++        .index_body(&body, BodyIndexLimits::default())
++        .unwrap();
++    let node = index
++        .nodes()
++        .iter()
++        .find(|node| {
++            if node.role != NodeRole::Expression(ExpressionKind::Path) {
++                return false;
++            }
++            let span = index.span(node.id).unwrap();
++            &text[(body.range.start + span.relative_start) as usize
++                ..(body.range.start + span.relative_end) as usize]
++                == needle
++        })
++        .unwrap();
++    let span = index.span(node.id).unwrap();
++    let range = SourceRange {
++        start: body.range.start + span.relative_start,
++        end: body.range.start + span.relative_end,
++    };
++    let pc = index.pc(node.id, Phase::Entry).unwrap();
++    let mut frame = Frame::new(index.clone(), pc, store).unwrap();
++    let mut current = Some(
++        frame
++            .constant_slot_scope_for_test(node.value.unwrap())
++            .unwrap(),
++    );
++    let mut scopes = Vec::new();
++    while let Some(scope) = current {
++        scopes.push(scope);
++        current = index.scopes()[scope.0 as usize].parent;
++    }
++    for scope in scopes.into_iter().rev() {
++        frame.constant_enter_for_test(scope).unwrap();
++    }
++    (frame, body, range)
++}
++fn selected_path(
++    db: &Database,
++    view: &PreparedSourceView,
++    body: &BodyHandle,
++    range: SourceRange,
++    views: &[&PreparedSourceView],
++) -> ConstantPathSelection {
++    let ConstantPathOutcome::Selected(path) =
++        ConstantPathSelection::capture_current(db, view, body, range, views, MAX_BYTES).unwrap()
++    else {
++        panic!("original source constant path unresolved")
++    };
++    path
++}
++fn ready<'a>(poll: ScalarUsePreparation<'a>) -> PreparedScalarConstantUse<'a> {
++    match poll {
++        ScalarUsePreparation::Ready(Ok(value)) => value,
++        ScalarUsePreparation::Ready(Err(error)) => panic!("{}: {}", error.code, error.message),
++        ScalarUsePreparation::NeedInput(_) => panic!("complete source scalar suspended"),
++    }
++}
++#[test]
++fn unchanged_module_bits_and_nested_x_scalar_recipe_publish_with_one_charge_all_editions() {
++    for (original, name, needle, expected) in
++        [(MODULE, "BITS", "u8::BITS", 8), (NESTED, "X", "X", 22)]
++    {
++        let text = format!("{original}\nfn scalar_use(){{let actual={needle};}}");
++        for edition in [2015, 2018, 2021, 2024] {
++            let (mut db, view, definition) = source(&text, name, edition);
++            let result = result(&db, &view, definition);
++            let mut store = GuestStore::new(1, 10000, 4 << 20).unwrap();
++            let (mut frame, body, range) = source_frame(&db, &view, &text, needle, &mut store);
++            let views = [&view];
++            let path = selected_path(&db, &view, &body, range, &views);
++            let site = ScalarConstantUseSite::capture_current(
++                &db,
++                &frame,
++                &store,
++                ScalarUseSources {
++                    caller: &view,
++                    views: &views,
++                    target: &view,
++                    result: &result,
++                    path: &path,
++                },
++                MAX_BYTES,
++            )
++            .unwrap();
++            let query = site.fetch_current(&mut db, &frame, &store, ConstLimits::default());
++            let before = (
++                store.budget().handles(),
++                frame.fuel.snapshot().used,
++                db.trace.events.len(),
++            );
++            let recipe = ready(site.accept_poll(&db, &frame, &store, &query));
++            assert_eq!(
++                before,
++                (
++                    store.budget().handles(),
++                    frame.fuel.snapshot().used,
++                    db.trace.events.len()
++                )
++            );
++            let mut charges = 0;
++            recipe
++                .publish_with_opcode_charge(&mut frame, &mut store, |frame| {
++                    charges += 1;
++                    frame.fuel.charge()
++                })
++                .unwrap();
++            assert_eq!(charges, 1);
++            assert_eq!(frame.fuel.snapshot().used, 1);
++            let CellState::Live(value) =
++                store.state(frame.cell(site.destination).unwrap()).unwrap()
++            else {
++                panic!("scalar result not published")
++            };
++            assert_eq!(value.payload, expected);
++            assert_eq!(
++                frame.source_view_ref(site.destination).unwrap(),
++                Some(recipe.construction.source_term())
++            );
++            let mut duplicate_charges = 0;
++            assert!(
++                recipe
++                    .publish_with_opcode_charge(&mut frame, &mut store, |frame| {
++                        duplicate_charges += 1;
++                        frame.fuel.charge()
++                    })
++                    .is_err()
++            );
++            assert_eq!(duplicate_charges, 0);
++            // Source query + physical publication only. Original main's assert,
++            // struct/array and complete interpreter continuations remain unexecuted.
++        }
++    }
++}
++#[test]
++fn scalar_adapter_transport_only_needinput_and_readyerr_preserve_no_value_state() {
++    let text = "const X:u32=22;fn scalar_use(){let value=X;}fn main(){}";
++    let (db, view, definition) = source(text, "X", 2024);
++    let result = result(&db, &view, definition);
++    let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++    let (frame, body, range) = source_frame(&db, &view, text, "X", &mut store);
++    let views = [&view];
++    let path = selected_path(&db, &view, &body, range, &views);
++    let site = ScalarConstantUseSite::capture_current(
++        &db,
++        &frame,
++        &store,
++        ScalarUseSources {
++            caller: &view,
++            views: &views,
++            target: &view,
++            result: &result,
++            path: &path,
++        },
++        MAX_BYTES,
++    )
++    .unwrap();
++    // Disclosed transport control: current scalar provider is input-complete.
++    // This typed demand is not claimed as a real constant-query suspension.
++    let query = QueryPoll::NeedInput(InputRequest::CaptureCompileEnvironment {
++        unit: view.selection().outline.crate_key,
++    });
++    let before = (
++        frame.pc().clone(),
++        store.budget().handles(),
++        frame.fuel.snapshot().used,
++        db.trace.events.len(),
++    );
++    let ScalarUsePreparation::NeedInput(input) = site.accept_poll(&db, &frame, &store, &query)
++    else {
++        panic!()
++    };
++    let QueryPoll::NeedInput(original) = &query else {
++        panic!()
++    };
++    assert!(std::ptr::eq(input, original));
++    let error = QueryPoll::Ready(Err(Diagnostic::new(
++        "LRR-E-SCALAR-TRANSPORT-CONTROL",
++        "exact error".into(),
++    )));
++    let ScalarUsePreparation::Ready(Err(actual)) = site.accept_poll(&db, &frame, &store, &error)
++    else {
++        panic!()
++    };
++    assert_eq!(actual.code, "LRR-E-SCALAR-TRANSPORT-CONTROL");
++    assert_eq!(actual.message, "exact error");
++    assert_eq!(
++        before,
++        (
++            frame.pc().clone(),
++            store.budget().handles(),
++            frame.fuel.snapshot().used,
++            db.trace.events.len()
++        )
++    );
++}
++#[test]
++fn genuine_cached_scalar_numeric_failure_remains_exact_diagnostic_without_recipe() {
++    let text = "const BAD:u8=1u8/0u8;fn scalar_use(){let value=BAD;}fn main(){}";
++    let (mut db, view, definition) = source(text, "BAD", 2024);
++    let result = result(&db, &view, definition);
++    let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++    let (frame, body, range) = source_frame(&db, &view, text, "BAD", &mut store);
++    let views = [&view];
++    let path = selected_path(&db, &view, &body, range, &views);
++    let site = ScalarConstantUseSite::capture_current(
++        &db,
++        &frame,
++        &store,
++        ScalarUseSources {
++            caller: &view,
++            views: &views,
++            target: &view,
++            result: &result,
++            path: &path,
++        },
++        MAX_BYTES,
++    )
++    .unwrap();
++    let query = site.fetch_current(&mut db, &frame, &store, ConstLimits::default());
++    let QueryPoll::Ready(Ok(outcome)) = &query else {
++        panic!("real constant failure did not become typed outcome")
++    };
++    let QueryValue::ConstantFailure(failure) = outcome.value.as_ref() else {
++        panic!("numeric failure was not typed")
++    };
++    let before = (
++        store.budget().handles(),
++        frame.fuel.snapshot().used,
++        db.trace.events.len(),
++    );
++    let ScalarUsePreparation::Ready(Err(actual)) = site.accept_poll(&db, &frame, &store, &query)
++    else {
++        panic!("cached failure became a value")
++    };
++    assert_eq!(actual.code, failure.diagnostic().code);
++    assert_eq!(actual.message, failure.diagnostic().message);
++    assert_eq!(
++        before,
++        (
++            store.budget().handles(),
++            frame.fuel.snapshot().used,
++            db.trace.events.len()
++        )
++    );
++}
++#[test]
++fn current_other_scalar_query_cannot_fill_selected_constant_recipe() {
++    let text = "const A:u8=25;const B:u8=26;fn scalar_use(){let first=A;let second=B;}fn main(){}";
++    let (mut db, view, definition) = source(text, "A", 2024);
++    let selected = result(&db, &view, definition);
++    let b = view
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "B")
++        .unwrap()
++        .def_key
++        .fingerprint();
++    let other = result(&db, &view, b);
++    let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++    let (frame, body, range) = source_frame(&db, &view, text, "A", &mut store);
++    let views = [&view];
++    let path = selected_path(&db, &view, &body, range, &views);
++    let site = ScalarConstantUseSite::capture_current(
++        &db,
++        &frame,
++        &store,
++        ScalarUseSources {
++            caller: &view,
++            views: &views,
++            target: &view,
++            result: &selected,
++            path: &path,
++        },
++        MAX_BYTES,
++    )
++    .unwrap();
++    let (other_frame, other_body, other_range) = source_frame(&db, &view, text, "B", &mut store);
++    let other_path = selected_path(&db, &view, &other_body, other_range, &views);
++    let other_site = ScalarConstantUseSite::capture_current(
++        &db,
++        &other_frame,
++        &store,
++        ScalarUseSources {
++            caller: &view,
++            views: &views,
++            target: &view,
++            result: &other,
++            path: &other_path,
++        },
++        MAX_BYTES,
++    )
++    .unwrap();
++    let query = other_site.fetch_current(&mut db, &other_frame, &store, ConstLimits::default());
++    assert!(matches!(
++        site.accept_poll(&db, &frame, &store, &query),
++        ScalarUsePreparation::Ready(Err(_))
++    ));
++    assert_eq!(frame.fuel.snapshot().used, 0);
++}
++#[test]
++fn scalar_site_source_query_revision_and_worker_epoch_require_fresh_capture() {
++    for change_source in [false, true] {
++        let text = "const X:u32=22;fn scalar_use(){let value=X;}fn main(){}";
++        let (mut db, view, definition) = source(text, "X", 2024);
++        let result = result(&db, &view, definition);
++        let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++        let (frame, body, range) = source_frame(&db, &view, text, "X", &mut store);
++        let views = [&view];
++        let path = selected_path(&db, &view, &body, range, &views);
++        let site = ScalarConstantUseSite::capture_current(
++            &db,
++            &frame,
++            &store,
++            ScalarUseSources {
++                caller: &view,
++                views: &views,
++                target: &view,
++                result: &result,
++                path: &path,
++            },
++            MAX_BYTES,
++        )
++        .unwrap();
++        let query = site.fetch_current(&mut db, &frame, &store, ConstLimits::default());
++        if change_source {
++            let revision = db.source_revision();
++            db.begin_expansion_epoch(2).unwrap();
++            assert_eq!(db.source_revision(), revision);
++        } else {
++            store.reset(2).unwrap();
++        }
++        assert!(matches!(
++            site.accept_poll(&db, &frame, &store, &query),
++            ScalarUsePreparation::Ready(Err(_))
++        ));
++        let trace = db.trace.events.len();
++        assert!(matches!(
++            site.fetch_current(&mut db, &frame, &store, ConstLimits::default()),
++            QueryPoll::Ready(Err(_))
++        ));
++        assert_eq!(trace, db.trace.events.len());
++    }
++}
++
++#[test]
++fn scalar_site_foreign_frame_and_changed_pc_refuse_before_opcode_charge() {
++    let text = "const X:u32=22;fn scalar_use(){let value=X;}fn main(){}";
++    let (mut db, view, definition) = source(text, "X", 2024);
++    let result = result(&db, &view, definition);
++    let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++    let (mut frame, body, range) = source_frame(&db, &view, text, "X", &mut store);
++    let views = [&view];
++    let path = selected_path(&db, &view, &body, range, &views);
++    let site = ScalarConstantUseSite::capture_current(
++        &db,
++        &frame,
++        &store,
++        ScalarUseSources {
++            caller: &view,
++            views: &views,
++            target: &view,
++            result: &result,
++            path: &path,
++        },
++        MAX_BYTES,
++    )
++    .unwrap();
++    let query = site.fetch_current(&mut db, &frame, &store, ConstLimits::default());
++    let foreign = Frame::new(frame.body.clone(), frame.pc().clone(), &mut store).unwrap();
++    assert!(matches!(
++        site.accept_poll(&db, &foreign, &store, &query),
++        ScalarUsePreparation::Ready(Err(_))
++    ));
++    frame.pc.phase = Phase::Commit.code().unwrap();
++    assert!(matches!(
++        site.accept_poll(&db, &frame, &store, &query),
++        ScalarUsePreparation::Ready(Err(_))
++    ));
++    assert_eq!(frame.fuel.snapshot().used, 0);
++}
++#[test]
++fn scalar_site_metadata_and_array_readiness_refuse_without_query_or_guest_work() {
++    for (text, name, needle) in [
++        (
++            "const X:u32=22;fn scalar_use(){let value=X;}fn main(){}",
++            "X",
++            "X",
++        ),
++        (
++            "const A:[u8;1]=[25];fn scalar_use(){let value=A;}fn main(){}",
++            "A",
++            "A",
++        ),
++    ] {
++        let (db, view, definition) = source(text, name, 2024);
++        let result = result(&db, &view, definition);
++        let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++        let (frame, body, range) = source_frame(&db, &view, text, needle, &mut store);
++        let views = [&view];
++        let path = selected_path(&db, &view, &body, range, &views);
++        let before = (store.budget().handles(), db.trace.events.len());
++        assert!(
++            ScalarConstantUseSite::capture_current(
++                &db,
++                &frame,
++                &store,
++                ScalarUseSources {
++                    caller: &view,
++                    views: &views,
++                    target: &view,
++                    result: &result,
++                    path: &path
++                },
++                if name == "X" { 1 } else { MAX_BYTES }
++            )
++            .is_err()
++        );
++        assert_eq!(before, (store.budget().handles(), db.trace.events.len()));
++    }
++}
++#[test]
++fn scalar_charge_cancellation_or_exhaustion_never_publishes_reserved_value() {
++    for cancel in [false, true] {
++        let text = "const X:u32=22;fn scalar_use(){let value=X;}fn main(){}";
++        let (mut db, view, definition) = source(text, "X", 2024);
++        let result = result(&db, &view, definition);
++        let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++        let (mut frame, body, range) = source_frame(&db, &view, text, "X", &mut store);
++        let views = [&view];
++        let path = selected_path(&db, &view, &body, range, &views);
++        let site = ScalarConstantUseSite::capture_current(
++            &db,
++            &frame,
++            &store,
++            ScalarUseSources {
++                caller: &view,
++                views: &views,
++                target: &view,
++                result: &result,
++                path: &path,
++            },
++            MAX_BYTES,
++        )
++        .unwrap();
++        let query = site.fetch_current(&mut db, &frame, &store, ConstLimits::default());
++        let recipe = ready(site.accept_poll(&db, &frame, &store, &query));
++        let before = store.budget().handles();
++        let mut charges = 0;
++        if !cancel {
++            frame.fuel = crate::vm::fuel::RunFuel::new(0).unwrap();
++        }
++        assert!(
++            recipe
++                .publish_with_opcode_charge(&mut frame, &mut store, |frame| {
++                    charges += 1;
++                    if cancel {
++                        frame.fuel.cancellation().cancel();
++                    }
++                    frame.fuel.charge()
++                })
++                .is_err()
++        );
++        assert_eq!(charges, 1);
++        assert_eq!(before, store.budget().handles());
++        assert!(frame.cell(site.destination).is_err());
++        assert_eq!(frame.source_view_ref(site.destination).unwrap(), None);
++    }
++}
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs
+@@ -0,0 +1,12 @@
++//@ run-pass
++// Test a call whose argument is the result of another call.
++
++const fn sub(x: u32, y: u32) -> u32 {
++    x - y
++}
++
++const X: u32 = sub(sub(88, 44), 22);
++
++fn main() {
++    assert_eq!(X, 22);
++}
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs
+@@ -0,0 +1,16 @@
++//! Regression test for https://github.com/rust-lang/rust/issues/13763
++
++//@ run-pass
++#![allow(dead_code)]
++
++mod u8 {
++    pub const BITS: usize = 8;
++}
++
++const NUM: usize = u8::BITS;
++
++struct MyStruct { nums: [usize; 8] }
++
++fn main() {
++    let _s = MyStruct { nums: [0; NUM] };
++}

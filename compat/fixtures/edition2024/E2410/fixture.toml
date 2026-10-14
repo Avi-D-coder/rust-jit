@@ -1,0 +1,11 @@
+schema_version=1
+id="E2410"
+category="strict"
+source="main.rs"
+entry="case"
+modes=["off","auto","force"]
+oracle=true
+[expect]
+status="passed"
+stdout="drop:scrutinee\nelse_entered\nafter_if\ndrop:tail\ndrop:local\nafter:7\n"
+stderr=""

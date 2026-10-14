@@ -1,0 +1,11 @@
+schema_version=1
+id="E2404"
+category="strict"
+source="main.rs"
+entry="case"
+modes=["off","auto","force"]
+oracle=true
+[expect]
+status="passed"
+stdout="using:direct:tuple:struct\nblock_end\ndrop:struct\ndrop:tuple\ndrop:direct\n"
+stderr=""

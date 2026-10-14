@@ -1,0 +1,11 @@
+# M013 preparation and validation ownership repair
+
+Explicit macro-server preparation now passes `--target-dir tools/prepared_macro_server/target`, matching its launch path even when a Cargo target is inherited. The build remains gated by explicit tool authority and restricted to the pinned external macro-host server. Two mock-only path/authority controls passed; they do not exercise actual compiler or macro execution. Their before-fix failure and test-fixture path repair are preserved.
+
+The attempted integrated numeric milestone exited 1 and its cached xtask/test binaries were anchored in candidate-source-v5. Its 2060 passed/7 failed project bodies and 144 summaries are observations of that execution, not a MAIN milestone or stock-suite pass. Seven procedural-macro server preparations failed on a missing fixed-path binary. Candidate receipts changed; MAIN receipts stayed at the prior accepted V13 build. The original agent-local outer terminal is unobserved after the user stopped agents; the runner recorded the actual child command exit and hashes, independently inspected by root.
+
+The developer validator now refuses a mismatch against explicit `LRR_VALIDATION_SOURCE_ROOT` before dispatch. Four checkout-ownership controls were authored before production edits; they remain unexecuted. Validation targets must belong to exactly one canonical source root. The next justified macOS Rust1.99.0 gate will use a new MAIN-owned target, record actual terminal/log/source evidence and preserve all failures. Host debug information is disabled to bound disk usage; optimization stays zero and test/debug assertions and unwind semantics stay enabled. Macro deadlines remain 10 seconds per invocation and 60 cumulative.
+
+M013 is reopened and release_complete=false. M017 candidate10218975 remains frozen and unexecuted. No full rustc fixture, full M017, release, JIT or Linux acceptance is established.
+
+The replacement MAIN milestone is now accepted: actual22217/0,2,421 unfiltered project bodies/181 summaries, fresh MAIN gates00–03, all seven formerly failing preparations and four new ownership controls once on unchanged8068a263. Root review12252b/0 followed independent collection2e7673/0 and actual terminal197a88/0. M013 component status is restored to complete; release_complete remains false and full fixture/integration obligations are unchanged.

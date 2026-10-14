@@ -1,0 +1,7 @@
+Frozen source-only Box source eligibility packet, M032/WT06-05 in_progress. Actual source/header/member/inventory/namespace records and exact Unit Call/projection sites are implemented; successful eligibility remains an opaque RequiredBoxCompilerFacet, not execution approval. See ROOT-HOOKS.md for precise existing-API and missing compiler/prelude/type/goal/runtime joins.
+
+Apply production.patch + module-attachments.patch + acceptance.patch + originals.patch (complete.patch reproduces the same candidate). The read-only root-owned SourceView bridge is a separate source-bridge-attachment.patch. Generic selected-library/schema29 prerequisites are referenced, not reimplemented. Current canonical has no such library leaf; all frontend current-library success paths remain uncompiled/unexercised until those prerequisites and actual source preparation are assembled.
+
+Eleven new controls are uncompiled/unexecuted; twelve upstream source/license files are unchanged. No Cargo/compiler/guest/native or target/canonical edits. Zero runtime-contract/full-stock passes; imported source/declaration observations do not count as actual interpreter execution. All earlier frozen Box/array/Vec/pattern packets remain immutable.
+
+Actual static cbcb77/exit0. Complete patch 50f083099903ae547db5a06adb6c8b0628ad2f8a786ffe96d9f1e39fc22ec786; separate source bridge b96a34f5f51e60e3d989fc35f27866113b97efe39e2c90176720a15eefdc93ad; manifest 25086b0d6d0b428e27c9d82e38b3e06b5265223e957e7b22e2bb443434569ec0; receipt d5810b8abc7d7d2fff0e9f3b9f20ec2a9a80ecac9631480d538d508e6e836160.

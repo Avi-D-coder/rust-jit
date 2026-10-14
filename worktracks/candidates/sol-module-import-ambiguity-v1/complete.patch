@@ -1,0 +1,780 @@
+diff --git a/crates/lrr/src/frontend/names.rs b/crates/lrr/src/frontend/names.rs
+--- a/crates/lrr/src/frontend/names.rs
++++ b/crates/lrr/src/frontend/names.rs
+@@ -278,6 +278,8 @@
+     manual_glob_bytes: usize,
+     generated_frontier_bytes: usize,
+     extern_alias_bytes: usize,
++    named_module_bytes: usize,
++    named_module_routes: usize,
+     source_proofs: std::collections::BTreeMap<crate::db::key::OutlineKey, Digest>,
+     values: MacroNamespaces,
+     types: MacroNamespaces,
+@@ -289,6 +291,10 @@
+     modules: std::collections::BTreeSet<Digest>,
+     deferred_imports: std::collections::BTreeSet<Digest>,
+     module_aliases: std::collections::BTreeMap<NamePath, super::module_paths::ModulePath>,
++    named_module_links: std::collections::BTreeMap<
++        NamePath,
++        std::collections::BTreeSet<super::module_paths::ModulePath>,
++    >,
+     candidate_globs: std::collections::BTreeSet<Digest>,
+     macro_import_facets: std::collections::BTreeMap<Digest, NameDefinition>,
+     glob_module_links: std::collections::BTreeMap<NamePath, std::collections::BTreeSet<NamePath>>,
+@@ -992,6 +998,50 @@
+             ));
+         }
+         self.macro_import_facets.insert(id, definition);
++        Ok(())
++    }
++    fn retain_named_module_route(
++        &mut self,
++        destination: NamePath,
++        target: super::module_paths::ModulePath,
++    ) -> Result<(), Diagnostic> {
++        if self
++            .named_module_links
++            .get(&destination)
++            .is_some_and(|old| old.contains(&target))
++        {
++            return Ok(());
++        }
++        let fail = || {
++            Diagnostic::new(
++                "LRR-E-SOURCE-LIMIT",
++                "ordinary named module route budget".into(),
++            )
++        };
++        let routes = self
++            .named_module_routes
++            .checked_add(1)
++            .filter(|n| *n <= 100_000)
++            .ok_or_else(fail)?;
++        let added = [destination.components(), &target.names]
++            .into_iter()
++            .flatten()
++            .try_fold(256usize, |n, name| {
++                n.checked_add(std::mem::size_of::<MacroName>())?
++                    .checked_add(name.as_str().len())
++            })
++            .ok_or_else(fail)?;
++        let bytes = self
++            .named_module_bytes
++            .checked_add(added)
++            .filter(|n| *n <= 32 * 1024 * 1024)
++            .ok_or_else(fail)?;
++        self.named_module_links
++            .entry(destination)
++            .or_default()
++            .insert(target);
++        self.named_module_routes = routes;
++        self.named_module_bytes = bytes;
+         Ok(())
+     }
+     /// Resolve named item and disclosed module imports. Other forms retain a frontier.
+@@ -1043,7 +1093,7 @@
+                         *edition,
+                     )?;
+                     for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
+-                        self.table_mut(namespace).module_paths.alias(
++                        self.table_mut(namespace).module_paths.imported_alias(
+                             super::module_paths::ModulePath {
+                                 unit: destination.unit,
+                                 names: names.clone(),
+@@ -1052,7 +1102,7 @@
+                             visibility.clone(),
+                         )?;
+                     }
+-                    self.module_aliases.insert(destination, root);
++                    self.retain_named_module_route(destination, root)?;
+                     root_imports.insert(*identity);
+                 }
+                 continue;
+@@ -1157,14 +1207,13 @@
+                         names: destination.components().to_vec(),
+                     };
+                     for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
+-                        self.table_mut(namespace).module_paths.alias(
++                        self.table_mut(namespace).module_paths.imported_alias(
+                             destination_module.clone(),
+                             target_module.clone(),
+                             visibility.clone(),
+                         )?;
+                     }
+-                    self.module_aliases
+-                        .insert(destination.clone(), target_module);
++                    self.retain_named_module_route(destination.clone(), target_module)?;
+                     installed.insert(*identity);
+                 }
+             }
+@@ -1228,6 +1277,7 @@
+             let mut pending = false;
+             let mut denied = module_denied.contains(&identity);
+             let mut ambiguous = false;
++            let mut settled_destination_ambiguity = false;
+             for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
+                 if namespace == Namespace::Macro && self.macro_import_facets.contains_key(&identity)
+                 {
+@@ -1262,7 +1312,10 @@
+                             {
+                                 PathLookup::Defined(_) => ready = true,
+                                 PathLookup::Inaccessible(_) => denied = true,
+-                                PathLookup::Ambiguous(_) => ambiguous = true,
++                                PathLookup::Ambiguous(_) => {
++                                    ambiguous = true;
++                                    settled_destination_ambiguity = true;
++                                }
+                                 PathLookup::NeedInput(_) => pending = true,
+                                 PathLookup::Absent => pending = true,
+                             }
+@@ -1279,6 +1332,14 @@
+                 result.pending.push(identity);
+             } else if ambiguous {
+                 result.ambiguous.push(identity);
++                // Only a completed collision of individually selected current
++                // source imports discharges the destination producer. Unsettled
++                // target ambiguity and unknown producers retain their frontier.
++                if settled_destination_ambiguity
++                    && let Some(frontier) = self.frontiers.get_mut(&import.scope)
++                {
++                    frontier.remove(&identity);
++                }
+             } else if denied && !ready {
+                 result.inaccessible.push(identity);
+             } else if !ready {
+@@ -1376,7 +1437,7 @@
+             e.digest(path.unit);
+             e.sequence(path.components(), |e, n| e.string(n.as_str()));
+         }
+-        let mut e = StableEncoder::new("lrr/v3/ordinary-import-convergence");
++        let mut e = StableEncoder::new("lrr/v4/ordinary-import-convergence");
+         for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
+             e.u32(namespace.tag());
+             self.table(namespace).encode_compiler_imports(&mut e);
+@@ -1410,6 +1471,16 @@
+                 path(e, from);
+                 e.digest(to.unit);
+                 e.sequence(&to.names, |e, n| e.string(n.as_str()));
++            },
++        );
++        e.sequence(
++            &self.named_module_links.iter().collect::<Vec<_>>(),
++            |e, (from, targets)| {
++                path(e, from);
++                e.sequence(&targets.iter().collect::<Vec<_>>(), |e, to| {
++                    e.digest(to.unit);
++                    e.sequence(&to.names, |e, n| e.string(n.as_str()));
++                });
+             },
+         );
+         e.sequence(
+@@ -1936,7 +2007,12 @@
+                         stack.push(NamePath::new(target.unit, names)?);
+                     }
+                 }
+-                if let Some(target) = self.module_aliases.get(&alias) {
++                for target in self.module_aliases.get(&alias).into_iter().chain(
++                    self.named_module_links
++                        .get(&alias)
++                        .into_iter()
++                        .flat_map(|targets| targets.iter()),
++                ) {
+                     let mut names = target.names.clone();
+                     names.extend_from_slice(&path.components()[length..]);
+                     if names.is_empty() {
+diff --git a/crates/lrr/src/frontend/module_paths.rs b/crates/lrr/src/frontend/module_paths.rs
+--- a/crates/lrr/src/frontend/module_paths.rs
++++ b/crates/lrr/src/frontend/module_paths.rs
+@@ -133,6 +133,8 @@
+ enum Binding {
+     Declared(VisibilityScope),
+     Alias(Alias),
++    // Only the ordinary source-import lane can collect competing routes.
++    ImportedAliases(Vec<Alias>),
+ }
+ #[derive(Clone, Default)]
+ pub(crate) struct ModulePaths {
+@@ -140,6 +142,7 @@
+     weak: BTreeMap<ModulePath, BTreeMap<ModulePath, BTreeSet<VisibilityScope>>>,
+     bytes: usize,
+     weak_bytes: usize,
++    imported_aliases: usize,
+ }
+ pub(crate) enum Resolution {
+     Known(MacroPath),
+@@ -290,6 +293,95 @@
+                 origin,
+             }),
+         );
++        Ok(())
++    }
++    /// Retain actual ordinary import routes without relaxing compiler aliases.
++    /// The caller has already selected each source module and checked reexport
++    /// width. The original route/origin remains necessary for subsequent walks.
++    pub(crate) fn imported_alias(
++        &mut self,
++        path: ModulePath,
++        target: ModulePath,
++        visibility: VisibilityScope,
++    ) -> Result<(), Diagnostic> {
++        ModulePath::validate_components(&path.names)?;
++        ModulePath::validate_components(&target.names)?;
++        if path.names.is_empty() {
++            return Err(error("imported module alias has no binding name"));
++        }
++        let owner = origin(&path);
++        visibility.validate_for_declaration(&owner)?;
++        match self.bindings.get(&path) {
++            Some(Binding::Declared(_)) | Some(Binding::Alias(_)) => {
++                // Extern/compiler/source declaration corruption remains strict.
++                return self.alias(path, target, visibility);
++            }
++            Some(Binding::ImportedAliases(aliases)) => {
++                if aliases.iter().any(|old| {
++                    old.target == target && old.visibility == visibility && old.origin == owner
++                }) {
++                    return Ok(());
++                }
++                if aliases.iter().any(|old| old.target == target) {
++                    return Err(error("conflicting imported module alias provenance"));
++                }
++            }
++            None => {
++                if self.bindings.len() >= 1_000_000 {
++                    return Err(error("module header limit exceeded"));
++                }
++            }
++        }
++        let count = self
++            .imported_aliases
++            .checked_add(1)
++            .filter(|n| *n <= 100_000)
++            .ok_or_else(|| error("imported module alias count exceeded"))?;
++        let mut budget = Self::default();
++        budget.charge(&path)?;
++        budget.charge(&target)?;
++        budget.charge_visibility(&visibility)?;
++        let mut added = budget
++            .bytes
++            .checked_add(std::mem::size_of::<Alias>() + std::mem::size_of::<ScopeKey>() + 128)
++            .ok_or_else(|| error("imported module alias metadata overflow"))?;
++        for name in &owner.module_path {
++            added = added
++                .checked_add(name.len())
++                .and_then(|n| n.checked_add(std::mem::size_of::<String>()))
++                .ok_or_else(|| error("imported module origin metadata overflow"))?;
++        }
++        let bytes = self
++            .bytes
++            .checked_add(added)
++            .filter(|n| *n <= 32 * 1024 * 1024)
++            .ok_or_else(|| error("imported module alias metadata budget exceeded"))?;
++        let alias = Alias {
++            target,
++            visibility,
++            origin: owner,
++        };
++        match self.bindings.get_mut(&path) {
++            Some(Binding::ImportedAliases(aliases)) => {
++                aliases
++                    .try_reserve_exact(1)
++                    .map_err(|_| error("imported module alias allocation failed"))?;
++                aliases.push(alias);
++                aliases.sort_by(|a, b| a.target.cmp(&b.target));
++            }
++            None => {
++                let mut aliases = Vec::new();
++                aliases
++                    .try_reserve_exact(1)
++                    .map_err(|_| error("imported module alias allocation failed"))?;
++                aliases.push(alias);
++                self.bindings
++                    .insert(path, Binding::ImportedAliases(aliases));
++            }
++            _ => return Err(error("imported module alias changed during admission")),
++        }
++        self.bytes = bytes;
++        self.imported_aliases = count;
+         Ok(())
+     }
+     pub(crate) fn member_candidates(
+@@ -519,7 +611,7 @@
+                 frame.final_visibility = visibility;
+                 continue;
+             };
+-            match binding {
++            let alias = match binding {
+                 Binding::Declared(visibility) => {
+                     if let Some(caller) = frame.caller
+                         && !visibility.allows(caller)?
+@@ -527,44 +619,69 @@
+                         return Ok(ModuleResolution::Denied(key.clone()));
+                     }
+                     frame.final_visibility = visibility;
+-                }
+-                Binding::Alias(alias) => {
+-                    if let Some(caller) = frame.caller
+-                        && !alias.visibility.allows(caller)?
+-                    {
++                    continue;
++                }
++                Binding::Alias(alias) => alias,
++                Binding::ImportedAliases(aliases) => {
++                    let mut selected = None;
++                    let mut visible = Vec::new();
++                    let mut budget = Self::default();
++                    for alias in aliases {
++                        if let Some(caller) = frame.caller
++                            && !alias.visibility.allows(caller)?
++                        {
++                            continue;
++                        }
++                        budget.charge(&alias.target)?;
++                        visible.try_reserve_exact(1).map_err(|_| {
++                            error("ambiguous imported module path allocation failed")
++                        })?;
++                        visible.push(alias.target.clone());
++                        selected = Some(alias);
++                    }
++                    if visible.len() > 1 {
++                        return Ok(ModuleResolution::Ambiguous(visible));
++                    }
++                    let Some(alias) = selected else {
+                         return Ok(ModuleResolution::Denied(key.clone()));
+-                    }
+-                    if !active.insert(key) {
+-                        return Err(error("module path alias cycle"));
+-                    }
+-                    if !self.bindings.contains_key(&ModulePath {
+-                        unit: alias.target.unit,
+-                        names: vec![],
+-                    }) {
+-                        return Ok(ModuleResolution::Absent);
+-                    }
+-                    frame.final_visibility = &alias.visibility;
+-                    let checked = frame.caller.is_some();
+-                    if frames.len() >= 100_000 {
+-                        return Err(error("module path frame limit exceeded"));
+-                    }
+-                    frames
+-                        .try_reserve(1)
+-                        .map_err(|_| error("module path frame allocation failed"))?;
+-                    frames.push(Frame {
+-                        names: &alias.target.names,
+-                        position: 0,
+-                        current: ModulePath {
+-                            unit: alias.target.unit,
+-                            names: vec![],
+-                        },
+-                        caller: checked.then_some(&alias.origin),
+-                        required: checked.then_some(&alias.visibility),
+-                        final_visibility: &PUBLIC,
+-                        active: Some(key),
+-                    });
+-                }
+-            }
+-        }
+-    }
+-}
++                    };
++                    alias
++                }
++            };
++            if let Some(caller) = frame.caller
++                && !alias.visibility.allows(caller)?
++            {
++                return Ok(ModuleResolution::Denied(key.clone()));
++            }
++            if !active.insert(key) {
++                return Err(error("module path alias cycle"));
++            }
++            if !self.bindings.contains_key(&ModulePath {
++                unit: alias.target.unit,
++                names: vec![],
++            }) {
++                return Ok(ModuleResolution::Absent);
++            }
++            frame.final_visibility = &alias.visibility;
++            let checked = frame.caller.is_some();
++            if frames.len() >= 100_000 {
++                return Err(error("module path frame limit exceeded"));
++            }
++            frames
++                .try_reserve(1)
++                .map_err(|_| error("module path frame allocation failed"))?;
++            frames.push(Frame {
++                names: &alias.target.names,
++                position: 0,
++                current: ModulePath {
++                    unit: alias.target.unit,
++                    names: vec![],
++                },
++                caller: checked.then_some(&alias.origin),
++                required: checked.then_some(&alias.visibility),
++                final_visibility: &PUBLIC,
++                active: Some(key),
++            });
++        }
++    }
++}
+diff --git a/crates/lrr/src/frontend/names_import_ambiguity_tests.rs b/crates/lrr/src/frontend/names_import_ambiguity_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/names_import_ambiguity_tests.rs
+@@ -0,0 +1,145 @@
++//! Original import ambiguity component; no compiler diagnostics/runtime pass claim.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    source::snapshot::{CfgSet, SourceBlob},
++    syntax::parse::ParsedFile,
++};
++use std::collections::BTreeSet;
++const ORIGINAL: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/imports/issue-25396.rs");
++fn graph(text: &str, edition: u16) -> (crate::syntax::outline::Outline, NameNamespaces) {
++    let profile = ProfileIdentity {
++        edition,
++        ..ProfileIdentity::current()
++    };
++    let parsed =
++        ParsedFile::parse(&SourceBlob::new(text.as_bytes().to_vec()).unwrap(), profile).unwrap();
++    let outline = parsed
++        .outline(
++            Digest::of_bytes(b"source module ambiguity"),
++            vec![],
++            &CfgSet::guest_default(),
++        )
++        .unwrap();
++    let names = NameNamespaces::from_outlines(&[&outline]).unwrap();
++    (outline, names)
++}
++#[test]
++fn unchanged_distinct_module_imports_preserve_value_and_type_ambiguities_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (outline, mut names) = graph(ORIGINAL, edition);
++        let resolution = names.resolve_imports().unwrap();
++        assert!(!resolution.ambiguous.is_empty());
++        assert!(resolution.pending.is_empty());
++        assert!(resolution.missing.is_empty());
++        for (namespace, name) in [
++            (Namespace::Value, "WOMP"),
++            (Namespace::Type, "baz"),
++            (Namespace::Type, "Quux"),
++            (Namespace::Type, "blah"),
++        ] {
++            let NameLookup::Ambiguous(found) = names
++                .lookup_unqualified(namespace, name, &outline.root_scope, edition, None)
++                .unwrap()
++            else {
++                panic!("exact original competing imports were not preserved")
++            };
++            let expected: BTreeSet<_> = outline
++                .items
++                .iter()
++                .filter(|i| i.def_key.declared_name == name)
++                .map(|i| i.def_key.fingerprint())
++                .collect();
++            let actual: BTreeSet<_> = found
++                .iter()
++                .map(|d| {
++                    assert_eq!(d.namespace, namespace);
++                    assert_eq!(d.definition_edition, edition);
++                    assert_eq!(d.defining_unit, outline.root_scope.crate_key);
++                    d.identity
++                })
++                .collect();
++            assert_eq!(actual, expected);
++            assert_eq!(actual.len(), 2);
++        }
++    }
++}
++const PREFIX: &str = "use foo::baz;use bar::baz;mod foo{pub mod baz{pub const X:u8=1;}}mod bar{pub mod baz{pub const X:u8=2;}}fn main(){}";
++#[test]
++fn qualified_imported_module_prefix_is_typed_ambiguous_not_first_route() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (outline, mut names) = graph(PREFIX, edition);
++        names.resolve_imports().unwrap();
++        let path =
++            NameNamespaces::path(outline.root_scope.crate_key, &["baz", "X"], edition).unwrap();
++        let NameLookup::AmbiguousModules(found) = names
++            .lookup(Namespace::Value, &path, &outline.root_scope)
++            .unwrap()
++        else {
++            panic!("competing source modules must not select X")
++        };
++        let expected = BTreeSet::from([
++            NameNamespaces::path(outline.root_scope.crate_key, &["foo", "baz"], edition).unwrap(),
++            NameNamespaces::path(outline.root_scope.crate_key, &["bar", "baz"], edition).unwrap(),
++        ]);
++        assert_eq!(found.into_iter().collect::<BTreeSet<_>>(), expected);
++    }
++}
++#[test]
++fn repeated_source_import_fixed_point_retains_routes_once() {
++    let (_, mut names) = graph(ORIGINAL, 2024);
++    let first = names.resolve_imports().unwrap();
++    let before = (
++        names.named_module_routes,
++        names.named_module_bytes,
++        names.import_state(),
++    );
++    for _ in 0..3 {
++        let result = names.resolve_imports().unwrap();
++        assert_eq!(result.ambiguous, first.ambiguous);
++        assert_eq!(
++            (
++                names.named_module_routes,
++                names.named_module_bytes,
++                names.import_state()
++            ),
++            before
++        );
++    }
++    assert_eq!(names.named_module_routes, 2);
++}
++#[test]
++fn genuine_unknown_producer_on_either_import_route_remains_need_input() {
++    for module in ["foo", "bar"] {
++        let (outline, mut names) = graph(PREFIX, 2024);
++        names.resolve_imports().unwrap();
++        let producer = Digest::of_bytes(module.as_bytes());
++        let scope = ScopeKey {
++            crate_key: outline.root_scope.crate_key,
++            module_path: vec![module.into(), "baz".into()],
++            owner: None,
++        };
++        names.reserve_generated_frontier(scope, producer).unwrap();
++        let path = NameNamespaces::path(outline.root_scope.crate_key, &["baz", "X"], 2024).unwrap();
++        assert!(
++            matches!(names.lookup(Namespace::Value,&path,&outline.root_scope).unwrap(),NameLookup::NeedInput(actual) if actual==producer)
++        );
++    }
++}
++#[test]
++fn unresolved_original_import_does_not_become_completed_destination_ambiguity() {
++    let (outline, mut names) = graph(
++        "use missing::baz;use foo::baz;mod foo{pub mod baz{pub const X:u8=1;}}fn main(){}",
++        2024,
++    );
++    let result = names.resolve_imports().unwrap();
++    assert!(!result.pending.is_empty() || !result.missing.is_empty());
++    let path = NameNamespaces::path(outline.root_scope.crate_key, &["baz", "X"], 2024).unwrap();
++    assert!(matches!(
++        names
++            .lookup(Namespace::Value, &path, &outline.root_scope)
++            .unwrap(),
++        NameLookup::NeedInput(_)
++    ));
++}
+diff --git a/crates/lrr/src/frontend/module_paths_import_tests.rs b/crates/lrr/src/frontend/module_paths_import_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/module_paths_import_tests.rs
+@@ -0,0 +1,184 @@
++//! Private registry invariants complement actual original source import controls.
++use super::*;
++fn path(unit: Digest, names: &[&str]) -> ModulePath {
++    ModulePath {
++        unit,
++        names: names
++            .iter()
++            .map(|n| MacroName::parse(n, 2024).unwrap())
++            .collect(),
++    }
++}
++fn registry() -> (ModulePaths, Digest, ModulePath, ModulePath, ModulePath) {
++    let unit = Digest([98; 32]);
++    let a = path(unit, &["a"]);
++    let b = path(unit, &["b"]);
++    let dest = path(unit, &["alias"]);
++    let mut registry = ModulePaths::default();
++    for p in [path(unit, &[]), a.clone(), b.clone()] {
++        registry.declare(p, VisibilityScope::Public).unwrap();
++    }
++    (registry, unit, a, b, dest)
++}
++#[test]
++fn actual_import_routes_and_original_origin_retained_exactly_once() {
++    let (mut registry, unit, a, b, dest) = registry();
++    registry
++        .imported_alias(dest.clone(), a.clone(), VisibilityScope::Public)
++        .unwrap();
++    let bytes = registry.bytes;
++    registry
++        .imported_alias(dest.clone(), a.clone(), VisibilityScope::Public)
++        .unwrap();
++    assert_eq!(bytes, registry.bytes);
++    assert_eq!(registry.imported_aliases, 1);
++    registry
++        .imported_alias(dest.clone(), b.clone(), VisibilityScope::Public)
++        .unwrap();
++    let bytes = registry.bytes;
++    registry
++        .imported_alias(dest.clone(), b.clone(), VisibilityScope::Public)
++        .unwrap();
++    assert_eq!(bytes, registry.bytes);
++    let Binding::ImportedAliases(aliases) = registry.bindings.get(&dest).unwrap() else {
++        panic!()
++    };
++    assert_eq!(aliases.len(), 2);
++    for alias in aliases {
++        assert_eq!(
++            alias.origin,
++            ScopeKey {
++                crate_key: unit,
++                module_path: vec![],
++                owner: None
++            }
++        );
++    }
++    let ModuleResolution::Ambiguous(found) = registry.resolve_module(&dest, None).unwrap() else {
++        panic!()
++    };
++    assert_eq!(
++        found.into_iter().collect::<BTreeSet<_>>(),
++        BTreeSet::from([a, b])
++    );
++}
++#[test]
++fn compiler_alias_and_declaration_provenance_are_still_strict() {
++    let (mut registry, _, a, b, dest) = registry();
++    registry
++        .alias(dest.clone(), a.clone(), VisibilityScope::Public)
++        .unwrap();
++    assert!(
++        registry
++            .alias(dest.clone(), b.clone(), VisibilityScope::Public)
++            .is_err()
++    );
++    assert!(
++        registry
++            .imported_alias(dest, b, VisibilityScope::Public)
++            .is_err()
++    );
++    assert!(
++        registry
++            .imported_alias(a.clone(), a, VisibilityScope::Public)
++            .is_err()
++    );
++}
++#[test]
++fn competing_private_import_does_not_grant_outside_access() {
++    let (mut registry, unit, a, b, dest) = registry();
++    registry
++        .imported_alias(dest.clone(), a.clone(), VisibilityScope::Public)
++        .unwrap();
++    registry
++        .imported_alias(
++            dest.clone(),
++            b,
++            VisibilityScope::Within {
++                unit,
++                module_path: vec![],
++            },
++        )
++        .unwrap();
++    let outside = ScopeKey {
++        crate_key: Digest([99; 32]),
++        module_path: vec![],
++        owner: None,
++    };
++    assert!(
++        matches!(registry.resolve_module(&dest,Some(&outside)).unwrap(),ModuleResolution::Known{path,..} if path==a)
++    );
++}
++#[test]
++fn imported_alias_still_checks_original_target_reexport_width() {
++    let (mut registry, unit, _, _, dest) = registry();
++    let hidden = path(unit, &["private"]);
++    registry
++        .declare(
++            hidden.clone(),
++            VisibilityScope::Within {
++                unit,
++                module_path: vec![],
++            },
++        )
++        .unwrap();
++    registry
++        .imported_alias(dest.clone(), hidden, VisibilityScope::Public)
++        .unwrap();
++    let root = ScopeKey {
++        crate_key: unit,
++        module_path: vec![],
++        owner: None,
++    };
++    assert!(matches!(
++        registry.resolve_module(&dest, Some(&root)).unwrap(),
++        ModuleResolution::Denied(_)
++    ));
++}
++#[test]
++fn metadata_and_count_refusal_install_no_unowned_import_route() {
++    let (mut registry, _, a, _, dest) = registry();
++    registry.bytes = 32 * 1024 * 1024;
++    let before = registry.bindings.len();
++    assert!(
++        registry
++            .imported_alias(dest.clone(), a, VisibilityScope::Public)
++            .is_err()
++    );
++    assert_eq!(registry.bindings.len(), before);
++    assert_eq!(registry.imported_aliases, 0);
++    assert!(!registry.bindings.contains_key(&dest));
++    assert_eq!(registry.bytes, 32 * 1024 * 1024);
++    let (mut registry, _, a, _, dest) = registry();
++    registry.imported_aliases = 100_000;
++    let bytes = registry.bytes;
++    assert!(
++        registry
++            .imported_alias(dest.clone(), a, VisibilityScope::Public)
++            .is_err()
++    );
++    assert_eq!(registry.bytes, bytes);
++    assert!(!registry.bindings.contains_key(&dest));
++}
++#[test]
++fn differing_visibility_for_same_import_route_is_not_silently_rewritten() {
++    let (mut registry, unit, a, _, dest) = registry();
++    registry
++        .imported_alias(dest.clone(), a.clone(), VisibilityScope::Public)
++        .unwrap();
++    let bytes = registry.bytes;
++    assert!(
++        registry
++            .imported_alias(
++                dest,
++                a,
++                VisibilityScope::Within {
++                    unit,
++                    module_path: vec![]
++                }
++            )
++            .is_err()
++    );
++    assert_eq!(bytes, registry.bytes);
++    assert_eq!(registry.imported_aliases, 1);
++}
+diff --git a/crates/lrr/src/frontend/names.rs b/crates/lrr/src/frontend/names.rs
+--- a/crates/lrr/src/frontend/names.rs
++++ b/crates/lrr/src/frontend/names.rs
+@@ -2548,3 +2548,7 @@
+         );
+     }
+ }
++
++#[cfg(test)]
++#[path = "names_import_ambiguity_tests.rs"]
++mod names_import_ambiguity_tests;
+diff --git a/crates/lrr/src/frontend/module_paths.rs b/crates/lrr/src/frontend/module_paths.rs
+--- a/crates/lrr/src/frontend/module_paths.rs
++++ b/crates/lrr/src/frontend/module_paths.rs
+@@ -685,3 +685,7 @@
+         }
+     }
+ }
++
++#[cfg(test)]
++#[path = "module_paths_import_tests.rs"]
++mod module_paths_import_tests;

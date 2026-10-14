@@ -1,0 +1,11 @@
+schema_version=1
+id="E2402"
+category="strict"
+source="main.rs"
+entry="case"
+modes=["off","auto","force"]
+oracle=true
+[expect]
+status="passed"
+stdout="borrowed:scrutinee\ndrop:consequent\ndrop:scrutinee\nafter_if\n"
+stderr=""

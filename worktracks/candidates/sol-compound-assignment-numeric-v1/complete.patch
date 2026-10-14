@@ -1,0 +1,791 @@
+--- a/crates/lrr/src/syntax/thunks.rs
++++ b/crates/lrr/src/syntax/thunks.rs
+@@ -231,6 +231,94 @@
+     }
+     Ok(hint(Some(ty)))
+ }
++/// Intrinsic literal source types are independent of printed type names and
++/// runtime substitution. This proof reads no digits, values, descriptors or
++/// later uses; an unsuffixed literal is deliberately not closed by fallback.
++fn compound_intrinsic_initializer(
++    mut expression: ast::Expr,
++) -> Result<Option<PrimitiveType>, Diagnostic> {
++    fn suffix(suffix: Option<&str>) -> Option<PrimitiveType> {
++        Some(match suffix? {
++            "i8" => PrimitiveType::I8,
++            "i16" => PrimitiveType::I16,
++            "i32" => PrimitiveType::I32,
++            "i64" => PrimitiveType::I64,
++            "isize" => PrimitiveType::Isize,
++            "u8" => PrimitiveType::U8,
++            "u16" => PrimitiveType::U16,
++            "u32" => PrimitiveType::U32,
++            "u64" => PrimitiveType::U64,
++            "usize" => PrimitiveType::Usize,
++            "f32" => PrimitiveType::F32,
++            "f64" => PrimitiveType::F64,
++            _ => return None,
++        })
++    }
++    let mut negative = false;
++    let mut inverted = false;
++    for _ in 0..256 {
++        if expression
++            .syntax()
++            .children()
++            .any(|node| ast::Attr::can_cast(node.kind()))
++        {
++            return Ok(None);
++        }
++        match expression {
++            ast::Expr::ParenExpr(group) => {
++                let Some(inner) = group.expr() else {
++                    return Ok(None);
++                };
++                expression = inner;
++            }
++            ast::Expr::PrefixExpr(prefix) => {
++                match prefix.op_token().as_ref().map(|token| token.text()) {
++                    Some("-") => negative = true,
++                    Some("!") => inverted = true,
++                    _ => return Ok(None),
++                }
++                let Some(inner) = prefix.expr() else {
++                    return Ok(None);
++                };
++                expression = inner;
++            }
++            ast::Expr::Literal(literal) => {
++                let token = literal.token();
++                let primitive = match token.kind() {
++                    SyntaxKind::INT_NUMBER => {
++                        ast::IntNumber::cast(token).and_then(|number| suffix(number.suffix()))
++                    }
++                    SyntaxKind::FLOAT_NUMBER => {
++                        ast::FloatNumber::cast(token).and_then(|number| suffix(number.suffix()))
++                    }
++                    _ => None,
++                };
++                let Some(primitive) = primitive else {
++                    return Ok(None);
++                };
++                if negative
++                    && matches!(
++                        primitive,
++                        PrimitiveType::U8
++                            | PrimitiveType::U16
++                            | PrimitiveType::U32
++                            | PrimitiveType::U64
++                            | PrimitiveType::Usize
++                    )
++                    || inverted && matches!(primitive, PrimitiveType::F32 | PrimitiveType::F64)
++                {
++                    return Ok(None);
++                }
++                return Ok(Some(primitive));
++            }
++            _ => return Ok(None),
++        }
++    }
++    Err(Diagnostic::new(
++        "LRR-E-BODY-INDEX-LIMIT",
++        "compound intrinsic initializer source nesting budget".into(),
++    ))
++}
+ fn compound_local_primitive(
+     parsed: &ParsedFile,
+     index: &BodyIndex,
+@@ -264,11 +352,45 @@
+     let Some(statement) = statement else {
+         return Ok(None);
+     };
+-    let Some(HintRecipe::Primitive(ty)) = annotation_hint(parsed, statement.ty(), body.def_key)?
+-    else {
++    if statement.ty().is_some() {
++        let Some(HintRecipe::Primitive(ty)) =
++            annotation_hint(parsed, statement.ty(), body.def_key)?
++        else {
++            return Ok(None);
++        };
++        return Ok(Some((binding, ty)));
++    }
++    // The indexed owning pattern must be a value binding, not an implicit
++    // reference or at-pattern. Generated/attributed owners need their own proof.
++    let Some(ast::Pat::IdentPat(pattern)) = statement.pat() else {
+         return Ok(None);
+     };
+-    Ok(Some((binding, ty)))
++    let (enabled, attributed) = statement_cfg(statement.syntax(), index.cfg())?;
++    if !enabled
++        || attributed
++        || parsed.generated_origin.is_some()
++        || pattern.ref_token().is_some()
++        || pattern.at_token().is_some()
++    {
++        return Ok(None);
++    }
++    let Some(initializer) = statement.initializer() else {
++        return Ok(None);
++    };
++    let range = initializer.syntax().text_range();
++    for (work, error) in parsed.errors.iter().enumerate() {
++        if work >= 100_000 {
++            return Err(Diagnostic::new(
++                "LRR-E-BODY-INDEX-LIMIT",
++                "compound initializer diagnostic source work budget".into(),
++            ));
++        }
++        if error.range.start < u32::from(range.end()) && error.range.end > u32::from(range.start())
++        {
++            return Ok(None);
++        }
++    }
++    Ok(compound_intrinsic_initializer(initializer)?.map(|ty| (binding, ty)))
+ }
+ fn compound_rhs_primitive(
+     parsed: &ParsedFile,
+--- /dev/null
++++ b/crates/lrr/src/syntax/compound_numeric_source_tests.rs
+@@ -0,0 +1,185 @@
++//! Source-only compound assignment admission controls, testing pending.
++use super::*;
++use crate::{
++    core::{digest::Digest, profile::ProfileIdentity},
++    ir::op::AssignKind,
++    source::snapshot::{CfgSet, SourceBlob},
++    syntax::body_index::BodyIndexLimits,
++};
++const LOOP: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/for-loop-while/loop-break-cont.rs"
++);
++const REFERENCE: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/binop/compound-assign-by-ref.rs"
++);
++fn world(text: &str, edition: u16) -> (ParsedFile, BodyHandle, BodyIndex) {
++    let parsed = ParsedFile::parse(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++    )
++    .unwrap();
++    let outline = parsed
++        .outline(
++            Digest::of_bytes(b"LRR compound source world"),
++            vec![],
++            &CfgSet::guest_default(),
++        )
++        .unwrap();
++    let handle = outline
++        .items
++        .iter()
++        .find(|item| item.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap()
++        .clone();
++    let index = parsed
++        .index_body(&handle, BodyIndexLimits::default())
++        .unwrap();
++    (parsed, handle, index)
++}
++fn at(index: &BodyIndex, handle: &BodyHandle, absolute: usize, written: &str) -> NodeId {
++    let start = u32::try_from(absolute).unwrap() - handle.range.start;
++    index
++        .nodes()
++        .iter()
++        .find(|node| {
++            node.range.start == start
++                && node.range.end == start + u32::try_from(written.len()).unwrap()
++        })
++        .unwrap()
++        .id
++}
++fn entry(text: &str, edition: u16, written: &str) -> Result<VerifiedRecipe, Diagnostic> {
++    let (parsed, handle, index) = world(text, edition);
++    let id = at(&index, &handle, text.find(written).unwrap(), written);
++    parsed.initial_thunk(&handle, &index, &index.pc(id, Phase::Entry).unwrap())
++}
++fn kind(recipe: &VerifiedRecipe) -> AssignKind {
++    recipe
++        .recipe()
++        .operations
++        .iter()
++        .find_map(|op| match op {
++            Op::CompoundHint { kind, .. } => Some(*kind),
++            _ => None,
++        })
++        .unwrap()
++}
++#[test]
++fn unchanged_loop_suffixed_local_selects_primitive_rhs_before_lhs_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (parsed, handle, index) = world(LOOP, edition);
++        let written = "i += 1_usize";
++        let occurrences = LOOP.match_indices(written).collect::<Vec<_>>();
++        assert_eq!(occurrences.len(), 3);
++        for (absolute, _) in occurrences {
++            let id = at(&index, &handle, absolute, written);
++            let node = &index.nodes()[id.0 as usize];
++            assert_eq!(node.operands.len(), 2);
++            let left = node.operands[0];
++            let right = node.operands[1];
++            let recipe = parsed
++                .initial_thunk(&handle, &index, &index.pc(id, Phase::Entry).unwrap())
++                .unwrap();
++            assert_eq!(
++                kind(&recipe),
++                AssignKind::Primitive {
++                    left: PrimitiveType::Usize,
++                    right: PrimitiveType::Usize,
++                }
++            );
++            assert_eq!(
++                recipe.recipe().exit,
++                RecipeExit::Next(index.pc(right, Phase::Entry).unwrap())
++            );
++            let after_rhs = parsed
++                .initial_thunk(&handle, &index, &index.pc(id, Phase::Operand(1)).unwrap())
++                .unwrap();
++            assert_eq!(
++                after_rhs.recipe().exit,
++                RecipeExit::Next(index.pc(left, Phase::Entry).unwrap())
++            );
++            let commit = parsed
++                .initial_thunk(&handle, &index, &index.pc(id, Phase::Commit).unwrap())
++                .unwrap();
++            assert!(matches!(
++                commit.recipe().operations[0],
++                Op::AssignLocal { .. }
++            ));
++        }
++    }
++}
++#[test]
++fn intrinsic_suffixed_both_local_sources_are_proven_without_runtime_descriptors() {
++    for (text, expected) in [
++        (
++            "fn main(){let mut a=3i8;let b=4i8;a+=b;}",
++            PrimitiveType::I8,
++        ),
++        (
++            "fn main(){let mut a=3f32;let b=4f32;a+=b;}",
++            PrimitiveType::F32,
++        ),
++        (
++            "type i8=bool;fn main(){let mut a=3i8;let b=4i8;a+=b;}",
++            PrimitiveType::I8,
++        ),
++        (
++            "fn main(){let mut a=(-(3i16));let b=4i16;a+=b;}",
++            PrimitiveType::I16,
++        ),
++    ] {
++        assert_eq!(
++            kind(&entry(text, 2024, "a+=b").unwrap()),
++            AssignKind::Primitive {
++                left: expected,
++                right: expected,
++            }
++        );
++    }
++}
++#[test]
++fn explicit_source_annotation_path_remains_unchanged() {
++    assert_eq!(
++        kind(&entry("fn main(){let mut a:i16=3;a+=4;}", 2024, "a+=4").unwrap()),
++        AssignKind::Primitive {
++            left: PrimitiveType::I16,
++            right: PrimitiveType::I16
++        }
++    );
++}
++#[test]
++fn unresolved_or_rigid_initializer_source_does_not_use_runtime_or_fallback_recovery() {
++    for text in [
++        "fn main(){let mut a=3;a+=4;}",
++        "fn main(){let mut a=3+4;a+=4;}",
++        "fn make()->i8{3}fn main(){let mut a=make();a+=4;}",
++        "fn main<T>(){let mut a:T=3;a+=4;}",
++        "fn main(){type i8=bool;let mut a:i8=true;a+=4;}",
++        "fn main(){let ref mut a=3i8;a+=4;}",
++        "fn main(){let mut a=3bad;a+=4;}",
++    ] {
++        let error = entry(text, 2024, "a+=4").unwrap_err();
++        assert_eq!(error.code, "LRR-E-TYPE-CONTEXT");
++        assert_eq!(
++            error.message,
++            "compound assignment requires a primitive source annotation or exact trait member before operands"
++        );
++    }
++}
++#[test]
++fn unchanged_borrowed_rhs_remains_exact_member_frontier_before_operands() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let error = entry(REFERENCE, edition, "x += &2i8").unwrap_err();
++        assert_eq!(error.code, "LRR-E-TYPE-CONTEXT");
++        assert_eq!(
++            error.message,
++            "compound RHS requires a symbolic source view before operands"
++        );
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/vm/compound_numeric_source_tests.rs
+@@ -0,0 +1,180 @@
++//! Supplemental LRR transaction controls with genuine source-lowered operands.
++use super::*;
++use crate::{
++    core::{digest::Digest, profile::ProfileIdentity},
++    ir::{op::Op, pc::Phase, recipe::VerifiedRecipe},
++    source::snapshot::{CfgSet, SourceBlob},
++    syntax::{outline::BodyHandle, parse::ParsedFile},
++    vm::{
++        numeric::PanicKind,
++        step::{StepOutcome, step},
++    },
++};
++struct Context {
++    parsed: ParsedFile,
++    handle: BodyHandle,
++    frame: Frame,
++    store: GuestStore,
++}
++fn reached(fuel: u64) -> (Context, VerifiedRecipe, NodeId) {
++    let text = "fn main(){let mut a=255u8;a+=1u8;}";
++    let parsed = ParsedFile::parse(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity::current(),
++    )
++    .unwrap();
++    let outline = parsed
++        .outline(
++            Digest::of_bytes(b"LRR compound transaction source"),
++            vec![],
++            &CfgSet::guest_default(),
++        )
++        .unwrap();
++    let handle = outline
++        .items
++        .iter()
++        .find(|item| item.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap()
++        .clone();
++    let body = parsed.index_body(&handle, Default::default()).unwrap();
++    let pc = body.pc(NodeId(0), Phase::Entry).unwrap();
++    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
++    let mut frame = Frame::new(body, pc, &mut store).unwrap();
++    frame.set_fuel_limit(fuel).unwrap();
++    let mut c = Context {
++        parsed,
++        handle,
++        frame,
++        store,
++    };
++    for _ in 0..64 {
++        let recipe = c
++            .parsed
++            .initial_thunk(&c.handle, &c.frame.body, c.frame.pc())
++            .unwrap();
++        if let Some(binding) = recipe.recipe().operations.iter().find_map(|op| match op {
++            Op::CompoundHint { binding, .. } => Some(*binding),
++            _ => None,
++        }) {
++            return (c, recipe, binding);
++        }
++        assert!(matches!(
++            step(&mut c.frame, &mut c.store, &recipe).unwrap(),
++            StepOutcome::Next(_) | StepOutcome::Dispatch
++        ));
++    }
++    panic!("source compound PC not reached");
++}
++#[test]
++fn source_suffixed_compound_overflow_preserves_destination_and_publishes_no_result() {
++    let (mut c, entry, binding) = reached(1000);
++    let destination = c.frame.binding_cell_for_test(binding).unwrap();
++    let before = c.store.state(destination).unwrap();
++    let epoch = c.store.location_epoch(destination).unwrap();
++    assert!(matches!(
++        step(&mut c.frame, &mut c.store, &entry).unwrap(),
++        StepOutcome::Next(_)
++    ));
++    for _ in 0..32 {
++        let recipe = c
++            .parsed
++            .initial_thunk(&c.handle, &c.frame.body, c.frame.pc())
++            .unwrap();
++        if recipe
++            .recipe()
++            .operations
++            .iter()
++            .any(|op| matches!(op, Op::NumericBinary { .. }))
++        {
++            let computed = recipe
++                .recipe()
++                .operations
++                .iter()
++                .find_map(|op| match op {
++                    Op::NumericBinary { destination, .. } => Some(*destination),
++                    _ => None,
++                })
++                .unwrap();
++            assert!(c.frame.cell(computed).is_err());
++            let handles = c.store.budget().handles();
++            let StepOutcome::GuestPanic(panic) = step(&mut c.frame, &mut c.store, &recipe).unwrap()
++            else {
++                panic!("source u8 compound must overflow");
++            };
++            assert_eq!(panic.kind, PanicKind::Overflow);
++            assert_eq!(c.store.state(destination).unwrap(), before);
++            assert_eq!(c.store.location_epoch(destination).unwrap(), epoch);
++            // Existing numeric entry prepares one frame-owned result cell
++            // before checked arithmetic, but publishes no result or ticket.
++            let result_cell = c.frame.cell(computed).unwrap();
++            assert_eq!(c.store.state(result_cell).unwrap(), CellState::Uninit);
++            assert_eq!(
++                c.store.owner(result_cell).unwrap(),
++                CellOwner::FrameSlot {
++                    frame: c.frame.anchor,
++                    slot: computed.0,
++                }
++            );
++            assert_eq!(c.store.budget().handles(), handles + 1);
++            assert_eq!(c.frame.counters.started_by_opcode[16], 0);
++            assert_eq!(c.frame.counters.started_by_opcode[10], 1);
++            assert_eq!(c.frame.status(), FrameStatus::Panicked);
++            return;
++        }
++        assert!(matches!(
++            step(&mut c.frame, &mut c.store, &recipe).unwrap(),
++            StepOutcome::Next(_) | StepOutcome::Dispatch
++        ));
++    }
++    panic!("checked source arithmetic not reached");
++}
++#[test]
++fn forged_rigid_binding_source_refuses_before_compound_opcode_or_operand_entry() {
++    let (mut c, recipe, binding) = reached(1000);
++    let cell = c.frame.binding_cell_for_test(binding).unwrap();
++    let state = c.store.state(cell).unwrap();
++    c.frame.binding_sources[binding.0 as usize] = Some(crate::traits::term::TyTerm::Param(
++        crate::traits::term::ParamKey {
++            definition: c.frame.body.body().definition,
++            ordinal: 0,
++        },
++    ));
++    let source = c.frame.binding_sources[binding.0 as usize].clone();
++    let fuel = c.frame.fuel.snapshot().used;
++    let handles = c.store.budget().handles();
++    let bytes = c.store.budget().bytes();
++    let error = step(&mut c.frame, &mut c.store, &recipe).unwrap_err();
++    assert_eq!(error.code, "LRR-E-GENERIC-BINDING");
++    assert_eq!(c.frame.fuel.snapshot().used, fuel);
++    assert_eq!(c.frame.counters.started_by_opcode[40], 0);
++    assert_eq!(c.frame.counters.started_by_opcode[10], 0);
++    assert_eq!(c.frame.counters.started_by_opcode[16], 0);
++    assert_eq!(c.store.state(cell).unwrap(), state);
++    assert_eq!(c.frame.binding_sources[binding.0 as usize], source);
++    assert_eq!(c.store.budget().handles(), handles);
++    assert_eq!(c.store.budget().bytes(), bytes);
++}
++#[test]
++fn compound_fuel_refusal_keeps_exact_initialized_prefix_without_operand_replay() {
++    let (probe, _, _) = reached(1000);
++    let prefix = probe.frame.fuel.snapshot().used;
++    let (mut c, recipe, binding) = reached(prefix);
++    let cell = c.frame.binding_cell_for_test(binding).unwrap();
++    let state = c.store.state(cell).unwrap();
++    let operations = c.frame.counters.operations_started;
++    let handles = c.store.budget().handles();
++    let bytes = c.store.budget().bytes();
++    let error = step(&mut c.frame, &mut c.store, &recipe).unwrap_err();
++    assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
++    assert_eq!(error.message, "guest opcode fuel exhausted");
++    assert_eq!(c.frame.fuel.snapshot().used, prefix);
++    assert_eq!(c.frame.counters.operations_started, operations);
++    assert_eq!(c.frame.counters.started_by_opcode[40], 0);
++    assert_eq!(c.frame.counters.started_by_opcode[10], 0);
++    assert_eq!(c.store.state(cell).unwrap(), state);
++    assert_eq!(c.store.budget().handles(), handles);
++    assert_eq!(c.store.budget().bytes(), bytes);
++}
+--- /dev/null
++++ b/xtask/tests/stock_compound_numeric_sources_v1.rs
+@@ -0,0 +1,251 @@
++//! Unchanged compound-assignment whole-main acceptance, pending actual execution.
++//! A natural unsupported frontier is a failure, never a selected-fixture pass.
++use lrr::{
++    core::{
++        digest::{Digest, StableEncode},
++        profile::ProfileIdentity,
++    },
++    db::{key::OutlineKey, memo::Database, poll::QueryPoll},
++    engine::run::{RunMachine, RunPoll, ValueSummary},
++    expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    source::{
++        changes::{PreparedSourceInputs, SourceSelection, SourceSelectionOutcome, SourceUnitInput},
++        manifest::Namespace,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::parse::ParseKey,
++};
++
++#[derive(Clone, Copy)]
++enum Expected {
++    Unit,
++    Fault(&'static str, &'static str),
++}
++
++fn run_program(source: &str, label: &str, expected: Expected) {
++    run_world(source, label, expected, &[]);
++}
++
++fn run_world(source: &str, label: &str, expected: Expected, modules: &[(&str, &str, &str)]) {
++    for edition in [2015, 2018, 2021, 2024] {
++        let owner = Digest::of_bytes(label.as_bytes());
++        let cfg = CfgSet::guest_default();
++        let profile = ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        };
++        let mut units = Vec::new();
++        let mut selections = Vec::new();
++        let mut sources = vec![("original.rs", None, source)];
++        sources.extend(
++            modules
++                .iter()
++                .map(|(path, module, text)| (*path, Some(*module), *text)),
++        );
++        for (path, module, text) in sources {
++            let path = SourcePath::new(path).unwrap();
++            let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++            let module_path = module.into_iter().map(str::to_owned).collect::<Vec<_>>();
++            selections.push(SourceSelection {
++                path: path.clone(),
++                outline: OutlineKey {
++                    parse: ParseKey {
++                        content: blob.content(),
++                        profile: profile.clone(),
++                    },
++                    crate_key: owner,
++                    module_path: module_path.clone(),
++                    cfg: cfg.fingerprint(),
++                },
++            });
++            units.push(SourceUnitInput {
++                path,
++                crate_key: owner,
++                module_path,
++                profile: profile.clone(),
++                cfg: cfg.clone(),
++                blob,
++            });
++        }
++        let inputs = PreparedSourceInputs::refresh(None, units, Default::default()).unwrap();
++        let views = selections
++            .iter()
++            .map(|selection| {
++                let SourceSelectionOutcome::Selected(view) = inputs.select(selection).unwrap()
++                else {
++                    panic!("recorded original source world unavailable");
++                };
++                view
++            })
++            .collect::<Vec<_>>();
++        let view = &views[0];
++        let main = view
++            .outline()
++            .items
++            .iter()
++            .find(|item| item.def_key.declared_name == "main")
++            .unwrap()
++            .body
++            .as_ref()
++            .unwrap()
++            .key();
++        let mut db = Database::default();
++        db.trace.detailed = true;
++        inputs.publish(&mut db).unwrap();
++        let mut discovery = SourceDiscovery::new(
++            views.iter().map(|view| view.share()).collect(),
++            view.outline().root_scope.clone(),
++            Namespace::Value,
++            Digest::of_bytes(b"LRR stock numeric discovery"),
++            1,
++        )
++        .unwrap()
++        .with_declarative_compiler(
++            Digest::of_bytes(b"LRR stock numeric declarative environment"),
++            Digest::of_bytes(b"LRR stock numeric compiler facade"),
++            std::sync::Arc::new(
++                lrr::frontend::compile_input_catalog::CompileInputCatalog::standalone(&profile)
++                    .unwrap(),
++            ),
++        )
++        .unwrap();
++        loop {
++            match discovery.poll().unwrap() {
++                SourceDiscoveryStep::Sealed(_) => break,
++                SourceDiscoveryStep::NeedExpansion { request } => {
++                    discovery
++                        .admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
++                        .unwrap();
++                }
++                SourceDiscoveryStep::NeedGeneratedExpansion { request } => {
++                    discovery
++                        .admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
++                        .unwrap();
++                }
++                SourceDiscoveryStep::Incomplete {
++                    diagnostic,
++                    blocked,
++                } => {
++                    panic!("{label} edition{edition} original discovery: {diagnostic}; {blocked:?}")
++                }
++                _ => panic!("original requires unsupported procedural/derive authority"),
++            }
++        }
++        let macros =
++            lrr::engine::standalone_macros::CompletedStandaloneRuntimeMacros::from_discovery(
++                view, &discovery,
++            )
++            .unwrap();
++        let contexts = macros.contexts().unwrap();
++        db.begin_run().unwrap();
++        let mut machine =
++            match RunMachine::start_with_discovery(&mut db, main.clone(), 100_000, discovery) {
++                QueryPoll::Ready(Ok(machine)) => machine,
++                QueryPoll::Ready(Err(error)) => {
++                    panic!("{label} edition{edition} original startup: {error}")
++                }
++                QueryPoll::NeedInput(input) => {
++                    panic!("{label} edition{edition} original startup requested {input:?}")
++                }
++            };
++        let report = match machine.poll_with_runtime_macros(&mut db, &contexts) {
++            RunPoll::Completed(report) => {
++                assert!(
++                    matches!(expected, Expected::Unit),
++                    "{label} edition{edition}: expected arithmetic panic did not occur"
++                );
++                report
++            }
++            RunPoll::Fault(error) if matches!(expected, Expected::Fault(_, _)) => {
++                let Expected::Fault(code, message) = expected else {
++                    unreachable!()
++                };
++                assert_eq!(
++                    error.code, code,
++                    "{label} edition{edition} exact refusal code"
++                );
++                assert_eq!(
++                    error.message, message,
++                    "{label} edition{edition} exact refusal message"
++                );
++                let counters = machine.opcode_counters().unwrap();
++                assert_eq!(
++                    counters.started_by_opcode[10], 0,
++                    "refused source inference must precede arithmetic"
++                );
++                assert_eq!(
++                    counters.started_by_opcode[0], 1,
++                    "only the already committed initializer literal executes"
++                );
++                assert_eq!(counters.started_by_opcode[40], 0);
++                assert_eq!(counters.started_by_opcode[16], 0);
++                assert_eq!(counters.panic_scopes_cleaned, 0);
++                db.finish_run().unwrap();
++                continue;
++            }
++            RunPoll::Fault(error) => panic!(
++                "{label} edition{edition} original fault: {error}; counters {:?}; last queries {:?}",
++                machine.opcode_counters().unwrap(),
++                db.trace
++                    .events
++                    .iter()
++                    .rev()
++                    .take(8)
++                    .map(|event| &event.key)
++                    .collect::<Vec<_>>()
++            ),
++            RunPoll::Panicked(report) => {
++                panic!(
++                    "{label} edition{edition}: unexpected guest panic {:?}",
++                    report.panic.kind
++                );
++            }
++            RunPoll::NeedInput(input) => {
++                panic!("{label} edition{edition} original requested {input:?}")
++            }
++        };
++        assert!(matches!(report.value, ValueSummary::Unit));
++        assert_eq!(report.live_edition, edition);
++        assert_eq!(
++            report.opcode_counters.operations_started,
++            report.opcode_counters.operations_completed
++        );
++        assert_eq!(report.opcode_counters.panic_scopes_cleaned, 0);
++        assert!(report.opcode_counters.operations_completed > 0);
++        db.finish_run().unwrap();
++    }
++}
++
++const ORIGINAL: &str = include_str!(
++    "../../fixtures/upstream/rustc-checkout/tests/ui/for-loop-while/loop-break-cont.rs"
++);
++#[test]
++fn original_loop_break_continue_whole_main_all_editions() {
++    run_program(
++        ORIGINAL,
++        "stock primitive compound suffix source whole main",
++        Expected::Unit,
++    );
++}
++#[test]
++fn unsuffixed_local_source_remains_incomplete_before_compound_operands_all_editions() {
++    run_program(
++        "fn main(){let mut a=3;a+=4;}",
++        "LRR incomplete compound local source",
++        Expected::Fault(
++            "LRR-E-TYPE-CONTEXT",
++            "compound assignment requires a primitive source annotation or exact trait member before operands",
++        ),
++    );
++}
++#[test]
++fn unresolved_compound_rhs_is_not_executed_to_discover_assignment_kind_all_editions() {
++    run_program(
++        "fn main(){let mut a=3i8;a+=missing;}",
++        "LRR incomplete compound RHS source",
++        Expected::Fault(
++            "LRR-E-TYPE-CONTEXT",
++            "compound RHS requires a symbolic source view before operands",
++        ),
++    );
++}
+--- a/crates/lrr/src/syntax/thunks.rs
++++ b/crates/lrr/src/syntax/thunks.rs
+@@ -3882,3 +3882,7 @@
+         // execution of invalid FOO(), or complete compile-fail acceptance.
+     }
+ }
++
++#[cfg(test)]
++#[path = "compound_numeric_source_tests.rs"]
++mod compound_numeric_source_tests;
+--- a/crates/lrr/src/vm/frame.rs
++++ b/crates/lrr/src/vm/frame.rs
+@@ -6524,3 +6524,7 @@
+         assert_eq!(frame.active_scopes().last(), Some(&right));
+     }
+ }
++
++#[cfg(test)]
++#[path = "compound_numeric_source_tests.rs"]
++mod compound_numeric_source_tests;

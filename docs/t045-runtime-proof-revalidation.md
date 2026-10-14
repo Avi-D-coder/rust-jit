@@ -1,0 +1,9 @@
+Historical draft record. The combined V14 implementation is now validated and integrated for its documented subset; see [current T045 scope](t045-panic-cleanup.md). Numeric policy was authorized by the user. The subsequent integrated V15 macOS milestone passed all17 checks and2,393 project test bodies; full fixture/release acceptance remains incomplete.
+
+# T045 exact runtime proof inventory
+
+V10 strict Clippy/formatting passed but its actual493-body library run failed491passed/2failed. The original panic-arg CLI reached database publication, where the no-item proof was rejected because source preparation recognized std println but revalidation reconstructed only core panic/assert identities. The original panic.rs failed under the existing strict unresolved-numeric policy; this separate spec conflict is awaiting the user's decision.
+
+Task/invariant: repair T045/compiler-facet seal integration. A shared standard catalogue constructor reconstructs the exact profile-bound core/std definition inventory. Ordinary source startup, original intrinsic-argument summaries, original no-item proofs, and generated declaration-fragment summaries use the same definition set. Explicit limited compiler catalogue construction remains available for the existing authority/incomplete-catalog diagnostic controls. Definition identity/unit/edition, parsed argument/no-item syntax, actual body/source range, current input/dependency fingerprint and seal publication checks remain intact. No comparison is removed and no error is converted into success.
+
+The unchanged panic-arg CLI regression existed and actually failed before this repair. No new language test is invented. This draft leaves the failed unsuffixed assert expectation registered and unchanged until the numeric-policy decision; no full library/task/stock pass is claimed. Source World, visibility, shadowing and disabled-prelude checks still require affected validation. Guest JIT remains deferred.

@@ -1,0 +1,8 @@
+# Preserve ordinary source as text, and hashed upstream inputs byte for byte.
+* text=auto
+*.rs text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+fixtures/upstream/rustc-checkout/** -text
+vendor/** -text

@@ -1,0 +1,25 @@
+T054 / WT02-04 + revision5 §16.7 frozen source-only resumable constant-array successor at sol-resumable-constant-arrays-v1. All earlier packets immutable; no MAIN/R/S/targets/Cargo/compiler/guest/root query/run.rs edits.
+
+The old whole traversal was insufficient: full array commit and recursive private rollback were also unbounded. New owned runtime cursor separately chunks child traversal/charge/transfer, cell commit and reverse private cleanup. It retains pending child/guard/object/cell/byte state, charges each field once even Unit, polls within construction and returns Dispatch after at most256 conservative steps/64KiB accounted state. Whole storage/table quota includes the still-unallocated destination so no final field forces arena growth. Inaccessible Constructing objects are transferred one field at a time and published only after exact private completion. Error/cancellation cleanup remains owned/pending until drained; no successful-op/PC advance or new guest cleanup fuel is fabricated.
+
+New VM activation stores only checked physical/source agreement data and frame/run/cell/PC state. Actual current full source proof is reborrowed and replayed before each construction/commit advance; no self-referential DB/proof borrow, descriptor/name/source guessing or digest permission. Initial callback must truly charge exactly1; resumes do not charge it again. Immutable content/source-use getters and VM type reexports are separate reviewed attachments, not shared/canonical edits. Old scalar publication stays; ordinary arrays and large physical legacy plans refuse one-shot traversal. Uniform frame OpActivation/opcode/schema/verifier/capture/engine/counters/normal continuation is explicitly root-owned in ROOT-HOOKS.md.
+
+Shared data boundary uses canonical ir::constant_data directly in runtime/VM constant leaves; no syntax/compiler/evaluator import is added. Root's unchanged-domain shared extraction remains a required assembly dependency. Checked immutable data still grants no source/type authority. Blueprint/abandoned metadata is retained until terminal teardown; closed actual guest owners are cleaned in bounded stages, without recursive user Drop or exposing partial objects.
+
+Eleven new test bodies (8 runtime +3 actual-source VM) are UNCOMPILED/UNEXECUTED: official NRVO1024 physical shape/mutation/immutable image scope; Unit exact field fuel; nested cursor/parent charges; cancellation during build/partial cell commit with bounded rollback; exhausted field once; full destination quota; large old loop refusal; actual BIG source proof reborrow/all4 editions/same PC/one entry; actual derived source epoch loss and fully drained private fault; dishonest zero-charge callback refusal. Prior eight frame adapters and joined array source control migrate to chunks; ownership/fuel/source assertions retain their meaning. The resource test intentionally strengthens old late failure to complete preflight no cell/fuel0, with explicit registry-name mapping in hooks. No assertion/error-to-pass/full-fixture substitution.
+
+Unchanged nrvo.rs @run-pass,1024 source declaration, init borrow/mutations/main and both inherited licenses retain pinned ae0fe511b15ab760d7e963b13389d1bc2ab42b18 provenance. Mutable constfn/index/assert original execution remains unsupported/unexecuted. New real query/source control uses disclosed supplemental BIG code; manual phases/storage acceptance is component scope. Full stock/runtime-contract passes0; task remains in_progress.
+
+Actual6bfae8/exit0 only: pinned Rust1.99 rustfmt --check; combined/layered35-file exact reproduction; two separate attachments exact reproduction; original NRVO hash and frozen scalar30-file source/patch verified unchanged; runtime leaf import boundary has no frontend imports. No compile/test/Clippy/audit/milestone or Linux acceptance claimed. Root must compile/validate frozen assembly and collect actual terminals before integration.
+
+Apply production.patch + acceptance-migrations.patch + originals.patch or complete.patch once over preserved scalar successor; then separately reviewed source-proof-attachment.patch + frame-activation-attachment.patch and canonical shared data prerequisites. Code/data getters are immutable agreement only; Root validates the actual full proof each chunk. Source-only ownership/transports are not a completed interpreter feature.
+
+- production.patch: `a62d7b9357afac0df25c0d20e9f79a6deaf531a34079e6cee24ac4f64512000e`
+- acceptance-migrations.patch: `81b5c5ce6c478208c42bb906c6955770debd683796073af2b074335d98843c1a`
+- originals.patch: `2a6549ff969f4e16e88e8404cd5dbc8d149cf5b306e0d16a80eeca902282681f`
+- complete.patch: `47b6e230b1c95477137684ddc4194860cb388595aa9650cef003feb3ed1734b7`
+- source-proof-attachment.patch: `3b79000ded48ea3604a1f5863bc4e2f362ecd08bff308508020e61f72752e9ed`
+- frame-activation-attachment.patch: `15f2366f69bb5ea6266337bfd311a2b3ae863c72fb650da34d4e39011aa40507`
+
+MANIFEST.json: `5fecea44e064ae8b37c932dcf772c12ee9d2ffdbdf926e6b478c018b414feb97`
+SOURCE-ONLY-RECEIPT.json: `88c4de0e716b44676898dfa480fa0dd8ffc312e2038f01f08be07a42466e369d`

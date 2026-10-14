@@ -1,0 +1,1087 @@
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_constant_instantiation.rs
+@@ -0,0 +1,472 @@
++//! T054 physical instantiation only. Descriptor agreement is not source authority.
++//! The reached driver must first validate its source-selected constant/type proof.
++use super::*;
++use crate::{
++    frontend::constants::{ConstValue, wire::ConstantWireType},
++    runtime::shape::PrimitiveIdentity,
++    vm::fuel::RunFuel,
++};
++const MAX_NODES: usize = 100_000;
++const MAX_DEPTH: usize = 128;
++const MAX_METADATA: usize = 32 << 20;
++fn mismatch() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-CONST-INSTANTIATION",
++        "immutable constant and exact guest scalar/array layout differ".into(),
++    )
++}
++/// Preallocated commit metadata; no arbitrary initialized-field summary can enter.
++pub(super) struct ReservedArrayStorage {
++    count: usize,
++    fields: Vec<CellId>,
++    initialized: InitializedFields,
++}
++impl ReservedArrayStorage {
++    pub(super) fn new(count: usize) -> Result<Self, Diagnostic> {
++        let mut fields = Vec::new();
++        fields.try_reserve_exact(count).map_err(|_| resource())?;
++        Ok(Self {
++            count,
++            fields,
++            initialized: InitializedFields::complete(count)?,
++        })
++    }
++    fn owned_bytes(&self) -> Result<usize, Diagnostic> {
++        self.fields
++            .capacity()
++            .checked_mul(std::mem::size_of::<CellId>())
++            .and_then(|n| n.checked_add(self.initialized.owned_bytes()?))
++            .ok_or_else(resource)
++    }
++    pub(super) fn into_parts(
++        self,
++        count: usize,
++    ) -> Result<(Vec<CellId>, InitializedFields), Diagnostic> {
++        if count != self.count || !self.fields.is_empty() || self.fields.capacity() < count {
++            return Err(ownership());
++        }
++        Ok((self.fields, self.initialized))
++    }
++}
++enum Node {
++    Scalar(ValueRepr),
++    Array {
++        ty: TypeId,
++        guard: Vec<ConstructionRecord>,
++        storage: ReservedArrayStorage,
++        children: Vec<Node>,
++    },
++}
++#[derive(Default)]
++struct Totals {
++    nodes: usize,
++    arrays: usize,
++    fields: usize,
++    payload: usize,
++    metadata: usize,
++}
++impl Totals {
++    fn node(&mut self) -> Result<(), Diagnostic> {
++        self.nodes = self
++            .nodes
++            .checked_add(1)
++            .filter(|n| *n <= MAX_NODES)
++            .ok_or_else(resource)?;
++        Ok(())
++    }
++    fn bytes(&mut self, bytes: usize) -> Result<(), Diagnostic> {
++        self.metadata = self
++            .metadata
++            .checked_add(bytes)
++            .filter(|n| *n <= MAX_METADATA)
++            .ok_or_else(resource)?;
++        Ok(())
++    }
++    fn handles(&self) -> Result<u32, Diagnostic> {
++        self.nodes
++            .checked_add(self.arrays.checked_mul(2).ok_or_else(resource)?)
++            .and_then(|n| n.checked_add(self.fields))
++            .and_then(|n| u32::try_from(n).ok())
++            .ok_or_else(resource)
++    }
++}
++/// Single-use, epoch-bound physical plan. Its fields cannot be forged, serialized
++/// or placed in a constant memo. Preparing a second use yields fresh storage.
++pub struct PreparedConstantInstantiation {
++    epoch: u32,
++    node: Node,
++    totals: Totals,
++}
++impl GuestStore {
++    fn constant_shape(
++        &self,
++        wire: &ConstantWireType,
++        ty: TypeId,
++        depth: usize,
++    ) -> Result<(), Diagnostic> {
++        if depth >= MAX_DEPTH {
++            return Err(resource());
++        }
++        match (wire, self.types.descriptor(ty)?.key.as_ref()) {
++            (ConstantWireType::Scalar(p), TypeKey::Primitive(identity))
++                if *identity == PrimitiveIdentity::from_recipe(*p)? =>
++            {
++                Ok(())
++            }
++            (
++                ConstantWireType::Array {
++                    element: wire,
++                    length,
++                },
++                TypeKey::Array { element, len },
++            ) if *length == u64::from(*len) && (*len as usize) <= MAX_NODES => {
++                self.constant_shape(wire, *element, depth + 1)
++            }
++            _ => Err(mismatch()),
++        }
++    }
++    fn constant_node(
++        &self,
++        value: &ConstValue,
++        wire: &ConstantWireType,
++        ty: TypeId,
++        totals: &mut Totals,
++    ) -> Result<Node, Diagnostic> {
++        totals.node()?;
++        match wire {
++            ConstantWireType::Scalar(_) => {
++                let scalar = value.scalar().ok_or_else(mismatch)?;
++                scalar.validate_scalar()?;
++                if scalar.type_id != ty.0 || !(1..=7).contains(&scalar.kind) {
++                    return Err(mismatch());
++                }
++                Ok(Node::Scalar(scalar))
++            }
++            ConstantWireType::Array {
++                element: wire,
++                length,
++            } => {
++                let TypeKey::Array { element, len } = self.types.descriptor(ty)?.key.as_ref()
++                else {
++                    return Err(mismatch());
++                };
++                let values = value.elements().ok_or_else(mismatch)?;
++                if values.len() != *len as usize || *length != u64::from(*len) {
++                    return Err(mismatch());
++                }
++                // Bound the entire expanded tree before allocating this child vector.
++                if totals
++                    .nodes
++                    .checked_add(values.len())
++                    .is_none_or(|n| n > MAX_NODES)
++                {
++                    return Err(resource());
++                }
++                totals.arrays = totals.arrays.checked_add(1).ok_or_else(resource)?;
++                totals.fields = totals
++                    .fields
++                    .checked_add(values.len())
++                    .ok_or_else(resource)?;
++                let mut children = Vec::new();
++                children
++                    .try_reserve_exact(values.len())
++                    .map_err(|_| resource())?;
++                totals.bytes(
++                    children
++                        .capacity()
++                        .checked_mul(std::mem::size_of::<Node>())
++                        .ok_or_else(resource)?,
++                )?;
++                let mut expected = Vec::new();
++                expected
++                    .try_reserve_exact(values.len())
++                    .map_err(|_| resource())?;
++                expected.resize(values.len(), *element);
++                let guard = ConstructionRecord::new(&expected)?;
++                let storage = ReservedArrayStorage::new(values.len())?;
++                let payload = guard
++                    .owned_bytes()
++                    .and_then(|n| n.checked_add(storage.owned_bytes().ok()?))
++                    .ok_or_else(resource)?;
++                totals.payload = totals.payload.checked_add(payload).ok_or_else(resource)?;
++                totals.bytes(
++                    payload
++                        .checked_add(
++                            expected
++                                .capacity()
++                                .checked_mul(std::mem::size_of::<TypeId>())
++                                .ok_or_else(resource)?,
++                        )
++                        .ok_or_else(resource)?,
++                )?;
++                for value in values {
++                    children.push(self.constant_node(value, wire, *element, totals)?);
++                }
++                let mut records = Vec::new();
++                records.try_reserve_exact(1).map_err(|_| resource())?;
++                totals.bytes(
++                    records
++                        .capacity()
++                        .checked_mul(std::mem::size_of::<ConstructionRecord>())
++                        .ok_or_else(resource)?,
++                )?;
++                records.push(guard);
++                Ok(Node::Array {
++                    ty,
++                    guard: records,
++                    storage,
++                    children,
++                })
++            }
++        }
++    }
++    /// Pure preparation from already-decoded immutable data. The caller still
++    /// needs current source/type/query admission; runtime IDs supply no such proof.
++    pub fn prepare_constant_instantiation(
++        &self,
++        value: &ConstValue,
++        wire: &ConstantWireType,
++        ty: TypeId,
++    ) -> Result<PreparedConstantInstantiation, Diagnostic> {
++        wire.fingerprint_checked()?;
++        self.constant_shape(wire, ty, 0)?;
++        let mut totals = Totals::default();
++        totals.bytes(std::mem::size_of::<PreparedConstantInstantiation>())?;
++        let node = self.constant_node(value, wire, ty, &mut totals)?;
++        Ok(PreparedConstantInstantiation {
++            epoch: self.budget.epoch(),
++            node,
++            totals,
++        })
++    }
++    fn reserve_constant_instantiation(&mut self, totals: &Totals) -> Result<(), Diagnostic> {
++        let capacities = self
++            .constructions
++            .reservation_bytes(totals.arrays)?
++            .checked_add(self.objects.reservation_bytes(totals.arrays)?)
++            .and_then(|n| n.checked_add(self.cells.reservation_bytes(totals.fields).ok()?))
++            .and_then(|n| n.checked_add(self.tickets.reservation_bytes(totals.nodes).ok()?))
++            .ok_or_else(resource)?;
++        self.budget.check(
++            totals.handles()?,
++            capacities
++                .checked_add(totals.payload)
++                .ok_or_else(resource)?,
++        )?;
++        self.constructions
++            .reserve(totals.arrays, &mut self.budget)?;
++        self.objects.reserve(totals.arrays, &mut self.budget)?;
++        self.cells.reserve(totals.fields, &mut self.budget)?;
++        self.tickets.reserve(totals.nodes, &mut self.budget)?;
++        // Replay using actual capacities; no value ownership has been published.
++        self.budget.check(totals.handles()?, totals.payload)
++    }
++    /// Physical scalar/array kernel, not a guest source admission path. Charges
++    /// one operation plus each processed array field, even zero-sized Unit.
++    pub fn instantiate_constant(
++        &mut self,
++        plan: PreparedConstantInstantiation,
++        fuel: &mut RunFuel,
++    ) -> Result<TicketId, Diagnostic> {
++        if plan.epoch != self.budget.epoch() {
++            return Err(stale());
++        }
++        fuel.charge()?;
++        self.instantiate_constant_admitted(plan, fuel)
++    }
++    /// For an interpreter opcode whose normal dispatch already charged the op.
++    pub(crate) fn instantiate_constant_admitted(
++        &mut self,
++        plan: PreparedConstantInstantiation,
++        fuel: &mut RunFuel,
++    ) -> Result<TicketId, Diagnostic> {
++        if plan.epoch != self.budget.epoch() {
++            return Err(stale());
++        }
++        fuel.poll()?;
++        self.reserve_constant_instantiation(&plan.totals)?;
++        self.instantiate_constant_node(plan.node, fuel)
++    }
++    fn instantiate_constant_node(
++        &mut self,
++        node: Node,
++        fuel: &mut RunFuel,
++    ) -> Result<TicketId, Diagnostic> {
++        match node {
++            Node::Scalar(value) => {
++                fuel.poll()?;
++                self.ticket(value)
++            }
++            Node::Array {
++                ty,
++                guard: mut records,
++                storage,
++                children,
++            } => {
++                let record = records.pop().ok_or_else(ownership)?;
++                let bytes = record.owned_bytes().ok_or_else(resource)?;
++                let guard = ConstructionId::from(self.constructions.allocate(
++                    record,
++                    bytes,
++                    &mut self.budget,
++                )?);
++                let result = (|| {
++                    for (i, child) in children.into_iter().enumerate() {
++                        fuel.charge()?;
++                        let ticket = self.instantiate_constant_node(child, fuel)?;
++                        if let Err(error) = self.construction_push(
++                            guard,
++                            u32::try_from(i).map_err(|_| resource())?,
++                            ticket,
++                        ) {
++                            self.abort_constant_ticket(ticket)?;
++                            return Err(error);
++                        }
++                    }
++                    fuel.poll()?;
++                    self.commit_construction_with_storage(guard, ty, Some(storage))
++                })();
++                if result.is_err() {
++                    self.abort_constant_guard(guard)?;
++                }
++                result
++            }
++        }
++    }
++    // Only privately constructed, unpublished copies reach these rollback paths.
++    // They contain no reference/nominal/Drop obligations, callbacks or external
++    // owners. Rollback is physical, not a new guest cleanup after stopped fuel.
++    fn abort_constant_guard(&mut self, guard: ConstructionId) -> Result<(), Diagnostic> {
++        let record = self.constructions.take(guard, &mut self.budget)?;
++        for i in record.completed.into_iter().rev() {
++            self.abort_constant_value(record.fields[i as usize].ok_or_else(ownership)?)?;
++        }
++        Ok(())
++    }
++    fn abort_constant_ticket(&mut self, ticket: TicketId) -> Result<(), Diagnostic> {
++        let value = self.tickets.take(ticket, &mut self.budget)?.value;
++        self.abort_constant_value(value)
++    }
++    fn abort_constant_value(&mut self, value: ValueRepr) -> Result<(), Diagnostic> {
++        if (1..=7).contains(&value.kind) {
++            return value.validate_scalar();
++        }
++        if value.kind != 8
++            || !matches!(
++                self.types.descriptor(TypeId(value.type_id))?.key.as_ref(),
++                TypeKey::Array { .. }
++            )
++        {
++            return Err(ownership());
++        }
++        let object = self
++            .objects
++            .take(ObjectId::from_bits(value.payload), &mut self.budget)?;
++        let ObjectStorage::Aggregate(storage) = object.storage else {
++            return Err(ownership());
++        };
++        for cell in storage.fields.into_iter().rev() {
++            let field = self.cells.take(cell, &mut self.budget)?;
++            let CellState::Live(value) = field.state else {
++                return Err(ownership());
++            };
++            self.abort_constant_value(value)?;
++        }
++        Ok(())
++    }
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::{frontend::constants::wire, ir::op::PrimitiveType};
++    fn nested_fixture() -> (ConstValue, ConstantWireType) {
++        let wire = ConstantWireType::Array {
++            element: Box::new(ConstantWireType::Array {
++                element: Box::new(ConstantWireType::Scalar(PrimitiveType::Unit)),
++                length: 2,
++            }),
++            length: 2,
++        };
++        let mut bytes = b"LRRCNST\0".to_vec();
++        bytes.extend_from_slice(&1u16.to_le_bytes());
++        for _ in 0..2 {
++            bytes.push(1);
++            bytes.extend_from_slice(&2u64.to_le_bytes());
++        }
++        bytes.push(0);
++        bytes.extend_from_slice(&0u32.to_le_bytes());
++        for _ in 0..4 {
++            bytes.extend_from_slice(&1u32.to_le_bytes());
++            bytes.extend_from_slice(&1u32.to_le_bytes());
++            bytes.extend_from_slice(&0u64.to_le_bytes());
++        }
++        (wire::decode(&bytes, &wire, 1 << 20).unwrap(), wire)
++    }
++    #[test]
++    fn private_constant_rollback_retires_completed_nested_objects_and_all_partial_owners() {
++        for credit in 1..7 {
++            let mut s = GuestStore::new(1, 1000, 1 << 20).unwrap();
++            let child = s
++                .intern_type(TypeKey::Array {
++                    element: TypeId(1),
++                    len: 2,
++                })
++                .unwrap();
++            let ty = s
++                .intern_type(TypeKey::Array {
++                    element: child,
++                    len: 2,
++                })
++                .unwrap();
++            let (value, wire) = nested_fixture();
++            let plan = s.prepare_constant_instantiation(&value, &wire, ty).unwrap();
++            let mut fuel = RunFuel::new(credit).unwrap();
++            assert!(s.instantiate_constant(plan, &mut fuel).is_err());
++            assert_eq!(fuel.snapshot().used, credit);
++            // Handle indexes are append-only; no retired private destination can
++            // remain reachable even when a completed child had already committed.
++            for index in 1..=s.budget.handles() {
++                let bits = (1u64 << 32) | u64::from(index);
++                assert!(
++                    s.constructions
++                        .get(Handle::<ConstructionRecord>::from_bits(bits))
++                        .is_err()
++                );
++                assert!(
++                    s.objects
++                        .get(Handle::<ObjectRecord>::from_bits(bits))
++                        .is_err()
++                );
++                assert!(s.cells.get(Handle::<Cell>::from_bits(bits)).is_err());
++                assert!(
++                    s.tickets
++                        .get(Handle::<TransferTicket>::from_bits(bits))
++                        .is_err()
++                );
++            }
++        }
++    }
++    #[test]
++    fn private_constant_admitted_join_charges_only_fields_after_dispatch() {
++        let mut s = GuestStore::new(1, 1000, 1 << 20).unwrap();
++        let child = s
++            .intern_type(TypeKey::Array {
++                element: TypeId(1),
++                len: 2,
++            })
++            .unwrap();
++        let ty = s
++            .intern_type(TypeKey::Array {
++                element: child,
++                len: 2,
++            })
++            .unwrap();
++        let (value, wire) = nested_fixture();
++        let plan = s.prepare_constant_instantiation(&value, &wire, ty).unwrap();
++        let mut fuel = RunFuel::new(7).unwrap();
++        fuel.charge().unwrap();
++        let ticket = s.instantiate_constant_admitted(plan, &mut fuel).unwrap();
++        assert_eq!(fuel.snapshot().used, 7);
++        assert_eq!(s.peek_ticket(ticket).unwrap().type_id, ty.0);
++    }
++}
+--- a/crates/lrr/src/runtime/cell.rs
++++ b/crates/lrr/src/runtime/cell.rs
+@@ -1,6 +1,8 @@
+ //! Validate/reserve/commit guest storage. No guest callbacks during mutation.
+ #[path = "cell_aggregate_copy.rs"]
+ pub(crate) mod aggregate_copy;
++#[path = "cell_constant_instantiation.rs"]
++pub mod constant_instantiation;
+ #[path = "cell_construction_cleanup.rs"]
+ mod construction_cleanup;
+ use super::{
+@@ -518,6 +520,14 @@
+         guard: ConstructionId,
+         ty: TypeId,
+     ) -> Result<TicketId, Diagnostic> {
++        self.commit_construction_with_storage(guard, ty, None)
++    }
++    fn commit_construction_with_storage(
++        &mut self,
++        guard: ConstructionId,
++        ty: TypeId,
++        reserved: Option<constant_instantiation::ReservedArrayStorage>,
++    ) -> Result<TicketId, Diagnostic> {
+         let record = self.constructions.get(guard)?;
+         if record.state != ConstructionState::Building
+             || record.completed.len() != record.fields.len()
+@@ -584,9 +594,11 @@
+         self.objects.reserve(1, &mut self.budget)?;
+         self.cells.reserve(count, &mut self.budget)?;
+         self.tickets.reserve(1, &mut self.budget)?;
+-        let mut fields = Vec::new();
+-        fields.try_reserve_exact(count).map_err(|_| resource())?;
+-        let initialized = InitializedFields::complete(count)?;
++        let reserved = match reserved {
++            Some(reserved) => reserved,
++            None => constant_instantiation::ReservedArrayStorage::new(count)?,
++        };
++        let (mut fields, initialized) = reserved.into_parts(count)?;
+         let owned = fields
+             .capacity()
+             .checked_mul(std::mem::size_of::<CellId>())
+--- /dev/null
++++ b/xtask/tests/constant_array_instantiation.rs
+@@ -0,0 +1,359 @@
++//! Physical T054 adapters; these do not execute complete upstream fixtures.
++use lrr::{
++    frontend::constants::{
++        ConstValue,
++        wire::{self, ConstantWireType},
++    },
++    ir::op::PrimitiveType,
++    runtime::{
++        cell::{AggregateCleanupStep, CellId, CellOwner, GuestStore, StorageContract},
++        place::{Place, PlaceRoot, Projection},
++        reference::Access,
++        shape::{TypeId, TypeKey},
++        value::ValueRepr,
++    },
++    vm::fuel::RunFuel,
++};
++fn shape(bytes: &mut Vec<u8>, ty: &ConstantWireType) {
++    match ty {
++        ConstantWireType::Scalar(p) => {
++            let tag: u32 = match p {
++                PrimitiveType::Unit => 0,
++                PrimitiveType::I32 => 5,
++                PrimitiveType::U8 => 9,
++                _ => panic!("fixture scalar"),
++            };
++            bytes.push(0);
++            bytes.extend_from_slice(&tag.to_le_bytes());
++        }
++        ConstantWireType::Array { element, length } => {
++            bytes.push(1);
++            bytes.extend_from_slice(&length.to_le_bytes());
++            shape(bytes, element);
++        }
++    }
++}
++// Immutable fixture bytes enter ONLY the existing canonical codec. This helper
++// constructs fixture data; it is neither a runtime decoder nor source authority.
++fn decoded(ty: &ConstantWireType, leaves: &[ValueRepr]) -> ConstValue {
++    let mut bytes = b"LRRCNST\0".to_vec();
++    bytes.extend_from_slice(&1u16.to_le_bytes());
++    shape(&mut bytes, ty);
++    for v in leaves {
++        bytes.extend_from_slice(&v.kind.to_le_bytes());
++        bytes.extend_from_slice(&v.type_id.to_le_bytes());
++        bytes.extend_from_slice(&v.payload.to_le_bytes());
++    }
++    wire::decode(&bytes, ty, 1 << 20).unwrap()
++}
++fn array(p: PrimitiveType, length: u64) -> ConstantWireType {
++    ConstantWireType::Array {
++        element: Box::new(ConstantWireType::Scalar(p)),
++        length,
++    }
++}
++fn store() -> GuestStore {
++    GuestStore::new(1, 100_000, 32 << 20).unwrap()
++}
++fn install(s: &mut GuestStore, t: lrr::runtime::cell::TicketId, ty: TypeId, slot: u32) -> CellId {
++    let frame = s.new_frame_anchor().unwrap();
++    let cell = s
++        .new_cell(
++            StorageContract::Exact(ty),
++            true,
++            CellOwner::FrameSlot { frame, slot },
++        )
++        .unwrap();
++    s.initialize(cell, t).unwrap();
++    cell
++}
++fn element(cell: CellId, indices: &[u32]) -> Place {
++    Place {
++        root: PlaceRoot::Cell(cell),
++        projections: indices.iter().map(|n| Projection::Index(*n)).collect(),
++    }
++}
++fn physical(
++    s: &mut GuestStore,
++    v: &ConstValue,
++    w: &ConstantWireType,
++    t: TypeId,
++    f: &mut RunFuel,
++) -> lrr::runtime::cell::TicketId {
++    let p = s.prepare_constant_instantiation(v, w, t).unwrap();
++    s.instantiate_constant(p, f).unwrap()
++}
++#[test]
++fn constant_array_original_declarations_remain_unchanged_partial_source_controls() {
++    let lint = include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/lint/lint-const-item-mutation.rs"
++    );
++    assert!(
++        lint.contains("//@ check-pass")
++            && lint.contains("const ARRAY: [u8; 1] = [25];")
++            && lint.contains("ARRAY[0] = 5; //~ WARN attempting to modify")
++    );
++    let runtime = include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-const-eval.rs"
++    );
++    assert!(
++        runtime.contains("//@ run-pass")
++            && runtime.contains("const ARR: [i32; add(1, 2)] = [5, 6, 7];")
++    );
++    // Full warning output/UB siblings and const-fn source execution are unforced.
++}
++#[test]
++fn constant_array_two_uses_have_independent_cells_mutation_and_leases() {
++    let mut s = store();
++    let w = array(PrimitiveType::U8, 1);
++    let v = decoded(&w, &[ValueRepr::unsigned(TypeId(9), 25).unwrap()]);
++    let ty = s
++        .intern_type(TypeKey::Array {
++            element: TypeId(9),
++            len: 1,
++        })
++        .unwrap();
++    let mut f = RunFuel::new(20).unwrap();
++    let first = physical(&mut s, &v, &w, ty, &mut f);
++    let second = physical(&mut s, &v, &w, ty, &mut f);
++    assert_ne!(
++        s.peek_ticket(first).unwrap().payload,
++        s.peek_ticket(second).unwrap().payload
++    );
++    let a = install(&mut s, first, ty, 0);
++    let b = install(&mut s, second, ty, 1);
++    let ra = s.borrow(&element(a, &[0]), Access::Mutable).unwrap();
++    let rb = s.borrow(&element(b, &[0]), Access::Mutable).unwrap();
++    assert_ne!(ra, rb);
++    let changed = s
++        .ticket(ValueRepr::unsigned(TypeId(9), 5).unwrap())
++        .unwrap();
++    let old = s.replace_reference(ra, changed).unwrap();
++    s.discard(old).unwrap();
++    assert_eq!(s.read_reference(ra).unwrap().payload, 5);
++    assert_eq!(s.read_reference(rb).unwrap().payload, 25);
++    assert_eq!(v.elements().unwrap()[0].scalar().unwrap().payload, 25);
++    let dropped = s.begin_drop(a).unwrap();
++    loop {
++        match s.aggregate_cleanup_step(dropped).unwrap() {
++            AggregateCleanupStep::Field(t) => s.discard(t).unwrap(),
++            AggregateCleanupStep::Skipped => {}
++            AggregateCleanupStep::Complete => break,
++        }
++    }
++    s.discard(dropped).unwrap();
++    s.retire_cell(a).unwrap();
++    assert!(s.read_reference(ra).is_err());
++    assert_eq!(s.read_reference(rb).unwrap().payload, 25);
++    assert_eq!(f.snapshot().used, 4);
++}
++#[test]
++fn constant_nested_arrays_create_fresh_complete_field_cells() {
++    let mut s = store();
++    let inner = array(PrimitiveType::I32, 2);
++    let w = ConstantWireType::Array {
++        element: Box::new(inner),
++        length: 2,
++    };
++    let v = decoded(
++        &w,
++        &[1, 2, 3, 4].map(|n| ValueRepr::signed(TypeId(6), n).unwrap()),
++    );
++    let child = s
++        .intern_type(TypeKey::Array {
++            element: TypeId(6),
++            len: 2,
++        })
++        .unwrap();
++    let ty = s
++        .intern_type(TypeKey::Array {
++            element: child,
++            len: 2,
++        })
++        .unwrap();
++    let mut f = RunFuel::new(20).unwrap();
++    let a = physical(&mut s, &v, &w, ty, &mut f);
++    let b = physical(&mut s, &v, &w, ty, &mut f);
++    let a = install(&mut s, a, ty, 0);
++    let b = install(&mut s, b, ty, 1);
++    let reference = s.borrow(&element(a, &[1, 0]), Access::Mutable).unwrap();
++    let t = s.ticket(ValueRepr::signed(TypeId(6), 9).unwrap()).unwrap();
++    let old = s.replace_reference(reference, t).unwrap();
++    s.discard(old).unwrap();
++    assert_eq!(s.read_place(&element(a, &[1, 0])).unwrap().payload, 9);
++    assert_eq!(s.read_place(&element(b, &[1, 0])).unwrap().payload, 3);
++    assert_eq!(f.snapshot().used, 14);
++}
++#[test]
++fn constant_empty_array_retains_exact_element_descriptor_and_owning_object() {
++    let mut s = store();
++    let w = array(PrimitiveType::U8, 0);
++    let v = decoded(&w, &[]);
++    let ty = s
++        .intern_type(TypeKey::Array {
++            element: TypeId(9),
++            len: 0,
++        })
++        .unwrap();
++    let mut f = RunFuel::new(2).unwrap();
++    let t = physical(&mut s, &v, &w, ty, &mut f);
++    assert_eq!(s.peek_ticket(t).unwrap().kind, 8);
++    assert_eq!(s.peek_ticket(t).unwrap().type_id, ty.0);
++    assert_eq!(f.snapshot().used, 1);
++    assert!(s.prepare_constant_instantiation(&v, &w, TypeId(1)).is_err());
++}
++#[test]
++fn constant_unit_elements_charge_even_without_scalar_payload_bytes() {
++    let mut s = store();
++    let w = array(PrimitiveType::Unit, 3);
++    let v = decoded(&w, &[ValueRepr::unit(); 3]);
++    let ty = s
++        .intern_type(TypeKey::Array {
++            element: TypeId(1),
++            len: 3,
++        })
++        .unwrap();
++    let mut f = RunFuel::new(4).unwrap();
++    let t = physical(&mut s, &v, &w, ty, &mut f);
++    let cell = install(&mut s, t, ty, 0);
++    for i in 0..3 {
++        assert_eq!(
++            s.read_place(&element(cell, &[i])).unwrap(),
++            ValueRepr::unit()
++        );
++    }
++    assert_eq!(f.snapshot().used, 4);
++}
++#[test]
++fn constant_shape_mismatch_refuses_before_guest_storage_or_fuel() {
++    let mut s = store();
++    let w = array(PrimitiveType::U8, 1);
++    let v = decoded(&w, &[ValueRepr::unsigned(TypeId(9), 25).unwrap()]);
++    let ty = s
++        .intern_type(TypeKey::Array {
++            element: TypeId(6),
++            len: 1,
++        })
++        .unwrap();
++    let before = (s.budget().handles(), s.budget().bytes());
++    assert!(s.prepare_constant_instantiation(&v, &w, ty).is_err());
++    let wrong = s
++        .intern_type(TypeKey::Array {
++            element: TypeId(9),
++            len: 2,
++        })
++        .unwrap();
++    assert!(s.prepare_constant_instantiation(&v, &w, wrong).is_err());
++    let huge = array(PrimitiveType::U8, u64::MAX);
++    assert!(s.prepare_constant_instantiation(&v, &huge, wrong).is_err());
++    assert_eq!(before, (s.budget().handles(), s.budget().bytes()));
++}
++#[test]
++fn constant_partial_fuel_failure_preserves_existing_array_and_immutable_data() {
++    let mut s = store();
++    let w = array(PrimitiveType::I32, 3);
++    let v = decoded(
++        &w,
++        &[5, 6, 7].map(|n| ValueRepr::signed(TypeId(6), n).unwrap()),
++    );
++    let ty = s
++        .intern_type(TypeKey::Array {
++            element: TypeId(6),
++            len: 3,
++        })
++        .unwrap();
++    let old = physical(&mut s, &v, &w, ty, &mut RunFuel::new(20).unwrap());
++    let old = install(&mut s, old, ty, 0);
++    let p = s.prepare_constant_instantiation(&v, &w, ty).unwrap();
++    let mut f = RunFuel::new(2).unwrap();
++    assert!(s.instantiate_constant(p, &mut f).is_err());
++    assert_eq!(f.snapshot().used, 2);
++    assert_eq!(s.read_place(&element(old, &[2])).unwrap().payload, 7);
++    assert_eq!(v.elements().unwrap()[0].scalar().unwrap().payload, 5);
++    let t = physical(&mut s, &v, &w, ty, &mut RunFuel::new(20).unwrap());
++    assert_eq!(s.peek_ticket(t).unwrap().type_id, ty.0);
++}
++#[test]
++fn constant_cancellation_and_resource_preflight_create_no_guest_values() {
++    let mut s = GuestStore::new(1, 2, 32 << 20).unwrap();
++    let w = array(PrimitiveType::Unit, 3);
++    let v = decoded(&w, &[ValueRepr::unit(); 3]);
++    let ty = s
++        .intern_type(TypeKey::Array {
++            element: TypeId(1),
++            len: 3,
++        })
++        .unwrap();
++    let p = s.prepare_constant_instantiation(&v, &w, ty).unwrap();
++    let mut f = RunFuel::new(20).unwrap();
++    f.cancellation().cancel();
++    let before = (s.budget().handles(), s.budget().bytes());
++    assert!(s.instantiate_constant(p, &mut f).is_err());
++    assert_eq!(before, (s.budget().handles(), s.budget().bytes()));
++    assert_eq!(f.snapshot().used, 0);
++    let p = s.prepare_constant_instantiation(&v, &w, ty).unwrap();
++    assert!(
++        s.instantiate_constant(p, &mut RunFuel::new(20).unwrap())
++            .is_err()
++    );
++    assert_eq!(before, (s.budget().handles(), s.budget().bytes()));
++    let mut memory = GuestStore::new(1, 1000, 0).unwrap();
++    let ty = memory
++        .intern_type(TypeKey::Array {
++            element: TypeId(1),
++            len: 3,
++        })
++        .unwrap();
++    let p = memory.prepare_constant_instantiation(&v, &w, ty).unwrap();
++    assert!(
++        memory
++            .instantiate_constant(p, &mut RunFuel::new(20).unwrap())
++            .is_err()
++    );
++    assert_eq!((memory.budget().handles(), memory.budget().bytes()), (0, 0));
++}
++#[test]
++fn constant_plan_old_epoch_cannot_publish_in_fresh_guest_run() {
++    let mut s = store();
++    let w = array(PrimitiveType::Unit, 0);
++    let v = decoded(&w, &[]);
++    let ty = s
++        .intern_type(TypeKey::Array {
++            element: TypeId(1),
++            len: 0,
++        })
++        .unwrap();
++    let p = s.prepare_constant_instantiation(&v, &w, ty).unwrap();
++    s.reset(2).unwrap();
++    let mut f = RunFuel::new(10).unwrap();
++    assert_eq!(
++        s.instantiate_constant(p, &mut f).unwrap_err().code,
++        "LRR-E-STALE-HANDLE"
++    );
++    assert_eq!(f.snapshot().used, 0);
++    assert_eq!(s.budget().handles(), 0);
++}
++
++#[test]
++fn constant_scalar_and_deadline_precommit_controls() {
++    let mut s = store();
++    let value = ConstValue::from_scalar(ValueRepr::signed(TypeId(6), -9).unwrap()).unwrap();
++    let wire = ConstantWireType::Scalar(PrimitiveType::I32);
++    let plan = s
++        .prepare_constant_instantiation(&value, &wire, TypeId(6))
++        .unwrap();
++    let mut fuel = RunFuel::new(1).unwrap();
++    let ticket = s.instantiate_constant(plan, &mut fuel).unwrap();
++    assert_eq!(s.peek_ticket(ticket).unwrap(), value.scalar().unwrap());
++    assert_eq!(fuel.snapshot().used, 1);
++    s.discard(ticket).unwrap();
++    let plan = s
++        .prepare_constant_instantiation(&value, &wire, TypeId(6))
++        .unwrap();
++    let mut fuel = RunFuel::new(10).unwrap();
++    fuel.set_deadline(std::time::Instant::now());
++    let before = (s.budget().handles(), s.budget().bytes());
++    assert!(s.instantiate_constant(plan, &mut fuel).is_err());
++    assert_eq!(before, (s.budget().handles(), s.budget().bytes()));
++    assert_eq!(fuel.snapshot().used, 0);
++}
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-const-eval.rs
+@@ -0,0 +1,10 @@
++//@ run-pass
++#![allow(dead_code)]
++
++const fn add(x: usize, y: usize) -> usize {
++    x + y
++}
++
++const ARR: [i32; add(1, 2)] = [5, 6, 7];
++
++pub fn main() {}
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-29914-2.rs
+@@ -0,0 +1,7 @@
++//@ run-pass
++const ARR: [usize; 5] = [5, 4, 3, 2, 1];
++const BLA: usize = ARR[ARR[3]];
++
++fn main() {
++    assert_eq!(3, BLA);
++}
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/lint/lint-const-item-mutation.rs
+@@ -0,0 +1,70 @@
++//@ check-pass
++
++struct MyStruct {
++    field: bool,
++    inner_array: [char; 1],
++    raw_ptr: *mut u8
++}
++impl MyStruct {
++    fn use_mut(&mut self) {}
++}
++
++struct Mutable {
++    msg: &'static str,
++}
++impl Drop for Mutable {
++    fn drop(&mut self) {
++        println!("{}", self.msg);
++    }
++}
++
++struct Mutable2 { // this one has drop glue but not a direct Drop impl
++    msg: &'static str,
++    other: String,
++}
++
++struct WithFieldDrop { inner: Mutable } // no Drop on this type, but Mutable has one
++
++const ARRAY: [u8; 1] = [25];
++const MY_STRUCT: MyStruct = MyStruct { field: true, inner_array: ['a'], raw_ptr: 2 as *mut u8 };
++const RAW_PTR: *mut u8 = 1 as *mut u8;
++const MUTABLE: Mutable = Mutable { msg: "" };
++const MUTABLE2: Mutable2 = Mutable2 { msg: "", other: String::new() };
++const WFD: WithFieldDrop = WithFieldDrop { inner: Mutable { msg: "" } };
++const VEC: Vec<i32> = Vec::new();
++const PTR: *mut () = 1 as *mut _;
++const PTR_TO_ARRAY: *mut [u32; 4] = 0x12345678 as _;
++const ARRAY_OF_PTR: [*mut u32; 1] = [1 as *mut _];
++
++fn main() {
++    ARRAY[0] = 5; //~ WARN attempting to modify
++    MY_STRUCT.field = false; //~ WARN attempting to modify
++    MY_STRUCT.inner_array[0] = 'b'; //~ WARN attempting to modify
++    MY_STRUCT.use_mut(); //~ WARN taking
++    &mut MY_STRUCT; //~ WARN taking
++    (&mut MY_STRUCT).use_mut(); //~ WARN taking
++
++    // Test that we don't warn when writing through
++    // a raw pointer
++    // This is U.B., but this test is check-pass,
++    // so this never actually executes
++    unsafe {
++        *RAW_PTR = 0;
++        *MY_STRUCT.raw_ptr = 0;
++    }
++
++    MUTABLE.msg = "wow"; // no warning — Drop impl observes the mutation
++    MUTABLE2.msg = "wow"; // no warning — field String has drop glue (needs_drop = true)
++    WFD.inner.msg = "observed"; // no warning — Mutable's Drop observes the field mutation
++    VEC.push(0); //~ WARN taking a mutable reference to a `const` item
++
++    // Test that we don't warn when converting a raw pointer
++    // into a mutable reference
++    unsafe { &mut *PTR };
++
++    // Test that we don't warn when there's a dereference involved.
++    // If we ever 'leave' the const via a deference, we're going
++    // to end up modifying something other than the temporary
++    unsafe { (*PTR_TO_ARRAY)[0] = 1 };
++    unsafe { *ARRAY_OF_PTR[0] = 25; }
++}
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/lint/lint-const-item-mutation.stderr
+@@ -0,0 +1,110 @@
++warning: attempting to modify a `const` item
++  --> $DIR/lint-const-item-mutation.rs:40:5
++   |
++LL |     ARRAY[0] = 5;
++   |     ^^^^^^^^^^^^
++   |
++   = note: each usage of a `const` item creates a new temporary; the original `const` item will not be modified
++note: `const` item defined here
++  --> $DIR/lint-const-item-mutation.rs:28:1
++   |
++LL | const ARRAY: [u8; 1] = [25];
++   | ^^^^^^^^^^^^^^^^^^^^
++   = note: `#[warn(const_item_mutation)]` on by default
++
++warning: attempting to modify a `const` item
++  --> $DIR/lint-const-item-mutation.rs:41:5
++   |
++LL |     MY_STRUCT.field = false;
++   |     ^^^^^^^^^^^^^^^^^^^^^^^
++   |
++   = note: each usage of a `const` item creates a new temporary; the original `const` item will not be modified
++note: `const` item defined here
++  --> $DIR/lint-const-item-mutation.rs:29:1
++   |
++LL | const MY_STRUCT: MyStruct = MyStruct { field: true, inner_array: ['a'], raw_ptr: 2 as *mut u8 };
++   | ^^^^^^^^^^^^^^^^^^^^^^^^^
++
++warning: attempting to modify a `const` item
++  --> $DIR/lint-const-item-mutation.rs:42:5
++   |
++LL |     MY_STRUCT.inner_array[0] = 'b';
++   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
++   |
++   = note: each usage of a `const` item creates a new temporary; the original `const` item will not be modified
++note: `const` item defined here
++  --> $DIR/lint-const-item-mutation.rs:29:1
++   |
++LL | const MY_STRUCT: MyStruct = MyStruct { field: true, inner_array: ['a'], raw_ptr: 2 as *mut u8 };
++   | ^^^^^^^^^^^^^^^^^^^^^^^^^
++
++warning: taking a mutable reference to a `const` item
++  --> $DIR/lint-const-item-mutation.rs:43:5
++   |
++LL |     MY_STRUCT.use_mut();
++   |     ^^^^^^^^^^^^^^^^^^^
++   |
++   = note: each usage of a `const` item creates a new temporary
++   = note: the mutable reference will refer to this temporary, not the original `const` item
++note: mutable reference created due to call to this method
++  --> $DIR/lint-const-item-mutation.rs:9:5
++   |
++LL |     fn use_mut(&mut self) {}
++   |     ^^^^^^^^^^^^^^^^^^^^^
++note: `const` item defined here
++  --> $DIR/lint-const-item-mutation.rs:29:1
++   |
++LL | const MY_STRUCT: MyStruct = MyStruct { field: true, inner_array: ['a'], raw_ptr: 2 as *mut u8 };
++   | ^^^^^^^^^^^^^^^^^^^^^^^^^
++
++warning: taking a mutable reference to a `const` item
++  --> $DIR/lint-const-item-mutation.rs:44:5
++   |
++LL |     &mut MY_STRUCT;
++   |     ^^^^^^^^^^^^^^
++   |
++   = note: each usage of a `const` item creates a new temporary
++   = note: the mutable reference will refer to this temporary, not the original `const` item
++note: `const` item defined here
++  --> $DIR/lint-const-item-mutation.rs:29:1
++   |
++LL | const MY_STRUCT: MyStruct = MyStruct { field: true, inner_array: ['a'], raw_ptr: 2 as *mut u8 };
++   | ^^^^^^^^^^^^^^^^^^^^^^^^^
++
++warning: taking a mutable reference to a `const` item
++  --> $DIR/lint-const-item-mutation.rs:45:5
++   |
++LL |     (&mut MY_STRUCT).use_mut();
++   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
++   |
++   = note: each usage of a `const` item creates a new temporary
++   = note: the mutable reference will refer to this temporary, not the original `const` item
++note: mutable reference created due to call to this method
++  --> $DIR/lint-const-item-mutation.rs:9:5
++   |
++LL |     fn use_mut(&mut self) {}
++   |     ^^^^^^^^^^^^^^^^^^^^^
++note: `const` item defined here
++  --> $DIR/lint-const-item-mutation.rs:29:1
++   |
++LL | const MY_STRUCT: MyStruct = MyStruct { field: true, inner_array: ['a'], raw_ptr: 2 as *mut u8 };
++   | ^^^^^^^^^^^^^^^^^^^^^^^^^
++
++warning: taking a mutable reference to a `const` item
++  --> $DIR/lint-const-item-mutation.rs:59:5
++   |
++LL |     VEC.push(0);
++   |     ^^^^^^^^^^^
++   |
++   = note: each usage of a `const` item creates a new temporary
++   = note: the mutable reference will refer to this temporary, not the original `const` item
++note: mutable reference created due to call to this method
++  --> $SRC_DIR/alloc/src/vec/mod.rs:LL:COL
++note: `const` item defined here
++  --> $DIR/lint-const-item-mutation.rs:34:1
++   |
++LL | const VEC: Vec<i32> = Vec::new();
++   | ^^^^^^^^^^^^^^^^^^^
++
++warning: 7 warnings emitted
++

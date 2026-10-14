@@ -1,0 +1,15 @@
+--- a/crates/proc-macro-srv/src/server_impl/rust_analyzer_span.rs
++++ b/crates/proc-macro-srv/src/server_impl/rust_analyzer_span.rs
+@@ -44,6 +44,12 @@
+ 
+     fn with_symbol_string(symbol: &Self::Symbol, f: impl FnOnce(&str)) {
+         f(symbol.as_str())
++    }
++
++    fn injected_env_var(&mut self, _: &str) -> Option<String> {
++        // API6 carries per-invocation process environment, not a rustc --env-set overlay.
++        // Report no compiler-injected override; the client retains its normal env lookup.
++        None
+     }
+ 
+     fn track_env_var(&mut self, var: &str, value: Option<&str>) {

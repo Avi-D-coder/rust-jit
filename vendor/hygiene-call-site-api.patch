@@ -1,0 +1,36 @@
+--- a/crates/hir-expand/src/hygiene.rs
++++ b/crates/hir-expand/src/hygiene.rs
+@@ -80,6 +80,24 @@
+     }
+ 
+     let call_site_ctxt = crate::MacroCallId::from(call_id).loc(db).ctxt;
++    apply_mark_with_call_site(db, ctxt, call_id, transparency, edition, call_site_ctxt)
++}
++
++/// Apply the existing hygiene algorithm to an explicitly resolved call-site
++/// context. Macro-only clients need a span interner, not source/HIR queries.
++/// Call IDs and contexts must belong to this database; this function does not
++/// look up a `MacroCallLoc` or run an expansion provider.
++pub fn apply_mark_with_call_site(
++    db: &dyn salsa::Database,
++    ctxt: SyntaxContext,
++    call_id: MacroCallId,
++    transparency: Transparency,
++    edition: Edition,
++    call_site_ctxt: SyntaxContext,
++) -> SyntaxContext {
++    if transparency == Transparency::Opaque {
++        return apply_mark_internal(db, ctxt, call_id, transparency, edition);
++    }
+     let mut call_site_ctxt = if transparency == Transparency::SemiOpaque {
+         call_site_ctxt.normalize_to_macros_2_0(db)
+     } else {
+@@ -106,7 +124,7 @@
+ }
+ 
+ fn apply_mark_internal(
+-    db: &dyn SourceDatabase,
++    db: &dyn salsa::Database,
+     ctxt: SyntaxContext,
+     call_id: MacroCallId,
+     transparency: Transparency,

@@ -1,0 +1,150 @@
+//! Source hints are demanded at the next argument boundary, never from a later
+//! argument whose evaluation might be prevented by an earlier panic.
+use super::*;
+
+pub(super) fn apply_context(
+    hint: &mut ArgumentHint,
+    callee: &SourceCallable,
+    explicit: &[(u32, ArgumentType)],
+    result: Option<&ArgumentType>,
+) {
+    if let crate::traits::term::TyTerm::Param(key) = &hint.source {
+        if let Some((_, actual)) = explicit.iter().find(|(ordinal, _)| *ordinal == key.ordinal) {
+            hint.descriptor = Some(actual.descriptor);
+            hint.source = actual.source.clone();
+        } else if callee.signature().result_symbolic.as_ref() == Some(&hint.source)
+            && let Some(actual) = result
+        {
+            if hint.descriptor.is_none() {
+                hint.descriptor = Some(actual.descriptor);
+            }
+            hint.source = actual.source.clone();
+        }
+    }
+}
+
+impl RunMachine {
+    pub(super) fn prepare_later_argument_hint(
+        &mut self,
+        db: &mut Database,
+        site: u32,
+        completed: u32,
+        target: &PcKey,
+    ) -> QueryPoll<()> {
+        match self.later_argument_hint(db, site, completed, target) {
+            Ok(poll) => poll,
+            Err(error) => QueryPoll::Ready(Err(error)),
+        }
+    }
+
+    fn later_argument_hint(
+        &mut self,
+        db: &mut Database,
+        site: u32,
+        completed: u32,
+        target: &PcKey,
+    ) -> Result<QueryPoll<()>, Diagnostic> {
+        self.frame.preflight_call_advance(site, completed)?;
+        let next = completed
+            .checked_add(1)
+            .and_then(|n| usize::try_from(n).ok())
+            .ok_or_else(|| call_fault("argument hint ordinal overflow"))?;
+        let selected = self
+            .pending
+            .get(&site)
+            .ok_or_else(|| call_fault("argument hint lacks selected call identity"))?;
+        let slot = *selected
+            .argument_slots
+            .get(next)
+            .ok_or_else(|| call_fault("next argument is outside the written call"))?;
+        if self.frame.pc().node != site
+            || !matches!(Phase::from_code(self.frame.pc().phase), Phase::Operand(_))
+            || target.body != self.frame.pc().body
+            || target.phase != Phase::Entry.code()?
+            || self
+                .frame
+                .body
+                .nodes()
+                .get(target.node as usize)
+                .is_none_or(|node| node.value != Some(slot))
+        {
+            return Err(call_fault(
+                "argument hint continuation differs from its written slot",
+            ));
+        }
+        self.frame.preflight_hint(slot)?;
+        if next >= selected.callee.signature().parameters.len() {
+            // Excess written arguments still execute before the final arity
+            // guard. They receive no fabricated parameter context.
+            return Ok(QueryPoll::Ready(Ok(())));
+        }
+        if next < selected.hints.len() {
+            // A query pause can revisit this boundary, but never repeats the
+            // completed argument's opcode or consumes its owner again.
+            return Ok(QueryPoll::Ready(Ok(())));
+        }
+        if next != selected.hints.len() || selected.hints.len() == selected.hints.capacity() {
+            return Err(call_fault("argument hint prefix changed during suspension"));
+        }
+        let graph = self
+            .graph
+            .as_ref()
+            .ok_or_else(|| call_fault("argument hint source catalogue absent"))?;
+        let sources: Vec<_> = self.sources.iter().collect();
+        let mut prepared = match prepare_argument_hint(db, &selected.callee, graph, &sources, next)
+        {
+            QueryPoll::Ready(Ok(ArgumentHintPreparation::Ready(hints))) => hints,
+            QueryPoll::Ready(Ok(_)) => {
+                return Err(call_fault(
+                    "argument source hints require further type integration",
+                ));
+            }
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+        };
+        if prepared.len() != 1 {
+            return Err(call_fault("selected argument has no unique source hint"));
+        }
+        let mut hint = prepared
+            .pop()
+            .ok_or_else(|| call_fault("argument hint disappeared"))?;
+        apply_context(
+            &mut hint,
+            &selected.callee,
+            &selected.explicit,
+            selected.result_hint.as_ref(),
+        );
+        let heap = hint
+            .source
+            .heap_bytes()
+            .ok_or_else(crate::runtime::arena::resource)?;
+        let retained = selected
+            .bytes
+            .checked_add(heap)
+            .ok_or_else(crate::runtime::arena::resource)?;
+        let pending = self
+            .pending_bytes
+            .checked_add(heap)
+            .ok_or_else(crate::runtime::arena::resource)?;
+        if pending
+            .checked_add(self.call_bytes)
+            .is_none_or(|n| n > self.call_limits.max_metadata_bytes)
+        {
+            return Err(crate::runtime::arena::resource());
+        }
+        let source = hint.descriptor.map(|_| hint.source.clone());
+        self.frame.preflight_source_view(slot, source.as_ref())?;
+        // All checked admission precedes mutation. Inline prefix capacity was
+        // reserved and charged at identity selection; this adds only its heap.
+        self.frame.set_source_view(slot, source)?;
+        self.frame.set_hint(slot, hint.descriptor)?;
+        let selected = self
+            .pending
+            .get_mut(&site)
+            .ok_or_else(|| call_fault("selected call disappeared during argument admission"))?;
+        selected.hints.push(hint);
+        selected.bytes = retained;
+        self.pending_bytes = pending;
+        Ok(QueryPoll::Ready(Ok(())))
+    }
+}

@@ -1,0 +1,16 @@
+schema_version = 1
+id = "T034-CONTRACT-ON-DISK"
+category = "relaxed"
+source = "main.rs"
+entry = "case"
+modes = ["off"]
+oracle = false
+
+[expect]
+status = "passed"
+stdout = ""
+stderr = ""
+
+[laziness]
+no_body_preparation = ["broken"]
+no_marker_preparation = ["cold_branch"]

@@ -9,7 +9,7 @@ pub struct PackageKey {
     pub version: String,
 }
 impl StableEncode for PackageKey {
-    const DOMAIN: &'static str = "lrr/v1/package";
+    const DOMAIN: &'static str = "lrr/v2/package";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.string(&self.source_identity);
         e.string(&self.package_name);
@@ -39,16 +39,18 @@ pub struct CrateKey {
     pub target_kind: TargetKind,
     pub target_name: String,
     pub guest_edition: u16,
+    pub semantics_profile: Digest,
     pub cfg_fingerprint: Digest,
     pub dependency_aliases: Digest,
 }
 impl StableEncode for CrateKey {
-    const DOMAIN: &'static str = "lrr/v1/crate";
+    const DOMAIN: &'static str = "lrr/v2/crate";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.package);
         e.u32(self.target_kind.tag());
         e.string(&self.target_name);
         e.u16(self.guest_edition);
+        e.digest(self.semantics_profile);
         e.digest(self.cfg_fingerprint);
         e.digest(self.dependency_aliases);
     }
@@ -81,6 +83,8 @@ pub enum ItemKind {
     Macro,
     TypeAlias,
     Import,
+    Union,
+    ExternBlock,
 }
 impl ItemKind {
     fn tag(self) -> u32 {
@@ -96,6 +100,8 @@ impl ItemKind {
             Self::Macro => 9,
             Self::TypeAlias => 10,
             Self::Import => 11,
+            Self::Union => 12,
+            Self::ExternBlock => 13,
         }
     }
 }
@@ -110,7 +116,7 @@ pub struct DefKey {
     pub duplicate_ordinal: u32,
 }
 impl StableEncode for DefKey {
-    const DOMAIN: &'static str = "lrr/v1/definition";
+    const DOMAIN: &'static str = "lrr/v2/definition";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.crate_key);
         e.sequence(&self.module_path, |e, s| e.string(s));
@@ -127,7 +133,7 @@ pub struct BodyKey {
     pub exact_body_bytes: Digest,
 }
 impl StableEncode for BodyKey {
-    const DOMAIN: &'static str = "lrr/v1/body";
+    const DOMAIN: &'static str = "lrr/v2/body";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.definition);
         e.digest(self.exact_body_bytes);
@@ -140,7 +146,7 @@ pub struct PcKey {
     pub phase: u16,
 }
 impl StableEncode for PcKey {
-    const DOMAIN: &'static str = "lrr/v1/program-counter";
+    const DOMAIN: &'static str = "lrr/v2/program-counter";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.body);
         e.u32(self.node);
@@ -195,6 +201,7 @@ mod tests {
             target_kind: TargetKind::LibraryTests,
             target_name: "app".into(),
             guest_edition: 2024,
+            semantics_profile: crate::core::profile::ProfileIdentity::current().fingerprint(),
             cfg_fingerprint: Digest::default(),
             dependency_aliases: Digest::default(),
         };

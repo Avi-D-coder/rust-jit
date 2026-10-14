@@ -1,0 +1,11 @@
+schema_version=1
+id="E2406"
+category="strict"
+source="main.rs"
+entry="case"
+modes=["off","auto","force"]
+oracle=true
+[expect]
+status="passed"
+stdout="evaluate:first\nevaluate:second\ndrop:second\ndrop:first\nelse_entered\nafter_if\n"
+stderr=""

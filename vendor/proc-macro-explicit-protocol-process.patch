@@ -1,0 +1,36 @@
+--- a/crates/proc-macro-api/src/process.rs
++++ b/crates/proc-macro-api/src/process.rs
+@@ -133,13 +133,32 @@
+         version: Option<&Version>,
+         binary_server_version: impl Fn() -> String,
+     ) -> io::Result<ProcMacroServerProcess> {
++        Self::run_with_protocol(spawn, version, binary_server_version, None)
++    }
++
++    /// Invokes `spawn` and performs a version check.
++    pub(crate) fn run_with_protocol(
++        spawn: impl Fn(
++            Option<ProtocolFormat>,
++        ) -> io::Result<(
++            Box<dyn ProcessExit>,
++            Box<dyn Write + Send + Sync>,
++            Box<dyn BufRead + Send + Sync>,
++        )>,
++        version: Option<&Version>,
++        binary_server_version: impl Fn() -> String,
++        explicit_protocol: Option<ProtocolFormat>,
++    ) -> io::Result<ProcMacroServerProcess> {
+         const VERSION: Version = Version::new(1, 93, 0);
+         // we do `>` for nightly as this started working in the middle of the 1.93 nightly release, so we dont want to break on half of the nightlies
+         let has_working_format_flag = version.map_or(false, |v| {
+             if v.pre.as_str() == "nightly" { *v > VERSION } else { *v >= VERSION }
+         });
+ 
+-        let formats: &[_] = if std::env::var_os("RUST_ANALYZER_USE_POSTCARD").is_some()
++        let selected = explicit_protocol.map(|format| [Some(format)]);
++        let formats: &[_] = if let Some(formats) = &selected {
++            formats
++        } else if std::env::var_os("RUST_ANALYZER_USE_POSTCARD").is_some()
+             && has_working_format_flag
+         {
+             &[

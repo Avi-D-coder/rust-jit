@@ -12,6 +12,62 @@ pub fn module_target(
     request: ModuleRequest,
     mut exists: impl FnMut(&SourcePath) -> Result<bool, Diagnostic>,
 ) -> Result<(SourcePath, PathBuf), Diagnostic> {
+    let name = request.name.clone();
+    let (candidates, directory) = module_candidates(path, directory, request)?;
+    let selected = match candidates.as_slice() {
+        [one] if exists(one)? => one.clone(),
+        [one] => {
+            return Err(Diagnostic::new(
+                "LRR-E-SOURCE-MISSING",
+                format!("module source {} is missing", one.as_str()),
+            ));
+        }
+        [plain, nested] => match (exists(plain)?, exists(nested)?) {
+            (true, false) => plain.clone(),
+            (false, true) => nested.clone(),
+            (true, true) => {
+                return Err(Diagnostic::new(
+                    "LRR-E-MODULE-AMBIGUOUS",
+                    format!("both {} and {} exist", plain.as_str(), nested.as_str()),
+                ));
+            }
+            (false, false) => {
+                return Err(Diagnostic::new(
+                    "LRR-E-SOURCE-MISSING",
+                    format!("module {name} has no source file"),
+                ));
+            }
+        },
+        _ => {
+            return Err(Diagnostic::new(
+                "LRR-E-SOURCE-MODULE",
+                "module candidate count differs".into(),
+            ));
+        }
+    };
+    Ok((selected, directory))
+}
+/// Pure candidate layout shared by captured and dynamically discovered modules.
+pub fn module_candidates(
+    path: &SourcePath,
+    directory: &Path,
+    request: ModuleRequest,
+) -> Result<(Vec<SourcePath>, PathBuf), Diagnostic> {
+    let (spellings, directory) = module_candidate_spellings(path, directory, request)?;
+    Ok((
+        spellings
+            .into_iter()
+            .map(SourcePath::new)
+            .collect::<Result<Vec<_>, _>>()?,
+        directory,
+    ))
+}
+/// Keep raw components for capability resolution, including symlink-before-parent semantics.
+pub fn module_candidate_spellings(
+    path: &SourcePath,
+    directory: &Path,
+    request: ModuleRequest,
+) -> Result<(Vec<PathBuf>, PathBuf), Diagnostic> {
     let source_parent = Path::new(path.as_str()).parent().unwrap_or(Path::new(""));
     let base = if request.file_relative {
         source_parent.join(request.directory.iter().collect::<PathBuf>())
@@ -24,33 +80,13 @@ pub fn module_target(
         } else {
             base.as_path()
         };
-        let child = SourcePath::new(override_base.join(override_path))?;
-        if !exists(&child)? {
-            return Err(Diagnostic {
-                code: "LRR-E-SOURCE-MISSING",
-                message: format!("module source {} is missing", child.as_str()),
-            });
-        }
-        let child_directory = Path::new(child.as_str())
-            .parent()
-            .unwrap_or(Path::new(""))
-            .to_owned();
-        Ok((child, child_directory))
+        let child = override_base.join(override_path);
+        let child_directory = child.as_path().parent().unwrap_or(Path::new("")).to_owned();
+        Ok((vec![child], child_directory))
     } else {
-        let plain = SourcePath::new(base.join(format!("{}.rs", request.name)))?;
-        let nested = SourcePath::new(base.join(&request.name).join("mod.rs"))?;
-        match (exists(&plain)?, exists(&nested)?) {
-            (true, true) => Err(Diagnostic {
-                code: "LRR-E-MODULE-AMBIGUOUS",
-                message: format!("both {} and {} exist", plain.as_str(), nested.as_str()),
-            }),
-            (true, false) => Ok((plain, base.join(request.name))),
-            (false, true) => Ok((nested, base.join(request.name))),
-            (false, false) => Err(Diagnostic {
-                code: "LRR-E-SOURCE-MISSING",
-                message: format!("module {} has no source file", request.name),
-            }),
-        }
+        let plain = base.join(format!("{}.rs", request.name));
+        let nested = base.join(&request.name).join("mod.rs");
+        Ok((vec![plain, nested], base.join(request.name)))
     }
 }
 
@@ -70,14 +106,16 @@ pub fn validate(
             continue;
         }
         if visited.len() > 100_000 {
-            return Err(Diagnostic {
-                code: "LRR-E-SOURCE-LIMIT",
-                message: "source module graph exceeds 100,000 contexts".into(),
-            });
+            return Err(Diagnostic::new(
+                "LRR-E-SOURCE-LIMIT",
+                "source module graph exceeds 100,000 contexts".into(),
+            ));
         }
-        let blob = files.get(&path).ok_or_else(|| Diagnostic {
-            code: "LRR-E-SOURCE-MISSING",
-            message: format!("missing source {}", path.as_str()),
+        let blob = files.get(&path).ok_or_else(|| {
+            Diagnostic::new(
+                "LRR-E-SOURCE-MISSING",
+                format!("missing source {}", path.as_str()),
+            )
         })?;
         for request in crate::syntax::modules::external_modules(blob.text()?, cfg)? {
             queue.push_back(module_target(&path, &directory, request, |p| {

@@ -1,0 +1,44 @@
+--- a/crates/proc-macro-api/src/lib.rs
++++ b/crates/proc-macro-api/src/lib.rs
+@@ -192,6 +192,41 @@
+         Ok(ProcMacroClient { pool: Arc::new(pool), path: process_path.to_owned() })
+     }
+ 
++    /// Explicit single-protocol channels, with no ambient format flag or fallback spawn.
++    /// Libraries remain external; require the current owned-span protocol before loading.
++    pub fn with_io_channels_protocol(
++        process_path: &AbsPath,
++        spawn: impl Fn(
++            Option<ProtocolFormat>,
++        ) -> io::Result<(
++            Box<dyn process::ProcessExit>,
++            Box<dyn io::Write + Send + Sync>,
++            Box<dyn io::BufRead + Send + Sync>,
++        )> + Clone,
++        protocol: ProtocolFormat,
++        num_process: usize,
++    ) -> io::Result<ProcMacroClient> {
++        let mut workers = Vec::with_capacity(num_process);
++        for _ in 0..num_process {
++            let worker = ProcMacroServerProcess::run_with_protocol(
++                spawn.clone(),
++                None,
++                || "<explicit protocol>".to_owned(),
++                Some(protocol),
++            )?;
++            if worker.version() != version::CURRENT_API_VERSION || !worker.rust_analyzer_spans() {
++                return Err(io::Error::other(
++                    "explicit protocol does not support current owned spans",
++                ));
++            }
++            workers.push(worker);
++        }
++        Ok(ProcMacroClient {
++            pool: Arc::new(ProcMacroServerPool::new(workers)),
++            path: process_path.to_owned(),
++        })
++    }
++
+     /// Returns the absolute path to the proc-macro server.
+     pub fn server_path(&self) -> &AbsPath {
+         &self.path

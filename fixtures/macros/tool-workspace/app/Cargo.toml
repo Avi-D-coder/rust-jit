@@ -1,0 +1,14 @@
+[package]
+name = "lrr_tool_probe_app"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[dependencies]
+lrr_tool_probe_macros = { path = "../fixture-macros" }
+
+[dev-dependencies]
+lrr_tool_probe_macros = { path = "../fixture-macros", features = ["test-intent-witness"] }
+
+[build-dependencies]
+lrr_tool_probe_build_support = { path = "../fixture-build-support" }

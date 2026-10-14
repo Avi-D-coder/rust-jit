@@ -1,0 +1,2592 @@
+diff --git a/crates/lrr/src/source/value_library_selection.rs b/crates/lrr/src/source/value_library_selection.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/source/value_library_selection.rs
+@@ -0,0 +1,552 @@
++//! Explicit live source-library selection, distinct from installed/native sysroot.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::{
++        dependency::{InputKey, InputValue},
++        memo::Database,
++    },
++    facade::value_prelude::{ValuePreludeCatalog, pinned_sources},
++    source::{
++        changes::{PreparedSourceView, SourceSelection},
++        manifest::TargetKind,
++        snapshot::{Snapshot, SourceBlob, SourcePath},
++    },
++};
++use std::collections::BTreeMap;
++const MAX_BYTES: usize = 32 * 1024 * 1024;
++const CORE_ROOT: &str = include_str!("../facade/value_prelude_sources/library/core/src/lib.rs");
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-SOURCE-TYPE-CONTEXT", message.into())
++}
++fn budget() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "selected Value-library metadata/source budget".into(),
++    )
++}
++/// Opaque, preparation-minted input. Its origin is *selected live source*, never
++/// an installed sysroot/native generation or a synthetic macro-facet default.
++/// Raw SourceView IDs, caller stamp lists and serde constructors are absent.
++#[derive(Debug)]
++pub struct PreparedValueLibrarySelection {
++    consumer: SourceSelection,
++    core: SourceSelection,
++    standard: SourceSelection,
++    allocation: Option<SourceSelection>,
++    snapshot: Digest,
++    graph: Digest,
++    catalog: Digest,
++    source_seal: Digest,
++    documents: BTreeMap<SourcePath, SourceBlob>,
++    stamps: BTreeMap<InputKey, Digest>,
++    bytes: usize,
++}
++fn require_provider(
++    snapshot: &Snapshot,
++    view: &PreparedSourceView,
++    name: &str,
++) -> Result<(), Diagnostic> {
++    view.require_original_hygiene()?;
++    view.require_declaration_syntax()?;
++    let selection = view.selection();
++    let profile = &selection.outline.parse.profile;
++    profile.validate_source()?;
++    if !selection.outline.module_path.is_empty() || profile.edition != 2024 {
++        return Err(fault(
++            "Value-library provider must be original owning-edition2024 root",
++        ));
++    }
++    let cargo_path = SourcePath::new(format!("library/{name}/Cargo.toml"))?;
++    let cargo = snapshot
++        .files()
++        .get(&cargo_path)
++        .ok_or_else(|| fault("selected Value-library owning Cargo document absent"))?;
++    let manifest: toml::Value = toml::from_str(cargo.text()?)
++        .map_err(|_| fault("selected Value-library Cargo document invalid"))?;
++    let package = manifest
++        .get("package")
++        .ok_or_else(|| fault("selected Value-library Cargo package absent"))?;
++    let cargo_name = package
++        .get("name")
++        .and_then(toml::Value::as_str)
++        .ok_or_else(|| fault("selected Value-library Cargo package name absent"))?;
++    let cargo_version = package
++        .get("version")
++        .and_then(toml::Value::as_str)
++        .ok_or_else(|| fault("selected Value-library Cargo package version absent"))?;
++    let cargo_edition = package
++        .get("edition")
++        .and_then(toml::Value::as_str)
++        .ok_or_else(|| fault("selected Value-library Cargo edition absent"))?;
++    let key = snapshot
++        .project()
++        .crates
++        .get(&selection.outline.crate_key)
++        .ok_or_else(|| fault("selected Value-library source crate identity is absent"))?;
++    let cfg = snapshot
++        .cfg_by_crate()
++        .get(&selection.outline.crate_key)
++        .ok_or_else(|| fault("selected Value-library source cfg is absent"))?;
++    if key.fingerprint() != selection.outline.crate_key
++        || key.package.package_name != name
++        || cargo_name != name
++        || key.package.version != cargo_version
++        || cargo_edition != "2024"
++        || key.target_name != name
++        || key.target_kind != TargetKind::Library
++        || key.guest_edition != 2024
++        || key.semantics_profile != profile.fingerprint()
++        || key.cfg_fingerprint != cfg.fingerprint()
++        || selection.outline.cfg != cfg.fingerprint()
++    {
++        return Err(fault(
++            "Value-library provider package/profile/edition/cfg differs",
++        ));
++    }
++    let path = SourcePath::new(format!("library/{name}/src/lib.rs"))?;
++    let blob = snapshot
++        .files()
++        .get(&path)
++        .ok_or_else(|| fault("selected Value-library provider root source absent"))?;
++    if blob.content() != selection.outline.parse.content
++        || view.captured_macro_blob()?.content() != blob.content()
++        || view.captured_macro_cfg()?.fingerprint() != cfg.fingerprint()
++    {
++        return Err(fault(
++            "Value-library provider root is not the captured source/cfg",
++        ));
++    }
++    // The full root source binds this exact public module declaration; no
++    // arbitrary renamed/root prelude route may replace the pinned chain.
++    use ra_ap_syntax::{
++        AstNode,
++        ast::{self, HasAttrs, HasModuleItem, HasName, HasVisibility},
++    };
++    let parsed =
++        ra_ap_syntax::ast::SourceFile::parse(blob.text()?, ra_ap_syntax::Edition::Edition2024)
++            .tree();
++    if name == "alloc" {
++        return Ok(());
++    }
++    let mut modules = parsed
++        .items()
++        .filter_map(|item| {
++            if let ast::Item::Module(module) = item {
++                Some(module)
++            } else {
++                None
++            }
++        })
++        .filter(|module| module.name().is_some_and(|n| n.text() == "prelude"));
++    let module = modules
++        .next()
++        .ok_or_else(|| fault("Value-library root prelude declaration absent"))?;
++    if modules.next().is_some()
++        || module
++            .visibility()
++            .is_none_or(|v| v.syntax().text().to_string() != "pub")
++        || module.item_list().is_some()
++    {
++        return Err(fault("Value-library prelude root declaration differs"));
++    }
++    let (enabled, _) = crate::syntax::attributes::effective_metas(
++        module.attrs().filter_map(|attr| attr.meta()).collect(),
++        cfg,
++    )?;
++    if !enabled {
++        return Err(fault("selected library cfg disables the prelude root"));
++    }
++    Ok(())
++}
++impl PreparedValueLibrarySelection {
++    pub(crate) fn capture_live_source(
++        consumer: &PreparedSourceView,
++        core: &PreparedSourceView,
++        standard: &PreparedSourceView,
++        allocation: Option<&PreparedSourceView>,
++        snapshot: &Snapshot,
++    ) -> Result<Self, Diagnostic> {
++        consumer.require_original_hygiene()?;
++        consumer.require_declaration_syntax()?;
++        consumer
++            .selection()
++            .outline
++            .parse
++            .profile
++            .validate_source()?;
++        if !consumer.selection().outline.module_path.is_empty() {
++            return Err(fault(
++                "Value-library selection requires exact consumer root",
++            ));
++        }
++        require_provider(snapshot, core, "core")?;
++        require_provider(snapshot, standard, "std")?;
++        if snapshot.project().selected_crate != core.selection().outline.crate_key
++            && snapshot.project().selected_crate != standard.selection().outline.crate_key
++        {
++            return Err(fault(
++                "captured library snapshot selects another source project",
++            ));
++        }
++        let selected = if snapshot.project().selected_crate == core.selection().outline.crate_key {
++            core
++        } else {
++            standard
++        };
++        if &snapshot.project().root_source != &selected.selection().path {
++            return Err(fault("captured library source root path differs"));
++        }
++        let graph = consumer.source_dependencies()?;
++        let policy = consumer.macro_prelude_policy()?;
++        let aliases = graph.aliases_for(
++            consumer.selection().outline.crate_key,
++            consumer.selection().outline.parse.profile.edition,
++        )?;
++        let core_name = crate::frontend::names::owned_name(
++            "core",
++            consumer.selection().outline.parse.profile.edition,
++        )?;
++        let std_name = crate::frontend::names::owned_name(
++            "std",
++            consumer.selection().outline.parse.profile.edition,
++        )?;
++        if aliases.get(&core_name) != Some(&core.selection().outline.crate_key)
++            || (policy.standard
++                && aliases.get(&std_name) != Some(&standard.selection().outline.crate_key))
++            || aliases
++                .get(&std_name)
++                .is_some_and(|provider| *provider != standard.selection().outline.crate_key)
++        {
++            return Err(fault(
++                "actual source dependency graph does not select the core/std Value policy providers",
++            ));
++        }
++        if core.source_dependencies()?.fingerprint() != graph.fingerprint()
++            || standard.source_dependencies()?.fingerprint() != graph.fingerprint()
++        {
++            return Err(fault(
++                "Value-library provider roots belong to another prepared source world",
++            ));
++        }
++        if let Some(allocation) = allocation {
++            require_provider(snapshot, allocation, "alloc")?;
++            let std_aliases = graph.aliases_for(standard.selection().outline.crate_key, 2024)?;
++            let alloc_aliases =
++                graph.aliases_for(allocation.selection().outline.crate_key, 2024)?;
++            if std_aliases.get(&crate::frontend::names::owned_name("alloc", 2024)?)
++                != Some(&allocation.selection().outline.crate_key)
++                || alloc_aliases.get(&crate::frontend::names::owned_name("core", 2024)?)
++                    != Some(&core.selection().outline.crate_key)
++                || allocation.source_dependencies()?.fingerprint() != graph.fingerprint()
++            {
++                return Err(fault(
++                    "actual selected alloc source graph/root world differs",
++                ));
++            }
++        }
++
++        // Standard/core are prepared together; actual no_std chooses the core
++        // lane at reached admission. Disabled/custom policies do not default to
++        // a different library. Consumer custom policy is refused by its producer.
++        let mut documents = BTreeMap::new();
++        let mut stamps = BTreeMap::new();
++        let mut source_bytes = 0usize;
++        for (path, expected) in pinned_sources()
++            .into_iter()
++            .chain([("library/core/src/lib.rs", CORE_ROOT)])
++        {
++            let path = SourcePath::new(path)?;
++            let blob = snapshot.files().get(&path).ok_or_else(|| {
++                fault("selected Value-library complete export source chain absent")
++            })?;
++            if blob.bytes() != expected.as_bytes() {
++                return Err(fault(
++                    "selected Value-library source generation/export chain differs; no sysroot equivalence",
++                ));
++            }
++            source_bytes = source_bytes
++                .checked_add(blob.bytes().len())
++                .filter(|n| *n <= MAX_BYTES)
++                .ok_or_else(budget)?;
++            stamps.insert(
++                InputKey::SourceBlob(blob.content()),
++                InputValue::SourceBlob(blob.clone()).fingerprint(),
++            );
++            documents.insert(path, blob.clone());
++        }
++        // Do not borrow a temporary path; static closed source paths determine
++        // the observation list, never a caller-selected dependency inventory.
++        // Retain the whole actually captured source bundle as observations.
++        // Extra files do not become declaration/module/trait authority. The
++        // prelude completeness proof still uses exactly the closed pinned chain.
++        if snapshot.files().len() > 100_000 {
++            return Err(budget());
++        }
++        for (path, blob) in snapshot.files() {
++            if documents.contains_key(path) {
++                continue;
++            }
++            source_bytes = source_bytes
++                .checked_add(blob.bytes().len())
++                .filter(|n| *n <= MAX_BYTES)
++                .ok_or_else(budget)?;
++            stamps.insert(
++                InputKey::SourceBlob(blob.content()),
++                InputValue::SourceBlob(blob.clone()).fingerprint(),
++            );
++            documents.insert(path.clone(), blob.clone());
++        }
++        let texts: Vec<_> = pinned_sources()
++            .into_iter()
++            .map(|(path, _)| Ok((path, documents[&SourcePath::new(path)?].text()?)))
++            .collect::<Result<Vec<_>, Diagnostic>>()?;
++        let catalog = ValuePreludeCatalog::from_sources(&texts)?.identity();
++        for view in [Some(consumer), Some(core), Some(standard), allocation]
++            .into_iter()
++            .flatten()
++        {
++            for (key, value) in view.prepared_inputs() {
++                if matches!(key, InputKey::ValueLibrarySelection(_)) {
++                    return Err(fault(
++                        "selection must be captured before an older library input is retained",
++                    ));
++                }
++                let fingerprint = value.fingerprint();
++                if stamps
++                    .insert(key.clone(), fingerprint)
++                    .is_some_and(|old| old != fingerprint)
++                {
++                    return Err(fault("Value-library captured input facts conflict"));
++                }
++            }
++        }
++        if stamps.len() > 100_000 {
++            return Err(budget());
++        }
++        let mut encoded = StableEncoder::new("lrr/v1/selected-live-value-library-source-seal");
++        encoded.record(consumer.selection());
++        encoded.record(core.selection());
++        encoded.record(standard.selection());
++        encoded.option(&allocation, |encoded, allocation| {
++            encoded.record(allocation.selection())
++        });
++        encoded.digest(snapshot.id());
++        encoded.digest(graph.fingerprint());
++        encoded.digest(catalog);
++        encoded.bool(policy.standard);
++        for (path, blob) in &documents {
++            encoded.string(path.as_str());
++            encoded.digest(blob.content());
++        }
++        let source_seal = encoded.finish();
++        let mut bytes = std::mem::size_of::<Self>();
++        for source in [
++            Some(consumer.selection()),
++            Some(core.selection()),
++            Some(standard.selection()),
++            allocation.map(PreparedSourceView::selection),
++        ]
++        .into_iter()
++        .flatten()
++        {
++            bytes = bytes
++                .checked_add(source.metadata_bytes()?)
++                .ok_or_else(budget)?;
++        }
++        for path in documents.keys() {
++            bytes = bytes
++                .checked_add(128 + std::mem::size_of::<(SourcePath, SourceBlob)>())
++                .and_then(|n| n.checked_add(path.as_str().len()))
++                .filter(|n| *n <= MAX_BYTES)
++                .ok_or_else(budget)?;
++        }
++        for key in stamps.keys() {
++            bytes = bytes
++                .checked_add(128 + std::mem::size_of::<(InputKey, Digest)>())
++                .and_then(|n| n.checked_add(key.heap_bytes()))
++                .filter(|n| *n <= MAX_BYTES)
++                .ok_or_else(budget)?;
++        }
++        Ok(Self {
++            consumer: consumer.selection().clone(),
++            core: core.selection().clone(),
++            standard: standard.selection().clone(),
++            allocation: allocation.map(|view| view.selection().clone()),
++            snapshot: snapshot.id(),
++            graph: graph.fingerprint(),
++            catalog,
++            source_seal,
++            documents,
++            stamps,
++            bytes,
++        })
++    }
++    pub(crate) fn consumer(&self) -> &SourceSelection {
++        &self.consumer
++    }
++    pub(crate) fn provider(&self, standard: bool) -> &SourceSelection {
++        if standard { &self.standard } else { &self.core }
++    }
++    pub(crate) fn allocation_provider(&self) -> Option<&SourceSelection> {
++        self.allocation.as_ref()
++    }
++    pub(crate) fn catalog_identity(&self) -> Digest {
++        self.catalog
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn observed_source(&self, path: &SourcePath) -> Option<Digest> {
++        self.documents.get(path).map(SourceBlob::content)
++    }
++    pub(crate) fn blobs(&self) -> impl Iterator<Item = &SourceBlob> {
++        self.documents.values()
++    }
++    pub(crate) fn validate_current(
++        &self,
++        db: &Database,
++        consumer: &PreparedSourceView,
++    ) -> Result<(), Diagnostic> {
++        if consumer.selection() != &self.consumer {
++            return Err(fault(
++                "selected Value-library consumer/source/profile differs",
++            ));
++        }
++        if !matches!(db.published_input(&InputKey::SourceDependencies),Some((InputValue::SourceDependencies(graph),_)) if graph.fingerprint()==self.graph)
++        {
++            return Err(fault(
++                "selected Value-library source dependency world changed",
++            ));
++        }
++        for (key, expected) in &self.stamps {
++            if db
++                .published_input(key)
++                .is_none_or(|(_, actual)| actual != *expected)
++            {
++                return Err(fault(
++                    "selected Value-library captured source/profile/cfg/input changed",
++                ));
++            }
++        }
++        Ok(())
++    }
++}
++impl StableEncode for PreparedValueLibrarySelection {
++    const DOMAIN: &'static str = "lrr/v1/selected-live-value-library-input";
++    fn encode_fields(&self, encoded: &mut StableEncoder) {
++        encoded.u32(1); // live source lane, never installed/native sysroot
++        encoded.record(&self.consumer);
++        encoded.record(&self.core);
++        encoded.record(&self.standard);
++        encoded.option(&self.allocation, |encoded, source| encoded.record(source));
++        encoded.digest(self.snapshot);
++        encoded.digest(self.graph);
++        encoded.digest(self.catalog);
++        encoded.digest(self.source_seal);
++        encoded.u64(
++            u64::try_from(self.documents.len())
++                .expect("bounded actually captured source documents"),
++        );
++        for (path, blob) in &self.documents {
++            encoded.string(path.as_str());
++            encoded.digest(blob.content());
++        }
++        encoded.u64(u64::try_from(self.stamps.len()).expect("bounded selected library stamps"));
++        for (key, value) in &self.stamps {
++            encoded.record(key);
++            encoded.digest(*value);
++        }
++    }
++}
++
++/// Explicitly selected packaged *live prelude source* generation. The immutable
++/// bundle contains complete prelude export spellings, not the entire std/core
++/// runtime/Value declaration catalogue. Uncaptured target kinds stay unresolved.
++/// This selects licensed source metadata; it never matches an installed sysroot.
++pub(crate) fn packaged_live_prelude_snapshot(
++    consumer_profile: &crate::core::profile::ProfileIdentity,
++) -> Result<Snapshot, Diagnostic> {
++    consumer_profile.validate_source()?;
++    let catalog = ValuePreludeCatalog::pinned()?;
++    let cfg = crate::source::snapshot::CfgSet::guest_default();
++    let mut files = BTreeMap::new();
++    let mut crates = BTreeMap::new();
++    let mut cfgs = BTreeMap::new();
++    let mut selected = None;
++    for (path, text) in pinned_sources()
++        .into_iter()
++        .chain([("library/core/src/lib.rs", CORE_ROOT)])
++    {
++        files.insert(
++            SourcePath::new(path)?,
++            SourceBlob::new(text.as_bytes().to_vec())?,
++        );
++    }
++    for (name, index) in [("core", 8), ("std", 9)] {
++        let manifest: toml::Value = toml::from_str(pinned_sources()[index].1)
++            .map_err(|_| fault("packaged library owning Cargo metadata syntax differs"))?;
++        let package = manifest
++            .get("package")
++            .ok_or_else(|| fault("packaged library Cargo package absent"))?;
++        let actual_name = package
++            .get("name")
++            .and_then(toml::Value::as_str)
++            .ok_or_else(|| fault("packaged library Cargo name absent"))?;
++        let version = package
++            .get("version")
++            .and_then(toml::Value::as_str)
++            .ok_or_else(|| fault("packaged library Cargo version absent"))?;
++        let edition = package
++            .get("edition")
++            .and_then(toml::Value::as_str)
++            .ok_or_else(|| fault("packaged library Cargo edition absent"))?
++            .parse::<u16>()
++            .map_err(|_| fault("packaged library Cargo edition invalid"))?;
++        if actual_name != name || edition != 2024 {
++            return Err(fault(
++                "packaged source library owning Cargo identity/edition differs",
++            ));
++        }
++        let profile = crate::core::profile::ProfileIdentity {
++            edition,
++            semantics: consumer_profile.semantics.clone(),
++        };
++        let key = crate::source::manifest::CrateKey {
++            package: crate::source::manifest::PackageKey {
++                source_identity: format!("lrr-packaged-live-prelude-source:{}", catalog.identity()),
++                package_name: actual_name.into(),
++                version: version.into(),
++            },
++            target_kind: TargetKind::Library,
++            target_name: actual_name.into(),
++            guest_edition: edition,
++            semantics_profile: profile.fingerprint(),
++            cfg_fingerprint: cfg.fingerprint(),
++            dependency_aliases: Digest::of_bytes(b""),
++        };
++        let identity = key.fingerprint();
++        if name == "std" {
++            selected = Some(identity);
++        }
++        crates.insert(identity, key);
++        cfgs.insert(identity, cfg.clone());
++    }
++    Snapshot::new(
++        crate::source::snapshot::ProjectManifest {
++            identity: format!(
++                "explicit-selected-live-prelude-source:{}",
++                catalog.identity()
++            ),
++            root_source: SourcePath::new("library/std/src/lib.rs")?,
++            selected_crate: selected.ok_or_else(|| fault("packaged source std root absent"))?,
++            crates,
++        },
++        files,
++        cfgs,
++        BTreeMap::new(),
++        None,
++    )
++}
+diff --git a/crates/lrr/src/frontend/value_library_admission.rs b/crates/lrr/src/frontend/value_library_admission.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/value_library_admission.rs
+@@ -0,0 +1,218 @@
++//! Current joined source-library generation and consumer Value discovery authority.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::{
++        dependency::{InputKey, InputValue},
++        memo::Database,
++        seals::{SealDomain, SealKey},
++    },
++    facade::value_prelude::ValuePreludeCatalog,
++    source::{
++        changes::{PreparedSourceView, SourceSelection},
++        snapshot::SourcePath,
++        value_library_selection::PreparedValueLibrarySelection,
++    },
++    syntax::outline::ScopeKey,
++};
++use std::sync::Arc;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-SOURCE-TYPE-CONTEXT", message.into())
++}
++/// Private-mintable immutable proof over the exact published preparation input.
++/// It grants only the selected closed prelude spelling world, not a trait member,
++/// static checker, native generation, arbitrary foreign symbol or SourceViewId.
++#[derive(Debug)]
++pub(crate) struct CurrentValueLibraryAdmission {
++    selection: Arc<PreparedValueLibrarySelection>,
++    publication: Digest,
++    seal: SealKey,
++    seal_fingerprint: Digest,
++    world: Digest,
++    scope: ScopeKey,
++    standard: bool,
++    bytes: usize,
++}
++impl CurrentValueLibraryAdmission {
++    pub(crate) fn capture_current(
++        db: &Database,
++        source: &PreparedSourceView,
++        scope: &ScopeKey,
++        catalog: &ValuePreludeCatalog,
++    ) -> Result<Self, Diagnostic> {
++        let key = InputKey::ValueLibrarySelection(source.selection().outline.crate_key);
++        let (InputValue::ValueLibrarySelection(selection),publication)=db.published_input(&key).ok_or_else(||fault("matched selected live Value-library generation input absent; macro/sysroot facets are insufficient"))? else{return Err(fault("selected Value-library input variant differs"));};
++        selection.validate_current(db, source)?;
++        if selection.catalog_identity() != catalog.identity() {
++            return Err(fault(
++                "selected Value-library export catalog/generation differs",
++            ));
++        }
++        let captured =
++            crate::facade::value_prelude::CapturedValuePreludePolicy::capture(db, source, scope)?;
++        if captured
++            .catalog()
++            .is_none_or(|actual| actual.identity() != catalog.identity())
++        {
++            return Err(fault(
++                "custom/disabled or mismatched Value-prelude policy needs separate source admission",
++            ));
++        }
++        let policy = source.macro_prelude_policy()?;
++        if scope.owner.is_some()
++            || scope.crate_key != source.selection().outline.crate_key
++            || policy
++                .disabled
++                .iter()
++                .any(|prefix| scope.module_path.starts_with(prefix))
++        {
++            return Err(fault(
++                "Value-library current admission requires the exact implicit module policy",
++            ));
++        }
++        let published = db.source_view_scope_certificate(source.selection(), scope)?;
++        let InputValue::DiscoverySeal(input) = published.as_ref() else {
++            return Err(fault("Value-library consumer Value seal variant differs"));
++        };
++        let declared = input
++            .scope
++            .as_ref()
++            .ok_or_else(|| fault("Value-library exact consumer scope certificate absent"))?;
++        let seal = input.seal.key();
++        seal.validate()?;
++        if declared.scope != *scope
++            || declared.namespace != crate::source::manifest::Namespace::Value
++            || declared.edition != source.selection().outline.parse.profile.edition
++            || !matches!(input.seal.domain(),SealDomain::Scope{id,namespace} if *id==scope.fingerprint()&&*namespace==crate::source::manifest::Namespace::Value)
++            || input.sources.len() != 1
++            || input.sources[0] != *source.selection()
++            || input.seal.unresolved_frontiers() != 0
++        {
++            return Err(fault(
++                "Value-library current consumer source/scope/profile/edition/world differs",
++            ));
++        }
++        if !matches!(db.published_input(&InputKey::ExpansionEpoch),Some((InputValue::ExpansionEpoch(epoch),_)) if *epoch==seal.epoch)
++        {
++            return Err(fault("Value-library current expansion epoch changed"));
++        }
++        if !matches!(db.published_input(&InputKey::SourceDependencies),Some((InputValue::SourceDependencies(graph),_)) if graph.fingerprint()==input.source_dependencies)
++        {
++            return Err(fault(
++                "Value-library current source dependency world changed",
++            ));
++        }
++        for (key, expected) in &input.compiler_inputs {
++            if db
++                .published_input(key)
++                .is_none_or(|(_, actual)| actual != *expected)
++            {
++                return Err(fault(
++                    "Value-library current compiler/source selection facts changed",
++                ));
++            }
++        }
++        if !input.records.is_empty()
++            || !input.procedural_catalogs.is_empty()
++            || !input.helper_declarations.is_empty()
++            || !input.argument_fragments.is_empty()
++            || !input.declaration_fragments.is_empty()
++        {
++            return Err(fault(
++                "generated/native/foreign Value-library selection needs separate admission",
++            ));
++        }
++        let bytes = std::mem::size_of::<Self>()
++            .checked_add(selection.metadata_bytes())
++            .and_then(|n| n.checked_add(scope.heap_bytes()))
++            .filter(|n| *n <= 32 * 1024 * 1024)
++            .ok_or_else(|| {
++                Diagnostic::new(
++                    "LRR-E-METADATA-LIMIT",
++                    "Value-library current admission metadata budget".into(),
++                )
++            })?;
++        Ok(Self {
++            selection: selection.clone(),
++            publication,
++            seal,
++            seal_fingerprint: published.fingerprint(),
++            world: input.seal.key().unit_graph,
++            scope: scope.clone(),
++            standard: policy.standard,
++            bytes,
++        })
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        let mut encoded = StableEncoder::new("lrr/v1/current-live-value-library-admission");
++        encoded.digest(self.selection.fingerprint());
++        encoded.digest(self.publication);
++        encoded.record(&self.seal);
++        encoded.digest(self.seal_fingerprint);
++        encoded.digest(self.world);
++        encoded.record(&self.scope);
++        encoded.bool(self.standard);
++        encoded.finish()
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(crate) fn provider(&self, standard: bool) -> &SourceSelection {
++        self.selection.provider(standard)
++    }
++    pub(crate) fn require_allocation_provider(&self) -> Result<&SourceSelection, Diagnostic> {
++        self.selection
++            .allocation_provider()
++            .ok_or_else(|| fault("actual selected alloc live source provider root/graph absent"))
++    }
++    pub(crate) fn require_automatic_absence(
++        &self,
++        catalog: &ValuePreludeCatalog,
++        standard: bool,
++        edition: u16,
++        name: &str,
++    ) -> Result<(), Diagnostic> {
++        if standard != self.standard
++            || edition != self.selection.consumer().outline.parse.profile.edition
++            || catalog.identity() != self.selection.catalog_identity()
++        {
++            return Err(fault(
++                "Value-library absence request owner/profile/policy/generation differs",
++            ));
++        }
++        if catalog.contains_export_spelling(standard, edition, name)? {
++            return Err(fault(
++                "present selected Value-prelude export needs source declaration-kind authority",
++            ));
++        }
++        Ok(())
++    }
++    /// Raw source observation only. An Index/Impl producer still needs actual
++    /// owning namespace, declaration/member and complete ImplCatalog seals.
++    pub(crate) fn require_observed_source(
++        &self,
++        path: &SourcePath,
++        content: Digest,
++    ) -> Result<(), Diagnostic> {
++        if self.selection.observed_source(path) != Some(content) {
++            return Err(fault(
++                "selected live Value-library source observation absent or mismatched",
++            ));
++        }
++        Ok(())
++    }
++    pub(crate) fn revalidate(
++        &self,
++        db: &Database,
++        source: &PreparedSourceView,
++        catalog: &ValuePreludeCatalog,
++    ) -> Result<(), Diagnostic> {
++        let fresh = Self::capture_current(db, source, &self.scope, catalog)?;
++        if fresh.identity() != self.identity() {
++            return Err(fault("selected live Value-library admission is stale"));
++        }
++        Ok(())
++    }
++}
+diff --git a/crates/lrr/src/facade/value_prelude.rs b/crates/lrr/src/facade/value_prelude.rs
+--- a/crates/lrr/src/facade/value_prelude.rs
++++ b/crates/lrr/src/facade/value_prelude.rs
+@@ -32,7 +32,7 @@
+         "Value-prelude source metadata budget".into(),
+     )
+ }
+-fn pinned_sources() -> [(&'static str, &'static str); 10] {
++pub(crate) fn pinned_sources() -> [(&'static str, &'static str); 10] {
+     [
+         (
+             "library/core/src/prelude/mod.rs",
+@@ -360,7 +360,7 @@
+     pub(crate) fn pinned() -> Result<Self, Diagnostic> {
+         Self::from_sources(&pinned_sources())
+     }
+-    fn from_sources(sources: &[(&str, &str)]) -> Result<Self, Diagnostic> {
++    pub(crate) fn from_sources(sources: &[(&str, &str)]) -> Result<Self, Diagnostic> {
+         let expected = pinned_sources();
+         if sources != expected.as_slice() {
+             return Err(fault("Value-prelude library export chain/pin differs"));
+@@ -631,6 +631,28 @@
+             .filter(|n| *n <= LIMIT)
+             .ok_or_else(budget)
+     }
++    pub(crate) fn catalog(&self) -> Option<&ValuePreludeCatalog> {
++        self.catalog.as_ref()
++    }
++    pub(crate) fn require_automatic_absence_in(
++        &self,
++        name: &str,
++        library: Option<&crate::frontend::value_library_admission::CurrentValueLibraryAdmission>,
++    ) -> Result<(), Diagnostic> {
++        if self.custom || self.disabled || library.is_none() {
++            return self.require_automatic_absence(name);
++        }
++        library
++            .expect("checked selected library option")
++            .require_automatic_absence(
++                self.catalog
++                    .as_ref()
++                    .ok_or_else(|| fault("Value-prelude export catalog absent"))?,
++                self.standard,
++                self.edition,
++                name,
++            )
++    }
+     pub(crate) fn require_automatic_absence(&self, name: &str) -> Result<(), Diagnostic> {
+         crate::frontend::names::owned_name(name, self.edition)?;
+         if self.custom {
+diff --git a/crates/lrr/src/frontend/source_view_pattern_admission.rs b/crates/lrr/src/frontend/source_view_pattern_admission.rs
+--- a/crates/lrr/src/frontend/source_view_pattern_admission.rs
++++ b/crates/lrr/src/frontend/source_view_pattern_admission.rs
+@@ -10,6 +10,7 @@
+ /// replay metadata, not a public NameId/SourceViewId or a reusable world witness.
+ pub(super) struct CurrentPatternNames {
+     policy: CapturedValuePreludePolicy,
++    library: Option<crate::frontend::value_library_admission::CurrentValueLibraryAdmission>,
+     resolutions: BTreeMap<Digest, PatternResolution>,
+     identity: Digest,
+ }
+@@ -23,9 +24,27 @@
+         limit: usize,
+     ) -> Result<Self, Diagnostic> {
+         let policy = CapturedValuePreludePolicy::capture(db, source, &owner.signature().scope)?;
++        let library = if let Some(catalog) = policy.catalog()
++            && db
++                .published_input(&InputKey::ValueLibrarySelection(
++                    source.selection().outline.crate_key,
++                ))
++                .is_some()
++        {
++            Some(crate::frontend::value_library_admission::CurrentValueLibraryAdmission::capture_current(db,source,&owner.signature().scope,catalog)?)
++        } else {
++            None
++        };
+         let mut bytes = policy
+             .metadata_bytes()?
+             .checked_add(std::mem::size_of::<Self>())
++            .and_then(|n| {
++                n.checked_add(
++                    library
++                        .as_ref()
++                        .map_or(0, |library| library.metadata_bytes()),
++                )
++            })
+             .filter(|n| *n <= limit)
+             .ok_or_else(metadata_fault)?;
+         if entered.facts().bindings.len() > 256 {
+@@ -79,7 +98,10 @@
+             }
+             // A missing implicit/custom library world never becomes module-only
+             // absence. Other cold ambiguous bindings stay deferred.
+-            if policy.require_automatic_absence(&binding.name).is_err() {
++            if policy
++                .require_automatic_absence_in(&binding.name, library.as_ref())
++                .is_err()
++            {
+                 continue;
+             }
+             bytes = bytes
+@@ -129,6 +151,9 @@
+         }
+         let mut encoded = StableEncoder::new("lrr/v1/current-source-view-pattern-admission");
+         encoded.digest(policy.identity());
++        encoded.option(&library, |encoded, library| {
++            encoded.digest(library.identity())
++        });
+         encoded.digest(owner.signature().fingerprint());
+         encoded.record(&owner.body().key());
+         encoded.u32(u32::try_from(resolutions.len()).map_err(|_| metadata_fault())?);
+@@ -145,6 +170,7 @@
+         }
+         Ok(Self {
+             policy,
++            library,
+             resolutions,
+             identity: encoded.finish(),
+         })
+@@ -156,9 +182,13 @@
+         self.identity
+     }
+     pub(super) fn refusal(&self, name: &str) -> Diagnostic {
+-        self.policy.require_automatic_absence(name).err().unwrap_or_else(||source_fault("source-view current pattern name needs exact local/module declaration-kind authority"))
++        self.policy.require_automatic_absence_in(name,self.library.as_ref()).err().unwrap_or_else(||source_fault("source-view current pattern name needs exact local/module declaration-kind authority"))
+     }
+ }
+ #[cfg(test)]
+ #[path = "source_view_pattern_admission_tests.rs"]
+ mod tests;
++
++#[cfg(test)]
++#[path = "source_view_library_admission_tests.rs"]
++mod library_admission_tests;
+diff --git a/crates/lrr/src/source/value_library_prepare.rs b/crates/lrr/src/source/value_library_prepare.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/source/value_library_prepare.rs
+@@ -0,0 +1,388 @@
++//! Pure explicit source preparation hook; no file reads, provider or tool effects.
++use super::*;
++use crate::db::dependency::{InputKey, InputValue};
++use crate::{
++    core::digest::StableEncode,
++    source::{
++        dependencies::SourceDependency, snapshot::Snapshot,
++        value_library_selection::PreparedValueLibrarySelection,
++    },
++};
++use std::{collections::BTreeMap, sync::Arc};
++impl PreparedSourceInputs {
++    /// Separately reviewed standalone source-preparation attachment: explicitly
++    /// choose the packaged live prelude source world, not the host sysroot. No
++    /// declaration kind or uncaptured std/core Value membership is invented.
++    pub(crate) fn with_packaged_live_value_libraries(
++        self,
++        consumer: &SourceSelection,
++    ) -> Result<Self, Diagnostic> {
++        let library = crate::source::value_library_selection::packaged_live_prelude_snapshot(
++            &consumer.outline.parse.profile,
++        )?;
++        self.with_pinned_live_value_libraries(consumer, &library)
++    }
++
++    /// Called explicitly by source preparation after capturing the selected live
++    /// library source bundle. This chooses an interpreter source facade/library,
++    /// not the installed host sysroot or a macro facade. It never guesses a match.
++    pub(crate) fn with_pinned_live_value_libraries(
++        self,
++        consumer: &SourceSelection,
++        library: &Snapshot,
++    ) -> Result<Self, Diagnostic> {
++        if self.state._module_origin.is_some() || self.state._ordinary_module_origin.is_some() {
++            return Err(publication_fault(
++                "generated Value-library selection needs separate admission",
++            ));
++        }
++        let SourceSelectionOutcome::Selected(root) = self.select(consumer)? else {
++            return Err(publication_fault(
++                "Value-library consumer root selection changed",
++            ));
++        };
++        if root.outline().items.iter().any(|item| {
++            item.header
++                .attributes
++                .iter()
++                .any(|attribute| attribute.name == "prelude_import")
++        }) {
++            return Err(publication_fault(
++                "custom prelude_import Value-library selection needs actual source admission",
++            ));
++        }
++        if !consumer.outline.module_path.is_empty() {
++            return Err(publication_fault(
++                "Value-library source preparation requires selected consumer root",
++            ));
++        }
++        if self.state.inputs.keys().any(|key| {
++            matches!(
++                key,
++                InputKey::ValueLibrarySelection(_)
++                    | InputKey::DiscoverySeal(_)
++                    | InputKey::GeneratedSyntax(_)
++            )
++        }) {
++            return Err(publication_fault(
++                "Value-library source preparation must precede discovery/old selection",
++            ));
++        }
++        let mut library_roots = BTreeMap::new();
++        for name in ["core", "std", "alloc"] {
++            let mut candidates = library.project().crates.iter().filter(|(_, key)| {
++                key.package.package_name == name
++                    && key.target_name == name
++                    && key.target_kind == crate::source::manifest::TargetKind::Library
++            });
++            let first = candidates.next();
++            if name == "alloc" && first.is_none() {
++                continue;
++            }
++            let (identity, key) = first.ok_or_else(|| {
++                publication_fault("captured live Value-library crate root absent")
++            })?;
++            if candidates.next().is_some()
++                || key.fingerprint() != *identity
++                || key.guest_edition != 2024
++            {
++                return Err(publication_fault(
++                    "captured live Value-library root/profile is ambiguous or unsupported",
++                ));
++            }
++            let cfg = library
++                .cfg_by_crate()
++                .get(identity)
++                .ok_or_else(|| publication_fault("captured Value-library owning cfg absent"))?;
++            let profile = crate::core::profile::ProfileIdentity {
++                edition: 2024,
++                semantics: consumer.outline.parse.profile.semantics.clone(),
++            };
++            let path = SourcePath::new(format!("library/{name}/src/lib.rs"))?;
++            let blob = library
++                .files()
++                .get(&path)
++                .ok_or_else(|| publication_fault("captured Value-library root file absent"))?;
++            if key.cfg_fingerprint != cfg.fingerprint()
++                || key.semantics_profile != profile.fingerprint()
++            {
++                return Err(publication_fault(
++                    "selected Value-library source profile/cfg differs",
++                ));
++            }
++            library_roots.insert(
++                name,
++                SourceUnitInput {
++                    path,
++                    crate_key: *identity,
++                    module_path: vec![],
++                    profile,
++                    cfg: cfg.clone(),
++                    blob: blob.clone(),
++                },
++            );
++        }
++        let mut units = Vec::new();
++        units
++            .try_reserve_exact(
++                self.state.files.len().checked_add(2).ok_or_else(|| {
++                    publication_fault("Value-library source context count overflow")
++                })?,
++            )
++            .map_err(|_| publication_fault("Value-library source context allocation"))?;
++        for (location, file) in &self.state.files {
++            let Some(InputValue::SourceBlob(blob)) = self
++                .state
++                .inputs
++                .get(&InputKey::SourceBlob(file.key.parse.content))
++            else {
++                return Err(publication_fault(
++                    "original source blob absent during Value-library preparation",
++                ));
++            };
++            let Some(InputValue::CrateCfg(cfg)) = self
++                .state
++                .inputs
++                .get(&InputKey::CrateCfg(location.crate_key))
++            else {
++                return Err(publication_fault(
++                    "original source cfg absent during Value-library preparation",
++                ));
++            };
++            units.push(SourceUnitInput {
++                path: location.path.clone(),
++                crate_key: location.crate_key,
++                module_path: location.module_path.clone(),
++                profile: file.key.parse.profile.clone(),
++                cfg: cfg.clone(),
++                blob: blob.clone(),
++            });
++        }
++        let mut dependencies = root.source_dependencies()?.copy_rows()?;
++        let policy = root.macro_prelude_policy()?;
++        if policy.disabled.iter().any(Vec::is_empty) {
++            return Err(publication_fault(
++                "automatic live library selection disabled; explicitly selected dependency lane required",
++            ));
++        }
++        let mut required = vec![
++            (consumer.outline.crate_key, "core"),
++            (library_roots["std"].crate_key, "core"),
++        ];
++        if policy.standard
++            || root
++                .outline()
++                .extern_crates
++                .iter()
++                .any(|row| row.dependency == "std")
++        {
++            required.push((consumer.outline.crate_key, "std"));
++        }
++        if let Some(allocation) = library_roots.get("alloc") {
++            required.push((library_roots["std"].crate_key, "alloc"));
++            required.push((allocation.crate_key, "core"));
++        }
++        for (owner, name) in required {
++            let target = library_roots[name].crate_key;
++            if dependencies
++                .iter()
++                .any(|row| row.consumer == owner && row.alias == name && row.provider != target)
++            {
++                return Err(publication_fault(
++                    "existing source dependency selects another Value-library provider",
++                ));
++            }
++            if !dependencies
++                .iter()
++                .any(|row| row.consumer == owner && row.alias == name)
++            {
++                dependencies.push(SourceDependency {
++                    consumer: owner,
++                    alias: name.into(),
++                    provider: target,
++                });
++            }
++        }
++        for unit in library_roots.into_values() {
++            if units
++                .iter()
++                .any(|old| old.crate_key == unit.crate_key && old.module_path.is_empty())
++            {
++                if !units.iter().any(|old| {
++                    old.crate_key == unit.crate_key
++                        && old.path == unit.path
++                        && old.profile == unit.profile
++                        && old.cfg == unit.cfg
++                        && old.blob.content() == unit.blob.content()
++                }) {
++                    return Err(publication_fault("existing selected library root differs"));
++                }
++            } else {
++                units.push(unit);
++            }
++        }
++        let environment = self
++            .state
++            .inputs
++            .iter()
++            .filter_map(|(key, value)| match (key, value) {
++                (InputKey::CompileEnv(name), InputValue::CompileEnv(value)) => {
++                    Some((name.clone(), value.clone()))
++                }
++                _ => None,
++            })
++            .collect();
++        let mut prepared =
++            Self::refresh_with_dependencies(Some(&self), units, environment, dependencies)?;
++        for value in self.state.inputs.values() {
++            if let InputValue::UnitCompileEnv(environment) = value {
++                prepared = prepared.with_compile_environment(environment.clone())?;
++            }
++        }
++        prepared.with_selected_live_value_libraries(consumer, library)
++    }
++    /// Existing selected dependency lane. Never adds or overrides source aliases;
++    /// the immutable captured roots/graph must already establish the library.
++    /// This is raw source generation authority and is usable independently of
++    /// NoImplicit/custom prelude policy. It grants no pattern membership itself.
++    pub(crate) fn with_selected_live_value_libraries(
++        self,
++        consumer: &SourceSelection,
++        library: &Snapshot,
++    ) -> Result<Self, Diagnostic> {
++        if self.state._module_origin.is_some()
++            || self.state._ordinary_module_origin.is_some()
++            || self.state.inputs.keys().any(|key| {
++                matches!(
++                    key,
++                    InputKey::ValueLibrarySelection(_)
++                        | InputKey::DiscoverySeal(_)
++                        | InputKey::GeneratedSyntax(_)
++                )
++            })
++        {
++            return Err(publication_fault(
++                "selected source-library capture must precede derived/generated publication",
++            ));
++        }
++        let SourceSelectionOutcome::Selected(consumer) = self.select(consumer)? else {
++            return Err(publication_fault(
++                "Value-library consumer changed during pure preparation",
++            ));
++        };
++        let mut providers = BTreeMap::new();
++        for name in ["core", "std", "alloc"] {
++            let mut candidates = library.project().crates.iter().filter(|(_, key)| {
++                key.package.package_name == name
++                    && key.target_name == name
++                    && key.target_kind == crate::source::manifest::TargetKind::Library
++            });
++            let Some((unit, _)) = candidates.next() else {
++                if name == "alloc" {
++                    continue;
++                }
++                return Err(publication_fault("selected live library crate absent"));
++            };
++            if candidates.next().is_some() {
++                return Err(publication_fault("selected live library crate ambiguous"));
++            }
++            let mut roots = self.state.files.iter().filter(|(location, _)| {
++                location.crate_key == *unit && location.module_path.is_empty()
++            });
++            let (location, file) = roots
++                .next()
++                .ok_or_else(|| publication_fault("selected live library root source absent"))?;
++            if roots.next().is_some() {
++                return Err(publication_fault(
++                    "selected live library root source ambiguous",
++                ));
++            }
++            let selection = SourceSelection {
++                path: location.path.clone(),
++                outline: file.key.clone(),
++            };
++            let SourceSelectionOutcome::Selected(view) = self.select(&selection)? else {
++                return Err(publication_fault("selected live library root changed"));
++            };
++            providers.insert(name, view);
++        }
++        let selection = Arc::new(PreparedValueLibrarySelection::capture_live_source(
++            &consumer,
++            &providers["core"],
++            &providers["std"],
++            providers.get("alloc"),
++            library,
++        )?);
++        let mut bytes = self
++            .state
++            .file_metadata_bytes()?
++            .checked_add(selection.metadata_bytes())
++            .ok_or_else(|| publication_fault("Value-library publication metadata overflow"))?;
++        for value in self.state.inputs.values() {
++            bytes = bytes
++                .checked_add(value.estimated_bytes()?)
++                .filter(|n| *n <= 64 * 1024 * 1024)
++                .ok_or_else(|| publication_fault("Value-library publication metadata limit"))?;
++        }
++        // Charge newly staged input records too, before publishing the owning
++        // immutable Arc. Source buffer bytes are separately bounded/accounted.
++        bytes = bytes
++            .checked_add(128 + std::mem::size_of::<(InputKey, InputValue)>())
++            .filter(|n| *n <= 64 * 1024 * 1024)
++            .ok_or_else(|| publication_fault("Value-library selection input record budget"))?;
++        for blob in selection.blobs() {
++            if !self
++                .state
++                .inputs
++                .contains_key(&InputKey::SourceBlob(blob.content()))
++            {
++                bytes = bytes
++                    .checked_add(128 + std::mem::size_of::<(InputKey, InputValue)>())
++                    .filter(|n| *n <= 64 * 1024 * 1024)
++                    .ok_or_else(|| {
++                        publication_fault("Value-library source document input record budget")
++                    })?;
++            }
++        }
++        let mut state = PreparedSourceState {
++            _module_origin: None,
++            _ordinary_module_origin: None,
++            inputs: self.state.inputs.clone(),
++            files: self
++                .state
++                .files
++                .iter()
++                .map(|(location, file)| {
++                    (
++                        location.clone(),
++                        PublishedFile {
++                            key: file.key.clone(),
++                            parsed: file.parsed.clone(),
++                            outline: file.outline.clone(),
++                        },
++                    )
++                })
++                .collect(),
++            parses: self.state.parses.clone(),
++            outlines: self.state.outlines.clone(),
++        };
++        for blob in selection.blobs() {
++            insert_input(
++                &mut state.inputs,
++                InputKey::SourceBlob(blob.content()),
++                InputValue::SourceBlob(blob.clone()),
++            )?;
++        }
++        insert_input(
++            &mut state.inputs,
++            InputKey::ValueLibrarySelection(consumer.selection().outline.crate_key),
++            InputValue::ValueLibrarySelection(selection),
++        )?;
++        Ok(Self {
++            state: Arc::new(state),
++            parsed_files: self.parsed_files,
++            outlined_files: self.outlined_files,
++            reused_files: self.reused_files,
++        })
++    }
++}
+diff --git a/crates/lrr/src/source/changes.rs b/crates/lrr/src/source/changes.rs
+--- a/crates/lrr/src/source/changes.rs
++++ b/crates/lrr/src/source/changes.rs
+@@ -1389,3 +1389,6 @@
+             .has_lexical_callable_syntax()
+     }
+ }
++
++#[path = "value_library_prepare.rs"]
++mod value_library_prepare;
+diff --git a/crates/lrr/src/source/mod.rs b/crates/lrr/src/source/mod.rs
+--- a/crates/lrr/src/source/mod.rs
++++ b/crates/lrr/src/source/mod.rs
+@@ -18,3 +18,6 @@
+ pub mod module_syntax;
+ 
+ pub mod ordinary_module;
++
++/// Opaque explicitly selected live source-library generation input.
++pub mod value_library_selection;
+diff --git a/crates/lrr/src/frontend/mod.rs b/crates/lrr/src/frontend/mod.rs
+--- a/crates/lrr/src/frontend/mod.rs
++++ b/crates/lrr/src/frontend/mod.rs
+@@ -62,3 +62,6 @@
+ pub mod source_view;
+ 
+ pub mod primitive_constants;
++
++/// Current selected live source-library Value prelude authority.
++pub(crate) mod value_library_admission;
+diff --git a/crates/lrr/src/db/dependency.rs b/crates/lrr/src/db/dependency.rs
+--- a/crates/lrr/src/db/dependency.rs
++++ b/crates/lrr/src/db/dependency.rs
+@@ -9,6 +9,7 @@
+ 
+ #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+ pub enum InputKey {
++    ValueLibrarySelection(Digest),
+     SourceDependencies,
+     GeneratedSyntax(Digest),
+     DiscoverySeal(super::seals::SealKey),
+@@ -31,6 +32,9 @@
+ }
+ #[derive(Debug, Clone)]
+ pub enum InputValue {
++    ValueLibrarySelection(
++        Arc<crate::source::value_library_selection::PreparedValueLibrarySelection>,
++    ),
+     SourceDependencies(Arc<crate::source::dependencies::SourceDependencies>),
+     GeneratedSyntax(Arc<crate::expand::generated_syntax::GeneratedSyntaxInput>),
+     DiscoverySeal(Box<super::seals::DiscoveryInput>),
+@@ -66,20 +70,30 @@
+         }
+     }
+     pub(crate) fn source_blobs(&self) -> impl Iterator<Item = &SourceBlob> {
+-        self.source_blob().into_iter().chain(
+-            match self {
+-                Self::ModuleRecord { captured, .. } => Some(captured),
+-                _ => None,
+-            }
++        self.source_blob()
+             .into_iter()
+-            .flat_map(|captured| captured.observations().iter())
+-            .filter_map(|observation| match observation {
+-                crate::source::module_capture::ModuleObservation::Present(record) => {
+-                    Some(record.blob())
++            .chain(
++                match self {
++                    Self::ValueLibrarySelection(selection) => Some(selection.as_ref()),
++                    _ => None,
+                 }
+-                _ => None,
+-            }),
+-        )
++                .into_iter()
++                .flat_map(|selection| selection.blobs()),
++            )
++            .chain(
++                match self {
++                    Self::ModuleRecord { captured, .. } => Some(captured),
++                    _ => None,
++                }
++                .into_iter()
++                .flat_map(|captured| captured.observations().iter())
++                .filter_map(|observation| match observation {
++                    crate::source::module_capture::ModuleObservation::Present(record) => {
++                        Some(record.blob())
++                    }
++                    _ => None,
++                }),
++            )
+     }
+     /// Owned payload capacities; source byte storage is accounted separately.
+     pub(crate) fn estimated_bytes(&self) -> Result<usize, crate::core::diagnostic::Diagnostic> {
+@@ -94,6 +108,7 @@
+             Ok::<_, crate::core::diagnostic::Diagnostic>(())
+         };
+         match self {
++            Self::ValueLibrarySelection(selection) => add(selection.metadata_bytes())?,
+             Self::SourceDependencies(graph) => add(graph.metadata_bytes()?)?,
+             Self::GeneratedSyntax(input) => add(input.metadata_bytes()?)?,
+             Self::DiscoverySeal(input) => add(input.metadata_bytes()?)?,
+@@ -134,6 +149,11 @@
+         Ok(bytes)
+     }
+     pub fn matches(&self, k: &InputKey) -> bool {
++        if let (Self::ValueLibrarySelection(selection), InputKey::ValueLibrarySelection(consumer)) =
++            (self, k)
++        {
++            return selection.consumer().outline.crate_key == *consumer;
++        }
+         if let (Self::GeneratedSyntax(input), InputKey::GeneratedSyntax(key)) = (self, k) {
+             return input.key.content == *key;
+         }
+@@ -176,6 +196,10 @@
+     pub fn fingerprint(&self) -> Digest {
+         let mut e = StableEncoder::new("lrr/v2/input-value");
+         match self {
++            Self::ValueLibrarySelection(selection) => {
++                e.u32(29);
++                e.record(selection.as_ref());
++            }
+             Self::SourceDependencies(graph) => {
+                 e.u32(27);
+                 e.record(graph.as_ref());
+@@ -308,6 +332,10 @@
+     const DOMAIN: &'static str = "lrr/v2/input-key";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         match self {
++            Self::ValueLibrarySelection(consumer) => {
++                e.u32(29);
++                e.digest(*consumer);
++            }
+             Self::SourceDependencies => e.u32(27),
+             Self::GeneratedSyntax(id) => {
+                 e.u32(26);
+diff --git a/crates/lrr/src/frontend/source_view_library_admission_tests.rs b/crates/lrr/src/frontend/source_view_library_admission_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/source_view_library_admission_tests.rs
+@@ -0,0 +1,728 @@
++//! Preregistered genuine captured-source component acceptance, never stock runtime pass.
++use super::super::tests::{COPY, INFER, runtime_environment, site, world_unsealed};
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    facade::value_prelude::{ValuePreludeCatalog, pinned_sources},
++    frontend::value_library_admission::CurrentValueLibraryAdmission,
++    source::{
++        changes::{PreparedSourceInputs, SourceSelectionOutcome, SourceUnitInput},
++        manifest::{CrateKey, PackageKey, TargetKind},
++        snapshot::{CfgSet, ProjectManifest, Snapshot, SourceBlob, SourcePath},
++    },
++};
++use std::sync::Arc;
++fn library_snapshot() -> Snapshot {
++    let profile = ProfileIdentity::current();
++    let cfg = CfgSet::guest_default();
++    let mut crates = BTreeMap::new();
++    let mut cfgs = BTreeMap::new();
++    let mut selected = None;
++    for name in ["core", "std"] {
++        let key = CrateKey {
++            package: PackageKey {
++                source_identity:
++                    "actual captured pinned rustc source facade; not installed sysroot".into(),
++                package_name: name.into(),
++                version: "0.0.0".into(),
++            },
++            target_kind: TargetKind::Library,
++            target_name: name.into(),
++            guest_edition: 2024,
++            semantics_profile: profile.fingerprint(),
++            cfg_fingerprint: cfg.fingerprint(),
++            dependency_aliases: Digest::of_bytes(b""),
++        };
++        let identity = key.fingerprint();
++        if name == "std" {
++            selected = Some(identity);
++        }
++        crates.insert(identity, key);
++        cfgs.insert(identity, cfg.clone());
++    }
++    let mut files: BTreeMap<_, _> = pinned_sources()
++        .into_iter()
++        .map(|(path, text)| {
++            (
++                SourcePath::new(path).unwrap(),
++                SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++            )
++        })
++        .collect();
++    files.insert(
++        SourcePath::new("library/core/src/lib.rs").unwrap(),
++        SourceBlob::new(
++            include_str!("../facade/value_prelude_sources/library/core/src/lib.rs")
++                .as_bytes()
++                .to_vec(),
++        )
++        .unwrap(),
++    );
++    Snapshot::new(
++        ProjectManifest {
++            identity: "selected live source-library generation fixture".into(),
++            root_source: SourcePath::new("library/std/src/lib.rs").unwrap(),
++            selected_crate: selected.unwrap(),
++            crates,
++        },
++        files,
++        cfgs,
++        BTreeMap::new(),
++        None,
++    )
++    .unwrap()
++}
++fn prepared(
++    text: &str,
++    function: &str,
++    edition: u16,
++) -> (PreparedSourceInputs, SourceSelection, Snapshot) {
++    let (_, view, _, _, _, _, _) = world_unsealed(text, function, edition);
++    let input = SourceUnitInput {
++        path: view.selection().path.clone(),
++        crate_key: view.selection().outline.crate_key,
++        module_path: vec![],
++        profile: view.selection().outline.parse.profile.clone(),
++        cfg: view.captured_macro_cfg().unwrap().clone(),
++        blob: view.captured_macro_blob().unwrap().clone(),
++    };
++    let prepared = PreparedSourceInputs::refresh(None, vec![input], BTreeMap::new()).unwrap();
++    (prepared, view.selection().clone(), library_snapshot())
++}
++fn select(prepared: &PreparedSourceInputs, selection: &SourceSelection) -> PreparedSourceView {
++    let SourceSelectionOutcome::Selected(view) = prepared.select(selection).unwrap() else {
++        panic!()
++    };
++    view
++}
++fn seal(db: &mut Database, view: &PreparedSourceView, world: Digest) {
++    let mut discovery = SourceDiscovery::new(
++        vec![view.share()],
++        view.outline().root_scope.clone(),
++        Namespace::Value,
++        world,
++        1,
++    )
++    .unwrap()
++    .with_declarative_compiler(
++        Digest::of_bytes(b"actual source library declaration compiler"),
++        Digest::of_bytes(b"actual source library compiler profile"),
++        Arc::new(
++            crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                &view.selection().outline.parse.profile,
++            )
++            .unwrap(),
++        ),
++    )
++    .unwrap();
++    loop {
++        match discovery.poll().unwrap() {
++            SourceDiscoveryStep::Sealed(_) => break,
++            _ => panic!("unestablished macro/generated library scope prerequisite"),
++        }
++    }
++    discovery.publish(db).unwrap();
++}
++fn retain_no_items(
++    db: &Database,
++    view: &PreparedSourceView,
++    owner: &DefinitionSourcePlan,
++    entered: &mut crate::frontend::source_macros::EnteredMacroIndex<'_>,
++) {
++    let published = db
++        .source_view_scope_certificate(view.selection(), &owner.signature().scope)
++        .unwrap();
++    let InputValue::DiscoverySeal(input) = published.as_ref() else {
++        panic!()
++    };
++    for (_, proof) in input
++        .runtime_no_item_proofs
++        .iter()
++        .filter(|(_, proof)| proof.body() == &owner.body().key())
++    {
++        let catalog =
++            crate::frontend::runtime_macro_catalog::RuntimeMacroCatalog::standard_for_definition(
++                &view.selection().outline.parse.profile,
++                proof.definition(),
++            )
++            .unwrap();
++        entered
++            .accept_no_item_proof(view.selection(), &owner.body().key(), proof, &catalog)
++            .unwrap();
++    }
++}
++fn selected(
++    text: &str,
++    function: &str,
++    edition: u16,
++) -> (
++    Database,
++    PreparedSourceView,
++    crate::frontend::source_macros::PublishedMacroIndex,
++    NameNamespaces,
++    ParsedFile,
++    BodyIndex,
++    Arc<DefinitionSourcePlan>,
++) {
++    let (prepared, selection, library) = prepared(text, function, edition);
++    let prepared = prepared
++        .with_pinned_live_value_libraries(&selection, &library)
++        .unwrap();
++    let view = select(&prepared, &selection);
++    let mut db = Database::default();
++    db.trace.detailed = true;
++    prepared.publish(&mut db).unwrap();
++    seal(
++        &mut db,
++        &view,
++        Digest::of_bytes(b"actual selected source-library consumer world"),
++    );
++    let graph = NameNamespaces::from_outlines(&[view.outline()]).unwrap();
++    let (context, hygiene) =
++        crate::syntax::floating_fixture_hygiene::root(selection.outline.crate_key, edition);
++    let published = crate::frontend::source_macros::PublishedMacroIndex::from_view(
++        view.share(),
++        context,
++        hygiene,
++    )
++    .unwrap();
++    let parsed = db.prepared_parse(&selection.outline.parse).unwrap();
++    let item = view
++        .outline()
++        .items
++        .iter()
++        .find(|item| item.def_key.declared_name == function)
++        .unwrap();
++    let owner = Arc::new(
++        parsed
++            .source_view_definition_plan(
++                item.body.as_ref().unwrap(),
++                &item.header,
++                &crate::syntax::outline::DeclarationContext {
++                    scope: item.scope.clone(),
++                    range: item.declaration_span,
++                },
++            )
++            .unwrap(),
++    );
++    let index = parsed.index_body(owner.body(), Default::default()).unwrap();
++    // The parser Arc is an immutable lease; reconstructing a pure pinned syntax
++    // value here does not query any future body or execute a provider.
++    let parsed = ParsedFile::parse(
++        view.captured_macro_blob().unwrap(),
++        selection.outline.parse.profile.clone(),
++    )
++    .unwrap();
++    (db, view, published, graph, parsed, index, owner)
++}
++#[test]
++fn original_copy_default_prelude_alias_has_genuine_selected_source_authority_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, view, published, names, parsed, index, owner) =
++            selected(COPY, "can_copy_copy", edition);
++        let mut entered = published
++            .enter_body(view.selection(), &owner.body().key())
++            .unwrap();
++        retain_no_items(&db, &view, &owner, &mut entered);
++        let patterns =
++            CurrentPatternNames::prepare(&db, &view, &owner, &entered, &names, SOURCE_VIEW_BUDGET)
++                .unwrap();
++        let locals = entered
++            .local_index(
++                view.selection(),
++                &owner.body().key(),
++                patterns.resolutions(),
++                &[],
++            )
++            .unwrap();
++        let env = runtime_environment(&owner);
++        let alias = parsed
++            .source_view_alias_plan(
++                &owner,
++                &index,
++                &site(
++                    COPY,
++                    &owner,
++                    &index,
++                    "let _a = v;",
++                    crate::ir::pc::Phase::Commit,
++                ),
++            )
++            .unwrap();
++        let seed = declared_binding_view(
++            &db,
++            &parsed,
++            &index,
++            &view,
++            &names,
++            &locals,
++            owner.clone(),
++            &alias.source,
++            Some(&env),
++            TypeId(6),
++            SOURCE_VIEW_BUDGET,
++        )
++        .unwrap();
++        let plan = local_alias_view(
++            &db,
++            &view,
++            &names,
++            &locals,
++            owner,
++            &alias,
++            &seed,
++            SOURCE_VIEW_BUDGET,
++        )
++        .unwrap();
++        let before = db.trace.events.len();
++        let proof = plan
++            .admit_current(&db, &view, Some(&env), SOURCE_VIEW_BUDGET)
++            .unwrap();
++        assert_eq!(proof.source().term(), seed.source.term());
++        assert!(matches!(proof.source().term(), TyTerm::Param(_)));
++        assert_eq!(proof.runtime(), TypeId(6));
++        proof.revalidate(&db, &view, Some(&env), &plan).unwrap();
++        assert_eq!(db.trace.events.len(), before);
++        assert!(db.trace.events.iter().all(|event| !matches!(
++            event.key,
++            crate::db::key::QueryKey::BodyStructure(_) | crate::db::key::QueryKey::Thunk(_)
++        )));
++    }
++}
++#[test]
++fn original_infer_named_return_default_prelude_preserves_source_with_selected_world_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, view, published, names, parsed, index, owner) =
++            selected(INFER, "main", edition);
++        let mut entered = published
++            .enter_body(view.selection(), &owner.body().key())
++            .unwrap();
++        retain_no_items(&db, &view, &owner, &mut entered);
++        let patterns =
++            CurrentPatternNames::prepare(&db, &view, &owner, &entered, &names, SOURCE_VIEW_BUDGET)
++                .unwrap();
++        let locals = entered
++            .local_index(
++                view.selection(),
++                &owner.body().key(),
++                patterns.resolutions(),
++                &[],
++            )
++            .unwrap();
++        let call = parsed
++            .source_view_named_call_plan(
++                &owner,
++                &index,
++                &site(INFER, &owner, &index, "id(x)", crate::ir::pc::Phase::Entry),
++            )
++            .unwrap();
++        let argument = declared_binding_view(
++            &db,
++            &parsed,
++            &index,
++            &view,
++            &names,
++            &locals,
++            owner.clone(),
++            &call.arguments[0],
++            None,
++            TypeId(8),
++            SOURCE_VIEW_BUDGET,
++        )
++        .unwrap();
++        let QueryPoll::Ready(Ok(result)) = named_function_return_view(
++            &mut db,
++            &view,
++            &[&view],
++            &names,
++            &locals,
++            owner,
++            &call,
++            &[&argument],
++            TypeId(8),
++            SOURCE_VIEW_BUDGET,
++        ) else {
++            panic!()
++        };
++        let before = db.trace.events.len();
++        let proof = result
++            .admit_current(&db, &view, None, SOURCE_VIEW_BUDGET)
++            .unwrap();
++        assert_eq!(
++            proof.source().term(),
++            &TyTerm::Primitive(crate::ir::op::PrimitiveType::Isize)
++        );
++        assert_eq!(proof.runtime(), TypeId(8));
++        proof.revalidate(&db, &view, None, &result).unwrap();
++        assert_eq!(db.trace.events.len(), before);
++    }
++}
++#[test]
++fn macro_only_and_missing_source_selection_never_mint_default_library_authority() {
++    let (mut db, view, _, _, _, _, owner) = world_unsealed(COPY, "can_copy_copy", 2024);
++    seal(
++        &mut db,
++        &view,
++        Digest::of_bytes(b"macro-only or absent selected library"),
++    );
++    let error = CurrentValueLibraryAdmission::capture_current(
++        &db,
++        &view,
++        &owner.signature().scope,
++        &ValuePreludeCatalog::pinned().unwrap(),
++    )
++    .unwrap_err();
++    assert!(error.message.contains("generation input absent"));
++}
++#[test]
++fn real_source_generation_and_observation_are_not_sysroot_or_missing_alloc_authority() {
++    let (db, view, _, _, _, _, owner) = selected(COPY, "can_copy_copy", 2024);
++    let catalog = ValuePreludeCatalog::pinned().unwrap();
++    let proof = CurrentValueLibraryAdmission::capture_current(
++        &db,
++        &view,
++        &owner.signature().scope,
++        &catalog,
++    )
++    .unwrap();
++    assert_eq!(proof.provider(true).outline.parse.profile.edition, 2024);
++    assert_eq!(proof.provider(false).outline.parse.profile.edition, 2024);
++    assert!(proof.require_allocation_provider().is_err());
++    let path = SourcePath::new("library/core/src/prelude/v1.rs").unwrap();
++    let bytes = pinned_sources()[1].1.as_bytes();
++    proof
++        .require_observed_source(&path, Digest::of_bytes(bytes))
++        .unwrap();
++    assert!(
++        proof
++            .require_observed_source(&path, Digest::of_bytes(b"forged native sysroot header"))
++            .is_err()
++    );
++    assert!(
++        proof
++            .require_observed_source(
++                &SourcePath::new("library/alloc/src/vec/mod.rs").unwrap(),
++                Digest::of_bytes(b"uncaptured Vec")
++            )
++            .is_err()
++    );
++    assert!(
++        proof
++            .require_automatic_absence(&catalog, true, 2024, "v")
++            .is_ok()
++    );
++    for name in ["None", "Some", "Ok", "Err"] {
++        assert!(
++            proof
++                .require_automatic_absence(&catalog, true, 2024, name)
++                .is_err()
++        );
++    }
++}
++#[test]
++fn copied_world_epoch_and_stale_derived_seal_refuse_without_source_revision_default() {
++    let (mut db, view, _, _, _, _, owner) = selected(COPY, "can_copy_copy", 2024);
++    let catalog = ValuePreludeCatalog::pinned().unwrap();
++    let proof = CurrentValueLibraryAdmission::capture_current(
++        &db,
++        &view,
++        &owner.signature().scope,
++        &catalog,
++    )
++    .unwrap();
++    let before = db.source_revision();
++    db.begin_expansion_epoch(2).unwrap();
++    assert_eq!(db.source_revision(), before);
++    assert!(proof.revalidate(&db, &view, &catalog).is_err());
++}
++#[test]
++fn changed_consumer_edition_policy_cfg_or_copied_source_refuses() {
++    let (db, view, _, _, _, _, owner) = selected(COPY, "can_copy_copy", 2015);
++    let catalog = ValuePreludeCatalog::pinned().unwrap();
++    let proof = CurrentValueLibraryAdmission::capture_current(
++        &db,
++        &view,
++        &owner.signature().scope,
++        &catalog,
++    )
++    .unwrap();
++    assert!(
++        proof
++            .require_automatic_absence(&catalog, true, 2024, "v")
++            .is_err()
++    );
++    assert!(
++        proof
++            .require_automatic_absence(&catalog, false, 2015, "v")
++            .is_err()
++    );
++    let (_, other, _, _, _, _, _) = world_unsealed(COPY, "can_copy_copy", 2024);
++    assert!(proof.revalidate(&db, &other, &catalog).is_err());
++}
++#[test]
++fn absent_changed_export_header_or_library_cargo_edition_fails_capture() {
++    for path in [
++        "library/core/src/prelude/v1.rs",
++        "library/std/src/prelude/mod.rs",
++        "library/core/Cargo.toml",
++    ] {
++        let (prepared, selection, snapshot) = prepared(COPY, "can_copy_copy", 2024);
++        let mut files = snapshot.files().clone();
++        files.remove(&SourcePath::new(path).unwrap());
++        let changed = Snapshot::new(
++            snapshot.project().clone(),
++            files,
++            snapshot.cfg_by_crate().clone(),
++            BTreeMap::new(),
++            None,
++        )
++        .unwrap();
++        assert!(
++            prepared
++                .with_pinned_live_value_libraries(&selection, &changed)
++                .is_err()
++        );
++    }
++}
++#[test]
++fn missing_actual_library_root_cfg_and_nonowning_edition_never_use_macro_facet_default() {
++    let (prepared, selection, snapshot) = prepared(COPY, "can_copy_copy", 2024);
++    let mut cfg = snapshot.cfg_by_crate().clone();
++    cfg.remove(&snapshot.project().selected_crate);
++    let changed = Snapshot::new(
++        snapshot.project().clone(),
++        snapshot.files().clone(),
++        cfg,
++        BTreeMap::new(),
++        None,
++    )
++    .unwrap();
++    assert!(
++        prepared
++            .with_pinned_live_value_libraries(&selection, &changed)
++            .is_err()
++    );
++}
++#[test]
++fn source_input_body_bytes_and_carrier_are_counted_before_attachment() {
++    let (prepared, selection, snapshot) = prepared(COPY, "can_copy_copy", 2024);
++    let prepared = prepared
++        .with_pinned_live_value_libraries(&selection, &snapshot)
++        .unwrap();
++    let view = select(&prepared, &selection);
++    let value =
++        &view.prepared_inputs()[&InputKey::ValueLibrarySelection(selection.outline.crate_key)];
++    assert!(value.estimated_bytes().unwrap() > std::mem::size_of::<InputValue>());
++    assert!(value.source_blobs().count() >= 11);
++    assert!(
++        !value.matches(&InputKey::ValueLibrarySelection(Digest::of_bytes(
++            b"other consumer"
++        )))
++    );
++}
++
++#[test]
++fn explicit_packaged_source_preparation_hook_is_real_selection_not_manual_certificate_or_sysroot_match()
++ {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (prepared, selection, _) = prepared(COPY, "can_copy_copy", edition);
++        let prepared = prepared
++            .with_packaged_live_value_libraries(&selection)
++            .unwrap();
++        let view = select(&prepared, &selection);
++        let mut db = Database::default();
++        prepared.publish(&mut db).unwrap();
++        seal(
++            &mut db,
++            &view,
++            Digest::of_bytes(b"explicit packaged live prelude source world"),
++        );
++        let scope = &view.outline().root_scope;
++        let catalog = ValuePreludeCatalog::pinned().unwrap();
++        let proof =
++            CurrentValueLibraryAdmission::capture_current(&db, &view, scope, &catalog).unwrap();
++        proof
++            .require_automatic_absence(&catalog, true, edition, "v")
++            .unwrap();
++        assert!(
++            proof
++                .require_automatic_absence(&catalog, true, edition, "Some")
++                .is_err()
++        );
++        assert!(
++            proof
++                .require_observed_source(
++                    &SourcePath::new("library/std/src/fs.rs").unwrap(),
++                    Digest::of_bytes(b"uncaptured declaration")
++                )
++                .is_err()
++        );
++        assert!(proof.require_allocation_provider().is_err());
++    }
++}
++
++#[test]
++fn stable_selection_tag29_preserves_module_record28_and_all_digest_key_encodings() {
++    use crate::core::digest::StableEncoder;
++    let identity = Digest::of_bytes(b"same retained identity across key variants");
++    let old = InputKey::ModuleRecord(identity);
++    let new = InputKey::ValueLibrarySelection(identity);
++    let mut old_expected = StableEncoder::new("lrr/v2/input-key");
++    old_expected.u32(28);
++    old_expected.digest(identity);
++    assert_eq!(old.fingerprint(), old_expected.finish());
++    let mut new_expected = StableEncoder::new("lrr/v2/input-key");
++    new_expected.u32(29);
++    new_expected.digest(identity);
++    assert_eq!(new.fingerprint(), new_expected.finish());
++    let keys = [
++        new.clone(),
++        old.clone(),
++        InputKey::SourceBlob(identity),
++        InputKey::DefinitionSource(identity),
++        InputKey::DefinitionHeader(identity),
++        InputKey::DefinitionBody(identity),
++        InputKey::DeclarationContext(identity),
++        InputKey::CapturedSource(identity),
++        InputKey::GeneratedSyntax(identity),
++        InputKey::UnitCompileEnv(identity),
++        InputKey::ExpansionRecord(identity),
++        InputKey::IncludeRecord(identity),
++        InputKey::CrateCfg(identity),
++    ];
++    let hashes: std::collections::BTreeSet<_> =
++        keys.iter().map(StableEncode::fingerprint).collect();
++    assert_eq!(hashes.len(), keys.len());
++    for key in keys {
++        let text = serde_json::to_string(&key).unwrap();
++        let parsed: InputKey = serde_json::from_str(&text).unwrap();
++        assert_eq!(parsed, key);
++        if key != new {
++            assert_ne!(parsed, new);
++        }
++    }
++    assert!(serde_json::from_str::<InputKey>("{\"ValueLibrarySelectionV0\":[]}").is_err());
++    let (prepared, selection, snapshot) = prepared(COPY, "can_copy_copy", 2024);
++    let prepared = prepared
++        .with_pinned_live_value_libraries(&selection, &snapshot)
++        .unwrap();
++    let view = select(&prepared, &selection);
++    let InputValue::ValueLibrarySelection(packet) =
++        &view.prepared_inputs()[&InputKey::ValueLibrarySelection(selection.outline.crate_key)]
++    else {
++        panic!()
++    };
++    let mut expected = StableEncoder::new("lrr/v2/input-value");
++    expected.u32(29);
++    expected.record(packet.as_ref());
++    assert_eq!(
++        InputValue::ValueLibrarySelection(packet.clone()).fingerprint(),
++        expected.finish()
++    );
++}
++
++#[test]
++fn no_std_selection_uses_actual_core_policy_and_retains_no_default_std_consumer_edge_all_editions()
++{
++    let text = "#![no_std] fn chosen<T>(x:T){let alias=x;}fn main(){}";
++    for edition in [2015, 2018, 2021, 2024] {
++        let (prepared, selection, _) = prepared(text, "chosen", edition);
++        let prepared = prepared
++            .with_packaged_live_value_libraries(&selection)
++            .unwrap();
++        let view = select(&prepared, &selection);
++        let aliases = view
++            .source_dependencies()
++            .unwrap()
++            .aliases_for(selection.outline.crate_key, edition)
++            .unwrap();
++        assert!(
++            aliases
++                .get(&crate::frontend::names::owned_name("std", edition).unwrap())
++                .is_none()
++        );
++        assert!(
++            aliases
++                .get(&crate::frontend::names::owned_name("core", edition).unwrap())
++                .is_some()
++        );
++        let mut db = Database::default();
++        prepared.publish(&mut db).unwrap();
++        seal(
++            &mut db,
++            &view,
++            Digest::of_bytes(b"actual no_std core source world"),
++        );
++        let catalog = ValuePreludeCatalog::pinned().unwrap();
++        let proof = CurrentValueLibraryAdmission::capture_current(
++            &db,
++            &view,
++            &view.outline().root_scope,
++            &catalog,
++        )
++        .unwrap();
++        proof
++            .require_automatic_absence(&catalog, false, edition, "x")
++            .unwrap();
++        assert!(
++            proof
++                .require_automatic_absence(&catalog, true, edition, "x")
++                .is_err()
++        );
++    }
++}
++#[test]
++fn automatic_custom_or_disabled_prelude_source_selection_never_synthesizes_default_library_membership()
++ {
++    for text in [
++        "#![no_implicit_prelude] fn chosen<T>(x:T){let alias=x;}fn main(){}",
++        "#[prelude_import] use names::*;mod names{pub const x:i32=0;}fn chosen<T>(x:T){let alias=x;}fn main(){}",
++    ] {
++        let (prepared, selection, _) = prepared(text, "chosen", 2024);
++        assert!(
++            prepared
++                .with_packaged_live_value_libraries(&selection)
++                .is_err()
++        );
++    }
++}
++#[test]
++fn oversized_actual_observation_bundle_refuses_before_any_prepared_input_attachment() {
++    let (prepared, selection, snapshot) = prepared(COPY, "can_copy_copy", 2024);
++    let mut files = snapshot.files().clone();
++    for ordinal in 0..5 {
++        files.insert(
++            SourcePath::new(format!("large-observation-{ordinal}.rs")).unwrap(),
++            SourceBlob::new(vec![b'a'; 8 * 1024 * 1024]).unwrap(),
++        );
++    }
++    let oversized = Snapshot::new(
++        snapshot.project().clone(),
++        files,
++        snapshot.cfg_by_crate().clone(),
++        BTreeMap::new(),
++        None,
++    )
++    .unwrap();
++    let old_view = select(&prepared, &selection);
++    assert!(
++        !old_view
++            .prepared_inputs()
++            .contains_key(&InputKey::ValueLibrarySelection(
++                selection.outline.crate_key
++            ))
++    );
++    let error = prepared
++        .with_pinned_live_value_libraries(&selection, &oversized)
++        .err()
++        .expect("bounded source observations must refuse");
++    assert_eq!(error.code, "LRR-E-METADATA-LIMIT");
++    assert!(
++        !old_view
++            .prepared_inputs()
++            .contains_key(&InputKey::ValueLibrarySelection(
++                selection.outline.crate_key
++            ))
++    );
++}
+diff --git a/crates/lrr/src/facade/value_prelude_sources/library/core/src/lib.rs b/crates/lrr/src/facade/value_prelude_sources/library/core/src/lib.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/facade/value_prelude_sources/library/core/src/lib.rs
+@@ -0,0 +1,411 @@
++//! # The Rust Core Library
++//!
++//! The Rust Core Library is the dependency-free[^free] foundation of [The
++//! Rust Standard Library](../std/index.html). It is the portable glue
++//! between the language and its libraries, defining the intrinsic and
++//! primitive building blocks of all Rust code. It links to no
++//! upstream libraries, no system libraries, and no libc.
++//!
++//! [^free]: Strictly speaking, there are some symbols which are needed but
++//!          they aren't always necessary.
++//!
++//! The core library is *minimal*: it isn't even aware of heap allocation,
++//! nor does it provide concurrency or I/O. These things require
++//! platform integration, and this library is platform-agnostic.
++//!
++//! # How to use the core library
++//!
++//! Please note that all of these details are currently not considered stable.
++//!
++// FIXME: Fill me in with more detail when the interface settles
++//! This library is built on the assumption of a few existing symbols:
++//!
++//! * `memcpy`, `memmove`, `memset`, `memcmp`, `bcmp`, `strlen` - These are core memory routines
++//!   which are generated by Rust codegen backends. Additionally, this library can make explicit
++//!   calls to `strlen`. Their signatures are the same as found in C, but there are extra
++//!   assumptions about their semantics: For `memcpy`, `memmove`, `memset`, `memcmp`, and `bcmp`, if
++//!   the `n` parameter is 0, the function is assumed to not be UB, even if the pointers are NULL or
++//!   dangling. (Note that making extra assumptions about these functions is common among compilers:
++//!   [clang](https://reviews.llvm.org/D86993) and [GCC](https://gcc.gnu.org/onlinedocs/gcc/Standards.html#C-Language) do the same.)
++//!   These functions are often provided by the system libc, but can also be provided by the
++//!   [compiler-builtins crate](https://crates.io/crates/compiler_builtins).
++//!   Note that the library does not guarantee that it will always make these assumptions, so Rust
++//!   user code directly calling the C functions should follow the C specification! The advice for
++//!   Rust user code is to call the functions provided by this library instead (such as
++//!   `ptr::copy`).
++//!
++//! * Panic handler - This function takes one argument, a `&panic::PanicInfo`. It is up to consumers of this core
++//!   library to define this panic function; it is only required to never
++//!   return. You should mark your implementation using `#[panic_handler]`.
++//!
++//! * `rust_eh_personality` - is used by the failure mechanisms of the
++//!   compiler. This is often mapped to GCC's personality function, but crates
++//!   which do not trigger a panic can be assured that this function is never
++//!   called. The `lang` attribute is called `eh_personality`.
++
++#![stable(feature = "core", since = "1.6.0")]
++#![doc(
++    html_playground_url = "https://play.rust-lang.org/",
++    issue_tracker_base_url = "https://github.com/rust-lang/rust/issues/",
++    test(no_crate_inject, attr(deny(warnings))),
++    test(attr(allow(dead_code, deprecated, unused_variables, unused_mut, duplicate_features)))
++)]
++#![doc(rust_logo)]
++#![doc(auto_cfg(
++    hide(no_fp_fmt_parse),
++    hide(target_pointer_width, values("16", "32", "64")),
++    hide(
++        target_has_atomic,
++        target_has_atomic_primitive_alignment,
++        target_has_atomic_load_store,
++        values("8", "16", "32", "64", "ptr"),
++    ),
++))]
++#![no_core]
++#![rustc_coherence_is_core]
++#![rustc_preserve_ub_checks]
++//
++// Lints:
++#![deny(rust_2021_incompatible_or_patterns)]
++#![deny(unsafe_op_in_unsafe_fn)]
++#![deny(implicit_provenance_casts)]
++#![warn(deprecated_in_future)]
++#![warn(missing_debug_implementations)]
++#![warn(missing_docs)]
++#![allow(explicit_outlives_requirements)]
++#![allow(incomplete_features)]
++#![warn(multiple_supertrait_upcastable)]
++#![allow(internal_features)]
++#![allow(unused_features)]
++#![deny(ffi_unwind_calls)]
++#![warn(unreachable_pub)]
++// Do not check link redundancy on bootstrapping phase
++#![allow(rustdoc::redundant_explicit_links)]
++#![warn(rustdoc::unescaped_backticks)]
++//
++// Library features:
++// tidy-alphabetical-start
++#![feature(asm_experimental_arch)]
++#![feature(bstr_internals)]
++#![feature(cfg_target_has_reliable_f16_f128)]
++#![feature(const_carrying_mul_add)]
++#![feature(const_cmp)]
++#![feature(const_destruct)]
++#![feature(const_eval_select)]
++#![feature(const_select_unpredictable)]
++#![feature(core_intrinsics)]
++#![feature(coverage_attribute)]
++#![feature(disjoint_bitor)]
++#![feature(io_const_error)]
++#![feature(offset_of_enum)]
++#![feature(panic_internals)]
++#![feature(pattern_type_macro)]
++#![feature(ub_checks)]
++// tidy-alphabetical-end
++//
++// Language features:
++// tidy-alphabetical-start
++#![feature(adt_const_params)]
++#![feature(allow_internal_unsafe)]
++#![feature(allow_internal_unstable)]
++#![feature(arbitrary_self_types_pointers)]
++#![feature(auto_traits)]
++#![feature(cfg_sanitize)]
++#![feature(cfg_target_has_atomic)]
++#![feature(cfg_ub_checks)]
++#![feature(const_closures)]
++#![feature(const_precise_live_drops)]
++#![feature(const_trait_impl)]
++#![feature(decl_macro)]
++#![feature(deprecated_suggestion)]
++#![feature(derive_const)]
++#![feature(diagnostic_on_const)]
++#![feature(diagnostic_on_unmatched_args)]
++#![feature(diagnostic_opaque)]
++#![feature(doc_cfg)]
++#![feature(doc_notable_trait)]
++#![feature(extern_types)]
++#![feature(f16)]
++#![feature(f128)]
++#![feature(field_projections)]
++#![feature(final_associated_functions)]
++#![feature(freeze_impls)]
++#![feature(fundamental)]
++#![feature(impl_restriction)]
++#![feature(intra_doc_pointers)]
++#![feature(intrinsics)]
++#![feature(lang_items)]
++#![feature(link_cfg)]
++#![feature(link_llvm_intrinsics)]
++#![feature(macro_metavar_expr)]
++#![feature(macro_metavar_expr_concat)]
++#![feature(marker_trait_attr)]
++#![feature(min_specialization)]
++#![feature(multiple_supertrait_upcastable)]
++#![feature(must_not_suspend)]
++#![feature(negative_impls)]
++#![feature(no_core)]
++#![feature(pattern_types)]
++#![feature(pin_macro_internals)]
++#![feature(prelude_import)]
++#![feature(repr_simd)]
++#![feature(rustc_attrs)]
++#![feature(rustdoc_internals)]
++#![feature(simd_ffi)]
++#![feature(splat)]
++#![feature(staged_api)]
++#![feature(stmt_expr_attributes)]
++#![feature(strict_provenance_lints)]
++#![feature(trait_alias)]
++#![feature(transparent_unions)]
++#![feature(try_blocks)]
++#![feature(uint_carryless_mul)]
++#![feature(unboxed_closures)]
++#![feature(unsized_fn_params)]
++#![feature(with_negative_coherence)]
++// tidy-alphabetical-end
++//
++// Target features:
++// tidy-alphabetical-start
++#![feature(aarch64_unstable_target_feature)]
++#![feature(arm_target_feature)]
++#![feature(avx10_target_feature)]
++#![feature(clflushopt_target_feature)]
++#![feature(hexagon_target_feature)]
++#![feature(loongarch_target_feature)]
++#![feature(mips_target_feature)]
++#![feature(movrs_target_feature)]
++#![feature(nvptx_target_feature)]
++#![feature(powerpc_target_feature)]
++#![feature(riscv_target_feature)]
++#![feature(rtm_target_feature)]
++#![feature(s390x_target_feature)]
++#![feature(wasm_target_feature)]
++#![feature(x86_amx_intrinsics)]
++// tidy-alphabetical-end
++
++// tidy-alphabetical-start
++#![expect(clippy::partialeq_ne_impl, reason = "we need to implement ne for a lot of core types")]
++// tidy-alphabetical-end
++
++// allow using `core::` in intra-doc links
++#[allow(unused_extern_crates)]
++extern crate self as core;
++
++/* The core prelude, not as all-encompassing as the std prelude */
++// The compiler expects the prelude definition to be defined before it's use statement.
++pub mod prelude;
++
++#[prelude_import]
++#[allow(unused)]
++use prelude::rust_2024::*;
++
++#[macro_use]
++mod macros;
++
++#[stable(feature = "assert_matches", since = "1.96.0")]
++pub use crate::macros::{assert_matches, debug_assert_matches};
++
++#[unstable(feature = "derive_from", issue = "144889")]
++/// Unstable module containing the unstable `From` derive macro.
++pub mod from {
++    #[unstable(feature = "derive_from", issue = "144889")]
++    pub use crate::macros::builtin::From;
++}
++
++// We don't export this through #[macro_export] for now, to avoid breakage.
++#[unstable(feature = "autodiff", issue = "124509")]
++#[doc = include_str!("../../core/src/autodiff.md")]
++pub mod autodiff {
++    #[unstable(feature = "autodiff", issue = "124509")]
++    pub use crate::macros::builtin::{autodiff_forward, autodiff_reverse};
++}
++
++#[unstable(feature = "gpu_offload", issue = "131513")]
++#[doc = include_str!("../../core/src/offload.md")]
++pub mod offload;
++
++#[unstable(feature = "contracts", issue = "128044")]
++pub mod contracts;
++
++#[allow(clippy::useless_attribute)]
++#[expect(
++    ineffective_unstable_reexports,
++    reason = "accepted as stable after accidental stabilization in 1.96, see #154645"
++)]
++#[unstable(feature = "derive_macro_global_path", issue = "154645")]
++pub use crate::macros::builtin::derive;
++#[stable(feature = "cfg_select", since = "1.95.0")]
++pub use crate::macros::cfg_select;
++
++#[macro_use]
++mod internal_macros;
++
++#[path = "num/shells/legacy_int_modules.rs"]
++mod legacy_int_modules;
++#[stable(feature = "rust1", since = "1.0.0")]
++#[allow(deprecated, clippy::legacy_numeric_constants)]
++pub use legacy_int_modules::{i8, i16, i32, i64, isize, u8, u16, u32, u64, usize};
++#[stable(feature = "i128", since = "1.26.0")]
++#[allow(deprecated, clippy::legacy_numeric_constants)]
++pub use legacy_int_modules::{i128, u128};
++
++#[path = "num/f128.rs"]
++pub mod f128;
++#[path = "num/f16.rs"]
++pub mod f16;
++#[path = "num/f32.rs"]
++pub mod f32;
++#[path = "num/f64.rs"]
++pub mod f64;
++
++#[macro_use]
++pub mod num;
++
++/* Core modules for ownership management */
++
++pub mod hint;
++pub mod intrinsics;
++pub mod mem;
++#[unstable(feature = "profiling_marker_api", issue = "148197")]
++pub mod profiling;
++pub mod ptr;
++#[unstable(feature = "ub_checks", issue = "none")]
++pub mod ub_checks;
++
++/* Core language traits */
++
++pub mod borrow;
++pub mod clone;
++pub mod cmp;
++pub mod convert;
++pub mod default;
++pub mod error;
++#[unstable(feature = "field_projections", issue = "145383")]
++pub mod field;
++pub mod index;
++pub mod marker;
++pub mod ops;
++
++/* Core types and methods on primitives */
++
++pub mod any;
++pub mod array;
++pub mod ascii;
++pub mod asserting;
++#[unstable(feature = "async_iterator", issue = "79024")]
++pub mod async_iter;
++#[unstable(feature = "bstr", issue = "134915")]
++pub mod bstr;
++pub mod cell;
++pub mod char;
++pub mod ffi;
++#[unstable(feature = "core_io", issue = "154046")]
++pub mod io;
++pub mod iter;
++pub mod net;
++pub mod option;
++pub mod os;
++pub mod panic;
++pub mod panicking;
++#[unstable(feature = "pattern_type_macro", issue = "123646")]
++pub mod pat;
++pub mod pin;
++#[unstable(feature = "abort_immediate", issue = "154601")]
++pub mod process;
++#[unstable(feature = "random", issue = "130703")]
++pub mod random;
++#[stable(feature = "new_range_inclusive_api", since = "1.95.0")]
++pub mod range;
++pub mod result;
++pub mod sync;
++#[unstable(feature = "unsafe_binders", issue = "130516")]
++pub mod unsafe_binder;
++
++pub mod fmt;
++pub mod hash;
++pub mod slice;
++pub mod str;
++pub mod time;
++
++pub mod wtf8;
++
++pub mod unicode;
++
++/* Async */
++pub mod future;
++pub mod task;
++
++/* Heap memory allocator trait */
++#[allow(missing_docs)]
++pub mod alloc;
++
++// note: does not need to be public
++mod bool;
++mod escape;
++mod tuple;
++mod unit;
++#[unstable(feature = "view_type_macro", issue = "155938")]
++pub mod view;
++
++#[stable(feature = "core_primitive", since = "1.43.0")]
++pub mod primitive;
++
++// Pull in the `core_arch` crate directly into core. The contents of
++// `core_arch` are in a different repository: rust-lang/stdarch.
++//
++// `core_arch` depends on core, but the contents of this module are
++// set up in such a way that directly pulling it here works such that the
++// crate uses the this crate as its core.
++#[path = "../../stdarch/crates/core_arch/src/mod.rs"]
++#[allow(
++    missing_docs,
++    missing_debug_implementations,
++    dead_code,
++    unused_imports,
++    unsafe_op_in_unsafe_fn,
++    ambiguous_glob_reexports,
++    unreachable_pub,
++    // FIXME: stdach is a submodule so clippy lints should be fixed (and ideally enforced) there
++    clippy::all,
++)]
++#[allow(rustdoc::bare_urls)]
++mod core_arch;
++
++#[stable(feature = "simd_arch", since = "1.27.0")]
++pub mod arch;
++
++// Pull in the `core_simd` crate directly into core. The contents of
++// `core_simd` are in a different repository: rust-lang/portable-simd.
++//
++// `core_simd` depends on core, but the contents of this module are
++// set up in such a way that directly pulling it here works such that the
++// crate uses this crate as its core.
++#[path = "../../portable-simd/crates/core_simd/src/mod.rs"]
++#[allow(missing_debug_implementations, dead_code, unsafe_op_in_unsafe_fn)]
++#[allow(rustdoc::bare_urls)]
++#[unstable(feature = "portable_simd", issue = "86656")]
++mod core_simd;
++
++#[unstable(feature = "portable_simd", issue = "86656")]
++pub mod simd {
++    #![doc = include_str!("../../portable-simd/crates/core_simd/src/core_simd_docs.md")]
++
++    #[unstable(feature = "portable_simd", issue = "86656")]
++    pub use crate::core_simd::simd::*;
++}
++
++// Include private modules that exist solely to provide rustdoc
++// documentation for built-in attributes. Using `include!` because rustdoc
++// only looks for these modules at the crate level.
++include!("attribute_docs.rs");
++
++// Include a number of private modules that exist solely to provide
++// the rustdoc documentation for the existing keywords. Using `include!`
++// because rustdoc only looks for these modules at the crate level.
++include!("keyword_docs.rs");
++
++// Include a number of private modules that exist solely to provide
++// the rustdoc documentation for primitive types. Using `include!`
++// because rustdoc only looks for these modules at the crate level.
++include!("primitive_docs.rs");

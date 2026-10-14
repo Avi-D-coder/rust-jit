@@ -1,0 +1,3 @@
+[workspace]
+members = ["app", "fixture-macros", "fixture-build-support"]
+resolver = "3"

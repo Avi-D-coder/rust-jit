@@ -1,0 +1,821 @@
+diff --git a/crates/lrr/src/engine/runtime_macros.rs b/crates/lrr/src/engine/runtime_macros.rs
+--- a/crates/lrr/src/engine/runtime_macros.rs
++++ b/crates/lrr/src/engine/runtime_macros.rs
+@@ -193,6 +193,12 @@
+                         .require_module_predicate_call(handle, body, pc, name)?;
+                 }
+                 let lowering = match plan.arguments().kind() {
++                    RuntimeMacroKind::Vec => {
++                        return Err(fault(
++                            "LRR-E-UNSUPPORTED",
++                            "reached vec requires pending Vec allocation and selected Clone integration",
++                        ));
++                    }
+                     RuntimeMacroKind::Println => {
+                         return Err(fault(
+                             "LRR-E-UNSUPPORTED",
+diff --git a/crates/lrr/src/expand/generated_declarations.rs b/crates/lrr/src/expand/generated_declarations.rs
+--- a/crates/lrr/src/expand/generated_declarations.rs
++++ b/crates/lrr/src/expand/generated_declarations.rs
+@@ -808,10 +808,19 @@
+                     "generated argument producer absent",
+                 )
+             })?;
++        // Original-source vec uses exact list/repeat AST capture; generated token origins
++        // require their own splitter before any declaration/no-item admission.
++        if kind == crate::facade::macros::RuntimeMacroKind::Vec {
++            return Err(fault(
++                "LRR-E-UNSUPPORTED",
++                "generated vec declaration capture requires token-aware list/repeat splitting",
++            ));
++        }
+         let tokens = self.runtime_argument_tokens(identity)?;
+         let minimum = match kind {
+             crate::facade::macros::RuntimeMacroKind::Panic
+-            | crate::facade::macros::RuntimeMacroKind::Println => 0,
++            | crate::facade::macros::RuntimeMacroKind::Println
++            | crate::facade::macros::RuntimeMacroKind::Vec => 0,
+             crate::facade::macros::RuntimeMacroKind::Assert => 1,
+             crate::facade::macros::RuntimeMacroKind::AssertEq
+             | crate::facade::macros::RuntimeMacroKind::AssertNe => 2,
+diff --git a/crates/lrr/src/facade/macros.rs b/crates/lrr/src/facade/macros.rs
+--- a/crates/lrr/src/facade/macros.rs
++++ b/crates/lrr/src/facade/macros.rs
+@@ -6,6 +6,7 @@
+     AssertEq,
+     AssertNe,
+     Println,
++    Vec,
+ }
+ impl RuntimeMacroKind {
+     pub fn name(self) -> &'static str {
+@@ -15,6 +16,7 @@
+             Self::AssertEq => "assert_eq",
+             Self::AssertNe => "assert_ne",
+             Self::Println => "println",
++            Self::Vec => "vec",
+         }
+     }
+     pub(crate) fn tag(self) -> u32 {
+@@ -24,6 +26,7 @@
+             Self::AssertEq => 2,
+             Self::AssertNe => 3,
+             Self::Println => 4,
++            Self::Vec => 5,
+         }
+     }
+ }
+diff --git a/crates/lrr/src/frontend/compile_input_catalog.rs b/crates/lrr/src/frontend/compile_input_catalog.rs
+--- a/crates/lrr/src/frontend/compile_input_catalog.rs
++++ b/crates/lrr/src/frontend/compile_input_catalog.rs
+@@ -22,6 +22,7 @@
+     unit: Digest,
+     edition: u16,
+     facades: BTreeMap<String, Digest>,
++    allocation: Option<Digest>,
+     definitions: BTreeMap<Digest, (MacroDefinition, CompileInputDescriptor)>,
+     attributes: Option<super::builtin_attributes::BuiltinAttributeCatalog>,
+ }
+@@ -60,6 +61,7 @@
+             unit,
+             edition,
+             facades: BTreeMap::new(),
++            allocation: None,
+             definitions,
+             attributes: None,
+         })
+@@ -98,6 +100,7 @@
+         if profile.edition != self.edition || crate::facade::unit(profile, "core") != self.unit {
+             return Err(fault("compiler facade owner/profile mismatch"));
+         }
++        self.allocation = Some(crate::facade::unit(profile, "alloc"));
+         self.facades.insert("core".into(), self.unit);
+         self.facades
+             .insert("std".into(), crate::facade::unit(profile, "std"));
+@@ -125,6 +128,11 @@
+             super::runtime_macro_catalog::RuntimeMacroCatalog::new(self.unit, self.edition)?;
+         let runtime = if let Some(standard) = self.facades.get("std") {
+             runtime.with_standard_unit(*standard)?
++        } else {
++            runtime
++        };
++        let runtime = if let Some(allocation) = self.allocation {
++            runtime.with_alloc_unit(allocation)?
+         } else {
+             runtime
+         };
+diff --git a/crates/lrr/src/frontend/runtime_macro_catalog.rs b/crates/lrr/src/frontend/runtime_macro_catalog.rs
+--- a/crates/lrr/src/frontend/runtime_macro_catalog.rs
++++ b/crates/lrr/src/frontend/runtime_macro_catalog.rs
+@@ -21,17 +21,19 @@
+ pub struct RuntimeMacroCatalog {
+     unit: Digest,
+     edition: u16,
++    standard: Option<Digest>,
++    allocation: Option<Digest>,
+     definitions: BTreeMap<Digest, (MacroDefinition, RuntimeMacroKind)>,
+ }
+ impl RuntimeMacroCatalog {
+     /// The pinned standard inventory used both during source preparation and
+     /// during database/generated certificate revalidation. This confers no
+     /// runtime authority and cannot accept a user definition by its spelling.
+-    pub(crate) fn standard(
+-        profile: &crate::core::profile::ProfileIdentity,
+-    ) -> Result<Self, Diagnostic> {
++    pub fn standard(profile: &crate::core::profile::ProfileIdentity) -> Result<Self, Diagnostic> {
++        profile.validate_source()?;
+         Self::new(crate::facade::unit(profile, "core"), profile.edition)?
+-            .with_standard_unit(crate::facade::unit(profile, "std"))
++            .with_standard_unit(crate::facade::unit(profile, "std"))?
++            .with_alloc_unit(crate::facade::unit(profile, "alloc"))
+     }
+     /// Reconstruct only the pinned standard facet in a resolved definition's
+     /// world. Invocation syntax keeps its own profile; select still checks the
+@@ -78,6 +80,8 @@
+         Ok(Self {
+             unit,
+             edition,
++            standard: None,
++            allocation: None,
+             definitions,
+         })
+     }
+@@ -87,6 +91,12 @@
+         if standard == self.unit {
+             return Err(fault("standard runtime macro unit aliases core"));
+         }
++        if self.standard.is_some() || self.allocation == Some(standard) {
++            return Err(fault(
++                "standard runtime macro facet already registered or aliases alloc",
++            ));
++        }
++        self.standard = Some(standard);
+         let kind = RuntimeMacroKind::Println;
+         let mut e = StableEncoder::new("lrr/v2/runtime-macro-definition");
+         e.digest(standard);
+@@ -107,11 +117,43 @@
+         }
+         Ok(self)
+     }
++    /// Pinned alloc owns vec; std may reexport that exact definition. No extern alias is added.
++    pub(crate) fn with_alloc_unit(mut self, allocation: Digest) -> Result<Self, Diagnostic> {
++        if allocation == self.unit || self.standard == Some(allocation) || self.allocation.is_some()
++        {
++            return Err(fault(
++                "alloc runtime macro unit aliases another facet or is already registered",
++            ));
++        }
++        let kind = RuntimeMacroKind::Vec;
++        let mut e = StableEncoder::new("lrr/v2/runtime-macro-definition");
++        e.digest(allocation);
++        e.u32(u32::from(self.edition));
++        e.u32(kind.tag());
++        let definition = MacroDefinition {
++            identity: e.finish(),
++            defining_unit: allocation,
++            definition_edition: self.edition,
++        };
++        definition.validate()?;
++        if self
++            .definitions
++            .insert(definition.identity, (definition, kind))
++            .is_some()
++        {
++            return Err(fault("alloc runtime macro identity already registered"));
++        }
++        self.allocation = Some(allocation);
++        Ok(self)
++    }
+     pub(crate) fn source_exports(
+         &self,
+         exporting_unit: Digest,
+     ) -> Result<SourceMacroRoutes, Diagnostic> {
+         let mut routes = self.source_routes()?;
++        if self.allocation == Some(exporting_unit) {
++            routes.definitions.clear();
++        }
+         routes.modules = BTreeSet::from([(exporting_unit, vec![])]);
+         routes.module_access =
+             BTreeMap::from([((exporting_unit, vec![]), VisibilityScope::Public)]);
+@@ -119,7 +161,9 @@
+             route.path = MacroPath::new(exporting_unit, route.path.components().to_vec())?;
+         }
+         for (definition, kind) in self.definitions.values() {
+-            if definition.defining_unit == exporting_unit && definition.defining_unit != self.unit {
++            if definition.defining_unit == exporting_unit && definition.defining_unit != self.unit
++                || *kind == RuntimeMacroKind::Vec && self.standard == Some(exporting_unit)
++            {
+                 routes.definitions.push(DefinitionRoute {
+                     path: MacroPath::new(
+                         exporting_unit,
+diff --git a/crates/lrr/src/frontend/runtime_macro_plan.rs b/crates/lrr/src/frontend/runtime_macro_plan.rs
+--- a/crates/lrr/src/frontend/runtime_macro_plan.rs
++++ b/crates/lrr/src/frontend/runtime_macro_plan.rs
+@@ -608,7 +608,9 @@
+     };
+     let arguments = parsed.runtime_macro_arguments(&invocation, kind)?;
+     let (operand_use, message_timing) = match kind {
+-        RuntimeMacroKind::Panic | RuntimeMacroKind::Println => (None, MessageTiming::Always),
++        RuntimeMacroKind::Panic | RuntimeMacroKind::Println | RuntimeMacroKind::Vec => {
++            (None, MessageTiming::Always)
++        }
+         RuntimeMacroKind::Assert => (
+             Some(OperandUse::Predicate),
+             MessageTiming::OnAssertionFailure,
+diff --git a/crates/lrr/src/syntax/runtime_macro_arguments.rs b/crates/lrr/src/syntax/runtime_macro_arguments.rs
+--- a/crates/lrr/src/syntax/runtime_macro_arguments.rs
++++ b/crates/lrr/src/syntax/runtime_macro_arguments.rs
+@@ -18,6 +18,9 @@
+     AstNode, Edition, TextRange, TextSize,
+     ast::{self, HasArgList, HasGenericArgs},
+ };
++#[path = "runtime_vec_arguments.rs"]
++mod vec_arguments;
++pub use vec_arguments::VecForm;
+ fn fault(message: &str) -> Diagnostic {
+     Diagnostic::new("LRR-E-RUNTIME-MACRO-ARGUMENTS", message.into())
+ }
+@@ -27,6 +30,7 @@
+     invocation: SourceRange,
+     kind: RuntimeMacroKind,
+     operands: Vec<SourceRange>,
++    vec_form: Option<VecForm>,
+     declaration_arguments: Vec<SourceRange>,
+     message: Option<SourceRange>,
+     message_argument_count: u32,
+@@ -93,6 +97,9 @@
+     }
+     pub(crate) fn declaration_arguments(&self) -> &[SourceRange] {
+         &self.declaration_arguments
++    }
++    pub fn vec_form(&self) -> Option<VecForm> {
++        self.vec_form
+     }
+     pub fn operands(&self) -> &[SourceRange] {
+         &self.operands
+@@ -135,6 +142,10 @@
+             e.u32(r.start);
+             e.u32(r.end);
+         }
++        // Preserve kind0–4 encodings; the new explicit tag5 carries a vec form.
++        if let Some(form) = self.vec_form {
++            e.u32(form.tag());
++        }
+     }
+ }
+ impl ParsedFile {
+@@ -178,6 +189,16 @@
+             return Err(fault("runtime macro arguments have incomplete delimiters"));
+         }
+         let inside = &text[1..text.len() - 1];
++        if kind == RuntimeMacroKind::Vec {
++            if self.generated_origin.is_some() {
++                return Err(Diagnostic::new(
++                    "LRR-E-UNSUPPORTED",
++                    "generated vec runtime arguments require token-aware list/repeat origins"
++                        .into(),
++                ));
++            }
++            return vec_arguments::capture(self, selected, inside, token_range);
++        }
+         let prefix = "fn __lrr_capture(){__lrr_arguments(";
+         let wrapped = format!("{prefix}{inside});}}");
+         let edition = match self.edition {
+@@ -203,7 +224,7 @@
+             .arg_list()
+             .ok_or_else(|| fault("runtime argument list is missing"))?;
+         let required = match kind {
+-            RuntimeMacroKind::Panic | RuntimeMacroKind::Println => 0,
++            RuntimeMacroKind::Panic | RuntimeMacroKind::Println | RuntimeMacroKind::Vec => 0,
+             RuntimeMacroKind::Assert => 1,
+             RuntimeMacroKind::AssertEq | RuntimeMacroKind::AssertNe => 2,
+         };
+@@ -315,7 +336,7 @@
+             });
+         }
+         let count = match kind {
+-            RuntimeMacroKind::Panic | RuntimeMacroKind::Println => 0,
++            RuntimeMacroKind::Panic | RuntimeMacroKind::Println | RuntimeMacroKind::Vec => 0,
+             RuntimeMacroKind::Assert => 1,
+             RuntimeMacroKind::AssertEq | RuntimeMacroKind::AssertNe => 2,
+         };
+@@ -335,6 +356,7 @@
+             invocation: r,
+             kind,
+             operands: ranges,
++            vec_form: None,
+             declaration_arguments,
+             message,
+             message_argument_count,
+diff --git a/crates/lrr/src/syntax/runtime_vec_arguments.rs b/crates/lrr/src/syntax/runtime_vec_arguments.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/syntax/runtime_vec_arguments.rs
+@@ -0,0 +1,154 @@
++//! Exact original-source vec expression forms. No operand evaluation or runtime body inspection.
++use super::{RuntimeMacroArguments, fault};
++use crate::{
++    facade::macros::RuntimeMacroKind,
++    syntax::{
++        ast_adapter::range, macro_calls::SourceMacroCall, parse::ParsedFile, spans::SourceRange,
++    },
++};
++use ra_ap_syntax::{AstNode, Edition, ast};
++#[derive(Debug, Clone, Copy, Eq, PartialEq)]
++pub enum VecForm {
++    Empty,
++    List,
++    Repeat,
++}
++impl VecForm {
++    pub(super) fn tag(self) -> u32 {
++        match self {
++            Self::Empty => 0,
++            Self::List => 1,
++            Self::Repeat => 2,
++        }
++    }
++}
++pub(super) fn capture(
++    source: &ParsedFile,
++    selected: &SourceMacroCall,
++    inside: &str,
++    token_range: SourceRange,
++) -> Result<RuntimeMacroArguments, crate::core::diagnostic::Diagnostic> {
++    let prefix = "fn __lrr_capture(){let _=[";
++    let mut wrapped = String::new();
++    let bytes = prefix
++        .len()
++        .checked_add(inside.len())
++        .and_then(|n| n.checked_add(3))
++        .ok_or_else(|| fault("vec argument wrapper overflow"))?;
++    wrapped
++        .try_reserve_exact(bytes)
++        .map_err(|_| fault("vec argument wrapper allocation"))?;
++    wrapped.push_str(prefix);
++    wrapped.push_str(inside);
++    wrapped.push_str("];}");
++    let edition = match source.edition {
++        2015 => Edition::Edition2015,
++        2018 => Edition::Edition2018,
++        2021 => Edition::Edition2021,
++        2024 => Edition::Edition2024,
++        _ => return Err(fault("vec argument edition unsupported")),
++    };
++    let parsed = ast::SourceFile::parse(&wrapped, edition);
++    if !parsed.errors().is_empty() {
++        return Err(fault(
++            "vec arguments are not a complete empty/list/repeat form",
++        ));
++    }
++    let array = parsed
++        .tree()
++        .syntax()
++        .descendants()
++        .find_map(ast::ArrayExpr::cast)
++        .ok_or_else(|| fault("vec argument wrapper array absent"))?;
++    let mut operands = Vec::new();
++    let form = match array.kind() {
++        ast::ArrayExprKind::Repeat {
++            initializer,
++            repeat,
++        } => {
++            for operand in [initializer, repeat] {
++                operands
++                    .try_reserve(1)
++                    .map_err(|_| fault("vec argument allocation"))?;
++                operands.push(operand.ok_or_else(|| fault("vec repeat lacks initializer/count"))?);
++            }
++            VecForm::Repeat
++        }
++        ast::ArrayExprKind::ElementList(expressions) => {
++            for expression in expressions {
++                if operands.len() >= 10_000 {
++                    return Err(fault("vec argument count limit"));
++                }
++                operands
++                    .try_reserve(1)
++                    .map_err(|_| fault("vec argument allocation"))?;
++                operands.push(expression);
++            }
++            if operands.is_empty() {
++                VecForm::Empty
++            } else {
++                VecForm::List
++            }
++        }
++    };
++    let base = token_range
++        .start
++        .checked_add(1)
++        .ok_or_else(|| fault("vec argument base overflow"))?;
++    let mut ranges = Vec::new();
++    ranges
++        .try_reserve_exact(operands.len())
++        .map_err(|_| fault("vec source range allocation"))?;
++    let mut no_item_syntax = true;
++    let mut nodes = 0usize;
++    for operand in operands {
++        for node in operand.syntax().descendants() {
++            nodes = nodes
++                .checked_add(1)
++                .filter(|n| *n <= 100_000)
++                .ok_or_else(|| fault("vec argument structural work limit"))?;
++            no_item_syntax &= !ast::Item::can_cast(node.kind())
++                && !ast::MacroExpr::can_cast(node.kind())
++                && !ast::MacroCall::can_cast(node.kind())
++                && !ast::Attr::can_cast(node.kind());
++        }
++        let offset = range(operand.syntax().text_range());
++        let start = usize::try_from(offset.start)
++            .map_err(|_| fault("vec start offset overflow"))?
++            .checked_sub(prefix.len())
++            .ok_or_else(|| fault("vec operand precedes original input"))?;
++        let end = usize::try_from(offset.end)
++            .map_err(|_| fault("vec end offset overflow"))?
++            .checked_sub(prefix.len())
++            .filter(|n| *n <= inside.len())
++            .ok_or_else(|| fault("vec operand escapes original input"))?;
++        ranges.push(SourceRange {
++            start: base
++                .checked_add(u32::try_from(start).map_err(|_| fault("vec source offset overflow"))?)
++                .ok_or_else(|| fault("vec source offset overflow"))?,
++            end: base
++                .checked_add(u32::try_from(end).map_err(|_| fault("vec source offset overflow"))?)
++                .ok_or_else(|| fault("vec source offset overflow"))?,
++        });
++    }
++    let mut declaration_arguments = Vec::new();
++    declaration_arguments
++        .try_reserve_exact(ranges.len())
++        .map_err(|_| fault("vec declaration argument allocation"))?;
++    declaration_arguments.extend_from_slice(&ranges);
++    Ok(RuntimeMacroArguments {
++        source: source.key(),
++        invocation: selected.range(),
++        kind: RuntimeMacroKind::Vec,
++        operands: ranges,
++        vec_form: Some(form),
++        declaration_arguments,
++        message: None,
++        message_argument_count: 0,
++        literal_message: None,
++        literal_predicate: None,
++        no_item_syntax,
++        binding_predicate: None,
++        zero_arg_predicate_call: None,
++    })
++}
+diff --git a/xtask/tests/vec_declaration_facets.rs b/xtask/tests/vec_declaration_facets.rs
+new file mode 100644
+--- /dev/null
++++ b/xtask/tests/vec_declaration_facets.rs
+@@ -0,0 +1,348 @@
++use lrr::{
++    core::{
++        digest::{Digest, StableEncode},
++        profile::ProfileIdentity,
++    },
++    db::{key::OutlineKey, memo::Database},
++    expand::{
++        scopes::MacroDefinition,
++        source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    },
++    facade::macros::RuntimeMacroKind,
++    frontend::{
++        compile_input_catalog::CompileInputCatalog,
++        macro_names::PathLookup,
++        runtime_macro_catalog::RuntimeMacroCatalog,
++        runtime_macro_plan::{RuntimeMacroPreparation, prepare_runtime_macro},
++    },
++    source::{
++        changes::{
++            PreparedSourceInputs, PreparedSourceView, SourceSelection, SourceSelectionOutcome,
++            SourceUnitInput,
++        },
++        manifest::Namespace,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::{
++        parse::{ParseKey, ParsedFile},
++        runtime_macro_arguments::VecForm,
++        spans::SourceRange,
++    },
++};
++fn profile(edition: u16) -> ProfileIdentity {
++    let mut p = ProfileIdentity::current();
++    p.edition = edition;
++    p
++}
++fn at(text: &str, part: &str) -> SourceRange {
++    let start = u32::try_from(text.find(part).unwrap()).unwrap();
++    SourceRange {
++        start,
++        end: start + u32::try_from(part.len()).unwrap(),
++    }
++}
++fn parse_source(text: &str, edition: u16) -> ParsedFile {
++    ParsedFile::parse(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        profile(edition),
++    )
++    .unwrap()
++}
++fn source(text: &str, edition: u16) -> (PreparedSourceView, PreparedSourceInputs) {
++    let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++    let profile = profile(edition);
++    let cfg = CfgSet::guest_default();
++    let path = SourcePath::new("main.rs").unwrap();
++    let crate_key = Digest([211; 32]);
++    let selection = SourceSelection {
++        path: path.clone(),
++        outline: OutlineKey {
++            parse: ParseKey {
++                content: blob.content(),
++                profile: profile.clone(),
++            },
++            crate_key,
++            module_path: vec![],
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let inputs = PreparedSourceInputs::refresh(
++        None,
++        vec![SourceUnitInput {
++            blob,
++            profile,
++            cfg,
++            path,
++            crate_key,
++            module_path: vec![],
++        }],
++        Default::default(),
++    )
++    .unwrap();
++    let SourceSelectionOutcome::Selected(view) = inputs.select(&selection).unwrap() else {
++        panic!("source not selected")
++    };
++    (view, inputs)
++}
++fn discovery(view: &PreparedSourceView) -> SourceDiscovery {
++    SourceDiscovery::new(
++        vec![view.share()],
++        view.outline().root_scope.clone(),
++        Namespace::Value,
++        Digest([212; 32]),
++        1,
++    )
++    .unwrap()
++    .with_declarative_compiler(
++        Digest([213; 32]),
++        Digest([214; 32]),
++        std::sync::Arc::new(
++            CompileInputCatalog::standalone(&view.selection().outline.parse.profile).unwrap(),
++        ),
++    )
++    .unwrap()
++}
++fn definition(catalog: &RuntimeMacroCatalog, kind: RuntimeMacroKind) -> MacroDefinition {
++    catalog
++        .definitions()
++        .find(|d| catalog.select(d).unwrap() == Some(kind))
++        .unwrap()
++        .clone()
++}
++#[test]
++fn vec_original_cold_sibling_declaration_facet_settles_four_editions() {
++    let text =
++        include_str!("../../fixtures/upstream/rustc-checkout/tests/ui/binding/expr-match-panic.rs");
++    for edition in [2015, 2018, 2021, 2024] {
++        let (view, _) = source(text, edition);
++        let mut work = discovery(&view);
++        assert!(matches!(
++            work.poll().unwrap(),
++            SourceDiscoveryStep::Sealed(_)
++        ));
++        assert_eq!(work.accounted_expansion_count().unwrap(), 0);
++        assert!(work.impl_header_inventory().unwrap().headers().is_empty());
++        // Whole main/test_box unexecuted here; root separately exercises selected test_simple.
++    }
++}
++#[test]
++fn vec_alloc_definition_std_reexport_preserves_world_and_user_identity() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let catalog = RuntimeMacroCatalog::standard(&profile(edition)).unwrap();
++        let vec = definition(&catalog, RuntimeMacroKind::Vec);
++        let core = definition(&catalog, RuntimeMacroKind::Panic).defining_unit;
++        let std = definition(&catalog, RuntimeMacroKind::Println).defining_unit;
++        assert_ne!(vec.defining_unit, core);
++        assert_ne!(vec.defining_unit, std);
++        assert_eq!(vec.definition_edition, edition);
++        assert_eq!(
++            RuntimeMacroCatalog::new(core, edition)
++                .unwrap()
++                .select(&vec)
++                .unwrap(),
++            None
++        );
++        let mut forged = vec.clone();
++        forged.defining_unit = std;
++        assert_eq!(
++            catalog.select(&forged).unwrap_err().code,
++            "LRR-E-RUNTIME-MACRO"
++        );
++        let user = MacroDefinition {
++            identity: Digest([215; 32]),
++            defining_unit: std,
++            definition_edition: edition,
++        };
++        assert_eq!(catalog.select(&user).unwrap(), None);
++        assert_eq!(
++            RuntimeMacroCatalog::new(core, edition)
++                .unwrap()
++                .definitions()
++                .count(),
++            4
++        );
++    }
++}
++#[test]
++fn vec_empty_list_repeat_arguments_keep_exact_spans_and_no_item_proof() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let catalog = RuntimeMacroCatalog::standard(&profile(edition)).unwrap();
++        let def = definition(&catalog, RuntimeMacroKind::Vec);
++        for (call, form, parts) in [
++            ("vec![]", VecForm::Empty, vec![]),
++            ("vec![one(), 2,]", VecForm::List, vec!["one()", "2"]),
++            (
++                "vec![one(); count()]",
++                VecForm::Repeat,
++                vec!["one()", "count()"],
++            ),
++        ] {
++            let text = format!("fn live(){{let _={call};}}");
++            let parsed = parse_source(&text, edition);
++            let invocation = parsed.macro_call_at(at(&text, call)).unwrap();
++            let RuntimeMacroPreparation::Intrinsic(plan) = prepare_runtime_macro(
++                &parsed,
++                invocation,
++                PathLookup::Defined(def.clone()),
++                &catalog,
++            )
++            .unwrap() else {
++                panic!("intrinsic absent")
++            };
++            assert_eq!(plan.arguments().vec_form(), Some(form));
++            assert_eq!(
++                plan.arguments().operands(),
++                parts.iter().map(|p| at(&text, p)).collect::<Vec<_>>()
++            );
++            assert_eq!(plan.arguments().message_argument_count(), 0);
++            assert!(plan.arguments().message().is_none());
++            let outline = parsed
++                .outline(Digest([211; 32]), vec![], &CfgSet::guest_default())
++                .unwrap();
++            assert!(
++                plan.no_item_proof(&outline.items[0].body.as_ref().unwrap().key())
++                    .is_some()
++            );
++            let other = parse_source("fn live(){vec![3]}", edition);
++            assert!(plan.arguments().require_source(&other.key()).is_err());
++        }
++        let text = "fn live(){vec![1;2,]}";
++        let parsed = parse_source(text, edition);
++        let invocation = parsed.macro_call_at(at(text, "vec![1;2,]")).unwrap();
++        assert_eq!(
++            parsed
++                .runtime_macro_arguments(&invocation, RuntimeMacroKind::Vec)
++                .unwrap_err()
++                .code,
++            "LRR-E-RUNTIME-MACRO-ARGUMENTS"
++        );
++    }
++}
++#[test]
++fn vec_nested_declarations_macros_attributes_do_not_receive_no_item_certificate() {
++    let catalog = RuntimeMacroCatalog::standard(&profile(2024)).unwrap();
++    let def = definition(&catalog, RuntimeMacroKind::Vec);
++    for call in [
++        "vec![{struct Hidden;1}]",
++        "vec![unknown!()]",
++        "vec![#[cfg(any())] 1]",
++        "vec![1;unknown!()]",
++    ] {
++        let text = format!("fn live(){{let _={call};}}");
++        let parsed = parse_source(&text, 2024);
++        let invocation = parsed.macro_call_at(at(&text, call)).unwrap();
++        let RuntimeMacroPreparation::Intrinsic(plan) = prepare_runtime_macro(
++            &parsed,
++            invocation,
++            PathLookup::Defined(def.clone()),
++            &catalog,
++        )
++        .unwrap() else {
++            panic!("intrinsic absent")
++        };
++        let outline = parsed
++            .outline(Digest([211; 32]), vec![], &CfgSet::guest_default())
++            .unwrap();
++        assert!(
++            plan.no_item_proof(&outline.items[0].body.as_ref().unwrap().key())
++                .is_none()
++        );
++    }
++    let (view, _) = source("fn cold(){vec![unknown!()];}fn main(){}", 2024);
++    let mut work = discovery(&view);
++    assert!(matches!(
++        work.poll().unwrap(),
++        SourceDiscoveryStep::Incomplete { .. }
++    ));
++    assert_eq!(work.accounted_expansion_count().unwrap(), 0);
++}
++#[test]
++fn vec_shadowed_user_definition_preserves_normal_expansion_authority() {
++    let (view, _) = source(
++        "struct Global;macro_rules! vec{($e:expr)=>{{impl Global{}7}}}fn cold(){vec![1];}fn main(){}",
++        2024,
++    );
++    let mut work = discovery(&view);
++    let SourceDiscoveryStep::NeedExpansion { request } = work.poll().unwrap() else {
++        panic!("user vec treated as intrinsic")
++    };
++    work.admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
++        .unwrap();
++    assert!(matches!(
++        work.poll().unwrap(),
++        SourceDiscoveryStep::Sealed(_)
++    ));
++    assert_eq!(work.impl_header_inventory().unwrap().headers().len(), 1);
++}
++#[test]
++fn vec_reached_allocation_refuses_before_operand_execution_or_guest_effect() {
++    use lrr::{
++        db::poll::QueryPoll,
++        engine::{
++            run::{RunMachine, RunPoll},
++            standalone_macros::CompletedStandaloneRuntimeMacros,
++        },
++    };
++    let (view, inputs) = source("fn live(){vec![unknown()];}fn main(){}", 2024);
++    let mut work = discovery(&view);
++    assert!(matches!(
++        work.poll().unwrap(),
++        SourceDiscoveryStep::Sealed(_)
++    ));
++    let macros = CompletedStandaloneRuntimeMacros::from_discovery(&view, &work).unwrap();
++    let contexts = macros.contexts().unwrap();
++    let body = view
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "live")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap()
++        .key();
++    let mut db = Database::default();
++    inputs.publish(&mut db).unwrap();
++    work.publish(&mut db).unwrap();
++    let revision = db.source_revision();
++    db.begin_run().unwrap();
++    let QueryPoll::Ready(Ok(mut machine)) =
++        RunMachine::start_with_discovery(&mut db, body, 100_000, work)
++    else {
++        panic!("startup")
++    };
++    let RunPoll::Fault(error) = machine.poll_with_runtime_macros(&mut db, &contexts) else {
++        panic!("reached vec must not succeed")
++    };
++    assert_eq!(error.code, "LRR-E-UNSUPPORTED");
++    assert!(error.message.contains("Vec allocation"));
++    assert_eq!(db.source_revision(), revision);
++    db.finish_run().unwrap();
++}
++
++#[test]
++fn vec_prelude_paths_and_renames_do_not_add_an_alloc_extern_alias() {
++    for text in [
++        "#![no_std] fn cold(){vec![1];}",
++        "fn cold(){alloc::vec![1];}",
++    ] {
++        let (view, _) = source(text, 2024);
++        let mut work = discovery(&view);
++        assert!(matches!(
++            work.poll().unwrap(),
++            SourceDiscoveryStep::Incomplete { .. }
++        ));
++    }
++    for text in [
++        "#![no_implicit_prelude] extern crate std; fn cold(){std::vec![1];}",
++        "use std::vec as make;fn cold(){make![1];}",
++    ] {
++        let (view, _) = source(text, 2024);
++        let mut work = discovery(&view);
++        assert!(matches!(
++            work.poll().unwrap(),
++            SourceDiscoveryStep::Sealed(_)
++        ));
++        assert_eq!(work.accounted_expansion_count().unwrap(), 0);
++    }
++}

@@ -1,0 +1,620 @@
+{
+  "schema_version": 1,
+  "claims": [
+    {
+      "id": "LOCAL-001",
+      "track": "WT01",
+      "item": "WT01-03",
+      "owner": "/root/stock_numeric_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen source-only stock run-pass contract runner handed off; not executed/integrated runtime acceptance.",
+      "paths": [
+        "artifacts/macos-first/sol-stock-run-pass-contract-runner-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T00:43:12.809063+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-002",
+      "track": "WT03",
+      "item": "WT03-01",
+      "owner": "/root/edition_macro_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen scalar/or-pattern and single-alternative guards handed off; candidate runtime validation pending.",
+      "paths": [
+        "artifacts/macos-first/sol-literal-match-v1/",
+        "artifacts/macos-first/sol-literal-or-pattern-v1/",
+        "artifacts/macos-first/sol-scalar-match-guards-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T01:44:10.292443+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-003",
+      "track": "WT04",
+      "item": "WT04-01",
+      "owner": "/root/generic_call_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Source-only lexical numeric call plan and engine/syntax admission integration; excludes frontend/db owned by root.",
+      "paths": [
+        "artifacts/macos-first/sol-lexical-numeric-callees-v1/",
+        "artifacts/macos-first/sol-lexical-numeric-callees-admission-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T00:44:30.045038+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-004",
+      "track": "WT04",
+      "item": "WT04-01",
+      "owner": "/root",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Bounded interpreter candidate integrated after collected components/strict checks; broader task and integrated milestone remain incomplete.",
+      "paths": [
+        "crates/lrr/src/frontend/callables.rs",
+        "crates/lrr/src/db/memo.rs",
+        "crates/lrr/src/frontend/lexical_callables.rs",
+        "crates/lrr/src/db/lexical_inputs.rs"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T03:11:27.673365+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-005",
+      "track": "WT12",
+      "item": "WT12-01",
+      "owner": "/root",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Initial contribution plans/templates/checker delivered with structural evidence; remote publication and full implementation acceptance remain pending.",
+      "paths": [
+        "worktracks/",
+        ".github/",
+        "AGENTS.md",
+        "README.md"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T00:43:12.809063+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-006",
+      "track": "WT01",
+      "item": "WT01-04",
+      "owner": "/root/stock_numeric_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Source-only complete-inventory model1 asserted-contract classification and four-report successor.",
+      "paths": [
+        "artifacts/macos-first/sol-rustc-runtime-contract-classification-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T01:17:17.746055+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-007",
+      "track": "WT03",
+      "item": "WT03-01",
+      "owner": "/root",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Bounded interpreter candidate integrated after collected components/strict checks; broader task and integrated milestone remain incomplete.",
+      "paths": [
+        "crates/lrr/src/ir/op.rs",
+        "crates/lrr/src/ir/recipe.rs",
+        "crates/lrr/src/ir/validate.rs",
+        "crates/lrr/src/vm/step.rs",
+        "crates/lrr/src/engine/failure.rs",
+        "xtask/tests/match_no_arm_exit.rs"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T03:11:27.673365+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-008",
+      "track": "WT04",
+      "item": "WT04-02",
+      "owner": "/root/generic_call_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Source-only M018 source-view propagation through local aliases/named returns; excludes root callables/db and IR/VM.",
+      "paths": [
+        "artifacts/macos-first/sol-source-view-alias-return-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T01:17:17.746055+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-009",
+      "track": "WT01",
+      "item": "WT01-03",
+      "owner": "/root/stock_numeric_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen execution adapter handed off with paired protocol metadata evidence; zero LRR/guest executions and capture/configuration blockers remain.",
+      "paths": [
+        "artifacts/macos-first/sol-stock-runtime-execution-adapter-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T01:44:10.292443+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-010",
+      "track": "WT04",
+      "item": "WT04-02",
+      "owner": "/root/generic_call_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen legacy checked frame source transfer handed off;11 unexecuted controls; general SourceView admission and aggregate Copy pending.",
+      "paths": [
+        "artifacts/macos-first/sol-frame-source-view-transfer-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T02:11:31.435242+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-011",
+      "track": "WT02",
+      "item": "WT02-04",
+      "owner": "/root/edition_macro_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen pure constant source evaluator handed off;11 unexecuted controls, only formatter accepted; provider/schema/guest integration pending.",
+      "paths": [
+        "artifacts/macos-first/sol-pure-constants-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T02:11:31.435242+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-012",
+      "track": "WT01",
+      "item": "WT01-03",
+      "owner": "/root/stock_numeric_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen CLI capture source handed off; compilation/runtime evidence pending.",
+      "paths": [
+        "artifacts/macos-first/sol-cli-runtime-capture-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T02:58:52.177631+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-013",
+      "track": "WT08",
+      "item": "WT08-02",
+      "owner": "/root/edition_macro_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen vec declaration facet handed off; canonical component validation pending; reached storage remains separate.",
+      "paths": [
+        "artifacts/macos-first/sol-vec-declaration-facet-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T02:58:52.177631+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-014",
+      "track": "WT04",
+      "item": "WT04-02",
+      "owner": "/root/generic_call_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen current source-view producer handed off;11 controls unexecuted; exact Value prelude prerequisite remains.",
+      "paths": [
+        "artifacts/macos-first/sol-source-view-current-admission-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T02:58:52.177631+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-015",
+      "track": "WT01",
+      "item": "WT01-03",
+      "owner": "/root/stock_numeric_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen configured-matrix source/metadata handoff; actual host preparation/configurations/runtime acceptance remain0.",
+      "paths": [
+        "artifacts/macos-first/sol-stock-configured-matrix-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T03:42:33.154249+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-016",
+      "track": "WT07",
+      "item": "WT07-01",
+      "owner": "/root/edition_macro_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen source-only handoff retained; candidate compilation/integration/runtime acceptance remain pending. Real managed Vec storage/runtime candidate; checked ownership/index/budgets; declaration facet frozen.",
+      "paths": [
+        "artifacts/macos-first/sol-vec-runtime-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T04:26:00.114298+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-017",
+      "track": "WT04",
+      "item": "WT04-02",
+      "owner": "/root/generic_call_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen source-only handoff retained; candidate compilation/integration/runtime acceptance remain pending. Exact Value prelude/pattern declaration witness; no module-only or guessed-name absence authority.",
+      "paths": [
+        "artifacts/macos-first/sol-value-prelude-admission-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T04:26:00.114298+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-018",
+      "track": "WT02",
+      "item": "WT02-04",
+      "owner": "/root",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen source-only constant-wire handoff retained; Rust compilation/acceptance remains pending.",
+      "paths": [
+        "artifacts/macos-first/root-constant-wire-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T04:46:32.817566+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-019",
+      "track": "WT01",
+      "item": "WT01-03",
+      "owner": "/root/stock_numeric_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen source-only handoff retained; candidate compilation/integration/runtime acceptance remain pending. Successor adapter for actual CLI schema5 capture, external source/world/entry authority and configured-case prerequisites; no invented streams/status.",
+      "paths": [
+        "artifacts/macos-first/sol-stock-cli-capture-adapter-v2/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T04:26:00.114298+00:00",
+      "review_after": "2026-10-15T00:32:09Z"
+    },
+    {
+      "id": "LOCAL-020",
+      "track": "WT07",
+      "item": "WT07-02",
+      "owner": "/root/edition_macro_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen source-only handoff retained; full task acceptance incomplete. Sealed Vec Index/SliceIndex source selection and macro operand provenance; no runtime-name fallback or ordinary-PC relabeling.",
+      "paths": [
+        "artifacts/macos-first/sol-vec-source-index-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T05:26:09.232158+00:00",
+      "review_after": "2026-10-15T04:26:00.114298+00:00"
+    },
+    {
+      "id": "LOCAL-021",
+      "track": "WT04",
+      "item": "WT04-02",
+      "owner": "/root/generic_call_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen source-only handoff retained; full task acceptance incomplete. Current exact live Value-library source generation and checked graph/prelude join; source-only, distinct installed sysroot/world.",
+      "paths": [
+        "artifacts/macos-first/sol-value-library-generation-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T05:26:09.232158+00:00",
+      "review_after": "2026-10-15T04:26:00.114298+00:00"
+    },
+    {
+      "id": "LOCAL-022",
+      "track": "WT01",
+      "item": "WT01-03",
+      "owner": "/root/stock_numeric_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen source-only handoff retained; full task acceptance incomplete. Independent actual preentry source-loader/main receipt through prepared-source/discovery APIs before VM; no packet self-echo.",
+      "paths": [
+        "artifacts/macos-first/sol-stock-preentry-loader-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T05:26:09.232158+00:00",
+      "review_after": "2026-10-15T04:26:00.114298+00:00"
+    },
+    {
+      "id": "LOCAL-023",
+      "track": "WT01",
+      "item": "WT01-02",
+      "owner": "/root",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Collected authentic compiletest host configuration capture; six commands prepared but not executed, runtime correspondence still incomplete.",
+      "paths": [
+        "artifacts/macos-first/root-stock-configured-matrix-v2/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T07:14:06.124150+00:00",
+      "review_after": "2026-10-15T04:26:00.114298+00:00"
+    },
+    {
+      "id": "LOCAL-024",
+      "track": "WT02",
+      "item": "WT02-04",
+      "owner": "/root",
+      "kind": "local_agent",
+      "status": "active",
+      "scope": "Root T054 reached-macro and exact length-child demand forwarding;840/0 private library,13 normal constant controls,9 new macro controls,architecture/fmt. Strict21 and MAIN milestone remain required; configured upstream runtime/full-fixture0.",
+      "paths": [
+        "artifacts/macos-first/root-constant-memo-v1/",
+        "artifacts/macos-first/root-constant-query-identity-v1/",
+        "artifacts/macos-first/root-constant-query-v1/",
+        "artifacts/macos-first/root-panic-family-static-lowering-v1/",
+        "artifacts/macos-first/root-source-constant-dispatch-v1/",
+        "artifacts/macos-first/root-constant-pending-ownership-v1/",
+        "artifacts/macos-first/root-reached-constant-macro-v1/",
+        "artifacts/macos-first/root-constant-production-consolidation-v1/",
+        "artifacts/macos-first/root-constant-candidate-harness-repair-v1/",
+        "artifacts/macos-first/root-constant-cold-world-bound-v1/",
+        "artifacts/macos-first/root-constant-loop-control-v1/",
+        "artifacts/macos-first/root-constant-generic-route-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T18:04:14.998555+00:00",
+      "review_after": "2026-10-15T05:55:00.598518+00:00"
+    },
+    {
+      "id": "LOCAL-025",
+      "track": "WT07",
+      "item": "WT07-02",
+      "owner": "/root/edition_macro_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen Box source propagation/header/field/return prerequisite handed off, source-only/uncompiled. M018 runtime/layout/dispatch integration remains incomplete; subsequent M019 preparation now reserved separately as LOCAL-031.",
+      "paths": [
+        "artifacts/macos-first/sol-buffer-slice-windows-v1/",
+        "artifacts/macos-first/sol-vec-push-pop-v1/",
+        "artifacts/macos-first/sol-constant-array-instantiation-v1/",
+        "artifacts/macos-first/sol-constant-array-transfer-v1/",
+        "artifacts/macos-first/sol-constant-array-source-publication-v1/",
+        "artifacts/macos-first/sol-scalar-constant-use-v1/",
+        "artifacts/macos-first/sol-resumable-constant-arrays-v1/",
+        "artifacts/macos-first/sol-managed-box-v1/",
+        "artifacts/macos-first/sol-box-source-admission-v1/",
+        "artifacts/macos-first/sol-box-compiler-contract-v1/",
+        "artifacts/macos-first/sol-box-type-readiness-v1/",
+        "artifacts/macos-first/sol-box-source-propagation-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T15:47:11.715761+00:00",
+      "review_after": "2026-10-15T05:44:26.583256+00:00"
+    },
+    {
+      "id": "LOCAL-026",
+      "track": "WT02",
+      "item": "WT02-04",
+      "owner": "/root/generic_call_logic",
+      "kind": "local_agent",
+      "status": "active",
+      "scope": "Frozen generated hygienic type packet; active private compiler primitive facet with actual published Type membership, source/origin/policy/profile proof. Default/custom Type prelude remains prerequisite; source-only/uncompiled.",
+      "paths": [
+        "artifacts/macos-first/sol-constant-macro-admission-v1/",
+        "artifacts/macos-first/sol-constant-path-selection-v1/",
+        "artifacts/macos-first/sol-constant-multisource-admission-v1/",
+        "artifacts/macos-first/sol-constant-result-type-v1/",
+        "artifacts/macos-first/sol-constant-child-admission-v1/",
+        "artifacts/macos-first/sol-constant-parameter-length-v1/",
+        "artifacts/macos-first/sol-constant-source-preparation-repair-v1/",
+        "artifacts/macos-first/sol-constant-authentic-preparation-v1/",
+        "artifacts/macos-first/sol-declarative-macro2-source-v1/",
+        "artifacts/macos-first/sol-generated-module-macro2-v1/",
+        "artifacts/macos-first/sol-constant-foreign-path-selection-v1/",
+        "artifacts/macos-first/sol-module-import-ambiguity-v1/",
+        "artifacts/macos-first/sol-original-inert-source-preparation-v1/",
+        "artifacts/macos-first/sol-mixed-edition-attribute-facets-v1/",
+        "artifacts/macos-first/sol-generated-crate-policy-v1/",
+        "artifacts/macos-first/sol-generated-constant-provenance-v1/",
+        "artifacts/macos-first/sol-generated-hygienic-source-type-v1/",
+        "artifacts/macos-first/sol-generated-primitive-admission-v1/",
+        "artifacts/macos-first/sol-generated-type-prelude-admission-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T17:10:07.401527+00:00",
+      "review_after": "2026-10-15T05:26:09.232158+00:00"
+    },
+    {
+      "id": "LOCAL-027",
+      "track": "WT01",
+      "item": "WT01-03",
+      "owner": "/root/stock_numeric_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Actual bounded runtime world audit and matched v2 configured-execution consumer; missing startup/library/native/profile/effects coverage remains incomplete.",
+      "paths": [
+        "artifacts/macos-first/sol-runtime-world-audit-v1/",
+        "artifacts/macos-first/sol-runtime-world-consumer-v2/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T06:11:53.846244+00:00",
+      "review_after": "2026-10-15T05:44:26.583256+00:00"
+    },
+    {
+      "id": "LOCAL-028",
+      "track": "WT03",
+      "item": "WT03-03",
+      "owner": "/root/stock_numeric_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Nested actual outer-arm source agreement/fresh frame session packet frozen and handed off; metadata only, twelve controls uncompiled/unexecuted. Root typed publication/dispatcher integration pending.",
+      "paths": [
+        "artifacts/macos-first/sol-scalar-guard-retry-v1/",
+        "artifacts/macos-first/sol-scalar-guard-retry-v2/",
+        "artifacts/macos-first/sol-char-match-v1/",
+        "artifacts/macos-first/sol-scalar-match-bindings-v1/",
+        "artifacts/macos-first/sol-facade-value-prelude-v1/",
+        "artifacts/macos-first/sol-pattern-namespace-db-v1/",
+        "artifacts/macos-first/sol-nested-pattern-namespace-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T11:54:30.651647+00:00",
+      "review_after": "2026-10-15T06:11:53.846244+00:00"
+    },
+    {
+      "id": "LOCAL-029",
+      "track": "WT04",
+      "item": "WT04-01",
+      "owner": "/root",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Actual predicate call-result context regression reproduced, repaired, tested and integrated; broader milestone required.",
+      "paths": [
+        "artifacts/macos-first/root-assert-predicate-result-context-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T07:14:06.124150+00:00",
+      "review_after": "2026-10-15T07:14:06.132536+00:00"
+    },
+    {
+      "id": "LOCAL-030",
+      "track": "WT04",
+      "item": "WT04-04",
+      "owner": "/root/stock_numeric_logic",
+      "kind": "local_agent",
+      "status": "active",
+      "scope": "Frozen closure call/return and opaque instance adoption handed off; active genuine closure symbolic type and dedicated capture layout producer. Actual source/frame/store/capture facts only; generic/Fn/ABI/dispatch remain explicit prerequisites. Source-only/uncompiled.",
+      "paths": [
+        "artifacts/macos-first/sol-source-closures-v1/",
+        "artifacts/macos-first/sol-closure-own-bindings-v1/",
+        "artifacts/macos-first/sol-closure-body-entry-v1/",
+        "artifacts/macos-first/sol-closure-environment-v1/",
+        "artifacts/macos-first/sol-closure-capture-bridge-v1/",
+        "artifacts/macos-first/sol-closure-entered-signatures-v1/",
+        "artifacts/macos-first/sol-closure-call-return-contracts-v1/",
+        "artifacts/macos-first/sol-closure-instance-adoption-v1/",
+        "artifacts/macos-first/sol-closure-type-layout-v1/",
+        "artifacts/macos-first/sol-closure-frame-publication-v1/",
+        "artifacts/macos-first/sol-closure-enum-consumers-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T18:20:13.744910+00:00",
+      "review_after": "2026-10-15T11:54:30.661821+00:00"
+    },
+    {
+      "id": "LOCAL-031",
+      "track": "WT05",
+      "item": "WT05-01",
+      "owner": "/root/edition_macro_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen M019 trait/header conservative index handed off with actual metadata/replay/provenance evidence;10 Rust controls uncompiled. M018/M019 integration and runtime selection remain incomplete.",
+      "paths": [
+        "artifacts/macos-first/sol-trait-header-index-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T16:46:37.723226+00:00",
+      "review_after": "2026-10-15T15:47:11.727579+00:00"
+    },
+    {
+      "id": "LOCAL-032",
+      "track": "WT05",
+      "item": "WT05-02",
+      "owner": "/root/edition_macro_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen M020 canonical goal/candidate transactions source-only handoff; ten Rust controls uncompiled, real M018/M019/normalization integration incomplete; no runtime or solver authority.",
+      "paths": [
+        "artifacts/macos-first/sol-canonical-candidate-transactions-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T17:08:45.945444+00:00",
+      "review_after": "2026-10-15T16:46:37.734075+00:00"
+    },
+    {
+      "id": "LOCAL-033",
+      "track": "WT05",
+      "item": "WT05-03",
+      "owner": "/root/edition_macro_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen M021 model table/control handoff; fourteen Rust controls uncompiled; actual M018/source-goal/predicate/normalization/query answer producers remain required, no solver/runtime authority.",
+      "paths": [
+        "artifacts/macos-first/sol-conditional-goal-tables-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T17:31:36.332506+00:00",
+      "review_after": "2026-10-15T17:08:45.945444+00:00"
+    },
+    {
+      "id": "LOCAL-034",
+      "track": "WT05",
+      "item": "WT05-03",
+      "owner": "/root/edition_macro_logic",
+      "kind": "local_agent",
+      "status": "released",
+      "scope": "Frozen M022 source-only current header/cycle-policy handoff;10 controls uncompiled and actual approved/source-goal dependencies incomplete. Worker now owns separate asynchronous validation, no trait integration claimed.",
+      "paths": [
+        "artifacts/macos-first/sol-source-trait-cycle-policy-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-14T18:04:14.998620+00:00",
+      "review_after": "2026-10-15T17:31:36.487444+00:00"
+    }
+  ]
+}

@@ -1,43 +1,1040 @@
-# Implementation state
+> October14 delegated complete gate collected failure (35195/57eb0b/1), unchanged09ccfac2: **1250 project bodies passed/1 failed/1699 unexecuted**,2950 listed. The unfiltered library passed841/0. The original tests-listing-format-default listing control fails with catalogue-incomplete before any guest test body; this remains a production frontier. A separate bootstrap failure came from the test runner PATH resolving Python3.9.6; corrected Python3.14 libexec is identified, not rerun. Earlier strict/authority/92CLI/audit/fmt scope passes remain valid. Full gate, MAIN integration, T054 and upstream runtime/full-fixture acceptance remain incomplete. Test agent is now reading the concrete failure; root continues implementation and source-only publication. Earlier entries remain historical checkpoints.
 
-The saved Codex goal is to complete the entire revision-3 specification, including
-T000–T122, H001–H028, every required gate, and reproducible release evidence. The
-goal remains active. The full runtime is not implemented or release ready.
+> October14 opaque source routing / strict constant admission repair: frozen09ccfac2 passes strict lrr-library Clippy,1 new authority control (840filtered),92 unfiltered CLI bodies (64module/28standalone), architecture and format, collected by the dedicated test agent. Original generic-fn-infer now runs through its existing CLI control in all four official editions; no full-stock status is inferred. The preceding complete candidate run collected1216/5/39summaries and stopped on premature generic-context checks; its large-module regression passed. The new opaque route retains missing context as data, while strict constant selection still refuses missing ParamEnv and has no query side effects. Complete gate03 is asynchronously live (agent session35195) on a successfully cp -Rc cloned target, current source unchanged. Root continues independent implementation/review; no duplicate tests or MAIN/task/runtime/full-fixture/JIT/Linux/release acceptance. Source-only checkpoint packaging ignores build targets, raw validation outputs and full snapshots; compact pending patches are under worktracks/candidates. PR code requires user approval before fetching/applying. Earlier entries remain historical checkpoints.
 
-Completed: T000–T003 bootstrap and H004 controlled Cargo reuse experiment.
-Linux x86-64 Rust 1.99.0 gate 00 passes with 41 unit/integration tests plus one
-compile-fail doc test. The parser and actual Cranelift functions execute; an
-ambient libc import is rejected in a child process. Dependency pins, exact vendor
-patch, license declarations, architecture boundaries, and fixture references are
-checked. The task ledger contains every original and hybrid task card.
+> October14 complete private T054 candidate collection remains pending. First milestone failed before host execution on an undefined expansion observation and stale six-facet acceptance name; both mechanical harness defects are corrected using the actual decoded query value and existing six-definition test. Second milestone collected **1135 passed/1 failed/25 summaries**, remaining bank unexecuted, unchanged1619ac44: the existing1040-module CLI regression exposes a constant source-count check applied before any constant routing. Production now charges that unchanged bound only to an actually routed constant candidate; full candidate milestonev3 runs asynchronously on frozen2d98d708 (session18530), no pass yet. Prior840/0 library and strict/audit/fmt apply to b970ab41, not this corrected successor. Root separately drafted source-derived bounded loop/break/continue control with10 uncompiled controls and3 unchanged upstream cases/8 files. Three workers independently prepare M022 current source cycle policy, generated Type-prelude admission and closure slot publication. No MAIN/task/upstream runtime/full-fixture/JIT/Linux/release acceptance. [Failed partial collection](../artifacts/macos-first/parallel-interpreter-followups-v2/revision5-constant-candidate-milestone-v2/partial-collection-v1.json). Earlier entries remain historical checkpoints.
 
-T010 stable keys and typed IDs and T011 immutable source capture are implemented
-and covered by the available host regression gate. They remain in progress until
-milestone 01's full acceptance coverage is integrated. Current behavior includes
-strict digest JSON, stable explicit field encodings, edition-sensitive identities,
-nonwrapping IDs, checked source paths, bounded capability-rooted reads, external
-module resolution, metadata-based race retry, immutable source bytes/maps, approved
-binary includes, and atomic in-memory overlays with module-graph validation.
+> October14 private T054 production adapter consolidation: **840 passed/0 failed/0 ignored/measured/filtered**, actual49579/ef7623/0 on unchangedb970ab41. Historical scalar/manual-preflight/one-shot helpers are now regression-only; normal bounded SourceConstant dispatch and coordinator retry remain production. Current path prerequisites report actual source identities and bounded route counts. Strict lrr-library Clippy, architecture and format pass on the same source (8377/62f7a9/0); earlier one-test-only-import lint failure retained. Nine-file exact replay and unchanged upstream entries verified. No MAIN/T054/runtime/full-fixture/release/Linux/JIT acceptance; configured upstream runtime/full-fixture passes0. Three disjoint workers prepare conditional goal tables, generated Type-prelude admission and closure slot publication; their new Rust controls remain uncompiled. User cleaned elsewhere; current checkout68GiB free. [Library receipt](../artifacts/macos-first/root-constant-query-v1/canonical-validation-v1/library-validation-v30/actual-terminal-v1.json), [handoff](../artifacts/macos-first/root-constant-production-consolidation-v1/HANDOFF.md). Earlier entries remain historical checkpoints.
 
-The controlled race fixture changes file length on every capture attempt. An
-initial equal-length rewrite relied on timestamp precision and did not reliably
-trigger the specified metadata checks on Linux. Its failing gate report is retained
-as artifacts/gates/00-before-race-fixture-fix.json. The corrected test guarantees
-observable metadata changes without sleep or stronger filesystem-atomicity claims.
+> October14 private T054 reached-macro/child-forwarding candidate: **840 passed/0 failed/0 ignored/measured/filtered**, actual41503/7d6cc1/0 on unchangedb095b592. Normal constant execution now drives actual uncached macro-site demands through coordinator-only selected proof preparation and cumulative step budgets; cold branches remain undemanded. Exact child forwarding repairs redundant memo hits without altering the two original cache assertions. Nine new macro controls and13 normal source-constant controls pass. Architecture/fmt pass; strict21 diagnostics remain unaccepted (21568/f82ad0/1). Earlier26/1 affected and837/2 library failures retained. No MAIN/card/runtime/release/Linux/JIT pass. Canonical292/470 originals,MAIN257/416; configured upstream runtime/full-fixture passes0. Three disjoint workers prepare canonical candidate transactions, published generated primitive facets and closure type/layout; all their new Rust controls remain uncompiled. [Library receipt](../artifacts/macos-first/root-constant-query-v1/canonical-validation-v1/library-validation-v29/actual-terminal-v1.json), [handoff](../artifacts/macos-first/root-reached-constant-macro-v1/HANDOFF.md). Earlier entries remain historical checkpoints.
 
-Cargo probe failures on the macOS bind mount and the final passing Linux-storage
-experiment are retained and explained in cargo-reuse-probe.md. Do not erase them
-or convert the failed runs into passing evidence.
+> October14 private T054 ownership/receiver/source-fact candidate: **828 passed/0 failed/0 ignored/measured/filtered**, actual23807/bd362b/0 on unchanged019900d0. Opaque publication consumes its token once after successful initialization; direct constant indexing/mutation gets independent temporary storage. Normal recipes retain actual caller/path input facts as well as the wrapped parent-query fingerprint; fresh source admission remains mandatory. Assertion-only successor714cbdfb collected30302/afa16a/1:10 focused and39 IR/VM controls passed; architecture/fmt pass, strict22 diagnostics remain unaccepted. Boxed test-helper compilation and prior receiver-verifier failures are preserved. No MAIN integration/card/runtime-gate/release/Linux/JIT pass. Canonical292/470 originals, MAIN257/416; configured upstream runtime/full-fixture passes0. Disk68GiB free, isolated target9.2GiB; user cleaned elsewhere, no clean here. Three disjoint workers prepare M019 headers/index, generated hygienic source types and closure call/return contracts; those source-only packets are uncompiled. [Actual library receipt](../artifacts/macos-first/root-constant-query-v1/canonical-validation-v1/library-validation-v27/actual-terminal-v1.json), [current handoff](../artifacts/macos-first/root-constant-pending-ownership-v1/HANDOFF.md). Earlier entries remain historical checkpoints.
 
-Next: finish milestone 01 in the specified order, starting with T012's owned
-syntax outlines and body/header fingerprint separation, then T013–T015's pure
-query memoization, negative dependency publication, budgets and source remapping.
-Apply H001's edition/profile identities to every new cache interface. Implement
-gate 01 with all acceptance tests before advancing to the frontend/LRIR milestone.
-H002/H003 belong to later control/pattern work and are not complete. Follow the
-remaining original tasks before H005–H028. No alternative frontend or AST evaluator
-has been introduced; missing guest execution currently fails explicitly.
+> October14 private normal SourceConstant dispatcher: **826 passed/0 failed/0 ignored/measured/filtered**, actual17535/7e8538/0 on unchangedc3fd2b13. Eight focused controls pass, including all-edition scalar/independent-array uses, repeated-PC memo reuse, actual1024-element normal continuation/return cleanup and exact unpublished-owner rollback on cancellation/epoch change. LRIR schema6/tag43/counter44 and original Path Exit continuation compile; schema5/0 and format pass. Original-prefix parser move eaf13bf0 passes20 affected controls, architecture and format(32474/8cfb65/0). Strict remains unaccepted; its prior32 issues are retained, no fresh whole-library claim for the parser successor. MAIN production remains the accepted2691-body milestone; canonical292/470 originals, MAIN257/416. Configured upstream runtime/full-fixture passes0; T054/JIT/Linux/release incomplete. Disk check68GiB free; no clean here. [Actual library terminal](../artifacts/macos-first/root-constant-query-v1/canonical-validation-v1/library-validation-v23/actual-terminal-v1.json), [handoff](../artifacts/macos-first/root-source-constant-dispatch-v1/HANDOFF.md). Earlier entries remain historical checkpoints.
 
-Use the pinned Linux container for target validation. Use /tmp inside Linux for
-the controlled native-workspace probe. The command logs and task ledger record
-what actually ran. Do not use emulated timings for native performance claims.
+> October14 store-isolation whole-library collection: actual34840/d42768/101, unchangedc372e3db, **805 passed/2 failed out807**, zero ignored/measured/filtered. All new actual store identity/source proof/cursor/pending owner and normal VM dispatch authority controls pass, along with existing library controls; only the same two macro-preparation failures remain. Normal dispatch retains PC/counters/fuel/guest state on foreign store refusal and then executes the unchanged original numeric literal in its genuine owning store. The mixed-profile compiler-facet/real prelude shadow packet is being prepared. No MAIN integration/full upstream runtime/fixture/strict/card/JIT acceptance. [Actual unfiltered terminal](../artifacts/macos-first/root-constant-query-v1/canonical-validation-v1/library-validation-v19/actual-terminal-v1.json).
+
+> October14 latest private assembly: actual macOS library-v18 executed **800 bodies:798 passed/2 failed**, unchanged5393ce67. Prepared original inert Meta certificates, source constructors/array lengths/publication and actual typed cached failures pass. The remaining failures are source macro preparation: the shadow adapter requests an unavailable core-root Test facet (actual singleton remains Incomplete), and mixed owning editions need separately matched Attribute catalogues. Separate affected runs pass15 import-ambiguity and12 foreign-constant controls; these are not an unfiltered whole-library pass. Root store-session successor d4885102 passes all5 actual cross-store frame/source/cursor/pending-owner authority regressions;801 unrelated bodies filtered. Canonical originals remain290 cases/466 files, MAIN257/416. Ordinary source-constant opcode/step/run/capture/exit/continuation joins and strict/full milestone acceptance remain pending; upstream runtime/full-fixture passes0. Disk check:69GiB free; no cargo clean run here. [Full private terminal](../artifacts/macos-first/root-constant-query-v1/canonical-validation-v1/library-validation-v18/actual-terminal-v1.json), [store isolation](../artifacts/macos-first/root-constant-query-v1/canonical-validation-v1/root-store-session-controls-v1/actual-terminal-v1.json). Earlier pending statements are historical checkpoints.
+
+> October14 source-constant physical assembly: actual private macOS library-v17 compiled and executed **765 bodies:759 passed/6 failed**, unchanged0c876373. Path selection, actual typed construction/current query/source publication and bounded array commit/rollback packets are now assembled; ordinary source opcode/step/run/capture/exit wiring remains pending. The affected173/5 followup confirms stronger cancellation cleanup passes. Root now retains exact original Meta-range inert certificates and actual current cached failures as typed failure data while preserving diagnostic-facing DB fetch. The successor affected bank is running asynchronously; no pass claimed before collection. Canonical originals290 cases/466files remain unchanged/imported, MAIN257/416 and all configured upstream runtime/full-fixture passes0. [Actual library terminal](../artifacts/macos-first/root-constant-query-v1/canonical-validation-v1/library-validation-v17/actual-terminal-v1.json).
+
+> October14 parser-boundary followup: the exact existing parameter-length fixture selector now lives in syntax and returns only owned source ranges. Current architecture audit passed (69943/3d948e/0), and all**10 affected controls passed** on unchangedfe080d4a;702 unrelated bodies filtered. The initial wrong-filter zero-body command is preserved as nonacceptance. The preceding unchangedaf0f840e candidate retains its712-body library pass. Strict6 production-consumer integration gaps remain; MAIN and upstream runtime/full-fixture counts unchanged.
+
+> October14 private interpreter library candidate: **712 passed / 0 failed / 0 skipped or filtered**, unchangedaf0f840e, actual86258/92a84c/exit0. Original-module macro2 now uses actual matcher/body capture and opaque hygiene; all12 producer controls pass, including unchanged pattern/reexport/$crate/rules components across owning editions. Verified completed empty original expansion records can participate in constant-source admission; foreign/missing/duplicate/stale descriptors and nonempty generated contributions refuse. Rust2015 compiler-injected imports and shared immutable IR data controls also pass. Formatting passed, while strict Clippy still fails six unused required runtime-consumer groups. Runtime wiring and full candidate/milestone acceptance remain pending; MAIN stays at the accepted2691-body snapshot and all upstream runtime/full-fixture passes remain0. [Actual private library terminal](../artifacts/macos-first/root-constant-query-v1/canonical-validation-v1/library-validation-v14/actual-terminal-v1.json).
+
+> October14 private macro-import repair collected: all**20 affected macro preparation bodies passed**,678 unrelated library bodies filtered, on unchanged31ccfef8 (actual30814/0ae5b5/exit0). Compiler-injected std/core facts now enter the initial pure module-alias graph, ordinary import graph and runtime macro graph; captured Cargo aliases do not acquire Rust2015 compiler status. The renamed Panic proof and unchanged m4 local macro identity/real expansion pass in all four editions. Prior694/4 library run and all failed adapters remain preserved. This scoped pass is not a full library/milestone/runtime/fixture pass; macro2 A and actual guest constant dispatch/strict joins remain pending. MAIN production stays at the accepted2691-body snapshot; no target cleanup occurred here.
+
+> October14 private interpreter successor: actual macOS library-v8 collected **694 passed / 3 failed** on unchanged4915ec8e. Shared immutable constant data and its wire codec now live in IR, retaining exact domains; the checked array/depth/handle boundary control passed. Renamed standard macro, authentic auxiliary shadow adapter and macro2 preparation remain incomplete. Root repaired the first two in a private successor; a mechanical Outline owner API error is retained, and corrected library-v10 is running asynchronously. MAIN remains the collected2691-body milestone; configured upstream runtime/full-fixture acceptance remains0. Three agents are working on original-module macro2, bounded resumable arrays and actual typed pattern namespace publication. No guest JIT/strict acceptance or MAIN integration claim.
+
+> October14 candidate successor: actual macOS library-v6 finished689 passed/3 failed on unchangedbe1cf815 (session38779/chunk22785a/exit101). Static unreachable/unimplemented now emit their distinct managed panic messages with original origins; all three unchanged rustc run-fail mains executed as components in four explicit editions. The three remaining library failures are renamed standard macro preparation, authentic shadow lookup and decl_macro preparation. Strict validation still requires actual production consumers; no dead-code suppression or source integration acceptance is claimed. Configured upstream runtime/full-fixture counts remain0. [Actual terminal](../artifacts/macos-first/root-constant-query-v1/canonical-validation-v1/library-validation-v6/actual-terminal-v1.json).
+
+> October14 typed constant-query candidate actually compiled: frozen 9e626009 passed670 library controls and failed10. Root collected actual session36208/chunkd2f826/exit101; source unchanged. Typed deterministic numeric failure caching and quota recovery controls passed, while source macro preparation and a mistaken no-op publication expectation blocked acceptance. Root corrected the publication adapter and added distinct cold unreachable/unimplemented identities plus source-independent parameter-length proofs in the private canonical successor; async validation remains pending. MAIN production still retains the accepted2691-body milestone snapshot; no T054 completion or full upstream runtime/full-fixture pass. [Candidate evidence](../artifacts/macos-first/root-constant-query-v1/canonical-validation-v1/library-validation-v3/actual-terminal-v1.json).
+
+> October14 integrated macOS milestone v10 accepted on unchanged14f0ac17: all2,691 project bodies across212 executable summaries passed with zero failed, ignored, measured or filtered. Actual session62367/chunkdb6508/exit0 and independent collection113250/exit0 verified fresh scoped gates00–03, raw reports, source ownership, the repaired assertion predicate control and all21 existing constant controls. MAIN retains257 upstream cases/416 unchanged originals. Runtime/full-fixture acceptance remains0; these project gates do not prove full upstream contracts. Root is preparing uncompiled typed constant query/currentness/failure and source-proof successors; no T054/JIT/release/Linux completion. [Milestone evidence](../artifacts/macos-first/parallel-interpreter-followups-v2/revision5-isolated-milestone-v10/independent-collection-v1.json).
+
+> October14 assertion predicate call-result context repaired and integrated: the actual v9 milestone stopped after2,510 project bodies passed and1 failed. A predicate returning i32 incorrectly entered its body under assert!’s surrounding unit context. The repair selects the exact verified call-result slot and its Bool requirement before entering the callee. All720 related project bodies and strict workspace/all-target Clippy, architecture and format checks passed on unchanged a8cfd901 source; root collected actual terminals before integrating two paths. Failed milestone and reproduction remain preserved. Fresh milestone v10 pending; full configured upstream runtime/full-fixture passes remain0. [Repair collection](../artifacts/macos-first/root-assert-predicate-result-context-v1/independent-collection-v1.json).
+
+> October13 interpreter transport/constant candidate integrated after actual frozen0171e5b9 acceptance:600 unfiltered lrr library bodies, including14 preentry/capture controls;11 pure-source constant,6 wire and4 typed memo controls; strict workspace/all-target Clippy, architecture and fmt passed. Root independently collected raw terminals/source hashes and preserved failed adapter/Clippy/runner attempts. MAIN retains257 upstream cases/416 unchanged original files under the pinned original licenses. Capture and pure evaluator components do not establish configured rustc acceptance: full runtime/full-fixture passes remain0. Current-source/type/macro/seal query publication, general constant forms, fresh guest instantiation and world correspondence remain required. Fresh integrated milestone pending. [Collection](../artifacts/macos-first/root-interpreter-capture-constants-validation-v1/independent-collection-v1.json).
+
+> October13 integrated milestone v8 actually failed after2436 passed/1 failed project bodies, with remaining bank unexecuted. The inherited unsealed local-function control expected UNSUPPORTED; the stricter exact lexical-source guard correctly returned CALL-CONTEXT before module fallback. The control now checks the exact diagnostic message, zero call publication and no signature demand; all67 source_run bodies passed on unchanged be8aa6b3, and the test-only repair is integrated. Failed gate remains preserved; next fresh integrated milestone pending. Full stock/runtime fixture acceptance remains0. [Scoped repair](../artifacts/macos-first/root-source-run-lexical-fixture-v1/independent-collection-v1.json).
+
+> October13 host preparation successor: pinned compiletest now actually builds locked/offline with reviewed retained dependency pins and mechanical hook repairs. Actual collector/driver preparation captured six unchanged run-pass cases, resolved owning fallback2015, and retained full compiler/runtime command/environment/expected-file facts. Independent collection passed; no case compiler/guest/native execution or runtime/full-fixture pass occurred. [Preparation evidence](../artifacts/macos-first/root-stock-configured-matrix-v2/independent-collection-v1.json). Earlier missing-dependency/build failures below remain historical. Frozen integrated interpreter milestone v8 continues against unchanged952445a0 source; current MAIN documentation updates are outside that frozen run.
+
+> October13 integrated milestone v7 exposed two assertion-predicate CLI regressions after636 project bodies passed and2 failed; the full bank was not executed. The lexical guard incorrectly required ordinary CallExpr syntax at a verified assertion Macro PC. The repair now replays the original module-predicate/shadow guard without entering opaque token trees. All21 discovery CLI bodies,13 affected lexical controls,strict Clippy/architecture/fmt passed on frozen e157d5ac and the two-file repair is integrated. Fresh milestone remains pending. Full stock fixture/runtime acceptance stays0/incomplete. [Repair collection](../artifacts/macos-first/root-lexical-assert-call-routing-v1/independent-collection-v1.json). Host-only compiletest metadata preparation also recorded exact missing offline anstyle-svg0.1.11; no harness/configuration/guest execution was performed.
+
+> October13 match/lexical integration: bounded Bool/integer scalar matches, written or-pattern alternatives, single-alternative guards, typed no-arm exit (recipe schema5), source-certified primitive lexical calls and alloc/std Vec declaration facets are now integrated. Actual frozen production evidence includes586 unfiltered library bodies and30 match/Vec component bodies; changed test adapters passed13 focused controls, strict workspace/all-target Clippy, architecture and formatting. The unchanged expr-match.rs main completed four source calls and all five assertion success phases in each disclosed edition. Earlier failed adapters remain preserved. General transactional patterns/guard retries, uniform bound-op phases, Vec runtime storage, general source views and complete upstream harness contracts remain pending. The integrated milestone is pending; no full stock/card/release/Linux/JIT pass is claimed. [Component collection](../artifacts/macos-first/root-vec-facet-integration-v1/independent-component-collection-v1.json), [integration](../artifacts/macos-first/root-vec-facet-integration-v1/MAIN-integration-v1.json). Root has also drafted an uncompiled constant wire decoder; it is not integrated or accepted.
+
+> October13 milestone collected: frozen d85d92fd passed all2,612 project bodies with zero failed, ignored, measured or filtered, and fresh scoped gates00–03. Actual root session23670/exit0 and independent collection5533/exit0 verified source, raw reports, body inventory, build identity and all31 integer/cast/profile controls. This exact snapshot predates the later Model1/worktrack documentation; those policy changes have separate52 metadata checks. Full upstream runtime and full-fixture acceptance remain0/incomplete. Root is preparing unaccepted scalar/or-pattern/guard execution and typed no-arm candidates; no task/release/Linux/JIT completion. [Evidence](../artifacts/macos-first/parallel-interpreter-followups-v2/revision5-isolated-milestone-v6/independent-collection-v1.json). Earlier pending statements below are historical.
+
+> October13 integer/cast integration: immutable decoded integer payloads, fresh per-evaluation bindings, exact folded negative spelling, recipe producer schema4, unsigned-minus refusal including zero, and bounded source-proven primitive cast expectations are now integrated. Frozen macOS private candidate passed573 unfiltered library tests,9 cast controls,108 related/5 binaries and strict Clippy/architecture/fmt; the reference-audit successor passed its real audit,all9 unchanged stock numeric component bodies,strict Clippy/fmt. Earlier integer/source/schema banks retain their exact separate scope. Actual persistent checkpoint restore/old-schema cache-miss handling and allocation/timing acceptance remain pending, so CA027 is incomplete. The preceding snapshot milestone passed2581 project bodies but failed source fixture references; all five existing macro-generated wrappers are now explicit under the unchanged auditor. Fresh integrated milestone is pending. Full rustc compiletest passes remain0; no task/release/Linux/JIT acceptance is claimed.
+
+> October13 revision5 parser-boundary repair: source-selected floating path/continuation AST inspection and test-only adapter hygiene now live in syntax. Frozen private macOS acceptance:555 unfiltered library tests,5 public floating component checks, architecture audit, strict workspace/all-target Clippy and fmt; source/currentness/ownership semantics retained. The earlier architecture failures are preserved. Fresh integrated milestone is pending; no task/release/full-rustc-suite completion claim. CA027 decoded integers and CA037 complete upstream inventory remain required interpreter work.
+
+The governing [specification is revision 5](../lrr_rust2024_macros_traits_implementation_spec.md). Its later direct Rust ABI, typed optimization, reconstruction, Cranelift/LLVM and precise/throughput requirements remain unimplemented and unaccepted. Interpreter-first work and all four official editions remain required.
+
+# Current status — interpreter batch integrated; macOS milestone pending
+
+The interpreter batch is integrated after **552 unfiltered library checks, 166 focused integration checks and 28 CLI checks passed**, along with strict workspace Clippy and formatting, on frozen macOS ARM64/Rust1.99.0 source. Root independently collected actual terminal results, raw log hashes, required regression bodies and unchanged upstream hashes. A fresh integrated milestone is pending; the preceding milestone recorded 2,222 passes and one macro-discovery failure, whose focused repair is now included. Historical failed gates and adapters remain preserved.
+
+The changes add bounded later-use numeric constraints and shared borrowed shift operands, source-aware primitive floating constants, cfg-disabled constructor handling, and suspension-aware observation. The unchanged infer-binary-operand-behind-reference.rs and cast-does-fallback.rs mains complete in all four editions. float-nan.rs commits NAN and reaches its next unsupported scalar method; wildcard place mention remains unsupported. These are disclosed program/component observations, not full compiletest passes.
+
+Ordinary Bool/Char literals now retain actual source identity through bindings and alias returns, preserving strict contexts and reached call/return mismatch boundaries. A private primitive alias return certificate retains bounded transitive alias dependencies and verifies the captured namespace catalogue against actual publication. Two adversarial fresh-database regressions first reproduced stale admission/routing and now refuse before body demand; trace limits and checked metadata/stable encoding are tested. General traits, methods, patterns, aliases and numeric inference remain incomplete.
+
+MAIN retains **250 selected rustc cases and 407 unchanged original files** at commit ae0fe511b15ab760d7e963b13389d1bc2ab42b18 with both original license texts. Full rustc compiletest passes remain **0**. Imported, partially exercised and unexecuted cases remain separate from full fixture acceptance. New component requirements reopen affected historical task statuses to in_progress; prior evidence remains intact. No new task, interpreter convergence, release or Linux pass is claimed. Guest JIT and later revision5 backend/native work stay deferred.
+
+Evidence: [combined collection](../artifacts/macos-first/root-alias-transitive-trace-v1/combined-component-acceptance-v2.json) and [MAIN integration](../artifacts/macos-first/root-return-and-attribute-v1/MAIN-integration-v1/integration.json). Earlier sections below are historical checkpoints.
+
+# Current status — two implementation workers and root
+
+Two Sol6.1/high agents own macro edition semantics and generic call identity; root owns call lowering and integration. The latest MAIN gate failed after800 passed/1 failed project bodies because a publication acceptance still expected Rust2021 to be rejected. That stale expectation now checks Changed for each older official edition, exact-key macro refusal, and unsupported2099 refusal; both publication bodies passed on frozenbdb5728e. The required corrected milestone remains pending.
+
+The macro token-edition repair is integrated after16 complete component bodies and8 filtered scanner controls passed. Root reproduced the unchanged stock blind-item-mixed-use-item.rs call-lowering failure and narrowed local import guards to the requested name;17 unfiltered query controls passed. Generic argument/return identity repair is integrated after23 unfiltered component bodies plus9 filtered return controls passed; nine unchanged generic-fn-twice program pairs ran across owning editions. The named return and function-pointer programs remain incomplete. No new full rustc fixture pass is claimed. The importer retains214 cases/356 original files, unchanged under MIT OR Apache-2.0; full compiletest passes remain0. Interpreter/traits/edition compatibility and release remain incomplete; guest JIT and Linux stay deferred. Earlier sections below are historical checkpoints.
+
+# Current status — all official edition roots admitted; macOS milestone pending
+
+The spec and implementation now require Rust2015/2018/2021/2024 roots, dependencies and macro origins. Standalone run/test accepts --edition and reports the actual edition; Cargo root normalization retains its declared edition. Macro proof revalidation preserves definition edition separately from invocation syntax, and sealed runtime contexts retain captured ordinary extern dependencies.
+
+Exact candidate scope passed694 Rust bodies in12 complete unfiltered binaries, strict workspace Clippy/format and architecture/manifest/importer checks. The unchanged official generic-fn-infer.rs program ran in all four root editions and five dependency pairs, including2015-root/2024-dependency, with actual generic callee/assertion execution. Failed witnesses and the scope runner's incorrect xtask-library selection remain preserved; the corrected suffix reused unchanged passing results.
+
+Tested production and assertions are integrated; the required fresh MAIN milestone is pending. The preceding MAIN Cargo command passed2466 bodies/186 summaries, but its enclosing gate failed because inherited vendor subprocess stdout split two result lines. Capturing that output is now tested with one host test thread. The last fully accepted earlier MAIN milestone remains2465 bodies/185 summaries. Full rustc compiletest passes remain0;209 cases/350 unchanged originals retain their upstream licenses/provenance. Full edition, M017/trait/source-view, interpreter, release and Linux acceptance remain incomplete. Guest JIT is deferred.
+
+# Edition compatibility successor — candidate validation pending
+
+Selected roots must support Rust 2015, 2018, 2021 and 2024, retaining each owning edition. Standalone run/test gains --edition (default 2024); Cargo root normalization accepts the declared official edition. The unchanged stock generic program is under interpreter validation in original and paired editions. No new stock fixture, complete edition, task or release pass is claimed.
+
+The last MAIN run completed its unfiltered Cargo test command with 2,466 passing bodies / 186 summaries and zero failed, ignored, measured or filtered bodies. The enclosing milestone failed because inherited vendor subprocess stdout split two libtest result lines. Its direct failure and independent collection are retained; it is not an accepted gate. Capturing those subprocess outputs is a separate validation correction in this successor.
+
+# Current status — retained return-source identity repaired; macOS milestone pending
+
+A stock generic id<T> header exposed a return-packet defect: distinct rigid source parameters were admitted at the same runtime descriptor. The new check preserves already-bound source identity for both known and deferred result descriptors, before map writes. The failing baseline is archived. Source parameter spelling changes also preserve identity within the same owning definition.
+
+The repaired scope passed 550 Rust bodies in 7 complete unfiltered binaries and 3 Python controls, including 38 selected M017 controls once. All 61 registered M017 controls were not selected in this scope. Tested production, assertions and originals are integrated; the required fresh MAIN milestone is pending. The preceding repair milestone ended with a real ENOSPC error, not a pass; its failure and exact child-absence/source review are retained.
+
+The latest accepted preceding MAIN milestone remains 2,465 project bodies/185 summaries. MAIN retains 209 official rustc cases/350 unchanged originals with both licenses. Full stock fixture passes remain **0**. Full M017/TR001/TR002, source-view/trait integration, interpreter convergence, release and Linux acceptance remain incomplete. Guest JIT is deferred; all subagents remain stopped.
+
+# Current status — substitution stack repair integrated; macOS milestone pending
+
+M017 identity substitution and zero-distance shift now preserve the admitted 120-layer stock-derived binder on the ordinary host stack. The acceptance extension reproduced a genuine stack overflow before production changed. Direct Result dispatch and branch helpers reduce native recursive frame storage while preserving all quota charges, typed identities and binder transitions.
+
+The repaired scope passed 576 Rust test bodies in 10 complete unfiltered binaries and 3 Python controls, including all 60 M017 controls once. Exact failed baseline source/logs are retained. The tested repair is integrated; its required fresh MAIN milestone is pending. The latest accepted preceding MAIN milestone passed 2,465 project bodies/185 summaries.
+
+MAIN retains 208 official rustc cases/349 unchanged originals; full stock fixture passes remain **0**. Full M017/TR001/TR002, source-view/trait integration, general interpreter convergence, release and Linux acceptance remain incomplete. Guest JIT is deferred. All subagents remain stopped.
+
+# Current status — wildcard macOS milestone accepted
+
+The macOS ARM64/Rust 1.99.0 milestone passed 2,465 project test bodies across 185 executable summaries, with zero failed, ignored, measured or filtered tests. All 60 M017 controls and the stock float wildcard control ran once. Actual root session 69531 and its gate/runner exited 0 on unchanged source 721f9fd4 after 2,000,185 ms. Independent raw-log, required inventory, canonical ownership and source checks passed before releasing the source hold.
+
+MAIN retains 208 official rustc cases and 349 unchanged original files with both original licenses. Full stock fixture/compiletest passes remain **0**. T030/T025/T031, M017/TR001/TR002 and source-view/trait integration remain incomplete. Guest JIT, release and Linux acceptance remain deferred. All subagents are stopped; root owns implementation and asynchronous validation.
+
+# Current status — wildcard component integrated; MAIN milestone pending
+
+The reviewed wildcard change evaluates value initializers with their written source type and discards them without creating a local binding. The unchanged stock parser/float-literals.rs main completes with actual F64 literal materialization, one discard per declaration and balanced scopes/counters. Direct place initializers still require non-moving source-view integration; reference-operand and later-use numeric constraints remain incomplete. This is component/body evidence, not the original build-pass/edition/lint compiletest contract.
+
+Exact scoped evidence covers580 Rust test bodies in5 unfiltered binaries plus3 Python importer controls. The existing numeric-discard and actual library reference-annotation controls ran once. A nonexistent xtask target stopped the first runner; that planning failure is retained, and only the seven untouched suffix commands followed. Independent inventories, logs, ownership, frozen source and original provenance were checked before integration. M017 production/60 controls and numeric expression fallback remain unchanged.
+
+MAIN now retains208 official rustc cases/349 unchanged original files with both original licenses. Full stock fixture/compiletest passes remain **0**. The required new MAIN milestone is pending; the last accepted earlier-source macOS milestone remains **2,464 project bodies/185 summaries**. T030/T025/T031 and full M017/TR001/TR002/source-view/trait integration remain incomplete. All subagents are stopped; root owns background tests. Guest JIT, release and Linux acceptance remain deferred/unestablished.
+
+Evidence: [scoped review](artifacts/macos-first/t030-wildcard-milestone-rebase-v6/root-scoped-review-v1.json). Earlier sections below are historical checkpoints.
+
+# Current status — M017 integration milestone accepted; interpreter work continues
+
+The integrated MAIN macOS ARM64/Rust1.99.0 milestone passed **2,464 project test bodies across185 executable summaries**, with zero failures, ignored, measured or filtered tests. All60 registered M017 controls ran once. Actual root29168/gate/runner exited0 on unchanged sourceadf2da4 after2,046,630ms; fresh gates00–03 passed with one build identity. Independent raw-log, required-name/inventory, exact-source and ownership checks passed before root released the source hold. No performance gain is claimed from this validation run.
+
+MAIN includes owned dyn/opaque terms, source-header arrays, reference elision and canonical Unicode lifetime identity, immutable frame tables and transaction-region admission guards. The source-derived120-layer admitted binder and130-layer typed depth refusal passed on the ordinary host stack. Original edition2021 declarations use the existing recorded dependency source world; bare legacy live entry remains refused. Earlier handoff, stack, ownership and harness failures remain preserved. These are partial component requirements; M017/TR001/TR002, full trait solving and expression source-view propagation remain incomplete.
+
+MAIN retains **206 official rustc cases/347 unchanged original files** with pinned provenance and both original licenses. Full stock fixture/compiletest passes remain **0**. Project and component tests are not full stock passes. T025/T031, general numeric constraints, traits, patterns, user Drop, printing and worker isolation remain incomplete. The parser is pinned rust-analyzer; VM/LRIR and query integration are project code. Guest JIT stays deferred until interpreter convergence; release and Linux acceptance are unestablished.
+
+All subagents are stopped; root owns implementation and asynchronous tests. The separate wildcard draft preserves current M017 and numeric fallback while adding an unexecuted stock float-literal control. Its208 copied cases/349 originals are draft inputs, not MAIN acceptance. The inspected reference-operand case exposes later numeric-use and reference-operator work; no execution pass is claimed.
+
+Evidence: [accepted root milestone review](artifacts/macos-first/m017-unicode-declaration-world-v8/integrated-main-milestone-v1/root-terminal-review-v1.json). Earlier sections below are historical checkpoints.
+
+# Current status — M017 components integrated; MAIN milestone pending
+
+Root reviewed the stopped subagent handoffs and integrated the tested M017 partial foundation on macOS ARM64/Rust1.99.0. Scoped evidence covers **575 Rust test bodies in10 unfiltered binaries and3 Python importer controls**, with all60 registered M017 controls observed once. The successful37-body V7 prefix is retained from a runner that later failed five Unicode harness setups; the repaired V8 suffix exited0. Exact raw logs, inventories, source ownership, unchanged-prefix inputs and upstream provenance were independently checked. Prior failures remain preserved; no single all-green combined runner is claimed.
+
+The integration adds owned dyn/opaque terms, source-header arrays, reference elision, canonical Unicode lifetime identity, immutable frame tables and transaction-region admission guards. Root repaired two handoff adapters and a real normal-stack overflow in recursive header lowering. Deep admitted120-layer binder structure and excessive130-layer typed refusal passed without raising stack settings or changing the pinned parser/quotas. Tested production, assertions and original bytes were copied with fresh mtimes.
+
+MAIN now retains **206 official rustc cases/347 unchanged original files** with both original licenses. Full stock fixture/compiletest passes remain **0**. These are component controls, not complete original body or diagnostic acceptance. M017/TR001/TR002, T025/T031, general numeric source inference, traits, patterns, user Drop, printing and worker isolation remain incomplete. The parser is pinned rust-analyzer; VM/LRIR and query integration are project code. Guest JIT remains deferred until interpreter convergence. All subagents are stopped; root owns implementation and background tests.
+
+The required fresh integrated MAIN milestone is pending. The last accepted earlier-source macOS milestone remains **2,421 project bodies/181 executable summaries**. Release and Linux acceptance remain unestablished.
+
+Evidence: [scoped collection](artifacts/macos-first/m017-unicode-declaration-world-v8/scoped-validation-v1/independent-collection-v1.json) and [integration receipt](artifacts/macos-first/m017-unicode-declaration-world-v8/integration-v1.json). Earlier sections below are historical checkpoints.
+
+# Current status — macOS milestone accepted; interpreter convergence continues
+
+The repaired MAIN milestone passed on macOS ARM64/Rust1.99.0: **2,421 project test bodies across181 executable summaries**, zero failed, ignored, measured or filtered. Actual root session22217, gate and runner exited0 after2,140,237ms on unchanged source8068a263. Fresh gates00–03 passed with one new build identity. All17 existing M017 controls, both numeric-discard controls and four new checkout-ownership controls ran once. Direct terminal, independent raw-report/inventory/source review and all preserved failure receipts were checked before root release. These counts are project tests, not full stock rustc fixture passes.
+
+A previous attempted MAIN validation ran cached binaries anchored in candidate-source-v5, observed2,060 passes/7 procedural-macro preparation failures and wrote that candidate's receipts. It is preserved as a failed attempt, not MAIN acceptance. The helper now pins its tool target to its launch directory; validation checks explicit canonical checkout ownership. The successful replacement used a fresh MAIN-owned target. Host debug information was disabled; optimization stayed0 and assertions/unwind semantics were retained. No timeout cause or performance gain is claimed.
+
+MAIN retains189 official rustc cases/316 unchanged original files and both licenses. Full stock compiletest/fixture passes remain **0**. The interpreter supports a limited primitive subset, reached calls and bounded ordinary panic cleanup. Rust-compatible numeric fallback includes closed literal islands and discarded expressions; general numeric source inference, traits, patterns, user Drop, printing and worker isolation remain incomplete. T025/T031 and M017 remain in progress. The pinned parser is rust-analyzer; VM/LRIR and query integration are project code. Guest JIT stays deferred until interpreter convergence.
+
+Subagents are stopped. The separate frozen M017 successor adds owned dyn/opaque terms, source-header arrays/elision/NFC lifetime handling and checked immutable frame tables, with206 copied cases/347 unchanged originals. Its60 registered M017 controls remain semantically unexecuted and it is unintegrated. Wildcard initialization work also remains unexecuted/unintegrated. Release and Linux acceptance are unestablished.
+
+Evidence: [current root milestone review](../artifacts/macos-first/m013-prepared-tool-target-coherence-v1/owned-main-milestone-v2/root-terminal-review-v1.json). Earlier sections below are historical checkpoints.
+
+# Current status — assignment macOS milestone accepted; interpreter work continues
+
+T044 scoped integration now includes source-selected primitive local compound assignment, checked arithmetic before replacement, and a separate arithmetic result/Unit assignment result. The unchanged official assign-expr-unit-type.rs program executes both helpers and all12 original assertions through a fresh LRR CLI. Its3 compound-kind entries and2 calls are checked. Explicit native references compiled and ran the unchanged source in original2015 and adapted2024 editions. Primitive selection occurs before operands, with RHS before local LHS read; generic/overloaded/projected/reference-RHS source integration remains pending.
+
+Bounded intrinsic tuple/array local replacement reserves its full transfer batch, commits the new value at the original binding before old cleanup, preserves its location epoch, and retains detached old obligations across suspension/cancellation/partial moves. The four unchanged dynamic-drop source-derived recipe controls use disclosed prepared String arrays and the original's owning2021 edition through explicit source preparation. They do not execute its allocator, coroutine, pattern or userDrop behavior. Assignment now validates the exact local owner before fuel/resource effects.
+
+The frozen V19 candidate passed all34 planned commands:478/478 library bodies,37 T044 controls,73 T042 and41 T043 controls,17 affected integration binaries, strict Clippy, ledger/import/integrity/architecture audits, and the fresh CLI/native fixture checks. All eight H002 aliases are covered; the separate2,000-frame control was not selected in this candidate run. Actual runner82322/exit0 and collector60256/exit0, all68 command logs, artifacts and unchanged source were collected before integration. Failed V15–V18 snapshots/diagnostics remain preserved; no test was skipped or an error treated as success.
+
+The fresh integrated MAIN macOS milestone passed 2,378 project test bodies across 179 executables, with zero failed, ignored or filtered bodies. All 17 commands exited0, including gates00–03, strict Clippy, formatting, architecture, upstream integrity and a fresh CLI. All73 T042,41 T043 and37 T044 controls, eight H002 aliases and the2,000-frame control passed once. Seven unchanged stock-program CLI probes passed and repeat existing observations. Root independently verified all34 distinct command logs, terminal/release receipts, gate and CLI identity, and unchanged tested source. The earlier failed macro-timeout run remains preserved.
+
+MAIN retains169 official cases/289 unchanged original files with both upstream licenses. Stock whole-program observations total14 programs/66 original assertions across tested snapshots; full rustc compiletest passes remain0. UserDrop, general traits/patterns, full T044 and release/native/Linux acceptance remain unfinished. The private T045 panic cleanup and later-argument hint drafts remain unaccepted; asynchronous validation is separate. Guest JIT is deferred until interpreter convergence.
+
+Evidence: [integration receipt](artifacts/macos-first/t044-assignment-integration-v19/integration.json) and [independent validation collection](artifacts/macos-first/t044-owner-admission-successor-v19/validation-v1/final-collection-v1/final-collection-v1.json). Current milestone: [root evidence review](../artifacts/macos-first/t044-assignment-integration-v19/current-main-milestone-v1/root-independent-review-v1.json). Earlier headings below are historical checkpoints.
+
+# Current status — observed construction, discard and exact return admission integrated; macOS milestone pending
+
+T044 component integration now includes observed tuple/array construction without invented types, bounded structural Discard, caller-result reservation before return cleanup, and the exact Call-exit continuation repair. Macro-generated argument calls can return to their verified temporary slot. A different canonical resume or result refuses before effects; source/type/initialization checks remain. The previously failing macro predicate integration now returns its required typed ownership fault. User Drop, replacement and panic/unwind remain incomplete.
+
+The frozen candidate passed473/473 library bodies, all17 selected call/scope/source integration binaries, all32 T044 controls,73 T042 and41 T043 controls once, all eight H002 aliases and the2,000-frame test. All27 distinct planned commands exited0 across two segments. The first wrapper exited93 solely because it searched for the separate long-frame event inside selected fixture events; its failure is preserved. Independent collection reconciled the actual raw logs; only the six untouched importer/import/architecture suffix commands followed. No single all-green27-command runner is claimed. Root independently checked all54 command log hashes, compiled artifact hashes and unchanged frozen source/release receipts before integration.
+
+The fresh integrated MAIN macOS milestone is pending. The last accepted prior-source milestone remains2362 project test bodies. MAIN retains167 official rustc cases/287 unchanged original files with pinned upstream provenance and both original licenses. Stock observations remain13 programs/54 original assertions across tested snapshots; full rustc compiletest passes remain0. The separately corrected local replacement draft has four unexecuted stock-derived controls and is excluded from this integration. Full traits, user Drop, guest JIT, native/release and Linux acceptance remain unfinished.
+
+Evidence: [integration receipt](artifacts/macos-first/t044-call-continuation-integration-v13/integration.json) and artifacts/macos-first/t044-call-continuation-draft-v13/validation-v1/combined-collection-v1.json. Earlier headings below are historical checkpoints.
+
+# Current status — bounded return and constructor cleanup milestone accepted
+
+T044 remains in progress. Return cleanup retains the returned owner and suspended caller until bounded scope cleanup completes. Partial constructor guards drain completed fields in reverse completion order and preserve exact child ticket/location acknowledgements across dispatch and interruption. Source-selected user Drop and general trait integration remain pending.
+
+The fresh integrated macOS milestone passed 2,362 project test bodies across 179 executables with zero failed, ignored or filtered bodies. All 17 distinct commands completed across two segments, including formatting, strict Clippy, architecture, gates 00–03, upstream integrity, a fresh CLI and seven unchanged stock-program probes. All 73 T042, 41 T043 and 21 T044 controls passed once; eight H002 aliases and the 2,000-frame control passed once. Root independently verified 34 command log hashes, terminal/release receipts, CLI identity and unchanged source membership before updating this documentation.
+
+The first runner exited 1 solely on a stale wrapper predicate expecting seven T044 events; gate03 itself exited 0 with all 21. Its failure is preserved. Only the nine unexecuted suffix commands ran afterward, without repeating the gate. A failed collector-only attempt is also preserved; corrected read-only collection passed. No single 17-check runner exit 0 is claimed.
+
+MAIN retains 164 official cases / 283 unchanged original files. Recorded stock-program observations remain 13 / 54 original assertions across tested snapshots; today's seven probes repeat existing observations and add no unique passes. Full rustc compiletest passes remain 0. The separate V7 candidate failed four library controls (465 passed / 4 failed); its formatting and Clippy passed, while dependent checks stayed unexecuted. The failures are retained. V9 fixed those setups and passed 471 of 472 library bodies; one unit-pair control assumed a single-step scope scan and failed. V11 passed that repaired control, then failed macro predicate integration (six passed/one failed): return preflight rejected its verified temporary destination with LRR-E-INTERNAL-IR instead of the expected typed LRR-E-OWNERSHIP. Its 22 untouched suffix checks remain unexecuted and the failure is preserved. V13 fixes the exact Call-exit continuation binding and is separately frozen for fresh full-library and integration validation; it is not integrated. V12 was never tested because independent preflight caught its missing fixture registration; V13 corrects only that metadata relative to V12. Bounded structural Discard and the mutable V10 local-replacement draft remain excluded from MAIN. User Drop, replacement, panic/unwind, general traits, guest JIT, release and Linux acceptance remain incomplete.
+
+Evidence: [independent milestone collection](../artifacts/macos-first/t044-return-guard-integration-v5/validation-v1/milestone-collection-v1.json), with terminal and source release sidecars.
+
+# Current status — integrated macOS ScopeLeave milestone accepted
+
+The fresh macOS milestone passed 2,348 project test bodies across 179 executables, with zero failures, ignored or filtered bodies. All 17 checks completed: formatting, strict Clippy, architecture, gates 00–03, upstream integrity, a freshly built CLI and seven stock-program probes. All 73 T042, 41 T043 and seven T044 controls passed once. Eight H002 aliases are included in T043; the 2,000-frame regression passed once. Independent collection verified unchanged tested source and released its hold.
+
+The initial Python3.9/tomllib gate failure remains preserved. The corrected continuation retained seven earlier successful checks and reran the failed gate/unexecuted tail under Python3.14. A stale raw report.unexecuted_checks field is preserved and explicitly reconciled against terminal/status and the actual17 successful command rows.
+
+T044 remains in progress. MAIN retains160 official cases /279 unchanged upstream files. Recorded stock-program observations remain13 /54 original assertions across tested snapshots; full rustc compiletest passes remain zero. Return and constructor cleanup candidates remain separately frozen and unvalidated. Selected user Drop, general traits/patterns, guest JIT, release and Linux acceptance remain unfinished.
+
+Evidence: artifacts/macos-first/t044-scope-cleanup-integration-v4/current-main-milestone-v1-python314-continuation/independent-collection-v1.json. Earlier entries below are historical checkpoints.
+
+# Current status — bounded ScopeLeave integrated; fresh macOS milestone pending
+
+T044 is in progress. Bounded ScopeLeave cleanup retains exact owning child
+continuations, processes committed fields in declaration order, skips moved fields,
+and resumes the same recipe without repeating opcode entry charges. Seven
+stock-derived controls passed. Intrinsic adaptations do not execute source-selected
+user Drop; unresolved nominal cleanup refuses until its selected witness is available.
+
+Scoped validation passed formatting, strict Clippy, corrected ledger, all 17
+integration binaries (177 tests), importer and architecture checks. Library coverage
+is split: the initial run had 447 passing tests and one filesystem permission failure;
+that exact test passed after writable artifact outputs were restored. No single
+all-green 448-test invocation is claimed. All 73 T042, 41 T043 and seven T044 controls,
+the separate H002 control and 2,000-frame check passed once in their accepted phases.
+The fresh integrated MAIN milestone is pending; the last accepted milestone has 2,341
+project test bodies. Failure receipts remain preserved.
+
+MAIN retains 160 official cases / 279 unchanged upstream files and both licenses.
+Stock-program observations remain 13 / 54 original assertions across prior snapshots;
+full rustc compiletest fixture passes remain zero. Return cleanup and partial guard
+successors are separate and unvalidated. Selected user Drop, general traits/patterns,
+guest JIT, release and Linux acceptance remain unfinished.
+
+See [component evidence](t044-cleanup-components.md).
+
+# Current status — T043 component accepted; bounded cleanup in development
+
+The fresh macOS milestone passed 2,341 project test bodies across 179 executables,
+with zero failures, ignored or filtered bodies. All 17 checks completed, including
+formatting, strict Clippy, architecture, fresh gates 00–03, upstream integrity and
+seven unchanged-source CLI probes. All 73 T042 and 41 T043 controls, the separate
+H002 control and the 2,000-frame bounded guest-stack event passed once.
+Independent collection verified the tested source stayed unchanged. A collector-only
+schema error is retained; its correction reran collection without rerunning tests.
+
+T043 has provisional component acceptance under Section 57/E-57-001, with explicit
+later integration dependencies and pending full fixtures. Release completion is
+false. General patterns, constructors, source/type/Drop integration, production
+guest JIT and Linux acceptance remain unfinished. T044 cleanup work is private,
+untested and unintegrated.
+
+MAIN retains 157 official cases and 276 unchanged upstream files with both licenses.
+The 13 recorded stock-program observations and 54 original assertions span tested
+snapshots; repeated probes add no unique passes. Full rustc compiletest passes: 0.
+
+# Current status — stock cast and borrow contexts integrated; macOS milestone pending
+
+T043 now resolves primitive cast targets through the existing lexical annotation
+guard and propagates an explicit borrowed target context to computed operands.
+Hoisted type declarations (including traits) refuse primitive admission before
+operand preparation; value-only function names do not shadow the type namespace.
+The owners, indexed lifetimes, fuel/cancellation admission and stable encodings
+remain explicit. The original temporary-frontier cases retain distinct call sites.
+
+The exact frozen V15 passed441 library and134 integration tests,33T043 controls,
+H002 and2000-frame events once, formatting, strict Clippy, ledger and architecture.
+Its independent collector and source release passed. V12/V14 failures and V13's
+segmented collector repair remain retained. Eight existing scope controls now
+appear in T043 traceability; their current MAIN milestone is pending.
+
+MAIN retains157 official cases/276 unchanged files and both original licenses.
+Recorded stock observations remain13 with54 original assertions across snapshots;
+full rustc compiletest passes0. The preceding accepted macOS milestone has2329
+project bodies. This integration requires a fresh milestone. T043 in_progress;
+general patterns, constructors, source/type/Drop, guest JIT, release and Linux pending.
+
+# Current status — reference components integrated; macOS milestone pending
+
+T043 now supports initialized simple ref/ref mut let bindings. A local/projected/
+dereferenced initializer preserves its original checked place; a computed initializer
+keeps its one owning temporary in the indexed extending scope. Only the reference
+moves into the immutable local binding. Ordinary-call barriers require revalidated
+source identity, and unknown constructor frontiers refuse before storage publication.
+Intrinsic local-path dereference assertions use checked LRIR and statement-owned
+value/place pairs, preserving the reference owner.
+
+The exact frozen candidate independently passed all six scoped commands:431 library
+tests,126 integration tests,all21 T043 controls and updated H002 once,exact ledger and
+the2000-frame bounded-stack event once. The unchanged stock let-destruct-ref.rs whole
+program completed its original one assertion under the explicit Rust2024 profile.
+MAIN now retains153 official cases/270 unchanged original files with both licenses;
+13 recorded interpreter program observations/54 original assertions across snapshots,
+and0 full rustc compiletest fixture passes. Repeated runs are not extra unique passes.
+
+A fresh integrated macOS milestone is pending. The prior accepted MAIN milestone
+has2312 project test bodies across179 executables. V5 and V7 failed snapshots and
+the V6 wrapper parser anomaly remain preserved. T043 stays in_progress; full patterns,
+constructor/Fn-value execution, source/type/Drop integration, production guest JIT,
+release and Linux remain incomplete.
+
+# Current status — integrated macOS milestone accepted
+
+The integrated T043 computed-temporary-borrow source passed the fresh macOS
+milestone:2312 project test bodies across179 executables,0 failed/ignored, all
+16 commands exit0,73 T042 controls and4 T043 controls each once, including the
+unchanged2000-frame/256KiB guest-stack regression. Independent raw collection
+confirmed the source freeze, gates00–03 and exact freshly built CLI identity.
+Six unchanged official programs completed through the immutable CLI copy;
+four arithmetic originals exercised29 original assertions. These repeat existing
+observations; MAIN remains150 official cases/263 unchanged original files,
+12 recorded interpreter program observations/53 original assertions under the
+explicit Rust2024 adaptation, and0 full rustc compiletest fixture passes.
+
+T043 remains in progress. A separate V5 candidate failed five selected-call
+controls on its unresolved stock std::ops::Drop import (416 library bodies passed,
+5 failed); it is not integrated. V6 supplies a stock-derived test-only declaration
+facet through normal import resolution and adds a suspension control; validation
+is pending. The production source retains the accepted MAIN milestone. Positive constructor/Fn-value execution, full
+patterns, source/type/Drop integration, production guest JIT, release and Linux
+remain incomplete. The runner's stale unexecuted-check list is retained as a
+metadata anomaly; independent logs/status/terminal prove all16 commands ran.
+
+[Collected milestone](../artifacts/macos-first/t031-t034-t040-t041-t042-t043-current-main-milestone-v1/independent-collection.json).
+
+## Earlier source snapshot
+
+# Current status — computed temporary borrows integrated
+
+T043 now evaluates computed borrow operands once, retains their indexed owning
+cell and forms a checked reference after completion. The stock literal-borrow
+initializer passes scope-retention, fuel and cancellation controls; all67 source
+execution regressions, strict Clippy, formatting and architecture passed privately.
+The official late-initialization drop-order test also exposed a spec contradiction:
+E-T043-001 corrects local cleanup to reverse declaration order, with native and
+scoped LRR evidence. A fresh integrated MAIN macOS milestone is pending.
+
+T042 retains component acceptance with73 ownership controls; its exact post-ledger
+test passed. The preceding macOS gate passed2308 project bodies. That is historical
+for the new T043 source, not a current integrated-source pass.
+
+MAIN retains150 official cases/263 unchanged original files with both licenses.
+Twelve earlier/current program observations exercise53 original assertions under
+the explicit Rust2024 adaptation; full rustc compiletest passes remain0. Newly
+imported scope/method cases are component-only or unexecuted. T043 remains
+in_progress; conditional constructor extensions, extending patterns, full cleanup,
+source/type and Drop integration, production guest JIT, release and Linux are
+incomplete.
+
+[Temporary borrow component]( t043-temporary-borrow-components.md).
+
+## Earlier snapshots
+
+# Current status — ownership component accepted; temporary scopes next
+
+T042 has component acceptance under Section57/E-57-001; release_complete is false.
+The fresh macOS gate passed2308 project test bodies with no failures or ignored
+tests, including all73 ownership controls. Gates00–03, strict Clippy, formatting
+and architecture passed. Exact source inputs stayed unchanged.
+
+A separately verified fresh executable completed six stock program probes,
+including all29 assertions in the four arithmetic originals. The initial helper's
+CLI hash remains unknown; its different executable and the suffix driver's
+post-child terminal-writer failure are preserved as qualified segmented evidence.
+
+MAIN retains145 official cases/252 unchanged upstream files. Twelve programs
+have interpreter execution observations with53 original assertions under the
+Rust2024 adaptation; full rustc compiletest passes remain0. Nominal Copy/Drop,
+complete cleanup, symbolic source/type integration, production guest JIT, full
+release/performance/security acceptance and Linux remain incomplete.
+
+T043 temporary-scope work is private and unintegrated. Its stock drop-order
+regression and native reference passed; new computed-borrow validation is pending.
+
+[Ownership acceptance](t042-component-acceptance.md).
+
+## Earlier snapshots
+
+# Current status — resumable structural Copy integrated
+
+T042 now copies closed Copy tuples/arrays through private iterative destination
+guards. Source owners remain live; each destination has distinct field storage.
+Dispatch chunks bound field and guard transitions, charge opcode entry once and
+poll cancellation. Fuel/quota/stale-source refusal leaves partial results
+unpublished. Whole non-Copy structural moves, checked projections, field
+assignment and cached partial initialization remain integrated.
+
+The exact Copy V3 candidate passed538 scoped project test bodies and all73 T042
+controls, strict Clippy, formatting and architecture. Those counts overlap;
+73 controls are included in538. Earlier runner/lint failures are retained with
+independent collections. The preceding MAIN milestone passed2295 project bodies
+and gates00–03; its final suffix was collected separately. A fresh combined
+MAIN milestone is pending after this integration.
+
+MAIN retains145 official rustc cases/252 unchanged original files with both
+licenses. Twelve unchanged-source programs have completed interpreter execution
+under the explicit Rust2024 adaptation, exercising53 original assertions; these
+include earlier tested builds. The newly imported fixed_length_copy.rs and
+tup.rs both fail direct CLI execution on missing type context/alias resolution.
+Their selected Copy operations have component evidence, not full-program passes.
+Full rustc compiletest fixture passes remain0.
+
+T042 remains in_progress. Source-selected nominal Copy/Drop, complete cleanup and
+source/type integration are pending. Production guest JIT, full release, security
+and performance acceptance and Linux validation remain incomplete.
+
+[Integration evidence](../artifacts/macos-first/t042-aggregate-copy-components-integration-v3/integration.json).
+
+## Earlier snapshots
+
+# Current status — whole structural moves and field reinitialization integrated
+
+T042 now transfers complete non-Copy structural tuples/arrays without cloning
+their fields or forcing a cold nominal sibling's policy. Projected intrinsic
+reference/String replacement and moved-field initialization preserve exact
+owners, cached completeness, inherited permissions and reference epochs.
+Computed temporary receivers still require a live completed operand before
+place publication. Copy/Deferred aggregates and source-selected nominal Drop
+remain pending. T042 stays in_progress; full release acceptance remains false.
+
+The final frozen candidate passed525 scoped project tests, all60 T042 controls,
+formatting, strict Clippy and architecture on unchanged source. Earlier failures
+and segmented repair evidence remain retained. The preceding MAIN macOS milestone
+passed2273 project tests and all11 checks; a fresh integrated milestone is pending.
+
+MAIN retains143 official rustc cases/250 unchanged originals with both licenses.
+Twelve unchanged-source programs have completed interpreter execution under the
+explicit Rust2024 adaptation, exercising53 original assertions. The Unit program
+adds no assertions. These observations include tested predecessor/candidate CLIs;
+fresh integrated CLI execution remains required. Full compiletest fixture passes0.
+General aggregate Copy, trait/source Drop integration, production JIT, complete
+service/native/security/performance acceptance, release and Linux remain pending.
+
+[Integration evidence](../artifacts/macos-first/t042-field-structural-components-integration-v1/integration.json).
+
+## Earlier snapshots
+
+# Current status — cached aggregate initialization integrated
+
+T042 aggregates now retain accounted field bitsets and cached completeness.
+Field moves/reinitialization update owning ancestors; whole ordinary transfers
+reject incomplete values. Cleanup emits one checked field/skip/completion step
+and preserves external owners of moved fields. Local assignment reserves its full
+batch before RHS transfer. Scoped validation passed503 tests/all38 controls,
+formatting, strict Clippy and architecture on unchanged initialization V1 source.
+Two external runner errors are retained; all actual commands passed without repeats.
+The fresh combined MAIN macOS milestone is pending; its predecessor passed2256
+project tests and all11 checks.
+
+MAIN retains140 official cases/247 unchanged originals and both rustc licenses.
+Unchanged-source execution observations remain11 programs/53 original assertions
+under explicit Rust2024 adaptation; full compiletest fixture acceptance remains0.
+General aggregate Copy, source-selected nominal Drop, guest projected moved-field
+reinitialization, production JIT, release and Linux remain incomplete. T042 stays
+in_progress. A separate original Unit program candidate is unvalidated/unintegrated.
+
+[Initialization integration](../artifacts/macos-first/t042-initialization-components-integration-v1/integration.json).
+
+## Earlier snapshots
+
+# Current status — assignment ownership components integrated
+
+T042 local assignment now checks destination/RHS aliases and the old-value cleanup
+obligation, then reserves the whole transfer/result batch before consuming RHS.
+Deferred and moved locals can initialize without reviving old reference epochs.
+The exact private candidate passed496 scoped tests/all31 ownership controls,
+formatting, strict Clippy and architecture, using independently collected segments.
+The first external matcher failure is retained. A fresh MAIN milestone is pending;
+the preceding collected macOS milestone passed2256 project tests and all11 checks.
+
+MAIN retains140 official rustc cases/247 unchanged original files and both licenses.
+Eleven unchanged-source program observations account for53 original assertions
+under explicit Rust2024 execution adaptation. Full rustc compiletest acceptance
+remains0. Cached field summaries are a separate draft; general aggregate Copy,
+projected reinitialization, guest Drop/JIT, release and Linux remain incomplete.
+
+[Assignment integration](../artifacts/macos-first/t042-assignment-components-integration-v3/integration.json).
+
+## Earlier snapshots
+
+# Current status — ownership components integrated
+
+T042 owning-read and tuple field-move components are integrated after scoped
+validation:486 project tests, all21 controls, formatting, strict Clippy and the
+architecture audit passed on unchanged V7 source. String/mutable-reference reads
+transfer one owner; intrinsic scalar reads copy; tuple extraction preserves its
+other fields. Closed primitive-reference arguments now initialize callee cells.
+General aggregate Copy, nominal Drop policy, assignment/reinitialization and full
+T042 integration remain incomplete. A fresh MAIN macOS milestone is pending.
+
+MAIN retains137 official rustc cases/239 unchanged original files. Eleven unchanged
+program execution observations now account for53 original assertions, with an
+explicit Rust2024 adaptation: ten arithmetic programs plus move-arg.rs. The new
+move-arg observation used the tested private CLI; a fresh MAIN observation follows.
+Full rustc compiletest acceptance remains0. T041 has component acceptance; the last
+collected MAIN milestone passed2235 project tests before this new integration.
+Guest JIT, full trait/Drop execution, release and Linux remain incomplete.
+
+[Ownership integration](../artifacts/macos-first/t042-owning-partial-components-integration-v7/integration.json).
+
+## Earlier snapshots
+
+# Current status — reference milestone collected
+
+The latest macOS ARM64/Rust 1.99.0 milestone passed all ten checks, fresh gates
+00–03 and 2,235 project host/doc tests. All 62 T041 reference controls passed.
+T041 now has component acceptance with explicit pending full-integration fixtures;
+T042 ownership implementation is now in progress in Section 57 order.
+
+Ten unchanged official arithmetic programs have completed interpreter execution
+under an explicit Rust2024 edition adaptation, running all 52 original assertions.
+Four were checked with the fresh MAIN CLI; six were previously observed on the
+collected scalar-assertion binary before their unchanged originals were integrated.
+MAIN retains 127 official cases / 221 original files. Full rustc compiletest
+acceptance remains zero. General traits/inference, complete Copy/move/Drop,
+guest JIT, release and Linux acceptance remain incomplete.
+
+[Collected milestone](../artifacts/macos-first/t031-t034-t040-t041-combined-main-milestone-v1/independent-collection.json) ·
+[Reference component acceptance](t041-component-acceptance.md).
+
+## Earlier snapshots
+
+# Current status — stock arithmetic observations and reference work
+
+Ten unchanged official arithmetic programs have completed interpreter execution
+under an explicit Rust2024 edition adaptation, executing all52 original assertions.
+Four are covered by the fresh MAIN CLI control; six additional programs were
+observed on the previously collected scalar-assertion binary, then their exact
+original files were integrated. MAIN retains127 official cases/221 original files.
+Full rustc compiletest acceptance remains0.
+
+The latest collected macOS milestone passed all10 checks and2228 project host/doc
+tests, with0 failed/ignored, including95 T034,56 T040 and55 T041 registered controls.
+It predates the whole-array-reference implementation and six new imports; fresh
+combined validation is pending. T041 remains in progress with62 registered controls.
+The integrated array-reference change passed10 scoped checks, full library337,
+CLI27, LRIR14, VM20 and source_run67, including the unchanged2000-frame/256KiB
+regression. Seven controls check source type/length, ownership, stale leases,
+fuel refusal and complete source-memory accounting. General source/trait inference,
+ownership/Drop, guest JIT, release and Linux remain incomplete.
+
+[Collected MAIN milestone](../artifacts/macos-first/t041-t034-integrated-main-milestone-v1/independent-collection.json) ·
+[Additional stock observations](../artifacts/macos-first/t031-stock-div-float-u32-v1-scoped-observations/index.json) ·
+[Six-original integration](../artifacts/macos-first/t031-stock-six-additional-originals-integration-v1/integration.json).
+
+## Earlier snapshots
+
+# Current status — source-bound fields and temporary references integrated
+
+The interpreter now has tested components for named fields, temporary owning places, computed references and nominal dereferences. Frozen v8 passed 482 host test bodies, including all 56 T040 and 55 T041 controls and the unchanged 2000-frame/256KiB stack regression. Both outer validation wrappers failed after successful childcommands because of collection-code defects; independent collectors reconciled those outcomes without rerunning. Full T041 and a fresh MAIN milestone remain pending. [Integration receipt](../artifacts/macos-first/t041-fields-temporaries-components-integration-v8/integration.json).
+
+MAIN now retains 116 official rustc cases / 210 unchanged files; full stock fixture passes remain zero. The unchanged arithmetic programs previously failed at assertion operand integration. A separate scalar assertion implementation is frozen and awaiting validation. General trait/type inference, Drop, guest JIT, release and Linux acceptance remain incomplete. The last full MAIN run failed on AddImpl preparation becoming stale; its isolated pass does not resolve that failure under the full run.
+
+## Earlier snapshots
+
+# Current status — T041 in progress
+
+The latest integrated macOS milestone failed during the original AddImpl procedural-macro test with LRR-E-TOOL-PREPARE-STALE. The same test subsequently passed in isolation; that does not resolve the failure under the full run. The previously integrated stack repair passed its scoped unchanged 256KiB/2000-frame regression. The earlier stack-abort milestone remains historical failure evidence.
+
+MAIN retains 111 official rustc cases / 204 unchanged files, with zero full fixture passes. Unchanged i32-sub.rs fails at assert_eq! operand integration; an independently imported borrowck-fixed-length-vecs.rs fails at missing array element context. Four further numeric programs remain unexecuted. The latest private reference candidate v7 passed 327 of 330 library tests with three failures; corrected v8 validation is running separately. No private successor is integrated on this evidence. Guest JIT, broad trait/type inference, release and Linux acceptance remain unfinished. [Retained observations](../artifacts/macos-first/t041-current-observations-20261011/index.json).
+
+## Previous snapshots
+
+# Current T041 status — stack repair integrated; fresh milestone pending
+
+The unchanged256KiB/2000-frame regression now passes on the integrated lowering split. Accepted privatev3 actual94517/0 and independentcollector0 retain3665 inputs/40133765 bytes after every command. All12 scopedchecks pass:448 actualhost bodies, all56T040+21T041 controls once, fullsource_run67 and affected IR/storage/VM/phase suites. Only tested syntax/thunks.rs bytes were integrated. Fresh MAIN macOS milestone remains required. [Integration receipt](../artifacts/macos-first/t041-stack-repair-components-integration-v3.json).
+
+MAIN still retains111 official cases/204 unchanged upstream files, fullstock acceptance0. T041 is inprogress; pending45-control field/temporary successor and five whole-source arithmetic programs are unintegrated/unexecuted. JIT, generaltraits/Drop, release and Linux remain incomplete. Prior failures and historical checkpoints below are preserved.
+
+## Prior stack diagnosis and checkpoints
+
+# Current T041 status — macOS milestone failed on bounded host stack
+
+The latest integrated macOS run failed: actual runner82506/1 and collector65201/0 retained3660 unchanged inputs/40,121,312 bytes. Host Cargo exited101 after source_run aborted with SIGABRT and a stack overflow in lrr-2000-frame-oracle.163 completed-binary summaries report2000 passing bodies; source_run emitted62 additional pass events but no final summary. Its2000-frame test started without a terminal result, and four other names have no observed terminal event. All56 T040 and21 T041 registered controls passed exactly once. These observations do not make the failed milestone a pass. Interpreter and final manifest checks were unexecuted. [Reconciled failure evidence](../artifacts/macos-first/t041-projections-components-main-milestone-v3-retained-failure/host-outcome-supplement.json).
+
+MAIN retains111 official rustc cases/204 unchanged original files. Full stock fixture passes remain0. T041 is in progress. The earlier2180-test successful milestone is historical. A frozen unvalidated repair extracts existing place-lowering arms to reduce the large fixed initial_thunk stack frame; the unchanged256KiB/2000-frame regression must pass before integration. A separate diagnostic candidate adds stage markers only. Borrowed named-field and temporary-receiver successors are unvalidated/unintegrated (private inventory115/209,45 T041 controls). General trait/call/Drop/JIT, release and Linux remain incomplete.
+
+The focused macOS stack diagnostic failed after startup, during dispatcher polling. The first lowering extraction rebuilt from frozen source but still overflowed. A second split into smaller pure lowering helpers passed the unchanged256KiB/depth2000 exact regression once, with independent collection. Affected-suite validation and integration/fresh milestone remain pending. Pending field/temporary code is staged separately with45 private controls and115 upstream cases/209 files, unexecuted/unintegrated. [Collected first repair failure](../artifacts/macos-first/t041-stack-repair-retained-failure-v1/collection-terminal.json).
+
+The v2 follow-up was rejected: the external driver lost eleven command outcomes and its runtime-alias test created two unstaged probe files. The exact recursion pass remains scoped evidence; no broader acceptance follows. A separate retry has identical production/test bytes and stages the known probe contents before freezing. The corrected driver must retain every actual command result and preserve all selected controls.
+
+## Historical checkpoint entries
+
+The entries below describe their recorded snapshots; their uses of “current” do not describe today’s MAIN.
+
+# Collected T041 local-borrow milestone
+
+The current macOS ARM64/Rust1.99 local-borrow milestone passed all10 checks and2180 actual project host/doc tests,0 failed/ignored/filtered, including56/56 T040 and9/9 T041 controls exactly once. Actual runner22053/0 and independent collector52643/0 verified3655 frozen inputs/40025746 bytes and110 official rustc cases/202 unchanged original files. [Collected evidence](../artifacts/macos-first/t041-local-borrow-components-main-milestone-v1/independent-collection.json).
+
+T041 remains in_progress; full stock fixture passes0. Frozen private dereference, projection and projected-borrow successors are unbuilt/unexecuted/unintegrated. They add11 new stock-based/source/quota controls across two successive drafts; private inventory reaches112 cases/205 originals. Main runtime source remains the collected local-borrow baseline. General field/index/deref/source/trait/call/Drop integration, guest JIT, release and Linux remain unfinished. Earlier checkpoint entries follow.
+
+# Implementation state — revision 4, macOS first
+
+T041 local-borrow components are integrated after20 private scoped checks/24 selected bodies passed with actual runner7419/0 and independent collector0. Nine T041 controls are now registered; MAIN retains110 official rustc cases/202 unchanged original files. The fresh current MAIN macOS milestone is pending. The previous collected2171-test/56-T040-control milestone is historical for this new source. T041 stays in_progress; full stock fixture passes remain0.
+
+The interpreter now reaches original local borrows and primitive-reference annotations, checking permissions/descriptors before borrow fuel or guest allocation and retaining the written source view after reference publication. The earlier local annotation and dropped-source-view failures are preserved; no failed result became a pass. Scope is limited to primitive local borrowing and runtime lease/ownership components. An independent unvalidated dereference read/write draft preserves RHS-first assignment and per-use checks; it is not integrated. General field/index/deref execution, bounds origins, abstract source contexts, full calls/returns, whole fixtures, guest JIT, release and Linux acceptance remain pending. [Integration receipt](../artifacts/macos-first/t041-local-borrow-components-integration-v1.json). [Collected scoped evidence](../artifacts/macos-first/t041-reference-annotation-controls-v2-scoped-evidence/controls-v2-collection.json). [Current scope](t041-places.md). Earlier entries below are historical.
+
+The six-path nominal result context/allocation/cfg-body/traceability successor is now integrated after ten segmented exact scoped passes, strict Clippy, formatting and architecture. MAIN retains104 official cases/191 original files and56 T040 controls. Its fresh macOS milestone is pending; T040 remains in_progress and full stock passes0. Previous2170/55 milestone evidence is historical for this new source. Original v4 runtime-fault resumption failure and v5 wrong-target ledger selector failure are preserved. [Integration receipt](../artifacts/macos-first/t040-constructor-source-context-components-integration.json). Earlier entries below are historical.
+
+The latest completed macOS milestone passed 2170 project host/doc tests, with 0 failed or ignored, including all 55 registered T040 controls. All nine checks passed; the independently reconciled source map remained fixed through collection. MAIN retains 104 official rustc cases and 191 unchanged original files. Full stock fixture passes remain 0; T040 remains in progress and T041 has not started. The passing baseline includes initializer-return and structural tuple/array dispatch components. General initializer evaluation, composite source/trait binding, repeat Copy, ordinary user Drop, guest JIT, release and Linux acceptance remain pending. [Collected milestone evidence](../artifacts/macos-first/t040-constructor-continuation-components-main-milestone-v1/independent-collection-reconciliation.json).
+
+A separate unintegrated nominal result source-context candidate passed strict Clippy, formatting, architecture and seven selected controls, then failed its new regression because that test attempted to resume a terminal runtime fault. Nine remaining controls were unexecuted. This failure is not part of the passing MAIN baseline. The test needs to distinguish reversible preflight refusal from terminal execution faults; neither the candidate nor its new control is accepted. Earlier checkpoint entries below retain their historical status.
+
+Current T040 initializer-return/structural-dispatch components are integrated across15 checked paths after33 segmented scoped test passes (32 on v3,1 added stale caller control on production-identical v4), with actual outer and independent collectors all0. MAIN now retains104 official cases/191 unchanged files and55 T040 registrations; full stock passes0. Fresh integrated macOS milestone is pending; the last completed parent milestone2160/45 remains historical. General initializer frame entry/evaluation, composite source/trait binding, repeat Copy, ordinary user Drop, guest JIT/release/Linux remain pending. The independent fallible source-reference vector change is unvalidated and not integrated. [Current integration](../artifacts/macos-first/t040-constructor-continuation-components-integration.json). Earlier entries below are historical.
+
+The latest integrated macOS milestone passed2160 project host/doc tests,0 failed/ignored and all45 T040 controls exactly once; MAIN retains100 official cases/186 unchanged files. The next private joint constructor candidate remains unaccepted: v1 failed E0500 and v2 failed missing compile-time inputs before any selected test ran. Fresh v3 restores the seven original accepted-MAIN include inputs and is assigned to async scoped validation (9 new controls,104 private cases/191 files,54 private T040 registrations). A separate working draft adds one unexecuted stock-based stale caller header/scope/range refusal and restoration control. No new production integration or full fixture pass follows. [Current draft/failure record](../artifacts/macos-first/t040-constructor-continuation-working-unvalidated-v5/progress.json). Earlier entries below retain their historical checkpoint status.
+
+Initializer source components are now integrated across19 checked paths. The frozen v4 candidate passed all24 scoped tests (eight new plus sixteen affected regressions), strict Clippy, fresh architecture and its fresh CLI/native-reference/interpreter commands. Actual outer26398/1 failed an external binary-mtime assertion; that result remains preserved. Independent collector69620/0 and separate read-only freshness audit verified3631 fixed inputs/39807790bytes and the actual binary built inside its preceding build interval, with matching build/interpreter SHA. This is scoped passing evidence plus an external validator failure, not a successful single driver. MAIN now retains100 pinned stock cases/186 original files and45 registered T040 controls; full stock passes0. Fresh integrated macOS milestone pending. General initializer runtime continuation/evaluation and complete T040/Drop/traits/JIT/release/Linux remain incomplete. [Integration](../artifacts/macos-first/t040-initializer-source-components-integration.json). Earlier entries below are historical.
+
+Current integrated T040 constructor-component macOS milestone is collected: 2152 actual host/doc checks passed,0failed/0ignored, with all37 registered T040 controls executed exactly once. Actual milestone10446/0 and independent collector0 verified3621 unchanged source/include inputs/39766650bytes and94 pinned upstream cases/178 original files. Gates00–03 and formatting/Clippy/architecture/manifest checks passed. The runner's default interpreter observation used a pre-integration binary and is excluded; explicit current MAIN compilation plus the selected interpreter/native-reference check passed separately37907/0. This is a collected milestone plus a separate binary-provenance correction, not acceptance of the stale row. Full stock fixture passes0; T040 remains in_progress, general construction/source-trait resumption/user Drop/guest JIT/release/Linux incomplete. [Retained checkpoint](../artifacts/macos-first/t040-constructor-components-main-milestone-v1/independent-collection.json).
+
+An independent initializer-expression candidate is frozen for async scoped validation, with19 changed paths and eight unexecuted stock-based controls. It retains100 cases/186 unchanged files privately; MAIN remains94/178. Exact const/static AST boundaries, single-token roots, outer macro invocation capture, root condition clauses and initializer source context are implemented privately. Generic metadata uses checked allocation and deterministic duplicate identity. General initializer runtime entry/continuations/evaluation remain pending. No new control or full fixture pass is inferred. [Recoverable candidate](../artifacts/macos-first/t040-initializer-expression-unvalidated-delta-v3/progress.json). Earlier entries below are historical.
+
+Current T040 constructor components are integrated after segmented scoped validation. Reached original record dispatch binds the selected source/schema/hygiene before fuel or guard allocation; matching completed macro contexts are reused. Partial panic cleanup handles completed builtin scalar fields and empty guards once. Live aggregates cannot borrow scalar discard admission without a checked destructor plan, even when empty. The unchanged threaded unit-Drop fixture retains its unresolved std::thread import; a separate import-free stock destructor fixture exercises refusal. Current successor passed Clippy, architecture and four exact controls, with collected actual outer10697/0 and collector58582/0. Earlier17 plan/binder controls,3 dispatch controls and8 cleanup/regressions retain separately scoped evidence; there was no single combined driver. MAIN inventory94 cases/178 unchanged retained files; full stock fixture passes0. Fresh integrated macOS milestone required. T040, actual guest Drop, general structural/repeat/update construction, source/trait resumption, guest JIT, release and Linux remain incomplete. [Integration record](../artifacts/macos-first/t040-constructor-components-integration.json). Earlier entries below are historical.
+
+M016 generated procedural execution now attaches bounded owned origin facts from its exact admitted pending request before failure cancellation, preserving the primary diagnostic and existing attachment failure. Compiler declarations inside opaque outer macro operands retain the exact admitted opening-token source/range when the physical parser has no whole-call entry; existing whole-call labels remain unchanged. Each new exact stock-derived control passed once with strict Clippy on its own frozen candidate; the unchanged generated procedural production code passed the unmodified fresh architecture audit on the separately preserved failing-test ancestor. No new-candidate audit is inferred. These are two separate scoped snapshots, not a combined milestone. The missing-parent failing ancestor is retained; no failure was converted to success.35 M016 controls are registered,78 cases/158 original files retained; full stock fixture passes0. Fresh combined macOS milestone required. M016/MX033/MX034, later source-aware members/traits/cache/service integration, actual guest JIT, release and Linux remain pending. [Integration evidence](../artifacts/macos-first/m016-origin-repairs-integration.json). Earlier checkpoints below are historical.
+
+New cold nested-operand diagnostic control executed once and failed: primary call/definition were retained, but concat compiler parent invocation was absent. Strict Clippy passed; exact test1failed/0ignored. Actual driver54337 exit101 and independent collector80268 exit0 verified3442 unchanged inputs/39098385bytes and78/158 original stock provenance. Failed evidence is retained unchanged; staged compiler opening-token anchor repair and generated procedural-failure attachment are unvalidated and imply no pass. [Retained failure](../artifacts/macos-first/m016-cold-string-origin-controls-v2-retained-failure/m016-cold-string-origin-controls-v2-collection-terminal.json).
+
+M016 nested compiler operands now retain their declaration lexical prefix independently of physical source offsets. Exact admitted cold/argument/generated declaration body owners and complete name-span registries supply bounded invocation, definition and compiler ancestry to the existing pure expansion adapter; initial source identities are independently revalidated. Strict private Clippy, unmodified architecture audit and two exact ownership/discovery controls passed on3442 unchanged inputs with actual driver21054 and collector88209 both exiting0. The unchanged macro-deep_expansion.rs is retained with upstream pin/directives/hashes; its whole-source discovery compares actual concat output to the original assertion operand. Guest string/assert execution and complete run-pass remain unexercised. Inventory78 cases/158 retained original files;33 registered M016 controls, full stock fixture passes0. The preceding owned-kind MAIN milestone was interrupted for the explicit one-time clean after7 of9 checks; no acceptance is inferred. Fresh integrated macOS milestone required. M016/MX033/MX034, service external-world supply, cache remapping, guest JIT, release and Linux remain pending. [Scoped evidence](../artifacts/macos-first/m016-cold-string-owner-controls-v3-collection-terminal.json). Earlier checkpoints below are historical.
+
+M016 owned-kind architecture repair: frontend diagnostic-definition keys now use existing owned ProceduralKind; conversion from adapter ProcForm stays in service/expansion boundaries. Stable form tags0/1/2 and existing fingerprint domain remain unchanged. Unmodified architecture audit, strict private Clippy and three exact stock procedural panic-origin controls passed on3440 unchanged inputs. Failed cold-compiler MAIN milestone remains preserved. Fresh integrated macOS milestone required; full M016/MX033/MX034, complete stock run-pass, service native-world supply, guest JIT, release and Linux remain pending. [Private acceptance](../artifacts/macos-first/m016-procedural-owned-kind-controls-v1-collection.json).
+
+Latest milestone: `m016-cold-compiler-main` failed the architecture audit because the frontend diagnostic-definition map used the external adapter ProcForm enum. Importer, both formatting checks and both Clippy checks passed. Manifest-first, gate03 and interpreter remain unexecuted in this attempt. Driver46978 exited1; independent collector93409 exited0 with all3591 source/include inputs unchanged and77 cases/157 upstream files verified. At that failed-attempt checkpoint the owned-kind boundary repair was private and unaccepted; its later scoped acceptance and integration are recorded above. M016 remains in progress. [Collected failure](../artifacts/macos-first/m016-cold-compiler-main-acceptance.json).
+
+Current checkpoint: M016 include and procedural diagnostic components are integrated after scoped private acceptance. The preceding collected macOS milestone passed all nine checks, 2103 actual host/doc tests and23 M016 controls. The new coherent integration requires a fresh milestone. Inventory77 cases/157 retained original files; full stock fixture passes0. M016 remains in progress; full MX033/MX034, guest JIT, release and Linux remain pending. See [integration evidence](../artifacts/macos-first/m016-cold-compiler-integration.json). Earlier checkpoints below are historical.
+
+Current checkpoint: the fixture-tooling and component ledger-transition milestone passed all nine checks, 2080 actual host/doc tests, all132 named M015 controls and three stock-based importer controls on3549 fixed source/include inputs/membership. M016 is now eligible in Section57 order. Full MX031/MX032 and release acceptance remain pending; inventory64/131, full stock0, guest JIT/release/Linux incomplete. See [immutable transition evidence](../artifacts/macos-first/m015-stock-closure-transition-acceptance.json). Earlier entries below are historical.
+
+Current status: M015 component acceptance is recorded under Section57/E-57-001 after the collected 2080-test integrated production milestone and all132 named M015 controls. Fixture tooling and this ledger transition still require a fresh milestone before M016 starts. Full MX031/MX032 and release acceptance remain pending; inventory64 cases/131 retained original files and full stock passes0. See [component traceability](m015-component-acceptance.md). Earlier entries below are historical.
+
+Current collected macOS milestone: 2080 actual host/doc tests and all132 named M015 controls on3539 unchanged source/include inputs and membership. All nine actual child check codes are zero. The parent exec exit was lost to tool-output truncation and is explicitly unobserved; its process is no longer live and final source verification was independently repeated. M015 component review/transition remains pending; M016 not started. Inventory62/124, full stock0, MX031/MX032/JIT/release/Linux incomplete. See [the immutable checkpoint](../artifacts/macos-first/m015-stock-test-action-main-acceptance.json). Earlier entries below are historical.
+
+Current M015 status: stock-driven exact compiler Test action and root/field inert path repair are integrated after collected private420-control core and30-control procedural/provenance acceptance. Seven bodies from three unchanged stock sources pass the CLI, and the unchanged empty-derive source passes its interpreter check. Inventory62 cases/124 retained files; full compiletest0. Main47922 regression and native linker ENOSPC failures remain preserved. A fresh full macOS milestone is pending; last accepted integrated main remains2046. M015/MX031/MX032/JIT/release/Linux are incomplete; work is primary-agent only. See [integration evidence](../artifacts/macos-first/m015-stock-test-action-integration.json).
+
+Current M015 status: the fresh compiler/inert milestone failed two existing generated empty-derive controls (session47922). All3531 source/include bytes and membership stayed fixed; interpreter validation was unexecuted. Last accepted integrated milestone remains2046. Three unchanged stock rustc sources separately execute seven interpreter test bodies; this is not full compiletest/JIT acceptance. A distinct compiler derive-as-test action defect is confirmed and a stock-driven private repair is under validation. The sub-agent is stopped; all remaining work is root-owned. See [failure evidence](../artifacts/macos-first/m015-compiler-inert-attribute-main-regression-failure.json).
+
+M014 nested declaration scanning and scope inventories now have component acceptance under Section57/E-57-001: 1816 actual host/doc tests and 138 named controls passed with the integrated macOS milestone. Full graph/facade sealing, reached trait selection, MX029/MX030, guest JIT, release and Linux remain pending. The historical M014 snapshot retained 21 cases and 45 unchanged files, with 52 component assertions; imports and component assertions are not full fixture passes. See the [current checkpoint](../artifacts/macos-first/m014-owned-origins-main-checkpoint.json).
+
+M015 remains in progress. The latest macOS milestone passed 2046 host/doc tests,
+gates 00–03, strict Clippy, formatting, architecture, manifest and interpreter
+controls with frozen source. See [the checkpoint](../artifacts/macos-first/m015-original-doc-attribute-order-main-acceptance.json).
+
+Original module provenance, annotation proof ordering and grammar-aware token
+transport are integrated. Module registration preserves full lexical ancestry
+without publishing global routes. Owned generated declaration captures now
+transport exact retained module name tokens with raw identifiers, spans and
+context preserved in item, statement and expression slots. Two pure controls
+refuse absent identities and opaque macro argument module text; formatting and
+targeted strict Clippy passed. This grants no namespace authority. Owned generated module admission now verifies expected epoch, actual insertion grammar and pinned item context. The physical Expression root remains Unattached while nested block keys remain generated; header-only captures keep their conservative legacy checks. The candidate passed 173 library, 64 declaration-scan and 7 enclosing controls, formatting, strict workspace Clippy and architecture. Coordinator registration, annotation proof completion and generated module routes remain pending. Names and spelling grant no resolution authority.
+
+Final catalog selection now shares a pure ignore policy between CLI listing and
+execution, retaining exact and substring filter meanings. Required discovery
+failure precedes known, substring and absent filters and publishes no success
+summary. Generated expected-panic execution distinguishes a matching guest panic,
+a mismatched message and an unsupported fault. CLI conflicting ignore flags
+retain their existing rejection. The candidate passed 173 library tests, 27 CLI
+tests, strict Clippy, formatting, architecture and 27
+procedural catalog controls. The new procedural async control checks the common
+pre-body refusal guard after a real native callback and current catalog seal;
+public procedural CLI execution and supported guest bodies remain separate gates.
+The integrated macOS milestone passed for catalog policy, owned module admission, the raw-identifier adaptation and wrong-scope re-emission controls.
+
+The newly imported unchanged rustc raw-identifier fixture retains all four edition directives. Its unchanged rule plus r#gen invocation is exercised outside the licensed directory under e2024 for module metadata only. Two generated modules keep distinct identities, lexical scopes and routes despite sharing the exact captured name span. Other keywords/editions and full fixture semantics remain unexecuted. See [module admission evidence](../artifacts/macos-first/m015-module-admission-v5-acceptance.json).
+
+The licensed inventory contains 58 unchanged cases and 117 retained files.
+The new test-re-emit source and auxiliary retain upstream directives, commit,
+Git blobs and hashes, with MIT, Apache and COPYRIGHT texts. The unchanged
+auxiliary passed two actual
+callbacks under the disclosed Rust2024 alias adaptation, with source registration
+retained despite real name-span loss. A same-name unrelated survivor cannot claim
+the removed registration. The standalone controls now pass two pure and three native tests, with four actual macro callbacks. Same producer/name in another module cannot inherit root test registration: published owned syntax proves the moved definition, original-root lookup is absent, and catalog discovery repeatedly returns LRR-E-TEST-DISCOVERY. A TestCatalog certificate is separately refused for scoped-name queries; this proves no positive child Scope seal. Guest bodies and the full stock fixture remain unexecuted. Source-backed
+listing and panic metadata adaptations remain
+outside the licensed directory. Full stock rustc fixture passes remain zero.
+Full MX031/MX032, remaining generated module/helper/world routing, guest JIT,
+release and Linux acceptance remain pending.
+
+The active project is LRR0.2.0 / lrr-2024-v2, implemented in Section57 cross-ledger
+order on macOS ARM64 with Rust1.99.0. Linux is a later port; Docker is optional.
+The saved goal's older revision3/Linux-first wording is superseded by the user's
+revision4 and macOS-first instructions. The full project goal remains active.
+
+H001–H003 retain component acceptance under Section57/E-57-001. M013 component acceptance is complete under Section57/E-57-001; full MX027/MX028 remain pending. M014 declaration scanning has component acceptance; full release integration remains pending: the pinned parser and immutable header inventory discover cold nested impls and retain pending producer demands without preparing executable bodies. Original-source derives have authorized execution, ordered append
+integration, completion proofs, canonical declaration restoration and publication
+for known inert/helper cases. Published original type queries invalidate after
+source edits. Unknown outer annotations, qualified helpers, forged/duplicate/
+foreign-run append and stale source retain their recorded refusal controls.
+
+Enabled members can now demand exact helper metadata from later derive groups
+on the same item before native execution. Source group-row resolution is shared
+by ordinary selection and lookahead. The local scope deduplicates receipts and
+records introduction positions/source contexts with checked limits. Members use
+valid later introductions; outer annotations still require a preceding introduction.
+Later metadata does not grant an early outer helper or a qualified helper path.
+Current-member scopes preserve the existing queue when unrelated later names are
+unresolved. Completed selections and source completion proofs retain replay checks.
+
+A controlled two-group case prepares both declarations before dispatch, preserves
+the later derive/member helper in the real input, executes twice and publishes
+real constants. Qualified-member and early-outer variants remain incomplete with
+zero/one native invocations respectively. The newly copied rustc helper-name
+collision fixture's adaptation executes two same-named-helper exports, preserves
+the intervening helper and publishes. These are adapted component controls;
+original auxiliaries and full stock fixtures are not accepted by these observations.
+
+The macOS prepared-server checkpoint records 1798 host/doc test passes and all 731
+M013 controls. Gate00/01/02 and provisional Gate03 component, strict Clippy,
+formatting, architecture and first/final fixture-manifest audits pass with
+RUST_TEST_THREADS=2. Twenty unchanged rustc cases and all 43 imported file hashes
+are verified at upstream commit ae0fe511b15ab760d7e963b13389d1bc2ab42b18. The
+exercised subset retains 50 component assertions; the two M014 imports now have syntax/inventory assertions, with full fixture acceptance pending.
+Both original license texts, directives and auxiliaries are retained. One unchanged
+empty-derive case passes a whole-source CLI interpreter run and explicit native
+metadata reference. Full compiletest and LRR fixture acceptance remain zero.
+The installed server still fails E-M013-001's printing auxiliary; terminal refusal is
+separate evidence. Explicit preparation now builds a versioned matched-source server
+with a preserved protocol descriptor and macro stdout routed to diagnostics. The
+unchanged printing auxiliary completes five occurrences; the unchanged tracked-env
+auxiliary passes three environment/fallback cases. Typed schema4 provenance now enables explicit preparation and ordinary MacroRun
+adoption of this exact repair. The integrated control executes identity and a
+nested declarative macro, seals and publishes generated members. Changed repair
+source refuses adoption before a run starts. The unchanged original derive-order source now completes all five native
+derives through the worklist and publishes canonical Foo. Macro-host registration
+headers generated by macro_rules expand on demand through owned syntax events;
+one declaration expansion is reused. Definition/call editions remain 2015/2024.
+Full guest/tier and CLI oracles remain pending.
+
+Following original-source replacing attributes now execute after replayed completed derives. Three controls cover preserved append output, prior macro bindings and stale-source refusal. Original-source helpers now follow identity and chained attributes with sibling/function-like isolation controls. Full legacy ordering/lint/helper diagnostics and
+resource/world/edition/service/CLI matrices remain pending. M014–M016 follow M013
+in the required order. The parser/AST and macro engines reuse rust-analyzer. The
+custom interpreter runs a limited primitive subset including loops, calls and
+recursion. Cranelift has synthetic bootstrap coverage; guest LRIR lowering,
+region recording, guards and interpreter/JIT transitions are unimplemented.
+Trait/runtime/native/security, performance, full-fixture/release and Linux
+acceptance remain incomplete.
+
+See [the helper scope](m013-source-future-helpers.md) and
+[the checkpoint](../artifacts/macos-first/m014-procedural-arguments-checkpoint.json).
+
+M014 recursive declaration adoption passes all 49 targeted controls and the
+full component gate with 1798 host/doc tests. Actual marked expansion, completed-
+child lexical publication and external-request subtree assembly are integrated.
+Unknown children and rejected replies retain their frontiers; shared accounting
+matches run, graph and epoch. Twenty unchanged rustc cases and 43 file hashes
+retain 46 upstream component assertions; full fixtures remain zero. SourceDiscovery
+job attachment, intrinsic summaries, complete graph/facade impl seals and reached
+selection remain pending. See [the adoption scope](m014-recursive-adoption.md).
+
+
+The new M015 component changes retain canonical token-context editions for generated
+module names, including 2021 definition tokens relocated to a 2024 call-site source
+location. Original source keeps its own parse profile. Module rows explicitly encode
+their name edition in a new stable domain. Batched capture replays pinned syntax once
+and refuses duplicate or absent module ranges; no benchmark claim is made. The private
+candidate passed two edition regressions, 173 library, 65 declaration-scan and seven
+enclosing controls, formatting, strict Clippy and architecture. See [the component
+receipt](../artifacts/macos-first/m015-module-token-edition-v3-acceptance.json).
+
+The procedural re-emission suite now passes three pure and five native controls,
+with six actual callbacks and five authorized macro-host builds. The unchanged
+issue-53675 source is an emitted token payload in a fixed Rust 2024 consumer; four
+qualified names retain distinct published identities, panic flags and exact/substring
+filter behavior. Only the stable procedural branch of test-followed-by-attr-macros
+is exercised, with an explicit `crate::test_macros` root-alias path adaptation.
+The earlier bare-alias refusal is preserved as an unresolved extern-prelude
+prerequisite, not a registration failure. The unchanged alias-shadowing fixture and
+auxiliary are retained as source evidence only. No selected live unit was compiled,
+and no guest body or full stock fixture ran. See [the worker component receipt](../artifacts/macos-first/m015-proc-reemit-v8-worker-acceptance.json).
+
+The integrated macOS milestone passed for the edition/batch/re-emission changes above. M015 remains
+in progress; annotation completion, generated module routes, full fixtures, guest
+JIT, release and Linux acceptance remain pending.
+
+
+The confirmed root cfg and generated extern-core route bugs are repaired in
+the integrated candidate. Original crate cfg exclusion precedes outline, import
+and external-module discovery. Generated routes use the same bounded captured
+dependency and installed compiler-facade availability as original source. Child
+expansion module indexes retain exact bounded ownership and capture masks without
+granting an annotation proof or namespace seal.
+
+The parent joint component passed two facade, two root-cfg, 175 library, 67 scan
+and seven enclosing checks, formatting, strict workspace Clippy and architecture.
+See [the receipt](../artifacts/macos-first/m015-generated-facade-v3-acceptance.json).
+The independent worker passed compile, format, two pure controls, strict Clippy
+and all three controls serially with one actual procedural callback. Final
+`core` and `foo` tests retain distinct value identities despite same-named type
+bindings. The configured-away original crate publishes a real empty sealed
+catalog, and generated inactive producers are never invoked. No body, signature,
+thunk or macro reexecution was demanded. See [the worker receipt]
+(../artifacts/macos-first/m015-proc-catalog-cfg-names-v12-worker-acceptance.json).
+
+The unchanged official issue-34932 and issue-36768 sources retain their original
+directives, commit and hashes under the rustc licenses. LRR fixed Rust2024/test-cfg
+adaptations and authority assertions live outside the licensed directory. The
+run-pass bodies and full stock fixtures are unexecuted; full fixture passes remain
+zero. All compiler, builder and lint failures remain preserved separately.
+
+The integrated macOS milestone passed 1974 host/doc checks against
+1144 frozen inputs. Gates 00–03, strict Clippy, format, architecture, manifest
+and interpreter controls passed; immutable source and gate evidence are retained. M015 remains in progress: generated
+module coordinator/routes, annotation completion, argument facts, full MX031/MX032,
+guest JIT, release and Linux acceptance remain pending.
+
+
+The accepted item-arena token-edition and expected-panic repairs are now in the
+integrated candidate. Generated arenas retain checked resolution-context editions
+without changing the live2024 profile. Stable name-value expected-panic strings
+use the same decoder as list forms; non-string reasons remain typed errors.
+
+The joint private candidate passed all 11 checks: 179 library, 67 scan, two each
+edition/facade/root-cfg/nested-route/panic-form and seven enclosing controls,
+format, strict workspace Clippy and architecture. See [the component receipt]
+(../artifacts/macos-first/m015-arena-panic-joint-v1-acceptance.json).
+The two independent worker harnesses pass unchanged strict original/generated
+catalog assertions. Private tests in module b remain distinct qualified entries
+while public root foo still resolves to a::foo; private glob names stay absent.
+Six expected-panic entries retain final source identities and all four string
+reasons with no attribute error. No child Scope certificate was inferred from
+TestCatalog, no bodies or native macro hosts ran, and rereads execute no macro.
+
+Unchanged issue52557 and expected-panic source/run-output closure are retained
+under the original rustc licenses, with commit, blobs, hashes and directives.
+The 2015..2021 runtime fixture semantics remain unexecuted; full stock fixture
+passes remain zero. Builder, compiler, lint and strict metadata failures are
+preserved. The integrated macOS milestone passed 1974 host/doc checks for these additions
+against the 1144 frozen inputs linked above. M015 remains in progress;
+annotation/module routes/argument facts, full MX031/MX032, guest JIT, release
+and Linux acceptance remain pending.
+
+
+The ordinary and nested-generated Items failure-retention repair is now integrated
+as a candidate. Exact malformed owned output keeps its primary diagnostic across
+poll/admission/seal/publication/catalog requests; foreign replies preserve valid
+owned demands and already accepted-output accounting. The private candidate passed
+three focused, 182 library and 61 source-discovery tests, format and strict workspace
+Clippy against 3015 frozen inputs. See [the component receipt]
+(../artifacts/macos-first/m015-required-admission-repair-generated-v1-acceptance.json).
+The integrated milestone passed 1977 host/doc checks against 3465 frozen
+inputs, including full production/test/vendor/tools/docs source and literal include
+closure. All nine checks pass; source bytes and membership remain unchanged. The independent derive-bad MacroRun attempt already
+rejects malformed Items in adapter procedural grammar validation before schema construction and database adoption; its original
+append-target harness expectation failed and its corrected native control has now passed independent joint validation. No live body or full stock fixture pass is inferred.
+
+
+The bounded original associated compiler Test repair is integrated as a candidate.
+Associated annotations retain declaration-worklist ownership; a resolved compiler
+Test target is checked against its exact captured attachment before inert retirement.
+Invalid targets retain the primary error and cannot publish a seal; disabled targets
+stay excluded. Selected ordinary signatures remain deferred. Private acceptance
+passed six focused,185library,61source-discovery,three module-edition,one unchanged
+original associated fixture control and two deferred-signature-prefix controls,
+format and strict workspace Clippy. The serial native joint run additionally passed
+all three derive-bad controls with two actual callbacks. See
+[the joint receipt](../artifacts/macos-first/m015-required-admission-repair-test-target-v3-native-acceptance.json).
+
+The unchanged derive-bad harness now exercises actual adapter grammar refusal before
+schema construction/database adoption. MacroRun closure and separate-session cached
+error replay retain their distinct diagnostics; no output record or invalid catalog
+is fabricated. The unchanged module-edition harness confirms existing raw semantic
+path reconstruction for a2021definition/2024caller; its hypothesized route bug was
+not reproduced and no production route correction was made. Stock outer generated
+macro recompilation and both full edition revisions remain unexecuted.
+
+The official derive-bad, nested-macro-edition and three test-attribute source closures
+are retained unchanged with original auxiliaries,revisions,expected stderr,commit,
+blobs and both rustc licenses. Inventory is51cases/104files; full stock passes remain
+zero. The earlier6-control target harness preserves three unresolved prerequisites
+and is not integrated or counted as passing. Generated associated and non-function
+completion remain pending. The fresh integrated macOS milestone passed1986host/doc checks against3486fixed
+source/include inputs, with all9checks0 and unchangedbytes/membership. M015,
+full MX031/MX032, module routes,argument facts,guest JIT,release and Linux remain
+unfinished.
+
+
+Original non-function and generated compiler Test target repairs are integrated
+as a candidate. Unowned module/constant annotations keep cold worklist ownership;
+enclosing ordinary transformations keep their complete sequence. Generated targets
+resolve the compiler facet and inert prefix before eligibility checks. Associated
+methods use the exact captured AST attachment before annotation retirement.
+Nested failures retain their primary diagnostic across poll/publication/catalog
+requests without signature/body/thunk preparation or seal publication.
+
+Private joint validation passed all ten checks:188library,61source-discovery,
+12unchanged target-eligibility controls,7unchanged generated-frontier controls,
+6unchanged cfg/attribute metadata controls,3module-edition and3real procedural
+admission controls with2callbacks, format and strict workspace Clippy. All3039
+source/include inputs and membership remained unchanged. See [the joint receipt]
+(../artifacts/macos-first/m015-required-admission-repair-generated-associated-joint-v1-acceptance.json)
+and [E-M015-008](errata/m015-generated-test-target-refinements.md).
+
+The metadata controls preserve original/generated malformed attribute errors,
+final ignore and expected-panic flags, active/inactive cfg_attr decisions and
+ordinary invalid-signature metadata without preparing selected bodies. The four
+new official source cases and complete source/output closure bring the retained
+inventory to55cases/110files. Full stock passes remain0; these are language
+components and LRR authority/seal assertions, not stock stderr/runtime parity.
+The procedural Test-shadow startup-path witness is separate and unresolved.
+Fresh integrated macOS milestone passed2014host/doc checks against3497fixed
+source/include inputs and membership,all9checks0. M015,fullMX031/MX032,module routes,
+argument facts,guestJIT,release andLinux acceptance remain unfinished.
+
+
+The procedural Test startup repair is integrated as a candidate. Both catalog
+installation paths reserve the same captured original Test candidates before
+polling; execution still requires actual procedural facet selection and separate
+macro authority. The original early path incorrectly sealed original tests with
+zero macro calls despite an exact prepared Attribute export. The unchanged late
+path isolated that lifecycle gap. See [E-M015-009](errata/m015-procedural-test-startup.md).
+
+Unchanged named/renamed early/late and module/constant controls passed in both the
+worker and parent private roots: eight controls,six actual callbacks,exact returned
+and published definitions,one record per invocation,repeated empty sealed catalogs,
+no compiler Test registration and no signature/body/thunk preparation. The module/
+constant overlap hypothesis did not reproduce; existing replacement proofs retire
+covered cold annotations. No production change was made for that hypothesis.
+The historical zero-selected source check is explicitly unexecuted,not acceptance.
+The existing catalog,re-emission,cfg/name and malformed-output controls also pass.
+See [the independent joint receipt](../artifacts/macos-first/m015-required-admission-repair-proc-test-shadow-nonfunction-joint-v1-acceptance.json).
+
+Inventory stays55cases/110files under the original rustc licenses; full stock
+passes remain0. Associated procedural method grammar is a separate pending probe.
+Fresh lifecycle macOS milestone pending; last completed milestone2014checks.
+M015,fullMX031/MX032,module routes,argument facts,guestJIT,release andLinux remain
+unfinished.
+
+Procedural Test startup integration passed the fresh macOS milestone: 2022 actual host/doc checks, 3501 unchanged source/include inputs and membership, all nine checks zero. Associated attribute grammar has private acceptance; its integration remains pending. M015, full stock fixture parity, JIT, release and Linux remain incomplete.
+
+Contextual cold/generated Attribute grammar propagation is integrated as a candidate. The exact original associated producer, actual request and real schema-checked record retain ImplItems, with one callback, no root new, repeated empty sealed catalog and no body queries. Parent and independent worker acceptance plus 60 broad private controls passed; see [E-M015-010](errata/m015-associated-attribute-grammar.md). The separate ordinary decorated-associated header owner prerequisite is retained as failing and does not count as compiler Test target acceptance. Fresh integrated milestone pending; last completed macOS checkpoint 2022 checks. Full M015, stock parity, JIT, release and Linux remain incomplete.
+
+The contextual grammar integrated gate failed three existing generated-cold procedural attribute controls at a remaining Items-only DeclarationFragment binding check. The full 3504 source/include bytes and membership were unchanged; interpreter validation was unexecuted after the failure. No 2026 checkpoint passed. Last completed macOS checkpoint remains2022. Failure evidence: artifacts/macos-first/m015-associated-attribute-grammar-main-failure.json. Parent is repairing the exact captured grammar binding in a separate private root. Independently validated lexical target and original outline ownership fixes remain private components; full M015/JIT/release/Linux acceptance is pending.
+
+The contextual attribute grammar candidate's failed main milestone is retained;
+checkpoint2022 remains the last completed macOS milestone. The exact generated
+attribute binding, generated compiler Test lexical eligibility and original
+associated producer routing repairs are integrated candidates with private
+acceptance. Unchanged source/native controls cover local Statements, ImplItems
+and TraitItems, including a macro-generated trait, real captured requests/records,
+required free-function refusal without sealing and repeated empty sealed catalogs
+where appropriate, with no body queries. The licensed inventory is57 cases/114
+files, preserving original sources, auxiliaries, directives, expected output and
+both licenses. Components do not count as full stock fixture passes: that remains0.
+See E-M015-010 through E-M015-013 and the private acceptance receipts. Fresh
+integrated milestone is pending. M015/full MX031/MX032, guest JIT, release and
+Linux acceptance remain incomplete.
+
+The combined contextual attribute binding/ownership milestone passed 2042 actual host/doc checks with3517 unchanged source/include bytes and membership/all9checks0. Earlier three-failure grammar milestone remains preserved; it was never checkpoint2026. Inventory57/114/fullstock0. Separate original doc-attribute order repair is under private validation; this checkpoint does not include it. FullM015/MX031/MX032/JIT/release/Linux remain pending.
+
+The original doc-attribute ordering repair is an integrated candidate after two parent regressions,196 library/30 adapter/14 attribute/67 scan/61 source-discovery checks, format/strictClippy, five unchanged legacy native controls and independent parent/worker final source/native controls. Actual bar→foo callbacks2/records2 retain interleaved doc attributes and replace the invalid literal with3; final current catalog/known+absentfilters/repeatedreads/body0 were exercised. Earlier original-aux panic and the new harness missing generated-continuation stage remain preserved. Inventory58/117/fullstock0. Fresh milestone pending; last completed combined associated checkpoint2042. See E-M015-014. M015/fullMX031/MX032/JIT/release/Linux remain incomplete.
+
+Original doc-attribute order integration passed the fresh macOS milestone: 2046 actual host/doc checks,3523 unchanged source/include bytes and membership,all9checks0. Main inventory58/117/fullstock0. Both originalbar and generatedfoo callbacks, catalog metadata and filters were exercised; stock consumer typechecking/body/runtime fixture semantics were not. FullM015/MX031/MX032/JIT/release/Linux acceptance remains incomplete.
+
+M015 inert Attribute-facet resolution is integrated from independently validated production. Current private core passed 200 library, 61 source-discovery, 67 declaration-scan and eight catalog tests; parent and worker each passed all nine actual native controls plus source provenance. Seven Attribute conflicts prevent sealing, two FunctionLike contrasts retain flags, and the sole legitimate prefix callback runs once. Final-attribute ignore/filter policy assertions are also integrated. The fresh main macOS milestone is pending; the last accepted milestone remains 2046 host/doc tests. Unchanged official inventory is 59 cases/119 files at ae0fe511b15ab760d7e963b13389d1bc2ab42b18. Full stock fixture passes remain zero. Full M015/MX031/MX032/JIT/release/Linux acceptance remains incomplete. See [the integration record](../artifacts/macos-first/m015-inert-attribute-resolution-integration.json).
+
+The combined M015 compiler/procedural inert Attribute-facet correction is integrated. Both compiler startup paths reserve exact free-function Test annotation work in one deterministic source pass; invalid non-function targets retain scanner ownership. Private current core202library/62source-discovery/67scan/8catalog checks passed, along with all13 unchanged worker source controls and parent source1/native11 controls (13actual observations/five legitimate callbacks/body0). Earlier disk-full failures are preserved and have no milestone pass. The latest accepted main remains2046; a fresh combined gate is pending. Inventory59/119/fullstock0; M015/MX031/MX032/JIT/release/Linux incomplete. See [the integration record](../artifacts/macos-first/m015-compiler-inert-attribute-integration.json).
+
+
+M016 generated body/fault and blocked-producer origin components are integrated after private validation. Checked generated-body spans and entered-frame fault origins, with exact owned invocation/definition/token facts; stock generated module whole main completes and zero-fuel generated callee faults; a newline-only immutable snapshot refuses stale attachments. Blocked generated println declaration producer now keeps the original incomplete-catalog failure and an admitted name token origin without body queries. Whole macro-as-fn-body remains unresolved; all native compiletest parity, complete MX033/MX034, include/procedural chains, complete guest stacks, worker/service forwarding, cache remapping, guest JIT, release and Linux acceptance remain pending. The stock inventory is73 cases/147 unchanged files at ae0fe511b15ab760d7e963b13389d1bc2ab42b18, retaining both rustc licenses; full stock fixture passes remain0. Private source snapshots remain separate scopes. Last accepted main milestone is2095 actual host/doc tests,all9 checks0 on3574 unchanged inputs; the fresh integrated milestone is pending. See [the integration record](../artifacts/macos-first/m016-generated-origin-integration.json).
+
+
+M016 guest-stack and procedural-origin components are integrated after current-source-guarded private acceptance. Entered guest stacks retain real caller frames through fallible return cleanup, with bounded owned raw PCs/source origins and redacted bundle summaries. Original procedural attributes retain the exact original meta independently of the unchanged native call-site anchor. Generated function/attribute/derive request builders use the validated root-to-leaf expansion ancestry; generated ancestor labels use actual owned token sites. The unchanged rustc custom-attr-panic source and auxiliary trigger the actual matched-server panic with preserved primary code/message, original invocation and host definition; failure adopts neither expansion nor discovery seal. Six selected combined controls executed once under exact checkout/embedded-source guards, alongside strict Clippy; no whole-suite claim is inferred. Full MX033/MX034, include chains, service forwarding, cache remapping, guest JIT, release and Linux acceptance remain pending. Retained stock inventory is74 cases/149 unchanged original files, including directives, expected output and both licenses. Twelve upstream source cases supply scoped M016 observations; full stock fixture passes remain0. The last main milestone has2098 actual host/doc tests and18 M016 controls; fresh integrated validation is pending. See [the integration evidence](../artifacts/macos-first/m016-meta-chain-origin-integration.json).
+
+
+M016 now retains checked include producer chains and revalidated admitted include blobs in success and partial-failure diagnostics. Cold original declaration and intrinsic argument compiler demands use their exact hygienic selection and immutable lexical prefixes through the existing eager worklist. Bounded private argument snapshots omit only their own invocation position while leaving the live pending index unchanged, and statement-position include parses one expression as in the pinned rustc implementation; captures and record adoption remain explicit. Shared pinned grammar and declaration materialization reject ERROR syntax nodes even when the pinned parser diagnostic list is empty, so malformed or trailing tokens cannot be admitted as complete compiler output. Parser failures keep the actual opening-parenthesis API anchor and primary code/message without adopting output or a seal. Original function-like and derive requests forward their exact bound original occurrence and native definition header on actual matched-server panic, preserving prior attachment failures and cancelling the failed run. Procedural definition maps distinguish function-like, attribute and derive forms and capture only loaded exact exports. The renderer can accept bounded immutable snapshots keyed by exact unit, with content/range checks, conflict refusal, unit/snapshot disambiguation and no render-time source I/O. Compiler requests from included intrinsic arguments now require their exact admitted source view, including the actual span, source identity, origin/context and unchanged input leases; stale, missing or ambiguous included worlds refuse. Service supply of native external worlds and full schema forwarding remain pending. The final ancestry control executes exactly once with strict Clippy on its frozen candidate; the single-expression control passed on its separately frozen grammar-repair ancestor whose ancestry failure remains preserved. Four earlier include-capture/procedural/shadowing controls passed on their frozen ancestor whose two include failures remain preserved. Earlier header/renderer/line-map controls retain separately scoped evidence. These are separate snapshots and are not one combined all-six validation run. Unchanged official sources, auxiliaries, directives and expected output are retained at the recorded pin. No whole compiletest fixture passes are inferred. Full MX033/MX034, generated cold compiler source worlds, complete cache remapping, guest JIT, release and Linux remain pending.
+
+
+M016's available diagnostic component is accepted under Section57.1/E-57-001;
+full MX033/MX034 remain pending and release_complete=false. The collected macOS
+milestone passed2115 host/doc tests and all35 named M016 controls on unchanged
+3596 inputs/39483605bytes. All9 check codes were0 across preserved first driver
+3104/1 (five checks passed, cleaned xtask launch failed) and resumed59182/0
+(remaining four checks passed); no single all-nine driver succeeded. Independent
+collector24914/0 preserved its earlier28571/1 reporting-field failure. See
+[component scope](m016-component-acceptance.md). MAIN inventory78/158/fullstock0.
+T040 is now in progress in fixed order. Its private deferred schema/descriptor/
+partial-owner-guard draft has nine unexecuted controls and seven additional stock
+cases, privately85/168. It is not integrated or accepted; actual aggregate commit,
+VM constructors, guest panic cleanup and full stock execution remain unfinished.
+
+
+Current T040 work remains private and unaccepted. Two source-frozen candidates
+stopped at strict Clippy:3983/101 on the pinned parser's already-borrowed Name::text
+API, then31841/101 on an unnecessary owned string comparison in a harness helper.
+Independent collectors exited0; both failures and the separate zero-command
+validation-wrapper failure are retained. No architecture or T040 named control
+ran in either failed source scope. The third candidate fixes both mechanical
+issues and shares its field cap across all active enum variants. It has13 pending
+controls and privately87 unchanged stock cases/170 original retained files.
+MAIN remains78/158/fullstock0 with no T040 production integration. M016's accepted
+2115-test diagnostic component remains provisional for final MX033/MX034 and
+release acceptance. See [private progress](../artifacts/macos-first/t040-schema-total-limits-draft-progress.json).
+
+T040 schema-total-limits v3 terminated75003/101 with independent collector0. Strict Clippy and fresh architecture passed,11 exact controls passed, source-name control failed, and final enum field-cap control was unexecuted. All3611 source inputs remained unchanged. Failure evidence is retained under artifacts/macos-first/t040-schema-total-limits-controls-v3-retained-failure. No production integration, full stock pass or task acceptance is claimed. The stock shadowing fixture contains a pending import that the harness must settle through ordinary production import resolution.
+
+The T040 import-settlement harness-only successor passed strict Clippy and both selected controls1/0/0 with outer45989/0 and independent collector0. Its3611 inputs remained unchanged. The eleven prior successful controls were not rerun. Source bool remains suspended until the original import resolves, then retains its captured source identity; forged schema rejection and enum total field cap now have scoped passing evidence. The source-checked nominal guard/storage successor remains private and unvalidated, with new original enum cold-variant and record-update fixtures. MAIN inventory and full stock count remain78/158/0.
+
+The private T040 nominal draft now admits construction only through an opaque source/schema-checked variant witness. Primitive field identities preserve isize/i64 distinctions; a nominal guard cannot be committed as a structural/unit value, nor can a structural field list forge nominal admission. Only the selected enum variant is bound, with source/generic/compound demands retained. Its first validation stopped36908/101 at one unused import (collector0; architecture and18 selected controls unexecuted); an immutable import-cleanup successor is under async validation. An independently owned constructor-plan successor retains written operands, unary tuples, zero-repeat initializer, record-update base, source/body/profile/cfg and token editions; its19 registered controls are unvalidated. No T040 production integration or full stock execution is claimed.
+
+T040 deferred schema/worker descriptor/source-checked nominal guard/storage components are integrated candidates across31 reviewed paths. Before copying, every existing MAIN path matched its M016 frozen baseline and every candidate input hash was rechecked. Private16 T040+2 VM controls passed exactly1/0/0 each; Clippy and architecture passed separately on the identical source manifest. External zero-filter and pre-dispatch tooling failures are retained. MAIN current milestone is pending; T040 remains in_progress and incomplete. Inventory is89 unchanged upstream cases/172 original files; full stock passes0. The entered constructor-plan successor stays private and unvalidated. See artifacts/macos-first/t040-nominal-components-integration.json.
+
+
+The current T040 nominal-component MAIN milestone failed with actual outer3457/1 and independently observed collector0. Seven initial checks passed; gate03 failed and the final interpreter check did not run. The original failing prerequisite was gate00.host_tests: the unchanged stock printing-derive worklist control timed out with LRR-E-MACRO-TIMEOUT at proc_sessions.rs:10624 (157 passed/1 failed/0 ignored in that group); gates01–03 propagate this failure. All3614 inputs/39600917bytes stayed unchanged through collection. No current milestone, full T040, release or Linux acceptance is claimed. See artifacts/macos-first/t040-nominal-components-main-milestone/independent-collection.json and its collection-terminal.json. Constructor source/query/frame/opcode work continues in physically owned private successors, with scoped validation queued separately. MAIN inventory remains89/172/fullstock0.
+
+The isolated MAIN printing-derive reproduction passed the exact named control with one test thread:1 passed/0 failed/0 ignored/157 filtered,47.29s; actual outer86681/0 and corrected read-only collector0. All3614 source inputs/39602359bytes remained unchanged. Two external preflight failures launched no test bodies; the initial collector incorrectly assumed prepared-server receipt stability and its failure is retained. The before/after receipt delta and post-run protocol6 macOS identity were verified. This changes the timeout investigation, not the failed broad milestone verdict; contention remains a hypothesis. [Evidence](../artifacts/macos-first/t040-printing-derive-isolated-evidence-v1/independent-collection.json). Full stock rustc fixture passes0.
+
+The private constructor opcode candidate stopped at strict Clippy:80577/1, nested101, E0603 for a runtime construction-limit constant visible only within runtime. Architecture and11 controls did not execute. An independently owned frozen successor repairs that visibility and adds actual pure source Thunk lowering for tuple/array-list/record phases, schema-bound written-to-declaration maps, caller field visibility, and bound initializer hints before operand execution. The original stock order4 and shorthand-unknown-field fixtures are retained unchanged; private inventory91 cases/175 files, MAIN89/172. Repeat and record update remain explicit unsupported paths pending their required const/Copy/base-transfer work. One15-control scoped batch is submitted asynchronously; the3617 inputs/39706712bytes remain frozen, no component acceptance or integration yet. [Candidate record](../artifacts/macos-first/t040-constructor-source-binding-draft-progress.json).
+
+The private source-binding batch85974/1 stopped at four E0433 nested test-module imports; after a physically owned import repair,75939/1 stopped at a single Clippy filter_next lint in the unary tuple helper. Both corrected read-only collectors exited0, both sources stayed unchanged, and neither architecture nor15 selected controls executed. Failures are retained, not passes. A new owned source-resolution successor repairs that lint and adds original-AST record path capture paired to the exact plan/source/cfg, actual SourceLocalIndex lexical/hygienic lookup, caller generic parameter and owner-context demands, schema/source checks, typed deferred names/field views, and a RuntimeMacroContext bridge using immutable publication/no-item certificates. The bridge is not invoked by RunMachine yet. Unchanged stock large-records.rs adds a12-field binding/duplicate-catalogue-owner control; private inventory92/176, MAIN89/172, full stock fixture passes0. This3619-input/39728779-byte candidate is frozen for one16-control async validation batch; no pass or integration is claimed. [Candidate record](../artifacts/macos-first/t040-constructor-source-resolution-draft-progress.json).
+
+Source-resolution51159/1 stopped on an extra reference around captured_macro_cfg(), which already returns &CfgSet. Owned cfg-fix18504/1 then stopped at an unfulfilled lint expectation; owned lint-fix55292/1 stopped at question_mark in the stock test helper. All independent collectors exited0 with source/provenance unchanged; no architecture or16 selected test bodies ran. All failures are retained. The new3619-input/39728606-byte qmark successor corrects these mechanical issues without suppression and is frozen for one16-control background batch, reusing external Cargo dependencies while invoking architecture from the current candidate. Source binding/context bridge remains unintegrated and unaccepted. [Candidate](../artifacts/macos-first/t040-constructor-source-resolution-qmark-fix-draft-progress.json).
+
+Cleanup review confirms the ordered integration boundary: finish_panic/finish_return still use scalar scope retirement; preflight_leave explicitly refuses active constructor guards, and set_source_view refuses composite symbolic terms until table integration. Constructor cleanup APIs transfer completed field tickets once in reverse completion order, but ordinary resumable guest Drop and composite source-view propagation are pending. These restrictions are not full partial-constructor-panic acceptance. T040 remains in_progress, release_complete=false; full stock fixture passes0.
+
+Owned qmark-fix87993/1 reached xtask compilation and stopped on an existing scalar assertion comparing27 expected opcode slots with the expanded30-slot counter. Corrected read-only collector0 verified unchanged source; architecture and16 controls did not run. A complete static inventory of counter-array assertions found exactly one stale27-slot assertion. Its owned repair appends the three unused constructor counters as zero, preserving the first27 expectations, and includes that affected thunk_queries control in the new17-control async selection. The3619-input/39728631-byte source is frozen and retained fully for recovery; no pass or integration yet. [Source snapshot](../artifacts/macos-first/t040-constructor-source-resolution-counter-fix-source-snapshot/manifest.json). Full stock fixture passes0; current milestone remains failed.
+
+
+The frozen T040 constructor/source-binding counter-fix candidate passed strict Clippy, the fresh architecture audit and all17 exact serial controls (13 new plus4 existing), each1 passed/0 failed/0 ignored. Actual outer12572/0 and independent collector0 verified unchanged3619 inputs/39728631 bytes and pinned92-case/176-file provenance. These are component checks; full stock fixture passes remain0. The source-aware binding/context bridge remains private and is not connected to RunMachine dispatch; production integration and its fresh milestone are pending. MAIN retains89 cases/172 files and its current milestone failure. [Scoped evidence](../artifacts/macos-first/t040-constructor-source-resolution-counter-fix-scoped-evidence-v1/controls-v1-report.json).
+
+
+The private reached record-constructor dispatcher now prepares the exact checked source/schema binding before opcode fuel or guard allocation, reuses matching completed runtime macro contexts, and refuses fabricated original hygiene for generated sources. Original Large constructor-prefix controls passed with both plain and completed-context dispatch, plus missing-source-owner refusal, on frozen context candidate19932 (three exact1/0/0 controls). Clippy and architecture passed on that candidate; the batch then failed on a cleanup test handle-budget assumption. The prior E0624 helper visibility, E0599 test API spelling and13-vs26 operation-count failures remain retained. The fuel-prefix repair accounts for26 operations plus26 exits (52 fuel); production charging was unchanged. Append-only arena handles retain tombstone charges; the next owned test-only repair expects one cleanup-ticket handle and no handle for empty guard retirement. Its eight selected cleanup/regression controls are running asynchronously; the three unchanged dispatch controls are not rerun.
+
+A separately frozen Drop-admission successor imports unchanged rustc unit-like-struct-drop-run.rs (private93 cases/177 files). Live aggregates cannot borrow scalar cleanup admission merely because they have no fields or no cached destructor witness. The source-backed empty nominal schema regression checks refusal before owner/cursor/fuel effects; the full threaded body and guest Drop are unexecuted. Partial constructor panic cleanup currently drains completed builtin scalar fields and empty guards only; aggregate field destructor dispatch and bounded resumable cleanup remain pending. This successor is unvalidated and fully retained for recovery. MAIN production remains the prior nominal-component integration with89 cases/172 files, failed current milestone, T040 in_progress, release_complete=false and full stock passes0. [Source snapshot](../artifacts/macos-first/t040-constructor-drop-admission-source-snapshot/manifest.json).
+
+
+The frozen append-only handle-expectation successor completed actual outer9844/0 and independent collector0. Strict Clippy, fresh architecture audit and all eight selected controls passed exactly1/0/0; all3620 inputs/39753711 bytes stayed fixed. The three unchanged dispatch controls passed on the retained predecessor and were not repeated. This is segmented scoped evidence, not a single11-control successful driver or an integrated milestone. Scalar/empty partial guard cleanup and existing scalar/call panic behavior now have collected passing evidence. Drop-admission successor remains separate/unvalidated; T040/full stock/release/Linux remain incomplete. [Scoped evidence](../artifacts/macos-first/t040-constructor-panic-handle-fix-scoped-evidence-v1/independent-collection.json).
+
+
+The integrated T040 initializer-source macOS milestone passed2160 actual host/doc tests,0 failed/ignored and all45 registered T040 controls exactly once. All nine checks passed with actual outer13409/0 and independent collector57148/0, including a fresh MAIN CLI build and default interpreter/native metadata-reference check. All3630 source/include inputs and membership stayed unchanged through collection;100 upstream cases/186 original files and11 legacy fixtures were verified. Full stock passes remain0 and T040 remains in_progress. The separate joint initializer-return/structural-dispatch successor is unvalidated, with9 new stock-based controls and104 private cases/191 original files; no MAIN integration or new feature acceptance follows from that draft. Evidence: [current collected milestone](../artifacts/macos-first/t040-initializer-source-components-main-milestone-v1/independent-collection.json) and [terminal receipt](../artifacts/macos-first/t040-initializer-source-components-main-milestone-v1/collection-terminal.json).
+
+# Current status — reference milestone accepted on macOS
+
+The integrated reference components passed the current macOS milestone with
+2,329 project test bodies across179 executables,0 failed/ignored. All73 T042 and21
+T043 controls,updatedH002 and the2000-frame bounded-stack event passed once. Seven
+unchanged-source CLI program observations completed on the freshly built immutable
+CLI; these repeat existing coverage and do not increase unique rustc pass counts.
+
+This is segmented acceptance: the initial runner exited1 on Python tomllib
+environment failures. Its first seven successful checks and all failure receipts
+remain preserved. With Python3.14.8 selected explicitly, the failed gate and nine
+unexecuted suffix checks completed; the corrected suffix runner and independent
+collector both exited0 on the unchanged frozen source.
+
+MAIN retains153 official cases/270 unchanged original files with both licenses,
+13 recorded program observations/54 original assertions across snapshots, and
+0 full rustc compiletest fixture passes. T043 remains in_progress. General patterns,
+source/type/Drop integration, production guest JIT, release and Linux are unfinished.
+Private cast/borrow-context/original-frontier successors remain unvalidated.
+
+[Collected milestone](../artifacts/macos-first/t043-reference-components-integration-v9/current-main-reference-milestone-v2/suffix-independent-collection.json).
+

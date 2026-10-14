@@ -1,0 +1,2157 @@
+--- a/crates/lrr/src/frontend/index_source_selection.rs
++++ b/crates/lrr/src/frontend/index_source_selection.rs
+@@ -0,0 +1,957 @@
++//! Bounded source-facade Index selection. Unknown live candidates stay unresolved.
++//! No parser, guest value/tag, native generation, provider callback or public witness constructor.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::{
++        dependency::{DependencyStamp, InputKey, InputValue},
++        memo::Database,
++        seals::{SealDomain, SealKey},
++    },
++    frontend::names::{NameLookup, NameNamespaces},
++    ir::op::PrimitiveType,
++    source::{
++        changes::{PreparedSourceView, SourceSelection},
++        manifest::{DefKey, Namespace},
++        value_library_selection::PreparedValueLibrarySelection,
++    },
++    syntax::{
++        outline::ScopeKey,
++        standard_index_headers::{IndexHeaderRole, IndexSourceFact, IndexSourceHeaders},
++    },
++    traits::term::{GenericArg, TraitRef, TyTerm},
++};
++use std::{
++    collections::{BTreeMap, BTreeSet},
++    sync::Arc,
++};
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-INDEX-SELECTION", message.into())
++}
++/// Data outcome is separate from a private-minted selected intrinsic member.
++#[derive(Debug)]
++pub enum IndexSelection {
++    Selected(Box<SelectedIndexIntrinsic>),
++    NeedGoalEngine { candidates: Vec<Digest> },
++    NeedSourceType,
++    NoSolution,
++}
++#[derive(Debug, Clone, Copy, Eq, PartialEq)]
++pub enum IndexReceiverKind {
++    Vec,
++    SliceReference,
++}
++/// Pure source proof; it never embeds worker TypeIds, cells, epochs or addresses.
++#[derive(Debug, Clone)]
++pub struct SelectedIndexIntrinsic {
++    library: Digest,
++    publication: Digest,
++    consumer: SourceSelection,
++    source_revision: u64,
++    seal: SealKey,
++    seal_input: Digest,
++    catalog: Digest,
++    receiver: TyTerm,
++    kind: IndexReceiverKind,
++    element: PrimitiveType,
++    mutable: bool,
++    trait_goal: TraitRef,
++    implementation: Digest,
++    member: DefKey,
++    delegation: Vec<Digest>,
++    dependencies: Vec<DependencyStamp>,
++}
++impl SelectedIndexIntrinsic {
++    pub fn receiver(&self) -> &TyTerm {
++        &self.receiver
++    }
++    pub fn receiver_kind(&self) -> IndexReceiverKind {
++        self.kind
++    }
++    pub fn element(&self) -> PrimitiveType {
++        self.element
++    }
++    pub fn mutable(&self) -> bool {
++        self.mutable
++    }
++    pub fn member(&self) -> &DefKey {
++        &self.member
++    }
++    pub fn implementation(&self) -> Digest {
++        self.implementation
++    }
++    pub fn goal(&self) -> &TraitRef {
++        &self.trait_goal
++    }
++    pub fn delegation(&self) -> &[Digest] {
++        &self.delegation
++    }
++    pub fn dependencies(&self) -> &[DependencyStamp] {
++        &self.dependencies
++    }
++    pub(crate) fn revalidate(
++        &self,
++        db: &Database,
++        source: &PreparedSourceView,
++        graph: &NameNamespaces,
++        headers: &[Arc<IndexSourceHeaders>],
++    ) -> Result<(), Diagnostic> {
++        let current = CurrentIndexLibrary::capture_current(db, source, graph, headers, &self.seal)?;
++        let IndexSelection::Selected(fresh) = current.select(
++            &self.receiver,
++            &TyTerm::Primitive(PrimitiveType::Usize),
++            self.mutable,
++        )?
++        else {
++            return Err(fault(
++                "selected Index source candidate/context became unresolved",
++            ));
++        };
++        if fresh.fingerprint() != self.fingerprint() {
++            return Err(fault("selected Index source/library/world/input is stale"));
++        }
++        Ok(())
++    }
++    pub fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
++        let mut bytes = std::mem::size_of::<Self>()
++            .checked_add(self.consumer.metadata_bytes()?)
++            .and_then(|n| n.checked_add(self.receiver.heap_bytes()?))
++            .and_then(|n| n.checked_add(self.delegation.capacity().checked_mul(32)?))
++            .and_then(|n| {
++                n.checked_add(
++                    self.dependencies
++                        .capacity()
++                        .checked_mul(std::mem::size_of::<DependencyStamp>())?,
++                )
++            })
++            .filter(|n| *n <= 32 * 1024 * 1024)
++            .ok_or_else(|| fault("selected Index witness metadata bound"))?;
++        bytes = bytes
++            .checked_add(
++                self.trait_goal
++                    .self_ty
++                    .heap_bytes()
++                    .ok_or_else(|| fault("Index goal metadata overflow"))?,
++            )
++            .ok_or_else(|| fault("Index goal metadata overflow"))?;
++        for definition in [&self.member] {
++            bytes = bytes
++                .checked_add(definition.declared_name.capacity())
++                .and_then(|n| {
++                    n.checked_add(
++                        definition
++                            .module_path
++                            .capacity()
++                            .checked_mul(std::mem::size_of::<String>())?,
++                    )
++                })
++                .ok_or_else(|| fault("Index definition metadata overflow"))?;
++            for segment in &definition.module_path {
++                bytes = bytes
++                    .checked_add(segment.capacity())
++                    .ok_or_else(|| fault("Index definition metadata overflow"))?;
++            }
++        }
++        for dependency in &self.dependencies {
++            bytes = bytes
++                .checked_add(dependency.heap_bytes())
++                .ok_or_else(|| fault("Index dependency metadata overflow"))?;
++        }
++        bytes = bytes
++            .checked_add(
++                self.trait_goal
++                    .args
++                    .capacity()
++                    .checked_mul(std::mem::size_of::<GenericArg>())
++                    .ok_or_else(|| fault("Index argument metadata overflow"))?,
++            )
++            .filter(|n| *n <= 32 * 1024 * 1024)
++            .ok_or_else(|| fault("Index witness metadata bound"))?;
++        Ok(bytes)
++    }
++}
++/// Ephemeral admission retains immutable current database and namespace borrows.
++/// The VM can consume this token once; it cannot mint one from descriptor tags.
++pub(crate) struct AdmittedIndexIntrinsic<'a> {
++    selected: &'a SelectedIndexIntrinsic,
++    _db: &'a Database,
++    _source: &'a PreparedSourceView,
++    _graph: &'a NameNamespaces,
++    _headers: &'a [Arc<IndexSourceHeaders>],
++    _operand: &'a crate::syntax::macro_index_source::MacroIndexOperand,
++}
++impl<'a> AdmittedIndexIntrinsic<'a> {
++    pub(crate) fn selected(&self) -> &SelectedIndexIntrinsic {
++        self.selected
++    }
++}
++impl SelectedIndexIntrinsic {
++    pub(crate) fn admit_current<'a>(
++        &'a self,
++        db: &'a Database,
++        source: &'a PreparedSourceView,
++        graph: &'a NameNamespaces,
++        headers: &'a [Arc<IndexSourceHeaders>],
++        operand: &'a crate::syntax::macro_index_source::MacroIndexOperand,
++    ) -> Result<AdmittedIndexIntrinsic<'a>, Diagnostic> {
++        self.revalidate(db, source, graph, headers)?;
++        if operand.source() != &source.selection().outline.parse
++            || operand.cfg() != source.selection().outline.cfg
++            || self.mutable
++        {
++            return Err(fault(
++                "assertion Index operand source/cfg/shared-use context differs",
++            ));
++        }
++        let index = source.index_body(
++            source.selection(),
++            operand.body(),
++            crate::syntax::body_index::BodyIndexLimits::default(),
++        )?;
++        if index.pc(operand.node(), crate::ir::pc::Phase::Entry)? != *operand.macro_entry()
++            || index
++                .nodes()
++                .get(operand.node().0 as usize)
++                .is_none_or(|node| {
++                    node.role
++                        != crate::syntax::body_index::NodeRole::Expression(
++                            crate::syntax::body_index::ExpressionKind::Macro,
++                        )
++                })
++        {
++            return Err(fault(
++                "Index operand is not the actual current Macro source PC",
++            ));
++        }
++        Ok(AdmittedIndexIntrinsic {
++            selected: self,
++            _db: db,
++            _source: source,
++            _graph: graph,
++            _headers: headers,
++            _operand: operand,
++        })
++    }
++}
++/// Read-only admission over opaque preparation, actual declared sources and the
++/// complete published impl catalog. An observed source file alone is insufficient.
++pub(crate) struct CurrentIndexLibrary {
++    selection: Arc<PreparedValueLibrarySelection>,
++    publication: Digest,
++    consumer: SourceSelection,
++    source_revision: u64,
++    seal: SealKey,
++    seal_input: Digest,
++    facts: BTreeMap<IndexHeaderRole, IndexSourceFact>,
++    catalog: Digest,
++    unknown: Vec<Digest>,
++    active: BTreeSet<Digest>,
++    dependencies: Vec<DependencyStamp>,
++}
++impl CurrentIndexLibrary {
++    pub(crate) fn capture_current(
++        db: &Database,
++        source: &PreparedSourceView,
++        graph: &NameNamespaces,
++        headers: &[Arc<IndexSourceHeaders>],
++        seal: &SealKey,
++    ) -> Result<Self, Diagnostic> {
++        if headers.len() > 16 {
++            return Err(fault("Index library source count bound"));
++        }
++        seal.validate()?;
++        let selection_key = InputKey::ValueLibrarySelection(source.selection().outline.crate_key);
++        let (InputValue::ValueLibrarySelection(selection), publication) = db
++            .published_input(&selection_key)
++            .ok_or_else(|| fault("actual selected source-library input absent"))?
++        else {
++            return Err(fault("selected source-library variant differs"));
++        };
++        selection.validate_current(db, source)?;
++        let (InputValue::DiscoverySeal(input), seal_input) = db
++            .published_input(&InputKey::DiscoverySeal(seal.clone()))
++            .ok_or_else(|| fault("current ImplCatalogSeal absent"))?
++        else {
++            return Err(fault("ImplCatalog input variant differs"));
++        };
++        if !matches!(seal.domain, SealDomain::ImplCatalog { .. })
++            || input.seal.key() != *seal
++            || input.scope.is_some()
++            || input.seal.unresolved_frontiers() != 0
++            || !input.declaration_inventory.pending_producers().is_empty()
++        {
++            return Err(fault(
++                "Index selection requires a complete actual impl catalog",
++            ));
++        }
++        if !matches!(db.published_input(&InputKey::ExpansionEpoch),Some((InputValue::ExpansionEpoch(epoch),_))if *epoch==seal.epoch)
++            || !matches!(db.published_input(&InputKey::SourceDependencies),Some((InputValue::SourceDependencies(deps),_))if deps.fingerprint()==input.source_dependencies)
++        {
++            return Err(fault("Index source epoch/dependency world differs"));
++        }
++        let mut dependencies = vec![
++            DependencyStamp::Input {
++                key: selection_key,
++                fingerprint: publication,
++            },
++            DependencyStamp::Input {
++                key: InputKey::DiscoverySeal(seal.clone()),
++                fingerprint: seal_input,
++            },
++        ];
++        for (key, expected) in &input.compiler_inputs {
++            if db
++                .published_input(key)
++                .is_none_or(|(_, actual)| actual != *expected)
++            {
++                return Err(fault("Index sealed source/compiler input changed"));
++            }
++            dependencies
++                .try_reserve(1)
++                .map_err(|_| fault("Index dependency allocation"))?;
++            dependencies.push(DependencyStamp::Input {
++                key: key.clone(),
++                fingerprint: *expected,
++            });
++        }
++        for key in [InputKey::ExpansionEpoch, InputKey::SourceDependencies] {
++            let (_, fingerprint) = db
++                .published_input(&key)
++                .ok_or_else(|| fault("current Index world input absent"))?;
++            dependencies.push(DependencyStamp::Input { key, fingerprint });
++        }
++        let core = selection.provider(false).outline.crate_key;
++        let alloc = selection.allocation_provider().map(|s| s.outline.crate_key);
++        let mut facts = BTreeMap::new();
++        let mut metadata = 0usize;
++        for file in headers {
++            metadata = metadata
++                .checked_add(file.metadata_bytes())
++                .filter(|n| *n <= 32 * 1024 * 1024)
++                .ok_or_else(|| fault("Index catalog metadata bound"))?;
++            let selected = file.source();
++            if selection.observed_source(&selected.path) != Some(selected.outline.parse.content) {
++                return Err(fault(
++                    "Index file absent from actual selected library observations",
++                ));
++            }
++            graph.require_source(selected, file.outline())?;
++            if !input.sources.contains(selected)
++                || !matches!(db.published_input(&InputKey::CapturedSource(selected.location_identity())),Some((InputValue::CapturedSource(current),_))if current==selected)
++                || !matches!(db.published_input(&InputKey::CrateCfg(selected.outline.crate_key)),Some((InputValue::CrateCfg(cfg),_))if cfg.fingerprint()==selected.outline.cfg)
++            {
++                return Err(fault(
++                    "Index owning module/source/cfg not current and sealed",
++                ));
++            }
++            for fact in file.facts() {
++                let (unit, module): (_, &[&str]) = match fact.role() {
++                    IndexHeaderRole::IndexTrait | IndexHeaderRole::IndexMutTrait => {
++                        (core, &["ops", "index"])
++                    }
++                    IndexHeaderRole::SliceIndexTrait
++                    | IndexHeaderRole::SliceIndexImpl
++                    | IndexHeaderRole::SliceIndexMutImpl
++                    | IndexHeaderRole::UsizeSliceIndexImpl => (core, &["slice", "index"]),
++                    IndexHeaderRole::VecType
++                    | IndexHeaderRole::VecIndexImpl
++                    | IndexHeaderRole::VecIndexMutImpl
++                    | IndexHeaderRole::VecDerefImpl
++                    | IndexHeaderRole::VecDerefMutImpl => (
++                        alloc.ok_or_else(|| fault("actual alloc provider root is absent"))?,
++                        &["vec"],
++                    ),
++                    IndexHeaderRole::DerefTrait | IndexHeaderRole::DerefMutTrait => {
++                        (core, &["ops", "deref"])
++                    }
++                    IndexHeaderRole::AllocatorTrait => (core, &["alloc"]),
++                    IndexHeaderRole::SizedTrait | IndexHeaderRole::CopyTrait => (core, &["marker"]),
++                    IndexHeaderRole::GlobalType | IndexHeaderRole::GlobalAllocatorImpl => (
++                        alloc.ok_or_else(|| fault("actual alloc provider root is absent"))?,
++                        &["alloc"],
++                    ),
++                };
++                if fact.definition().crate_key != unit
++                    || fact
++                        .definition()
++                        .module_path
++                        .iter()
++                        .map(String::as_str)
++                        .ne(module.iter().copied())
++                    || fact.source().outline.parse.profile.edition != 2024
++                    || fact.source().outline.parse.profile.semantics
++                        != source.selection().outline.parse.profile.semantics
++                {
++                    return Err(fault(
++                        "Index declaration defining source/unit/edition/profile differs",
++                    ));
++                }
++                let key = InputKey::DefinitionHeader(fact.definition().fingerprint());
++                let (InputValue::DefinitionHeader(header), stamp) = db
++                    .published_input(&key)
++                    .ok_or_else(|| fault("Index declaration header not captured/published"))?
++                else {
++                    return Err(fault("Index declaration header variant differs"));
++                };
++                if header != fact.header() {
++                    return Err(fault("Index exact published declaration header differs"));
++                }
++                dependencies.push(DependencyStamp::Input {
++                    key,
++                    fingerprint: stamp,
++                });
++                for (definition, header, range) in
++                    std::iter::once((fact.definition(), fact.header(), fact.range()))
++                        .chain(
++                            fact.members()
++                                .iter()
++                                .map(|m| (m.definition(), m.header(), m.range())),
++                        )
++                        .chain(
++                            fact.associated_types()
++                                .iter()
++                                .map(|a| (a.definition(), a.header(), a.range())),
++                        )
++                {
++                    let identity = definition.fingerprint();
++                    for key in [
++                        InputKey::DefinitionSource(identity),
++                        InputKey::DeclarationContext(identity),
++                        InputKey::DefinitionHeader(identity),
++                    ] {
++                        let (value, fingerprint) = db.published_input(&key).ok_or_else(|| {
++                            fault("Index declaration/member source context absent")
++                        })?;
++                        let valid = match value {
++                            InputValue::DefinitionSource(parse) => parse == &selected.outline.parse,
++                            InputValue::DeclarationContext(context) => {
++                                context.range == range
++                                    && context.scope.crate_key == definition.crate_key
++                                    && context.scope.module_path == definition.module_path
++                            }
++                            InputValue::DefinitionHeader(current) => current == header,
++                            _ => false,
++                        };
++                        if !valid {
++                            return Err(fault(
++                                "exact Index declaration/member published source context differs",
++                            ));
++                        }
++                        dependencies
++                            .try_reserve(1)
++                            .map_err(|_| fault("Index member dependency allocation"))?;
++                        dependencies.push(DependencyStamp::Input { key, fingerprint });
++                    }
++                }
++                if facts.insert(fact.role(), fact.clone()).is_some() {
++                    return Err(fault("Index source role duplicate"));
++                }
++            }
++        }
++        let mut encoded = StableEncoder::new("lrr/v1/current-source-index-catalog");
++        for fact in facts.values() {
++            encoded.record(fact)
++        }
++        let catalog = encoded.finish();
++        let known = facts
++            .values()
++            .filter_map(IndexSourceFact::impl_source)
++            .collect::<BTreeSet<_>>();
++        let mut unknown = Vec::new();
++        let mut active = BTreeSet::new();
++        if input.declaration_inventory.headers().len() > 100_000 {
++            return Err(fault("Index catalog candidate count bound"));
++        }
++        for header in input.declaration_inventory.headers() {
++            active.insert(header.identity);
++            if !known.contains(&header.identity) {
++                unknown
++                    .try_reserve(1)
++                    .map_err(|_| fault("Index candidate allocation"))?;
++                unknown.push(header.identity)
++            }
++        }
++        // No spelling-based exclusion of a foreign, conditional or blanket candidate.
++        unknown.sort();
++        unknown.dedup();
++        metadata = metadata
++            .checked_add(
++                unknown
++                    .capacity()
++                    .checked_mul(32)
++                    .ok_or_else(|| fault("Index unknown capacity overflow"))?,
++            )
++            .and_then(|n| n.checked_add(active.len().checked_mul(96)?))
++            .and_then(|n| {
++                n.checked_add(
++                    dependencies
++                        .capacity()
++                        .checked_mul(std::mem::size_of::<DependencyStamp>())?,
++                )
++            })
++            .ok_or_else(|| fault("Index admission metadata overflow"))?;
++        for dependency in &dependencies {
++            metadata = metadata
++                .checked_add(dependency.heap_bytes())
++                .ok_or_else(|| fault("Index dependency metadata overflow"))?;
++        }
++        if metadata > 32 * 1024 * 1024 {
++            return Err(fault("Index admission metadata bound"));
++        }
++        let current = Self {
++            selection: selection.clone(),
++            publication,
++            consumer: source.selection().clone(),
++            source_revision: db.source_revision(),
++            seal: seal.clone(),
++            seal_input,
++            catalog,
++            facts,
++            unknown,
++            active,
++            dependencies,
++        };
++        current.require_source_symbols(graph)?;
++        current.require_member_contracts()?;
++        Ok(current)
++    }
++    fn fact(&self, role: IndexHeaderRole) -> Result<&IndexSourceFact, Diagnostic> {
++        self.facts
++            .get(&role)
++            .ok_or_else(|| fault("required source Index declaration/impl absent"))
++    }
++    fn namespace_symbol(
++        graph: &NameNamespaces,
++        from: &IndexSourceFact,
++        name: &str,
++        wanted: &IndexSourceFact,
++    ) -> Result<(), Diagnostic> {
++        let scope = ScopeKey {
++            crate_key: from.definition().crate_key,
++            module_path: from.definition().module_path.clone(),
++            owner: None,
++        };
++        if !matches!(graph.lookup_unqualified(Namespace::Type,name,&scope,2024,None)?,NameLookup::Defined(found)if found.identity==wanted.definition().fingerprint()&&found.defining_unit==wanted.definition().crate_key&&found.definition_edition==2024)
++        {
++            return Err(fault(
++                "Index source header symbol is unresolved/shadowed/foreign",
++            ));
++        }
++        Ok(())
++    }
++    pub(crate) fn require_source_symbols(&self, graph: &NameNamespaces) -> Result<(), Diagnostic> {
++        let index = self.fact(IndexHeaderRole::IndexTrait)?;
++        let index_mut = self.fact(IndexHeaderRole::IndexMutTrait)?;
++        let slice = self.fact(IndexHeaderRole::SliceIndexTrait)?;
++        let vector = self.fact(IndexHeaderRole::VecType)?;
++        let global = self.fact(IndexHeaderRole::GlobalType)?;
++        let allocator = self.fact(IndexHeaderRole::AllocatorTrait)?;
++        for (role, name, wanted) in [
++            (IndexHeaderRole::VecIndexImpl, "Index", index),
++            (IndexHeaderRole::VecIndexMutImpl, "IndexMut", index_mut),
++            (IndexHeaderRole::VecIndexImpl, "SliceIndex", slice),
++            (IndexHeaderRole::VecIndexImpl, "Vec", vector),
++            (IndexHeaderRole::VecIndexImpl, "Global", global),
++            (IndexHeaderRole::VecIndexImpl, "Allocator", allocator),
++            (IndexHeaderRole::IndexMutTrait, "Index", index),
++            (
++                IndexHeaderRole::DerefMutTrait,
++                "Deref",
++                self.fact(IndexHeaderRole::DerefTrait)?,
++            ),
++            (IndexHeaderRole::GlobalAllocatorImpl, "Allocator", allocator),
++            (IndexHeaderRole::UsizeSliceIndexImpl, "SliceIndex", slice),
++            (IndexHeaderRole::SliceIndexImpl, "SliceIndex", slice),
++        ] {
++            Self::namespace_symbol(graph, self.fact(role)?, name, wanted)?
++        }
++        for (role, path, wanted) in [
++            (IndexHeaderRole::SliceIndexImpl, ["ops", "Index"], index),
++            (
++                IndexHeaderRole::SliceIndexMutImpl,
++                ["ops", "IndexMut"],
++                index_mut,
++            ),
++            (
++                IndexHeaderRole::VecDerefImpl,
++                ["ops", "Deref"],
++                self.fact(IndexHeaderRole::DerefTrait)?,
++            ),
++            (
++                IndexHeaderRole::VecDerefMutImpl,
++                ["ops", "DerefMut"],
++                self.fact(IndexHeaderRole::DerefMutTrait)?,
++            ),
++        ] {
++            let from = self.fact(role)?;
++            let scope = ScopeKey {
++                crate_key: from.definition().crate_key,
++                module_path: from.definition().module_path.clone(),
++                owner: None,
++            };
++            let segments = path.map(|s| crate::syntax::imports::ImportSegment::Name(s.into()));
++            if !matches!(graph.lookup_source_path(Namespace::Type, &segments, false, &scope, 2024)?, NameLookup::Defined(found) if found.identity==wanted.definition().fingerprint() && found.defining_unit==wanted.definition().crate_key && found.definition_edition==2024)
++            {
++                return Err(fault("qualified Index/Deref source symbol differs"));
++            }
++        }
++        Ok(())
++    }
++    fn require_member_contracts(&self) -> Result<(), Diagnostic> {
++        let sized = self.fact(IndexHeaderRole::SizedTrait)?;
++        let lang = sized
++            .header()
++            .attributes
++            .iter()
++            .filter(|a| a.name == "lang")
++            .collect::<Vec<_>>();
++        if lang.len() != 1
++            || lang[0]
++                .tokens
++                .iter()
++                .map(|t| t.text.as_str())
++                .ne(["lang", "=", "\"sized\""])
++        {
++            return Err(fault("primitive Sized source intrinsic identity absent"));
++        }
++        for (role, contract) in [
++            (IndexHeaderRole::IndexTrait, "<Idx:?Sized>||"),
++            (
++                IndexHeaderRole::IndexMutTrait,
++                "<Idx:?Sized>|[const]Index<Idx>|",
++            ),
++            (IndexHeaderRole::SliceIndexTrait, "<T:?Sized>||"),
++            (IndexHeaderRole::DerefTrait, "|PointeeSized|"),
++            (
++                IndexHeaderRole::DerefMutTrait,
++                "|[const]Deref+PointeeSized|",
++            ),
++            (IndexHeaderRole::AllocatorTrait, "||"),
++            (IndexHeaderRole::SizedTrait, "|MetaSized|"),
++            (IndexHeaderRole::CopyTrait, "|Clone|"),
++            (
++                IndexHeaderRole::VecIndexImpl,
++                "<T,I:[const]SliceIndex<[T]>,A:Allocator>",
++            ),
++            (
++                IndexHeaderRole::VecIndexMutImpl,
++                "<T,I:[const]SliceIndex<[T]>,A:Allocator>",
++            ),
++            (
++                IndexHeaderRole::SliceIndexImpl,
++                "<T,I>whereI:[const]SliceIndex<[T]>,",
++            ),
++            (
++                IndexHeaderRole::SliceIndexMutImpl,
++                "<T,I>whereI:[const]SliceIndex<[T]>,",
++            ),
++            (IndexHeaderRole::UsizeSliceIndexImpl, "<T>"),
++            (IndexHeaderRole::VecDerefImpl, "<T,A:Allocator>"),
++            (IndexHeaderRole::VecDerefMutImpl, "<T,A:Allocator>"),
++            (IndexHeaderRole::GlobalAllocatorImpl, ""),
++        ] {
++            if self.fact(role)?.parameter_contract() != Some(contract) {
++                return Err(fault(
++                    "Index delegated source generic/predicate contract differs",
++                ));
++            }
++        }
++        for (role, name, signature) in [
++            (
++                IndexHeaderRole::IndexTrait,
++                "index",
++                "fnindex(&self,index:Idx)->&Self::Output",
++            ),
++            (
++                IndexHeaderRole::IndexMutTrait,
++                "index_mut",
++                "fnindex_mut(&mutself,index:Idx)->&mutSelf::Output",
++            ),
++            (
++                IndexHeaderRole::VecIndexImpl,
++                "index",
++                "fnindex(&self,index:I)->&Self::Output",
++            ),
++            (
++                IndexHeaderRole::VecIndexMutImpl,
++                "index_mut",
++                "fnindex_mut(&mutself,index:I)->&mutSelf::Output",
++            ),
++            (
++                IndexHeaderRole::SliceIndexImpl,
++                "index",
++                "fnindex(&self,index:I)->&I::Output",
++            ),
++            (
++                IndexHeaderRole::SliceIndexMutImpl,
++                "index_mut",
++                "fnindex_mut(&mutself,index:I)->&mutI::Output",
++            ),
++            (
++                IndexHeaderRole::UsizeSliceIndexImpl,
++                "index",
++                "fnindex(self,slice:&[T])->&T",
++            ),
++            (
++                IndexHeaderRole::UsizeSliceIndexImpl,
++                "index_mut",
++                "fnindex_mut(self,slice:&mut[T])->&mutT",
++            ),
++            (
++                IndexHeaderRole::VecDerefImpl,
++                "deref",
++                "fnderef(&self)->&[T]",
++            ),
++            (
++                IndexHeaderRole::VecDerefMutImpl,
++                "deref_mut",
++                "fnderef_mut(&mutself)->&mut[T]",
++            ),
++        ] {
++            if self.fact(role)?.member(name)?.signature() != signature {
++                return Err(fault("source Index result/receiver signature differs"));
++            }
++        }
++        for (role, name, expected) in [
++            (IndexHeaderRole::VecIndexImpl, "Output", "I::Output"),
++            (IndexHeaderRole::SliceIndexImpl, "Output", "I::Output"),
++            (IndexHeaderRole::UsizeSliceIndexImpl, "Output", "T"),
++            (IndexHeaderRole::VecDerefImpl, "Target", "[T]"),
++        ] {
++            let fact = self.fact(role)?;
++            let mut types = fact
++                .associated_types()
++                .iter()
++                .filter(|t| t.definition().declared_name == name);
++            if types.next().and_then(|t| t.written_type()) != Some(expected)
++                || types.next().is_some()
++            {
++                return Err(fault("Index source associated result differs"));
++            }
++        }
++        for (role, name, body) in [
++            (IndexHeaderRole::VecDerefImpl, "deref", "{self.as_slice()}"),
++            (
++                IndexHeaderRole::VecDerefMutImpl,
++                "deref_mut",
++                "{self.as_mut_slice()}",
++            ),
++        ] {
++            if self.fact(role)?.member(name)?.body_tokens() != Some(body) {
++                return Err(fault("Vec source slice delegation differs"));
++            }
++        }
++        Ok(())
++    }
++    pub(crate) fn select(
++        &self,
++        receiver: &TyTerm,
++        index: &TyTerm,
++        mutable: bool,
++    ) -> Result<IndexSelection, Diagnostic> {
++        if !self.unknown.is_empty() {
++            return Ok(IndexSelection::NeedGoalEngine {
++                candidates: self.unknown.clone(),
++            });
++        }
++        let vector = self.fact(IndexHeaderRole::VecType)?;
++        let global = self.fact(IndexHeaderRole::GlobalType)?;
++        let mut receiver_target = receiver;
++        let mut receiver_mutable = None;
++        if let TyTerm::Ref(_, writable, target) = receiver {
++            receiver_target = target;
++            receiver_mutable = Some(*writable)
++        }
++        if mutable && receiver_mutable == Some(false) {
++            return Ok(IndexSelection::NoSolution);
++        }
++        let (kind, element, role) = match receiver_target {
++            TyTerm::Nominal(identity, args) if *identity == vector.definition().fingerprint() => {
++                if args.len() != 2 {
++                    return Ok(IndexSelection::NeedSourceType);
++                }
++                let (
++                    GenericArg::Type(TyTerm::Primitive(element)),
++                    GenericArg::Type(TyTerm::Nominal(allocator, allocator_args)),
++                ) = (&args[0], &args[1])
++                else {
++                    return Ok(IndexSelection::NeedSourceType);
++                };
++                if *allocator != global.definition().fingerprint() || !allocator_args.is_empty() {
++                    return Ok(IndexSelection::NeedSourceType);
++                }
++                (
++                    IndexReceiverKind::Vec,
++                    *element,
++                    if mutable {
++                        IndexHeaderRole::VecIndexMutImpl
++                    } else {
++                        IndexHeaderRole::VecIndexImpl
++                    },
++                )
++            }
++            TyTerm::Slice(element) if receiver_mutable.is_some() => {
++                let TyTerm::Primitive(element) = element.as_ref() else {
++                    return Ok(IndexSelection::NeedSourceType);
++                };
++                (
++                    IndexReceiverKind::SliceReference,
++                    *element,
++                    if mutable {
++                        IndexHeaderRole::SliceIndexMutImpl
++                    } else {
++                        IndexHeaderRole::SliceIndexImpl
++                    },
++                )
++            }
++            _ => return Ok(IndexSelection::NeedSourceType),
++        };
++        if *index != TyTerm::Primitive(PrimitiveType::Usize) {
++            return Ok(IndexSelection::NoSolution);
++        }
++        let implementation = self.fact(role)?;
++        let implementation_id = implementation
++            .impl_source()
++            .ok_or_else(|| fault("Index actual source impl identity absent"))?;
++        let method = implementation.member(if mutable { "index_mut" } else { "index" })?;
++        let expected = match (kind, mutable) {
++            (IndexReceiverKind::Vec, false) => "{Index::index(&**self,index)}",
++            (IndexReceiverKind::Vec, true) => "{IndexMut::index_mut(&mut**self,index)}",
++            (IndexReceiverKind::SliceReference, false) => "{index.index(self)}",
++            (IndexReceiverKind::SliceReference, true) => "{index.index_mut(self)}",
++        };
++        if method.body_tokens() != Some(expected) {
++            return Err(fault(
++                "selected standard Index body is not the captured intrinsic template",
++            ));
++        }
++        let leaf = self.fact(IndexHeaderRole::UsizeSliceIndexImpl)?;
++        let leaf_method = leaf.member(if mutable { "index_mut" } else { "index" })?;
++        let expected_leaf = if mutable {
++            "{&mut(*slice)[self]}"
++        } else {
++            "{&(*slice)[self]}"
++        };
++        if leaf_method.body_tokens() != Some(expected_leaf) {
++            return Err(fault(
++                "usize SliceIndex body differs from intrinsic bounds/lease template",
++            ));
++        }
++        if leaf
++            .associated_types()
++            .iter()
++            .find(|t| t.definition().declared_name == "Output")
++            .and_then(|t| t.written_type())
++            != Some("T")
++        {
++            return Err(fault(
++                "usize SliceIndex output is not its exact element parameter",
++            ));
++        }
++        let mut delegation = vec![
++            leaf.impl_source()
++                .ok_or_else(|| fault("usize source impl absent"))?,
++            leaf_method.definition().fingerprint(),
++        ];
++        if kind == IndexReceiverKind::Vec {
++            let slice = self.fact(if mutable {
++                IndexHeaderRole::SliceIndexMutImpl
++            } else {
++                IndexHeaderRole::SliceIndexImpl
++            })?;
++            delegation.push(
++                slice
++                    .impl_source()
++                    .ok_or_else(|| fault("slice Index impl absent"))?,
++            );
++            delegation.push(
++                slice
++                    .member(if mutable { "index_mut" } else { "index" })?
++                    .definition()
++                    .fingerprint(),
++            );
++            let deref = self.fact(if mutable {
++                IndexHeaderRole::VecDerefMutImpl
++            } else {
++                IndexHeaderRole::VecDerefImpl
++            })?;
++            delegation.push(
++                deref
++                    .impl_source()
++                    .ok_or_else(|| fault("Vec Deref impl absent"))?,
++            );
++            delegation.push(
++                self.fact(IndexHeaderRole::GlobalAllocatorImpl)?
++                    .impl_source()
++                    .ok_or_else(|| fault("Global allocator impl absent"))?,
++            );
++        }
++        if std::iter::once(&implementation_id)
++            .chain(
++                delegation
++                    .iter()
++                    .filter(|id| self.facts.values().any(|f| f.impl_source() == Some(**id))),
++            )
++            .any(|id| !self.active.contains(id))
++        {
++            return Err(fault(
++                "selected/delegated Index impl is not in current complete catalog",
++            ));
++        }
++        let trait_fact = self.fact(if mutable {
++            IndexHeaderRole::IndexMutTrait
++        } else {
++            IndexHeaderRole::IndexTrait
++        })?;
++        let proof = SelectedIndexIntrinsic {
++            library: self.selection.fingerprint(),
++            publication: self.publication,
++            consumer: self.consumer.clone(),
++            source_revision: self.source_revision,
++            seal: self.seal.clone(),
++            seal_input: self.seal_input,
++            catalog: self.catalog,
++            receiver: receiver.clone(),
++            kind,
++            element,
++            mutable,
++            trait_goal: TraitRef {
++                trait_key: trait_fact.definition().fingerprint(),
++                self_ty: receiver_target.clone(),
++                args: vec![GenericArg::Type(TyTerm::Primitive(PrimitiveType::Usize))],
++            },
++            implementation: implementation_id,
++            member: method.definition().clone(),
++            delegation,
++            dependencies: self.dependencies.clone(),
++        };
++        proof.metadata_bytes()?;
++        Ok(IndexSelection::Selected(Box::new(proof)))
++    }
++}
++impl StableEncode for SelectedIndexIntrinsic {
++    const DOMAIN: &'static str = "lrr/v1/selected-source-index-intrinsic";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.digest(self.library);
++        e.digest(self.publication);
++        e.record(&self.consumer);
++        e.u64(self.source_revision);
++        e.record(&self.seal);
++        e.digest(self.seal_input);
++        e.digest(self.catalog);
++        e.record(&self.receiver);
++        e.u32(match self.kind {
++            IndexReceiverKind::Vec => 0,
++            IndexReceiverKind::SliceReference => 1,
++        });
++        e.u32(self.element.tag());
++        e.bool(self.mutable);
++        e.record(&self.trait_goal);
++        e.digest(self.implementation);
++        e.record(&self.member);
++        e.sequence(&self.delegation, |e, d| e.digest(*d));
++        e.sequence(&self.dependencies, |e, d| e.record(d));
++    }
++}
+--- a/crates/lrr/src/frontend/mod.rs
++++ b/crates/lrr/src/frontend/mod.rs
+@@ -62,3 +62,5 @@
+ pub mod source_view;
+ 
+ pub mod primitive_constants;
++
++pub mod index_source_selection;
+--- a/crates/lrr/src/syntax/macro_index_source.rs
++++ b/crates/lrr/src/syntax/macro_index_source.rs
+@@ -0,0 +1,287 @@
++//! Original assertion operand indexing, retaining its Macro PC rather than inventing an IndexExpr PC.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    expand::scopes::MacroDefinition,
++    facade::macros::RuntimeMacroKind,
++    frontend::runtime_macro_plan::RuntimeIntrinsicPlan,
++    ir::{
++        op::LiteralRecipe,
++        pc::{NodeId, PcKey},
++    },
++    source::manifest::BodyKey,
++    syntax::{
++        ast_adapter::range,
++        body_index::{BodyIndex, ExpressionKind, NodeRole},
++        outline::BodyHandle,
++        parse::{ParseKey, ParsedFile},
++        spans::{BodySpan, SourceRange},
++        thunks::literal_recipe,
++    },
++};
++use ra_ap_syntax::{AstNode, Edition, TextRange, TextSize, ast};
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-INDEX-SOURCE", message.into())
++}
++fn pending(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-UNSUPPORTED", message.into())
++}
++#[derive(Debug)]
++pub struct MacroIndexOperand {
++    source: ParseKey,
++    body: BodyKey,
++    cfg: Digest,
++    node: NodeId,
++    definition: MacroDefinition,
++    operand: u32,
++    origin: BodySpan,
++    receiver_origin: BodySpan,
++    receiver_name: String,
++    index_literal: LiteralRecipe,
++    entry: PcKey,
++}
++impl MacroIndexOperand {
++    pub fn cfg(&self) -> Digest {
++        self.cfg
++    }
++    pub fn source(&self) -> &ParseKey {
++        &self.source
++    }
++    pub fn body(&self) -> &BodyKey {
++        &self.body
++    }
++    pub fn definition(&self) -> &MacroDefinition {
++        &self.definition
++    }
++    pub fn node(&self) -> NodeId {
++        self.node
++    }
++    pub fn operand(&self) -> u32 {
++        self.operand
++    }
++    pub fn origin(&self) -> &BodySpan {
++        &self.origin
++    }
++    pub fn receiver_origin(&self) -> &BodySpan {
++        &self.receiver_origin
++    }
++    pub fn receiver_name(&self) -> &str {
++        &self.receiver_name
++    }
++    pub fn index_literal(&self) -> &LiteralRecipe {
++        &self.index_literal
++    }
++    pub fn macro_entry(&self) -> &PcKey {
++        &self.entry
++    }
++    pub fn require_source(&self, parsed: &ParsedFile, index: &BodyIndex) -> Result<(), Diagnostic> {
++        if parsed.key() != self.source
++            || index.body() != &self.body
++            || index.profile() != &self.source.profile
++            || index.cfg().fingerprint() != self.cfg
++            || index
++                .nodes()
++                .get(self.node.0 as usize)
++                .is_none_or(|n| n.role != NodeRole::Expression(ExpressionKind::Macro))
++        {
++            return Err(fault("macro index source/profile/cfg/PC differs"));
++        }
++        Ok(())
++    }
++}
++pub fn capture_macro_index_operand(
++    parsed: &ParsedFile,
++    plan: &RuntimeIntrinsicPlan,
++    handle: &BodyHandle,
++    index: &BodyIndex,
++    ordinal: u32,
++) -> Result<MacroIndexOperand, Diagnostic> {
++    if parsed.generated_origin.is_some() {
++        return Err(pending(
++            "generated macro index requires exact token-origin producer",
++        ));
++    }
++    if !matches!(
++        plan.kind(),
++        RuntimeMacroKind::AssertEq | RuntimeMacroKind::AssertNe
++    ) {
++        return Err(pending(
++            "macro index requires selected assertion operand contract",
++        ));
++    }
++    plan.arguments().require_source(&parsed.key())?;
++    if handle.key() != *index.body() || index.profile() != &parsed.profile {
++        return Err(fault("macro index body/profile differs"));
++    }
++    let node = index
++        .nodes()
++        .iter()
++        .find(|n| {
++            n.role == NodeRole::Expression(ExpressionKind::Macro)
++                && n.range.start.checked_add(handle.range.start)
++                    == Some(plan.invocation().range().start)
++                && n.range.end.checked_add(handle.range.start)
++                    == Some(plan.invocation().range().end)
++        })
++        .ok_or_else(|| fault("macro index invocation is not this exact entered Macro"))?;
++    let selected = *plan
++        .arguments()
++        .operands()
++        .get(ordinal as usize)
++        .ok_or_else(|| fault("macro index ordinal absent"))?;
++    if !handle.range.contains(selected) || !plan.invocation().range().contains(selected) {
++        return Err(fault("macro index operand escapes source"));
++    }
++    let text = parsed
++        .parsed
++        .tree()
++        .syntax()
++        .text()
++        .slice(TextRange::new(
++            TextSize::from(selected.start),
++            TextSize::from(selected.end),
++        ))
++        .to_string();
++    let prefix = "fn __lrr_index_operand(){let __value=";
++    let wrapped = format!("{prefix}{text};}}");
++    if wrapped.len() > 131072 {
++        return Err(fault("macro index source byte bound"));
++    }
++    let edition = match parsed.edition {
++        2015 => Edition::Edition2015,
++        2018 => Edition::Edition2018,
++        2021 => Edition::Edition2021,
++        2024 => Edition::Edition2024,
++        _ => return Err(fault("macro index owning edition invalid")),
++    };
++    let tree = ast::SourceFile::parse(&wrapped, edition);
++    if !tree.errors().is_empty() {
++        return Err(fault("macro index argument has parse diagnostics"));
++    }
++    let mut expression = tree
++        .tree()
++        .syntax()
++        .descendants()
++        .find_map(ast::LetStmt::cast)
++        .and_then(|s| s.initializer())
++        .ok_or_else(|| fault("macro index operand wrapper missing"))?;
++    for _ in 0..128 {
++        if let ast::Expr::ParenExpr(paren) = expression {
++            expression = paren
++                .expr()
++                .ok_or_else(|| fault("macro index group missing"))?
++        } else {
++            break;
++        }
++    }
++    let ast::Expr::IndexExpr(expression) = expression else {
++        return Err(pending("assertion operand is not bounded index syntax"));
++    };
++    if expression
++        .syntax()
++        .descendants()
++        .any(|n| ast::Attr::can_cast(n.kind()))
++    {
++        return Err(pending(
++            "macro index attributes require source producer admission",
++        ));
++    }
++    let ast::Expr::PathExpr(receiver) = expression
++        .base()
++        .ok_or_else(|| fault("macro index receiver absent"))?
++    else {
++        return Err(pending(
++            "macro index receiver requires further source continuation",
++        ));
++    };
++    let path = receiver
++        .path()
++        .ok_or_else(|| fault("macro index receiver path absent"))?;
++    if path.qualifier().is_some()
++        || path
++            .segment()
++            .is_some_and(|s| s.coloncolon_token().is_some() || s.generic_arg_list().is_some())
++    {
++        return Err(pending(
++            "macro index qualified/generic receiver requires source lookup",
++        ));
++    }
++    let receiver_name = path
++        .segment()
++        .and_then(|s| s.name_ref())
++        .map(|n| n.text().to_string())
++        .ok_or_else(|| fault("macro index receiver name absent"))?;
++    crate::expand::scopes::MacroName::parse(&receiver_name, parsed.edition)?;
++    let ast::Expr::Literal(literal) = expression
++        .index()
++        .ok_or_else(|| fault("macro index argument absent"))?
++    else {
++        return Err(pending(
++            "macro index nonliteral argument requires reached source continuation",
++        ));
++    };
++    if !matches!(literal.kind(), ast::LiteralKind::IntNumber(_)) {
++        return Err(pending("macro index argument requires integer source goal"));
++    }
++    let map = |r: SourceRange| -> Result<BodySpan, Diagnostic> {
++        let offset =
++            u32::try_from(prefix.len()).map_err(|_| fault("macro index wrapper offset"))?;
++        let start = r
++            .start
++            .checked_sub(offset)
++            .and_then(|n| n.checked_add(selected.start))
++            .and_then(|n| n.checked_sub(handle.range.start))
++            .ok_or_else(|| fault("macro index source start overflow"))?;
++        let end = r
++            .end
++            .checked_sub(offset)
++            .and_then(|n| n.checked_add(selected.start))
++            .and_then(|n| n.checked_sub(handle.range.start))
++            .ok_or_else(|| fault("macro index source end overflow"))?;
++        Ok(BodySpan {
++            body_key: index.body().clone(),
++            relative_start: start,
++            relative_end: end,
++        })
++    };
++    let origin = map(range(expression.syntax().text_range()))?;
++    let receiver_origin = map(range(receiver.syntax().text_range()))?;
++    let index_literal = literal_recipe(&literal, map(range(literal.syntax().text_range()))?)?;
++    Ok(MacroIndexOperand {
++        source: parsed.key(),
++        body: index.body().clone(),
++        cfg: index.cfg().fingerprint(),
++        node: node.id,
++        definition: plan.definition().clone(),
++        operand: ordinal,
++        origin,
++        receiver_origin,
++        receiver_name,
++        index_literal,
++        entry: index.pc(node.id, crate::ir::pc::Phase::Entry)?,
++    })
++}
++impl StableEncode for MacroIndexOperand {
++    const DOMAIN: &'static str = "lrr/v1/source-macro-index-operand";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.record(&self.source);
++        e.record(&self.body);
++        e.digest(self.cfg);
++        e.u32(self.node.0);
++        e.digest(self.definition.identity);
++        e.digest(self.definition.defining_unit);
++        e.u16(self.definition.definition_edition);
++        e.u32(self.operand);
++        e.u32(self.origin.relative_start);
++        e.u32(self.origin.relative_end);
++        e.u32(self.receiver_origin.relative_start);
++        e.u32(self.receiver_origin.relative_end);
++        e.string(&self.receiver_name);
++        e.u32(self.index_literal.source.relative_start);
++        e.u32(self.index_literal.source.relative_end);
++        e.string(&self.index_literal.spelling);
++        e.record(&self.entry);
++    }
++}
+--- a/crates/lrr/src/syntax/mod.rs
++++ b/crates/lrr/src/syntax/mod.rs
+@@ -70,3 +70,7 @@
+ pub(crate) mod literal_decode;
+ 
+ pub(crate) mod lexical_numeric_callees;
++
++pub mod standard_index_headers;
++
++pub mod macro_index_source;
+--- a/crates/lrr/src/syntax/standard_index_headers.rs
++++ b/crates/lrr/src/syntax/standard_index_headers.rs
+@@ -0,0 +1,543 @@
++//! Pure source capture, never a selected trait/member certificate.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    source::{
++        changes::SourceSelection,
++        manifest::{DefKey, ItemKind},
++        snapshot::CfgSet,
++    },
++    syntax::{
++        ast_adapter::range,
++        declaration_scan::DeclarationScanLimits,
++        outline::{HeaderRecipe, Outline, ScopeKey},
++        parse::ParsedFile,
++        spans::SourceRange,
++    },
++};
++use ra_ap_syntax::{
++    AstNode, SyntaxNode,
++    ast::{self, HasGenericParams, HasName, HasTypeBounds},
++};
++#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
++pub enum IndexHeaderRole {
++    IndexTrait,
++    IndexMutTrait,
++    SliceIndexTrait,
++    VecType,
++    GlobalType,
++    VecIndexImpl,
++    VecIndexMutImpl,
++    SliceIndexImpl,
++    SliceIndexMutImpl,
++    UsizeSliceIndexImpl,
++    GlobalAllocatorImpl,
++    VecDerefImpl,
++    VecDerefMutImpl,
++    DerefTrait,
++    DerefMutTrait,
++    AllocatorTrait,
++    SizedTrait,
++    CopyTrait,
++}
++impl IndexHeaderRole {
++    pub fn tag(self) -> u32 {
++        match self {
++            Self::IndexTrait => 0,
++            Self::IndexMutTrait => 1,
++            Self::SliceIndexTrait => 2,
++            Self::VecType => 3,
++            Self::GlobalType => 4,
++            Self::VecIndexImpl => 5,
++            Self::VecIndexMutImpl => 6,
++            Self::SliceIndexImpl => 7,
++            Self::SliceIndexMutImpl => 8,
++            Self::UsizeSliceIndexImpl => 9,
++            Self::GlobalAllocatorImpl => 10,
++            Self::VecDerefImpl => 11,
++            Self::VecDerefMutImpl => 12,
++            Self::DerefTrait => 13,
++            Self::DerefMutTrait => 14,
++            Self::AllocatorTrait => 15,
++            Self::SizedTrait => 16,
++            Self::CopyTrait => 17,
++        }
++    }
++}
++#[derive(Debug, Clone)]
++pub struct IndexSourceMember {
++    definition: DefKey,
++    header: HeaderRecipe,
++    range: SourceRange,
++    body: Option<Digest>,
++    body_tokens: Option<String>,
++    signature: String,
++}
++impl IndexSourceMember {
++    pub fn signature(&self) -> &str {
++        &self.signature
++    }
++    pub fn definition(&self) -> &DefKey {
++        &self.definition
++    }
++    pub fn header(&self) -> &HeaderRecipe {
++        &self.header
++    }
++    pub fn range(&self) -> SourceRange {
++        self.range
++    }
++    pub fn body(&self) -> Option<Digest> {
++        self.body
++    }
++    pub fn body_tokens(&self) -> Option<&str> {
++        self.body_tokens.as_deref()
++    }
++}
++#[derive(Debug, Clone)]
++pub struct IndexSourceAssociatedType {
++    definition: DefKey,
++    header: HeaderRecipe,
++    range: SourceRange,
++    written_type: Option<String>,
++}
++impl IndexSourceAssociatedType {
++    pub fn written_type(&self) -> Option<&str> {
++        self.written_type.as_deref()
++    }
++    pub fn definition(&self) -> &DefKey {
++        &self.definition
++    }
++    pub fn header(&self) -> &HeaderRecipe {
++        &self.header
++    }
++    pub fn range(&self) -> SourceRange {
++        self.range
++    }
++}
++#[derive(Debug, Clone)]
++pub struct IndexSourceFact {
++    role: IndexHeaderRole,
++    source: SourceSelection,
++    definition: DefKey,
++    header: HeaderRecipe,
++    range: SourceRange,
++    impl_source: Option<Digest>,
++    impl_header: Option<Digest>,
++    parameter_contract: Option<String>,
++    members: Vec<IndexSourceMember>,
++    associated_types: Vec<IndexSourceAssociatedType>,
++}
++impl IndexSourceFact {
++    pub fn parameter_contract(&self) -> Option<&str> {
++        self.parameter_contract.as_deref()
++    }
++    pub fn role(&self) -> IndexHeaderRole {
++        self.role
++    }
++    pub fn source(&self) -> &SourceSelection {
++        &self.source
++    }
++    pub fn definition(&self) -> &DefKey {
++        &self.definition
++    }
++    pub fn header(&self) -> &HeaderRecipe {
++        &self.header
++    }
++    pub fn range(&self) -> SourceRange {
++        self.range
++    }
++    pub fn impl_source(&self) -> Option<Digest> {
++        self.impl_source
++    }
++    pub fn impl_header(&self) -> Option<Digest> {
++        self.impl_header
++    }
++    pub fn associated_types(&self) -> &[IndexSourceAssociatedType] {
++        &self.associated_types
++    }
++    pub fn members(&self) -> &[IndexSourceMember] {
++        &self.members
++    }
++    pub fn member(&self, name: &str) -> Result<&IndexSourceMember, Diagnostic> {
++        let mut rows = self
++            .members
++            .iter()
++            .filter(|m| m.definition.declared_name == name);
++        let result = rows
++            .next()
++            .ok_or_else(|| fault("selected source member absent"))?;
++        if rows.next().is_some() {
++            return Err(fault("source member duplicated"));
++        }
++        Ok(result)
++    }
++    fn bytes(&self) -> Option<usize> {
++        let mut bytes = std::mem::size_of::<Self>()
++            .checked_add(self.source.metadata_bytes().ok()?)?
++            .checked_add(self.header.estimated_bytes())?
++            .checked_add(
++                self.members
++                    .capacity()
++                    .checked_mul(std::mem::size_of::<IndexSourceMember>())?,
++            )?;
++        bytes = bytes.checked_add(
++            self.associated_types
++                .capacity()
++                .checked_mul(std::mem::size_of::<IndexSourceAssociatedType>())?,
++        )?;
++        for a in &self.associated_types {
++            bytes = bytes
++                .checked_add(a.header.estimated_bytes())?
++                .checked_add(a.written_type.as_ref().map_or(0, String::capacity))?;
++        }
++        for m in &self.members {
++            bytes = bytes
++                .checked_add(m.header.estimated_bytes())?
++                .checked_add(m.body_tokens.as_ref().map_or(0, String::capacity))?
++                .checked_add(m.signature.capacity())?;
++        }
++        bytes = bytes.checked_add(self.parameter_contract.as_ref().map_or(0, String::capacity))?;
++        Some(bytes)
++    }
++}
++#[derive(Debug)]
++pub struct IndexSourceHeaders {
++    source: SourceSelection,
++    facts: Vec<IndexSourceFact>,
++    metadata: usize,
++    outline: std::sync::Arc<Outline>,
++}
++impl IndexSourceHeaders {
++    pub fn outline(&self) -> &Outline {
++        &self.outline
++    }
++    pub fn source(&self) -> &SourceSelection {
++        &self.source
++    }
++    pub fn facts(&self) -> &[IndexSourceFact] {
++        &self.facts
++    }
++    pub fn fact(&self, role: IndexHeaderRole) -> Option<&IndexSourceFact> {
++        self.facts.iter().find(|f| f.role == role)
++    }
++    pub fn metadata_bytes(&self) -> usize {
++        self.metadata
++    }
++}
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-INDEX-SOURCE", message.into())
++}
++fn compact(node: &SyntaxNode) -> Result<String, Diagnostic> {
++    let mut text = String::new();
++    for token in node
++        .descendants_with_tokens()
++        .filter_map(|e| e.into_token())
++        .filter(|t| !t.kind().is_trivia())
++    {
++        let n = text
++            .len()
++            .checked_add(token.text().len())
++            .filter(|n| *n <= 65536)
++            .ok_or_else(|| fault("Index source token limit"))?;
++        text.try_reserve(n - text.len())
++            .map_err(|_| fault("Index source token allocation"))?;
++        text.push_str(token.text());
++    }
++    Ok(text)
++}
++fn role(node: &SyntaxNode) -> Result<Option<IndexHeaderRole>, Diagnostic> {
++    if let Some(t) = ast::Trait::cast(node.clone()) {
++        return Ok(match t.name().map(|n| n.text().to_string()).as_deref() {
++            Some("Index") => Some(IndexHeaderRole::IndexTrait),
++            Some("IndexMut") => Some(IndexHeaderRole::IndexMutTrait),
++            Some("SliceIndex") => Some(IndexHeaderRole::SliceIndexTrait),
++            Some("Deref") => Some(IndexHeaderRole::DerefTrait),
++            Some("DerefMut") => Some(IndexHeaderRole::DerefMutTrait),
++            Some("Allocator") => Some(IndexHeaderRole::AllocatorTrait),
++            Some("Sized") => Some(IndexHeaderRole::SizedTrait),
++            Some("Copy") => Some(IndexHeaderRole::CopyTrait),
++            _ => None,
++        });
++    }
++    if let Some(t) = ast::Struct::cast(node.clone()) {
++        return Ok(match t.name().map(|n| n.text().to_string()).as_deref() {
++            Some("Vec") => Some(IndexHeaderRole::VecType),
++            Some("Global") => Some(IndexHeaderRole::GlobalType),
++            _ => None,
++        });
++    }
++    let Some(item) = ast::Impl::cast(node.clone()) else {
++        return Ok(None);
++    };
++    let Some(trait_ty) = item.trait_() else {
++        return Ok(None);
++    };
++    let Some(self_ty) = item.self_ty() else {
++        return Err(fault("Index source impl lacks self type"));
++    };
++    let trait_ty = compact(trait_ty.syntax())?;
++    let self_ty = compact(self_ty.syntax())?;
++    Ok(match (trait_ty.as_str(), self_ty.as_str()) {
++        ("Index<I>", "Vec<T,A>") => Some(IndexHeaderRole::VecIndexImpl),
++        ("IndexMut<I>", "Vec<T,A>") => Some(IndexHeaderRole::VecIndexMutImpl),
++        ("ops::Index<I>", "[T]") => Some(IndexHeaderRole::SliceIndexImpl),
++        ("ops::IndexMut<I>", "[T]") => Some(IndexHeaderRole::SliceIndexMutImpl),
++        ("SliceIndex<[T]>", "usize") => Some(IndexHeaderRole::UsizeSliceIndexImpl),
++        ("Allocator", "Global") => Some(IndexHeaderRole::GlobalAllocatorImpl),
++        ("ops::Deref", "Vec<T,A>") => Some(IndexHeaderRole::VecDerefImpl),
++        ("ops::DerefMut", "Vec<T,A>") => Some(IndexHeaderRole::VecDerefMutImpl),
++        _ => None,
++    })
++}
++/// Syntactic role recognition is data only. A current selected-library authority,
++/// complete impl catalog and resolved source goal must still authorize execution.
++pub fn capture_index_headers(
++    parsed: &ParsedFile,
++    source: &SourceSelection,
++    cfg: &CfgSet,
++) -> Result<IndexSourceHeaders, Diagnostic> {
++    if parsed.generated_origin.is_some()
++        || parsed.key() != source.outline.parse
++        || cfg.fingerprint() != source.outline.cfg
++    {
++        return Err(fault("Index source attachment/profile/cfg differs"));
++    }
++    let tree = parsed.parsed.tree();
++    let count = tree.syntax().descendants().count();
++    if count > 1_000_000 {
++        return Err(fault("Index source node limit"));
++    }
++    let outline = parsed.outline(
++        source.outline.crate_key,
++        source.outline.module_path.clone(),
++        cfg,
++    )?;
++    let scope = ScopeKey {
++        crate_key: source.outline.crate_key,
++        module_path: source.outline.module_path.clone(),
++        owner: None,
++    };
++    let scan = parsed.scan_declarations(
++        source.path.clone(),
++        scope,
++        cfg,
++        DeclarationScanLimits::default(),
++    )?;
++    let mut facts: Vec<IndexSourceFact> = Vec::new();
++    let mut metadata = std::mem::size_of::<IndexSourceHeaders>();
++    for node in tree.syntax().descendants() {
++        let Some(role) = role(&node)? else { continue };
++        let selected = range(node.text_range());
++        if parsed
++            .errors
++            .iter()
++            .any(|error| selected.contains(error.range))
++        {
++            return Err(fault("Index selected declaration has parse diagnostics"));
++        }
++        if facts.iter().any(|f| f.role == role) {
++            return Err(fault("Index source role duplicate, not a selected member"));
++        }
++        let declaration = outline
++            .items
++            .iter()
++            .find(|item| item.declaration_span == selected)
++            .ok_or_else(|| fault("Index source declaration lacks exact outline identity"))?;
++        let scanned = if declaration.def_key.item_kind == ItemKind::Impl {
++            Some(
++                scan.impls()
++                    .iter()
++                    .find(|h| h.range == selected)
++                    .ok_or_else(|| fault("Index impl absent from actual source inventory"))?,
++            )
++        } else {
++            None
++        };
++        let mut members = Vec::new();
++        let mut associated_types = Vec::new();
++        for child in node
++            .children()
++            .filter(|n| ast::AssocItemList::can_cast(n.kind()))
++            .flat_map(|list| list.children())
++        {
++            if let Some(alias) = ast::TypeAlias::cast(child.clone()) {
++                if matches!(
++                    alias.name().map(|n| n.text().to_string()).as_deref(),
++                    Some("Output" | "Target")
++                ) {
++                    let span = range(child.text_range());
++                    let item = outline
++                        .items
++                        .iter()
++                        .find(|i| i.declaration_span == span)
++                        .ok_or_else(|| {
++                            fault("Index associated type lacks exact outline identity")
++                        })?;
++                    associated_types
++                        .try_reserve_exact(1)
++                        .map_err(|_| fault("Index associated type allocation"))?;
++                    associated_types.push(IndexSourceAssociatedType {
++                        definition: item.def_key.clone(),
++                        header: item.header.clone(),
++                        range: span,
++                        written_type: alias.ty().map(|t| compact(t.syntax())).transpose()?,
++                    });
++                }
++            }
++            let Some(function) = ast::Fn::cast(child.clone()) else {
++                continue;
++            };
++            let Some(name) = function.name() else {
++                return Err(fault("Index member name absent"));
++            };
++            let name = name.text().to_string();
++            if !matches!(name.as_str(), "index" | "index_mut" | "deref" | "deref_mut") {
++                continue;
++            }
++            let span = range(child.text_range());
++            let member = outline
++                .items
++                .iter()
++                .find(|item| item.declaration_span == span)
++                .ok_or_else(|| fault("Index member lacks actual outline identity"))?;
++            if function.async_token().is_some()
++                || function.unsafe_token().is_some()
++                || function.generic_param_list().is_some()
++            {
++                return Err(fault(
++                    "Index selected member qualifiers require a different source rule",
++                ));
++            }
++            let params = function
++                .param_list()
++                .ok_or_else(|| fault("Index source member parameters absent"))?;
++            let result = function
++                .ret_type()
++                .ok_or_else(|| fault("Index source member result absent"))?;
++            let signature = format!(
++                "fn{}{}{}",
++                name,
++                compact(params.syntax())?,
++                compact(result.syntax())?
++            );
++            let body = function.body();
++            let body_tokens = body.as_ref().map(|b| compact(b.syntax())).transpose()?;
++            let body = body
++                .as_ref()
++                .map(|b| Digest::of_bytes(b.syntax().text().to_string().as_bytes()));
++            members
++                .try_reserve_exact(1)
++                .map_err(|_| fault("Index member allocation"))?;
++            members.push(IndexSourceMember {
++                definition: member.def_key.clone(),
++                header: member.header.clone(),
++                range: span,
++                body,
++                body_tokens,
++                signature,
++            });
++        }
++        let mut parameter_contract = ast::Impl::cast(node.clone())
++            .map(|item| {
++                let generic = item
++                    .generic_param_list()
++                    .map(|p| compact(p.syntax()))
++                    .transpose()?
++                    .unwrap_or_default();
++                let predicate = item
++                    .where_clause()
++                    .map(|p| compact(p.syntax()))
++                    .transpose()?
++                    .unwrap_or_default();
++                Ok::<_, Diagnostic>(format!("{generic}{predicate}"))
++            })
++            .transpose()?;
++        if let Some(item) = ast::Trait::cast(node.clone()) {
++            let generic = item
++                .generic_param_list()
++                .map(|p| compact(p.syntax()))
++                .transpose()?
++                .unwrap_or_default();
++            let mut bounds = Vec::new();
++            if let Some(list) = item.type_bound_list() {
++                for bound in list.bounds() {
++                    bounds.push(compact(bound.syntax())?);
++                }
++            }
++            let predicate = item
++                .where_clause()
++                .map(|p| compact(p.syntax()))
++                .transpose()?
++                .unwrap_or_default();
++            parameter_contract = Some(format!("{generic}|{}|{predicate}", bounds.join("+")));
++        }
++        let fact = IndexSourceFact {
++            role,
++            source: source.clone(),
++            definition: declaration.def_key.clone(),
++            header: declaration.header.clone(),
++            range: selected,
++            impl_source: scanned.map(|s| s.identity),
++            impl_header: scanned.map(|s| s.header_identity),
++            parameter_contract,
++            members,
++            associated_types,
++        };
++        metadata = metadata
++            .checked_add(
++                fact.bytes()
++                    .ok_or_else(|| fault("Index source metadata overflow"))?,
++            )
++            .filter(|n| *n <= 32 * 1024 * 1024)
++            .ok_or_else(|| fault("Index source metadata budget"))?;
++        facts
++            .try_reserve_exact(1)
++            .map_err(|_| fault("Index fact allocation"))?;
++        facts.push(fact);
++    }
++    metadata = metadata
++        .checked_add(outline.estimated_bytes())
++        .filter(|n| *n <= 32 * 1024 * 1024)
++        .ok_or_else(|| fault("Index retained outline metadata budget"))?;
++    Ok(IndexSourceHeaders {
++        source: source.clone(),
++        facts,
++        metadata,
++        outline: std::sync::Arc::new(outline),
++    })
++}
++impl StableEncode for IndexSourceFact {
++    const DOMAIN: &'static str = "lrr/v1/index-source-header";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.u32(self.role.tag());
++        e.option(&self.parameter_contract, |e, p| e.string(p));
++        e.string(self.source.path.as_str());
++        e.record(&crate::db::key::QueryKey::Outline(
++            self.source.outline.clone(),
++        ));
++        e.record(&self.definition);
++        e.record(&self.header);
++        e.u32(self.range.start);
++        e.u32(self.range.end);
++        e.option(&self.impl_source, |e, d| e.digest(*d));
++        e.option(&self.impl_header, |e, d| e.digest(*d));
++        e.sequence(&self.associated_types, |e, a| {
++            e.record(&a.definition);
++            e.record(&a.header);
++            e.u32(a.range.start);
++            e.u32(a.range.end);
++            e.option(&a.written_type, |e, t| e.string(t));
++        });
++        e.sequence(&self.members, |e, m| {
++            e.record(&m.definition);
++            e.record(&m.header);
++            e.u32(m.range.start);
++            e.u32(m.range.end);
++            e.option(&m.body, |e, d| e.digest(*d));
++            e.option(&m.body_tokens, |e, s| e.string(s));
++            e.string(&m.signature);
++        });
++    }
++}
+--- a/crates/lrr/src/vm/mod.rs
++++ b/crates/lrr/src/vm/mod.rs
+@@ -14,3 +14,5 @@
+ pub mod pattern;
+ 
+ pub mod cleanup;
++
++pub(crate) mod source_index;
+--- a/crates/lrr/src/vm/source_index.rs
++++ b/crates/lrr/src/vm/source_index.rs
+@@ -0,0 +1,80 @@
++//! Mechanism join after private current source-member admission. No query/parser.
++use crate::{
++    core::diagnostic::Diagnostic,
++    frontend::index_source_selection::{AdmittedIndexIntrinsic, IndexReceiverKind},
++    runtime::{
++        cell::{GuestStore, TicketId},
++        place::{Place, PlaceFailure},
++        reference::Access,
++        shape::{FacadeType, PrimitiveIdentity, TypeKey},
++        value::ValueRepr,
++    },
++    vm::fuel::RunFuel,
++};
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-INDEX-SOURCE", message.into())
++}
++/// One selected Index/IndexMut invocation. Caller evaluates base/index once,
++/// attaches the actual source PC/origin and registers returned owner for cleanup.
++/// `admission` is non-Clone and consumed; scope prevents source publication changes.
++pub(crate) fn invoke_selected_index(
++    admission: AdmittedIndexIntrinsic<'_>,
++    store: &mut GuestStore,
++    fuel: &mut RunFuel,
++    receiver: &Place,
++    index: ValueRepr,
++) -> Result<TicketId, PlaceFailure> {
++    let selected = admission.selected();
++    if selected.receiver_kind() != IndexReceiverKind::Vec {
++        return Err(Diagnostic::new(
++            "LRR-E-UNSUPPORTED",
++            "selected slice Index needs an exact Buffer slice-window lease producer".into(),
++        )
++        .into());
++    }
++    let element = PrimitiveIdentity::from_recipe(selected.element())?.id();
++    let receiver_type = store.live_place_type_id(receiver)?;
++    if !matches!(store.type_descriptor(receiver_type)?.key.as_ref(),TypeKey::Facade{family:FacadeType::Vec,args}if args.as_ref()==[element])
++    {
++        return Err(
++            fault("runtime Vec receiver descriptor differs from selected source type").into(),
++        );
++    }
++    // Equal-width u64 is not usize. Bounds precede u32 narrowing in storage helper.
++    crate::runtime::place::checked_index(index)?;
++    let result_type = store
++        .find_type(&TypeKey::Ref {
++            mutable: selected.mutable(),
++            target: element,
++        })
++        .ok_or_else(|| fault("selected source reference result descriptor was not prepared"))?;
++    let place = store.vector_index(receiver, index)?;
++    let access = if selected.mutable() {
++        Access::Mutable
++    } else {
++        Access::Shared
++    };
++    if store.admit_place_borrow(&place, access)? != element {
++        return Err(fault("selected Index projection element descriptor differs").into());
++    }
++    // Reservations can retain capacity but publish no guest lease or move owner.
++    store.reserve_place_borrow_result(&place, false)?;
++    fuel.charge()?;
++    invoke_admitted(store, &place, access, result_type)
++}
++/// Step-loop integration uses this join only after the same source/preflight
++/// checks and its ordinary one-operation fuel charge; never charge twice.
++fn invoke_admitted(
++    store: &mut GuestStore,
++    place: &Place,
++    access: Access,
++    result_type: crate::runtime::shape::TypeId,
++) -> Result<TicketId, PlaceFailure> {
++    let ticket = store.borrow_ticket(place, access)?;
++    let result = store.peek_ticket(ticket)?;
++    if result.kind != 9 || result.type_id != result_type.0 {
++        store.discard(ticket)?;
++        return Err(fault("selected Index returned wrong managed reference descriptor").into());
++    }
++    Ok(ticket)
++}
+--- a/xtask/tests/index_source_contracts.rs
++++ b/xtask/tests/index_source_contracts.rs
+@@ -0,0 +1,249 @@
++use lrr::{
++    core::{
++        digest::{Digest, StableEncode},
++        profile::ProfileIdentity,
++    },
++    db::key::OutlineKey,
++    source::{
++        changes::SourceSelection,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::{
++        parse::ParsedFile,
++        standard_index_headers::{IndexHeaderRole, capture_index_headers},
++    },
++};
++fn capture(
++    text: &str,
++    module: &[&str],
++    path: &str,
++) -> lrr::syntax::standard_index_headers::IndexSourceHeaders {
++    let mut profile = ProfileIdentity::current();
++    profile.edition = 2024;
++    let parsed =
++        ParsedFile::parse(&SourceBlob::new(text.as_bytes().to_vec()).unwrap(), profile).unwrap();
++    let cfg = CfgSet::guest_default();
++    let selection = SourceSelection {
++        path: SourcePath::new(path).unwrap(),
++        outline: OutlineKey {
++            parse: parsed.key(),
++            crate_key: Digest::of_bytes(module[0].as_bytes()),
++            module_path: module[1..].iter().map(|s| s.to_string()).collect(),
++            cfg: cfg.fingerprint(),
++        },
++    };
++    capture_index_headers(&parsed, &selection, &cfg).unwrap()
++}
++#[test]
++fn index_contract_original_headers_keep_actual_decl_member_and_impl_sources() {
++    let ops = capture(
++        include_str!("../../fixtures/upstream/rustc-checkout/library/core/src/ops/index.rs"),
++        &["core", "ops", "index"],
++        "core/src/ops/index.rs",
++    );
++    assert_eq!(
++        ops.fact(IndexHeaderRole::IndexTrait)
++            .unwrap()
++            .definition()
++            .declared_name,
++        "Index"
++    );
++    assert_eq!(
++        ops.fact(IndexHeaderRole::IndexMutTrait)
++            .unwrap()
++            .definition()
++            .declared_name,
++        "IndexMut"
++    );
++    let slice = capture(
++        include_str!("../../fixtures/upstream/rustc-checkout/library/core/src/slice/index.rs"),
++        &["core", "slice", "index"],
++        "core/src/slice/index.rs",
++    );
++    for role in [
++        IndexHeaderRole::SliceIndexTrait,
++        IndexHeaderRole::SliceIndexImpl,
++        IndexHeaderRole::SliceIndexMutImpl,
++        IndexHeaderRole::UsizeSliceIndexImpl,
++    ] {
++        assert!(slice.fact(role).is_some());
++    }
++    let vector = capture(
++        include_str!("../../fixtures/upstream/rustc-checkout/library/alloc/src/vec/mod.rs"),
++        &["alloc", "vec"],
++        "alloc/src/vec/mod.rs",
++    );
++    for role in [
++        IndexHeaderRole::VecType,
++        IndexHeaderRole::VecIndexImpl,
++        IndexHeaderRole::VecIndexMutImpl,
++        IndexHeaderRole::VecDerefImpl,
++        IndexHeaderRole::VecDerefMutImpl,
++    ] {
++        let fact = vector.fact(role).unwrap();
++        assert_eq!(fact.source().outline.parse.profile.edition, 2024);
++        assert!(fact.range().end > fact.range().start);
++    }
++    let global = capture(
++        include_str!("../../fixtures/upstream/rustc-checkout/library/alloc/src/alloc.rs"),
++        &["alloc", "alloc"],
++        "alloc/src/alloc.rs",
++    );
++    assert!(global.fact(IndexHeaderRole::GlobalType).is_some());
++    assert!(global.fact(IndexHeaderRole::GlobalAllocatorImpl).is_some());
++    // Data capture only: this does not admit ae0fe source as the installed library.
++}
++
++#[test]
++fn index_contract_original_assert_operand_preserves_macro_pc_and_source_origin_all_editions() {
++    use lrr::{
++        facade::macros::RuntimeMacroKind,
++        frontend::{
++            macro_names::PathLookup,
++            runtime_macro_catalog::RuntimeMacroCatalog,
++            runtime_macro_plan::{RuntimeMacroPreparation, prepare_runtime_macro},
++        },
++        ir::pc::Phase,
++        syntax::{macro_index_source::capture_macro_index_operand, spans::SourceRange},
++    };
++    let text =
++        include_str!("../../fixtures/upstream/rustc-checkout/tests/ui/binding/expr-match-panic.rs");
++    for edition in [2015, 2018, 2021, 2024] {
++        let mut profile = ProfileIdentity::current();
++        profile.edition = edition;
++        let parsed = ParsedFile::parse(
++            &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++            profile.clone(),
++        )
++        .unwrap();
++        let cfg = CfgSet::guest_default();
++        let outline = parsed.outline(Digest([191; 32]), vec![], &cfg).unwrap();
++        let handle = outline
++            .items
++            .iter()
++            .find(|i| i.def_key.declared_name == "test_box")
++            .unwrap()
++            .body
++            .as_ref()
++            .unwrap();
++        let index = parsed.index_body(handle, Default::default()).unwrap();
++        let start = text.find("assert_eq!(r[0], 10)").unwrap() as u32;
++        let call = parsed
++            .macro_call_at(SourceRange {
++                start,
++                end: start + 20,
++            })
++            .unwrap();
++        let catalog = RuntimeMacroCatalog::standard(&profile).unwrap();
++        let definition = catalog
++            .definitions()
++            .find(|d| catalog.select(d).unwrap() == Some(RuntimeMacroKind::AssertEq))
++            .unwrap()
++            .clone();
++        let RuntimeMacroPreparation::Intrinsic(plan) =
++            prepare_runtime_macro(&parsed, call, PathLookup::Defined(definition), &catalog)
++                .unwrap()
++        else {
++            panic!("intrinsic")
++        };
++        let site = capture_macro_index_operand(&parsed, &plan, handle, &index, 0).unwrap();
++        assert_eq!(site.receiver_name(), "r");
++        assert_eq!(
++            site.origin().relative_start + handle.range.start,
++            start + 11
++        );
++        assert_eq!(site.origin().relative_end + handle.range.start, start + 15);
++        assert_eq!(site.index_literal().spelling, "0");
++        assert_eq!(site.macro_entry().phase, Phase::Entry.code().unwrap());
++        assert_eq!(
++            index.nodes()[site.node().0 as usize].role,
++            lrr::syntax::body_index::NodeRole::Expression(
++                lrr::syntax::body_index::ExpressionKind::Macro
++            )
++        );
++        assert!(capture_macro_index_operand(&parsed, &plan, handle, &index, 1).is_err());
++    }
++    // Original token capture/phase provenance, not selected Index or body execution.
++}
++
++#[test]
++fn index_contract_captured_generic_signature_output_and_body_changes_identity() {
++    let original =
++        include_str!("../../fixtures/upstream/rustc-checkout/library/alloc/src/vec/mod.rs");
++    let baseline = capture(original, &["alloc", "vec"], "alloc/src/vec/mod.rs");
++    let fact = baseline.fact(IndexHeaderRole::VecIndexImpl).unwrap();
++    assert_eq!(
++        fact.parameter_contract(),
++        Some("<T,I:[const]SliceIndex<[T]>,A:Allocator>")
++    );
++    assert_eq!(
++        fact.member("index").unwrap().signature(),
++        "fnindex(&self,index:I)->&Self::Output"
++    );
++    assert_eq!(
++        fact.member("index").unwrap().body_tokens(),
++        Some("{Index::index(&**self,index)}")
++    );
++    assert_eq!(
++        fact.associated_types()
++            .iter()
++            .find(|t| t.definition().declared_name == "Output")
++            .unwrap()
++            .written_type(),
++        Some("I::Output")
++    );
++    for changed in [
++        original.replacen(
++            "fn index(&self, index: I) -> &Self::Output",
++            "fn index(&self, index: I) -> &T",
++            1,
++        ),
++        original.replacen(
++            "Index::index(&**self, index)",
++            "Index::index(&**self, 0)",
++            1,
++        ),
++        original.replacen(
++            "I: [const] SliceIndex<[T]>, A: Allocator> Index<I>",
++            "I: SliceIndex<[T]>, A: Allocator> Index<I>",
++            1,
++        ),
++    ] {
++        assert_ne!(changed, original, "negative must alter actual source");
++        let changed = capture(&changed, &["alloc", "vec"], "alloc/src/vec/mod.rs");
++        assert_ne!(
++            changed
++                .fact(IndexHeaderRole::VecIndexImpl)
++                .unwrap()
++                .fingerprint(),
++            fact.fingerprint()
++        );
++    }
++    // Mutation adapters outside upstream; these are capture identities, not selected authority passes.
++}
++#[test]
++fn index_contract_foreign_cfg_parse_attachment_refuses_before_source_capture() {
++    let text = include_str!("../../fixtures/upstream/rustc-checkout/library/core/src/ops/index.rs");
++    let parsed = ParsedFile::parse(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity::current(),
++    )
++    .unwrap();
++    let cfg = CfgSet::guest_default();
++    let mut selection = SourceSelection {
++        path: SourcePath::new("core/src/ops/index.rs").unwrap(),
++        outline: OutlineKey {
++            parse: parsed.key(),
++            crate_key: Digest::of_bytes(b"core"),
++            module_path: vec!["ops".into(), "index".into()],
++            cfg: cfg.fingerprint(),
++        },
++    };
++    selection.outline.cfg = Digest::of_bytes(b"foreign-cfg");
++    assert_eq!(
++        capture_index_headers(&parsed, &selection, &cfg)
++            .unwrap_err()
++            .code,
++        "LRR-E-INDEX-SOURCE"
++    );
++}

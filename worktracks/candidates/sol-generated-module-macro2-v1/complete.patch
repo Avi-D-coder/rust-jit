@@ -1,0 +1,2343 @@
+diff --git a/crates/lrr/src/expand/generated_declaration_scan.rs b/crates/lrr/src/expand/generated_declaration_scan.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/expand/generated_declaration_scan.rs
+@@ -0,0 +1,28 @@
++//! Exact new-dialect rows matched to actual pinned output. No namespace installation.
++use super::*;
++pub(super) fn admit(
++    scan: &DeclarationScan,
++    rows: &mut BTreeMap<(u32, u32), declaration_output::DefinitionCapture>,
++) -> Result<BTreeMap<Digest, declaration_output::DefinitionCapture>, Diagnostic> {
++    let mut definitions = BTreeMap::new();
++    for header in scan.macro2_definitions() {
++        let capture = rows
++            .remove(&(header.range.start, header.range.end))
++            .ok_or_else(|| {
++                fault(
++                    "LRR-E-MACRO-OUTPUT",
++                    "active generated macro2 capture absent",
++                )
++            })?;
++        if capture.dialect != declaration_output::DefinitionDialect::Macro2
++            || capture.arguments.is_some() != header.arguments.is_some()
++        {
++            return Err(fault(
++                "LRR-E-MACRO-OUTPUT",
++                "generated macro2 dialect or matcher presence differs",
++            ));
++        }
++        definitions.insert(header.identity, capture);
++    }
++    Ok(definitions)
++}
+diff --git a/crates/lrr/src/expand/generated_declarations.rs b/crates/lrr/src/expand/generated_declarations.rs
+--- a/crates/lrr/src/expand/generated_declarations.rs
++++ b/crates/lrr/src/expand/generated_declarations.rs
+@@ -44,8 +44,11 @@
+     parsed: ParsedFile,
+     scan: Arc<DeclarationScan>,
+     definitions: BTreeMap<Digest, declaration_output::DefinitionCapture>,
++    macro2_definitions: BTreeMap<Digest, declaration_output::DefinitionCapture>,
+     calls: BTreeMap<Digest, declaration_output::CallCapture>,
+ }
++#[path = "generated_declaration_scan.rs"]
++mod generated_declaration_scan;
+ fn fault(code: &'static str, message: &str) -> Diagnostic {
+     Diagnostic::new(code, message.into())
+ }
+@@ -455,6 +458,7 @@
+                 ));
+             }
+         }
++        let macro2_definitions = generated_declaration_scan::admit(&scan, &mut definition_rows)?;
+         let mut definitions = BTreeMap::new();
+         for header in scan.macro_definitions() {
+             let definition = definition_rows
+@@ -465,6 +469,14 @@
+                         "active generated definition capture absent",
+                     )
+                 })?;
++            if definition.dialect != declaration_output::DefinitionDialect::Rules
++                || definition.arguments.is_some()
++            {
++                return Err(fault(
++                    "LRR-E-MACRO-OUTPUT",
++                    "Rules capture has a different generated dialect",
++                ));
++            }
+             definitions.insert(header.identity, definition);
+         }
+         let mut calls = BTreeMap::new();
+@@ -491,6 +503,7 @@
+             parsed,
+             scan,
+             definitions,
++            macro2_definitions,
+             calls,
+         };
+         if value.metadata_bytes()? > 256 * 1024 * 1024 {
+@@ -581,6 +594,29 @@
+             declaration_grammar(self.record.key().grammar),
+         )
+         .map_err(|e| fault(e.code, &e.message))
++    }
++    /// Source-owned syntax facts; module admission still needs the exact caller/epoch/seal.
++    pub fn macro2_definition(
++        &self,
++        identity: Digest,
++    ) -> Result<&declaration_output::DefinitionCapture, Diagnostic> {
++        let header = self
++            .scan
++            .macro2_definitions()
++            .iter()
++            .find(|h| h.identity == identity)
++            .ok_or_else(|| fault("LRR-E-EXPANSION-INPUT", "generated macro2 header absent"))?;
++        if header.scope_kind != crate::syntax::declaration_scan::DeclarationScopeKind::Module
++            || header.scope.owner.is_some()
++        {
++            return Err(fault(
++                "LRR-E-MACRO2-SOURCE",
++                "generated macro2 is not a captured module declaration",
++            ));
++        }
++        self.macro2_definitions
++            .get(&identity)
++            .ok_or_else(|| fault("LRR-E-EXPANSION-INPUT", "generated macro2 capture absent"))
+     }
+     pub fn macro_definition(
+         &self,
+@@ -889,13 +925,25 @@
+             .allocated_bytes()
+             .map_err(|e| fault(e.code, &e.message))?;
+         let mut captures = 0usize;
+-        for definition in self.definitions.values() {
++        for definition in self
++            .definitions
++            .values()
++            .chain(self.macro2_definitions.values())
++        {
+             let bytes = definition
+                 .body
+                 .allocated_bytes()
+                 .map_err(|e| fault(e.code, &e.message))?;
++            let args = definition
++                .arguments
++                .as_ref()
++                .map(|a| a.allocated_bytes())
++                .transpose()
++                .map_err(|e| fault(e.code, &e.message))?
++                .unwrap_or(0);
+             captures = captures
+                 .checked_add(bytes)
++                .and_then(|n| n.checked_add(args))
+                 .and_then(|n| n.checked_add(256))
+                 .ok_or_else(|| {
+                     fault(
+@@ -942,7 +990,7 @@
+     }
+ }
+ impl StableEncode for GeneratedDeclarations {
+-    const DOMAIN: &'static str = "lrr/v2/generated-declaration-input";
++    const DOMAIN: &'static str = "lrr/v3/generated-declaration-input";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         e.digest(self.parent);
+         e.digest(self.parent_invocation);
+diff --git a/crates/lrr/src/expand/generated_definition_capture.rs b/crates/lrr/src/expand/generated_definition_capture.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/expand/generated_definition_capture.rs
+@@ -0,0 +1,62 @@
++//! Privately retained matched item capture; data cannot publish a namespace.
++use super::*;
++#[derive(Debug, Clone)]
++pub(super) struct GeneratedDefinitionCapture {
++    pub(super) edition: u16,
++    pub(super) body: TokenForest,
++    pub(super) arguments: Option<TokenForest>,
++    pub(super) dialect: lrr_expand_adapter::declaration_output::DefinitionDialect,
++}
++impl GeneratedDefinitionCapture {
++    pub(super) fn admit(
++        header: &GeneratedHeader,
++        dialect: lrr_expand_adapter::declaration_output::DefinitionDialect,
++        edition: u16,
++        body: TokenForest,
++        arguments: Option<TokenForest>,
++    ) -> Result<Self, Diagnostic> {
++        use lrr_expand_adapter::declaration_output::DefinitionDialect;
++        let expected = match header.kind {
++            GeneratedHeaderKind::MacroRules => DefinitionDialect::Rules,
++            GeneratedHeaderKind::Macro2 => DefinitionDialect::Macro2,
++            _ => {
++                return Err(fault(
++                    "LRR-E-EXPANSION-INPUT",
++                    "generated definition capture is not a macro header",
++                ));
++            }
++        };
++        if dialect != expected
++            || !matches!(edition, 2015 | 2018 | 2021 | 2024)
++            || (dialect == DefinitionDialect::Rules && arguments.is_some())
++        {
++            return Err(fault(
++                "LRR-E-EXPANSION-INPUT",
++                "generated definition dialect/edition differs",
++            ));
++        }
++        let bytes = body
++            .encoded_len()
++            .map_err(|e| fault(e.code, &e.message))?
++            .checked_add(
++                arguments
++                    .as_ref()
++                    .map(TokenForest::encoded_len)
++                    .transpose()
++                    .map_err(|e| fault(e.code, &e.message))?
++                    .unwrap_or(0),
++            );
++        bytes.filter(|n| *n <= 32 * 1024 * 1024).ok_or_else(|| {
++            fault(
++                "LRR-E-METADATA-LIMIT",
++                "generated definition groups exceed metadata ceiling",
++            )
++        })?;
++        Ok(Self {
++            edition,
++            body,
++            arguments,
++            dialect,
++        })
++    }
++}
+diff --git a/crates/lrr/src/expand/generated_items.rs b/crates/lrr/src/expand/generated_items.rs
+--- a/crates/lrr/src/expand/generated_items.rs
++++ b/crates/lrr/src/expand/generated_items.rs
+@@ -41,7 +41,10 @@
+     items: Vec<GeneratedHeader>,
+     epoch: u64,
+     calls: Vec<GeneratedCall>,
+-    macro_bodies: std::collections::BTreeMap<Digest, (u16, TokenForest)>,
++    macro_bodies: std::collections::BTreeMap<
++        Digest,
++        generated_definition_capture::GeneratedDefinitionCapture,
++    >,
+     hygiene: Arc<crate::frontend::hygiene::HygieneFacts>,
+     syntax: Vec<item_output::SyntaxEvent>,
+     item_classes: std::collections::BTreeMap<
+@@ -49,6 +52,8 @@
+         crate::syntax::token_wire::NameContextKey,
+     >,
+ }
++#[path = "generated_definition_capture.rs"]
++mod generated_definition_capture;
+ fn fault(code: &'static str, message: &str) -> Diagnostic {
+     Diagnostic::new(code, message.into())
+ }
+@@ -165,7 +170,7 @@
+             .try_reserve_exact(parsed.items.len())
+             .map_err(|_| fault("LRR-E-DISCOVERY-LIMIT", "generated header allocation"))?;
+         for item in parsed.items {
+-            let mut e = StableEncoder::new("lrr/v2/generated-header");
++            let mut e = StableEncoder::new("lrr/v3/generated-header");
+             e.u32(item.kind.tag());
+             e.string(&parsed.text[item.header_start as usize..item.header_end as usize]);
+             let first = parsed
+@@ -209,7 +214,30 @@
+                 .encode()
+                 .map_err(|e| fault(e.code, &e.message))?;
+             let tokens = TokenForest::decode(&wire).map_err(|e| fault(e.code, &e.message))?;
+-            macro_bodies.insert(header.key.fingerprint(), (body.edition, tokens));
++            let arguments = body
++                .arguments
++                .as_ref()
++                .map(|a| {
++                    TokenForest::decode(&a.encode().map_err(|e| fault(e.code, &e.message))?)
++                        .map_err(|e| fault(e.code, &e.message))
++                })
++                .transpose()?;
++            let capture = generated_definition_capture::GeneratedDefinitionCapture::admit(
++                header,
++                body.dialect,
++                body.edition,
++                tokens,
++                arguments,
++            )?;
++            if macro_bodies
++                .insert(header.key.fingerprint(), capture)
++                .is_some()
++            {
++                return Err(fault(
++                    "LRR-E-EXPANSION-INPUT",
++                    "duplicate generated macro definition",
++                ));
++            }
+         }
+         let mut calls = Vec::new();
+         calls
+@@ -303,9 +331,15 @@
+                 .checked_mul(std::mem::size_of::<u32>())
+                 .ok_or_else(fail)?)?;
+         }
+-        for (_, tokens) in self.macro_bodies.values() {
++        for capture in self.macro_bodies.values() {
+             add(128)?;
+-            add(tokens
++            if let Some(arguments) = &capture.arguments {
++                add(arguments
++                    .allocated_bytes()
++                    .map_err(|e| fault(e.code, &e.message))?)?;
++            }
++            add(capture
++                .body
+                 .allocated_bytes()
+                 .map_err(|e| fault("LRR-E-METADATA-LIMIT", &e.to_string()))?)?;
+         }
+@@ -326,10 +360,19 @@
+     pub(crate) fn hygiene_facts(&self) -> Arc<crate::frontend::hygiene::HygieneFacts> {
+         self.hygiene.clone()
+     }
++    pub(crate) fn macro_dialect(
++        &self,
++        id: Digest,
++    ) -> Result<lrr_expand_adapter::declaration_output::DefinitionDialect, Diagnostic> {
++        self.macro_bodies
++            .get(&id)
++            .map(|b| b.dialect)
++            .ok_or_else(|| fault("LRR-E-EXPANSION-INPUT", "generated macro dialect absent"))
++    }
+     pub(crate) fn macro_edition(&self, id: Digest) -> Result<u16, Diagnostic> {
+         self.macro_bodies
+             .get(&id)
+-            .map(|b| b.0)
++            .map(|b| b.edition)
+             .ok_or_else(|| fault("LRR-E-EXPANSION-INPUT", "generated macro body absent"))
+     }
+     pub(crate) fn expand_macro_body(
+@@ -341,10 +384,12 @@
+         site: crate::syntax::token_wire::Key,
+     ) -> Result<ExpansionRecord, Diagnostic> {
+         key.validate()?;
+-        let (edition, body) = self
++        let capture = self
+             .macro_bodies
+             .get(&id)
+             .ok_or_else(|| fault("LRR-E-EXPANSION-INPUT", "generated macro body absent"))?;
++        let edition = &capture.edition;
++        let body = &capture.body;
+         let call_site = input
+             .spans()
+             .iter()
+@@ -378,8 +423,25 @@
+             .map_err(|e| fault(e.code, &e.message))?;
+         let input = lrr_expand_adapter::token_wire::TokenForest::decode(&wire)
+             .map_err(|e| fault(e.code, &e.message))?;
+-        let definition = lrr_expand_adapter::declarative::DeclarativeMacro::new(body)
+-            .map_err(|e| fault(e.code, &e.message))?;
++        let definition = match capture.dialect {
++            lrr_expand_adapter::declaration_output::DefinitionDialect::Rules => {
++                lrr_expand_adapter::declarative::DeclarativeMacro::new(body)
++            }
++            lrr_expand_adapter::declaration_output::DefinitionDialect::Macro2 => {
++                let arguments = capture
++                    .arguments
++                    .as_ref()
++                    .map(|a| {
++                        lrr_expand_adapter::token_wire::TokenForest::decode(
++                            &a.encode().map_err(|e| fault(e.code, &e.message))?,
++                        )
++                        .map_err(|e| fault(e.code, &e.message))
++                    })
++                    .transpose()?;
++                lrr_expand_adapter::declarative::DeclarativeMacro::new_macro2(arguments, body)
++            }
++        }
++        .map_err(|e| fault(e.code, &e.message))?;
+         let edition = match *edition {
+             2015 => lrr_expand_adapter::token_wire::Edition::E2015,
+             2018 => lrr_expand_adapter::token_wire::Edition::E2018,
+diff --git a/crates/lrr/src/expand/source_declarative.rs b/crates/lrr/src/expand/source_declarative.rs
+--- a/crates/lrr/src/expand/source_declarative.rs
++++ b/crates/lrr/src/expand/source_declarative.rs
+@@ -867,19 +867,50 @@
+                     "completed source invocation absent",
+                 )
+             })?;
+-        self.index.complete_generated_item_producer(
++        if catalog.cfg_fingerprint() != self.source.outline().cfg {
++            return Err(fault(
++                "LRR-E-EXPANSION-INPUT",
++                "completed generated module cfg differs from captured source",
++            ));
++        }
++        if self.catalogs.len() >= 100_000 {
++            return Err(fault(
++                "LRR-E-DISCOVERY-LIMIT",
++                "completed macro catalogue count limit",
++            ));
++        }
++        let module_definitions = catalog.module_macro2_definitions()?;
++        self.generated
++            .len()
++            .checked_add(module_definitions.len())
++            .and_then(|n| n.checked_add(catalog.outward().len()))
++            .filter(|n| *n <= 1_000_000)
++            .ok_or_else(|| fault("LRR-E-DISCOVERY-LIMIT", "generated body owner count limit"))?;
++        let catalogue_bytes = catalog.metadata_bytes()?;
++        self.index
++            .metadata_bytes()?
++            .checked_mul(2)
++            .and_then(|n| n.checked_add(catalogue_bytes))
++            .filter(|n| *n <= 256 * 1024 * 1024)
++            .ok_or_else(|| {
++                fault(
++                    "LRR-E-METADATA-LIMIT",
++                    "generated module transaction transient budget",
++                )
++            })?;
++        let mut next = self.index.snapshot_clone()?;
++        next.complete_generated_item_producer(
+             &call.scope,
+             u64::from(call.range.start),
+             invocation,
+             &catalog,
+         )?;
+-        if self.catalogs.len() >= 100_000 {
+-            return Err(fault(
+-                "LRR-E-DISCOVERY-LIMIT",
+-                "completed macro catalogue count limit",
+-            ));
+-        }
++        next.metadata_bytes()?;
++        self.index = next;
+         self.catalogs.insert(invocation, catalog.clone());
++        for definition in module_definitions {
++            self.generated.insert(definition.identity, catalog.clone());
++        }
+         for entry in catalog.outward() {
+             self.generated
+                 .insert(entry.definition.identity, catalog.clone());
+diff --git a/crates/lrr/src/frontend/generated_headers.rs b/crates/lrr/src/frontend/generated_headers.rs
+--- a/crates/lrr/src/frontend/generated_headers.rs
++++ b/crates/lrr/src/frontend/generated_headers.rs
+@@ -225,7 +225,7 @@
+         }
+         let edition = items.record().key().call_edition;
+         let parsed = ParsedFile::from_generated_items(items)?;
+-        let outline = parsed.outline(scope.crate_key, scope.module_path.clone(), cfg)?;
++        let outline = parsed.outline_generated_module(items, &scope, cfg, epoch)?;
+         let owner_class = items.item_class(if captured_root.is_some() {
+             call_context
+         } else {
+diff --git a/crates/lrr/src/frontend/generated_macros.rs b/crates/lrr/src/frontend/generated_macros.rs
+--- a/crates/lrr/src/frontend/generated_macros.rs
++++ b/crates/lrr/src/frontend/generated_macros.rs
+@@ -699,7 +699,7 @@
+             context.clone()
+         };
+         let parsed = ParsedFile::from_generated_items(items)?;
+-        let outline = parsed.outline(owner.crate_key, owner.module_path.clone(), cfg)?;
++        let outline = parsed.outline_generated_module(items, &owner, cfg, epoch)?;
+         let permitted = outline
+             .item_invocations
+             .iter()
+@@ -901,9 +901,15 @@
+             let header = headers
+                 .get(&(item.declaration_span.start, item.declaration_span.end))
+                 .ok_or_else(|| fault("generated macro header absent"))?;
+-            if header.kind != crate::expand::generated_items::GeneratedHeaderKind::MacroRules {
++            if !matches!(
++                header.kind,
++                crate::expand::generated_items::GeneratedHeaderKind::MacroRules
++                    | crate::expand::generated_items::GeneratedHeaderKind::Macro2
++            ) {
+                 continue;
+             }
++            let is_macro2 =
++                header.kind == crate::expand::generated_items::GeneratedHeaderKind::Macro2;
+             let name = header
+                 .name
+                 .as_ref()
+@@ -912,36 +918,46 @@
+                 .get(&name.span.0)
+                 .ok_or_else(|| fault("generated macro name span absent"))?
+                 .context;
++            if is_macro2 && facts.name_item(context)? != facts.name_item(owner_context)? {
++                return Err(Diagnostic::new(
++                    "LRR-E-MACRO2-SOURCE",
++                    "generated module macro2 name requires hygienic namespace membership".into(),
++                ));
++            }
+             let definition = MacroDefinition {
+                 identity: header.key.fingerprint(),
+                 defining_unit: owner.crate_key,
+                 definition_edition: items.macro_edition(header.key.fingerprint())?,
+             };
+-            scopes.define(
+-                *module_scopes
+-                    .get(&item.scope)
+-                    .ok_or_else(|| fault("generated macro lexical module absent"))?,
+-                u64::from(header.start),
+-                MacroName::parse(&name.text, definition.definition_edition)?,
+-                definition.clone(),
+-            )?;
++            if !is_macro2 {
++                scopes.define(
++                    *module_scopes
++                        .get(&item.scope)
++                        .ok_or_else(|| fault("generated macro lexical module absent"))?,
++                    u64::from(header.start),
++                    MacroName::parse(&name.text, definition.definition_edition)?,
++                    definition.clone(),
++                )?;
++            }
+             declarations.register(definition.clone(), context, Some(origin), &facts, &ancestry)?;
+-            scope_bytes = scope_bytes
+-                .checked_add(item.scope.heap_bytes())
+-                .and_then(|n| n.checked_add(160))
+-                .filter(|n| *n <= 32 * 1024 * 1024)
+-                .ok_or_else(|| fault("generated outward scope metadata limit"))?;
+-            outward
+-                .try_reserve(1)
+-                .map_err(|_| fault("outward macro declaration allocation"))?;
+-            outward.push(OutwardMacro {
+-                scope: item.scope.clone(),
+-                name: MacroName::parse(&name.text, definition.definition_edition)?,
+-                definition: definition.clone(),
+-                context,
+-                origin: Some(origin),
+-                at: header.start,
+-            });
++            if !is_macro2 {
++                scope_bytes = scope_bytes
++                    .checked_add(item.scope.heap_bytes())
++                    .and_then(|n| n.checked_add(160))
++                    .filter(|n| *n <= 32 * 1024 * 1024)
++                    .ok_or_else(|| fault("generated outward scope metadata limit"))?;
++                outward
++                    .try_reserve(1)
++                    .map_err(|_| fault("outward macro declaration allocation"))?;
++                outward.push(OutwardMacro {
++                    scope: item.scope.clone(),
++                    name: MacroName::parse(&name.text, definition.definition_edition)?,
++                    definition: definition.clone(),
++                    context,
++                    origin: Some(origin),
++                    at: header.start,
++                });
++            }
+             definitions.insert(definition.identity, definition);
+         }
+         let indices = items
+@@ -3803,10 +3819,11 @@
+             return Err(fault("generated macro routes require completed calls"));
+         }
+         let parsed = ParsedFile::from_generated_items(&self.items)?;
+-        let outline = parsed.outline(
+-            self.owner.crate_key,
+-            self.owner.module_path.clone(),
++        let outline = parsed.outline_generated_module(
++            &self.items,
++            &self.owner,
+             &self.cfg,
++            self.items.epoch(),
+         )?;
+         let plan = super::generated_headers::GeneratedHeaderPlan::prepare_catalog(self)?;
+         let headers = self
+@@ -4184,11 +4201,8 @@
+             .get(&call_scope)
+             .ok_or_else(|| fault("completed generated lexical scope absent"))?;
+         let parsed = ParsedFile::from_generated_items(&items)?;
+-        let outline = parsed.outline(
+-            call_scope.crate_key,
+-            call_scope.module_path.clone(),
+-            &self.cfg,
+-        )?;
++        let outline =
++            parsed.outline_generated_module(&items, &call_scope, &self.cfg, self.items.epoch())?;
+         if child.is_none()
+             && (!outline.imports.is_empty()
+                 || outline.scopes.values().any(|s| !s.blockers.is_empty())
+@@ -4762,11 +4776,67 @@
+             &self.ancestry,
+         )
+     }
++    pub(crate) fn definition_context(
++        &self,
++        definition: &MacroDefinition,
++    ) -> Result<Key, Diagnostic> {
++        let body = self
++            .module_definition_body(definition)
++            .ok_or_else(|| fault("module definition body owner absent"))?;
++        let header = body
++            .items()
++            .iter()
++            .find(|h| h.key.fingerprint() == definition.identity)
++            .ok_or_else(|| fault("module definition header absent"))?;
++        let name = header
++            .name
++            .as_ref()
++            .ok_or_else(|| fault("module definition name absent"))?;
++        body.tokens()
++            .spans()
++            .iter()
++            .find(|s| s.key().0 == name.span.0)
++            .map(|s| s.context)
++            .ok_or_else(|| fault("module definition name context absent"))
++    }
+     pub(crate) fn definition_origin(
+         &self,
+         definition: &MacroDefinition,
+     ) -> Result<Option<Option<Key>>, Diagnostic> {
+         self.declarations.origin_of(definition)
++    }
++    /// Exact privately matched module Macro2 members, separate from textual outward bindings.
++    pub(crate) fn cfg_fingerprint(&self) -> Digest {
++        self.cfg.fingerprint()
++    }
++    pub(crate) fn module_macro2_definitions(&self) -> Result<Vec<&MacroDefinition>, Diagnostic> {
++        if !self.ready_for_outward() {
++            return Err(fault(
++                "generated module definitions retain unresolved producers",
++            ));
++        }
++        self.definitions
++            .len()
++            .checked_mul(std::mem::size_of::<&MacroDefinition>())
++            .filter(|n| *n <= 8 * 1024 * 1024)
++            .ok_or_else(|| fault("module definition borrow index budget"))?;
++        let mut values = Vec::new();
++        values
++            .try_reserve_exact(self.definitions.len())
++            .map_err(|_| fault("module definition borrow allocation"))?;
++        for definition in self.definitions.values() {
++            if self.source_body_owners.contains_key(&definition.identity) {
++                continue;
++            }
++            if self
++                .body_for(definition.identity)
++                .macro_dialect(definition.identity)?
++                == lrr_expand_adapter::declaration_output::DefinitionDialect::Macro2
++            {
++                values.push(definition);
++            }
++        }
++        Ok(values)
+     }
+     pub(crate) fn module_definition_body(
+         &self,
+diff --git a/crates/lrr/src/frontend/source_macros.rs b/crates/lrr/src/frontend/source_macros.rs
+--- a/crates/lrr/src/frontend/source_macros.rs
++++ b/crates/lrr/src/frontend/source_macros.rs
+@@ -391,14 +391,21 @@
+             .scope_keys
+             .get(scope)
+             .ok_or_else(|| error("outward source scope absent"))?;
++        let module_definitions = catalog.module_macro2_definitions()?;
+         self.definitions
+             .len()
+             .checked_add(catalog.outward().len())
++            .and_then(|n| n.checked_add(module_definitions.len()))
+             .filter(|n| *n <= 1_000_000)
+             .ok_or_else(|| error("outward macro definition count limit"))?;
+         for entry in catalog.outward() {
+             if self.definitions.contains_key(&entry.definition.identity) {
+                 return Err(error("outward macro identity was already registered"));
++            }
++        }
++        for definition in &module_definitions {
++            if self.definitions.contains_key(&definition.identity) {
++                return Err(error("module macro identity was already registered"));
+             }
+         }
+         std::sync::Arc::make_mut(&mut self.facts).extend(catalog.facts())?;
+@@ -414,6 +421,22 @@
+             )?;
+             self.definitions
+                 .insert(entry.definition.identity, entry.definition.clone());
++        }
++        for definition in module_definitions {
++            // The actual selected generated body carries the name context/origin.
++            // It is not a textual binding or macro_use export.
++            let origin = catalog
++                .definition_origin(definition)?
++                .ok_or_else(|| error("module macro origin absent"))?;
++            self.declarations.register(
++                definition.clone(),
++                catalog.definition_context(definition)?,
++                origin,
++                &self.facts,
++                &self.ancestry,
++            )?;
++            self.definitions
++                .insert(definition.identity, definition.clone());
+         }
+         if prefix {
+             self.scopes.publish_prefix(key, at, identity, bindings)?;
+diff --git a/crates/lrr/src/syntax/declaration_macro_capture.rs b/crates/lrr/src/syntax/declaration_macro_capture.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/syntax/declaration_macro_capture.rs
+@@ -0,0 +1,109 @@
++//! Exact macro2 AST header data. Never a textual binding or selected namespace proof.
++use super::*;
++#[derive(Clone, Debug)]
++pub struct ScannedMacro2Definition {
++    pub identity: Digest,
++    pub name: String,
++    pub name_range: SourceRange,
++    pub name_edition: u16,
++    pub range: SourceRange,
++    pub arguments: Option<SourceRange>,
++    pub body: SourceRange,
++    pub scope: ScopeKey,
++    pub lexical_scope: MacroScope,
++    pub scope_kind: DeclarationScopeKind,
++    pub visibility: super::super::visibility::VisibilityScope,
++}
++impl StableEncode for ScannedMacro2Definition {
++    const DOMAIN: &'static str = "lrr/v1/scanned-macro2-definition";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.digest(self.identity);
++        e.string(&self.name);
++        e.u16(self.name_edition);
++        position(e, self.name_range);
++        position(e, self.range);
++        e.option(&self.arguments, |e, r| position(e, *r));
++        position(e, self.body);
++        e.record(&self.scope);
++        e.record(&self.lexical_scope);
++        e.record(&self.scope_kind);
++        e.record(&self.visibility);
++    }
++}
++pub(super) fn capture(
++    parsed: &ParsedFile,
++    m: &ast::MacroDef,
++    lexical_scope: MacroScope,
++    scope_kind: DeclarationScopeKind,
++    scan: &DeclarationScan,
++    budget: &mut Budget,
++) -> Result<ScannedMacro2Definition, Diagnostic> {
++    let name = m.name().ok_or_else(|| {
++        Diagnostic::new("LRR-E-SOURCE-PARSE", "macro2 definition has no name".into())
++    })?;
++    let name_range = range(name.syntax().text_range());
++    let name_edition = parsed.token_edition(name_range)?;
++    let name = name.text().to_string();
++    super::super::ast_adapter::macro_name(&name, name_edition)
++        .ok_or_else(|| Diagnostic::new("LRR-E-SOURCE-NAME", "macro2 source name invalid".into()))?;
++    let selected = range(m.syntax().text_range());
++    let args = m.args().map(|a| range(a.syntax().text_range()));
++    let body = range(
++        m.body()
++            .ok_or_else(|| Diagnostic::new("LRR-E-SOURCE-PARSE", "macro2 body absent".into()))?
++            .syntax()
++            .text_range(),
++    );
++    if !selected.contains(body) || args.is_some_and(|a| !selected.contains(a) || a.end > body.start)
++    {
++        return Err(limit());
++    }
++    let (mut scope, _) = lexical_context(m.syntax(), &scan.scope, budget)?;
++    if scope_kind == DeclarationScopeKind::Module
++        && !m.syntax().ancestors().any(|a| {
++            ast::Fn::can_cast(a.kind())
++                || ast::BlockExpr::can_cast(a.kind())
++                || ast::ClosureExpr::can_cast(a.kind())
++                || ast::AssocItemList::can_cast(a.kind())
++        })
++    {
++        scope.owner = None;
++    }
++    let visibility = super::super::visibility::VisibilityScope::for_declaration(
++        &super::super::outline::visibility(m.syntax()),
++        &scope,
++        name_edition,
++    )?;
++    let visibility_bytes = match &visibility {
++        super::super::visibility::VisibilityScope::Public => Some(0),
++        super::super::visibility::VisibilityScope::Within { module_path, .. } => module_path
++            .capacity()
++            .checked_mul(std::mem::size_of::<String>())
++            .and_then(|n| {
++                module_path
++                    .iter()
++                    .try_fold(n, |n, s| n.checked_add(s.capacity()))
++            }),
++    }
++    .ok_or_else(limit)?;
++    let bytes = std::mem::size_of::<ScannedMacro2Definition>()
++        .checked_add(name.capacity())
++        .and_then(|n| n.checked_add(scope.heap_bytes()))
++        .and_then(|n| n.checked_add(visibility_bytes))
++        .and_then(|n| n.checked_add(128))
++        .ok_or_else(limit)?;
++    budget.charge(bytes)?;
++    Ok(ScannedMacro2Definition {
++        identity: source_identity(scan, selected, 6),
++        name,
++        name_range,
++        name_edition,
++        range: selected,
++        arguments: args,
++        body,
++        scope,
++        lexical_scope,
++        scope_kind,
++        visibility,
++    })
++}
+diff --git a/crates/lrr/src/syntax/declaration_scan.rs b/crates/lrr/src/syntax/declaration_scan.rs
+--- a/crates/lrr/src/syntax/declaration_scan.rs
++++ b/crates/lrr/src/syntax/declaration_scan.rs
+@@ -94,6 +94,9 @@
+     pub parent: Option<MacroScope>,
+     pub range: SourceRange,
+ }
++#[path = "declaration_macro_capture.rs"]
++mod declaration_macro_capture;
++pub use declaration_macro_capture::ScannedMacro2Definition;
+ #[derive(Clone, Debug)]
+ pub struct ScannedMacroDefinition {
+     pub identity: Digest,
+@@ -155,6 +158,7 @@
+     producers: Vec<DeclarationProducer>,
+     lexical_scopes: Vec<DeclarationLexicalScope>,
+     macro_definitions: Vec<ScannedMacroDefinition>,
++    macro2_definitions: Vec<ScannedMacro2Definition>,
+     modules: Vec<ScannedModule>,
+     imports: Vec<ScannedImport>,
+     cost: DeclarationScanCost,
+@@ -194,6 +198,9 @@
+     pub fn lexical_scopes(&self) -> &[DeclarationLexicalScope] {
+         &self.lexical_scopes
+     }
++    pub fn macro2_definitions(&self) -> &[ScannedMacro2Definition] {
++        &self.macro2_definitions
++    }
+     pub fn macro_definitions(&self) -> &[ScannedMacroDefinition] {
+         &self.macro_definitions
+     }
+@@ -216,7 +223,7 @@
+ }
+ impl StableEncode for DeclarationScan {
+     const DOMAIN: &'static str =
+-        "lrr/v2/declaration-skeleton-with-scoped-module-bindings-and-token-editions";
++        "lrr/v3/declaration-skeleton-with-scoped-module-bindings-and-token-editions";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         e.string(self.path.as_str());
+         e.record(&self.parse);
+@@ -269,6 +276,7 @@
+             e.record(&m.visibility);
+             e.sequence(&m.attribute_inputs, |e, input| e.digest(*input));
+         });
++        e.sequence(&self.macro2_definitions, |e, d| e.record(d));
+         e.sequence(&self.macro_definitions, |e, d| {
+             e.digest(d.identity);
+             e.string(&d.name);
+@@ -584,6 +592,7 @@
+             producers: Vec::new(),
+             lexical_scopes: Vec::new(),
+             macro_definitions: Vec::new(),
++            macro2_definitions: Vec::new(),
+             modules: Vec::new(),
+             imports: Vec::new(),
+             cost: DeclarationScanCost::default(),
+@@ -798,6 +807,24 @@
+                     });
+                 }
+             }
++            if let Some(definition) = ast::MacroDef::cast(node.clone()) {
++                if scan.macro2_definitions.len() >= limits.producers {
++                    return Err(limit());
++                }
++                let captured = declaration_macro_capture::capture(
++                    self,
++                    &definition,
++                    lexical_scope,
++                    lexical_kind,
++                    &scan,
++                    &mut budget,
++                )?;
++                scan.macro2_definitions
++                    .try_reserve_exact(1)
++                    .map_err(|_| limit())?;
++                scan.macro2_definitions.push(captured);
++                continue;
++            }
+             if let Some(definition) = ast::MacroRules::cast(node.clone()) {
+                 if scan.macro_definitions.len() >= limits.producers {
+                     return Err(limit());
+diff --git a/crates/lrr/src/syntax/generated_declaration_scan.rs b/crates/lrr/src/syntax/generated_declaration_scan.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/syntax/generated_declaration_scan.rs
+@@ -0,0 +1,80 @@
++//! Exact generated item arena admission. Pure syntax data, never namespace completeness.
++use super::*;
++pub(super) struct GeneratedModuleSyntax {
++    origin: Digest,
++}
++impl GeneratedModuleSyntax {
++    pub(super) fn matches(&self, parsed: &ParsedFile) -> bool {
++        parsed.generated_origin == Some(self.origin)
++    }
++}
++impl ParsedFile {
++    pub(crate) fn outline_generated_module(
++        &self,
++        items: &crate::expand::generated_items::GeneratedItems,
++        owner: &ScopeKey,
++        cfg: &CfgSet,
++        epoch: u64,
++    ) -> Result<Outline, Diagnostic> {
++        use crate::expand::identity::GrammarSlot;
++        let refusal = || {
++            fault(
++                "LRR-E-EXPANSION-INPUT",
++                "generated module syntax source/owner/producer differs",
++            )
++        };
++        if epoch == 0 || items.epoch() != epoch {
++            return Err(fault(
++                "LRR-E-EXPANSION-EPOCH",
++                "generated module syntax epoch differs",
++            ));
++        }
++        if !items.items().iter().any(|header| {
++            header.kind == crate::expand::generated_items::GeneratedHeaderKind::Macro2
++        }) {
++            // Keep the existing Rules/non-macro module parser path unchanged.
++            return self.outline(owner.crate_key, owner.module_path.clone(), cfg);
++        }
++        let descriptor = items.record().descriptor();
++        let origin = descriptor.fingerprint();
++        let mut input = StableEncoder::new("lrr/v2/generated-syntax-input");
++        input.record(&descriptor);
++        let expected_profile = crate::core::profile::ProfileIdentity {
++            edition: items.record().key().call_edition,
++            ..crate::core::profile::ProfileIdentity::current()
++        };
++        if self.content != input.finish()
++            || self.profile != expected_profile
++            || self.edition != items.record().key().call_edition
++            || self.generated_origin != Some(origin)
++            || owner.owner.is_some()
++            || items.record().key().grammar != GrammarSlot::Items
++        {
++            return Err(refusal());
++        }
++        let mut cursor = crate::syntax::token_wire::Key(items.record().key().parent_context.0);
++        for _ in 0..=256 {
++            let record = items
++                .tokens()
++                .contexts()
++                .iter()
++                .find(|c| c.key() == cursor)
++                .ok_or_else(refusal)?;
++            if let Some(parent) = record.parent {
++                cursor = parent;
++                continue;
++            }
++            if record.defining_unit.0 != owner.crate_key.0 || record.expansion.is_some() {
++                return Err(refusal());
++            }
++            let proof = GeneratedModuleSyntax { origin };
++            return self.outline_with_generated_macro2(
++                owner.crate_key,
++                owner.module_path.clone(),
++                cfg,
++                Some(&proof),
++            );
++        }
++        Err(refusal())
++    }
++}
+diff --git a/crates/lrr/src/syntax/outline.rs b/crates/lrr/src/syntax/outline.rs
+--- a/crates/lrr/src/syntax/outline.rs
++++ b/crates/lrr/src/syntax/outline.rs
+@@ -570,6 +570,8 @@
+     Ok((enabled, result))
+ }
+ 
++#[path = "generated_declaration_scan.rs"]
++mod generated_declaration_scan;
+ impl ParsedFile {
+     /// Pure header traversal. Function bodies and macro token trees are opaque.
+     pub fn outline(
+@@ -577,6 +579,15 @@
+         crate_key: Digest,
+         module_path: Vec<String>,
+         cfg: &CfgSet,
++    ) -> Result<Outline, Diagnostic> {
++        self.outline_with_generated_macro2(crate_key, module_path, cfg, None)
++    }
++    fn outline_with_generated_macro2(
++        &self,
++        crate_key: Digest,
++        module_path: Vec<String>,
++        cfg: &CfgSet,
++        generated: Option<&generated_declaration_scan::GeneratedModuleSyntax>,
+     ) -> Result<Outline, Diagnostic> {
+         let initial = ScopeKey {
+             crate_key,
+diff --git a/crates/lrr-expand-adapter/src/declaration_output.rs b/crates/lrr-expand-adapter/src/declaration_output.rs
+--- a/crates/lrr-expand-adapter/src/declaration_output.rs
++++ b/crates/lrr-expand-adapter/src/declaration_output.rs
+@@ -7,7 +7,7 @@
+ };
+ use syntax::{
+     AstNode,
+-    ast::{self, HasName},
++    ast::{self},
+ };
+ 
+ #[derive(Clone, Copy, Debug)]
+@@ -40,7 +40,17 @@
+     pub definitions: Vec<DefinitionCapture>,
+     pub calls: Vec<CallCapture>,
+ }
++#[derive(Debug, Clone, Copy, Eq, PartialEq)]
++pub enum DefinitionDialect {
++    Rules,
++    Macro2,
++}
++#[path = "generated_definition_capture.rs"]
++mod generated_definition_capture;
++pub(crate) use generated_definition_capture::capture_definition;
+ pub struct DefinitionCapture {
++    pub dialect: DefinitionDialect,
++    pub arguments: Option<TokenForest>,
+     pub start: u32,
+     pub end: u32,
+     pub name_span: Key,
+@@ -154,36 +164,26 @@
+         let syntax::WalkEvent::Enter(node) = event else {
+             continue;
+         };
+-        if let Some(definition) = ast::MacroRules::cast(node.clone()) {
++        if let Some(definition) = capture_definition(&node, &map, &store)? {
+             if definitions.len() >= 100_000 {
+                 return Err(error("generated definition capture count limit"));
+             }
+-            let name = definition
+-                .name()
+-                .ok_or_else(|| error("generated definition name absent"))?;
+-            let keyword = definition
+-                .macro_rules_token()
+-                .ok_or_else(|| error("generated definition keyword absent"))?;
+-            let body = definition
+-                .token_tree()
+-                .ok_or_else(|| error("generated definition body absent"))?;
+-            let source = map.span_at(keyword.text_range().start());
+-            let body = group(body.syntax(), &map, source, &store)?;
++            let arguments_bytes = definition
++                .arguments
++                .as_ref()
++                .map(TokenForest::allocated_bytes)
++                .transpose()?
++                .unwrap_or(0);
+             bytes = bytes
+-                .checked_add(body.allocated_bytes()?)
++                .checked_add(definition.body.allocated_bytes()?)
+                 .and_then(|n| n.checked_add(128))
++                .and_then(|n| n.checked_add(arguments_bytes))
+                 .filter(|n| *n <= 256 * 1024 * 1024)
+                 .ok_or_else(|| error("generated macro capture retention budget"))?;
+             definitions
+                 .try_reserve_exact(1)
+                 .map_err(|_| error("generated definition capture allocation"))?;
+-            definitions.push(DefinitionCapture {
+-                start: u32::from(node.text_range().start()),
+-                end: u32::from(node.text_range().end()),
+-                name_span: store.key(map.span_at(name.syntax().text_range().start()))?,
+-                body,
+-                edition: source.ctx.edition(store.database()).number() as u16,
+-            });
++            definitions.push(definition);
+             walk.skip_subtree();
+             continue;
+         }
+diff --git a/crates/lrr-expand-adapter/src/generated_definition_capture.rs b/crates/lrr-expand-adapter/src/generated_definition_capture.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr-expand-adapter/src/generated_definition_capture.rs
+@@ -0,0 +1,66 @@
++//! Real pinned generated declaration groups. Component facts, never scope authority.
++use super::{DefinitionCapture, DefinitionDialect};
++use crate::{AdapterError, span_store::SpanStore};
++use syntax::{
++    AstNode,
++    ast::{self, HasName},
++};
++fn error(message: &str) -> AdapterError {
++    AdapterError {
++        code: "LRR-E-MACRO-OUTPUT",
++        message: message.into(),
++    }
++}
++pub(crate) fn capture_definition(
++    node: &syntax::SyntaxNode,
++    map: &span::SpanMap,
++    store: &SpanStore,
++) -> Result<Option<DefinitionCapture>, AdapterError> {
++    let (dialect, keyword, name, args, body) = if let Some(m) = ast::MacroRules::cast(node.clone())
++    {
++        (
++            DefinitionDialect::Rules,
++            m.macro_rules_token(),
++            m.name(),
++            None,
++            m.token_tree(),
++        )
++    } else if let Some(m) = ast::MacroDef::cast(node.clone()) {
++        (
++            DefinitionDialect::Macro2,
++            m.macro_token(),
++            m.name(),
++            m.args(),
++            m.body(),
++        )
++    } else {
++        return Ok(None);
++    };
++    let keyword = keyword.ok_or_else(|| error("generated definition keyword absent"))?;
++    let name = name.ok_or_else(|| error("generated definition name absent"))?;
++    let body = body.ok_or_else(|| error("generated definition body absent"))?;
++    let source = map.span_at(keyword.text_range().start());
++    let body = super::group(body.syntax(), map, source, store)?;
++    let arguments = args
++        .map(|args| super::group(args.syntax(), map, source, store))
++        .transpose()?;
++    body.allocated_bytes()?
++        .checked_add(
++            arguments
++                .as_ref()
++                .map(|a| a.allocated_bytes())
++                .transpose()?
++                .unwrap_or(0),
++        )
++        .filter(|n| *n <= 32 * 1024 * 1024)
++        .ok_or_else(|| error("generated definition groups exceed metadata limit"))?;
++    Ok(Some(DefinitionCapture {
++        dialect,
++        arguments,
++        start: u32::from(node.text_range().start()),
++        end: u32::from(node.text_range().end()),
++        name_span: store.key(map.span_at(name.syntax().text_range().start()))?,
++        body,
++        edition: source.ctx.edition(store.database()).number() as u16,
++    }))
++}
+diff --git a/crates/lrr-expand-adapter/src/item_output.rs b/crates/lrr-expand-adapter/src/item_output.rs
+--- a/crates/lrr-expand-adapter/src/item_output.rs
++++ b/crates/lrr-expand-adapter/src/item_output.rs
+@@ -13,6 +13,7 @@
+     Function,
+     Import,
+     MacroRules,
++    Macro2,
+     Module,
+     Struct,
+     Enum,
+@@ -42,6 +43,7 @@
+             Self::Union => 11,
+             Self::Other => 12,
+             Self::ExternCrate => 13,
++            Self::Macro2 => 14,
+         }
+     }
+ }
+@@ -80,6 +82,8 @@
+     pub ordinal: u32,
+     pub edition: u16,
+     pub tokens: TokenForest,
++    pub arguments: Option<TokenForest>,
++    pub dialect: crate::declaration_output::DefinitionDialect,
+ }
+ #[derive(Debug, Clone)]
+ pub struct MacroCall {
+@@ -246,6 +250,7 @@
+             ast::Item::Use(_) => (ItemKind::Import, None),
+             ast::Item::ExternCrate(i) => (ItemKind::ExternCrate, i.rename().and_then(|r| r.name())),
+             ast::Item::MacroRules(i) => (ItemKind::MacroRules, i.name()),
++            ast::Item::MacroDef(i) => (ItemKind::Macro2, i.name()),
+             ast::Item::Module(i) => {
+                 if let Some(body) = i.item_list() {
+                     header_end = u32::from(body.syntax().text_range().start());
+@@ -300,47 +305,29 @@
+         };
+         let ordinal =
+             u32::try_from(items.len()).map_err(|_| fault("generated header ordinal overflow"))?;
+-        if let ast::Item::MacroRules(declaration) = &item {
+-            let body = declaration
+-                .token_tree()
+-                .ok_or_else(|| fault("macro body absent"))?;
+-            let keyword = declaration
+-                .macro_rules_token()
+-                .ok_or_else(|| fault("macro keyword absent"))?;
+-            let source = map.span_at(keyword.text_range().start());
+-            let edition = source.ctx.edition(store.database()).number() as u16;
+-            let converted = syntax_bridge::syntax_node_to_token_tree(
+-                body.syntax(),
+-                &map,
+-                source,
+-                syntax_bridge::DocCommentDesugarMode::Mbe,
+-            );
+-            let exported = store.export(&converted)?;
+-            let tokens = match exported.roots() {
+-                [
+-                    crate::token_wire::TokenTree::Group {
+-                        delimiter: crate::token_wire::Delimiter::Invisible,
+-                        children,
+-                        ..
+-                    },
+-                ] if children.len() == 1 => TokenForest::new(
+-                    vec![children[0].clone()],
+-                    exported.contexts().to_vec(),
+-                    exported.spans().to_vec(),
+-                )?,
+-                _ => exported,
+-            };
++        if let Some(capture) =
++            crate::declaration_output::capture_definition(item.syntax(), &map, &store)?
++        {
++            let arguments_bytes = capture
++                .arguments
++                .as_ref()
++                .map(TokenForest::encoded_len)
++                .transpose()?
++                .unwrap_or(0);
+             macro_bytes = macro_bytes
+-                .checked_add(tokens.encoded_len()?)
++                .checked_add(capture.body.encoded_len()?)
++                .and_then(|n| n.checked_add(arguments_bytes))
+                 .filter(|n| *n <= 256 * 1024 * 1024)
+-                .ok_or_else(|| fault("generated macro body budget"))?;
++                .ok_or_else(|| fault("generated macro groups budget"))?;
+             macros
+                 .try_reserve(1)
+-                .map_err(|_| fault("generated macro body allocation"))?;
++                .map_err(|_| fault("generated macro group allocation"))?;
+             macros.push(MacroBody {
+                 ordinal,
+-                edition,
+-                tokens,
++                edition: capture.edition,
++                tokens: capture.body,
++                arguments: capture.arguments,
++                dialect: capture.dialect,
+             });
+         }
+         if let ast::Item::MacroCall(call) = &item {
+diff --git a/crates/lrr/src/expand/generated_items/macro2_tests.rs b/crates/lrr/src/expand/generated_items/macro2_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/expand/generated_items/macro2_tests.rs
+@@ -0,0 +1,650 @@
++//! Original-source expansion components. No complete upstream fixture claim.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    db::key::OutlineKey,
++    expand::{
++        generated_declarations::GeneratedDeclarations,
++        source_declarative::{
++            SourceDeclarative, SourceDeclarativeDemand, SourceDeclarativeRequest,
++        },
++    },
++    frontend::{generated_macros::GeneratedMacroCatalog, source_macro_routes::SourceMacroRoutes},
++    source::{
++        changes::{
++            PreparedSourceInputs, PreparedSourceView, SourceSelection, SourceSelectionOutcome,
++            SourceUnitInput,
++        },
++        dependencies::SourceDependency,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::{
++        declaration_scan::{DeclarationScanLimits, DeclarationScopeKind},
++        parse::{ParseKey, ParsedFile},
++        token_wire::{Key, TokenTree},
++    },
++};
++const MODERN: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/dollar-crate-modern.rs"
++);
++const INTERCRATE: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/auxiliary/intercrate.rs"
++);
++const SHADOW: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-shadowing-relaxed.rs"
++);
++const MACRO_AUX: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/auxiliary/macro-in-other-crate.rs"
++);
++fn unit(text: &str, path: &str, key: Digest, edition: u16) -> SourceUnitInput {
++    SourceUnitInput {
++        path: SourcePath::new(path).unwrap(),
++        crate_key: key,
++        module_path: vec![],
++        profile: ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        cfg: CfgSet::guest_default(),
++        blob: SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++    }
++}
++fn prepare(
++    units: Vec<SourceUnitInput>,
++    edges: Vec<SourceDependency>,
++) -> (Vec<PreparedSourceView>, Vec<SourceDeclarative>) {
++    let selections = units
++        .iter()
++        .map(|u| SourceSelection {
++            path: u.path.clone(),
++            outline: OutlineKey {
++                parse: ParseKey {
++                    content: u.blob.content(),
++                    profile: u.profile.clone(),
++                },
++                crate_key: u.crate_key,
++                module_path: u.module_path.clone(),
++                cfg: u.cfg.fingerprint(),
++            },
++        })
++        .collect::<Vec<_>>();
++    let inputs =
++        PreparedSourceInputs::refresh_with_dependencies(None, units, Default::default(), edges)
++            .unwrap();
++    let views = selections
++        .iter()
++        .map(|s| {
++            let SourceSelectionOutcome::Selected(v) = inputs.select(s).unwrap() else {
++                panic!("actual source absent")
++            };
++            v
++        })
++        .collect::<Vec<_>>();
++    let providers = views
++        .iter()
++        .map(|v| SourceDeclarative::new(v.share()).unwrap())
++        .collect();
++    (views, providers)
++}
++fn graph(providers: &[SourceDeclarative]) -> crate::frontend::macro_names::MacroNamespaces {
++    let routes = providers
++        .iter()
++        .flat_map(|p| p.routes_in(providers).unwrap())
++        .collect::<Vec<_>>();
++    // This real builder already resolves aliases; MacroNamespaces is not NameNamespaces.
++    SourceMacroRoutes::discovery_graph(&routes).unwrap()
++}
++fn request(
++    view: &PreparedSourceView,
++    providers: &[SourceDeclarative],
++    tail: &str,
++) -> SourceDeclarativeRequest {
++    let call = view
++        .outline()
++        .item_invocations
++        .iter()
++        .find(|c| {
++            view.macro_call_at(c.range)
++                .unwrap()
++                .segments()
++                .last()
++                .is_some_and(
++                    |s| matches!(s,crate::syntax::imports::ImportSegment::Name(n) if n==tail),
++                )
++        })
++        .unwrap();
++    let SourceDeclarativeDemand::Ready(request) = providers[0]
++        .demand_for_discovery(
++            call.item_input,
++            Digest::of_bytes(b"generated source macro2 exact preparation component"),
++            crate::expand::source_declarative::engine_version(),
++            &graph(providers),
++            providers,
++        )
++        .unwrap()
++    else {
++        panic!("actual original macro request not selected")
++    };
++    *request
++}
++fn nested(
++    caller: u16,
++    definition: u16,
++) -> (
++    Vec<PreparedSourceView>,
++    Vec<SourceDeclarative>,
++    SourceDeclarativeRequest,
++    GeneratedItems,
++) {
++    let root = Digest([131; 32]);
++    let aux = Digest([132; 32]);
++    let (views, providers) = prepare(
++        vec![
++            unit(MODERN, "modern.rs", root, caller),
++            unit(INTERCRATE, "intercrate.rs", aux, definition),
++        ],
++        vec![SourceDependency {
++            consumer: root,
++            alias: "intercrate".into(),
++            provider: aux,
++        }],
++    );
++    let request = request(
++        &views[0],
++        &providers,
++        "define_uses_dollar_crate_modern_nested",
++    );
++    let output = request.expand().unwrap();
++    let items = GeneratedItems::admit(request.key(), Arc::new(output), 1).unwrap();
++    (views, providers, request, items)
++}
++fn token_span<'a>(
++    forest: &'a TokenForest,
++    name: &str,
++) -> &'a crate::syntax::token_wire::SpanRecord {
++    let mut stack = forest.roots().iter().collect::<Vec<_>>();
++    while let Some(t) = stack.pop() {
++        let key = match t {
++            TokenTree::Group { children, .. } => {
++                stack.extend(children);
++                continue;
++            }
++            TokenTree::Ident { text, span, .. } if text == name => *span,
++            _ => continue,
++        };
++        return forest.spans().iter().find(|s| s.key() == key).unwrap();
++    }
++    panic!("actual token absent: {name}")
++}
++fn catalog(view: &PreparedSourceView, items: &GeneratedItems) -> GeneratedMacroCatalog {
++    GeneratedMacroCatalog::new(
++        items,
++        view.outline().root_scope.clone(),
++        Key(items.record().key().parent_context.0),
++        &CfgSet::guest_default(),
++        items.epoch(),
++    )
++    .unwrap()
++}
++
++#[test]
++fn unchanged_nested_macro2_real_second_expansion_preserves_dollar_crate_all_owning_editions() {
++    for (caller, owner) in [(2015, 2024), (2018, 2021), (2021, 2018), (2024, 2015)] {
++        let (views, mut providers, parent, items) = nested(caller, owner);
++        let cat = catalog(&views[0], &items);
++        let members = cat.module_macro2_definitions().unwrap();
++        assert_eq!(members.len(), 1);
++        let definition = (*members[0]).clone();
++        assert_eq!(
++            definition.defining_unit,
++            views[0].selection().outline.crate_key
++        );
++        assert_eq!(definition.definition_edition, owner);
++        assert!(cat.root_bindings().unwrap().is_empty());
++        assert_eq!(
++            items.macro_dialect(definition.identity).unwrap(),
++            lrr_expand_adapter::declaration_output::DefinitionDialect::Macro2
++        );
++        providers[0]
++            .complete_generated_bindings(parent.key().invocation, Arc::new(cat))
++            .unwrap();
++        let second = request(&views[0], &providers, "uses_dollar_crate_modern_nested");
++        assert_eq!(
++            second.key().macro_identity,
++            crate::expand::identity::MacroIdentity::Declaration {
++                definition: definition.identity
++            }
++        );
++        assert_eq!(second.key().definition_edition, owner);
++        assert_eq!(second.key().call_edition, caller);
++        let record = second.expand().unwrap();
++        let output = GeneratedItems::admit(second.key(), Arc::new(record), 1).unwrap();
++        let dollar = token_span(output.tokens(), "$crate");
++        assert_eq!(
++            dollar.source.unit,
++            Key(views[1].selection().outline.crate_key.0)
++        );
++        let current = output
++            .hygiene_facts()
++            .context(dollar.context)
++            .unwrap()
++            .clone();
++        assert_eq!(
++            current.defining_unit,
++            Key(views[0].selection().outline.crate_key.0)
++        );
++        assert!(current.parent.is_some());
++        // Real ancestry chooses the older opaque def-site; no mark was skipped.
++        assert_eq!(
++            output.hygiene_facts().dollar_crate(dollar.context).unwrap(),
++            Key(views[1].selection().outline.crate_key.0)
++        );
++    }
++}
++
++#[test]
++fn unchanged_generated_macro2_capture_retains_actual_name_and_empty_matcher_groups() {
++    let (views, _, _, items) = nested(2024, 2018);
++    let header = items
++        .items()
++        .iter()
++        .find(|h| h.kind == GeneratedHeaderKind::Macro2)
++        .unwrap();
++    let capture = items.macro_bodies.get(&header.key.fingerprint()).unwrap();
++    assert_eq!(
++        capture.dialect,
++        lrr_expand_adapter::declaration_output::DefinitionDialect::Macro2
++    );
++    assert_eq!(capture.edition, 2018);
++    assert!(capture.arguments.is_some());
++    let name = header.name.as_ref().unwrap();
++    let actual = items
++        .tokens()
++        .spans()
++        .iter()
++        .find(|s| s.key().0 == name.span.0)
++        .unwrap();
++    assert_eq!(
++        actual.source.unit,
++        Key(views[0].selection().outline.crate_key.0)
++    );
++    assert_eq!(actual.edition, crate::syntax::token_wire::Edition::E2024);
++    // Join dual owned wire types by codecs, never by schema/span casts.
++    let body = lrr_expand_adapter::token_wire::TokenForest::decode(&capture.body.encode().unwrap())
++        .unwrap();
++    let args = lrr_expand_adapter::token_wire::TokenForest::decode(
++        &capture.arguments.as_ref().unwrap().encode().unwrap(),
++    )
++    .unwrap();
++    let _parser =
++        lrr_expand_adapter::declarative::DeclarativeMacro::new_macro2(Some(args), body).unwrap();
++}
++
++#[test]
++fn unchanged_macro_rules_generated_module_and_local_macro2_have_distinct_scope_facts() {
++    let root = Digest([133; 32]);
++    let aux = Digest([134; 32]);
++    for edition in [2015, 2018, 2021, 2024] {
++        let (views, providers) = prepare(
++            vec![
++                unit(SHADOW, "shadow.rs", root, edition),
++                unit(MACRO_AUX, "macro-in-other-crate.rs", aux, edition),
++            ],
++            vec![SourceDependency {
++                consumer: root,
++                alias: "macro_in_other_crate".into(),
++                provider: aux,
++            }],
++        );
++        let request = request(&views[0], &providers, "my_include");
++        let site = request.source_base().unwrap();
++        let declarations = GeneratedDeclarations::admit_item_output(
++            Arc::new(request.expand().unwrap()),
++            1,
++            &views[0],
++            &CfgSet::guest_default(),
++            DeclarationScanLimits::default(),
++            &site,
++        )
++        .unwrap();
++        let fields = declarations.scan().macro2_definitions();
++        assert_eq!(fields.len(), 2);
++        let module = fields
++            .iter()
++            .find(|h| h.scope_kind == DeclarationScopeKind::Module)
++            .unwrap();
++        let local = fields
++            .iter()
++            .find(|h| h.scope_kind == DeclarationScopeKind::Block)
++            .unwrap();
++        assert_ne!(module.identity, local.identity);
++        assert_eq!(
++            declarations
++                .macro2_definition(module.identity)
++                .unwrap()
++                .dialect,
++            lrr_expand_adapter::declaration_output::DefinitionDialect::Macro2
++        );
++        let refusal = declarations
++            .macro2_definition(local.identity)
++            .err()
++            .unwrap();
++        assert_eq!(refusal.code, "LRR-E-MACRO2-SOURCE");
++        assert!(
++            declarations
++                .scan()
++                .macro_definitions()
++                .iter()
++                .any(|h| h.name == "from_prelude")
++        );
++        assert!(
++            declarations
++                .scan()
++                .macro_definitions()
++                .iter()
++                .all(|h| h.name != "m")
++        );
++    }
++}
++
++#[test]
++fn genuine_generated_module_outline_requires_exact_arena_epoch_and_source_profile() {
++    let (views, _, _, items) = nested(2024, 2018);
++    let mut parsed = ParsedFile::from_generated_items(&items).unwrap();
++    let owner = views[0].outline().root_scope.clone();
++    assert!(
++        parsed
++            .outline(owner.crate_key, vec![], &CfgSet::guest_default())
++            .is_err()
++    );
++    let current = parsed
++        .outline_generated_module(&items, &owner, &CfgSet::guest_default(), 1)
++        .unwrap();
++    assert!(
++        current
++            .items
++            .iter()
++            .any(|i| i.def_key.item_kind == crate::source::manifest::ItemKind::Macro)
++    );
++    assert_eq!(
++        parsed
++            .outline_generated_module(&items, &owner, &CfgSet::guest_default(), 2)
++            .err()
++            .unwrap()
++            .code,
++        "LRR-E-EXPANSION-EPOCH"
++    );
++    parsed.content = Digest([135; 32]);
++    assert_eq!(
++        parsed
++            .outline_generated_module(&items, &owner, &CfgSet::guest_default(), 1)
++            .err()
++            .unwrap()
++            .code,
++        "LRR-E-EXPANSION-INPUT"
++    );
++}
++
++#[test]
++fn generated_module_macro2_wrong_owner_refuses_without_publishing_definitions() {
++    let (views, mut providers, parent, items) = nested(2024, 2018);
++    let mut owner = views[0].outline().root_scope.clone();
++    owner.crate_key = Digest([136; 32]);
++    let before = providers[0].macro_index().definition_count();
++    assert!(
++        GeneratedMacroCatalog::new(
++            &items,
++            owner,
++            Key(items.record().key().parent_context.0),
++            &CfgSet::guest_default(),
++            1
++        )
++        .is_err()
++    );
++    let cat = Arc::new(catalog(&views[0], &items));
++    assert!(
++        providers[0]
++            .complete_generated_bindings(Digest([137; 32]), cat.clone())
++            .is_err()
++    );
++    assert_eq!(providers[0].macro_index().definition_count(), before);
++    providers[0]
++        .complete_generated_bindings(parent.key().invocation, cat.clone())
++        .unwrap();
++    let after = providers[0].macro_index().definition_count();
++    assert!(
++        providers[0]
++            .complete_generated_bindings(parent.key().invocation, cat)
++            .is_err()
++    );
++    assert_eq!(providers[0].macro_index().definition_count(), after);
++}
++
++#[test]
++fn mismatched_generated_record_producer_and_epoch_are_not_current_admission() {
++    let (_, _, parent, items) = nested(2024, 2018);
++    let record = Arc::new(parent.expand().unwrap());
++    let mut wrong = parent.key().clone();
++    wrong.invocation = Digest([138; 32]);
++    assert_eq!(
++        GeneratedItems::admit(&wrong, record.clone(), 1)
++            .err()
++            .unwrap()
++            .code,
++        "LRR-E-EXPANSION-INPUT"
++    );
++    assert_eq!(
++        GeneratedItems::admit(parent.key(), record, 0)
++            .err()
++            .unwrap()
++            .code,
++        "LRR-E-EXPANSION-EPOCH"
++    );
++    assert_eq!(items.epoch(), 1);
++}
++
++#[test]
++fn generated_item_kind_macro2_uses_next_free_stable_tag_without_changing_old_tags() {
++    use lrr_expand_adapter::item_output::ItemKind::*;
++    let kinds = [
++        Function,
++        Import,
++        MacroRules,
++        Module,
++        Struct,
++        Enum,
++        Trait,
++        Impl,
++        Type,
++        Const,
++        Static,
++        Union,
++        Other,
++        ExternCrate,
++        Macro2,
++    ];
++    let tags = kinds
++        .iter()
++        .map(|k| k.tag())
++        .collect::<std::collections::BTreeSet<_>>();
++    assert_eq!(tags.len(), kinds.len());
++    assert_eq!(MacroRules.tag(), 2);
++    assert_eq!(ExternCrate.tag(), 13);
++    assert_eq!(Macro2.tag(), 14);
++}
++
++#[test]
++fn completed_module_macro2_wrong_cfg_refuses_before_source_index_commit() {
++    let (views, mut providers, parent, items) = nested(2024, 2018);
++    let mut wrong = CfgSet::guest_default();
++    wrong.atoms.insert("changed_current_profile".into());
++    let cat = GeneratedMacroCatalog::new(
++        &items,
++        views[0].outline().root_scope.clone(),
++        Key(items.record().key().parent_context.0),
++        &wrong,
++        1,
++    )
++    .unwrap();
++    let before = providers[0].macro_index().definition_count();
++    let refusal = providers[0]
++        .complete_generated_bindings(parent.key().invocation, Arc::new(cat))
++        .err()
++        .unwrap();
++    assert_eq!(refusal.code, "LRR-E-EXPANSION-INPUT");
++    assert_eq!(providers[0].macro_index().definition_count(), before);
++}
++
++#[test]
++fn real_nested_macro2_transcription_checks_exact_bytes_before_materialization() {
++    let (views, mut providers, parent, items) = nested(2024, 2018);
++    let cat = catalog(&views[0], &items);
++    let definition = (*cat.module_macro2_definitions().unwrap()[0]).clone();
++    let capture = items.macro_bodies.get(&definition.identity).unwrap();
++    providers[0]
++        .complete_generated_bindings(parent.key().invocation, Arc::new(cat))
++        .unwrap();
++    let second = request(&views[0], &providers, "uses_dollar_crate_modern_nested");
++    let body = lrr_expand_adapter::token_wire::TokenForest::decode(&capture.body.encode().unwrap())
++        .unwrap();
++    let args = capture.arguments.as_ref().map(|a| {
++        lrr_expand_adapter::token_wire::TokenForest::decode(&a.encode().unwrap()).unwrap()
++    });
++    let parser = lrr_expand_adapter::declarative::DeclarativeMacro::new_macro2(args, body).unwrap();
++    let call = views[0]
++        .outline()
++        .item_invocations
++        .iter()
++        .find(|c| c.item_input == second.key().invocation)
++        .unwrap();
++    let input = crate::expand::source_declarative::group(
++        &providers[0].owned_forest().unwrap(),
++        views[0].macro_token_group(call.range, false).unwrap(),
++    )
++    .unwrap();
++    let [lrr_expand_adapter::token_wire::TokenTree::Group { open, .. }] = input.roots() else {
++        panic!("actual input group absent")
++    };
++    let site = lrr_expand_adapter::declarative::DeclarativeSite {
++        expansion: lrr_expand_adapter::token_wire::Key(second.key().fingerprint().0),
++        defining_unit: lrr_expand_adapter::token_wire::Key(definition.defining_unit.0),
++        definition_edition: lrr_expand_adapter::token_wire::Edition::E2018,
++    };
++    let (result, stats) = parser
++        .expand_hygienic_with_limits(&input, *open, site, 100, 32768)
++        .unwrap();
++    let bytes = result.unwrap().tokens.encoded_len().unwrap();
++    assert_eq!(stats.admitted_bytes, bytes);
++    let (result, stats) = parser
++        .expand_hygienic_with_limits(&input, *open, site, 100, bytes - 1)
++        .unwrap();
++    assert_eq!(
++        result.err().unwrap().kind,
++        lrr_expand_adapter::declarative::FailureKind::Limit
++    );
++    assert_eq!(stats.materializations, 0);
++    assert_eq!(
++        parser
++            .expand_hygienic_with_limits(&input, *open, site, 100, bytes)
++            .unwrap()
++            .1
++            .materializations,
++        1
++    );
++}
++
++#[test]
++fn generated_opaque_literal_name_does_not_gain_module_membership_by_spelling() {
++    let (views, providers) = prepare(
++        vec![unit(
++            "pub macro make(){macro hidden(){1}}make!();fn main(){}",
++            "literal-name.rs",
++            Digest([139; 32]),
++            2024,
++        )],
++        vec![],
++    );
++    let parent = request(&views[0], &providers, "make");
++    let items = GeneratedItems::admit(parent.key(), Arc::new(parent.expand().unwrap()), 1).unwrap();
++    let refusal = GeneratedMacroCatalog::new(
++        &items,
++        views[0].outline().root_scope.clone(),
++        Key(items.record().key().parent_context.0),
++        &CfgSet::guest_default(),
++        1,
++    )
++    .err()
++    .unwrap();
++    assert_eq!(refusal.code, "LRR-E-MACRO2-SOURCE");
++    assert!(refusal.message.contains("hygienic namespace membership"));
++}
++
++#[test]
++fn generated_local_module_does_not_erase_its_unentered_function_owner() {
++    let (views, providers) = prepare(
++        vec![unit(
++            "macro_rules! make{()=>{fn cold(){mod n{macro m(){}}}}}make!();fn main(){}",
++            "local-module.rs",
++            Digest([140; 32]),
++            2024,
++        )],
++        vec![],
++    );
++    let request = request(&views[0], &providers, "make");
++    let declarations = GeneratedDeclarations::admit_item_output(
++        Arc::new(request.expand().unwrap()),
++        1,
++        &views[0],
++        &CfgSet::guest_default(),
++        DeclarationScanLimits::default(),
++        &request.source_base().unwrap(),
++    )
++    .unwrap();
++    let member = declarations
++        .scan()
++        .macro2_definitions()
++        .iter()
++        .find(|h| h.name == "m")
++        .unwrap();
++    assert_eq!(member.scope_kind, DeclarationScopeKind::Module);
++    assert!(member.scope.owner.is_some());
++    assert_eq!(
++        declarations
++            .macro2_definition(member.identity)
++            .err()
++            .unwrap()
++            .code,
++        "LRR-E-MACRO2-SOURCE"
++    );
++}
++
++#[test]
++fn genuine_generated_header_cannot_admit_a_forged_rules_dialect_or_unknown_edition() {
++    let (_, _, _, items) = nested(2024, 2018);
++    let header = items
++        .items()
++        .iter()
++        .find(|h| h.kind == GeneratedHeaderKind::Macro2)
++        .unwrap();
++    let capture = items.macro_bodies.get(&header.key.fingerprint()).unwrap();
++    let wrong = generated_definition_capture::GeneratedDefinitionCapture::admit(
++        header,
++        lrr_expand_adapter::declaration_output::DefinitionDialect::Rules,
++        2018,
++        capture.body.clone(),
++        None,
++    );
++    assert_eq!(wrong.err().unwrap().code, "LRR-E-EXPANSION-INPUT");
++    let wrong = generated_definition_capture::GeneratedDefinitionCapture::admit(
++        header,
++        capture.dialect,
++        2027,
++        capture.body.clone(),
++        capture.arguments.clone(),
++    );
++    assert_eq!(wrong.err().unwrap().code, "LRR-E-EXPANSION-INPUT");
++    assert_eq!(
++        items.macro_dialect(header.key.fingerprint()).unwrap(),
++        capture.dialect
++    );
++}
+diff --git a/crates/lrr/src/expand/generated_items.rs b/crates/lrr/src/expand/generated_items.rs
+--- a/crates/lrr/src/expand/generated_items.rs
++++ b/crates/lrr/src/expand/generated_items.rs
+@@ -821,3 +821,7 @@
+         }
+     }
+ }
++
++#[cfg(test)]
++#[path = "generated_items/macro2_tests.rs"]
++mod macro2_tests;
+diff --git a/crates/lrr/src/frontend/dollar_crate.rs b/crates/lrr/src/frontend/dollar_crate.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/dollar_crate.rs
+@@ -0,0 +1,34 @@
++//! Pinned rustc_resolve::resolve_crate_root mark selection (ae0fe lib.rs:2351).
++//! Uses actual adapter-normalized ancestry; no mark/source/context is erased.
++use super::*;
++pub(super) fn select(facts: &HygieneFacts, key: Key) -> Result<Key, Diagnostic> {
++    let mut cursor = facts.local(key)?; // pinned normalize_to_macro_rules row
++    let mut selected = None;
++    let mut opaque_suffix = true;
++    for _ in 0..=256 {
++        let record = facts.context(cursor)?;
++        if record.expansion.is_none() {
++            return selected
++                .ok_or_else(|| error("dollar-crate token lacks definition-site authority"));
++        }
++        match record.transparency {
++            Transparency::Opaque if opaque_suffix => selected = Some(record.defining_unit),
++            Transparency::SemiTransparent => {
++                opaque_suffix = false;
++                selected = Some(record.defining_unit);
++            }
++            Transparency::Opaque => {
++                return selected.ok_or_else(|| error("dollar-crate mark selection is absent"));
++            }
++            Transparency::Transparent => {
++                return Err(error(
++                    "dollar-crate normalized ancestry contains a transparent mark",
++                ));
++            }
++        }
++        cursor = record
++            .parent
++            .ok_or_else(|| error("dollar-crate mark parent is missing"))?;
++    }
++    Err(error("dollar-crate definition ancestry depth exceeded"))
++}
+diff --git a/crates/lrr/src/frontend/hygiene.rs b/crates/lrr/src/frontend/hygiene.rs
+--- a/crates/lrr/src/frontend/hygiene.rs
++++ b/crates/lrr/src/frontend/hygiene.rs
+@@ -217,13 +217,12 @@
+             name: name.as_str().to_owned(),
+         })
+     }
+-    /// `$crate` uses the exact emitting definition's authority, even through
+-    /// renames. Normalize only for name comparison, not for this owner route.
++    /// `$crate` selects the pinned definition-scope mark from actual normalized
++    /// ancestry, including nested generated definitions. Namespace selection stays explicit.
+     pub fn dollar_crate(&self, key: Key) -> Result<Key, Diagnostic> {
+-        let record = self.context(key)?;
+-        if record.expansion.is_none() || record.transparency == Transparency::Transparent {
+-            return Err(error("dollar-crate token lacks definition-site authority"));
+-        }
+-        Ok(record.defining_unit)
+-    }
+-}
++        dollar_crate::select(self, key)
++    }
++}
++
++#[path = "dollar_crate.rs"]
++mod dollar_crate;
+diff --git a/fixtures/upstream/rustc-checkout/COPYRIGHT b/fixtures/upstream/rustc-checkout/COPYRIGHT
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/COPYRIGHT
+@@ -0,0 +1,34 @@
++Short version for non-lawyers:
++
++The Rust Project is dual-licensed under Apache 2.0 and MIT
++terms.
++
++It is Copyright (c) The Rust Project Contributors.
++
++Longer version:
++
++Copyrights in the Rust project are retained by their contributors. No
++copyright assignment is required to contribute to the Rust project.
++
++Some files include explicit copyright notices and/or license notices.
++For full authorship information, see the version control history or
++<https://thanks.rust-lang.org>
++
++Except as otherwise noted, Rust is licensed under the Apache License, Version
++2.0 <LICENSE-APACHE> or <http://www.apache.org/licenses/LICENSE-2.0> or the MIT
++license <LICENSE-MIT> or <http://opensource.org/licenses/MIT>, at your option.
++
++We track licenses for third-party materials in two ways:
++
++* We use [REUSE](https://reuse.software) to track license information for
++  in-tree source files - both those authored by the Rust project and those
++  authored by third parties. See `REUSE.toml`, and our cached output of the
++  `reuse` tool which is committed to `license-metadata.json`.
++* We use `cargo` to track license information for out-of-tree dependencies.
++
++These two sources of information are collected by the tool `generate-copyright`
++into a file called `COPYRIGHT.html`, which is shipped with each binary release
++of Rust. Please refer to that file for detailed information as to the components of
++any given Rust release. We also produce a `COPYRIGHT-library.html` file which only
++covers the subset of source code used in the Rust Standard Library, as opposed
++to the toolchain as a whole.
+diff --git a/fixtures/upstream/rustc-checkout/LICENSE-APACHE b/fixtures/upstream/rustc-checkout/LICENSE-APACHE
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/LICENSE-APACHE
+@@ -0,0 +1,176 @@
++                              Apache License
++                        Version 2.0, January 2004
++                     http://www.apache.org/licenses/
++
++TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
++
++1. Definitions.
++
++   "License" shall mean the terms and conditions for use, reproduction,
++   and distribution as defined by Sections 1 through 9 of this document.
++
++   "Licensor" shall mean the copyright owner or entity authorized by
++   the copyright owner that is granting the License.
++
++   "Legal Entity" shall mean the union of the acting entity and all
++   other entities that control, are controlled by, or are under common
++   control with that entity. For the purposes of this definition,
++   "control" means (i) the power, direct or indirect, to cause the
++   direction or management of such entity, whether by contract or
++   otherwise, or (ii) ownership of fifty percent (50%) or more of the
++   outstanding shares, or (iii) beneficial ownership of such entity.
++
++   "You" (or "Your") shall mean an individual or Legal Entity
++   exercising permissions granted by this License.
++
++   "Source" form shall mean the preferred form for making modifications,
++   including but not limited to software source code, documentation
++   source, and configuration files.
++
++   "Object" form shall mean any form resulting from mechanical
++   transformation or translation of a Source form, including but
++   not limited to compiled object code, generated documentation,
++   and conversions to other media types.
++
++   "Work" shall mean the work of authorship, whether in Source or
++   Object form, made available under the License, as indicated by a
++   copyright notice that is included in or attached to the work
++   (an example is provided in the Appendix below).
++
++   "Derivative Works" shall mean any work, whether in Source or Object
++   form, that is based on (or derived from) the Work and for which the
++   editorial revisions, annotations, elaborations, or other modifications
++   represent, as a whole, an original work of authorship. For the purposes
++   of this License, Derivative Works shall not include works that remain
++   separable from, or merely link (or bind by name) to the interfaces of,
++   the Work and Derivative Works thereof.
++
++   "Contribution" shall mean any work of authorship, including
++   the original version of the Work and any modifications or additions
++   to that Work or Derivative Works thereof, that is intentionally
++   submitted to Licensor for inclusion in the Work by the copyright owner
++   or by an individual or Legal Entity authorized to submit on behalf of
++   the copyright owner. For the purposes of this definition, "submitted"
++   means any form of electronic, verbal, or written communication sent
++   to the Licensor or its representatives, including but not limited to
++   communication on electronic mailing lists, source code control systems,
++   and issue tracking systems that are managed by, or on behalf of, the
++   Licensor for the purpose of discussing and improving the Work, but
++   excluding communication that is conspicuously marked or otherwise
++   designated in writing by the copyright owner as "Not a Contribution."
++
++   "Contributor" shall mean Licensor and any individual or Legal Entity
++   on behalf of whom a Contribution has been received by Licensor and
++   subsequently incorporated within the Work.
++
++2. Grant of Copyright License. Subject to the terms and conditions of
++   this License, each Contributor hereby grants to You a perpetual,
++   worldwide, non-exclusive, no-charge, royalty-free, irrevocable
++   copyright license to reproduce, prepare Derivative Works of,
++   publicly display, publicly perform, sublicense, and distribute the
++   Work and such Derivative Works in Source or Object form.
++
++3. Grant of Patent License. Subject to the terms and conditions of
++   this License, each Contributor hereby grants to You a perpetual,
++   worldwide, non-exclusive, no-charge, royalty-free, irrevocable
++   (except as stated in this section) patent license to make, have made,
++   use, offer to sell, sell, import, and otherwise transfer the Work,
++   where such license applies only to those patent claims licensable
++   by such Contributor that are necessarily infringed by their
++   Contribution(s) alone or by combination of their Contribution(s)
++   with the Work to which such Contribution(s) was submitted. If You
++   institute patent litigation against any entity (including a
++   cross-claim or counterclaim in a lawsuit) alleging that the Work
++   or a Contribution incorporated within the Work constitutes direct
++   or contributory patent infringement, then any patent licenses
++   granted to You under this License for that Work shall terminate
++   as of the date such litigation is filed.
++
++4. Redistribution. You may reproduce and distribute copies of the
++   Work or Derivative Works thereof in any medium, with or without
++   modifications, and in Source or Object form, provided that You
++   meet the following conditions:
++
++   (a) You must give any other recipients of the Work or
++       Derivative Works a copy of this License; and
++
++   (b) You must cause any modified files to carry prominent notices
++       stating that You changed the files; and
++
++   (c) You must retain, in the Source form of any Derivative Works
++       that You distribute, all copyright, patent, trademark, and
++       attribution notices from the Source form of the Work,
++       excluding those notices that do not pertain to any part of
++       the Derivative Works; and
++
++   (d) If the Work includes a "NOTICE" text file as part of its
++       distribution, then any Derivative Works that You distribute must
++       include a readable copy of the attribution notices contained
++       within such NOTICE file, excluding those notices that do not
++       pertain to any part of the Derivative Works, in at least one
++       of the following places: within a NOTICE text file distributed
++       as part of the Derivative Works; within the Source form or
++       documentation, if provided along with the Derivative Works; or,
++       within a display generated by the Derivative Works, if and
++       wherever such third-party notices normally appear. The contents
++       of the NOTICE file are for informational purposes only and
++       do not modify the License. You may add Your own attribution
++       notices within Derivative Works that You distribute, alongside
++       or as an addendum to the NOTICE text from the Work, provided
++       that such additional attribution notices cannot be construed
++       as modifying the License.
++
++   You may add Your own copyright statement to Your modifications and
++   may provide additional or different license terms and conditions
++   for use, reproduction, or distribution of Your modifications, or
++   for any such Derivative Works as a whole, provided Your use,
++   reproduction, and distribution of the Work otherwise complies with
++   the conditions stated in this License.
++
++5. Submission of Contributions. Unless You explicitly state otherwise,
++   any Contribution intentionally submitted for inclusion in the Work
++   by You to the Licensor shall be under the terms and conditions of
++   this License, without any additional terms or conditions.
++   Notwithstanding the above, nothing herein shall supersede or modify
++   the terms of any separate license agreement you may have executed
++   with Licensor regarding such Contributions.
++
++6. Trademarks. This License does not grant permission to use the trade
++   names, trademarks, service marks, or product names of the Licensor,
++   except as required for reasonable and customary use in describing the
++   origin of the Work and reproducing the content of the NOTICE file.
++
++7. Disclaimer of Warranty. Unless required by applicable law or
++   agreed to in writing, Licensor provides the Work (and each
++   Contributor provides its Contributions) on an "AS IS" BASIS,
++   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
++   implied, including, without limitation, any warranties or conditions
++   of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
++   PARTICULAR PURPOSE. You are solely responsible for determining the
++   appropriateness of using or redistributing the Work and assume any
++   risks associated with Your exercise of permissions under this License.
++
++8. Limitation of Liability. In no event and under no legal theory,
++   whether in tort (including negligence), contract, or otherwise,
++   unless required by applicable law (such as deliberate and grossly
++   negligent acts) or agreed to in writing, shall any Contributor be
++   liable to You for damages, including any direct, indirect, special,
++   incidental, or consequential damages of any character arising as a
++   result of this License or out of the use or inability to use the
++   Work (including but not limited to damages for loss of goodwill,
++   work stoppage, computer failure or malfunction, or any and all
++   other commercial damages or losses), even if such Contributor
++   has been advised of the possibility of such damages.
++
++9. Accepting Warranty or Additional Liability. While redistributing
++   the Work or Derivative Works thereof, You may choose to offer,
++   and charge a fee for, acceptance of support, warranty, indemnity,
++   or other liability obligations and/or rights consistent with this
++   License. However, in accepting such obligations, You may act only
++   on Your own behalf and on Your sole responsibility, not on behalf
++   of any other Contributor, and only if You agree to indemnify,
++   defend, and hold each Contributor harmless for any liability
++   incurred by, or claims asserted against, such Contributor by reason
++   of your accepting any such warranty or additional liability.
++
++END OF TERMS AND CONDITIONS
+diff --git a/fixtures/upstream/rustc-checkout/LICENSE-MIT b/fixtures/upstream/rustc-checkout/LICENSE-MIT
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/LICENSE-MIT
+@@ -0,0 +1,25 @@
++Copyright (c) The Rust Project Contributors
++
++Permission is hereby granted, free of charge, to any
++person obtaining a copy of this software and associated
++documentation files (the "Software"), to deal in the
++Software without restriction, including without
++limitation the rights to use, copy, modify, merge,
++publish, distribute, sublicense, and/or sell copies of
++the Software, and to permit persons to whom the Software
++is furnished to do so, subject to the following
++conditions:
++
++The above copyright notice and this permission notice
++shall be included in all copies or substantial portions
++of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
++ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
++TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
++PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
++SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
++CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
++OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
++IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
++DEALINGS IN THE SOFTWARE.
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/hygiene/auxiliary/intercrate.rs b/fixtures/upstream/rustc-checkout/tests/ui/hygiene/auxiliary/intercrate.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/hygiene/auxiliary/intercrate.rs
+@@ -0,0 +1,46 @@
++#![feature(decl_macro)]
++
++pub mod foo {
++    pub use self::bar::m;
++    mod bar {
++        fn f() -> u32 { 1 }
++        pub macro m() {
++            f()
++        }
++    }
++}
++
++pub struct SomeType;
++
++// `$crate`
++pub macro uses_dollar_crate_modern() {
++    type Alias = $crate::SomeType;
++}
++
++pub macro define_uses_dollar_crate_modern_nested($uses_dollar_crate_modern_nested: ident) {
++    macro $uses_dollar_crate_modern_nested() {
++        type AliasCrateModernNested = $crate::SomeType;
++    }
++}
++
++#[macro_export]
++macro_rules! define_uses_dollar_crate_legacy_nested {
++    () => {
++        macro_rules! uses_dollar_crate_legacy_nested {
++            () => {
++                type AliasLegacyNested = $crate::SomeType;
++            }
++        }
++    }
++}
++
++// `crate`
++pub macro uses_crate_modern() {
++    type AliasCrate = crate::SomeType;
++}
++
++pub macro define_uses_crate_modern_nested($uses_crate_modern_nested: ident) {
++    macro $uses_crate_modern_nested() {
++        type AliasCrateModernNested = crate::SomeType;
++    }
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/hygiene/dollar-crate-modern.rs b/fixtures/upstream/rustc-checkout/tests/ui/hygiene/dollar-crate-modern.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/hygiene/dollar-crate-modern.rs
+@@ -0,0 +1,25 @@
++// Make sure `$crate` and `crate` work in for basic cases of nested macros.
++
++//@ check-pass
++//@ aux-build:intercrate.rs
++
++#![feature(decl_macro)]
++
++extern crate intercrate;
++
++// `$crate`
++intercrate::uses_dollar_crate_modern!();
++
++intercrate::define_uses_dollar_crate_modern_nested!(uses_dollar_crate_modern_nested);
++uses_dollar_crate_modern_nested!();
++
++intercrate::define_uses_dollar_crate_legacy_nested!();
++uses_dollar_crate_legacy_nested!();
++
++// `crate`
++intercrate::uses_crate_modern!();
++
++intercrate::define_uses_crate_modern_nested!(uses_crate_modern_nested);
++uses_crate_modern_nested!();
++
++fn main() {}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/macros/auxiliary/macro-in-other-crate.rs b/fixtures/upstream/rustc-checkout/tests/ui/macros/auxiliary/macro-in-other-crate.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/macros/auxiliary/macro-in-other-crate.rs
+@@ -0,0 +1,14 @@
++#[macro_export]
++macro_rules! mac {
++    ($ident:ident) => { let $ident = 42; }
++}
++
++#[macro_export]
++macro_rules! inline {
++    () => ()
++}
++
++#[macro_export]
++macro_rules! from_prelude {
++    () => ()
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/macros/macro-shadowing-relaxed.rs b/fixtures/upstream/rustc-checkout/tests/ui/macros/macro-shadowing-relaxed.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/macros/macro-shadowing-relaxed.rs
+@@ -0,0 +1,25 @@
++//@ build-pass (FIXME(62277): could be check-pass?)
++//@ aux-build:macro-in-other-crate.rs
++
++#![feature(decl_macro)]
++
++macro_rules! my_include {() => {
++    // Outer
++    macro m() {}
++    #[macro_use(from_prelude)] extern crate macro_in_other_crate;
++
++    fn inner() {
++        // Inner
++        macro m() {}
++        macro_rules! from_prelude { () => {} }
++
++        // OK, both `m` and `from_prelude` are macro-expanded,
++        // but no more macro-expanded than their counterpart from outer scope.
++        m!();
++        from_prelude!();
++    }
++}}
++
++my_include!();
++
++fn main() {}

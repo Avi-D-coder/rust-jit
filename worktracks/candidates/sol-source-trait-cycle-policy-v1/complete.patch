@@ -1,0 +1,1349 @@
+diff --git a/crates/lrr/src/traits/index.rs b/crates/lrr/src/traits/index.rs
+--- a/crates/lrr/src/traits/index.rs
++++ b/crates/lrr/src/traits/index.rs
+@@ -463,6 +463,50 @@
+             limits,
+         })
+     }
++    /// Narrow read-only current source/predicate policy view. All header/member
++    /// attachments and exact Type-certified row identities are replayed first.
++    /// This cannot approve an auto structural rule or negative applicability.
++    pub(super) fn cycle_policy_header_current<'a>(
++        &'a self,
++        db: &Database,
++        header: Digest,
++    ) -> Result<CurrentCyclePolicyHeader<'a>, Diagnostic> {
++        self.revalidate(db)?;
++        let owner = self
++            .model
++            .fragments
++            .iter()
++            .flat_map(|f| &f.headers)
++            .find(|h| h.exact_identity() == header)
++            .ok_or_else(|| required("policy header is outside actual current source catalog"))?;
++        let selected_impl_trait = self
++            .model
++            .rows
++            .iter()
++            .find(|r| r.identity == header)
++            .and_then(|r| match r.trait_bucket {
++                TraitBucket::Exact(id) => self
++                    .model
++                    .fragments
++                    .iter()
++                    .flat_map(|f| &f.headers)
++                    .find(|h| h.definition.fingerprint() == id),
++                _ => None,
++            });
++        let mut e = StableEncoder::new("lrr/v5/current-cycle-policy-header-stamp/v1");
++        e.record(&self.seal);
++        e.digest(self.publication);
++        e.digest(self.model.fingerprint());
++        e.digest(owner.exact_identity());
++        e.u64(self.source_revision);
++        e.u64(self.query_revision);
++        Ok(CurrentCyclePolicyHeader {
++            index: self,
++            owner,
++            selected_impl_trait,
++            stamp: e.finish(),
++        })
++    }
+     /// Actual current header/catalog agreement only, no source-goal completion.
+     pub(super) fn canonical_header_requirement_current(
+         &self,
+@@ -560,6 +604,107 @@
+         Ok(selected)
+     }
+ }
++pub(super) struct CurrentCyclePolicyHeader<'a> {
++    index: &'a CurrentImplCandidateIndex,
++    owner: &'a SourceTraitHeader,
++    selected_impl_trait: Option<&'a SourceTraitHeader>,
++    stamp: Digest,
++}
++impl<'a> CurrentCyclePolicyHeader<'a> {
++    pub(super) fn owner(&self) -> &'a SourceTraitHeader {
++        self.owner
++    }
++    pub(super) fn selected_impl_trait(&self) -> Option<&'a SourceTraitHeader> {
++        self.selected_impl_trait
++    }
++    pub(super) fn stamp(&self) -> Digest {
++        self.stamp
++    }
++    pub(super) fn bound_trait_current(
++        &self,
++        db: &Database,
++        origin: super::source_cycle_policy::AtomOrigin,
++    ) -> Result<Option<&'a SourceTraitHeader>, Diagnostic> {
++        use super::source_cycle_policy::AtomOrigin;
++        let (bound, outer) = match origin {
++            AtomOrigin::Predicate {
++                group,
++                bound: Some(bound),
++            } => {
++                let p = self
++                    .owner
++                    .predicates
++                    .get(usize::try_from(group).map_err(|_| limit())?)
++                    .ok_or_else(|| fault("policy group ordinal differs"))?;
++                let bounds = match &p.kind {
++                    PredicateKind::Bound { bounds, .. }
++                    | PredicateKind::RegionOutlives { bounds, .. } => bounds,
++                    PredicateKind::ImplicitSized { relaxed, .. } => relaxed,
++                    _ => return Err(fault("policy source group has no selected bound")),
++                };
++                (
++                    bounds
++                        .get(usize::try_from(bound).map_err(|_| limit())?)
++                        .ok_or_else(|| fault("policy bound ordinal differs"))?,
++                    p.binder.as_slice(),
++                )
++            }
++            AtomOrigin::Supertrait { bound } => {
++                let HeaderKind::Trait { supertraits, .. } = &self.owner.kind else {
++                    return Err(fault("policy supertrait owner is not a trait"));
++                };
++                (
++                    supertraits
++                        .get(usize::try_from(bound).map_err(|_| limit())?)
++                        .ok_or_else(|| fault("policy supertrait ordinal differs"))?,
++                    &[][..],
++                )
++            }
++            _ => return Ok(None),
++        };
++        if bound.modifier != BoundModifier::Ordinary {
++            return Ok(None);
++        }
++        let Some(name) = bound.ty.as_ref().and_then(bare_path) else {
++            return Ok(None);
++        };
++        // Real source generic/binder ribs cannot be guessed through an ambient
++        // same-spelled Type memo. Associated/type anchors remain unresolved.
++        if name == "Self"
++            || self
++                .owner
++                .generics
++                .iter()
++                .chain(outer)
++                .chain(&bound.binder)
++                .any(|p| p.kind == super::term::BoundKind::Type && p.name == name)
++        {
++            return Ok(None);
++        }
++        let Some(selected) = current_name(
++            db,
++            &self.index.seal,
++            &self.owner.context.scope,
++            self.owner.source.profile.edition,
++            name,
++        ) else {
++            return Ok(None);
++        };
++        Ok(self
++            .index
++            .model
++            .fragments
++            .iter()
++            .flat_map(|f| &f.headers)
++            .find(|h| {
++                h.definition.fingerprint() == selected.identity
++                    && h.definition.crate_key == selected.defining_unit
++                    && h.source.profile.edition == selected.definition_edition
++                    && matches!(h.kind, HeaderKind::Trait { alias: false, .. })
++            }))
++    }
++}
++
+ fn published_catalog<'a>(
+     db: &'a Database,
+     key: &SealKey,
+diff --git a/crates/lrr/src/traits/mod.rs b/crates/lrr/src/traits/mod.rs
+--- a/crates/lrr/src/traits/mod.rs
++++ b/crates/lrr/src/traits/mod.rs
+@@ -10,3 +10,5 @@
+ pub mod canonical;
+ 
+ pub mod table;
++
++pub mod source_cycle_policy;
+diff --git a/crates/lrr/src/traits/source_cycle_policy.rs b/crates/lrr/src/traits/source_cycle_policy.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/traits/source_cycle_policy.rs
+@@ -0,0 +1,642 @@
++//! Source-derived declaration/predicate policy, not trait applicability or proof.
++use super::{header::*, index::CurrentImplCandidateIndex};
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncode, StableEncoder},
++    },
++    db::memo::Database,
++};
++
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum DeclarationPolicy {
++    OrdinaryTrait,
++    DeclaredAutoTrait,
++    TraitAliasRequired,
++    PositiveImpl,
++    ExplicitNegativeDeclaration,
++    DefaultImplRequired,
++    InherentImpl,
++}
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum AtomOrigin {
++    Predicate { group: u32, bound: Option<u32> },
++    Supertrait { bound: u32 },
++}
++impl StableEncode for AtomOrigin {
++    const DOMAIN: &'static str = "lrr/v5/source-cycle-atom-origin/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        match self {
++            Self::Predicate { group, bound } => {
++                e.u8(0);
++                e.u32(*group);
++                e.option(bound, |e, b| e.u32(*b));
++            }
++            Self::Supertrait { bound } => {
++                e.u8(1);
++                e.u32(*bound);
++            }
++        }
++    }
++}
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum AtomPolicy {
++    PositiveTraitTypeRequired,
++    OutlivesRequired,
++    RelaxedMarkerIdentityRequired,
++    ConstOrModifierRequired,
++    ImplicitSizedIdentityRequired,
++    RequiredSyntax,
++}
++fn declaration(header: &SourceTraitHeader) -> DeclarationPolicy {
++    match header.kind() {
++        HeaderKind::Trait { alias: true, .. } => DeclarationPolicy::TraitAliasRequired,
++        HeaderKind::Trait {
++            auto_trait: true, ..
++        } => DeclarationPolicy::DeclaredAutoTrait,
++        HeaderKind::Trait { .. } => DeclarationPolicy::OrdinaryTrait,
++        HeaderKind::Impl {
++            trait_type: None, ..
++        } => DeclarationPolicy::InherentImpl,
++        HeaderKind::Impl {
++            default_impl: true, ..
++        } => DeclarationPolicy::DefaultImplRequired,
++        HeaderKind::Impl { negative: true, .. } => DeclarationPolicy::ExplicitNegativeDeclaration,
++        HeaderKind::Impl { .. } => DeclarationPolicy::PositiveImpl,
++    }
++}
++fn policy(bound: &HeaderBound) -> AtomPolicy {
++    match bound.modifier {
++        BoundModifier::Relaxed => AtomPolicy::RelaxedMarkerIdentityRequired,
++        BoundModifier::RequiredConstOrOther => AtomPolicy::ConstOrModifierRequired,
++        BoundModifier::Ordinary if bound.ty.is_some() => AtomPolicy::PositiveTraitTypeRequired,
++        BoundModifier::Ordinary if bound.lifetime.is_some() => AtomPolicy::OutlivesRequired,
++        _ => AtomPolicy::RequiredSyntax,
++    }
++}
++#[derive(Clone, Debug)]
++pub struct PredicateAtomFact {
++    origin: AtomOrigin,
++    policy: AtomPolicy,
++    source_identity: Digest,
++    group_binder: Digest,
++    bound_binder: Digest,
++    binder_parameters: usize,
++}
++impl PredicateAtomFact {
++    pub fn origin(&self) -> AtomOrigin {
++        self.origin
++    }
++    pub fn policy(&self) -> AtomPolicy {
++        self.policy
++    }
++    pub fn source_identity(&self) -> Digest {
++        self.source_identity
++    }
++    pub fn binder_parameters(&self) -> usize {
++        self.binder_parameters
++    }
++}
++impl StableEncode for PredicateAtomFact {
++    const DOMAIN: &'static str = "lrr/v5/source-cycle-predicate-atom/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.record(&self.origin);
++        e.u8(match self.policy {
++            AtomPolicy::PositiveTraitTypeRequired => 0,
++            AtomPolicy::OutlivesRequired => 1,
++            AtomPolicy::RelaxedMarkerIdentityRequired => 2,
++            AtomPolicy::ConstOrModifierRequired => 3,
++            AtomPolicy::ImplicitSizedIdentityRequired => 4,
++            AtomPolicy::RequiredSyntax => 5,
++        });
++        e.digest(self.source_identity);
++        e.digest(self.group_binder);
++        e.digest(self.bound_binder);
++    }
++}
++#[derive(Clone, Debug)]
++pub struct MemberDeclarationFact {
++    definition: Digest,
++    header: Digest,
++    kind: AssociatedKind,
++}
++impl MemberDeclarationFact {
++    pub fn definition(&self) -> Digest {
++        self.definition
++    }
++    pub fn header(&self) -> Digest {
++        self.header
++    }
++    pub fn kind(&self) -> &AssociatedKind {
++        &self.kind
++    }
++}
++impl StableEncode for MemberDeclarationFact {
++    const DOMAIN: &'static str = "lrr/v5/source-cycle-member-declaration/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.digest(self.definition);
++        e.digest(self.header);
++        e.u8(match self.kind {
++            AssociatedKind::Method => 0,
++            AssociatedKind::Type => 1,
++            AssociatedKind::Constant => 2,
++        });
++    }
++}
++#[derive(Clone, Copy, Debug)]
++pub struct PolicyLimits {
++    pub atoms: usize,
++    pub members: usize,
++    pub binder_parameters: usize,
++    pub metadata_bytes: usize,
++    pub current_name_reads: usize,
++}
++impl Default for PolicyLimits {
++    fn default() -> Self {
++        Self {
++            atoms: 100_000,
++            members: 100_000,
++            binder_parameters: 256,
++            metadata_bytes: 1024 * 1024,
++            current_name_reads: 64,
++        }
++    }
++}
++impl PolicyLimits {
++    fn validate(self) -> Result<Self, Diagnostic> {
++        let hard = Self::default();
++        if self.atoms > hard.atoms
++            || self.members > hard.members
++            || self.binder_parameters > hard.binder_parameters
++            || self.metadata_bytes > hard.metadata_bytes
++            || self.current_name_reads > hard.current_name_reads
++        {
++            return Err(fault("policy limits exceed fixed ceilings"));
++        }
++        Ok(self)
++    }
++}
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-TRAIT-CYCLE-POLICY", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "source trait cycle policy atom/member/binder/byte/lookup limit".into(),
++    )
++}
++fn binder_identity(parameters: &[HeaderParameter]) -> Digest {
++    let mut e = StableEncoder::new("lrr/v5/source-cycle-binder/v1");
++    e.sequence(parameters, |e, p| e.record(p));
++    e.finish()
++}
++/// Retained exact source data. Public capture is useful for header controls but
++/// confers no current catalog, name-resolution or structural-rule certificate.
++pub struct RetainedHeaderCycleFacts {
++    header: Digest,
++    definition: Digest,
++    source: Digest,
++    edition: u16,
++    cfg: Digest,
++    declaration: DeclarationPolicy,
++    unsafe_declaration: bool,
++    negative_declaration: bool,
++    default_impl: bool,
++    declared_auto: bool,
++    atoms: Vec<PredicateAtomFact>,
++    members: Vec<MemberDeclarationFact>,
++    metadata_bytes: usize,
++}
++impl RetainedHeaderCycleFacts {
++    pub fn capture(header: &SourceTraitHeader, limits: PolicyLimits) -> Result<Self, Diagnostic> {
++        let limits = limits.validate()?;
++        // Reuse the actual header's checked full-capacity sizer before any
++        // atom/member clone/hash traversal or policy-vector publication.
++        let source_bytes = header.candidate_snapshot_bytes()?;
++        if source_bytes > limits.metadata_bytes {
++            return Err(limit());
++        }
++        let mut count = 0usize;
++        for p in header.predicates() {
++            let n = match &p.kind {
++                PredicateKind::Bound { bounds, .. }
++                | PredicateKind::RegionOutlives { bounds, .. } => bounds.len().max(1),
++                PredicateKind::ImplicitSized { relaxed, .. } => {
++                    relaxed.len().checked_add(1).ok_or_else(limit)?
++                }
++                PredicateKind::RequiredSyntax(_) => 1,
++            };
++            count = count
++                .checked_add(n)
++                .filter(|n| *n <= limits.atoms)
++                .ok_or_else(limit)?;
++        }
++        if let HeaderKind::Trait { supertraits, .. } = header.kind() {
++            count = count
++                .checked_add(supertraits.len())
++                .filter(|n| *n <= limits.atoms)
++                .ok_or_else(limit)?;
++        }
++        if header.associated().len() > limits.members {
++            return Err(limit());
++        }
++        let bytes = source_bytes
++            .checked_add(
++                count
++                    .checked_mul(std::mem::size_of::<PredicateAtomFact>())
++                    .ok_or_else(limit)?,
++            )
++            .and_then(|n| {
++                n.checked_add(
++                    header
++                        .associated()
++                        .len()
++                        .checked_mul(std::mem::size_of::<MemberDeclarationFact>())?,
++                )
++            })
++            .and_then(|n| n.checked_add(std::mem::size_of::<Self>()))
++            .filter(|n| *n <= limits.metadata_bytes)
++            .ok_or_else(limit)?;
++        let mut atoms = Vec::new();
++        atoms.try_reserve_exact(count).map_err(|_| limit())?;
++        let empty = binder_identity(&[]);
++        let header_identity = header.exact_identity();
++        for (group, p) in header.predicates().iter().enumerate() {
++            let group = u32::try_from(group).map_err(|_| limit())?;
++            if p.binder.len() > limits.binder_parameters {
++                return Err(limit());
++            }
++            let group_binder = binder_identity(&p.binder);
++            let predicate_identity = p.fingerprint();
++            let mut emit = |bound: Option<(usize, &HeaderBound)>,
++                            kind: AtomPolicy|
++             -> Result<(), Diagnostic> {
++                let parameters = p
++                    .binder
++                    .len()
++                    .checked_add(bound.map_or(0, |(_, b)| b.binder.len()))
++                    .filter(|n| *n <= limits.binder_parameters)
++                    .ok_or_else(limit)?;
++                let origin = AtomOrigin::Predicate {
++                    group,
++                    bound: bound
++                        .map(|(i, _)| u32::try_from(i))
++                        .transpose()
++                        .map_err(|_| limit())?,
++                };
++                let mut e = StableEncoder::new("lrr/v5/source-cycle-atom-source/v1");
++                e.digest(header_identity);
++                e.record(&origin);
++                e.digest(predicate_identity);
++                if let Some((_, b)) = bound {
++                    e.record(b);
++                }
++                atoms.push(PredicateAtomFact {
++                    origin,
++                    policy: kind,
++                    source_identity: e.finish(),
++                    group_binder,
++                    bound_binder: bound.map_or(empty, |(_, b)| binder_identity(&b.binder)),
++                    binder_parameters: parameters,
++                });
++                Ok(())
++            };
++            match &p.kind {
++                PredicateKind::Bound { bounds, .. }
++                | PredicateKind::RegionOutlives { bounds, .. } => {
++                    if bounds.is_empty() {
++                        emit(None, AtomPolicy::RequiredSyntax)?;
++                    }
++                    for (i, b) in bounds.iter().enumerate() {
++                        emit(Some((i, b)), policy(b))?;
++                    }
++                }
++                PredicateKind::ImplicitSized { relaxed, .. } => {
++                    emit(None, AtomPolicy::ImplicitSizedIdentityRequired)?;
++                    for (i, b) in relaxed.iter().enumerate() {
++                        emit(Some((i, b)), AtomPolicy::RelaxedMarkerIdentityRequired)?;
++                    }
++                }
++                PredicateKind::RequiredSyntax(_) => emit(None, AtomPolicy::RequiredSyntax)?,
++            }
++        }
++        if let HeaderKind::Trait { supertraits, .. } = header.kind() {
++            for (bound, b) in supertraits.iter().enumerate() {
++                if b.binder.len() > limits.binder_parameters {
++                    return Err(limit());
++                }
++                let origin = AtomOrigin::Supertrait {
++                    bound: u32::try_from(bound).map_err(|_| limit())?,
++                };
++                let mut e = StableEncoder::new("lrr/v5/source-cycle-atom-source/v1");
++                e.digest(header_identity);
++                e.record(&origin);
++                e.record(b);
++                atoms.push(PredicateAtomFact {
++                    origin,
++                    policy: policy(b),
++                    source_identity: e.finish(),
++                    group_binder: empty,
++                    bound_binder: binder_identity(&b.binder),
++                    binder_parameters: b.binder.len(),
++                });
++            }
++        }
++        let mut members = Vec::new();
++        members
++            .try_reserve_exact(header.associated().len())
++            .map_err(|_| limit())?;
++        for m in header.associated() {
++            members.push(MemberDeclarationFact {
++                definition: m.definition.fingerprint(),
++                header: m.fingerprint(),
++                kind: m.kind,
++            });
++        }
++        let unsafe_declaration = match header.kind() {
++            HeaderKind::Trait { unsafe_trait, .. } => *unsafe_trait,
++            HeaderKind::Impl { unsafe_impl, .. } => *unsafe_impl,
++        };
++        let (negative_declaration, default_impl, declared_auto) = match header.kind() {
++            HeaderKind::Trait { auto_trait, .. } => (false, false, *auto_trait),
++            HeaderKind::Impl {
++                negative,
++                default_impl,
++                ..
++            } => (*negative, *default_impl, false),
++        };
++        Ok(Self {
++            header: header_identity,
++            definition: header.definition().fingerprint(),
++            source: header.source().fingerprint(),
++            edition: header.source().profile.edition,
++            cfg: header.cfg,
++            declaration: declaration(header),
++            unsafe_declaration,
++            negative_declaration,
++            default_impl,
++            declared_auto,
++            atoms,
++            members,
++            metadata_bytes: bytes,
++        })
++    }
++    pub fn declaration(&self) -> DeclarationPolicy {
++        self.declaration
++    }
++    pub fn header(&self) -> Digest {
++        self.header
++    }
++    pub fn definition(&self) -> Digest {
++        self.definition
++    }
++    pub fn owning_edition(&self) -> u16 {
++        self.edition
++    }
++    pub fn atoms(&self) -> &[PredicateAtomFact] {
++        &self.atoms
++    }
++    pub fn members(&self) -> &[MemberDeclarationFact] {
++        &self.members
++    }
++    pub fn metadata_bytes(&self) -> usize {
++        self.metadata_bytes
++    }
++    pub fn unsafe_declaration(&self) -> bool {
++        self.unsafe_declaration
++    }
++    pub fn negative_declaration(&self) -> bool {
++        self.negative_declaration
++    }
++    pub fn default_impl(&self) -> bool {
++        self.default_impl
++    }
++    pub fn declared_auto(&self) -> bool {
++        self.declared_auto
++    }
++}
++impl StableEncode for RetainedHeaderCycleFacts {
++    const DOMAIN: &'static str = "lrr/v5/retained-source-cycle-facts/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.digest(self.header);
++        e.digest(self.definition);
++        e.digest(self.source);
++        e.u16(self.edition);
++        e.digest(self.cfg);
++        e.u8(match self.declaration {
++            DeclarationPolicy::OrdinaryTrait => 0,
++            DeclarationPolicy::DeclaredAutoTrait => 1,
++            DeclarationPolicy::TraitAliasRequired => 2,
++            DeclarationPolicy::PositiveImpl => 3,
++            DeclarationPolicy::ExplicitNegativeDeclaration => 4,
++            DeclarationPolicy::DefaultImplRequired => 5,
++            DeclarationPolicy::InherentImpl => 6,
++        });
++        e.bool(self.unsafe_declaration);
++        e.bool(self.negative_declaration);
++        e.bool(self.default_impl);
++        e.bool(self.declared_auto);
++        e.sequence(&self.atoms, |e, a| e.record(a));
++        e.sequence(&self.members, |e, m| e.record(m));
++    }
++}
++#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
++pub enum SourceCycleRequirement {
++    M018SourceView,
++    SourceGoalApplicability,
++    ResolvedPredicateArguments,
++    NormalizationGoalProducer,
++    CurrentGoalPublication,
++    TypeMemberPublication,
++    ApprovedStructuralAutoIdentity,
++    ActualFieldAndReferenceRules,
++    ApprovedNegativeCompilerFact,
++    NegativeSyntaxProfile,
++    AliasNormalization,
++    DefaultImplSemantics,
++}
++pub struct CurrentPredicateTraitFact {
++    atom: Digest,
++    trait_header: Digest,
++    trait_definition: Digest,
++    declaration: DeclarationPolicy,
++}
++impl CurrentPredicateTraitFact {
++    pub fn atom(&self) -> Digest {
++        self.atom
++    }
++    pub fn trait_definition(&self) -> Digest {
++        self.trait_definition
++    }
++    pub fn declaration(&self) -> DeclarationPolicy {
++        self.declaration
++    }
++}
++impl StableEncode for CurrentPredicateTraitFact {
++    const DOMAIN: &'static str = "lrr/v5/current-source-predicate-trait-fact/v1";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.digest(self.atom);
++        e.digest(self.trait_header);
++        e.digest(self.trait_definition);
++        e.u8(match self.declaration {
++            DeclarationPolicy::OrdinaryTrait => 0,
++            DeclarationPolicy::DeclaredAutoTrait => 1,
++            DeclarationPolicy::TraitAliasRequired => 2,
++            _ => 3,
++        });
++    }
++}
++/// Private genuine currentness producer: no caller names, descriptors, SCC
++/// model or solved Boolean. It cannot construct an applicable negative fact
++/// or an approved structural-auto witness.
++pub struct CurrentSourceCyclePolicy {
++    owner: RetainedHeaderCycleFacts,
++    selected_trait: Option<RetainedHeaderCycleFacts>,
++    predicate_traits: Vec<CurrentPredicateTraitFact>,
++    requirements: Vec<SourceCycleRequirement>,
++    stamp: Digest,
++    identity: Digest,
++    limits: PolicyLimits,
++}
++impl CurrentSourceCyclePolicy {
++    pub fn capture_header_current(
++        db: &Database,
++        index: &CurrentImplCandidateIndex,
++        header: Digest,
++        limits: PolicyLimits,
++    ) -> Result<Self, Diagnostic> {
++        let limits = limits.validate()?;
++        let view = index.cycle_policy_header_current(db, header)?;
++        let owner = RetainedHeaderCycleFacts::capture(view.owner(), limits)?;
++        let mut budget = owner.metadata_bytes();
++        let selected_trait = if let Some(selected) = view.selected_impl_trait() {
++            let facts = RetainedHeaderCycleFacts::capture(selected, limits)?;
++            budget = budget
++                .checked_add(facts.metadata_bytes())
++                .filter(|n| *n <= limits.metadata_bytes)
++                .ok_or_else(limit)?;
++            Some(facts)
++        } else {
++            None
++        };
++        let mut requirements = std::collections::BTreeSet::from([
++            SourceCycleRequirement::M018SourceView,
++            SourceCycleRequirement::SourceGoalApplicability,
++            SourceCycleRequirement::ResolvedPredicateArguments,
++            SourceCycleRequirement::NormalizationGoalProducer,
++            SourceCycleRequirement::CurrentGoalPublication,
++        ]);
++        let effective_auto = selected_trait.as_ref().map_or(
++            owner.declared_auto(),
++            RetainedHeaderCycleFacts::declared_auto,
++        );
++        if effective_auto {
++            requirements.insert(SourceCycleRequirement::ApprovedStructuralAutoIdentity);
++            requirements.insert(SourceCycleRequirement::ActualFieldAndReferenceRules);
++        }
++        if owner.negative_declaration() {
++            requirements.insert(SourceCycleRequirement::NegativeSyntaxProfile);
++            requirements.insert(SourceCycleRequirement::ApprovedNegativeCompilerFact);
++        }
++        if matches!(owner.declaration(), DeclarationPolicy::TraitAliasRequired) {
++            requirements.insert(SourceCycleRequirement::AliasNormalization);
++        }
++        if owner.default_impl() {
++            requirements.insert(SourceCycleRequirement::DefaultImplSemantics);
++        }
++        if matches!(
++            owner.declaration(),
++            DeclarationPolicy::PositiveImpl
++                | DeclarationPolicy::ExplicitNegativeDeclaration
++                | DeclarationPolicy::DefaultImplRequired
++        ) && selected_trait.is_none()
++        {
++            requirements.insert(SourceCycleRequirement::TypeMemberPublication);
++        }
++        let count = owner
++            .atoms()
++            .iter()
++            .filter(|a| a.policy() == AtomPolicy::PositiveTraitTypeRequired)
++            .count();
++        if count > limits.current_name_reads {
++            return Err(limit());
++        }
++        budget = budget
++            .checked_add(
++                count
++                    .checked_mul(std::mem::size_of::<CurrentPredicateTraitFact>())
++                    .ok_or_else(limit)?,
++            )
++            .filter(|n| *n <= limits.metadata_bytes)
++            .ok_or_else(limit)?;
++        let mut predicate_traits = Vec::new();
++        predicate_traits
++            .try_reserve_exact(count)
++            .map_err(|_| limit())?;
++        let mut trait_fingerprints = std::collections::BTreeMap::new();
++        for atom in owner.atoms() {
++            if atom.policy() == AtomPolicy::PositiveTraitTypeRequired {
++                if let Some(header) = view.bound_trait_current(db, atom.origin())? {
++                    let definition = header.definition().fingerprint();
++                    let header_identity = *trait_fingerprints
++                        .entry(definition)
++                        .or_insert_with(|| header.exact_identity());
++                    predicate_traits.push(CurrentPredicateTraitFact {
++                        atom: atom.source_identity(),
++                        trait_header: header_identity,
++                        trait_definition: definition,
++                        declaration: declaration(header),
++                    });
++                } else {
++                    requirements.insert(SourceCycleRequirement::TypeMemberPublication);
++                }
++            }
++        }
++        let _metadata_reservation = budget;
++        let stamp = view.stamp();
++        let requirements = requirements.into_iter().collect::<Vec<_>>();
++        let mut e = StableEncoder::new("lrr/v5/current-source-cycle-policy/v1");
++        e.digest(stamp);
++        e.record(&owner);
++        e.option(&selected_trait, |e, t| e.record(t));
++        e.sequence(&predicate_traits, |e, t| e.record(t));
++        let identity = e.finish();
++        Ok(Self {
++            owner,
++            selected_trait,
++            predicate_traits,
++            requirements,
++            stamp,
++            identity,
++            limits,
++        })
++    }
++    pub fn revalidate(
++        &self,
++        db: &Database,
++        index: &CurrentImplCandidateIndex,
++    ) -> Result<(), Diagnostic> {
++        let fresh = Self::capture_header_current(db, index, self.owner.header(), self.limits)?;
++        if fresh.stamp != self.stamp || fresh.identity != self.identity {
++            return Err(fault(
++                "source trait declaration/member readiness changed; fresh capture required",
++            ));
++        }
++        Ok(())
++    }
++    pub fn owner(&self) -> &RetainedHeaderCycleFacts {
++        &self.owner
++    }
++    pub fn selected_trait(&self) -> Option<&RetainedHeaderCycleFacts> {
++        self.selected_trait.as_ref()
++    }
++    pub fn predicate_traits(&self) -> &[CurrentPredicateTraitFact] {
++        &self.predicate_traits
++    }
++    pub fn requirements(&self) -> &[SourceCycleRequirement] {
++        &self.requirements
++    }
++    pub fn identity(&self) -> Digest {
++        self.identity
++    }
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-is-contextual.rs b/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-is-contextual.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-is-contextual.rs
+@@ -0,0 +1,18 @@
++//@ run-pass
++
++#![allow(path_statements)]
++#![allow(dead_code)]
++macro_rules! auto {
++    () => (struct S;)
++}
++
++auto!();
++
++fn auto() {}
++
++fn main() {
++    auto();
++    let auto = 10;
++    auto;
++    auto as u8;
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-trait-projection-recursion.rs b/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-trait-projection-recursion.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-trait-projection-recursion.rs
+@@ -0,0 +1,34 @@
++// Checking the `Send` bound in `main` requires:
++//
++// checking             <C<'static> as Y>::P: Send
++// which normalizes to  Box<X<C<'?1>>>: Send
++// which needs          X<C<'?1>>: Send
++// which needs          <C<'?1> as Y>::P: Send
++//
++// At this point we used to normalize the predicate to `Box<X<C<'?2>>>: Send`
++// and continue in a loop where we created new region variables to the
++// recursion limit. To avoid this we now "canonicalize" region variables to
++// lowest unified region vid. This means we instead have to prove
++// `Box<X<C<'?1>>>: Send`, which we can because auto traits are coinductive.
++
++//@ check-pass
++
++// Avoid a really long error message if this regresses.
++#![recursion_limit="20"]
++
++trait Y {
++    type P;
++}
++
++impl<'a> Y for C<'a> {
++    type P = Box<X<C<'a>>>;
++}
++
++struct C<'a>(&'a ());
++struct X<T: Y>(T::P);
++
++fn is_send<S: Send>() {}
++
++fn main() {
++    is_send::<X<C<'static>>>();
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/distinct-type-tuple-by-negative-impl.rs b/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/distinct-type-tuple-by-negative-impl.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/distinct-type-tuple-by-negative-impl.rs
+@@ -0,0 +1,21 @@
++//! Regression test for <https://github.com/rust-lang/rust/issues/29516>
++//@ check-pass
++#![feature(auto_traits)]
++#![feature(negative_impls)]
++
++auto trait NotSame {}
++
++impl<A> !NotSame for (A, A) {}
++
++trait OneOfEach {}
++
++impl<A> OneOfEach for (A,) {}
++
++impl<A, B> OneOfEach for (A, B)
++where
++    (B,): OneOfEach,
++    (A, B): NotSame,
++{
++}
++
++fn main() {}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/typeck-default-trait-impl-negation.rs b/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/typeck-default-trait-impl-negation.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/typeck-default-trait-impl-negation.rs
+@@ -0,0 +1,29 @@
++#![feature(auto_traits)]
++#![feature(negative_impls)]
++
++auto trait MyTrait {}
++
++unsafe auto trait MyUnsafeTrait {}
++
++struct ThisImplsTrait;
++
++impl !MyUnsafeTrait for ThisImplsTrait {}
++
++
++struct ThisImplsUnsafeTrait;
++
++impl !MyTrait for ThisImplsUnsafeTrait {}
++
++fn is_my_trait<T: MyTrait>() {}
++fn is_my_unsafe_trait<T: MyUnsafeTrait>() {}
++
++fn main() {
++    is_my_trait::<ThisImplsTrait>();
++    is_my_trait::<ThisImplsUnsafeTrait>();
++    //~^ ERROR `ThisImplsUnsafeTrait: MyTrait` is not satisfied
++
++    is_my_unsafe_trait::<ThisImplsTrait>();
++    //~^ ERROR `ThisImplsTrait: MyUnsafeTrait` is not satisfied
++
++    is_my_unsafe_trait::<ThisImplsUnsafeTrait>();
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/typeck-default-trait-impl-negation.stderr b/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/typeck-default-trait-impl-negation.stderr
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/typeck-default-trait-impl-negation.stderr
+@@ -0,0 +1,37 @@
++error[E0277]: the trait bound `ThisImplsUnsafeTrait: MyTrait` is not satisfied
++  --> $DIR/typeck-default-trait-impl-negation.rs:22:19
++   |
++LL |     is_my_trait::<ThisImplsUnsafeTrait>();
++   |                   ^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
++   |
++help: the trait `MyTrait` is not implemented for `ThisImplsUnsafeTrait`
++  --> $DIR/typeck-default-trait-impl-negation.rs:13:1
++   |
++LL | struct ThisImplsUnsafeTrait;
++   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
++note: required by a bound in `is_my_trait`
++  --> $DIR/typeck-default-trait-impl-negation.rs:17:19
++   |
++LL | fn is_my_trait<T: MyTrait>() {}
++   |                   ^^^^^^^ required by this bound in `is_my_trait`
++
++error[E0277]: the trait bound `ThisImplsTrait: MyUnsafeTrait` is not satisfied
++  --> $DIR/typeck-default-trait-impl-negation.rs:25:26
++   |
++LL |     is_my_unsafe_trait::<ThisImplsTrait>();
++   |                          ^^^^^^^^^^^^^^ unsatisfied trait bound
++   |
++help: the trait `MyUnsafeTrait` is not implemented for `ThisImplsTrait`
++  --> $DIR/typeck-default-trait-impl-negation.rs:8:1
++   |
++LL | struct ThisImplsTrait;
++   | ^^^^^^^^^^^^^^^^^^^^^
++note: required by a bound in `is_my_unsafe_trait`
++  --> $DIR/typeck-default-trait-impl-negation.rs:18:26
++   |
++LL | fn is_my_unsafe_trait<T: MyUnsafeTrait>() {}
++   |                          ^^^^^^^^^^^^^ required by this bound in `is_my_unsafe_trait`
++
++error: aborting due to 2 previous errors
++
++For more information about this error, try `rustc --explain E0277`.
+diff --git a/xtask/tests/source_trait_cycle_policy.rs b/xtask/tests/source_trait_cycle_policy.rs
+new file mode 100644
+--- /dev/null
++++ b/xtask/tests/source_trait_cycle_policy.rs
+@@ -0,0 +1,362 @@
++//! Source-policy component controls; no fulfilled trait/SCC/runtime acceptance.
++use lrr::{
++    core::{
++        digest::{Digest, StableEncode},
++        profile::ProfileIdentity,
++    },
++    source::snapshot::{CfgSet, SourceBlob, SourcePath},
++    syntax::{outline::ScopeKey, parse::ParsedFile},
++    traits::{
++        header::{CapturedSourceHeaders, HeaderCaptureLimits, HeaderKind, SourceTraitHeader},
++        source_cycle_policy::{
++            AtomOrigin, AtomPolicy, DeclarationPolicy, PolicyLimits, RetainedHeaderCycleFacts,
++        },
++    },
++};
++fn headers(text: &str, edition: u16) -> CapturedSourceHeaders {
++    let mut profile = ProfileIdentity::current();
++    profile.edition = edition;
++    ParsedFile::parse_declarations(&SourceBlob::new(text.as_bytes().to_vec()).unwrap(), profile)
++        .unwrap()
++        .capture_trait_headers(
++            SourcePath::new("source_policy_fixture.rs").unwrap(),
++            ScopeKey {
++                crate_key: Digest([145; 32]),
++                module_path: vec![],
++                owner: None,
++            },
++            &CfgSet::guest_default(),
++            HeaderCaptureLimits::default(),
++        )
++        .unwrap()
++}
++fn facts(h: &SourceTraitHeader) -> RetainedHeaderCycleFacts {
++    RetainedHeaderCycleFacts::capture(h, PolicyLimits::default()).unwrap()
++}
++#[test]
++fn m022_source_keyword_auto_and_negative_are_declarations_not_approved_rules() {
++    let h = headers(
++        include_str!(
++            "../../fixtures/upstream/rustc-checkout/tests/ui/auto-traits/distinct-type-tuple-by-negative-impl.rs"
++        ),
++        2015,
++    );
++    let auto = h
++        .headers()
++        .iter()
++        .find(|h| h.definition().declared_name == "NotSame")
++        .unwrap();
++    assert_eq!(
++        facts(auto).declaration(),
++        DeclarationPolicy::DeclaredAutoTrait
++    );
++    let negative = h
++        .headers()
++        .iter()
++        .find(|h| matches!(h.kind(), HeaderKind::Impl { negative: true, .. }))
++        .unwrap();
++    let f = facts(negative);
++    assert_eq!(
++        f.declaration(),
++        DeclarationPolicy::ExplicitNegativeDeclaration
++    );
++    assert!(!f.atoms().is_empty());
++    assert_eq!(f.header(), negative.exact_identity());
++    // The source uses the SAME actual A parameter twice; this declaration
++    // cannot be applied to an arbitrary tuple without the missing reached goal.
++    let HeaderKind::Impl { self_type, .. } = negative.kind() else {
++        unreachable!()
++    };
++    let tuple = self_type.symbolic().unwrap();
++    let lrr::traits::term::TyTerm::Tuple(fields) = tuple else {
++        panic!("source tuple shape lost")
++    };
++    assert_eq!(fields.len(), 2);
++    assert_eq!(fields[0].fingerprint(), fields[1].fingerprint());
++}
++#[test]
++fn m022_plain_same_spelled_marker_traits_and_coinductive_attributes_stay_ordinary() {
++    let h = headers(
++        "trait Send {} trait Sync {} trait Unpin {} auto trait Other {}",
++        2015,
++    );
++    for name in ["Send", "Sync", "Unpin"] {
++        let header = h
++            .headers()
++            .iter()
++            .find(|h| h.definition().declared_name == name)
++            .unwrap();
++        assert_eq!(
++            facts(header).declaration(),
++            DeclarationPolicy::OrdinaryTrait
++        );
++    }
++    let original = headers(
++        include_str!(
++            "../../fixtures/upstream/rustc-checkout/tests/ui/traits/next-solver/cycles/inductive-cycle-discarded-coinductive-constraints.rs"
++        ),
++        2015,
++    );
++    let marked = original
++        .headers()
++        .iter()
++        .find(|h| h.definition().declared_name == "Trait")
++        .unwrap();
++    assert_eq!(
++        facts(marked).declaration(),
++        DeclarationPolicy::OrdinaryTrait
++    );
++    // rustc_attrs/nightly compiler annotation is not an LRR structural rule.
++}
++#[test]
++fn m022_contextual_auto_original_does_not_create_a_trait_policy() {
++    let original = include_str!(
++        "../../fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-is-contextual.rs"
++    );
++    for edition in [2015, 2018, 2021, 2024] {
++        let h = headers(original, edition);
++        assert!(h.headers().is_empty());
++    }
++    // Original auto! expansion/body remains unexecuted; this proves only that
++    // its spelling is not a source trait declaration in the retained AST.
++}
++#[test]
++fn m022_each_source_bound_has_distinct_group_ordinal_and_binder_identity() {
++    let h = headers(
++        "trait A {} trait B {} trait C<'a> {} impl<T:A+B> A for T where for<'a> T:C<'a> {}",
++        2015,
++    );
++    let owner = h
++        .headers()
++        .iter()
++        .find(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++        .unwrap();
++    let f = facts(owner);
++    let positive = f
++        .atoms()
++        .iter()
++        .filter(|a| a.policy() == AtomPolicy::PositiveTraitTypeRequired)
++        .collect::<Vec<_>>();
++    assert_eq!(positive.len(), 3);
++    assert_ne!(positive[0].source_identity(), positive[1].source_identity());
++    let AtomOrigin::Predicate {
++        group: a,
++        bound: Some(0),
++    } = positive[0].origin()
++    else {
++        panic!("first source group atom missing")
++    };
++    let AtomOrigin::Predicate {
++        group: b,
++        bound: Some(1),
++    } = positive[1].origin()
++    else {
++        panic!("second source group atom missing")
++    };
++    assert_eq!(a, b);
++    assert!(positive.iter().any(|a| a.binder_parameters() == 1));
++    assert!(
++        f.atoms()
++            .iter()
++            .any(|a| a.policy() == AtomPolicy::ImplicitSizedIdentityRequired)
++    );
++    // Atom splitting preserves all facts; it does not resolve A/B/C arguments,
++    // create ParamEnv assumptions, normalize projections, or fulfill any bound.
++}
++#[test]
++fn m022_relaxed_sized_retains_identity_requirement_without_negative_fact() {
++    let h = headers("trait A {} impl<T:?Sized> A for &T {}", 2015);
++    let owner = h
++        .headers()
++        .iter()
++        .find(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++        .unwrap();
++    let f = facts(owner);
++    assert_eq!(f.declaration(), DeclarationPolicy::PositiveImpl);
++    assert!(
++        f.atoms()
++            .iter()
++            .any(|a| a.policy() == AtomPolicy::ImplicitSizedIdentityRequired)
++    );
++    assert!(
++        f.atoms()
++            .iter()
++            .any(|a| a.policy() == AtomPolicy::RelaxedMarkerIdentityRequired)
++    );
++    assert!(
++        !f.atoms()
++            .iter()
++            .any(|a| a.policy() == AtomPolicy::PositiveTraitTypeRequired)
++    );
++    // Genuine core Sized identity is still required to remove the implicit
++    // bound. No NotSized/negative goal is asserted by a ? spelling.
++}
++#[test]
++fn m022_negative_conditions_and_unsafe_source_headers_remain_unfulfilled() {
++    let original = headers(
++        include_str!(
++            "../../fixtures/upstream/rustc-checkout/tests/ui/auto-traits/typeck-default-trait-impl-negation.rs"
++        ),
++        2015,
++    );
++    let autos = original
++        .headers()
++        .iter()
++        .filter(|h| {
++            matches!(
++                h.kind(),
++                HeaderKind::Trait {
++                    auto_trait: true,
++                    ..
++                }
++            )
++        })
++        .collect::<Vec<_>>();
++    assert_eq!(autos.len(), 2);
++    assert!(autos.iter().any(|h| facts(h).unsafe_declaration()));
++    let negatives = original
++        .headers()
++        .iter()
++        .filter(|h| matches!(h.kind(), HeaderKind::Impl { negative: true, .. }))
++        .collect::<Vec<_>>();
++    assert_eq!(negatives.len(), 2);
++    for h in negatives {
++        assert_eq!(
++            facts(h).declaration(),
++            DeclarationPolicy::ExplicitNegativeDeclaration
++        );
++    }
++    let adapter = headers(
++        "trait Bound {} auto trait Auto {} impl<T:Bound> !Auto for T {}",
++        2015,
++    );
++    let negative = adapter
++        .headers()
++        .iter()
++        .find(|h| matches!(h.kind(), HeaderKind::Impl { negative: true, .. }))
++        .unwrap();
++    let f = facts(negative);
++    assert_eq!(
++        f.atoms()
++            .iter()
++            .filter(|a| a.policy() == AtomPolicy::PositiveTraitTypeRequired)
++            .count(),
++        1
++    );
++    // Raw negative declarations remain subject to source profile/compiler-facet
++    // and actual Self/arguments/predicate applicability, never unconditional.
++}
++#[test]
++fn m022_projection_original_keeps_target_and_selected_members_cold() {
++    let h = headers(
++        include_str!(
++            "../../fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-trait-projection-recursion.rs"
++        ),
++        2015,
++    );
++    let trait_header = h
++        .headers()
++        .iter()
++        .find(|h| h.definition().declared_name == "Y")
++        .unwrap();
++    let f = facts(trait_header);
++    assert_eq!(f.declaration(), DeclarationPolicy::OrdinaryTrait);
++    assert_eq!(f.members().len(), 1);
++    assert_eq!(
++        f.members()[0].definition(),
++        trait_header.associated()[0].definition.fingerprint()
++    );
++    assert_eq!(
++        f.members()[0].header(),
++        trait_header.associated()[0].fingerprint()
++    );
++    let implementation = h
++        .headers()
++        .iter()
++        .find(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++        .unwrap();
++    assert_eq!(facts(implementation).members().len(), 1);
++    // Box/X/associated P/Send normalization and source library capture are
++    // prerequisites, not facts inferred from printed types or runtime tags.
++}
++#[test]
++fn m022_source_profiles_and_same_spelled_owners_preserve_distinct_identities() {
++    let mut identities = std::collections::BTreeSet::new();
++    for edition in [2015, 2018, 2021, 2024] {
++        let h = headers("auto trait Marker {}", edition);
++        let f = facts(&h.headers()[0]);
++        assert_eq!(f.owning_edition(), edition);
++        assert!(identities.insert(f.fingerprint()));
++    }
++    let a = headers("trait Marker {}", 2015);
++    let b = headers("auto trait Marker {}", 2015);
++    assert_ne!(
++        facts(&a.headers()[0]).fingerprint(),
++        facts(&b.headers()[0]).fingerprint()
++    );
++}
++#[test]
++fn m022_policy_limits_reject_before_returning_partial_source_facts() {
++    let h = headers(
++        "trait A {} trait B {} trait C {} impl<T:A+B> C for T {fn cold(){unknown!()}}",
++        2015,
++    );
++    let owner = h
++        .headers()
++        .iter()
++        .find(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++        .unwrap();
++    for field in 0..3 {
++        let mut limits = PolicyLimits::default();
++        match field {
++            0 => limits.metadata_bytes = 0,
++            1 => limits.atoms = 0,
++            _ => limits.members = 0,
++        }
++        assert_eq!(
++            RetainedHeaderCycleFacts::capture(owner, limits)
++                .err()
++                .unwrap()
++                .code,
++            "LRR-E-METADATA-LIMIT"
++        );
++    }
++    let h = headers(
++        "trait A<'a> {} trait B {} impl<T> B for T where for<'a> T:A<'a> {}",
++        2015,
++    );
++    let owner = h
++        .headers()
++        .iter()
++        .find(|h| matches!(h.kind(), HeaderKind::Impl { .. }))
++        .unwrap();
++    let mut limits = PolicyLimits::default();
++    limits.binder_parameters = 0;
++    assert!(RetainedHeaderCycleFacts::capture(owner, limits).is_err());
++}
++#[test]
++fn m022_real_policy_capture_requires_actual_current_catalog_without_query_effects() {
++    use lrr::{
++        db::{
++            memo::Database,
++            seals::{SealDomain, SealKey},
++        },
++        traits::{index::CurrentImplCandidateIndex, source_cycle_policy::CurrentSourceCyclePolicy},
++    };
++    let db = Database::default();
++    let request = SealKey {
++        domain: SealDomain::ImplCatalog {
++            id: Digest([146; 32]),
++        },
++        unit_graph: Digest([147; 32]),
++        epoch: 1,
++    };
++    assert!(
++        CurrentImplCandidateIndex::capture_current(&db, &request, HeaderCaptureLimits::default())
++            .is_err()
++    );
++    let _capture = CurrentSourceCyclePolicy::capture_header_current;
++    assert!(db.trace.counts.is_empty());
++    // No fake catalog/type scope/member memo/structural rule/currentness proof
++    // or positive CurrentSourceCyclePolicy is minted by this negative control.
++}

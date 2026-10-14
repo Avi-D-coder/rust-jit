@@ -1,0 +1,11 @@
+schema_version=1
+id="E2408"
+category="strict"
+source="main.rs"
+entry="case"
+modes=["off","auto","force"]
+oracle=true
+[expect]
+status="passed"
+stdout="explicit:3\ninherited:4\nnested:5\nmutable:7\n"
+stderr=""

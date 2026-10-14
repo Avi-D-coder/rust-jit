@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/rust-lang/rust",
+  "commit": "b940084d7eb6a299eb4bfeb8e34901bc051e7ac4",
+  "host": "aarch64-apple-darwin",
+  "rustc": "1.99.0",
+  "inventory_truncated": true,
+  "scope": "Initial selected upstream sources for assessment; not the full rustc suite. No LRR acceptance or native oracle execution claimed.",
+  "lrr_tests_passed": [],
+  "native_oracles_passed": [],
+  "files": [
+    {
+      "path": "tests/ui/macros/for-loop-macro-rules-hygiene.rs",
+      "git_blob": "fcebda1b9da82774d35828a34bb73431262cf70f",
+      "sha256": "6c8f7702a4cba2cb7e75ac9d578183bdc99fbf763f9e3be31e22eae2752ed355",
+      "bytes": 267
+    },
+    {
+      "path": "tests/ui/macros/macro-tt-followed-by-seq.rs",
+      "git_blob": "b4ab486b23691bf9c8afe164c836a98c5b6ed7e3",
+      "sha256": "b6ff698c4d5e6ad603ca384ce0bc7ea26fba09f61f517380196743a4067a73cf",
+      "bytes": 640
+    },
+    {
+      "path": "tests/ui/macros/macro-tt-matchers.rs",
+      "git_blob": "004be966cb492e7e2bba2a4b286729500cf8147f",
+      "sha256": "962222c95e211c3127a46fff6ba0a3f635d93de71748b81c5fdda1bbdc4cd6d3",
+      "bytes": 161
+    },
+    {
+      "path": "tests/ui/macros/user-defined-macro-rules.rs",
+      "git_blob": "baabe0e90c450c70fcff977e55e7696daba7866f",
+      "sha256": "fb64ad5ad4db69dba59d3dfe627c6c20bee5a6cc563d66839571e2efaa304cec",
+      "bytes": 155
+    },
+    {
+      "path": "tests/ui/associated-types/associated-types-basic.rs",
+      "git_blob": "911073a6a32c84d6007f2b164e50a49131fce45a",
+      "sha256": "b0431c764db2bd40d9004024aa83cbffb2bb6afdbf8663fce86cf310eb3058fc",
+      "bytes": 178
+    },
+    {
+      "path": "tests/ui/proc-macro/gen-macro-rules-hygiene.rs",
+      "git_blob": "fb7c830c2edf45a5cf64ef7b02b25d3d42cf8b59",
+      "sha256": "78b239a79564dce3297c79641ce6ee4b6b1e6193b842c184e1b7434f89b9fe07",
+      "bytes": 706
+    },
+    {
+      "path": "tests/ui/proc-macro/auxiliary/gen-macro-rules-hygiene.rs",
+      "git_blob": "40ecf4ef704677f870b332702560b5005e41830a",
+      "sha256": "6d6424c302f8eee71991e2ce366be0719af8a1c54b3c45d81798bf036c28bc79",
+      "bytes": 378
+    },
+    {
+      "path": "LICENSE-APACHE",
+      "git_blob": "1b5ec8b78e237b5c3b3d812a7c0a6589d0f7161d",
+      "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "bytes": 9723
+    },
+    {
+      "path": "LICENSE-MIT",
+      "git_blob": "a2070c4be7acd5316f8d0357ca3c12419a2f3c62",
+      "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "bytes": 1068
+    },
+    {
+      "path": "tests/ui/proc-macro/gen-macro-rules-hygiene.stderr",
+      "git_blob": "46cdbaccaeb6ced5ab25e471e5b240623aaf3c7b",
+      "sha256": "fb2cbe251403ab2875b2a1307e41e4edefdda05112ae2e9173ee13c81025653c",
+      "bytes": 1878
+    }
+  ],
+  "cases": [
+    {
+      "path": "tests/ui/macros/for-loop-macro-rules-hygiene.rs",
+      "mode": "run-pass",
+      "relevance": "Definition-local x must not capture caller x; vector, index and assert_eq runtime prerequisites",
+      "integration_tasks": [
+        "M013",
+        "M030",
+        "M043"
+      ],
+      "lrr_status": "pending"
+    },
+    {
+      "path": "tests/ui/macros/macro-tt-followed-by-seq.rs",
+      "mode": "run-pass",
+      "relevance": "tt repetition and nested declarative expansion; enum/generics/derive Debug/format runtime prerequisites",
+      "integration_tasks": [
+        "M013",
+        "M028",
+        "M033",
+        "M043"
+      ],
+      "lrr_status": "pending"
+    },
+    {
+      "path": "tests/ui/macros/macro-tt-matchers.rs",
+      "mode": "build-pass",
+      "relevance": "tt substitution as generic type constructor; source-aware Box/type-alias resolution",
+      "integration_tasks": [
+        "M013",
+        "M017",
+        "M032",
+        "M043"
+      ],
+      "lrr_status": "pending"
+    },
+    {
+      "path": "tests/ui/macros/user-defined-macro-rules.rs",
+      "mode": "check-pass",
+      "relevance": "Macro named macro_rules and generated item discovery; not a runtime-equivalence test",
+      "integration_tasks": [
+        "M013",
+        "M043"
+      ],
+      "lrr_status": "pending"
+    },
+    {
+      "path": "tests/ui/associated-types/associated-types-basic.rs",
+      "mode": "run-pass",
+      "relevance": "Associated type projection and arithmetic through the resolved projection",
+      "integration_tasks": [
+        "M023",
+        "M043"
+      ],
+      "lrr_status": "pending"
+    },
+    {
+      "path": "tests/ui/proc-macro/gen-macro-rules-hygiene.rs",
+      "mode": "compile-fail",
+      "relevance": "Generated macro hygiene and dollar-crate origin; rustc diagnostic snapshots cannot serve as LRR relaxed-profile expected rejection",
+      "integration_tasks": [
+        "M016",
+        "M043",
+        "M044"
+      ],
+      "lrr_status": "requires separate LRR semantic assertions; unexecuted",
+      "auxiliary": [
+        "tests/ui/proc-macro/auxiliary/gen-macro-rules-hygiene.rs"
+      ],
+      "expected_diagnostics": [
+        "tests/ui/proc-macro/gen-macro-rules-hygiene.stderr"
+      ]
+    }
+  ]
+}

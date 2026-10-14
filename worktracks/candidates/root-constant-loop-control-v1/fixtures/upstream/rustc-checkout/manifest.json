@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/rust-lang/rust",
+  "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "license": "MIT OR Apache-2.0",
+  "scope": "Selected unchanged official UI cases; no complete-suite or execution claim",
+  "files": [
+    {
+      "path": "COPYRIGHT",
+      "git_blob": "4dad74f234eaaaa3c311ca031216e16fc9c4e940",
+      "sha256": "172020dbfd5b53a226dfde77616190a48dcff519b0bc0e6deb91a8450782c4af",
+      "bytes": 1571
+    },
+    {
+      "path": "LICENSE-APACHE",
+      "git_blob": "1b5ec8b78e237b5c3b3d812a7c0a6589d0f7161d",
+      "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "bytes": 9723
+    },
+    {
+      "path": "LICENSE-MIT",
+      "git_blob": "a2070c4be7acd5316f8d0357ca3c12419a2f3c62",
+      "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "bytes": 1068
+    },
+    {
+      "path": "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.allow.stderr",
+      "git_blob": "dddd79a43838f625a56747bc711080a5e005d561",
+      "sha256": "4aa305eac6a01a82ce82b2e65e59cf52b60be18e9eb3a9c637f637a31372d4be",
+      "bytes": 381
+    },
+    {
+      "path": "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.rs",
+      "git_blob": "7fa338f025a7bf1f770901bf76ab70dcb9bd5170",
+      "sha256": "5591b3fa000aff9105d382b71d3edc5d5154aaad2af6b463b7cf4b14f182e4a3",
+      "bytes": 546
+    },
+    {
+      "path": "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.warn.stderr",
+      "git_blob": "44abf8be6bdfaf7e5fd160f562eb68a5f6a69abb",
+      "sha256": "bf55748e03ed9154e362d3cfa7158ec8ea3a680fcb6924ffe68f839a669b3f31",
+      "bytes": 1527
+    },
+    {
+      "path": "tests/ui/consts/const-labeled-break.rs",
+      "git_blob": "16444dfefe2b0c9370bffda39afa2295a30bc88b",
+      "sha256": "07d3e298d10795e40866115b9b521cd8fce96a9f08bf0b709ca4e4edd8c7347f",
+      "bytes": 283
+    },
+    {
+      "path": "tests/ui/consts/control-flow/loop.rs",
+      "git_blob": "7da88dfd2ac89c657e71a5872fa1abfbf4ee6367",
+      "sha256": "2253f87458478482a2c038c94e6ed45d15430c434f71a8eb44d80bcba6b2cb4a",
+      "bytes": 1102
+    }
+  ],
+  "cases": [
+    {
+      "path": "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ revisions: warn allow",
+        "//@ compile-flags: -Z tiny-const-eval-limit"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/const-labeled-break.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/control-flow/loop.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    }
+  ]
+}

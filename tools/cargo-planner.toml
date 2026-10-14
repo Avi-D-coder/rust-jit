@@ -1,0 +1,5 @@
+schema = 1
+channel = "nightly-2026-10-01"
+project_toolchain = "1.99.0"
+required_interfaces = ["unit-graph", "compile-time-deps"]
+# Installed binary path/version/hash belong to the measured M002 tool manifest.

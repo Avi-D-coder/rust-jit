@@ -1,0 +1,943 @@
+diff --git a/crates/lrr/src/syntax/pure_constants.rs b/crates/lrr/src/syntax/pure_constants.rs
+--- a/crates/lrr/src/syntax/pure_constants.rs
++++ b/crates/lrr/src/syntax/pure_constants.rs
+@@ -27,6 +27,9 @@
+     ast::{self, HasArgList, HasAttrs, HasGenericArgs, HasGenericParams, HasModuleItem, HasName},
+ };
+ use std::{collections::BTreeMap, rc::Rc};
++#[path = "constant_parameter_lengths.rs"]
++mod parameter_lengths;
++use parameter_lengths::ParameterIndependentLength;
+ fn fault(message: &str) -> Diagnostic {
+     Diagnostic::new("LRR-E-CONST-SOURCE", message.into())
+ }
+@@ -512,6 +515,7 @@
+                 )? {
+                     return Err(fault("array length owning root is cfg-disabled"));
+                 }
++                let mut parameter_length = None;
+                 for ancestor in expr.syntax().ancestors() {
+                     if (ast::Module::can_cast(ancestor.kind()) && self.0.selection.is_none())
+                         || ast::Impl::can_cast(ancestor.kind())
+@@ -522,19 +526,27 @@
+                             "anonymous array length requires nested source namespace preparation",
+                         ));
+                     }
+-                    if let Some(function) = ast::Fn::cast(ancestor.clone())
+-                        && (function.param_list().is_none_or(|p| {
+-                            p.self_param().is_some() || p.params().next().is_some()
+-                        }) || function.generic_param_list().is_some()
++                    if let Some(function) = ast::Fn::cast(ancestor.clone()) {
++                        let params = required(function.param_list())?;
++                        if params.self_param().is_some()
++                            || function.generic_param_list().is_some()
++                            || function.where_clause().is_some()
+                             || ancestor.parent().is_none_or(|p| {
+                                 !ast::SourceFile::can_cast(p.kind())
+                                     && !(self.0.selection.is_some()
+                                         && ast::ItemList::can_cast(p.kind()))
+-                            }))
+-                    {
+-                        return Err(fault(
+-                            "anonymous array length requires captured function binding context",
+-                        ));
++                            })
++                        {
++                            return Err(fault(
++                                "anonymous array length requires captured function binding context",
++                            ));
++                        }
++                        if params.params().next().is_some() {
++                            if parameter_length.is_some() {
++                                return Err(fault("nested parameter length owner is ambiguous"));
++                            }
++                            parameter_length = Some(self.prove_parameter_length(&function, &expr)?);
++                        }
+                     }
+                     if let Some(statements) = ast::StmtList::cast(ancestor.clone()) {
+                         for statement in statements.statements() {
+@@ -569,7 +581,11 @@
+                         ));
+                     }
+                 }
+-                return self.plan(Entry::Length(ExprRef(expr)), at);
++                return self.plan_with_parameter_length(
++                    Entry::Length(ExprRef(expr)),
++                    at,
++                    parameter_length,
++                );
+             }
+         }
+         Err(fault(
+@@ -577,6 +593,14 @@
+         ))
+     }
+     fn plan(&self, entry: Entry, at: SourceRange) -> Result<ConstantPlan, Diagnostic> {
++        self.plan_with_parameter_length(entry, at, None)
++    }
++    fn plan_with_parameter_length(
++        &self,
++        entry: Entry,
++        at: SourceRange,
++        parameter_length: Option<ParameterIndependentLength>,
++    ) -> Result<ConstantPlan, Diagnostic> {
+         if self
+             .0
+             .parsed
+@@ -596,8 +620,9 @@
+         if let Some(body) = owner_body {
+             body.require_entry()?;
+         }
+-        let mut e = StableEncoder::new("lrr/v3/pure-constant-source-plan");
++        let mut e = StableEncoder::new("lrr/v4/pure-constant-source-plan");
+         e.digest(self.0.crate_key);
++        e.option(&parameter_length, |e, proof| e.digest(proof.identity()));
+         e.u64(self.0.macro_proofs.len() as u64);
+         for ((start, end), proof) in &self.0.macro_proofs {
+             e.u32(*start);
+@@ -605,7 +630,7 @@
+             e.digest(proof.identity());
+         }
+         e.record(&self.0.scope);
+-        e.option(self.0.selection.as_ref(), |e, selection| {
++        e.option(&self.0.selection, |e, selection| {
+             e.string(selection.path.as_str());
+             e.digest(selection.location_identity());
+             e.digest(selection.outline.parse.content);
+diff --git a/crates/lrr/src/syntax/constant_parameter_lengths.rs b/crates/lrr/src/syntax/constant_parameter_lengths.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/syntax/constant_parameter_lengths.rs
+@@ -0,0 +1,347 @@
++//! Closed source independence proof for a reached length under a fn header.
++//! Parameter identifiers are potential shadows, never guessed Binding patterns.
++use super::*;
++use std::collections::BTreeSet;
++const MAX_WORK: usize = 100_000;
++const MAX_METADATA: usize = 64 * 1024;
++const MAX_WORKLIST_BYTES: usize = 64 * 1024;
++#[derive(Debug, Clone)]
++pub(super) struct ParameterIndependentLength {
++    identity: Digest,
++}
++impl ParameterIndependentLength {
++    pub(super) fn identity(&self) -> Digest {
++        self.identity
++    }
++}
++fn prerequisite(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-CONST-LENGTH-SOURCE", message.into())
++}
++fn metadata() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "parameter length source proof budget".into(),
++    )
++}
++fn tick(work: &mut usize) -> Result<(), Diagnostic> {
++    *work = work
++        .checked_add(1)
++        .filter(|n| *n <= MAX_WORK)
++        .ok_or_else(metadata)?;
++    Ok(())
++}
++fn insert(names: &mut BTreeSet<String>, name: String, bytes: &mut usize) -> Result<(), Diagnostic> {
++    if names.contains(&name) {
++        return Ok(());
++    }
++    *bytes = bytes
++        .checked_add(128)
++        .and_then(|n| n.checked_add(name.capacity()))
++        .filter(|n| *n <= MAX_METADATA)
++        .ok_or_else(metadata)?;
++    if names.len() >= 256 {
++        return Err(metadata());
++    }
++    names.insert(name);
++    Ok(())
++}
++fn candidates(
++    pattern: ast::Pat,
++    names: &mut BTreeSet<String>,
++    bytes: &mut usize,
++    work: &mut usize,
++) -> Result<(), Diagnostic> {
++    for node in pattern.syntax().descendants() {
++        tick(work)?;
++        let Some(pat) = ast::Pat::cast(node) else {
++            continue;
++        };
++        match pat {
++            ast::Pat::IdentPat(p) => {
++                let name = required(p.name())?;
++                if name.text().len() > 4096 {
++                    return Err(metadata());
++                }
++                insert(names, semantic(name.text())?, bytes)?;
++            }
++            ast::Pat::TuplePat(_)
++            | ast::Pat::SlicePat(_)
++            | ast::Pat::ParenPat(_)
++            | ast::Pat::RefPat(_)
++            | ast::Pat::WildcardPat(_)
++            | ast::Pat::RestPat(_) => {}
++            _ => {
++                return Err(prerequisite(
++                    "parameter pattern requires its exact source binding context",
++                ));
++            }
++        }
++    }
++    Ok(())
++}
++fn length_name(path: ast::Path) -> Result<String, Diagnostic> {
++    if u32::from(path.syntax().text_range().len()) > 4096 {
++        return Err(metadata());
++    }
++    bare(path)
++}
++impl ConstantSource {
++    pub(super) fn prove_parameter_length(
++        &self,
++        function: &ast::Fn,
++        expression: &ast::Expr,
++    ) -> Result<ParameterIndependentLength, Diagnostic> {
++        let params = required(function.param_list())?;
++        if params.self_param().is_some()
++            || function.generic_param_list().is_some()
++            || function.where_clause().is_some()
++        {
++            return Err(prerequisite(
++                "generic/self parameter length context is not established",
++            ));
++        }
++        let mut work = 0usize;
++        let mut bytes = 256usize;
++        let mut parameters = BTreeSet::new();
++        let mut count = 0usize;
++        for param in params.params() {
++            tick(&mut work)?;
++            count += 1;
++            if count > 256 {
++                return Err(metadata());
++            }
++            if param
++                .syntax()
++                .children()
++                .any(|n| ast::Attr::can_cast(n.kind()))
++            {
++                return Err(prerequisite(
++                    "parameter attributes require current prepared signature context",
++                ));
++            }
++            candidates(
++                required(param.pat())?,
++                &mut parameters,
++                &mut bytes,
++                &mut work,
++            )?;
++        }
++        let mut names = BTreeSet::new();
++        let mut roots = BTreeSet::new();
++        let mut stack = vec![expression.clone()];
++        while let Some(expr) = stack.pop() {
++            tick(&mut work)?;
++            self.attributes_clear(expr.syntax())?;
++            let mut operands = Vec::new();
++            match expr {
++                ast::Expr::Literal(_) => {}
++                ast::Expr::ParenExpr(p) => operands.push(required(p.expr())?),
++                ast::Expr::PrefixExpr(p) => {
++                    if !matches!(p.op_kind(), Some(ast::UnaryOp::Neg | ast::UnaryOp::Not)) {
++                        return Err(prerequisite(
++                            "length reference/borrow operation is not source-independent",
++                        ));
++                    }
++                    operands.push(required(p.expr())?);
++                }
++                ast::Expr::BinExpr(b) => {
++                    if matches!(required(b.op_kind())?, ast::BinaryOp::Assignment { .. }) {
++                        return Err(prerequisite(
++                            "length assignment is not static source syntax",
++                        ));
++                    }
++                    operands.push(required(b.lhs())?);
++                    operands.push(required(b.rhs())?);
++                }
++                ast::Expr::CastExpr(c) => {
++                    self.primitive(required(c.ty())?)?;
++                    operands.push(required(c.expr())?);
++                }
++                ast::Expr::PathExpr(path) => {
++                    let name = length_name(required(path.path())?)?;
++                    self.length_root(
++                        &name,
++                        path.syntax(),
++                        false,
++                        &parameters,
++                        &mut roots,
++                        &mut bytes,
++                    )?;
++                    insert(&mut names, name, &mut bytes)?;
++                }
++                ast::Expr::CallExpr(call) => {
++                    let ast::Expr::PathExpr(path) = required(call.expr())? else {
++                        return Err(prerequisite(
++                            "length callee requires an exact original module member",
++                        ));
++                    };
++                    let name = length_name(required(path.path())?)?;
++                    self.length_root(
++                        &name,
++                        call.syntax(),
++                        true,
++                        &parameters,
++                        &mut roots,
++                        &mut bytes,
++                    )?;
++                    insert(&mut names, name, &mut bytes)?;
++                    for arg in required(call.arg_list())?.args() {
++                        if operands.len() >= 256 {
++                            return Err(metadata());
++                        }
++                        operands.push(arg);
++                    }
++                }
++                ast::Expr::MacroExpr(m) => {
++                    // Only already privately admitted concrete panic semantics
++                    // has proven static operands; no macro execution or spelling.
++                    if !matches!(
++                        self.node(&ExprRef(ast::Expr::MacroExpr(m)))?,
++                        Node::AdmittedPanic(_)
++                    ) {
++                        return Err(prerequisite(
++                            "length macro has no current source-static operand proof",
++                        ));
++                    }
++                }
++                _ => {
++                    return Err(prerequisite(
++                        "length expression requires additional source local/control context",
++                    ));
++                }
++            }
++            stack
++                .len()
++                .checked_add(operands.len())
++                .and_then(|n| n.checked_mul(std::mem::size_of::<ast::Expr>()))
++                .filter(|n| *n <= MAX_WORKLIST_BYTES)
++                .ok_or_else(metadata)?;
++            stack
++                .try_reserve_exact(operands.len())
++                .map_err(|_| metadata())?;
++            if stack
++                .capacity()
++                .checked_mul(std::mem::size_of::<ast::Expr>())
++                .is_none_or(|n| n > MAX_WORKLIST_BYTES)
++            {
++                return Err(metadata());
++            }
++            stack.extend(operands);
++        }
++        // Do not inspect prior initializer/callee bodies. Only names from the
++        // exact selected expression need preceding local-pattern exclusion.
++        for ancestor in expression.syntax().ancestors() {
++            if let Some(statements) = ast::StmtList::cast(ancestor) {
++                for statement in statements.statements() {
++                    tick(&mut work)?;
++                    if let ast::Stmt::LetStmt(binding) = statement
++                        && range(binding.syntax().text_range()).end
++                            <= range(expression.syntax().text_range()).start
++                    {
++                        let mut locals = BTreeSet::new();
++                        candidates(required(binding.pat())?, &mut locals, &mut bytes, &mut work)?;
++                        if !locals.is_disjoint(&names) {
++                            return Err(prerequisite(
++                                "length path may capture a preceding local instead of its module constant",
++                            ));
++                        }
++                    }
++                }
++            }
++        }
++        let declaration = self.declaration(function)?;
++        let header_start = range(function.syntax().text_range()).start;
++        let header_end = range(required(function.body())?.syntax().text_range()).start;
++        let header = SourceRange::checked(header_start, header_end)?;
++        let width = header.end.checked_sub(header.start).ok_or_else(metadata)?;
++        if width > u32::from(function.syntax().text_range().len()) {
++            return Err(prerequisite(
++                "exact function header source range is invalid",
++            ));
++        }
++        bytes
++            .checked_add(width as usize)
++            .filter(|n| *n <= MAX_METADATA)
++            .ok_or_else(metadata)?;
++        // Retain the existing immutable source lease; copy only the bounded
++        // original header, never the complete source or unentered body text.
++        let text = function
++            .syntax()
++            .text()
++            .slice(..ra_ap_syntax::TextSize::from(width))
++            .to_string();
++        let mut e = StableEncoder::new("lrr/v1/parameter-independent-constant-length");
++        e.digest(declaration.definition());
++        e.record(declaration.context());
++        e.record(self.profile());
++        e.digest(self.cfg());
++        e.u32(header.start);
++        e.u32(header.end);
++        e.digest(Digest::of_bytes(text.as_bytes()));
++        let site = range(expression.syntax().text_range());
++        e.u32(site.start);
++        e.u32(site.end);
++        e.u64(parameters.len() as u64);
++        for name in &parameters {
++            e.string(name);
++        }
++        e.u64(names.len() as u64);
++        for name in &names {
++            e.string(name);
++        }
++        e.u64(roots.len() as u64);
++        for root in &roots {
++            e.digest(*root);
++        }
++        Ok(ParameterIndependentLength {
++            identity: e.finish(),
++        })
++    }
++    fn length_root(
++        &self,
++        name: &str,
++        syntax: &ra_ap_syntax::SyntaxNode,
++        call: bool,
++        parameters: &BTreeSet<String>,
++        roots: &mut BTreeSet<Digest>,
++        bytes: &mut usize,
++    ) -> Result<(), Diagnostic> {
++        if parameters.contains(name) {
++            return Err(prerequisite(
++                "length path may read an owning function parameter",
++            ));
++        }
++        self.lexical_value_clear(syntax, name)?;
++        let item = self.named(name)?;
++        self.attributes_clear(item.syntax())?;
++        let admitted = match &item {
++            ast::Item::Const(_) => !call,
++            ast::Item::Fn(f) => {
++                call && f.const_token().is_some()
++                    && f.generic_param_list().is_none()
++                    && f.where_clause().is_none()
++            }
++            _ => false,
++        };
++        if !admitted {
++            return Err(prerequisite(
++                "length path is not an exact supported static module member",
++            ));
++        }
++        // Structural kind/context only: no callee type/body semantics forced.
++        let declaration = self.declaration(&item)?;
++        if declaration.context().scope != self.0.scope {
++            return Err(prerequisite(
++                "length root member belongs to another source namespace",
++            ));
++        }
++        if !roots.contains(&declaration.definition()) {
++            *bytes = bytes
++                .checked_add(128)
++                .filter(|n| *n <= MAX_METADATA)
++                .ok_or_else(metadata)?;
++            roots.insert(declaration.definition());
++        }
++        Ok(())
++    }
++}
+diff --git a/crates/lrr/src/frontend/constant_result_type_tests.rs b/crates/lrr/src/frontend/constant_result_type_tests.rs
+--- a/crates/lrr/src/frontend/constant_result_type_tests.rs
++++ b/crates/lrr/src/frontend/constant_result_type_tests.rs
+@@ -386,7 +386,7 @@
+     );
+ }
+ #[test]
+-fn array_const_fn_demand_preserves_arguments_and_explicit_missing_length_context() {
++fn array_const_fn_demand_preserves_arguments_and_admits_independent_header_length() {
+     let source = "const fn f(x:u32)->[u8;2]{let _=x;[1,2]}fn main(){}";
+     let (db, view, definition) = world(source, "f", 2024);
+     let proof = ready(
+@@ -407,9 +407,13 @@
+             .unwrap(),
+         ExpectedResultReadiness::RequiredArrayLength(_)
+     ));
+-    // Existing anonymous length planning refuses a fn parameter namespace.
+-    // Root must supply that precise source context; readiness does not override it.
+-    assert!(source_admit(&db, &view, definition, demand.request()).is_err());
++    // Exact header literal is independent of the scalar parameter/body local.
++    // No initializer/const-call evaluation or guessed lexical argument is needed.
++    let before = db.trace.counts.clone();
++    let child = source_admit(&db, &view, definition, demand.request()).unwrap();
++    child.revalidate(&db, &view).unwrap();
++    assert_eq!(child.plan().range(), demand.range());
++    assert_eq!(db.trace.counts, before);
+ }
+ #[test]
+ fn private_scalar_and_length_tamper_controls_fail_against_exact_admitted_header() {
+@@ -524,3 +528,6 @@
+ 
+ #[path = "constant_child_admission_tests.rs"]
+ mod child_tests;
++
++#[path = "constant_parameter_length_tests.rs"]
++mod parameter_length_tests;
+diff --git a/crates/lrr/src/frontend/constant_child_admission_tests.rs b/crates/lrr/src/frontend/constant_child_admission_tests.rs
+--- a/crates/lrr/src/frontend/constant_child_admission_tests.rs
++++ b/crates/lrr/src/frontend/constant_child_admission_tests.rs
+@@ -345,7 +345,7 @@
+     assert_eq!(db.trace.counts, before);
+ }
+ #[test]
+-fn missing_fn_parameter_length_context_is_not_repaired_by_parent_evidence() {
++fn source_independent_fn_header_length_reselects_from_actual_parent_evidence() {
+     let (db, view, definition) = world("const fn f(x:u32)->[u8;2]{[1,2]}fn main(){}", "f", 2024);
+     let parent = ready(
+         &db,
+@@ -355,11 +355,14 @@
+     )
+     .unwrap();
+     let (_, demand) = parent.array().unwrap();
+-    assert!(
+-        parent
+-            .admission()
+-            .reselect_array_length_current(&db, &view, demand, MAX_BYTES)
+-            .is_err()
+-    );
++    let child = parent
++        .admission()
++        .reselect_array_length_current(&db, &view, demand, MAX_BYTES)
++        .unwrap();
++    child.revalidate(&db, &view).unwrap();
++    assert_eq!(child.plan().owner_definition(), definition);
++    assert_eq!(child.plan().range(), demand.range());
++    let result = CurrentConstantResultType::capture_current(&db, &view, child, MAX_BYTES).unwrap();
++    assert_eq!(result.scalar().unwrap().primitive(), PrimitiveType::Usize);
+     assert!(db.trace.counts.is_empty());
+ }
+diff --git a/crates/lrr/src/frontend/constant_parameter_length_tests.rs b/crates/lrr/src/frontend/constant_parameter_length_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_parameter_length_tests.rs
+@@ -0,0 +1,276 @@
++//! Current-source length controls; no evaluator/provider/guest execution.
++use super::*;
++use crate::syntax::{ast_adapter::range, pure_constants::ConstantSource, spans::SourceRange};
++use ra_ap_syntax::{
++    AstNode,
++    ast::{self, HasName},
++};
++const IRREFUTABLE: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const_let_irrefutable.rs"
++);
++const CAST_FN: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/min_const_fn/cast_fn.rs"
++);
++const NRVO: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/nrvo.rs");
++const RETURN_ARRAY: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/mir/mir_codegen_array_2.rs"
++);
++const STATIC_ROOT: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/issue-70773-mir-typeck-lt-norm.rs"
++);
++fn length_sites(text: &str, name: &str, edition: u16) -> Vec<SourceRange> {
++    let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++    let parsed = crate::syntax::parse::ParsedFile::parse(
++        &blob,
++        ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++    )
++    .unwrap();
++    let function = parsed
++        .parsed
++        .tree()
++        .syntax()
++        .descendants()
++        .filter_map(ast::Fn::cast)
++        .find(|f| f.name().is_some_and(|n| n.text() == name))
++        .unwrap();
++    function
++        .syntax()
++        .descendants()
++        .filter_map(|node| {
++            if let Some(a) = ast::ArrayType::cast(node.clone()) {
++                a.const_arg()
++                    .and_then(|c| c.syntax().children().find_map(ast::Expr::cast))
++            } else if let Some(a) = ast::ArrayExpr::cast(node) {
++                match a.kind() {
++                    ast::ArrayExprKind::Repeat { repeat, .. } => repeat,
++                    _ => None,
++                }
++            } else {
++                None
++            }
++        })
++        .map(|e| range(e.syntax().text_range()))
++        .collect()
++}
++fn admit_length(
++    text: &str,
++    name: &str,
++    edition: u16,
++    site: SourceRange,
++) -> Result<ConstantSourceAdmission, Diagnostic> {
++    let (db, view, definition) = world(text, name, edition);
++    let before = db.trace.counts.clone();
++    let admitted = source_admit(&db, &view, definition, ConstantRequest::ArrayLength(site))?;
++    assert_eq!(admitted.plan().owner_definition(), definition);
++    assert_eq!(admitted.plan().range(), site);
++    admitted.revalidate(&db, &view)?;
++    let ready =
++        CurrentConstantResultType::capture_current(&db, &view, admitted.clone(), MAX_BYTES)?;
++    assert_eq!(ready.scalar().unwrap().primitive(), PrimitiveType::Usize);
++    assert_eq!(db.trace.counts, before);
++    Ok(admitted)
++}
++#[test]
++fn unchanged_parameter_array_headers_admit_exact_static_lengths_all_editions() {
++    for (source, name, spelling) in [(IRREFUTABLE, "array", "2"), (CAST_FN, "unsize", "3")] {
++        for edition in [2015, 2018, 2021, 2024] {
++            let sites = length_sites(source, name, edition);
++            assert_eq!(sites.len(), 1);
++            let site = sites[0];
++            assert_eq!(&source[site.start as usize..site.end as usize], spelling);
++            admit_length(source, name, edition, site).unwrap();
++        }
++    }
++}
++#[test]
++fn unchanged_array_return_and_repeat_only_read_the_selected_length_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let sites = length_sites(RETURN_ARRAY, "into_inner", edition);
++        assert_eq!(sites.len(), 2);
++        let mut identities = Vec::new();
++        for (site, spelling) in sites.into_iter().zip(["1024", "2*4*8*16"]) {
++            assert_eq!(
++                &RETURN_ARRAY[site.start as usize..site.end as usize],
++                spelling
++            );
++            identities.push(
++                admit_length(RETURN_ARRAY, "into_inner", edition, site)
++                    .unwrap()
++                    .plan()
++                    .identity(),
++            );
++        }
++        assert_ne!(identities[0], identities[1]);
++    }
++}
++#[test]
++fn unchanged_nrvo_retains_inline_attribute_frontier_without_skipping_it() {
++    let sites = length_sites(NRVO, "init", 2024);
++    assert_eq!(sites.len(), 1);
++    let err = admit_length(NRVO, "init", 2024, sites[0]).unwrap_err();
++    assert_eq!(err.code, "LRR-E-CONST-SOURCE");
++    assert!(err.message.contains("attribute"));
++    // This zero-parameter header is the existing admitted control. Mutation,
++    // borrowed buffers, inline preparation and full original remain unexecuted.
++    let site = length_sites(NRVO, "nrvo", 2024)[0];
++    admit_length(NRVO, "nrvo", 2024, site).unwrap();
++}
++#[test]
++fn actual_module_static_root_is_selected_without_entering_its_body() {
++    let source = "const N:usize=42;const fn hidden()->usize{loop{}}const fn f(x:u32)->[u8;N+hidden()]{loop{}}fn main(){}";
++    for edition in [2015, 2018, 2021, 2024] {
++        let site = length_sites(source, "f", edition)[0];
++        admit_length(source, "f", edition, site).unwrap();
++    }
++}
++#[test]
++fn potential_parameter_shadows_never_fall_back_to_same_named_global() {
++    for pattern in ["N:u32", "r#N:u32", "(N,_):(u32,u32)", "[N,_]:[u32;2]"] {
++        let source =
++            format!("const N:usize=42;const fn f({pattern})->[u8;N]{{loop{{}}}}fn main(){{}}");
++        let sites = length_sites(&source, "f", 2024);
++        let site = *sites.last().unwrap();
++        let err = admit_length(&source, "f", 2024, site).unwrap_err();
++        assert_eq!(err.code, "LRR-E-CONST-LENGTH-SOURCE");
++        assert!(err.message.contains("parameter"));
++    }
++}
++#[test]
++fn local_import_qualified_generic_and_unproven_pattern_context_stays_closed() {
++    for (source, name) in [
++        ("const N:usize=42;fn f(x:u32){let N=1;let _=[0;N];}", "f"),
++        (
++            "mod provider{pub const N:usize=42;}use provider::N;fn f(x:u32)->[u8;N]{loop{}}",
++            "f",
++        ),
++        (
++            "mod provider{pub const N:usize=42;}fn f(x:u32)->[u8;provider::N]{loop{}}",
++            "f",
++        ),
++        ("fn f<T>(x:T)->[u8;3]{loop{}}", "f"),
++        ("fn f(x:u32)where u32:Copy{let _=[0;3];}", "f"),
++        ("fn f(Some(x):Option<u32>)->[u8;3]{loop{}}", "f"),
++        ("fn f(x:u32)->[u8;Missing]{loop{}}", "f"),
++        ("type usize=bool;fn f(x:u32)->[u8;42 as usize]{loop{}}", "f"),
++        ("fn f(x:u32){fn cold()->usize{3}let _=[0;cold()];}", "f"),
++        ("fn outer(){fn f(x:u32)->[u8;3]{loop{}}}", "f"),
++    ] {
++        let site = length_sites(source, name, 2024)[0];
++        let blob = SourceBlob::new(source.as_bytes().to_vec()).unwrap();
++        let captured = ConstantSource::parse(
++            &blob,
++            ProfileIdentity::current(),
++            Digest::of_bytes(b"length negative scope"),
++            CfgSet::guest_default(),
++        )
++        .unwrap();
++        assert!(captured.array_length(site).is_err(), "{source}");
++    }
++}
++#[test]
++fn current_header_changed_source_and_epoch_refuse_without_provider_work() {
++    let source = "const fn f(x:u32)->[u8;42]{loop{}}fn main(){}";
++    let site = length_sites(source, "f", 2024)[0];
++    let (mut db, view, definition) = world(source, "f", 2024);
++    let admitted =
++        source_admit(&db, &view, definition, ConstantRequest::ArrayLength(site)).unwrap();
++    let (_, changed, _) = world("const fn f(y:u32)->[u8;42]{loop{}}fn main(){}", "f", 2024);
++    assert!(admitted.revalidate(&db, &changed).is_err());
++    let before = db.trace.counts.clone();
++    db.begin_expansion_epoch(2).unwrap();
++    assert!(admitted.revalidate(&db, &view).is_err());
++    assert_eq!(db.trace.counts, before);
++}
++#[test]
++fn work_header_metadata_and_current_admission_quotas_refuse_before_evaluation() {
++    let parameters = (0..257)
++        .map(|n| format!("p{n}:u8"))
++        .collect::<Vec<_>>()
++        .join(",");
++    let long_header = format!("fn f(x:u8/*{}*/)->[u8;3]{{loop{{}}}}", "a".repeat(65_536));
++    for source in [
++        format!("fn f({parameters})->[u8;3]{{loop{{}}}}"),
++        long_header,
++    ] {
++        let site = length_sites(&source, "f", 2024)[0];
++        let blob = SourceBlob::new(source.as_bytes().to_vec()).unwrap();
++        let captured = ConstantSource::parse(
++            &blob,
++            ProfileIdentity::current(),
++            Digest::of_bytes(b"length budget"),
++            CfgSet::guest_default(),
++        )
++        .unwrap();
++        assert_eq!(
++            captured.array_length(site).unwrap_err().code,
++            "LRR-E-METADATA-LIMIT"
++        );
++    }
++    let source = "const fn f(x:u32)->[u8;42]{loop{}}fn main(){}";
++    let site = length_sites(source, "f", 2024)[0];
++    let (db, view, definition) = world(source, "f", 2024);
++    let admitted =
++        source_admit(&db, &view, definition, ConstantRequest::ArrayLength(site)).unwrap();
++    let before = db.trace.counts.clone();
++    assert_eq!(
++        ConstantSourceAdmission::capture_current(
++            &db,
++            &view,
++            definition,
++            ConstantRequest::ArrayLength(site),
++            admitted.metadata_bytes() - 1
++        )
++        .unwrap_err()
++        .code,
++        "LRR-E-METADATA-LIMIT"
++    );
++    assert_eq!(db.trace.counts, before);
++}
++
++#[test]
++fn foreign_owner_or_nonlength_range_cannot_reuse_a_current_header_witness() {
++    let source =
++        "const fn f(x:u32)->[u8;42]{loop{}} const fn other(y:u32)->[u8;42]{loop{}}fn main(){}";
++    let (db, view, definition) = world(source, "f", 2024);
++    let site = length_sites(source, "f", 2024)[0];
++    let before = db.trace.counts.clone();
++    let foreign = length_sites(source, "other", 2024)[0];
++    assert!(
++        source_admit(
++            &db,
++            &view,
++            definition,
++            ConstantRequest::ArrayLength(foreign)
++        )
++        .is_err()
++    );
++    let changed = SourceRange::checked(site.start, site.end - 1).unwrap();
++    assert!(
++        source_admit(
++            &db,
++            &view,
++            definition,
++            ConstantRequest::ArrayLength(changed)
++        )
++        .is_err()
++    );
++    assert_eq!(db.trace.counts, before);
++}
++
++#[test]
++fn unchanged_wildcard_parameter_header_selects_exact_current_module_constant() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let sites = length_sites(STATIC_ROOT, "init_hash", edition);
++        assert_eq!(sites.len(), 1);
++        let site = sites[0];
++        assert_eq!(
++            &STATIC_ROOT[site.start as usize..site.end as usize],
++            "HASH_LEN"
++        );
++        admit_length(STATIC_ROOT, "init_hash", edition, site).unwrap();
++    }
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/const_let_irrefutable.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/const_let_irrefutable.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const_let_irrefutable.rs
+@@ -0,0 +1,11 @@
++//@ build-pass (FIXME(62277): could be check-pass?)
++
++fn main() {}
++
++const fn tup((a, b): (i32, i32)) -> i32 {
++    a + b
++}
++
++const fn array([a, b]: [i32; 2]) -> i32 {
++    a + b
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/min_const_fn/cast_fn.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/min_const_fn/cast_fn.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/min_const_fn/cast_fn.rs
+@@ -0,0 +1,11 @@
++//@ check-pass
++
++fn main() {}
++
++const fn unsize(x: &[u8; 3]) -> &[u8] { x }
++const fn closure() -> fn() { || {} }
++const fn closure2() {
++    (|| {}) as fn();
++}
++const fn reify(f: fn()) -> unsafe fn() { f }
++const fn reify2() { main as unsafe fn(); }
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/nrvo.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/nrvo.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/nrvo.rs
+@@ -0,0 +1,25 @@
++//@ run-pass
++
++// When the NRVO is applied, the return place (`_0`) gets treated like a normal local. For example,
++// its address may be taken and it may be written to indirectly. Ensure that the const-eval
++// interpreter can handle this.
++
++#[inline(never)] // Try to ensure that MIR optimizations don't optimize this away.
++const fn init(buf: &mut [u8; 1024]) {
++    buf[33] = 3;
++    buf[444] = 4;
++}
++
++const fn nrvo() -> [u8; 1024] {
++    let mut buf = [0; 1024];
++    init(&mut buf);
++    buf
++}
++
++const BUF: [u8; 1024] = nrvo();
++
++fn main() {
++    assert_eq!(BUF[33], 3);
++    assert_eq!(BUF[19], 0);
++    assert_eq!(BUF[444], 4);
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs
+@@ -0,0 +1,12 @@
++//@ run-pass
++// Test a call whose argument is the result of another call.
++
++const fn sub(x: u32, y: u32) -> u32 {
++    x - y
++}
++
++const X: u32 = sub(sub(88, 44), 22);
++
++fn main() {
++    assert_eq!(X, 22);
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs
+@@ -0,0 +1,16 @@
++//! Regression test for https://github.com/rust-lang/rust/issues/13763
++
++//@ run-pass
++#![allow(dead_code)]
++
++mod u8 {
++    pub const BITS: usize = 8;
++}
++
++const NUM: usize = u8::BITS;
++
++struct MyStruct { nums: [usize; 8] }
++
++fn main() {
++    let _s = MyStruct { nums: [0; NUM] };
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/mir/mir_codegen_array_2.rs b/fixtures/upstream/rustc-checkout/tests/ui/mir/mir_codegen_array_2.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/mir/mir_codegen_array_2.rs
+@@ -0,0 +1,9 @@
++//@ run-pass
++fn into_inner(x: u64) -> [u64; 1024] {
++    [x; 2*4*8*16]
++}
++
++fn main(){
++    let x: &[u64] = &[42; 1024];
++    assert_eq!(&into_inner(42)[..], x);
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-70773-mir-typeck-lt-norm.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-70773-mir-typeck-lt-norm.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-70773-mir-typeck-lt-norm.rs
+@@ -0,0 +1,16 @@
++//@ run-pass
++
++const HASH_LEN: usize = 20;
++struct Hash(#[allow(dead_code)] [u8; HASH_LEN]);
++fn init_hash(_: &mut [u8; HASH_LEN]) {}
++
++fn foo<'a>() -> &'a () {
++    Hash([0; HASH_LEN]);
++    init_hash(&mut [0; HASH_LEN]);
++    let (_array,) = ([0; HASH_LEN],);
++    &()
++}
++
++fn main() {
++    foo();
++}

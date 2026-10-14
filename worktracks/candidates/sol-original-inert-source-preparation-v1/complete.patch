@@ -1,0 +1,683 @@
+diff --git a/crates/lrr/src/expand/source_discovery/original_inert.rs b/crates/lrr/src/expand/source_discovery/original_inert.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/expand/source_discovery/original_inert.rs
+@@ -0,0 +1,177 @@
++//! Exact original SourceFile prefix producers. No manual readiness or macro execution.
++use crate::{
++    core::{diagnostic::Diagnostic, digest::Digest},
++    frontend::builtin_attributes::BuiltinAttributeCatalog,
++    source::changes::PreparedSourceView,
++    syntax::{
++        declaration_scan::{DeclarationProducerKind, DeclarationScan, DeclarationScopeKind},
++        parse::ParsedFile,
++        spans::SourceRange,
++    },
++};
++use ra_ap_syntax::{AstNode, ast::HasAttrs};
++use std::collections::BTreeSet;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-CATALOG-INCOMPLETE", message.into())
++}
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "original source-prefix attribute budget".into(),
++    )
++}
++pub(super) fn capture(
++    source: &PreparedSourceView,
++    scan: &DeclarationScan,
++    byte_limit: usize,
++) -> Result<BTreeSet<Digest>, Diagnostic> {
++    if byte_limit < 128 || byte_limit > 32 * 1024 * 1024 {
++        return Err(limit());
++    }
++    source.require_original_hygiene()?;
++    source.require_declaration_syntax()?;
++    if scan.parse() != &source.selection().outline.parse
++        || scan.path() != &source.selection().path
++        || scan.cfg() != source.selection().outline.cfg
++        || scan.scope() != &source.outline().root_scope
++    {
++        return Err(fault(
++            "original prefix source/scan/profile/cfg/owning scope differs",
++        ));
++    }
++    let root = scan
++        .lexical_scopes()
++        .first()
++        .ok_or_else(|| fault("original prefix lexical root absent"))?;
++    if root.parent.is_some() || root.kind != DeclarationScopeKind::Module {
++        return Err(fault(
++            "original prefix is not an original module source root",
++        ));
++    }
++    if !scan
++        .producers()
++        .iter()
++        .any(|row| row.kind == DeclarationProducerKind::Attribute)
++    {
++        return Ok(BTreeSet::new());
++    }
++    let parsed = ParsedFile::parse(
++        source.captured_macro_blob()?,
++        source.selection().outline.parse.profile.clone(),
++    )?;
++    let tree = parsed.parsed.tree();
++    let mut metas = Vec::new();
++    for attribute in tree.attrs() {
++        if metas.len() >= 100_000 {
++            return Err(limit());
++        }
++        metas.try_reserve_exact(1).map_err(|_| limit())?;
++        metas.push(
++            attribute
++                .meta()
++                .ok_or_else(|| fault("original root attribute meta absent"))?,
++        );
++    }
++    let (enabled, metas) =
++        crate::syntax::attributes::effective_metas(metas, source.captured_macro_cfg()?)?;
++    if !enabled {
++        return Ok(BTreeSet::new());
++    }
++    let mut result = BTreeSet::new();
++    let mut bytes = 128usize;
++    for meta in metas {
++        let range: SourceRange = crate::syntax::ast_adapter::range(meta.syntax().text_range());
++        let mut rows = scan
++            .producers()
++            .iter()
++            .filter(|row| row.kind == DeclarationProducerKind::Attribute && row.range == range);
++        let row = rows
++            .next()
++            .ok_or_else(|| fault("exact original root meta producer absent"))?;
++        if rows.next().is_some()
++            || row.lexical_scope != root.identity
++            || row.scope != *scan.scope()
++            || row.scope.owner.is_some()
++            || !row.containers.is_empty()
++        {
++            return Err(fault(
++                "original root meta producer ownership is ambiguous or differs",
++            ));
++        }
++        bytes = bytes
++            .checked_add(std::mem::size_of::<Digest>() + 128)
++            .filter(|n| *n <= byte_limit)
++            .ok_or_else(limit)?;
++        if !result.insert(row.identity) {
++            return Err(fault("original root meta producer duplicated"));
++        }
++    }
++    Ok(result)
++}
++/// A negative Attribute-facet witness must come from an actual matched compiler
++/// world. Bang-only declarations do not become Attribute facets by spelling.
++pub(super) fn matched_attribute_facet<'a>(
++    source: &PreparedSourceView,
++    provider: &'a super::super::source_declarative::SourceDeclarative,
++) -> Result<Option<&'a BuiltinAttributeCatalog>, Diagnostic> {
++    if !source.same_publication(provider.module_source())
++        || source.selection() != provider.module_source().selection()
++    {
++        return Err(fault(
++            "original inert prefix provider belongs to another source publication",
++        ));
++    }
++    let Some(compiler) = provider.compiler.as_ref() else {
++        return Ok(None);
++    };
++    let Some(attributes) = compiler.attribute_catalog() else {
++        return Ok(None);
++    };
++    if compiler.runtime_prelude_unit(false)
++        != crate::facade::unit(&source.selection().outline.parse.profile, "core")
++        || compiler.runtime_catalog()?.is_none()
++    {
++        return Err(fault(
++            "original inert prefix compiler Attribute facet/profile differs",
++        ));
++    }
++    Ok(Some(attributes))
++}
++pub(super) fn revalidate(
++    source: &PreparedSourceView,
++    provider: &super::super::source_declarative::SourceDeclarative,
++    proof: &super::super::nested_inert::NestedInertProof,
++    namespaces: &crate::frontend::macro_names::MacroNamespaces,
++) -> Result<(), Diagnostic> {
++    if !capture(source, proof.scan(), 32 * 1024 * 1024)?.contains(&proof.producer()) {
++        return Err(fault(
++            "original inert proof is not attached to this exact root meta",
++        ));
++    }
++    let attributes = matched_attribute_facet(source, provider)?.ok_or_else(|| {
++        fault("original inert prefix compiler Attribute facet absent before sealing")
++    })?;
++    let expected = proof
++        .attribute_facet()
++        .ok_or_else(|| fault("original inert prefix has no selected Attribute-facet proof"))?;
++    proof.revalidate(source.captured_macro_blob()?, source.captured_macro_cfg()?)?;
++    let lookup = crate::service::source_attribute_requests::SourceAttributeSelection::cold_lookup(
++        source,
++        proof.scan(),
++        proof.producer(),
++        namespaces,
++    )?;
++    let actual = super::super::builtin_attributes::certify_inert_binding(
++        proof.name()?,
++        &lookup,
++        provider.procedural.as_deref(),
++        Some(attributes),
++    )?
++    .ok_or_else(|| fault("original inert prefix Attribute selection remains incomplete"))?;
++    if actual != expected {
++        return Err(fault(
++            "original inert prefix Attribute facet changed before sealing",
++        ));
++    }
++    Ok(())
++}
+diff --git a/crates/lrr/src/expand/source_discovery.rs b/crates/lrr/src/expand/source_discovery.rs
+--- a/crates/lrr/src/expand/source_discovery.rs
++++ b/crates/lrr/src/expand/source_discovery.rs
+@@ -14,6 +14,8 @@
+     syntax::outline::{ScopeKey, TextualEventKind},
+ };
+ use std::collections::{BTreeMap, BTreeSet};
++#[path = "source_discovery/original_inert.rs"]
++mod original_inert;
+ pub enum SourceDiscoveryStep {
+     NeedSourceDeriveSelection {
+         selection: std::sync::Arc<crate::service::source_derive_requests::SourceDeriveSelection>,
+@@ -446,6 +448,7 @@
+     nested_sources:
+         BTreeMap<usize, std::sync::Arc<crate::frontend::impl_index::DeclarationMacroIndex>>,
+     nested_jobs: BTreeMap<Digest, usize>,
++    original_prefix_jobs: BTreeSet<Digest>,
+     source_replacements:
+         BTreeMap<Digest, std::sync::Arc<super::source_replacement::SourceReplacementProof>>,
+     replaced_source_producers:
+@@ -822,11 +825,36 @@
+         }
+         let mut nested_sources = BTreeMap::new();
+         let mut nested_jobs = BTreeMap::new();
++        let mut original_prefix_jobs = BTreeSet::new();
+         let mut nested_bytes = 0usize;
+         for (ordinal, source) in sources.iter().enumerate() {
+             let scan = source.declaration_inventory(
+                 crate::syntax::declaration_scan::DeclarationScanLimits::default(),
+             )?;
++            let prefixes = if scan.generated_origin().is_none() {
++                original_inert::capture(source, &scan, 32 * 1024 * 1024)?
++            } else {
++                // This lane supplies no original-source authority to generated
++                // roots; their existing producer/context admission is separate.
++                BTreeSet::new()
++            };
++            nested_bytes = nested_bytes
++                .checked_add(
++                    prefixes
++                        .len()
++                        .checked_mul(128)
++                        .ok_or_else(|| fault("original root annotation metadata overflow"))?,
++                )
++                .filter(|n| *n <= 512 * 1024 * 1024)
++                .ok_or_else(|| fault("original root annotation metadata limit"))?;
++            if original_prefix_jobs
++                .len()
++                .checked_add(prefixes.len())
++                .is_none_or(|n| n > 100_000)
++            {
++                return Err(fault("original root annotation count limit"));
++            }
++            original_prefix_jobs.extend(prefixes.iter().copied());
+             let mut index = crate::frontend::impl_index::DeclarationMacroIndex::new(scan)?;
+             // The runtime outline owns module items, not associated items.
+             // An associated header can have no executable owner; that does not
+@@ -867,12 +895,13 @@
+                 .producers()
+                 .iter()
+                 .filter(|p| {
+-                    ordinary_ranges.contains(&(ordinal, p.range.start, p.range.end))
++                    !prefixes.contains(&p.identity)
++                        && (ordinary_ranges.contains(&(ordinal, p.range.start, p.range.end))
+                         || (p.kind
+                             == crate::syntax::declaration_scan::DeclarationProducerKind::Attribute
+                             && p.scope.owner.is_none()
+                             && !associated_scopes.contains(&p.lexical_scope)
+-                            && !cold_test_targets.contains(&p.identity))
++                            && !cold_test_targets.contains(&p.identity)))
+                 })
+                 .map(|p| p.identity)
+                 .collect::<BTreeSet<_>>();
+@@ -935,6 +964,7 @@
+             nested_runtime_proofs: BTreeMap::new(),
+             nested_sources,
+             nested_jobs,
++            original_prefix_jobs,
+             source_replacements: BTreeMap::new(),
+             replaced_source_producers: BTreeMap::new(),
+             item_impl_jobs: BTreeMap::new(),
+@@ -8277,6 +8307,13 @@
+         let provider = providers
+             .get(ordinal)
+             .ok_or_else(|| fault("nested provider absent"))?;
++        if self.original_prefix_jobs.contains(&identity)
++            && original_inert::matched_attribute_facet(&self.sources[ordinal], provider)?.is_none()
++        {
++            self.work.block(ticket, vec![identity])?;
++            self.pending_nested = None;
++            return Ok(None);
++        }
+         if self.argument_discoveries.contains_key(&identity) {
+             return self.poll_argument_declarations(ticket, ordinal);
+         }
+@@ -8398,14 +8435,14 @@
+                     };
+                     proof = proof.with_attribute_facet(binding);
+                 }
+-                let mut parent = (*parent).clone();
+-                parent.accept_inert_attribute(identity, proof.name()?)?;
+                 let retained = self
+                     .nested_bytes
+                     .checked_add(proof.metadata_bytes()?)
+                     .and_then(|n| n.checked_add(parent.retained_metadata_bytes()))
+                     .filter(|n| *n <= 512 * 1024 * 1024)
+                     .ok_or_else(|| fault("nested inert attribute metadata limit"))?;
++                let mut parent = (*parent).clone();
++                parent.accept_inert_attribute(identity, proof.name()?)?;
+                 let fingerprint = proof.fingerprint();
+                 let mut update = DiscoveryUpdate {
+                     members: vec![identity, fingerprint],
+@@ -9751,6 +9788,19 @@
+             }
+         }
+         for (identity, proof) in &self.nested_inert_proofs {
++            if self.original_prefix_jobs.contains(identity) {
++                let ordinal = *self
++                    .nested_jobs
++                    .get(identity)
++                    .ok_or_else(|| fault("original inert prefix source owner absent"))?;
++                original_inert::revalidate(
++                    &self.sources[ordinal],
++                    &providers[ordinal],
++                    proof,
++                    namespaces,
++                )?;
++                continue;
++            }
+             if let Some(expected) = proof.attribute_facet() {
+                 let ordinal = *self
+                     .nested_jobs
+diff --git a/crates/lrr/src/expand/source_discovery/original_inert_tests.rs b/crates/lrr/src/expand/source_discovery/original_inert_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/expand/source_discovery/original_inert_tests.rs
+@@ -0,0 +1,353 @@
++//! Genuine coordinator discovery/publication of exact original root Meta proofs.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    db::{
++        dependency::{InputKey, InputValue},
++        key::OutlineKey,
++        memo::Database,
++    },
++    source::{
++        changes::{PreparedSourceInputs, SourceSelection, SourceSelectionOutcome, SourceUnitInput},
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::parse::ParseKey,
++};
++use std::sync::Arc;
++const ORIGINAL: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-const-eval.rs"
++);
++const SHADOW: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/imports/shadow_builtin_macros.rs"
++);
++fn prepare(
++    text: &str,
++    edition: u16,
++    cfg: CfgSet,
++    module: &[&str],
++) -> (Database, PreparedSourceView) {
++    let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++    let path = SourcePath::new("original-inert.rs").unwrap();
++    let unit = Digest::of_bytes(b"source-proven original root prefix");
++    let profile = ProfileIdentity {
++        edition,
++        ..ProfileIdentity::current()
++    };
++    let module_path: Vec<_> = module.iter().map(|s| (*s).into()).collect();
++    let selection = SourceSelection {
++        path: path.clone(),
++        outline: OutlineKey {
++            parse: ParseKey {
++                content: blob.content(),
++                profile: profile.clone(),
++            },
++            crate_key: unit,
++            module_path: module_path.clone(),
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let inputs = PreparedSourceInputs::refresh(
++        None,
++        vec![SourceUnitInput {
++            path,
++            crate_key: unit,
++            module_path,
++            profile,
++            cfg,
++            blob,
++        }],
++        Default::default(),
++    )
++    .unwrap();
++    let SourceSelectionOutcome::Selected(view) = inputs.select(&selection).unwrap() else {
++        panic!("genuine original source absent")
++    };
++    let mut db = Database::default();
++    inputs.publish(&mut db).unwrap();
++    db.begin_expansion_epoch(1).unwrap();
++    (db, view)
++}
++fn discovery(view: &PreparedSourceView, namespace: Namespace, compiler: bool) -> SourceDiscovery {
++    let d = SourceDiscovery::new(
++        vec![view.share()],
++        view.outline().root_scope.clone(),
++        namespace,
++        Digest::of_bytes(b"original prefix source world"),
++        1,
++    )
++    .unwrap();
++    if compiler {
++        d.with_declarative_compiler(
++            Digest::of_bytes(b"original prefix compile environment"),
++            crate::expand::source_declarative::engine_version(),
++            Arc::new(
++                crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                    &view.selection().outline.parse.profile,
++                )
++                .unwrap(),
++            ),
++        )
++        .unwrap()
++    } else {
++        d.with_declarative(
++            Digest::of_bytes(b"original prefix compile environment"),
++            crate::expand::source_declarative::engine_version(),
++        )
++        .unwrap()
++    }
++}
++fn seal(d: &mut SourceDiscovery) -> Seal {
++    loop {
++        match d.poll().unwrap() {
++            SourceDiscoveryStep::Sealed(seal) => return seal,
++            SourceDiscoveryStep::NeedExpansion { request } => d
++                .admit_expansion(Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::NeedGeneratedExpansion { request } => d
++                .admit_expansion(Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::Incomplete { diagnostic, .. } => panic!(
++                "actual original discovery incomplete: {} {}",
++                diagnostic.code, diagnostic.message
++            ),
++            _ => panic!("actual original source requires unestablished macro authority"),
++        }
++    }
++}
++#[test]
++fn unchanged_header_array_original_publishes_actual_allow_proof_value_and_type_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, view) = prepare(ORIGINAL, edition, CfgSet::guest_default(), &[]);
++        for namespace in [Namespace::Value, Namespace::Type] {
++            let mut d = discovery(&view, namespace, true);
++            let sealed = seal(&mut d);
++            let before = db.trace.events.len();
++            d.publish(&mut db).unwrap();
++            let Some((InputValue::DiscoverySeal(input), _)) =
++                db.published_input(&InputKey::DiscoverySeal(sealed.key()))
++            else {
++                panic!("genuine scoped publication absent")
++            };
++            assert_eq!(input.nested_inert_proofs.len(), 1);
++            let proof = &input.nested_inert_proofs[0];
++            assert_eq!(proof.name().unwrap(), "allow");
++            assert!(proof.attribute_facet().is_some());
++            assert_eq!(proof.scan().path(), &view.selection().path);
++            assert_eq!(proof.scan().parse(), &view.selection().outline.parse);
++            assert_eq!(proof.scan().scope(), &view.outline().root_scope);
++            let row = proof
++                .scan()
++                .producers()
++                .iter()
++                .find(|p| p.identity == proof.producer())
++                .unwrap();
++            assert_eq!(
++                &ORIGINAL[row.range.start as usize..row.range.end as usize],
++                "allow(dead_code)"
++            );
++            assert!(d.original_prefix_jobs.contains(&proof.producer()));
++            assert_eq!(d.nested_jobs.get(&proof.producer()), Some(&0));
++            proof
++                .revalidate(
++                    view.captured_macro_blob().unwrap(),
++                    view.captured_macro_cfg().unwrap(),
++                )
++                .unwrap();
++            assert_eq!(db.trace.events.len(), before);
++            assert!(input.records.is_empty());
++            assert!(input.runtime_no_item_proofs.is_empty());
++            // Original ARR/add remain unevaluated; this is preparation evidence,
++            // not array length execution or a full run-pass fixture claim.
++            assert!(
++                view.outline()
++                    .items
++                    .iter()
++                    .any(|i| i.def_key.declared_name == "ARR")
++            );
++        }
++    }
++}
++#[test]
++fn original_root_attribute_is_an_actual_job_not_a_delegated_completion() {
++    let (_, view) = prepare(ORIGINAL, 2024, CfgSet::guest_default(), &[]);
++    let d = discovery(&view, Namespace::Type, true);
++    let scan = view.declaration_inventory(Default::default()).unwrap();
++    let ids = original_inert::capture(&view, &scan, 32 * 1024 * 1024).unwrap();
++    assert_eq!(ids.len(), 1);
++    for id in ids {
++        assert!(d.original_prefix_jobs.contains(&id));
++        assert!(d.nested_jobs.contains_key(&id));
++        assert!(d.nested_sources[&0].producer(id).is_ok());
++        assert!(!d.nested_inert_proofs.contains_key(&id));
++    }
++    assert!(d.seal.is_none());
++}
++#[test]
++fn missing_current_compiler_attribute_facet_cannot_seal_original_prefix() {
++    let (mut db, view) = prepare(ORIGINAL, 2024, CfgSet::guest_default(), &[]);
++    let mut d = discovery(&view, Namespace::Value, false);
++    let id = *d.original_prefix_jobs.first().unwrap();
++    let SourceDiscoveryStep::Incomplete { blocked, .. } = d.poll().unwrap() else {
++        panic!("missing actual Attribute facet must remain a prerequisite")
++    };
++    assert!(blocked.iter().any(|(_, inputs)| inputs.contains(&id)));
++    assert!(d.nested_inert_proofs.is_empty());
++    assert!(d.publish(&mut db).is_err());
++}
++#[test]
++fn bang_only_allow_definition_does_not_supply_competing_attribute_authority() {
++    let text = "#![allow(dead_code)]macro_rules! allow{()=>{}}const X:usize=1;fn main(){}";
++    let (mut db, view) = prepare(text, 2024, CfgSet::guest_default(), &[]);
++    let mut d = discovery(&view, Namespace::Type, true);
++    let sealed = seal(&mut d);
++    d.publish(&mut db).unwrap();
++    let Some((InputValue::DiscoverySeal(input), _)) =
++        db.published_input(&InputKey::DiscoverySeal(sealed.key()))
++    else {
++        panic!()
++    };
++    assert_eq!(input.nested_inert_proofs.len(), 1);
++    assert_eq!(input.nested_inert_proofs[0].name().unwrap(), "allow");
++    assert!(input.nested_inert_proofs[0].attribute_facet().is_some());
++}
++#[test]
++fn genuine_imported_compiler_attribute_shadow_cannot_be_retired_as_allow() {
++    let text =
++        "#![allow(dead_code)]extern crate core;use core::test as allow;const X:usize=1;fn main(){}";
++    let (_, view) = prepare(text, 2024, CfgSet::guest_default(), &[]);
++    let mut d = discovery(&view, Namespace::Type, true);
++    let error = d
++        .poll()
++        .err()
++        .expect("selected Test Attribute facet must conflict with inert allow");
++    assert_eq!(error.code, "LRR-E-MACRO-AMBIGUOUS");
++    assert!(d.nested_inert_proofs.is_empty());
++    assert!(d.seal.is_none());
++}
++#[test]
++fn foreign_compiler_profile_cannot_mint_source_prefix_facet_proof() {
++    let (_, view) = prepare(ORIGINAL, 2024, CfgSet::guest_default(), &[]);
++    let mut provider =
++        crate::expand::source_declarative::SourceDeclarative::new(view.share()).unwrap();
++    provider.compiler = Some(Arc::new(
++        crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(&ProfileIdentity {
++            edition: 2015,
++            ..ProfileIdentity::current()
++        })
++        .unwrap(),
++    ));
++    let e = original_inert::matched_attribute_facet(&view, &provider)
++        .err()
++        .unwrap();
++    assert_eq!(e.code, "LRR-E-CATALOG-INCOMPLETE");
++    assert!(e.message.contains("facet/profile"));
++}
++#[test]
++fn copied_source_cfg_and_producer_cannot_replay_original_prefix_proof() {
++    let (_, view) = prepare(ORIGINAL, 2024, CfgSet::guest_default(), &[]);
++    let mut d = discovery(&view, Namespace::Value, true);
++    seal(&mut d);
++    let proof = d.nested_inert_proofs.values().next().unwrap();
++    let (_, changed) = prepare(
++        "#![allow(unused)]const ARR:usize=1;fn main(){}",
++        2024,
++        CfgSet::guest_default(),
++        &[],
++    );
++    assert!(original_inert::capture(&changed, proof.scan(), 32 * 1024 * 1024).is_err());
++    assert!(
++        proof
++            .revalidate(
++                changed.captured_macro_blob().unwrap(),
++                changed.captured_macro_cfg().unwrap()
++            )
++            .is_err()
++    );
++    let mut changed_cfg = CfgSet::guest_default();
++    changed_cfg.atoms.insert("changed".into());
++    let (_, changed) = prepare(ORIGINAL, 2024, changed_cfg, &[]);
++    assert!(original_inert::capture(&changed, proof.scan(), 32 * 1024 * 1024).is_err());
++    let (_, scoped) = prepare(ORIGINAL, 2024, CfgSet::guest_default(), &["owned"]);
++    assert!(original_inert::capture(&scoped, proof.scan(), 32 * 1024 * 1024).is_err());
++}
++#[test]
++fn actual_epoch_refuses_old_preparation_publication_without_source_advance() {
++    let (mut db, view) = prepare(ORIGINAL, 2024, CfgSet::guest_default(), &[]);
++    let mut d = discovery(&view, Namespace::Type, true);
++    seal(&mut d);
++    let revision = db.source_revision();
++    db.begin_expansion_epoch(2).unwrap();
++    assert_eq!(db.source_revision(), revision);
++    assert!(d.publish(&mut db).is_err());
++}
++#[test]
++fn cfg_attr_selects_exact_original_meta_while_disabled_root_has_no_proof() {
++    let text = "#![cfg_attr(all(),allow(dead_code))]const X:usize=1;fn main(){}";
++    let (mut db, view) = prepare(text, 2024, CfgSet::guest_default(), &[]);
++    let mut d = discovery(&view, Namespace::Value, true);
++    let sealed = seal(&mut d);
++    d.publish(&mut db).unwrap();
++    let Some((InputValue::DiscoverySeal(input), _)) =
++        db.published_input(&InputKey::DiscoverySeal(sealed.key()))
++    else {
++        panic!()
++    };
++    assert_eq!(input.nested_inert_proofs.len(), 1);
++    let p = &input.nested_inert_proofs[0];
++    let row = p
++        .scan()
++        .producers()
++        .iter()
++        .find(|r| r.identity == p.producer())
++        .unwrap();
++    assert_eq!(
++        &text[row.range.start as usize..row.range.end as usize],
++        "allow(dead_code)"
++    );
++    let (_, view) = prepare(
++        "#![cfg(any())]#![allow(dead_code)]const X:usize=1;",
++        2024,
++        CfgSet::guest_default(),
++        &[],
++    );
++    let scan = view.declaration_inventory(Default::default()).unwrap();
++    assert!(
++        original_inert::capture(&view, &scan, 32 * 1024 * 1024)
++            .unwrap()
++            .is_empty()
++    );
++}
++#[test]
++fn metadata_refusal_keeps_original_attribute_unproven() {
++    let (_, view) = prepare(ORIGINAL, 2024, CfgSet::guest_default(), &[]);
++    let scan = view.declaration_inventory(Default::default()).unwrap();
++    let e = original_inert::capture(&view, &scan, 128).unwrap_err();
++    assert_eq!(e.code, "LRR-E-METADATA-LIMIT");
++    let mut d = discovery(&view, Namespace::Type, true);
++    d.nested_bytes = 512 * 1024 * 1024;
++    assert!(d.poll().is_err());
++    assert!(d.nested_inert_proofs.is_empty());
++    assert!(d.seal.is_none());
++}
++#[test]
++fn unchanged_user_macro_source_is_not_a_root_attribute_proof() {
++    // Original shadow fixture has bang producers and aux imports; no full seal
++    // or macro execution is asserted by this root-prefix component control.
++    let (_, view) = prepare(SHADOW, 2024, CfgSet::guest_default(), &[]);
++    let scan = view.declaration_inventory(Default::default()).unwrap();
++    assert!(
++        original_inert::capture(&view, &scan, 32 * 1024 * 1024)
++            .unwrap()
++            .is_empty()
++    );
++    let row = scan
++        .producers()
++        .iter()
++        .find(|r| r.kind == crate::syntax::declaration_scan::DeclarationProducerKind::Macro)
++        .unwrap();
++    assert!(
++        crate::expand::nested_inert::NestedInertProof::select(scan.clone(), row.identity)
++            .unwrap()
++            .is_none()
++    );
++}
+diff --git a/crates/lrr/src/expand/source_discovery.rs b/crates/lrr/src/expand/source_discovery.rs
+--- a/crates/lrr/src/expand/source_discovery.rs
++++ b/crates/lrr/src/expand/source_discovery.rs
+@@ -10774,3 +10774,7 @@
+         )));
+     }
+ }
++
++#[cfg(test)]
++#[path = "source_discovery/original_inert_tests.rs"]
++mod original_inert_tests;

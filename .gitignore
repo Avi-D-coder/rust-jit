@@ -1,2 +1,38 @@
+# Local builds, preparation outputs, validation runs and copied source snapshots.
 /target/
+**/target/
+/.lrr/
+/artifacts/
+/coverage/
+/logs/
+
+# The local upstream checkout is an input; licensed selected fixtures are committed.
+/rustc/
+
+# Python/tool caches.
 **/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editor and macOS metadata.
+.DS_Store
+.AppleDouble/
+.LSOverride
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+# Local patch/editor backups; pinned vendor originals remain publishable.
+/crates/**/*.orig
+/crates/**/*.rej
+/xtask/**/*.orig
+/xtask/**/*.rej
+
+# Local environment configuration; checked-in templates remain available.
+.env
+.env.*
+!.env.example
+!.env.template

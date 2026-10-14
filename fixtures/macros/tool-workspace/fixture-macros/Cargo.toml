@@ -1,0 +1,10 @@
+[package]
+name = "lrr_tool_probe_macros"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+proc-macro = true
+
+[features]
+test-intent-witness = []

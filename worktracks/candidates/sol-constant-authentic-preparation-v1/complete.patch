@@ -1,0 +1,522 @@
+diff --git a/crates/lrr/src/frontend/compile_input_modules.rs b/crates/lrr/src/frontend/compile_input_modules.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/compile_input_modules.rs
+@@ -0,0 +1,57 @@
++//! Section17 closed synthetic module metadata, separate from macro authority.
++//! No real std source/native symbols or executable API are loaded here.
++use super::*;
++use crate::{
++    frontend::names::{NameDefinition, NameNamespaces},
++    source::manifest::Namespace,
++};
++impl CompileInputCatalog {
++    /// Only the actual immutable standard-facade catalog can disclose these
++    /// explicit module entries. Ordinary custom compiler catalogs grant none.
++    pub(crate) fn install_ordinary_module_facets(
++        &self,
++        graph: &mut NameNamespaces,
++    ) -> Result<(), Diagnostic> {
++        if self.facades.is_empty() {
++            return Ok(());
++        }
++        if self.facades.len() != 2
++            || self.facades.get("core") != Some(&self.unit)
++            || self
++                .facades
++                .get("std")
++                .is_none_or(|unit| *unit == self.unit)
++            || self
++                .facades
++                .keys()
++                .any(|name| !matches!(name.as_str(), "core" | "std"))
++            || !crate::core::profile::is_supported_source_edition(self.edition)
++        {
++            return Err(fault(
++                "ordinary module facets require exact private standard facade ownership",
++            ));
++        }
++        for unit in self.facades.values() {
++            let mut e = StableEncoder::new("lrr/v1/compiler-facade-panic-module");
++            e.digest(*unit);
++            e.u16(self.edition);
++            e.string("panic");
++            let definition = NameDefinition {
++                namespace: Namespace::Type,
++                identity: e.finish(),
++                defining_unit: *unit,
++                definition_edition: self.edition,
++            };
++            graph.declare_module(*unit, &[], self.edition, VisibilityScope::Public)?;
++            // Existing admitted-module namespace operation retains Type identity,
++            // module status, path, edition, access and alias routing. This is a
++            // compiler-owned facade entry, not generated/live/native authority.
++            graph.define_generated_module(
++                NameNamespaces::path(*unit, &["panic"], self.edition)?,
++                definition,
++                VisibilityScope::Public,
++            )?;
++        }
++        Ok(())
++    }
++}
+diff --git a/crates/lrr/src/frontend/compile_input_catalog.rs b/crates/lrr/src/frontend/compile_input_catalog.rs
+--- a/crates/lrr/src/frontend/compile_input_catalog.rs
++++ b/crates/lrr/src/frontend/compile_input_catalog.rs
+@@ -15,6 +15,8 @@
+     syntax::{outline::Visibility, visibility::VisibilityScope},
+ };
+ use std::collections::{BTreeMap, BTreeSet};
++#[path = "compile_input_modules.rs"]
++mod ordinary_modules;
+ fn fault(message: &str) -> Diagnostic {
+     Diagnostic::new("LRR-E-COMPILE-INPUT", message.into())
+ }
+diff --git a/crates/lrr/src/expand/source_discovery.rs b/crates/lrr/src/expand/source_discovery.rs
+--- a/crates/lrr/src/expand/source_discovery.rs
++++ b/crates/lrr/src/expand/source_discovery.rs
+@@ -3931,6 +3931,11 @@
+                         provider.module_source().outline().profile.edition,
+                     )?;
+                 }
++            }
++        }
++        for provider in providers {
++            if let Some(catalog) = &provider.compiler {
++                catalog.install_ordinary_module_facets(graph)?;
+             }
+         }
+         if providers.first().is_some_and(|p| p.compiler.is_some()) {
+diff --git a/crates/lrr/src/frontend/constant_macro_admission_tests.rs b/crates/lrr/src/frontend/constant_macro_admission_tests.rs
+--- a/crates/lrr/src/frontend/constant_macro_admission_tests.rs
++++ b/crates/lrr/src/frontend/constant_macro_admission_tests.rs
+@@ -366,48 +366,9 @@
+     }
+ }
+ #[test]
+-fn unchanged_lexical_user_shadow_has_exact_original_hygiene_identity() {
++fn unchanged_lexical_user_shadow_has_exact_cold_source_selection_and_expansion() {
+     for edition in [2015, 2018, 2021, 2024] {
+-        let unit = Digest::of_bytes(b"original macro shadow fixture");
+-        let profile = ProfileIdentity {
+-            edition,
+-            ..ProfileIdentity::current()
+-        };
+-        let blob = SourceBlob::new(SHADOW_BUILTIN.as_bytes().to_vec()).unwrap();
+-        let parsed = crate::syntax::parse::ParsedFile::parse(&blob, profile.clone()).unwrap();
+-        let outline = parsed
+-            .outline(unit, vec![], &CfgSet::guest_default())
+-            .unwrap();
+-        let root = crate::expand::source_hygiene::source_root(unit, edition).unwrap();
+-        let facts = crate::frontend::hygiene::HygieneFacts::new(root.contexts, root.rows)
+-            .unwrap()
+-            .with_name_contexts(root.names)
+-            .unwrap();
+-        let index = crate::frontend::source_macros::SourceMacroIndex::from_outline(
+-            &outline,
+-            root.context,
+-            facts,
+-        )
+-        .unwrap();
+-        let start = SHADOW_BUILTIN.find("mod m4").unwrap();
+-        let end = SHADOW_BUILTIN[start..].find("mod m5").unwrap() + start;
+-        let at = SHADOW_BUILTIN[start..end].rfind("panic!();").unwrap() + start;
+-        let selected = index.lookup(&["m4".into()], at as u64, "panic").unwrap();
+-        let crate::frontend::macro_scopes::HygienicLookup::Selection(
+-            crate::frontend::macro_origins::MacroSelection::Defined(definition),
+-        ) = selected
+-        else {
+-            panic!("original user shadow proof missing: {selected:?}")
+-        };
+-        assert_eq!(definition.defining_unit, unit);
+-        assert_eq!(definition.definition_edition, edition);
+-        assert_eq!(
+-            crate::frontend::runtime_macro_catalog::RuntimeMacroCatalog::standard(&profile)
+-                .unwrap()
+-                .select(&definition)
+-                .unwrap(),
+-            None
+-        );
++        preparation::original_m4_selection(edition);
+     }
+ }
+ #[test]
+@@ -479,3 +440,6 @@
+         assert_eq!(db.trace.counts["Constant:MemoHit"], 1);
+     }
+ }
++
++#[path = "constant_preparation_tests.rs"]
++mod preparation;
+diff --git a/crates/lrr/src/frontend/constant_preparation_tests.rs b/crates/lrr/src/frontend/constant_preparation_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_preparation_tests.rs
+@@ -0,0 +1,367 @@
++//! Genuine cold preparation/current facade controls; no full original execution.
++use super::*;
++use crate::{
++    expand::{
++        identity::MacroIdentity,
++        source_declarative::{SourceDeclarative, SourceDeclarativeDemand},
++    },
++    frontend::{
++        compile_input_catalog::CompileInputCatalog,
++        names::{NameLookup, NameNamespaces},
++        source_macro_routes::SourceMacroRoutes,
++    },
++    source::dependencies::SourceDependency,
++    syntax::{outline::ScopeKey, token_wire::TokenTree},
++};
++const AUX: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/imports/auxiliary/two_macros.rs"
++);
++pub(super) fn original_m4_selection(edition: u16) {
++    let unit = Digest::of_bytes(b"original macro shadow fixture");
++    let auxiliary = Digest::of_bytes(b"original two_macros auxiliary");
++    let profile = ProfileIdentity {
++        edition,
++        ..ProfileIdentity::current()
++    };
++    let cfg = CfgSet::guest_default();
++    let mut units = Vec::new();
++    let mut selections = Vec::new();
++    for (text, path, key) in [
++        (SHADOW_BUILTIN, "shadow_builtin_macros.rs", unit),
++        (AUX, "auxiliary/two_macros.rs", auxiliary),
++    ] {
++        let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++        let path = SourcePath::new(path).unwrap();
++        selections.push(SourceSelection {
++            path: path.clone(),
++            outline: OutlineKey {
++                parse: ParseKey {
++                    content: blob.content(),
++                    profile: profile.clone(),
++                },
++                crate_key: key,
++                module_path: vec![],
++                cfg: cfg.fingerprint(),
++            },
++        });
++        units.push(SourceUnitInput {
++            path,
++            crate_key: key,
++            module_path: vec![],
++            profile: profile.clone(),
++            cfg: cfg.clone(),
++            blob,
++        });
++    }
++    let inputs = PreparedSourceInputs::refresh_with_dependencies(
++        None,
++        units,
++        Default::default(),
++        vec![SourceDependency {
++            consumer: unit,
++            alias: "two_macros".into(),
++            provider: auxiliary,
++        }],
++    )
++    .unwrap();
++    let views: Vec<_> = selections
++        .iter()
++        .map(|s| {
++            let SourceSelectionOutcome::Selected(v) = inputs.select(s).unwrap() else {
++                panic!("original source absent")
++            };
++            v
++        })
++        .collect();
++    let root = &views[0];
++    let call = root
++        .outline()
++        .item_invocations
++        .iter()
++        .find(|c| c.scope.module_path == ["m4"])
++        .unwrap();
++    let selected = root
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.scope.module_path == ["m4"] && i.def_key.declared_name == "panic")
++        .unwrap();
++    let mut providers: Vec<_> = views
++        .iter()
++        .map(|v| SourceDeclarative::new(v.share()).unwrap())
++        .collect();
++    SourceDeclarative::configure_captured_modules(&mut providers).unwrap();
++    // The strict raw index is not a completed authority. Keep its exact current
++    // original frontier instead of manufacturing a successful scope lookup.
++    let raw = providers[0]
++        .macro_index()
++        .lookup(&["m4".into()], u64::from(call.range.start), "panic")
++        .unwrap();
++    let crate::frontend::macro_scopes::HygienicLookup::NeedInput(frontier) = raw else {
++        panic!("original raw frontier unexpectedly changed: {raw:?}")
++    };
++    assert_eq!(
++        frontier.hex(),
++        "5901dcc8ed82add700c96ba83633214c4dfd33a7871d41f289228b459a27fb8d"
++    );
++    assert!(providers[0].macro_index().producer_kind(frontier).is_some());
++    let mut routes = Vec::new();
++    for provider in &providers {
++        routes.extend(provider.routes_in(&providers).unwrap());
++    }
++    let names = SourceMacroRoutes::discovery_graph(&routes).unwrap();
++    // This existing API explicitly mints only a pure unsealed preparation
++    // candidate. Genuine source tokens/definition ownership remain required;
++    // this request is not a CurrentConstantMacroProof or a scope seal.
++    let SourceDeclarativeDemand::Ready(request) = providers[0]
++        .demand_for_discovery(
++            call.item_input,
++            Digest::of_bytes(b"original pure prep"),
++            Digest::of_bytes(b"pinned declarative source engine"),
++            &names,
++            &providers,
++        )
++        .unwrap()
++    else {
++        panic!("genuine m4 preparation needs an unestablished operand")
++    };
++    assert_eq!(
++        request.key().macro_identity,
++        MacroIdentity::Declaration {
++            definition: selected.def_key.fingerprint()
++        }
++    );
++    assert_eq!(request.key().definition_edition, edition);
++    assert_eq!(request.key().call_edition, edition);
++    let definition = providers[0]
++        .macro_index()
++        .definition(selected.def_key.fingerprint())
++        .unwrap();
++    assert_eq!(definition.defining_unit, unit);
++    assert_eq!(definition.definition_edition, edition);
++    assert_eq!(
++        crate::frontend::runtime_macro_catalog::RuntimeMacroCatalog::standard(&profile)
++            .unwrap()
++            .select(definition)
++            .unwrap(),
++        None
++    );
++    let expanded = request.expand().unwrap();
++    assert_eq!(expanded.key(), request.key());
++    let output = expanded.tokens().unwrap();
++    assert!(matches!(output.roots(),[TokenTree::Group{children,..}] if children.is_empty()));
++    // Expansion evidence does not retire a different/broader producer, publish
++    // a full source seal, or authorize intrinsic Panic semantics.
++    let after = providers[0]
++        .macro_index()
++        .lookup(&["m4".into()], u64::from(call.range.start), "panic")
++        .unwrap();
++    assert!(
++        matches!(after,crate::frontend::macro_scopes::HygienicLookup::NeedInput(found) if found==frontier)
++    );
++}
++#[test]
++fn fixed_type_panic_module_is_distinct_from_macro_and_custom_catalogue_has_no_grant() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let profile = ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        };
++        let catalog = CompileInputCatalog::standalone(&profile).unwrap();
++        let mut graph = NameNamespaces::default();
++        catalog.install_ordinary_module_facets(&mut graph).unwrap();
++        let runtime = catalog.runtime_catalog().unwrap().unwrap();
++        for (_, unit) in catalog.facade_aliases() {
++            let caller = ScopeKey {
++                crate_key: unit,
++                module_path: vec![],
++                owner: None,
++            };
++            let NameLookup::Defined(module) = graph
++                .lookup_unqualified(Namespace::Type, "panic", &caller, edition, None)
++                .unwrap()
++            else {
++                panic!("explicit synthetic Type module absent")
++            };
++            assert_eq!(module.namespace, Namespace::Type);
++            assert_eq!(module.defining_unit, unit);
++            assert_eq!(module.definition_edition, edition);
++            assert_eq!(
++                runtime
++                    .select(&crate::expand::scopes::MacroDefinition {
++                        identity: module.identity,
++                        defining_unit: unit,
++                        definition_edition: edition
++                    })
++                    .unwrap(),
++                None
++            );
++            assert_eq!(
++                graph
++                    .lookup_unqualified(Namespace::Value, "panic", &caller, edition, None)
++                    .unwrap(),
++                NameLookup::Absent
++            );
++        }
++        let custom =
++            CompileInputCatalog::new(Digest::of_bytes(b"unconfigured custom facet"), edition, [])
++                .unwrap();
++        let mut empty = NameNamespaces::default();
++        custom.install_ordinary_module_facets(&mut empty).unwrap();
++        let caller = ScopeKey {
++            crate_key: crate::facade::unit(&profile, "std"),
++            module_path: vec![],
++            owner: None,
++        };
++        assert_eq!(
++            empty
++                .lookup_unqualified(Namespace::Type, "panic", &caller, edition, None)
++                .unwrap(),
++            NameLookup::Absent
++        );
++    }
++}
++#[test]
++fn explicit_standard_module_macro_rename_retains_real_type_route_under_source_policy() {
++    for edition in [2015, 2018, 2021, 2024] {
++        for text in [
++            "extern crate std;use std::panic as p;const X:()=p!(\"renamed\");fn main(){}",
++            "#![no_std]extern crate core;use core::panic as p;const X:()=p!(\"core\");fn main(){}",
++            "#![no_implicit_prelude]extern crate std;use std::panic as p;const X:()=p!(\"explicit\");fn main(){}",
++        ] {
++            let (db, view, _, base, proof) = proof(text, "X", edition);
++            let current = ConstantSourceAdmission::capture_current_with_macro_proofs(
++                &db,
++                &view,
++                base.plan().owner_definition(),
++                ConstantRequest::Constant,
++                MAX_BYTES,
++                &[proof.clone()],
++            )
++            .unwrap();
++            current.revalidate(&db, &view).unwrap();
++            let type_key=current.dependencies().keys().find(|k|matches!(k,InputKey::DiscoverySeal(s) if matches!(&s.domain,SealDomain::Scope{namespace:Namespace::Type,..}))).unwrap();
++            let published = db.published_input(type_key).unwrap();
++            let InputValue::DiscoverySeal(seal) = published.as_ref() else {
++                panic!("actual Type seal absent")
++            };
++            let certified = seal.scope.as_ref().unwrap();
++            let crate::frontend::names::NameLookup::Defined(module) = certified
++                .lookup(&crate::db::key::BucketKey {
++                    scope: certified.scope.clone(),
++                    namespace: Namespace::Type,
++                    name: "p".into(),
++                })
++                .unwrap()
++            else {
++                panic!("actual ordinary module alias p absent")
++            };
++            assert_ne!(module.identity, proof.definition());
++            let Node::AdmittedPanic(panic) = selected_node(&current).unwrap() else {
++                panic!("exact Macro proof not retained")
++            };
++            assert_eq!(panic.definition(), proof.definition());
++            // No fake value/Type absence or blanket macro-only import success.
++        }
++    }
++}
++#[test]
++fn renamed_proof_refuses_changed_source_cfg_and_epoch_without_query_work() {
++    let text = "use std::panic as p;const X:()=p!(\"retained\");fn main(){}";
++    let (mut db, view, _, _, admitted) = proof(text, "X", 2024);
++    let (_, shadow, _) = world(
++        "macro_rules! p{()=>{()}}const X:()=p!();fn main(){}",
++        "X",
++        2024,
++        true,
++    );
++    assert!(admitted.revalidate(&db, &shadow).is_err());
++    let selection = view.selection();
++    let changed_cfg = CfgSet::default();
++    assert_ne!(changed_cfg.fingerprint(), selection.outline.cfg);
++    let changed_selection = SourceSelection {
++        path: selection.path.clone(),
++        outline: OutlineKey {
++            cfg: changed_cfg.fingerprint(),
++            ..selection.outline.clone()
++        },
++    };
++    let changed = PreparedSourceInputs::refresh(
++        None,
++        vec![SourceUnitInput {
++            path: selection.path.clone(),
++            crate_key: selection.outline.crate_key,
++            module_path: selection.outline.module_path.clone(),
++            profile: selection.outline.parse.profile.clone(),
++            cfg: changed_cfg,
++            blob: SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        }],
++        Default::default(),
++    )
++    .unwrap();
++    let SourceSelectionOutcome::Selected(changed) = changed.select(&changed_selection).unwrap()
++    else {
++        panic!("actual cfg source capture absent")
++    };
++    assert!(admitted.revalidate(&db, &changed).is_err());
++    let before = db.trace.counts.clone();
++    db.begin_expansion_epoch(2).unwrap();
++    assert!(admitted.revalidate(&db, &view).is_err());
++    assert_eq!(db.trace.counts, before);
++    let profile = ProfileIdentity {
++        edition: 2099,
++        ..ProfileIdentity::current()
++    };
++    assert!(CompileInputCatalog::standalone(&profile).is_err());
++}
++
++#[test]
++fn actual_source_std_module_shadow_keeps_ordinary_type_alias_identity() {
++    let text = "mod std{pub mod panic{}}use std::panic as p;const X:()=();fn main(){}";
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, view, definition) = world(text, "X", edition, true);
++        let current = admit(&db, &view, definition).unwrap();
++        let expected = view
++            .outline()
++            .items
++            .iter()
++            .find(|i| i.def_key.declared_name == "panic" && i.scope.module_path == ["std"])
++            .unwrap()
++            .def_key
++            .fingerprint();
++        let key=current.dependencies().keys().find(|k|matches!(k,InputKey::DiscoverySeal(s) if matches!(&s.domain,SealDomain::Scope{namespace:Namespace::Type,..}))).unwrap();
++        let published = db.published_input(key).unwrap();
++        let InputValue::DiscoverySeal(seal) = published.as_ref() else {
++            panic!("actual Type scope absent")
++        };
++        let scope = seal.scope.as_ref().unwrap();
++        let NameLookup::Defined(module) = scope
++            .lookup(&crate::db::key::BucketKey {
++                scope: scope.scope.clone(),
++                namespace: Namespace::Type,
++                name: "p".into(),
++            })
++            .unwrap()
++        else {
++            panic!("original local std Type module was replaced")
++        };
++        assert_eq!(module.identity, expected);
++        assert_eq!(module.defining_unit, view.selection().outline.crate_key);
++        let runtime = CompileInputCatalog::standalone(&view.selection().outline.parse.profile)
++            .unwrap()
++            .runtime_catalog()
++            .unwrap()
++            .unwrap();
++        assert_eq!(
++            runtime
++                .select(&crate::expand::scopes::MacroDefinition {
++                    identity: module.identity,
++                    defining_unit: module.defining_unit,
++                    definition_edition: module.definition_edition
++                })
++                .unwrap(),
++            None
++        );
++        current.revalidate(&db, &view).unwrap();
++    }
++}

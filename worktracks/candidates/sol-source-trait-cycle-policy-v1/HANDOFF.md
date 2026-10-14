@@ -1,0 +1,7 @@
+# Frozen M022 source-derived cycle policy prerequisite
+
+Private `sol-source-trait-cycle-policy-v1`, successor to preserved M021. New traits/source_cycle_policy.rs plus isolated read-only index policy-view/Type-member attachment and module export; ten unique acceptance controls plus five unchanged official auto/negative fixture/expected files. All controls uncompiled/unexecuted; no root canonical/Cargo/targets/guest/compiler mutation or task/full-stock/runtime pass.
+
+Replay complete.patch from baseline, or production→index-readonly-policy attachment→module→acceptance→originals. Baseline is the exact small frozen M021 overlay; earlier M019 memo reader remains separately root-owned. MANIFEST/frozen-source bind exact files, SOURCE-ONLY-RECEIPT/STATIC-CHECKS actual terminals. ROOT-HOOKS names real source/currentness/missing approved compiler-rule/source-goal/normalization/query publication producers and migration risks.
+
+The actual current producer uses certified retained headers and current Type/member facts; source auto/negative flags are declarations, never coinductive/negative applicability proofs. Bounds split without losing groups/binders/arguments or turning ?Sized into negative facts. Currentness replays source/catalog/member publication; body metadata remains cold. No model SCC/descriptor/native identity/solved Boolean grants execution or table witness authority. M018/M019/M020/M021/M022 remain incomplete; root owns actual assembly/async validation/milestone.

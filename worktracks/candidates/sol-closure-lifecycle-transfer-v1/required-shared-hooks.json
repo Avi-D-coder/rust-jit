@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "scope": "required reviewed shared integration; all unexecuted",
+  "hooks": [
+    {
+      "area": "normal closure creation/placement dispatcher",
+      "requirement": "Root creates typed instance only from genuine reached SourceClosure; after expression publication prepare canonical Placement with actual current pattern namespace admission, then intercept exact BindLocal boundary with prepare_binding/commit. Preserve opcode entry fuel/PC/operation order and genuine NeedInput resume. No arbitrary synthetic replacement recipe."
+    },
+    {
+      "area": "normal cleanup",
+      "requirement": "Merge frame_scope_cleanup attachment and child leaf after Frame publication predecessor. Existing scope/return/panic/discard cursors retain physical and acknowledgement phases; exact owner selected from real cells. No eager all-closure draining."
+    },
+    {
+      "area": "cancellation terminal",
+      "requirement": "Actual stopped fuel does not permit teardown effects. Retain frame/store/ledger/activation in actual terminal ownership lifecycle; separately specified genuine host cleanup capability/policy needed for post-stop teardown, with no guest effects or fabricated fresh fuel."
+    },
+    {
+      "area": "general moves/read/return/replacement",
+      "requirement": "Typed blockers remain. Actual source selected Copy/Move/Fn witness and prepared destination owner/caller continuation required before any object/ticket/ledger transfer. Deferred Copy layout cannot decide read mode."
+    },
+    {
+      "area": "genuine namespace inputs",
+      "requirement": "Integrate frozen PatternNamespace publication/private Admission + genuine synthetic compiler Value/prelude scope seals. Nested bindings consume legitimate outer declaration proof composition; ordinary prelude/world/library facts never caller Boolean."
+    },
+    {
+      "area": "dynamic accounting/enum consumers",
+      "requirement": "Frame metadata includes changed Published and Activation sizes/capacities. Existing closure-layout packet TypeKey/TyTerm migrations, source-return/call/world-capture consumers remain separate. Receipt slot remains origin, current Location is actual frame binding/temporary record."
+    },
+    {
+      "area": "validation",
+      "requirement": "Root/edition worker exclusively owns frozen-source compile/Clippy/runtime/fixture validation. Apply exact split hunks after active terminal, merge canonical current StoreSession/test-owner hooks and constants. No whole-fixture pass from this metadata packet."
+    }
+  ],
+  "executed_controls": 0,
+  "full_fixture_passes": 0
+}

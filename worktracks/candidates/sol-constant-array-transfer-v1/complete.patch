@@ -1,0 +1,969 @@
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_constant_pending.rs
+@@ -0,0 +1,69 @@
++//! Unpublished constant owner. Only actual construction can create this token.
++use super::*;
++/// No public fields, raw-ticket constructor, Clone or stable encoding.
++pub(crate) struct PendingConstantResult {
++    epoch: u32,
++    ticket: TicketId,
++}
++impl GuestStore {
++    pub(crate) fn instantiate_pending_constant(
++        &mut self,
++        plan: PreparedConstantInstantiation,
++        fuel: &mut RunFuel,
++    ) -> Result<PendingConstantResult, Diagnostic> {
++        let ticket = self.instantiate_constant_admitted(plan, fuel)?;
++        Ok(PendingConstantResult {
++            epoch: self.budget.epoch(),
++            ticket,
++        })
++    }
++    fn validate_pending_constant(
++        &self,
++        pending: &PendingConstantResult,
++    ) -> Result<ValueRepr, Diagnostic> {
++        if pending.epoch != self.budget.epoch() {
++            return Err(stale());
++        }
++        let value = self.peek_ticket(pending.ticket)?;
++        self.object_owner(value, ValueOwner::Ticket(pending.ticket))?;
++        self.require_initialized_value(value)?;
++        Ok(value)
++    }
++    /// Failure preserves the exact pending owner for explicit private rollback.
++    pub(crate) fn commit_pending_constant(
++        &mut self,
++        pending: PendingConstantResult,
++        destination: CellId,
++    ) -> Result<(), (Diagnostic, PendingConstantResult)> {
++        let admission = (|| {
++            let value = self.validate_pending_constant(&pending)?;
++            if !matches!(
++                self.cells.get(destination)?.owner,
++                CellOwner::FrameSlot { .. }
++            ) {
++                return Err(ownership());
++            }
++            self.validate_initialization_value(destination, value)
++        })();
++        if let Err(error) = admission {
++            return Err((error, pending));
++        }
++        // Exact FrameSlot initialization allocates nothing and cannot invoke
++        // callbacks. The ordinary store initializer consumes ownership once.
++        if let Err(error) = self.initialize(destination, pending.ticket) {
++            return Err((error, pending));
++        }
++        Ok(())
++    }
++    /// Closed unpublished copies only: never a general aggregate cleanup bypass.
++    pub(crate) fn abort_pending_constant(
++        &mut self,
++        pending: PendingConstantResult,
++    ) -> Result<(), Diagnostic> {
++        self.validate_pending_constant(&pending)?;
++        self.abort_constant_ticket(pending.ticket)
++    }
++}
++#[cfg(test)]
++#[path = "constant_pending_tests.rs"]
++mod tests;
+--- /dev/null
++++ b/crates/lrr/src/vm/frame_constant_arrays.rs
+@@ -0,0 +1,175 @@
++//! T054 physical publication into the existing ordinary temporary machine.
++//! Only an opaque admitted use may reach production; its producer is prerequisite.
++use super::*;
++use crate::{
++    engine::constant_array_publication::AdmittedConstantUse,
++    frontend::constants::{ConstValue, wire::ConstantWireType},
++    runtime::cell::constant_instantiation::PreparedConstantInstantiation,
++    syntax::body_index::{ExpressionKind, NodeRole},
++};
++/// No public constructor, clone, raw result ticket or stable encoding.
++pub(crate) struct PreparedConstantPublication<'a> {
++    admitted: &'a AdmittedConstantUse,
++    frame: FrameId,
++    pc: PcKey,
++    destination: SlotId,
++    prior: Option<CellId>,
++    scope: ScopeId,
++    epoch: u32,
++    ty: TypeId,
++    source: crate::traits::term::TyTerm,
++    construction: PreparedConstantInstantiation,
++}
++impl Frame {
++    #[cfg(test)]
++    pub(crate) fn constant_frame_anchor(&self) -> FrameId {
++        self.anchor
++    }
++    fn preflight_constant_use(
++        &self,
++        proof: &AdmittedConstantUse,
++        store: &GuestStore,
++    ) -> Result<(), Diagnostic> {
++        let node = self
++            .body
++            .nodes()
++            .get(self.pc.node as usize)
++            .ok_or_else(|| invalid("constant publication node absent"))?;
++        if self.status != FrameStatus::Running
++            || proof.frame() != self.anchor
++            || proof.pc() != &self.pc
++            || proof.body_index() != self.body.fingerprint()
++            || self.pc.phase != crate::ir::pc::Phase::Entry.code()?
++            || node.role != NodeRole::Expression(ExpressionKind::Path)
++            || node.value != Some(proof.destination())
++            || self.body.span(node.id)? != *proof.span()
++            || self.copy_activation.is_some()
++            || self.cleanup_activation.is_some()
++        {
++            return Err(invalid(
++                "constant publication differs from exact running source path/frame/phase",
++            ));
++        }
++        // Agreement only: the opaque source proof is mandatory and is never
++        // synthesized by looking at a descriptor.
++        use crate::{
++            runtime::shape::{PrimitiveIdentity, TypeKey},
++            traits::term::{ConstTerm, TyTerm},
++        };
++        let source_agrees = match (
++            proof.source(),
++            store.type_descriptor(proof.ty())?.key.as_ref(),
++        ) {
++            (TyTerm::Primitive(p), TypeKey::Primitive(actual)) => {
++                *actual == PrimitiveIdentity::from_recipe(*p)?
++            }
++            (TyTerm::Array(source, ConstTerm::Value(length)), TypeKey::Array { element, len }) => {
++                matches!(source.as_ref(),TyTerm::Primitive(p) if PrimitiveIdentity::from_recipe(*p).is_ok_and(|id|id.id()==*element))
++                    && *length == u64::from(*len)
++            }
++            _ => false,
++        };
++        if !source_agrees {
++            return Err(Diagnostic::new(
++                "LRR-E-TYPE-CONTEXT",
++                "constant publication requires exact source-selected scalar/primitive-array layout"
++                    .into(),
++            ));
++        }
++        self.preflight_source_view(proof.destination(), Some(proof.source()))?;
++        if self
++            .source_view_ref(proof.destination())?
++            .is_some_and(|s| s != proof.source())
++            || self
++                .hint(proof.destination())?
++                .is_some_and(|t| t != proof.ty())
++        {
++            return Err(Diagnostic::new(
++                "LRR-E-TYPE-CONTEXT",
++                "constant source result differs from retained destination context".into(),
++            ));
++        }
++        self.preflight_write_type(proof.destination(), proof.ty(), store)
++    }
++    pub(crate) fn prepare_constant_publication<'a>(
++        &self,
++        proof: &'a AdmittedConstantUse,
++        value: &ConstValue,
++        wire: &ConstantWireType,
++        store: &GuestStore,
++    ) -> Result<PreparedConstantPublication<'a>, Diagnostic> {
++        self.preflight_constant_use(proof, store)?;
++        if !proof.admits_content(value, wire)? {
++            return Err(invalid(
++                "constant publication immutable content differs from admitted memo",
++            ));
++        }
++        let construction = store.prepare_constant_instantiation(value, wire, proof.ty())?;
++        let retained = Self::metadata_bytes(&self.body, self.parameter_metadata_count())
++            .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
++            .and_then(|n| n.checked_add(self.projection_bytes))
++            .and_then(|n| n.checked_add(self.source_field_bytes()?))
++            .and_then(|n| n.checked_add(std::mem::size_of::<PreparedConstantPublication<'_>>()))
++            .and_then(|n| n.checked_add(construction.metadata_bytes()))
++            .filter(|n| *n <= 32 << 20)
++            .ok_or_else(crate::runtime::arena::resource)?;
++        let _ = retained;
++        store
++            .preflight_owning_read_result(self.slot(proof.destination())?.cell.is_none(), false)?;
++        Ok(PreparedConstantPublication {
++            admitted: proof,
++            frame: self.anchor,
++            pc: self.pc.clone(),
++            destination: proof.destination(),
++            prior: self.slot(proof.destination())?.cell,
++            scope: self.slot(proof.destination())?.scope,
++            epoch: store.budget().epoch(),
++            ty: proof.ty(),
++            source: proof.source().clone(),
++            construction,
++        })
++    }
++    /// Ordinary opcode entry is already charged. No source query or authority
++    /// recovery occurs here. Destination storage is secured before constructing.
++    pub(crate) fn publish_constant_to_temporary(
++        &mut self,
++        prepared: PreparedConstantPublication<'_>,
++        store: &mut GuestStore,
++    ) -> Result<(), Diagnostic> {
++        let proof = prepared.admitted;
++        self.preflight_constant_use(proof, store)?;
++        if prepared.frame != self.anchor
++            || prepared.pc != self.pc
++            || prepared.destination != proof.destination()
++            || prepared.epoch != store.budget().epoch()
++            || prepared.prior != self.slot(prepared.destination)?.cell
++            || prepared.scope != self.slot(prepared.destination)?.scope
++            || prepared.ty != proof.ty()
++            || &prepared.source != proof.source()
++        {
++            return Err(invalid(
++                "constant publication preparation is stale or foreign",
++            ));
++        }
++        self.fuel.poll()?;
++        store.reserve_owning_read_result(prepared.prior.is_none(), false)?;
++        // A new Uninit FrameSlot is a normal cleanup obligation, not a value
++        // publication. Its handle cannot be spent by subsequent construction.
++        let cell = self.prepare_write(prepared.destination, store)?;
++        let pending = store.instantiate_pending_constant(prepared.construction, &mut self.fuel)?;
++        if let Err(error) = self.fuel.poll() {
++            store.abort_pending_constant(pending)?;
++            return Err(error);
++        }
++        match store.commit_pending_constant(pending, cell) {
++            Ok(()) => self.set_source_view(prepared.destination, Some(prepared.source)),
++            Err((error, pending)) => {
++                store.abort_pending_constant(pending)?;
++                Err(error)
++            }
++        }
++    }
++}
++#[cfg(test)]
++#[path = "constant_array_transfer_tests.rs"]
++mod tests;
+--- a/crates/lrr/src/runtime/cell_constant_instantiation.rs
++++ b/crates/lrr/src/runtime/cell_constant_instantiation.rs
+@@ -1,5 +1,7 @@
+ //! T054 physical instantiation only. Descriptor agreement is not source authority.
+ //! The reached driver must first validate its source-selected constant/type proof.
++#[path = "cell_constant_pending.rs"]
++mod pending;
+ use super::*;
+ use crate::{
+     frontend::constants::{ConstValue, wire::ConstantWireType},
+@@ -96,6 +98,11 @@
+     epoch: u32,
+     node: Node,
+     totals: Totals,
++}
++impl PreparedConstantInstantiation {
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        self.totals.metadata
++    }
+ }
+ impl GuestStore {
+     fn constant_shape(
+--- a/crates/lrr/src/vm/frame.rs
++++ b/crates/lrr/src/vm/frame.rs
+@@ -4,6 +4,8 @@
+ #[cfg(test)]
+ #[path = "frame_call_scope_tests.rs"]
+ mod call_scope_tests;
++#[path = "frame_constant_arrays.rs"]
++mod constant_array_frame;
+ #[cfg(test)]
+ #[path = "integer_literal_decode_tests.rs"]
+ mod integer_literal_decode_tests;
+--- /dev/null
++++ b/crates/lrr/src/engine/constant_array_publication.rs
+@@ -0,0 +1,87 @@
++//! Opaque T054 publication prerequisite. The selected source/type producer is
++//! intentionally unavailable until root integrates its complete current proof.
++//! This module performs no queries, source selection or physical guest effects.
++#[cfg(test)]
++use crate::core::digest::StableEncode;
++use crate::{
++    core::{diagnostic::Diagnostic, digest::Digest},
++    frontend::constants::{
++        ConstValue,
++        wire::{self, ConstantWireType},
++    },
++    ir::pc::{PcKey, SlotId},
++    runtime::{cell::FrameId, shape::TypeId},
++    syntax::spans::BodySpan,
++    traits::term::TyTerm,
++};
++// There is NO production variant or constructor. A digest, descriptor, caller
++// spelling or decoded payload cannot supply the missing current authority.
++enum PublicationAuthority {
++    #[cfg(test)]
++    PhysicalFixtureOnly,
++}
++pub(crate) struct AdmittedConstantUse {
++    _authority: PublicationAuthority,
++    frame: FrameId,
++    pc: PcKey,
++    destination: SlotId,
++    span: BodySpan,
++    body_index: Digest,
++    source: TyTerm,
++    ty: TypeId,
++    content: Digest,
++}
++impl AdmittedConstantUse {
++    pub(crate) fn frame(&self) -> FrameId {
++        self.frame
++    }
++    pub(crate) fn pc(&self) -> &PcKey {
++        &self.pc
++    }
++    pub(crate) fn destination(&self) -> SlotId {
++        self.destination
++    }
++    pub(crate) fn span(&self) -> &BodySpan {
++        &self.span
++    }
++    pub(crate) fn body_index(&self) -> Digest {
++        self.body_index
++    }
++    pub(crate) fn source(&self) -> &TyTerm {
++        &self.source
++    }
++    pub(crate) fn ty(&self) -> TypeId {
++        self.ty
++    }
++    pub(crate) fn admits_content(
++        &self,
++        value: &ConstValue,
++        ty: &ConstantWireType,
++    ) -> Result<bool, Diagnostic> {
++        Ok(Digest::of_bytes(&wire::encode(value, ty, 1 << 20)?) == self.content)
++    }
++}
++/// Test-only physical injection. It is NOT source/namespace/query/type authority
++/// and must never become a production constructor or full-fixture pass.
++#[cfg(test)]
++pub(crate) fn physical_fixture_use(
++    frame: &crate::vm::frame::Frame,
++    destination: SlotId,
++    source: TyTerm,
++    ty: TypeId,
++    value: &ConstValue,
++    wire: &ConstantWireType,
++) -> Result<AdmittedConstantUse, Diagnostic> {
++    let pc = frame.pc().clone();
++    Ok(AdmittedConstantUse {
++        _authority: PublicationAuthority::PhysicalFixtureOnly,
++        frame: frame.constant_frame_anchor(),
++        span: frame.body.span(crate::ir::pc::NodeId(pc.node))?,
++        pc,
++        destination,
++        body_index: frame.body.fingerprint(),
++        source,
++        ty,
++        content: Digest::of_bytes(&wire::encode(value, wire, 1 << 20)?),
++    })
++}
+--- a/crates/lrr/src/engine/mod.rs
++++ b/crates/lrr/src/engine/mod.rs
+@@ -19,3 +19,6 @@
+ pub mod standalone_macros;
+ 
+ pub(crate) mod declarative_runtime;
++
++// Opaque witness producer remains an explicit T054 prerequisite.
++pub(crate) mod constant_array_publication;
+--- /dev/null
++++ b/crates/lrr/src/runtime/constant_pending_tests.rs
+@@ -0,0 +1,80 @@
++//! Physical unpublished-owner tests; no source authority or whole-fixture pass.
++use super::*;
++use crate::{frontend::constants::wire, ir::op::PrimitiveType};
++fn value() -> (ConstValue, ConstantWireType) {
++    let w = ConstantWireType::Array {
++        element: Box::new(ConstantWireType::Scalar(PrimitiveType::Unit)),
++        length: 1,
++    };
++    let mut b = b"LRRCNST\0".to_vec();
++    b.extend_from_slice(&1u16.to_le_bytes());
++    b.push(1);
++    b.extend_from_slice(&1u64.to_le_bytes());
++    b.push(0);
++    b.extend_from_slice(&0u32.to_le_bytes());
++    b.extend_from_slice(&1u32.to_le_bytes());
++    b.extend_from_slice(&1u32.to_le_bytes());
++    b.extend_from_slice(&0u64.to_le_bytes());
++    (wire::decode(&b, &w, 1 << 20).unwrap(), w)
++}
++#[test]
++fn pending_constant_after_construction_cancellation_aborts_only_private_owner() {
++    let mut s = GuestStore::new(1, 1000, 1 << 20).unwrap();
++    let (v, w) = value();
++    let ty = s
++        .intern_type(TypeKey::Array {
++            element: TypeId(1),
++            len: 1,
++        })
++        .unwrap();
++    let plan = s.prepare_constant_instantiation(&v, &w, ty).unwrap();
++    let mut f = RunFuel::new(2).unwrap();
++    f.charge().unwrap();
++    let pending = s.instantiate_pending_constant(plan, &mut f).unwrap();
++    let ticket = pending.ticket;
++    let repr = s.peek_ticket(ticket).unwrap();
++    f.cancellation().cancel();
++    assert!(f.poll().is_err());
++    s.abort_pending_constant(pending).unwrap();
++    assert!(s.peek_ticket(ticket).is_err());
++    assert!(s.objects.get(ObjectId::from_bits(repr.payload)).is_err());
++    assert_eq!(f.snapshot().used, 2);
++}
++#[test]
++fn pending_constant_bad_destination_retains_owner_then_commit_consumes_once() {
++    let mut s = GuestStore::new(1, 1000, 1 << 20).unwrap();
++    let (v, w) = value();
++    let ty = s
++        .intern_type(TypeKey::Array {
++            element: TypeId(1),
++            len: 1,
++        })
++        .unwrap();
++    let plan = s.prepare_constant_instantiation(&v, &w, ty).unwrap();
++    let mut f = RunFuel::new(10).unwrap();
++    let pending = s.instantiate_pending_constant(plan, &mut f).unwrap();
++    let ticket = pending.ticket;
++    let frame = s.new_frame_anchor().unwrap();
++    let wrong = s
++        .new_cell(
++            StorageContract::Exact(TypeId(2)),
++            true,
++            CellOwner::FrameSlot { frame, slot: 0 },
++        )
++        .unwrap();
++    let Err((_, pending)) = s.commit_pending_constant(pending, wrong) else {
++        panic!("wrong storage admitted")
++    };
++    assert!(s.peek_ticket(ticket).is_ok());
++    assert_eq!(s.state(wrong).unwrap(), CellState::Uninit);
++    let destination = s
++        .new_cell(
++            StorageContract::Exact(ty),
++            true,
++            CellOwner::FrameSlot { frame, slot: 1 },
++        )
++        .unwrap();
++    assert!(s.commit_pending_constant(pending, destination).is_ok());
++    assert!(s.peek_ticket(ticket).is_err());
++    assert!(matches!(s.state(destination).unwrap(), CellState::Live(_)));
++}
+--- /dev/null
++++ b/crates/lrr/src/vm/constant_array_transfer_tests.rs
+@@ -0,0 +1,501 @@
++//! Physical T054 publication controls. The test-only opaque injection certifies
++//! no production source authority, namespace, query currentness or full fixture.
++use super::*;
++use crate::{
++    core::{digest::Digest, profile::ProfileIdentity},
++    engine::constant_array_publication::physical_fixture_use,
++    frontend::constants::wire,
++    ir::{
++        op::{Op, PrimitiveType},
++        pc::Phase,
++    },
++    runtime::{
++        place::{Place, PlaceRoot, Projection},
++        reference::Access,
++        shape::TypeKey,
++        value::ValueRepr,
++    },
++    source::snapshot::{CfgSet, SourceBlob},
++    syntax::{body_index::BodyIndexLimits, parse::ParsedFile},
++    traits::term::{ConstTerm, TyTerm},
++    vm::fuel::RunFuel,
++};
++const ORIGINAL: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/lint/lint-const-item-mutation.rs"
++);
++const ADAPTER: &str =
++    "const ARRAY:[u8;1]=[25];fn main(){let mut first=ARRAY;let mut second=ARRAY;}";
++fn value() -> (ConstValue, ConstantWireType) {
++    let wire = ConstantWireType::Array {
++        element: Box::new(ConstantWireType::Scalar(PrimitiveType::U8)),
++        length: 1,
++    };
++    let mut bytes = b"LRRCNST\0".to_vec();
++    bytes.extend_from_slice(&1u16.to_le_bytes());
++    bytes.push(1);
++    bytes.extend_from_slice(&1u64.to_le_bytes());
++    bytes.push(0);
++    bytes.extend_from_slice(&9u32.to_le_bytes());
++    let v = ValueRepr::unsigned(TypeId(9), 25).unwrap();
++    bytes.extend_from_slice(&v.kind.to_le_bytes());
++    bytes.extend_from_slice(&v.type_id.to_le_bytes());
++    bytes.extend_from_slice(&v.payload.to_le_bytes());
++    (wire::decode(&bytes, &wire, 1 << 20).unwrap(), wire)
++}
++fn source() -> TyTerm {
++    TyTerm::Array(
++        Box::new(TyTerm::Primitive(PrimitiveType::U8)),
++        ConstTerm::Value(1),
++    )
++}
++fn context(text: &str, edition: u16) -> (Frame, GuestStore, Vec<NodeId>) {
++    let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++    let parsed = ParsedFile::parse(
++        &blob,
++        ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++    )
++    .unwrap();
++    let outline = parsed
++        .outline(
++            Digest::of_bytes(b"T054 physical temporary controls"),
++            vec![],
++            &CfgSet::guest_default(),
++        )
++        .unwrap();
++    let handle = outline
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap();
++    let body = parsed
++        .index_body(handle, BodyIndexLimits::default())
++        .unwrap();
++    let paths = body
++        .nodes()
++        .iter()
++        .filter(|n| n.role == NodeRole::Expression(ExpressionKind::Path))
++        .filter_map(|n| {
++            let span = body.span(n.id).unwrap();
++            let start = handle.range.start + span.relative_start;
++            let end = handle.range.start + span.relative_end;
++            (&text[start as usize..end as usize] == "ARRAY").then_some(n.id)
++        })
++        .collect::<Vec<_>>();
++    assert!(!paths.is_empty());
++    let mut store = GuestStore::new(1, 100_000, 32 << 20).unwrap();
++    let frame = Frame::new(
++        body.clone(),
++        body.pc(paths[0], Phase::Entry).unwrap(),
++        &mut store,
++    )
++    .unwrap();
++    (frame, store, paths)
++}
++fn reach(frame: &mut Frame, node: NodeId) {
++    frame.pc = frame.body.pc(node, Phase::Entry).unwrap();
++    let destination = frame.body.nodes()[node.0 as usize].value.unwrap();
++    let mut scope = Some(frame.slots[destination.0 as usize].scope);
++    let mut scopes = Vec::new();
++    while let Some(s) = scope {
++        scopes.push(s);
++        scope = frame.body.scopes()[s.0 as usize].parent;
++    }
++    for scope in scopes.into_iter().rev() {
++        if !frame.active_scopes.contains(&scope) {
++            frame.enter(scope).unwrap();
++        }
++    }
++}
++fn target(frame: &Frame) -> SlotId {
++    frame.body.nodes()[frame.pc.node as usize].value.unwrap()
++}
++fn publish(frame: &mut Frame, store: &mut GuestStore, ty: TypeId) -> SlotId {
++    let (v, w) = value();
++    let dst = target(frame);
++    let proof = physical_fixture_use(frame, dst, source(), ty, &v, &w).unwrap();
++    let prepared = frame
++        .prepare_constant_publication(&proof, &v, &w, store)
++        .unwrap();
++    frame.fuel.charge().unwrap();
++    frame
++        .publish_constant_to_temporary(prepared, store)
++        .unwrap();
++    dst
++}
++fn element(cell: CellId) -> Place {
++    Place {
++        root: PlaceRoot::Cell(cell),
++        projections: Box::new([Projection::Index(0)]),
++    }
++}
++fn leave_current(frame: &mut Frame, store: &mut GuestStore) {
++    let scope = *frame.active_scopes.last().unwrap();
++    assert!(
++        frame
++            .begin_scope_cleanup(0, &Op::ScopeLeave { scope }, store)
++            .unwrap()
++    );
++    let mut done = false;
++    for _ in 0..1000 {
++        if frame.advance_scope_cleanup(store).unwrap() {
++            done = true;
++            break;
++        }
++    }
++    assert!(done);
++    assert!(!frame.has_cleanup_activation());
++}
++fn binding(frame: &Frame, text: &str, name: &str) -> NodeId {
++    let parsed = ParsedFile::parse(
++        &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++        frame.body.profile().clone(),
++    )
++    .unwrap();
++    let outline = parsed
++        .outline(
++            Digest::of_bytes(b"T054 physical temporary controls"),
++            vec![],
++            &CfgSet::guest_default(),
++        )
++        .unwrap();
++    let handle = outline
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap();
++    frame
++        .body
++        .nodes()
++        .iter()
++        .find(|n| {
++            if n.role != NodeRole::Pattern {
++                return false;
++            }
++            let span = frame.body.span(n.id).unwrap();
++            let raw = &text[(handle.range.start + span.relative_start) as usize
++                ..(handle.range.start + span.relative_end) as usize];
++            raw == format!("mut {name}") || raw == name
++        })
++        .unwrap()
++        .id
++}
++#[test]
++fn original_constant_array_path_publishes_physical_temporary_in_all_editions() {
++    assert!(
++        ORIGINAL.contains("//@ check-pass") && ORIGINAL.contains("const ARRAY: [u8; 1] = [25];")
++    );
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut frame, mut store, paths) = context(ORIGINAL, edition);
++        reach(&mut frame, paths[0]);
++        let ty = store
++            .intern_type(TypeKey::Array {
++                element: TypeId(9),
++                len: 1,
++            })
++            .unwrap();
++        let dst = publish(&mut frame, &mut store, ty);
++        assert_eq!(frame.source_view_ref(dst).unwrap(), Some(&source()));
++        assert_eq!(
++            store
++                .read_place(&element(frame.cell(dst).unwrap()))
++                .unwrap()
++                .payload,
++            25
++        );
++        assert_eq!(frame.fuel.snapshot().used, 2);
++        while !frame.active_scopes.is_empty() {
++            leave_current(&mut frame, &mut store);
++        }
++        assert!(frame.slots[dst.0 as usize].cell.is_none());
++    }
++}
++#[test]
++fn two_constant_uses_transfer_to_independent_mutable_variable_cells_and_cleanup() {
++    let (mut frame, mut store, paths) = context(ADAPTER, 2024);
++    let ty = store
++        .intern_type(TypeKey::Array {
++            element: TypeId(9),
++            len: 1,
++        })
++        .unwrap();
++    reach(&mut frame, paths[0]);
++    let first = publish(&mut frame, &mut store, ty);
++    let first_pattern = binding(&frame, ADAPTER, "first");
++    frame
++        .bind(first_pattern, first, Some(ty), true, &mut store)
++        .unwrap();
++    let first_cell = frame.binding(first_pattern).unwrap();
++    assert_eq!(
++        frame.binding_sources[first_pattern.0 as usize].as_ref(),
++        Some(&source())
++    );
++    assert_eq!(
++        store.state(frame.cell(first).unwrap()).unwrap(),
++        CellState::Moved
++    );
++    leave_current(&mut frame, &mut store);
++    reach(&mut frame, paths[1]);
++    let second = publish(&mut frame, &mut store, ty);
++    let second_pattern = binding(&frame, ADAPTER, "second");
++    frame
++        .bind(second_pattern, second, Some(ty), true, &mut store)
++        .unwrap();
++    let second_cell = frame.binding(second_pattern).unwrap();
++    assert_ne!(first_cell, second_cell);
++    let a = store.borrow(&element(first_cell), Access::Mutable).unwrap();
++    let b = store
++        .borrow(&element(second_cell), Access::Mutable)
++        .unwrap();
++    let v = store
++        .ticket(ValueRepr::unsigned(TypeId(9), 5).unwrap())
++        .unwrap();
++    let old = store.replace_reference(a, v).unwrap();
++    store.discard(old).unwrap();
++    assert_eq!(store.read_reference(a).unwrap().payload, 5);
++    assert_eq!(store.read_reference(b).unwrap().payload, 25);
++    while !frame.active_scopes.is_empty() {
++        leave_current(&mut frame, &mut store);
++    }
++    assert!(store.read_reference(a).is_err() && store.read_reference(b).is_err());
++    assert!(
++        frame.bindings[first_pattern.0 as usize].is_none()
++            && frame.bindings[second_pattern.0 as usize].is_none()
++    );
++    assert!(frame.counters.cleanup_elements_completed >= 4);
++}
++#[test]
++fn foreign_frame_wrong_pc_and_altered_content_refuse_before_publication() {
++    let (mut frame, mut store, paths) = context(ADAPTER, 2024);
++    reach(&mut frame, paths[0]);
++    let ty = store
++        .intern_type(TypeKey::Array {
++            element: TypeId(9),
++            len: 1,
++        })
++        .unwrap();
++    let (v, w) = value();
++    let proof = physical_fixture_use(&frame, target(&frame), source(), ty, &v, &w).unwrap();
++    let prepared = frame
++        .prepare_constant_publication(&proof, &v, &w, &store)
++        .unwrap();
++    let before = (store.budget().handles(), store.budget().bytes());
++    frame.pc = frame.body.pc(paths[1], Phase::Entry).unwrap();
++    assert!(
++        frame
++            .publish_constant_to_temporary(prepared, &mut store)
++            .is_err()
++    );
++    assert_eq!(before, (store.budget().handles(), store.budget().bytes()));
++    let mut other = Frame::new(
++        frame.body.clone(),
++        frame.body.pc(paths[0], Phase::Entry).unwrap(),
++        &mut store,
++    )
++    .unwrap();
++    reach(&mut other, paths[0]);
++    assert_ne!(other.anchor, proof.frame());
++    assert!(
++        other
++            .prepare_constant_publication(&proof, &v, &w, &store)
++            .is_err()
++    );
++    frame.pc = frame.body.pc(paths[0], Phase::Entry).unwrap();
++    let changed = ConstValue::from_scalar(ValueRepr::unsigned(TypeId(9), 1).unwrap()).unwrap();
++    assert!(
++        frame
++            .prepare_constant_publication(
++                &proof,
++                &changed,
++                &ConstantWireType::Scalar(PrimitiveType::U8),
++                &store
++            )
++            .is_err()
++    );
++}
++#[test]
++fn source_descriptor_scope_and_live_destination_refusals_preserve_published_owner() {
++    let (mut frame, mut store, paths) = context(ADAPTER, 2024);
++    let ty = store
++        .intern_type(TypeKey::Array {
++            element: TypeId(9),
++            len: 1,
++        })
++        .unwrap();
++    let (v, w) = value();
++    let dst = target(&frame);
++    let proof = physical_fixture_use(&frame, dst, source(), ty, &v, &w).unwrap();
++    assert!(
++        frame
++            .prepare_constant_publication(&proof, &v, &w, &store)
++            .is_err()
++    );
++    reach(&mut frame, paths[0]);
++    let wrong = physical_fixture_use(
++        &frame,
++        dst,
++        TyTerm::Array(
++            Box::new(TyTerm::Primitive(PrimitiveType::I32)),
++            ConstTerm::Value(1),
++        ),
++        ty,
++        &v,
++        &w,
++    )
++    .unwrap();
++    assert!(
++        frame
++            .prepare_constant_publication(&wrong, &v, &w, &store)
++            .is_err()
++    );
++    let dst = publish(&mut frame, &mut store, ty);
++    let cell = frame.cell(dst).unwrap();
++    let before = store.read_place(&element(cell)).unwrap();
++    assert!(
++        frame
++            .prepare_constant_publication(&proof, &v, &w, &store)
++            .is_err()
++    );
++    assert_eq!(store.read_place(&element(cell)).unwrap(), before);
++}
++#[test]
++fn construction_fuel_refusal_leaves_only_uninit_temporary_for_ordinary_cleanup() {
++    let (mut frame, mut store, paths) = context(ADAPTER, 2024);
++    reach(&mut frame, paths[0]);
++    let ty = store
++        .intern_type(TypeKey::Array {
++            element: TypeId(9),
++            len: 1,
++        })
++        .unwrap();
++    let (v, w) = value();
++    let dst = target(&frame);
++    let proof = physical_fixture_use(&frame, dst, source(), ty, &v, &w).unwrap();
++    let prepared = frame
++        .prepare_constant_publication(&proof, &v, &w, &store)
++        .unwrap();
++    frame.fuel = RunFuel::new(1).unwrap();
++    frame.fuel.charge().unwrap();
++    assert!(
++        frame
++            .publish_constant_to_temporary(prepared, &mut store)
++            .is_err()
++    );
++    assert_eq!(
++        store.state(frame.cell(dst).unwrap()).unwrap(),
++        CellState::Uninit
++    );
++    assert!(frame.source_view_ref(dst).unwrap().is_none());
++    let root = store.state(frame.cell(dst).unwrap()).unwrap();
++    assert_eq!(root, CellState::Uninit);
++    assert_eq!(frame.fuel.snapshot().used, 1);
++    // Stopped run fuel is terminal; this test never replenishes it or claims
++    // successful post-stop cleanup. Normal scope continuation owns Uninit cell.
++}
++#[test]
++fn published_array_cancellation_keeps_exact_scope_cleanup_owner_without_refill() {
++    let (mut frame, mut store, paths) = context(ADAPTER, 2024);
++    reach(&mut frame, paths[0]);
++    let ty = store
++        .intern_type(TypeKey::Array {
++            element: TypeId(9),
++            len: 1,
++        })
++        .unwrap();
++    let dst = publish(&mut frame, &mut store, ty);
++    let cell = frame.cell(dst).unwrap();
++    let old = store.state(cell).unwrap();
++    let scope = *frame.active_scopes.last().unwrap();
++    assert!(
++        frame
++            .begin_scope_cleanup(0, &Op::ScopeLeave { scope }, &mut store)
++            .unwrap()
++    );
++    frame.fuel.cancellation().cancel();
++    assert!(frame.advance_scope_cleanup(&mut store).is_err());
++    assert!(frame.has_cleanup_activation());
++    assert_eq!(store.state(cell).unwrap(), old);
++    assert!(frame.advance_scope_cleanup(&mut store).is_err());
++    assert_eq!(store.state(cell).unwrap(), old);
++    assert_eq!(frame.fuel.snapshot().used, 2);
++}
++
++#[test]
++fn destination_resource_preparation_leaves_cleanup_owned_uninit_without_late_publication() {
++    let (mut frame, _, paths) = context(ADAPTER, 2024);
++    let mut store = GuestStore::new(1, 6, 32 << 20).unwrap();
++    // A real Frame allocated in the constrained store; no foreign owner ticket.
++    frame = Frame::new(
++        frame.body.clone(),
++        frame.body.pc(paths[0], Phase::Entry).unwrap(),
++        &mut store,
++    )
++    .unwrap();
++    reach(&mut frame, paths[0]);
++    let ty = store
++        .intern_type(TypeKey::Array {
++            element: TypeId(9),
++            len: 1,
++        })
++        .unwrap();
++    let (v, w) = value();
++    let dst = target(&frame);
++    let proof = physical_fixture_use(&frame, dst, source(), ty, &v, &w).unwrap();
++    let prepared = frame
++        .prepare_constant_publication(&proof, &v, &w, &store)
++        .unwrap();
++    frame.fuel.charge().unwrap();
++    assert!(
++        frame
++            .publish_constant_to_temporary(prepared, &mut store)
++            .is_err()
++    );
++    assert_eq!(
++        store.state(frame.cell(dst).unwrap()).unwrap(),
++        CellState::Uninit
++    );
++    assert!(frame.source_view_ref(dst).unwrap().is_none());
++    assert_eq!(frame.fuel.snapshot().used, 1);
++    while !frame.active_scopes.is_empty() {
++        leave_current(&mut frame, &mut store);
++    }
++    assert!(frame.slots[dst.0 as usize].cell.is_none());
++}
++#[test]
++fn nested_source_and_conflicting_source_context_refuse_before_read_or_allocation() {
++    let (mut frame, mut store, paths) = context(ADAPTER, 2024);
++    reach(&mut frame, paths[0]);
++    let ty = store
++        .intern_type(TypeKey::Array {
++            element: TypeId(9),
++            len: 1,
++        })
++        .unwrap();
++    let (v, w) = value();
++    let dst = target(&frame);
++    let nested = TyTerm::Array(Box::new(source()), ConstTerm::Value(1));
++    let proof = physical_fixture_use(&frame, dst, nested, ty, &v, &w).unwrap();
++    let before = (store.budget().handles(), store.budget().bytes());
++    assert!(
++        frame
++            .prepare_constant_publication(&proof, &v, &w, &store)
++            .is_err()
++    );
++    assert_eq!(before, (store.budget().handles(), store.budget().bytes()));
++    frame.slots[dst.0 as usize].source = Some(TyTerm::Primitive(PrimitiveType::Bool));
++    let proof = physical_fixture_use(&frame, dst, source(), ty, &v, &w).unwrap();
++    assert!(
++        frame
++            .prepare_constant_publication(&proof, &v, &w, &store)
++            .is_err()
++    );
++    assert_eq!(before, (store.budget().handles(), store.budget().bytes()));
++}

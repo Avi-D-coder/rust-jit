@@ -1,0 +1,71 @@
+--- a/crates/proc-macro-srv-cli/src/main.rs
++++ b/crates/proc-macro-srv-cli/src/main.rs
+@@ -6,8 +6,6 @@
+ 
+ #[cfg(feature = "in-rust-tree")]
+ extern crate rustc_driver as _;
+-
+-mod version;
+ 
+ use clap::{Command, ValueEnum};
+ use proc_macro_api::ProtocolFormat;
+@@ -40,7 +38,11 @@
+         ])
+         .get_matches();
+     if matches.get_flag("version") {
+-        println!("rust-analyzer-proc-macro-srv {}", version::version());
++        println!(
++            "rust-analyzer-proc-macro-srv 1.99.0 (rustc {}; source {}; lrr-stdio-v1)",
++            env!("LRR_SERVER_COMPILER_COMMIT"),
++            env!("LRR_SERVER_SOURCE_COMMIT")
++        );
+         return Ok(());
+     }
+     let &format = matches
+@@ -48,7 +50,11 @@
+         .expect("format value should always be present");
+ 
+     let mut stdin = std::io::BufReader::new(std::io::stdin());
+-    let mut stdout = std::io::stdout();
++    // Preserve the protocol pipe before directing native macro stdout to diagnostics.
++    // The pinned main loop and postcard framing write only through this owned file.
++    use std::os::fd::AsFd;
++    let mut stdout = std::fs::File::from(std::io::stdout().as_fd().try_clone_to_owned()?);
++    rustix::stdio::dup2_stdout(std::io::stderr())?;
+ 
+     run(&mut stdin, &mut stdout, format.into())
+ }
+@@ -74,18 +80,18 @@
+     fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+         match self.0 {
+             ProtocolFormat::JsonLegacy => Some(clap::builder::PossibleValue::new("json-legacy")),
+-            ProtocolFormat::BidirectionalPostcardPrototype => {
+-                Some(clap::builder::PossibleValue::new("bidirectional-postcard-prototype"))
+-            }
++            ProtocolFormat::BidirectionalPostcardPrototype => Some(
++                clap::builder::PossibleValue::new("bidirectional-postcard-prototype"),
++            ),
+         }
+     }
+ 
+     fn from_str(input: &str, _ignore_case: bool) -> Result<Self, String> {
+         match input {
+             "json-legacy" => Ok(ProtocolFormatArg(ProtocolFormat::JsonLegacy)),
+-            "bidirectional-postcard-prototype" => {
+-                Ok(ProtocolFormatArg(ProtocolFormat::BidirectionalPostcardPrototype))
+-            }
++            "bidirectional-postcard-prototype" => Ok(ProtocolFormatArg(
++                ProtocolFormat::BidirectionalPostcardPrototype,
++            )),
+             _ => Err(format!("unknown protocol format: {input}")),
+         }
+     }
+@@ -94,7 +100,7 @@
+ #[cfg(not(feature = "in-rust-tree"))]
+ fn run(
+     _: &mut std::io::BufReader<std::io::Stdin>,
+-    _: &mut std::io::Stdout,
++    _: &mut (dyn std::io::Write + Send + Sync),
+     _: ProtocolFormat,
+ ) -> std::io::Result<()> {
+     Err(std::io::Error::new(

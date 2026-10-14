@@ -1,0 +1,1242 @@
+diff --git a/crates/lrr/src/frontend/constant_source_admission.rs b/crates/lrr/src/frontend/constant_source_admission.rs
+--- a/crates/lrr/src/frontend/constant_source_admission.rs
++++ b/crates/lrr/src/frontend/constant_source_admission.rs
+@@ -21,6 +21,9 @@
+     },
+ };
+ use std::collections::{BTreeMap, BTreeSet};
++#[path = "constant_source_admission_sources.rs"]
++mod retained_sources;
++use retained_sources::RetainedConstantSources;
+ const MAX_BYTES: usize = 32 * 1024 * 1024;
+ fn fault(message: &str) -> Diagnostic {
+     Diagnostic::new("LRR-E-CONST-SOURCE", message.into())
+@@ -90,6 +93,7 @@
+     bytes: usize,
+     byte_limit: usize,
+     macro_proofs: Vec<crate::frontend::constant_macro_admission::AdmittedConstantPanic>,
++    sources: RetainedConstantSources,
+ }
+ fn value_bytes(value: &ConstValue, depth: usize, nodes: &mut usize) -> Result<usize, Diagnostic> {
+     *nodes = nodes
+@@ -133,6 +137,7 @@
+     key: &SealKey,
+     scope: &crate::syntax::outline::ScopeKey,
+     namespace: Namespace,
++    sources: &RetainedConstantSources,
+ ) -> Result<(), Diagnostic> {
+     key.validate()?;
+     let certified = input
+@@ -145,8 +150,7 @@
+         || certified.edition != source.selection().outline.parse.profile.edition
+         || !matches!(input.seal.domain(), SealDomain::Scope {id, namespace: actual}
+             if *id == scope.fingerprint() && *actual == namespace)
+-        || input.sources.len() != 1
+-        || input.sources[0] != *source.selection()
++        || !sources.matches_seal_sources(&input.sources)
+         || input.seal.unresolved_frontiers() != 0
+     {
+         return Err(fault(
+@@ -192,7 +196,7 @@
+         request: ConstantRequest,
+         byte_limit: usize,
+     ) -> Result<Self, Diagnostic> {
+-        Self::capture_current_impl(db, source, definition, request, byte_limit, &[])
++        Self::capture_current_impl(db, source, definition, request, byte_limit, &[], &[source])
+     }
+     pub(crate) fn capture_current_with_macro_proofs(
+         db: &Database,
+@@ -202,7 +206,27 @@
+         byte_limit: usize,
+         proofs: &[crate::frontend::constant_macro_admission::AdmittedConstantPanic],
+     ) -> Result<Self, Diagnostic> {
+-        Self::capture_current_impl(db, source, definition, request, byte_limit, proofs)
++        Self::capture_current_impl(
++            db,
++            source,
++            definition,
++            request,
++            byte_limit,
++            proofs,
++            &[source],
++        )
++    }
++    /// Views are evidence, not authority: both actual current namespace seals
++    /// must disclose exactly this original source set.
++    pub(crate) fn capture_current_in_sources(
++        db: &Database,
++        source: &PreparedSourceView,
++        definition: Digest,
++        request: ConstantRequest,
++        byte_limit: usize,
++        views: &[&PreparedSourceView],
++    ) -> Result<Self, Diagnostic> {
++        Self::capture_current_impl(db, source, definition, request, byte_limit, &[], views)
+     }
+     fn capture_current_impl(
+         db: &Database,
+@@ -211,6 +235,7 @@
+         request: ConstantRequest,
+         byte_limit: usize,
+         proofs: &[crate::frontend::constant_macro_admission::AdmittedConstantPanic],
++        views: &[&PreparedSourceView],
+     ) -> Result<Self, Diagnostic> {
+         if proofs.len() > 256
+             || byte_limit < std::mem::size_of::<Self>() + 256
+@@ -218,6 +243,8 @@
+         {
+             return Err(limit());
+         }
++        let stamps = db.source_view_namespace_stamps()?;
++        let sources = RetainedConstantSources::capture(db, source, views, &stamps, byte_limit)?;
+         let mut proof_bytes = 0usize;
+         for proof in proofs {
+             proof_bytes = proof_bytes
+@@ -268,7 +295,6 @@
+                 ));
+             }
+         }
+-        let stamps = db.source_view_namespace_stamps()?;
+         let mut bytes = std::mem::size_of::<Self>()
+             .checked_add(256)
+             .and_then(|n| {
+@@ -278,7 +304,7 @@
+             })
+             .ok_or_else(limit)?;
+         bytes = bytes
+-            .checked_add(source.selection().metadata_bytes()?)
++            .checked_add(sources.metadata_bytes())
+             .and_then(|n| n.checked_add(request_bytes(&request).ok()?.checked_mul(2)?))
+             .ok_or_else(limit)?;
+         for key in stamps.keys() {
+@@ -290,12 +316,7 @@
+         }
+         // Bound new parser/owned-plan allocation before it happens. This source
+         // lane deliberately uses a conservative byte-per-token upper reservation.
+-        let parser_reservation = source
+-            .captured_macro_blob()?
+-            .bytes()
+-            .len()
+-            .checked_mul(128)
+-            .ok_or_else(limit)?;
++        let parser_reservation = sources.parser_reservation()?;
+         if bytes
+             .checked_add(parser_reservation)
+             .is_none_or(|n| n > byte_limit)
+@@ -314,6 +335,7 @@
+             &value_seal,
+             &item.scope,
+             Namespace::Value,
++            &sources,
+         )?;
+         let type_seal = SealKey {
+             domain: SealDomain::Scope {
+@@ -336,7 +358,9 @@
+             &type_seal,
+             &item.scope,
+             Namespace::Type,
++            &sources,
+         )?;
++        sources.validate_names(source, value_input, type_input)?;
+         let captured = ConstantSource::capture_prepared(source, definition)?;
+         if captured.selection() != Some(source.selection()) || captured.scope() != &item.scope {
+             return Err(fault("constant prepared capture source owner differs"));
+@@ -417,6 +441,7 @@
+             bytes,
+             byte_limit,
+             macro_proofs: proofs.to_vec(),
++            sources,
+         })
+     }
+     pub(crate) fn plan(&self) -> &ConstantPlan {
+@@ -447,6 +472,7 @@
+             self.request.clone(),
+             self.byte_limit,
+             &self.macro_proofs,
++            &self.sources.views(),
+         )?;
+         if self.identity() != fresh.identity() {
+             return Err(fault("constant source plan/certificate changed"));
+@@ -454,10 +480,11 @@
+         Ok(())
+     }
+     pub(crate) fn identity(&self) -> Digest {
+-        let mut e = StableEncoder::new("lrr/v1/current-constant-source-admission");
++        let mut e = StableEncoder::new("lrr/v2/current-constant-source-admission");
+         e.string(self.selection.path.as_str());
+         e.digest(self.selection.location_identity());
+         e.digest(self.plan.identity());
++        self.sources.encode(&mut e);
+         e.record(&self.value_seal);
+         e.record(&self.type_seal);
+         e.digest(self.value_fingerprint);
+diff --git a/crates/lrr/src/frontend/constant_source_admission_sources.rs b/crates/lrr/src/frontend/constant_source_admission_sources.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_source_admission_sources.rs
+@@ -0,0 +1,230 @@
++//! Retained original-source set; no public source-completeness assertion.
++use super::*;
++use crate::frontend::names::NameNamespaces;
++
++pub(super) struct RetainedConstantSources {
++    views: Vec<PreparedSourceView>,
++    bytes: usize,
++}
++impl Clone for RetainedConstantSources {
++    fn clone(&self) -> Self {
++        Self {
++            views: self.views.iter().map(PreparedSourceView::share).collect(),
++            bytes: self.bytes,
++        }
++    }
++}
++impl std::fmt::Debug for RetainedConstantSources {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        f.debug_list()
++            .entries(self.views.iter().map(PreparedSourceView::selection))
++            .finish()
++    }
++}
++impl RetainedConstantSources {
++    pub(super) fn capture(
++        db: &Database,
++        target: &PreparedSourceView,
++        views: &[&PreparedSourceView],
++        stamps: &BTreeMap<InputKey, Digest>,
++        byte_limit: usize,
++    ) -> Result<Self, Diagnostic> {
++        if views.is_empty() || views.len() > 256 {
++            return Err(limit());
++        }
++        let mut bytes = std::mem::size_of::<Self>()
++            .and_then(|n| {
++                n.checked_add(
++                    views
++                        .len()
++                        .checked_mul(std::mem::size_of::<PreparedSourceView>())?,
++                )
++            })
++            .filter(|n| *n <= byte_limit)
++            .ok_or_else(limit)?;
++        let mut locations = BTreeSet::new();
++        let mut target_seen = false;
++        for (index, view) in views.iter().enumerate() {
++            if !views[..index]
++                .iter()
++                .any(|earlier| earlier.same_publication(view))
++            {
++                bytes = bytes
++                    .checked_add(view.prepared_metadata_bytes()?)
++                    .filter(|n| *n <= byte_limit)
++                    .ok_or_else(limit)?;
++                for (key, value) in view.prepared_inputs() {
++                    if db
++                        .published_input(key)
++                        .is_none_or(|(_, actual)| actual != value.fingerprint())
++                    {
++                        return Err(fault(
++                            "constant retained original source/compiler publication changed",
++                        ));
++                    }
++                }
++            }
++            if view.selection().canonical()? != *view.selection() {
++                return Err(fault("constant source selection is not canonical"));
++            }
++            view.require_original_hygiene()?;
++            view.require_declaration_syntax()?;
++            if !locations.insert(view.selection().location_identity()) {
++                return Err(fault(
++                    "constant retained source location is duplicate/ambiguous",
++                ));
++            }
++            target_seen |= view.selection() == target.selection() && view.same_publication(target);
++            bytes = bytes
++                .checked_add(view.selection().metadata_bytes()?)
++                .and_then(|n| n.checked_add(128))
++                .filter(|n| *n <= byte_limit)
++                .ok_or_else(limit)?;
++        }
++        if !target_seen {
++            return Err(fault("constant target is not in retained source set"));
++        }
++        // Conservative completeness comes from the actual published source
++        // universe, not an arbitrary subset or a caller completeness flag.
++        let mut captured_count = 0usize;
++        for key in stamps.keys() {
++            if let InputKey::CapturedSource(location) = key {
++                captured_count = captured_count
++                    .checked_add(1)
++                    .filter(|n| *n <= 256)
++                    .ok_or_else(limit)?;
++                let Some((InputValue::CapturedSource(selection), _)) = db.published_input(key)
++                else {
++                    return Err(fault("constant captured source input variant differs"));
++                };
++                if selection.location_identity() != *location
++                    || !views.iter().any(|view| view.selection() == selection)
++                {
++                    return Err(fault(
++                        "constant complete current original source set is not retained",
++                    ));
++                }
++            }
++        }
++        if captured_count != views.len() {
++            return Err(fault(
++                "constant retained set differs from actual current source membership",
++            ));
++        }
++        let mut retained = Vec::new();
++        retained
++            .try_reserve_exact(views.len())
++            .map_err(|_| limit())?;
++        retained.extend(views.iter().map(|view| view.share()));
++        retained.sort_by_key(|view| view.selection().location_identity());
++        Ok(Self {
++            views: retained,
++            bytes,
++        })
++    }
++    pub(super) fn metadata_bytes(&self) -> usize {
++        self.bytes
++    }
++    pub(super) fn views(&self) -> Vec<&PreparedSourceView> {
++        // Already admitted count <= 256, no guest data or provider selection.
++        self.views.iter().collect()
++    }
++    pub(super) fn parser_reservation(&self) -> Result<usize, Diagnostic> {
++        self.views.iter().try_fold(0usize, |bytes, view| {
++            bytes
++                .checked_add(
++                    view.captured_macro_blob()?
++                        .bytes()
++                        .len()
++                        .checked_mul(128)
++                        .ok_or_else(limit)?,
++                )
++                .ok_or_else(limit)
++        })
++    }
++    pub(super) fn matches_seal_sources(&self, sources: &[SourceSelection]) -> bool {
++        sources.len() == self.views.len()
++            && self.views.iter().all(|view| {
++                sources
++                    .iter()
++                    .filter(|source| *source == view.selection())
++                    .count()
++                    == 1
++            })
++    }
++    pub(super) fn encode(&self, e: &mut StableEncoder) {
++        e.u64(self.views.len() as u64);
++        for view in &self.views {
++            e.string(view.selection().path.as_str());
++            e.record(&view.selection().outline);
++        }
++    }
++    pub(super) fn validate_names(
++        &self,
++        target: &PreparedSourceView,
++        value: &DiscoveryInput,
++        types: &DiscoveryInput,
++    ) -> Result<(), Diagnostic> {
++        // Preserve the established exact singleton producer, including its
++        // privately published compiler-facet import resolution. A raw source
++        // graph cannot reconstruct that separate facet authority. The new
++        // multisource lane requires explicit original graph replay below.
++        if self.views.len() == 1 {
++            return Ok(());
++        }
++        if value.seal.key().unit_graph != types.seal.key().unit_graph
++            || value.seal.key().epoch != types.seal.key().epoch
++            || value.source_dependencies != types.source_dependencies
++            || value.compiler_inputs != types.compiler_inputs
++        {
++            return Err(fault(
++                "constant Type/Value world/compiler/source graph differs",
++            ));
++        }
++        let mut graph = NameNamespaces::from_outlines(
++            &self
++                .views
++                .iter()
++                .map(PreparedSourceView::outline)
++                .collect::<Vec<_>>(),
++        )?;
++        for view in &self.views {
++            graph.require_source(view.selection(), view.outline())?;
++        }
++        let dependencies = target.source_dependencies()?;
++        let mut units = BTreeSet::new();
++        for view in &self.views {
++            if units.insert(view.selection().outline.crate_key) {
++                for (alias, provider) in dependencies
++                    .aliases_for(
++                        view.selection().outline.crate_key,
++                        view.selection().outline.parse.profile.edition,
++                    )?
++                    .iter()
++                {
++                    graph.dependency(
++                        view.selection().outline.crate_key,
++                        alias.as_str(),
++                        *provider,
++                        view.selection().outline.parse.profile.edition,
++                    )?;
++                }
++            }
++        }
++        let _ = graph.resolve_imports()?; // bounded pure fixed point; no arbitrary absence fallback.
++        for input in [value, types] {
++            let certified = input
++                .scope
++                .as_ref()
++                .ok_or_else(|| fault("constant retained scope absent"))?;
++            let replay =
++                graph.certified_scope(&certified.scope, certified.namespace, certified.edition)?;
++            if replay.fingerprint() != certified.fingerprint() {
++                return Err(fault(
++                    "constant original namespace replay differs from published seal",
++                ));
++            }
++        }
++        Ok(())
++    }
++}
+diff --git a/crates/lrr/src/frontend/constant_source_admission_tests.rs b/crates/lrr/src/frontend/constant_source_admission_tests.rs
+--- a/crates/lrr/src/frontend/constant_source_admission_tests.rs
++++ b/crates/lrr/src/frontend/constant_source_admission_tests.rs
+@@ -470,3 +470,6 @@
+ 
+ #[path = "constant_macro_admission_tests.rs"]
+ mod macro_tests;
++
++#[path = "constant_source_multisource_tests.rs"]
++mod multisource_tests;
+diff --git a/crates/lrr/src/frontend/constant_source_multisource_tests.rs b/crates/lrr/src/frontend/constant_source_multisource_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/constant_source_multisource_tests.rs
+@@ -0,0 +1,604 @@
++//! Exact original multisource admission; no full-main pass assertion.
++use super::*;
++use crate::source::dependencies::SourceDependency;
++const CROSS_ROOT: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/cross-crate/const-fn-evaluated-cross-crate.rs"
++);
++const CROSS_PROVIDER: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/cross-crate/auxiliary/const-fn-evaluated-cross-crate.rs"
++);
++const REEXPORT: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/imports/reexport-from-multiple-namespaces.rs"
++);
++fn unit(text: &str, path: &str, key: Digest, module: &[&str], edition: u16) -> SourceUnitInput {
++    SourceUnitInput {
++        path: SourcePath::new(path).unwrap(),
++        crate_key: key,
++        module_path: module.iter().map(|s| (*s).into()).collect(),
++        profile: ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        cfg: CfgSet::guest_default(),
++        blob: SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++    }
++}
++fn universe(
++    units: Vec<SourceUnitInput>,
++    edges: Vec<SourceDependency>,
++) -> (Database, Vec<PreparedSourceView>) {
++    let selections: Vec<_> = units
++        .iter()
++        .map(|unit| SourceSelection {
++            path: unit.path.clone(),
++            outline: OutlineKey {
++                parse: ParseKey {
++                    content: unit.blob.content(),
++                    profile: unit.profile.clone(),
++                },
++                crate_key: unit.crate_key,
++                module_path: unit.module_path.clone(),
++                cfg: unit.cfg.fingerprint(),
++            },
++        })
++        .collect();
++    let inputs =
++        PreparedSourceInputs::refresh_with_dependencies(None, units, Default::default(), edges)
++            .unwrap();
++    let mut db = Database::default();
++    inputs.publish(&mut db).unwrap();
++    let views = selections
++        .iter()
++        .map(|selection| {
++            let SourceSelectionOutcome::Selected(view) = inputs.select(selection).unwrap() else {
++                panic!("actual selected original source absent")
++            };
++            view
++        })
++        .collect();
++    (db, views)
++}
++fn definition(view: &PreparedSourceView, name: &str) -> Digest {
++    view.outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == name)
++        .unwrap()
++        .def_key
++        .fingerprint()
++}
++fn seal(
++    db: &mut Database,
++    views: &[&PreparedSourceView],
++    target: &PreparedSourceView,
++    definition: Digest,
++    namespace: Namespace,
++    world: Digest,
++) {
++    let scope = target
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.fingerprint() == definition)
++        .unwrap()
++        .scope
++        .clone();
++    let mut discovery = SourceDiscovery::new(
++        views.iter().map(|v| v.share()).collect(),
++        scope,
++        namespace,
++        world,
++        1,
++    )
++    .unwrap()
++    .with_declarative_compiler(
++        Digest::of_bytes(b"LRR multisource declarative"),
++        Digest::of_bytes(b"LRR multisource compiler"),
++        Arc::new(
++            crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                &target.selection().outline.parse.profile,
++            )
++            .unwrap(),
++        ),
++    )
++    .unwrap();
++    loop {
++        match discovery.poll().unwrap() {
++            SourceDiscoveryStep::Sealed(_) => break,
++            SourceDiscoveryStep::NeedExpansion { request }
++            | SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                .admit_expansion(Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            _ => panic!("current source namespace prerequisite not established"),
++        }
++    }
++    discovery.publish(db).unwrap();
++}
++fn seal_both(
++    db: &mut Database,
++    views: &[&PreparedSourceView],
++    target: &PreparedSourceView,
++    definition: Digest,
++) {
++    for ns in [Namespace::Value, Namespace::Type] {
++        seal(
++            db,
++            views,
++            target,
++            definition,
++            ns,
++            Digest::of_bytes(b"LRR multisource current world"),
++        );
++    }
++}
++fn capture(
++    db: &Database,
++    target: &PreparedSourceView,
++    definition: Digest,
++    views: &[&PreparedSourceView],
++) -> Result<ConstantSourceAdmission, Diagnostic> {
++    ConstantSourceAdmission::capture_current_in_sources(
++        db,
++        target,
++        definition,
++        ConstantRequest::Constant,
++        MAX_BYTES,
++        views,
++    )
++}
++#[test]
++fn unchanged_cross_crate_const_fn_retains_selected_original_provider_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let root = Digest::of_bytes(b"official cross crate root");
++        let provider = Digest::of_bytes(b"official cross crate provider");
++        let (mut db, views) = universe(
++            vec![
++                unit(CROSS_ROOT, "cross-root.rs", root, &[], edition),
++                unit(CROSS_PROVIDER, "cross-provider.rs", provider, &[], edition),
++            ],
++            vec![SourceDependency {
++                consumer: root,
++                alias: "const_fn_evaluated_cross_crate".into(),
++                provider,
++            }],
++        );
++        let refs: Vec<_> = views.iter().collect();
++        let def = definition(&views[1], "FOO");
++        seal_both(&mut db, &refs, &views[1], def);
++        assert!(
++            ConstantSourceAdmission::capture_current(
++                &db,
++                &views[1],
++                def,
++                ConstantRequest::Constant,
++                MAX_BYTES
++            )
++            .is_err()
++        );
++        let before = db.trace.events.len();
++        let admitted = capture(&db, &views[1], def, &refs).unwrap();
++        assert_eq!(admitted.plan().owner_definition(), def);
++        assert_eq!(admitted.plan().profile().edition, edition);
++        assert_eq!(
++            evaluate(admitted.plan(), ConstLimits::default())
++                .unwrap()
++                .value()
++                .scalar()
++                .unwrap()
++                .payload,
++            1
++        );
++        admitted.revalidate(&db, &views[1]).unwrap();
++        assert_eq!(before, db.trace.events.len());
++        assert!(
++            admitted
++                .dependencies()
++                .contains_key(&InputKey::DefinitionBody(def))
++        );
++        assert!(admitted.metadata_bytes() <= MAX_BYTES);
++        // Exact original provider plan only. Root lib::FOO dispatch/whole main remains separate.
++    }
++}
++#[test]
++fn unchanged_inline_module_member_can_join_a_relevant_original_source_set() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let key = Digest::of_bytes(b"original module source set");
++        let (mut db, views) = universe(
++            vec![
++                unit(MODULE, "module.rs", key, &[], edition),
++                unit(
++                    CROSS_PROVIDER,
++                    "aux.rs",
++                    Digest::of_bytes(b"original module dependency"),
++                    &[],
++                    edition,
++                ),
++            ],
++            vec![],
++        );
++        let refs: Vec<_> = views.iter().collect();
++        let def = definition(&views[0], "BITS");
++        seal_both(&mut db, &refs, &views[0], def);
++        let a = capture(&db, &views[0], def, &refs).unwrap();
++        assert_eq!(a.plan().owner_context().scope.module_path, vec!["u8"]);
++        assert_eq!(
++            evaluate(a.plan(), ConstLimits::default())
++                .unwrap()
++                .value()
++                .scalar()
++                .unwrap()
++                .payload,
++            8
++        );
++        a.revalidate(&db, &views[0]).unwrap();
++    }
++}
++#[test]
++fn unchanged_reexport_value_member_keeps_type_namespace_distinct() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let key = Digest::of_bytes(b"official reexport source set");
++        let (mut db, views) = universe(
++            vec![
++                unit(REEXPORT, "reexport.rs", key, &[], edition),
++                unit(
++                    CROSS_PROVIDER,
++                    "aux.rs",
++                    Digest::of_bytes(b"original reexport dependency"),
++                    &[],
++                    edition,
++                ),
++            ],
++            vec![],
++        );
++        let refs: Vec<_> = views.iter().collect();
++        let value = views[0]
++            .outline()
++            .items
++            .iter()
++            .find(|i| i.def_key.declared_name == "A" && i.scope.module_path == ["value_ns"])
++            .unwrap();
++        let def = value.def_key.fingerprint();
++        seal_both(&mut db, &refs, &views[0], def);
++        let a = capture(&db, &views[0], def, &refs).unwrap();
++        assert_eq!(a.plan().owner_definition(), def);
++        assert_eq!(
++            evaluate(a.plan(), ConstLimits::default())
++                .unwrap()
++                .value()
++                .scalar()
++                .unwrap()
++                .payload,
++            0
++        );
++        // Original declaration macro/use3 expansion remains a separate source prerequisite.
++    }
++}
++fn external_world() -> (Database, Vec<PreparedSourceView>, Digest) {
++    let key = Digest::of_bytes(b"exact external module source set");
++    let (mut db, views) = universe(
++        vec![
++            unit("fn main(){}", "root.rs", key, &[], 2024),
++            unit(
++                "pub const X:u32=22;",
++                "provider.rs",
++                Digest::of_bytes(b"exact selected constant provider"),
++                &[],
++                2024,
++            ),
++        ],
++        vec![],
++    );
++    let def = definition(&views[1], "X");
++    let refs: Vec<_> = views.iter().collect();
++    seal_both(&mut db, &refs, &views[1], def);
++    (db, views, def)
++}
++#[test]
++fn actual_selected_provider_scope_and_canonical_set_order_are_owned() {
++    let (db, views, def) = external_world();
++    let a = capture(&db, &views[1], def, &[&views[0], &views[1]]).unwrap();
++    let b = capture(&db, &views[1], def, &[&views[1], &views[0]]).unwrap();
++    assert_eq!(a.identity(), b.identity());
++    assert_eq!(
++        a.plan().owner_context().scope.crate_key,
++        views[1].selection().outline.crate_key
++    );
++    assert!(a.plan().owner_context().scope.module_path.is_empty());
++    a.revalidate(&db, &views[1]).unwrap();
++}
++#[test]
++fn incomplete_extra_duplicate_and_wrong_snapshot_sources_refuse() {
++    let (db, views, def) = external_world();
++    let before = db.trace.events.len();
++    assert!(capture(&db, &views[1], def, &[&views[1]]).is_err());
++    assert!(capture(&db, &views[1], def, &[&views[0], &views[1], &views[0]]).is_err());
++    let key = views[0].selection().outline.crate_key;
++    let (_, copied) = universe(
++        vec![
++            unit("fn main(){let changed=1;}", "root.rs", key, &[], 2024),
++            unit(
++                "pub const X:u32=22;",
++                "provider.rs",
++                Digest::of_bytes(b"exact selected constant provider"),
++                &[],
++                2024,
++            ),
++        ],
++        vec![],
++    );
++    assert!(capture(&db, &views[1], def, &[&copied[0], &views[1]]).is_err());
++    let admitted = capture(&db, &views[1], def, &[&views[0], &views[1]]).unwrap();
++    assert_eq!(copied[1].selection(), views[1].selection());
++    assert!(admitted.revalidate(&db, &copied[1]).is_err());
++    let key = views[0].selection().outline.crate_key;
++    let (extra_db, extra) = universe(
++        vec![
++            unit("fn main(){}", "root.rs", key, &[], 2024),
++            unit(
++                "pub const X:u32=22;",
++                "provider.rs",
++                Digest::of_bytes(b"exact selected constant provider"),
++                &[],
++                2024,
++            ),
++            unit(
++                "pub const Y:u8=1;",
++                "extra.rs",
++                Digest::of_bytes(b"exact extra source provider"),
++                &[],
++                2024,
++            ),
++        ],
++        vec![],
++    );
++    // Even without relying on a namespace seal, actual prepared membership
++    // proves that the third original cannot be erased by a supplied subset.
++    assert!(
++        retained_sources::RetainedConstantSources::capture(
++            &extra_db,
++            &extra[1],
++            &[&extra[0], &extra[1]],
++            &extra_db.source_view_namespace_stamps().unwrap(),
++            MAX_BYTES
++        )
++        .is_err()
++    );
++    assert_eq!(before, db.trace.events.len());
++}
++#[test]
++fn type_value_source_set_or_world_mismatch_never_mints_primitive_authority() {
++    let key = Digest::of_bytes(b"type value world mismatch");
++    let (mut db, views) = universe(
++        vec![
++            unit("fn main(){}", "root.rs", key, &[], 2024),
++            unit(
++                "pub const X:u32=22;",
++                "provider.rs",
++                Digest::of_bytes(b"exact selected constant provider"),
++                &[],
++                2024,
++            ),
++        ],
++        vec![],
++    );
++    let def = definition(&views[1], "X");
++    seal(
++        &mut db,
++        &[&views[0], &views[1]],
++        &views[1],
++        def,
++        Namespace::Value,
++        Digest::of_bytes(b"LRR multisource current world"),
++    );
++    seal(
++        &mut db,
++        &[&views[0], &views[1]],
++        &views[1],
++        def,
++        Namespace::Type,
++        Digest::of_bytes(b"different world"),
++    );
++    assert!(capture(&db, &views[1], def, &[&views[0], &views[1]]).is_err());
++    // A real singleton Type seal can be published only for its own target view.
++    let key = Digest::of_bytes(b"type value sources mismatch");
++    let (mut db, views) = universe(
++        vec![
++            unit("const X:u32=1;", "one.rs", key, &[], 2024),
++            unit(
++                "pub const Y:u8=2;",
++                "two.rs",
++                Digest::of_bytes(b"type value source companion"),
++                &[],
++                2024,
++            ),
++        ],
++        vec![],
++    );
++    let def = definition(&views[0], "X");
++    seal(
++        &mut db,
++        &[&views[0], &views[1]],
++        &views[0],
++        def,
++        Namespace::Value,
++        Digest::of_bytes(b"LRR multisource current world"),
++    );
++    seal(
++        &mut db,
++        &[&views[0]],
++        &views[0],
++        def,
++        Namespace::Type,
++        Digest::of_bytes(b"LRR multisource current world"),
++    );
++    assert!(capture(&db, &views[0], def, &[&views[0], &views[1]]).is_err());
++}
++#[test]
++fn imported_primitive_spelling_is_not_recovered_from_its_descriptor() {
++    let key = Digest::of_bytes(b"source selected primitive shadow");
++    let (mut db, views) = universe(
++        vec![
++            unit(
++                "mod names{pub type u32=bool;}mod values{use super::names::u32;pub const X:u32=true;}fn main(){}",
++                "root.rs",
++                key,
++                &[],
++                2024,
++            ),
++            unit(
++                CROSS_PROVIDER,
++                "provider.rs",
++                Digest::of_bytes(b"primitive shadow source companion"),
++                &[],
++                2024,
++            ),
++        ],
++        vec![],
++    );
++    let refs: Vec<_> = views.iter().collect();
++    let def = definition(&views[0], "X");
++    seal_both(&mut db, &refs, &views[0], def);
++    // Alias evaluation remains a precise type integration prerequisite.
++    assert!(capture(&db, &views[0], def, &refs).is_err());
++}
++#[test]
++fn derived_epoch_and_changed_original_compile_facts_invalidate_without_query_work() {
++    let (mut db, views, def) = external_world();
++    let a = capture(&db, &views[1], def, &[&views[0], &views[1]]).unwrap();
++    let revision = db.source_revision();
++    let before = db.trace.events.len();
++    db.begin_expansion_epoch(2).unwrap();
++    assert_eq!(revision, db.source_revision());
++    assert!(a.revalidate(&db, &views[1]).is_err());
++    assert_eq!(before, db.trace.events.len());
++    let (mut db, views, def) = external_world();
++    let a = capture(&db, &views[1], def, &[&views[0], &views[1]]).unwrap();
++    let mut facts = views[1].prepared_inputs().clone();
++    facts.insert(
++        InputKey::CompileEnv("changed".into()),
++        InputValue::CompileEnv("yes".into()),
++    );
++    db.publish_inputs(facts).unwrap();
++    assert!(a.revalidate(&db, &views[1]).is_err());
++}
++#[test]
++fn stale_body_context_and_owning_edition_refuse_exact_replay() {
++    let (mut db, views, def) = external_world();
++    let a = capture(&db, &views[1], def, &[&views[0], &views[1]]).unwrap();
++    let mut facts = views[1].prepared_inputs().clone();
++    let InputValue::DefinitionBody(body) = facts.get_mut(&InputKey::DefinitionBody(def)).unwrap()
++    else {
++        panic!()
++    };
++    body.range.end -= 1;
++    db.publish_inputs(facts).unwrap();
++    assert!(a.revalidate(&db, &views[1]).is_err());
++    let key = views[0].selection().outline.crate_key;
++    let (_, changed) = universe(
++        vec![
++            unit("fn main(){}", "root.rs", key, &[], 2024),
++            unit(
++                "pub const X:u32=22;",
++                "provider.rs",
++                Digest::of_bytes(b"exact selected constant provider"),
++                &[],
++                2018,
++            ),
++        ],
++        vec![],
++    );
++    assert!(a.revalidate(&db, &changed[1]).is_err());
++}
++#[test]
++fn bounded_source_count_and_metadata_refusal_are_pure() {
++    let (db, views, def) = external_world();
++    let before = db.trace.events.len();
++    let many = vec![&views[1]; 257];
++    assert!(
++        ConstantSourceAdmission::capture_current_in_sources(
++            &db,
++            &views[1],
++            def,
++            ConstantRequest::Constant,
++            MAX_BYTES,
++            &many
++        )
++        .is_err()
++    );
++    let error = ConstantSourceAdmission::capture_current_in_sources(
++        &db,
++        &views[1],
++        def,
++        ConstantRequest::Constant,
++        1,
++        &[&views[0], &views[1]],
++    )
++    .unwrap_err();
++    assert_eq!(error.code, "LRR-E-METADATA-LIMIT");
++    assert_eq!(before, db.trace.events.len());
++}
++#[test]
++fn singleton_api_remains_exact_for_unchanged_nested_original() {
++    let (db, view, def) = world(NESTED, "X", 2024, true);
++    let a = ConstantSourceAdmission::capture_current(
++        &db,
++        &view,
++        def,
++        ConstantRequest::Constant,
++        MAX_BYTES,
++    )
++    .unwrap();
++    let b = capture(&db, &view, def, &[&view]).unwrap();
++    assert_eq!(a.identity(), b.identity());
++    a.revalidate(&db, &view).unwrap();
++}
++
++#[test]
++fn changed_cfg_and_declaration_context_never_reuse_source_authority() {
++    let (mut db, views, def) = external_world();
++    let a = capture(&db, &views[1], def, &[&views[0], &views[1]]).unwrap();
++    let mut facts = views[1].prepared_inputs().clone();
++    let InputValue::DeclarationContext(context) =
++        facts.get_mut(&InputKey::DeclarationContext(def)).unwrap()
++    else {
++        panic!()
++    };
++    context.scope.module_path.clear();
++    db.publish_inputs(facts).unwrap();
++    assert!(a.revalidate(&db, &views[1]).is_err());
++    let key = views[0].selection().outline.crate_key;
++    let mut root = unit("fn main(){}", "root.rs", key, &[], 2024);
++    let mut child = unit(
++        "pub const X:u32=22;",
++        "provider.rs",
++        Digest::of_bytes(b"exact selected constant provider"),
++        &[],
++        2024,
++    );
++    root.cfg = CfgSet::default();
++    child.cfg = CfgSet::default();
++    let (_, changed) = universe(vec![root, child], vec![]);
++    assert_ne!(
++        changed[1].selection().outline.cfg,
++        views[1].selection().outline.cfg
++    );
++    assert!(a.revalidate(&db, &changed[1]).is_err());
++}
++#[test]
++fn complete_disclosed_seal_set_does_not_invent_an_uncaptured_import_target() {
++    let key = Digest::of_bytes(b"unestablished imported constant source");
++    let (db, views) = universe(
++        vec![unit(
++            "mod missing;use missing::A;const X:u32=1;",
++            "root.rs",
++            key,
++            &[],
++            2024,
++        )],
++        vec![],
++    );
++    let def = definition(&views[0], "X");
++    assert!(capture(&db, &views[0], def, &[&views[0]]).is_err());
++    // No manually constructed scope seal or provider execution to erase missing source.
++    assert!(db.trace.events.is_empty());
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/module-const-array-size-13763.rs
+@@ -0,0 +1,16 @@
++//! Regression test for https://github.com/rust-lang/rust/issues/13763
++
++//@ run-pass
++#![allow(dead_code)]
++
++mod u8 {
++    pub const BITS: usize = 8;
++}
++
++const NUM: usize = u8::BITS;
++
++struct MyStruct { nums: [usize; 8] }
++
++fn main() {
++    let _s = MyStruct { nums: [0; NUM] };
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/imports/reexport-from-multiple-namespaces.rs b/fixtures/upstream/rustc-checkout/tests/ui/imports/reexport-from-multiple-namespaces.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/imports/reexport-from-multiple-namespaces.rs
+@@ -0,0 +1,40 @@
++//! Regression test for https://github.com/rust-lang/rust/issues/50187
++//@ check-pass
++
++#![feature(decl_macro)]
++
++mod type_ns {
++    pub type A = u8;
++}
++mod value_ns {
++    pub const A: u8 = 0;
++}
++mod macro_ns {
++    pub macro A() {}
++}
++
++mod merge2 {
++    pub use crate::type_ns::A;
++    pub use crate::value_ns::A;
++}
++mod merge3 {
++    pub use crate::type_ns::A;
++    pub use crate::value_ns::A;
++    pub use crate::macro_ns::A;
++}
++
++mod use2 {
++    pub use crate::merge2::A;
++}
++mod use3 {
++    pub use crate::merge3::A;
++}
++
++fn main() {
++    type B2 = use2::A;
++    let a2 = use2::A;
++
++    type B3 = use3::A;
++    let a3 = use3::A;
++    use3::A!();
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-17718.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-17718.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-17718.rs
+@@ -0,0 +1,77 @@
++//@ run-pass
++//@ aux-build:issue-17718-aux.rs
++
++#![allow(dead_code)]
++#![allow(const_item_interior_mutations)]
++
++extern crate issue_17718_aux as other;
++
++use std::sync::atomic::{AtomicUsize, Ordering};
++
++const C1: usize = 1;
++const C2: AtomicUsize = AtomicUsize::new(0);
++const C3: fn() = foo;
++const C4: usize = C1 * C1 + C1 / C1;
++const C5: &'static usize = &C4;
++const C6: usize = {
++    const C: usize = 3;
++    C
++};
++
++static S1: usize = 3;
++static S2: AtomicUsize = AtomicUsize::new(0);
++
++mod test {
++    static A: usize = 4;
++    static B: &'static usize = &A;
++    static C: &'static usize = &(A);
++}
++
++fn foo() {}
++
++fn main() {
++    assert_eq!(C1, 1);
++    assert_eq!(C3(), ());
++    assert_eq!(C2.fetch_add(1, Ordering::SeqCst), 0);
++    assert_eq!(C2.fetch_add(1, Ordering::SeqCst), 0);
++    assert_eq!(C4, 2);
++    assert_eq!(*C5, 2);
++    assert_eq!(C6, 3);
++    assert_eq!(S1, 3);
++    assert_eq!(S2.fetch_add(1, Ordering::SeqCst), 0);
++    assert_eq!(S2.fetch_add(1, Ordering::SeqCst), 1);
++
++    match 1 {
++        C1 => {}
++        _ => unreachable!(),
++    }
++
++    let _a = C1;
++    let _a = C2;
++    let _a = C3;
++    let _a = C4;
++    let _a = C5;
++    let _a = C6;
++    let _a = S1;
++
++    assert_eq!(other::C1, 1);
++    assert_eq!(other::C3(), ());
++    assert_eq!(other::C2.fetch_add(1, Ordering::SeqCst), 0);
++    assert_eq!(other::C2.fetch_add(1, Ordering::SeqCst), 0);
++    assert_eq!(other::C4, 2);
++    assert_eq!(*other::C5, 2);
++    assert_eq!(other::S1, 3);
++    assert_eq!(other::S2.fetch_add(1, Ordering::SeqCst), 0);
++    assert_eq!(other::S2.fetch_add(1, Ordering::SeqCst), 1);
++
++    let _a = other::C1;
++    let _a = other::C2;
++    let _a = other::C3;
++    let _a = other::C4;
++    let _a = other::C5;
++
++    match 1 {
++        other::C1 => {}
++        _ => unreachable!(),
++    }
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/consts/auxiliary/issue-17718-aux.rs b/fixtures/upstream/rustc-checkout/tests/ui/consts/auxiliary/issue-17718-aux.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/auxiliary/issue-17718-aux.rs
+@@ -0,0 +1,10 @@
++use std::sync::atomic;
++
++pub const C1: usize = 1;
++pub const C2: atomic::AtomicUsize = atomic::AtomicUsize::new(0);
++pub const C3: fn() = { fn foo() {} foo };
++pub const C4: usize = C1 * C1 + C1 / C1;
++pub const C5: &'static usize = &C4;
++
++pub static S1: usize = 3;
++pub static S2: atomic::AtomicUsize = atomic::AtomicUsize::new(0);
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/cross-crate/const-fn-evaluated-cross-crate.rs b/fixtures/upstream/rustc-checkout/tests/ui/cross-crate/const-fn-evaluated-cross-crate.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/cross-crate/const-fn-evaluated-cross-crate.rs
+@@ -0,0 +1,12 @@
++//@ run-pass
++//@ aux-build:const-fn-evaluated-cross-crate.rs
++//! Regression test for https://github.com/rust-lang/rust/issues/36954
++//! Cross crate const fn evaluation failed because the compiler's
++//! internal argument lookup table used crate local ids that didn't
++//! exist when evaluating a const fn from another crate.
++
++extern crate const_fn_evaluated_cross_crate as lib;
++
++fn main() {
++    let _ = lib::FOO;
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/cross-crate/auxiliary/const-fn-evaluated-cross-crate.rs b/fixtures/upstream/rustc-checkout/tests/ui/cross-crate/auxiliary/const-fn-evaluated-cross-crate.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/cross-crate/auxiliary/const-fn-evaluated-cross-crate.rs
+@@ -0,0 +1,8 @@
++//! Auxiliary crate testing this issue https://github.com/rust-lang/rust/issues/36954
++#![crate_type = "lib"]
++
++const fn foo(i: i32) -> i32 {
++    i
++}
++
++pub const FOO: i32 = foo(1);
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/cross-crate/cross-crate-array-len.rs b/fixtures/upstream/rustc-checkout/tests/ui/cross-crate/cross-crate-array-len.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/cross-crate/cross-crate-array-len.rs
+@@ -0,0 +1,11 @@
++//! Regression test for <https://github.com/rust-lang/rust/issues/38875>.
++//! This used to check `constant evaluation error` span doesn't point
++//! on nothing when const is defined in another crate.
++//@ aux-build:cross-crate-array-len.rs
++//@ check-pass
++
++extern crate cross_crate_array_len;
++
++fn main() {
++    let test_x = [0; cross_crate_array_len::FOO];
++}
+diff --git a/fixtures/upstream/rustc-checkout/tests/ui/cross-crate/auxiliary/cross-crate-array-len.rs b/fixtures/upstream/rustc-checkout/tests/ui/cross-crate/auxiliary/cross-crate-array-len.rs
+new file mode 100644
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/cross-crate/auxiliary/cross-crate-array-len.rs
+@@ -0,0 +1,2 @@
++//! Auxiliary file for <https://github.com/rust-lang/rust/issues/38875>.
++pub const FOO: usize = *&0;
