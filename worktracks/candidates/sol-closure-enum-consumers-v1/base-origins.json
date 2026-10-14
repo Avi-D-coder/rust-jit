@@ -1,0 +1,68 @@
+{
+  "crates/lrr/src/engine/closure_frame_publication_tests.rs": {
+    "kind": "regular",
+    "mode": 420,
+    "origin": "artifacts/macos-first/sol-closure-lifecycle-transfer-v1/draft/crates/lrr/src/engine/closure_frame_publication_tests.rs",
+    "sha256": "7c854e1ac29ad150dd0a11a8176061f4b7a04c4a27f2a64ce1d53f9ec64b2789"
+  },
+  "crates/lrr/src/frontend/call_contracts.rs": {
+    "kind": "regular",
+    "mode": 420,
+    "origin": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-milestone-source-v2/crates/lrr/src/frontend/call_contracts.rs",
+    "sha256": "f0ee3446490d9d549490c35d949e90d09d11c866fb0ee1e1e7549baba25a3ecc"
+  },
+  "crates/lrr/src/frontend/closure_type_source.rs": {
+    "kind": "regular",
+    "mode": 420,
+    "origin": "artifacts/macos-first/sol-closure-type-layout-v1/draft/crates/lrr/src/frontend/closure_type_source.rs",
+    "sha256": "f6c7bb9651e6a52e73e09188c2631f409d60476281b7f854a3cfe84caad10bc1"
+  },
+  "crates/lrr/src/runtime/cell.rs": {
+    "kind": "regular",
+    "mode": 420,
+    "origin": "artifacts/macos-first/sol-closure-type-layout-v1/draft/crates/lrr/src/runtime/cell.rs",
+    "sha256": "731de023c30d73be7e49d146e1aaaa349affdda12ac419f9e9f011695dcf1b61"
+  },
+  "crates/lrr/src/runtime/cell_aggregate_copy.rs": {
+    "kind": "regular",
+    "mode": 420,
+    "origin": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-milestone-source-v2/crates/lrr/src/runtime/cell_aggregate_copy.rs",
+    "sha256": "0514f829b67b7f3882624389defd42ae52e462a305941c8bdaf7e6e624cfd8cb"
+  },
+  "crates/lrr/src/runtime/shape.rs": {
+    "kind": "regular",
+    "mode": 420,
+    "origin": "artifacts/macos-first/sol-closure-type-layout-v1/draft/crates/lrr/src/runtime/shape.rs",
+    "sha256": "b291e7cc64a018007308f97fec04268a824f3c6e14f125c156de9975925f877c"
+  },
+  "crates/lrr/src/traits/closure_identity.rs": {
+    "kind": "regular",
+    "mode": 420,
+    "origin": "artifacts/macos-first/sol-closure-type-layout-v1/draft/crates/lrr/src/traits/closure_identity.rs",
+    "sha256": "901d1064bcf3e150ef8d983b200f3bd4eafaaaecf14d164154dc739e5a4e1fdc"
+  },
+  "crates/lrr/src/traits/subst.rs": {
+    "kind": "regular",
+    "mode": 420,
+    "origin": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-milestone-source-v2/crates/lrr/src/traits/subst.rs",
+    "sha256": "419ebc8290bd44d367809be354ded42c2e8579af9c7e807ddf86b8d64ef9e8fb"
+  },
+  "crates/lrr/src/traits/term.rs": {
+    "kind": "regular",
+    "mode": 420,
+    "origin": "artifacts/macos-first/sol-closure-type-layout-v1/draft/crates/lrr/src/traits/term.rs",
+    "sha256": "1f5a6a7da5d255e2b533b4d9cc36cb430181a169e424c44e46fd18bb49e73b3a"
+  },
+  "crates/lrr/src/traits/unify.rs": {
+    "kind": "regular",
+    "mode": 420,
+    "origin": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-milestone-source-v2/crates/lrr/src/traits/unify.rs",
+    "sha256": "63f4ee202be8a5c8fb4abf752b6202ff83dc1ae4087755f262675850068e98e6"
+  },
+  "crates/lrr/src/vm/context.rs": {
+    "kind": "regular",
+    "mode": 420,
+    "origin": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-milestone-source-v2/crates/lrr/src/vm/context.rs",
+    "sha256": "88b2918008b33f8e3d73d945c228840f0982b9beaa30a41471d303f0ebf9dfbf"
+  }
+}

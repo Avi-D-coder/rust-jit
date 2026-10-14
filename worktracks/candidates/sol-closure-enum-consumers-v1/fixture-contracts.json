@@ -1,0 +1,113 @@
+{
+  "actual_configurations": 0,
+  "cases": [
+    {
+      "asserted_gate": "upstream_runtime_acceptance",
+      "authentic_configurations": 0,
+      "directives_unchanged": [
+        "//@ run-pass",
+        "//@ check-run-results",
+        "//@ revisions: twenty_eighteen twenty_twentyone",
+        "//@ [twenty_eighteen] edition: 2018",
+        "//@ [twenty_twentyone] edition: 2021"
+      ],
+      "full_fixture_passes": 0,
+      "path": "tests/ui/closures/2229_closure_analysis/preserve_field_drop_order2.rs",
+      "required_runtime_frontiers": [
+        "ordinary prelude/world/library source",
+        "general/non-Copy/generic/lifetime capture typing",
+        "genuine target ABI size/alignment/niche layout",
+        "actual source-slot ticket ownership publication",
+        "callable/Fn/activation/return/drop/output producers"
+      ],
+      "runtime_contract_passes": 0,
+      "sha256": "cf04c283c0e31aa1915c2fba0182c023ffee49c3a46bf4b8146bb374d3fe7b29",
+      "status": "unexecuted"
+    },
+    {
+      "asserted_gate": "upstream_runtime_acceptance",
+      "authentic_configurations": 0,
+      "directives_unchanged": [
+        "//@ edition:2021",
+        "//@ run-pass"
+      ],
+      "full_fixture_passes": 0,
+      "path": "tests/ui/closures/2229_closure_analysis/run_pass/move_closure.rs",
+      "required_runtime_frontiers": [
+        "ordinary prelude/world/library source",
+        "general/non-Copy/generic/lifetime capture typing",
+        "genuine target ABI size/alignment/niche layout",
+        "actual source-slot ticket ownership publication",
+        "callable/Fn/activation/return/drop/output producers"
+      ],
+      "runtime_contract_passes": 0,
+      "sha256": "17c768bf782919f31b74f088654d3623360cc9cb34f65dfb5af13771faf74c6d",
+      "status": "unexecuted"
+    },
+    {
+      "asserted_gate": "diagnostic_compatibility",
+      "authentic_configurations": 0,
+      "directives_unchanged": [
+        "//@ compile-flags: --crate-type=lib"
+      ],
+      "full_fixture_passes": 0,
+      "path": "tests/ui/closures/capture-unsized-by-move.rs",
+      "required_runtime_frontiers": [
+        "unsized capture compiler diagnostics; no runtime-pass evidence"
+      ],
+      "runtime_contract_passes": 0,
+      "sha256": "75498290092c3816c2ba0d11b7068ca81064b58d4bc6a1a9e0839db004effaa8",
+      "status": "unexecuted"
+    },
+    {
+      "asserted_gate": "upstream_runtime_acceptance",
+      "authentic_configurations": 0,
+      "directives_unchanged": [
+        "//@ run-pass"
+      ],
+      "full_fixture_passes": 0,
+      "path": "tests/ui/closures/drop-glue-for-closure-with-captures.rs",
+      "required_runtime_frontiers": [
+        "ordinary prelude/world/library source",
+        "general/non-Copy/generic/lifetime capture typing",
+        "genuine target ABI size/alignment/niche layout",
+        "actual source-slot ticket ownership publication",
+        "callable/Fn/activation/return/drop/output producers"
+      ],
+      "runtime_contract_passes": 0,
+      "sha256": "af9f7d8b4a501a2371c84280cc261d3a84376eafe8fa254016fb70ee54bccef9",
+      "status": "unexecuted"
+    },
+    {
+      "asserted_gate": "upstream_runtime_acceptance",
+      "authentic_configurations": 0,
+      "directives_unchanged": [
+        "//@ run-pass"
+      ],
+      "full_fixture_passes": 0,
+      "path": "tests/ui/functions-closures/nullable-pointer-opt-closures.rs",
+      "required_runtime_frontiers": [
+        "ordinary prelude/world/library source",
+        "general/non-Copy/generic/lifetime capture typing",
+        "genuine target ABI size/alignment/niche layout",
+        "actual source-slot ticket ownership publication",
+        "callable/Fn/activation/return/drop/output producers"
+      ],
+      "runtime_contract_passes": 0,
+      "sha256": "0bb621cb0a2fd06c2156b00405801cfdb95198059435c0af9f6bfc13d8dfad6a",
+      "status": "unexecuted"
+    }
+  ],
+  "component_profiles": [
+    2015,
+    2018,
+    2021,
+    2024
+  ],
+  "component_profiles_are_upstream_configurations": false,
+  "diagnostic_declared_cases": 1,
+  "full_fixture_passes": 0,
+  "runtime_contract_passes": 0,
+  "runtime_declared_cases": 4,
+  "schema_version": 1
+}

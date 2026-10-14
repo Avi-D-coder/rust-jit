@@ -1,0 +1,26 @@
+--- a/crates/lrr/src/runtime/shape.rs
++++ b/crates/lrr/src/runtime/shape.rs
+@@ -269,7 +269,14 @@
+         match key {
+             TypeKey::Primitive(primitive) => Some(primitive.id()),
+             TypeKey::Tuple(members) if members.is_empty() => Some(TypeId(1)),
+-            _ => self.by_key.get(key).copied(),
++            TypeKey::ClosureEnvironment(_)
++            | TypeKey::Ref { .. }
++            | TypeKey::Slice { .. }
++            | TypeKey::Array { .. }
++            | TypeKey::Tuple(_)
++            | TypeKey::Nominal { .. }
++            | TypeKey::Function { .. }
++            | TypeKey::Facade { .. } => self.by_key.get(key).copied(),
+         }
+     }
+     pub fn intern(&mut self, key: TypeKey) -> Result<TypeId, Diagnostic> {
+@@ -604,3 +611,7 @@
+ 
+ #[path = "closure_layout_key.rs"]
+ pub mod closure_layout;
++
++#[path = "closure_shape_consumers.rs"]
++mod closure_consumers;
++pub(crate) use closure_consumers::closure_frontier;

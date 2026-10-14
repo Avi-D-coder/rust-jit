@@ -1,0 +1,9 @@
+--- a/crates/lrr/src/engine/closure_frame_publication_tests.rs
++++ b/crates/lrr/src/engine/closure_frame_publication_tests.rs
+@@ -500,3 +500,6 @@
+ 
+ #[path = "closure_lifecycle_tests.rs"]
+ mod lifecycle;
++
++#[path = "closure_enum_consumer_tests.rs"]
++mod enum_consumers;

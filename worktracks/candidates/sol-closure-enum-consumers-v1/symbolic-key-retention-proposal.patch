@@ -1,0 +1,12 @@
+--- a/crates/lrr/src/traits/closure_identity.rs
++++ b/crates/lrr/src/traits/closure_identity.rs
+@@ -42,6 +42,9 @@
+             edition,
+         })
+     }
++    pub(crate) fn retained_bytes(&self) -> usize {
++        std::mem::size_of::<Self>()
++    }
+     pub(crate) fn validate(&self) -> Result<(), Diagnostic> {
+         if !matches!(self.edition, 2015 | 2018 | 2021 | 2024) {
+             return Err(Diagnostic::new(

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "task": "WT04 ClosureKey/TyTerm::Closure and dedicated closure environment enum-consumer migration",
+  "invariant": "Static traversal/measurement/encoding/substitution/binder and unification preserve actual original ClosureKey atom identity and typed context, without synthesizing source identity or trait/runtime authority. Runtime ordinary calls/copy/constructors/projections/cleanup/native ABI reject absent physical/source permissions explicitly. Existing stable tags/domains unchanged, new tags15/8 retained. Future unknown variants cannot be accepted by wildcard atomic-success paths.",
+  "registered_before_production": true,
+  "controls": [
+    "genuine closure key remains unchanged under simultaneous substitution, binder shift and instantiation",
+    "distinct original site/body/source revision identities cannot unify",
+    "inference binds source atom without Fn/Copy/descriptor grant",
+    "pure whole-term closure detection visits every composite with bounded work",
+    "existing stable tag/domain map unchanged and new closure tags explicit",
+    "normal call/return/generic environment without closure ownership permission rejects",
+    "copy/structural construction/projection/cleanup consumers never disguise closure as tuple or nominal",
+    "source identity/environment/session and cold body remain preserved"
+  ],
+  "execution": "all Rust/guest/original controls unexecuted"
+}

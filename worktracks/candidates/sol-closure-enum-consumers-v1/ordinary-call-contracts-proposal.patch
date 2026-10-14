@@ -1,0 +1,40 @@
+--- a/crates/lrr/src/frontend/call_contracts.rs
++++ b/crates/lrr/src/frontend/call_contracts.rs
+@@ -501,6 +501,7 @@
+ impl PreparedCallContracts {
+     /// Validate the reached return source identity and bind an unbound result parameter.
+     pub fn bind_return_parameter(&mut self, actual: &ArgumentType) -> Result<(), Diagnostic> {
++        closure_transfer_guard(actual)?;
+         if actual.descriptor.0 == 0 || contains_transaction_term(&actual.source) {
+             return Err(fault(
+                 "LRR-E-CALL-CONTEXT",
+@@ -782,6 +783,7 @@
+         .chain(explicit.iter().map(|(_, actual)| actual))
+         .chain(result_hint)
+     {
++        closure_transfer_guard(actual)?;
+         view_bytes = view_bytes
+             .checked_add(actual.source.heap_bytes().ok_or_else(|| {
+                 fault(
+@@ -1018,7 +1020,12 @@
+             TyTerm::Ref(_, _, term) | TyTerm::Array(term, _) | TyTerm::Slice(term) => {
+                 stack.push(term)
+             }
+-            _ => {}
++            TyTerm::Closure(_)
++            | TyTerm::Dyn(_)
++            | TyTerm::Bound { .. }
++            | TyTerm::Primitive(_)
++            | TyTerm::Param(_)
++            | TyTerm::Never => {}
+         }
+     }
+     false
+@@ -1033,3 +1040,7 @@
+             ))
+     )
+ }
++
++#[path = "closure_contract_consumers.rs"]
++mod closure_consumers;
++pub(crate) use closure_consumers::closure_transfer_guard;

@@ -1,0 +1,68 @@
+{
+  "scope": "frozen source-only proposals, not assembled or runtime accepted",
+  "patches": [
+    {
+      "path": "acceptance-module-proposal.patch",
+      "sha256": "68b44240cdcb7ed15aa3b3fb37a04730e46f002a892264b9ff9880f7c484139d"
+    },
+    {
+      "path": "acceptance.patch",
+      "sha256": "7c32635961a828be2fa15adf3a7c36d7d0a4b5af73ae5a2aa2e84bf7cf4fedf6"
+    },
+    {
+      "path": "copy-consumers-proposal.patch",
+      "sha256": "13a23d6055353da39df785df78f26dc97bb80c488fd80b41ccc73d9aaf4b09a7"
+    },
+    {
+      "path": "ordinary-call-contracts-proposal.patch",
+      "sha256": "e52797379a41aea3005fcfb0d4b47cb324b271e917cb9415ac9090c446845efc"
+    },
+    {
+      "path": "ordinary-call-frontier-leaf.patch",
+      "sha256": "211b59b8076fbe56b0294b2cb932cf4fc75610adab2ccc7efb90d5ec93b6da2d"
+    },
+    {
+      "path": "ordinary-frame-environment-proposal.patch",
+      "sha256": "46fc210b20fd842c60d9681358e10c0cda45c4799d61d6f170ac06f3b3fc0794"
+    },
+    {
+      "path": "shape-frontier-leaf.patch",
+      "sha256": "eea6270bd5faf4a21c18b498f77e4f062a1d74dafb32e84a235242641378580d"
+    },
+    {
+      "path": "shape-registry-consumers-proposal.patch",
+      "sha256": "b0dd62608d2559ae62e27e4c47d1bfb599be71b0b3b4604885ddb51c13a58858"
+    },
+    {
+      "path": "source-owned-arc-proposal.patch",
+      "sha256": "5941bfc1314226776dae8c416acd4feed0551d6dde32f48d9ff4593a58582997"
+    },
+    {
+      "path": "store-consumers-proposal.patch",
+      "sha256": "ec5a4b38959ce64d23beeeb444f4498e4c8a3387bda84c5151082f0a650a1dea"
+    },
+    {
+      "path": "substitution-binder-proposal.patch",
+      "sha256": "8de9e580725e38176c166b1795308241453d72686c70b31db7cbadd7515737ca"
+    },
+    {
+      "path": "symbolic-key-retention-proposal.patch",
+      "sha256": "a8567583e857f5f36049408001af5343b81c1f64b6d8d8853a5e256fa2fa09e8"
+    },
+    {
+      "path": "symbolic-observation-leaf.patch",
+      "sha256": "81bc05f32e561f3d8936ffebf482de7c0c9bd97c3229ead6cfe6e8ad41d5a58e"
+    },
+    {
+      "path": "symbolic-term-consumers-proposal.patch",
+      "sha256": "842f4f3288190514422ec27c18850103a26b651ecac5b9ce96289bcb15ec702d"
+    },
+    {
+      "path": "unifier-consumers-proposal.patch",
+      "sha256": "3a224661ecad9a4eb5d20943d162a61c4ea56925bd8aedbd65c927afafa22b0d"
+    }
+  ],
+  "Rust_controls": 18,
+  "Rust_controls_executed": 0,
+  "full_stock_fixture_passes": 0
+}

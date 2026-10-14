@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/rust-lang/rust",
+  "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "license": "MIT OR Apache-2.0",
+  "scope": "Selected unchanged official UI cases; no complete-suite or execution claim",
+  "files": [
+    {
+      "path": "COPYRIGHT",
+      "git_blob": "4dad74f234eaaaa3c311ca031216e16fc9c4e940",
+      "sha256": "172020dbfd5b53a226dfde77616190a48dcff519b0bc0e6deb91a8450782c4af",
+      "bytes": 1571
+    },
+    {
+      "path": "LICENSE-APACHE",
+      "git_blob": "1b5ec8b78e237b5c3b3d812a7c0a6589d0f7161d",
+      "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "bytes": 9723
+    },
+    {
+      "path": "LICENSE-MIT",
+      "git_blob": "a2070c4be7acd5316f8d0357ca3c12419a2f3c62",
+      "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "bytes": 1068
+    },
+    {
+      "path": "tests/ui/closures/2229_closure_analysis/preserve_field_drop_order2.rs",
+      "git_blob": "a771b815702ad5d3a0a010433fbe7a802187d49b",
+      "sha256": "cf04c283c0e31aa1915c2fba0182c023ffee49c3a46bf4b8146bb374d3fe7b29",
+      "bytes": 1098
+    },
+    {
+      "path": "tests/ui/closures/2229_closure_analysis/preserve_field_drop_order2.twenty_eighteen.run.stdout",
+      "git_blob": "557d047c1d52431109af4bb2240c127cc083ceae",
+      "sha256": "cc1baaeb1d098d845b258160bf1e93b896436e9f2954b75bbe5ea425fc1797a2",
+      "bytes": 314
+    },
+    {
+      "path": "tests/ui/closures/2229_closure_analysis/preserve_field_drop_order2.twenty_twentyone.run.stdout",
+      "git_blob": "557d047c1d52431109af4bb2240c127cc083ceae",
+      "sha256": "cc1baaeb1d098d845b258160bf1e93b896436e9f2954b75bbe5ea425fc1797a2",
+      "bytes": 314
+    },
+    {
+      "path": "tests/ui/closures/2229_closure_analysis/run_pass/move_closure.rs",
+      "git_blob": "625a6f9592ab6eee6c2e766bfc7560b6d9c2375f",
+      "sha256": "17c768bf782919f31b74f088654d3623360cc9cb34f65dfb5af13771faf74c6d",
+      "bytes": 1834
+    },
+    {
+      "path": "tests/ui/closures/capture-unsized-by-move.rs",
+      "git_blob": "72f6a5501e83ce202ed97dfd352e078a336f9f08",
+      "sha256": "75498290092c3816c2ba0d11b7068ca81064b58d4bc6a1a9e0839db004effaa8",
+      "bytes": 280
+    },
+    {
+      "path": "tests/ui/closures/capture-unsized-by-move.stderr",
+      "git_blob": "686bbab883951f20e67eb3eb3983f39fb2541eef",
+      "sha256": "cf1ed52aeca1c0f7d244cab6cb4cb471b2afa94d520d1f97c28548700b409462",
+      "bytes": 631
+    },
+    {
+      "path": "tests/ui/closures/drop-glue-for-closure-with-captures.rs",
+      "git_blob": "2ccf4c31a995eab93b30c0d962a439624c238f69",
+      "sha256": "af9f7d8b4a501a2371c84280cc261d3a84376eafe8fa254016fb70ee54bccef9",
+      "bytes": 387
+    },
+    {
+      "path": "tests/ui/functions-closures/nullable-pointer-opt-closures.rs",
+      "git_blob": "2cafe1b7aba8a91a5a28f1a3ce4f405e5a03c684",
+      "sha256": "0bb621cb0a2fd06c2156b00405801cfdb95198059435c0af9f6bfc13d8dfad6a",
+      "bytes": 1245
+    }
+  ],
+  "cases": [
+    {
+      "path": "tests/ui/closures/2229_closure_analysis/preserve_field_drop_order2.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ check-run-results",
+        "//@ revisions: twenty_eighteen twenty_twentyone",
+        "//@ [twenty_eighteen] edition: 2018",
+        "//@ [twenty_twentyone] edition: 2021"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/closures/2229_closure_analysis/run_pass/move_closure.rs",
+      "directives": [
+        "//@ edition:2021",
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/closures/capture-unsized-by-move.rs",
+      "directives": [
+        "//@ compile-flags: --crate-type=lib"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/closures/drop-glue-for-closure-with-captures.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/functions-closures/nullable-pointer-opt-closures.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    }
+  ]
+}

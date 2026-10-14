@@ -1,0 +1,14 @@
+--- /dev/null
++++ b/crates/lrr/src/frontend/closure_contract_consumers.rs
+@@ -0,0 +1,11 @@
++//! Child of ordinary call contracts: source identity is not owner/call permission.
++use super::*;
++pub(crate) fn closure_transfer_guard(actual: &ArgumentType) -> Result<(), Diagnostic> {
++    if actual.source.contains_closure()? {
++        return Err(fault(
++            "LRR-E-CLOSURE-CALL-OWNERSHIP",
++            "ordinary call/return requires source-selected closure ownership transfer, live capture/source agreement and callable activation; a concrete descriptor/source atom is insufficient",
++        ));
++    }
++    Ok(())
++}

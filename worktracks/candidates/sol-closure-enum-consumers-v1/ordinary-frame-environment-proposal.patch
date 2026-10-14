@@ -1,0 +1,26 @@
+--- a/crates/lrr/src/vm/context.rs
++++ b/crates/lrr/src/vm/context.rs
+@@ -95,6 +95,11 @@
+             .chain(contracts.source_result.as_ref())
+             .chain(&contracts.source_parameters)
+         {
++            if source.contains_closure()? {
++                return Err(invalid(
++                    "ordinary frame template containing closure needs actual owner/call/activation integration",
++                ));
++            }
+             source.validate_opaque_shape().map_err(|_| {
+                 invalid("retained source template has invalid opaque shape or exceeds structural limits")
+             })?;
+@@ -148,6 +153,11 @@
+             let source_bytes = source
+                 .heap_bytes()
+                 .ok_or_else(|| invalid("substitution term exceeds checked structural limits"))?;
++            if source.contains_closure()? {
++                return Err(invalid(
++                    "closure substitution cannot enter ordinary frame without actual closure ownership/activation join",
++                ));
++            }
+             source.validate_opaque_shape().map_err(|_| {
+                 invalid(
+                     "symbolic substitution has invalid opaque shape or exceeds structural limits",

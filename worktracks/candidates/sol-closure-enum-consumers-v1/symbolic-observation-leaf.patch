@@ -1,0 +1,49 @@
+--- /dev/null
++++ b/crates/lrr/src/traits/closure_term_consumers.rs
+@@ -0,0 +1,46 @@
++//! Explicit bounded observation of closure atoms in actual symbolic term trees.
++//! This observation grants no trait, source-world, runtime or callable permission.
++use super::*;
++impl TyTerm {
++    pub(crate) fn contains_closure(&self) -> Result<bool, crate::core::diagnostic::Diagnostic> {
++        self.validate_opaque_shape()?;
++        let (nodes, _) = self.measure().ok_or_else(crate::runtime::arena::resource)?;
++        let mut stack = Vec::new();
++        stack
++            .try_reserve_exact(nodes)
++            .map_err(|_| crate::runtime::arena::resource())?;
++        stack.push(self);
++        while let Some(term) = stack.pop() {
++            match term {
++                Self::Closure(_) => return Ok(true),
++                Self::Projection(key) => {
++                    stack.push(&key.trait_ref.self_ty);
++                    stack.extend(key.arguments().filter_map(|a| match a {
++                        GenericArg::Type(t) => Some(t),
++                        GenericArg::Const(_) | GenericArg::Region(_) => None,
++                    }));
++                }
++                Self::Function(f) => {
++                    stack.extend(&f.value.parameters);
++                    stack.push(&f.value.result);
++                }
++                Self::Tuple(fields) => stack.extend(fields),
++                Self::Nominal(_, args) | Self::Opaque(_, args) => {
++                    stack.extend(args.iter().filter_map(|a| match a {
++                        GenericArg::Type(t) => Some(t),
++                        GenericArg::Const(_) | GenericArg::Region(_) => None,
++                    }))
++                }
++                Self::Array(t, _) | Self::Slice(t) | Self::Ref(_, _, t) => stack.push(t),
++                Self::Dyn(_)
++                | Self::Placeholder(_)
++                | Self::Bound { .. }
++                | Self::Primitive(_)
++                | Self::Param(_)
++                | Self::Infer(_)
++                | Self::Never => {}
++            }
++        }
++        Ok(false)
++    }
++}

@@ -1,0 +1,52 @@
+--- a/crates/lrr/src/frontend/closure_type_source.rs
++++ b/crates/lrr/src/frontend/closure_type_source.rs
+@@ -36,7 +36,7 @@
+ }
+ pub(crate) struct SourceType {
+     kind: SourceKind,
+-    key: ClosureKey,
++    key: std::sync::Arc<ClosureKey>,
+     captures: Vec<SourceCapture>,
+ }
+ fn fail(m: &str) -> Diagnostic {
+@@ -100,6 +100,19 @@
+                 });
+             }
+             let key = ClosureKey::capture(&kind)?;
++            kind.metadata_bytes()?
++                .checked_add(std::mem::size_of::<Self>())
++                .and_then(|n| n.checked_add(key.retained_bytes()))
++                .and_then(|n| {
++                    n.checked_add(
++                        captures
++                            .capacity()
++                            .checked_mul(std::mem::size_of::<SourceCapture>())?,
++                    )
++                })
++                .filter(|n| *n <= 32 * 1024 * 1024)
++                .ok_or_else(|| fail("source-owned closure key admission budget"))?;
++            let key = std::sync::Arc::new(key);
+             let result = Self {
+                 kind,
+                 key,
+@@ -117,10 +130,10 @@
+         &self.kind
+     }
+     pub(crate) fn key(&self) -> ClosureKey {
+-        self.key
++        *self.key
+     }
+     pub(crate) fn symbolic(&self) -> TyTerm {
+-        TyTerm::Closure(self.key)
++        TyTerm::Closure(std::sync::Arc::clone(&self.key))
+     }
+     pub(crate) fn captures(&self) -> &[SourceCapture] {
+         &self.captures
+@@ -129,6 +142,7 @@
+         self.kind
+             .metadata_bytes()?
+             .checked_add(std::mem::size_of::<Self>())
++            .and_then(|n| n.checked_add(self.key.retained_bytes()))
+             .and_then(|n| {
+                 n.checked_add(
+                     self.captures

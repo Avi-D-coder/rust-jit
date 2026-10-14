@@ -1,0 +1,37 @@
+--- a/crates/lrr/src/traits/subst.rs
++++ b/crates/lrr/src/traits/subst.rs
+@@ -242,7 +242,18 @@
+             budget,
+             inst,
+         ),
+-        _ => Ok(term.clone()),
++        TyTerm::Closure(key) => {
++            key.validate()?;
++            budget.charge(0, key.retained_bytes())?;
++            Ok(TyTerm::Closure(std::sync::Arc::clone(key)))
++        }
++        TyTerm::Bound { .. }
++        | TyTerm::Dyn(_)
++        | TyTerm::Placeholder(_)
++        | TyTerm::Primitive(_)
++        | TyTerm::Param(_)
++        | TyTerm::Infer(_)
++        | TyTerm::Never => Ok(term.clone()),
+     }
+ }
+ // Keep recursive dispatch results direct and large branch storage separate.
+@@ -549,7 +560,13 @@
+             region(r, scopes)?;
+             closed(t, scopes, depth + 1)
+         }
+-        _ => Ok(()),
++        TyTerm::Closure(key) => key.validate(),
++        TyTerm::Dyn(_)
++        | TyTerm::Placeholder(_)
++        | TyTerm::Primitive(_)
++        | TyTerm::Param(_)
++        | TyTerm::Infer(_)
++        | TyTerm::Never => Ok(()),
+     }
+ }
+ 

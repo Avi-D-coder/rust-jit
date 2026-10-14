@@ -1,0 +1,42 @@
+--- a/crates/lrr/src/runtime/cell_aggregate_copy.rs
++++ b/crates/lrr/src/runtime/cell_aggregate_copy.rs
+@@ -45,13 +45,28 @@
+         let value = self.admit_move(source)?;
+         let ty = TypeId(value.type_id);
+         let descriptor = self.types.descriptor(ty)?;
++        if matches!(descriptor.key.as_ref(), TypeKey::ClosureEnvironment(_)) {
++            return Err(crate::runtime::shape::closure_frontier(
++                "aggregate Copy of dedicated closure environment",
++            ));
++        }
+         if value.kind != 8 || descriptor.copy != CopyStatus::Copy {
+             return Err(requires_activation());
+         }
+         let count = match descriptor.key.as_ref() {
+             TypeKey::Tuple(fields) => fields.len(),
+             TypeKey::Array { len, .. } => usize::try_from(*len).map_err(|_| resource())?,
+-            _ => return Err(requires_activation()),
++            TypeKey::ClosureEnvironment(_) => {
++                return Err(crate::runtime::shape::closure_frontier(
++                    "closure aggregate Copy member inventory",
++                ));
++            }
++            TypeKey::Primitive(_)
++            | TypeKey::Ref { .. }
++            | TypeKey::Slice { .. }
++            | TypeKey::Nominal { .. }
++            | TypeKey::Function { .. }
++            | TypeKey::Facade { .. } => return Err(requires_activation()),
+         };
+         let (_, storage) = self.place_object(source)?;
+         if storage.fields.len() != count
+@@ -111,6 +126,9 @@
+             {
+                 Ok(*element)
+             }
++            TypeKey::ClosureEnvironment(_) => Err(crate::runtime::shape::closure_frontier(
++                "closure aggregate Copy member type",
++            )),
+             _ => Err(ownership()),
+         }
+     }

@@ -1,0 +1,310 @@
+--- /dev/null
++++ b/crates/lrr/src/engine/closure_enum_consumer_tests.rs
+@@ -0,0 +1,307 @@
++//! Genuine source/key/shape component regressions, not whole upstream execution.
++use super::*;
++use crate::{
++    core::digest::{StableEncode, StableEncoder},
++    traits::{
++        subst::{self, Substitution},
++        term::{Binder, BoundKind, GenericArg, InferVarKey, ParamKey, TyTerm},
++        unify::Unifier,
++    },
++};
++fn genuine(
++    text: &str,
++) -> (
++    World,
++    Frame,
++    GuestStore,
++    TyTerm,
++    crate::runtime::shape::TypeId,
++) {
++    let mut w = world(text, 2024);
++    let p = plan(&mut w);
++    let (frame, mut store) = reached(&p, &w);
++    let mut instance = typed(&mut w, p, &frame, &mut store);
++    let (term, descriptor) = instance.runtime_view(&store).unwrap();
++    while !matches!(
++        instance.cleanup_next(&mut store).unwrap(),
++        CleanupStep::Complete
++    ) {}
++    (w, frame, store, term, descriptor)
++}
++#[test]
++fn closure_source_atom_survives_substitution_shift_and_empty_instantiation() {
++    let (_, _, _, t, _) = genuine("#![no_implicit_prelude] fn main(){let f=||{};}");
++    let mut substitution = Substitution::default();
++    let p = ParamKey {
++        definition: Digest::of_bytes(b"ordinary generic parameter"),
++        ordinal: 0,
++    };
++    substitution.insert(p, GenericArg::Type(t.clone())).unwrap();
++    assert_eq!(substitution.apply(&TyTerm::Param(p)).unwrap(), t);
++    assert_eq!(substitution.apply(&t).unwrap(), t);
++    assert_eq!(subst::shift(&t, 9, 0).unwrap(), t);
++    assert!(subst::validate_closed(&t).is_ok());
++}
++#[test]
++fn closure_atoms_are_exact_source_identity_not_signature_or_capture_layout_equality() {
++    let (_, _, _, a, _) = genuine("#![no_implicit_prelude] fn main(){let f=||{};}");
++    let (_, _, _, b, _) = genuine("#![no_implicit_prelude] fn main(){let g=||{};}");
++    assert_ne!(a, b);
++    assert_ne!(a.fingerprint(), b.fingerprint());
++    let mut u = Unifier::new(Digest::of_bytes(b"closure source equality only"));
++    assert!(u.unify(&a, &a).is_ok());
++    assert!(u.unify(&a, &b).is_err());
++}
++#[test]
++fn closure_source_unification_retains_atom_without_callable_or_copy_grant() {
++    let (_, _, _, t, _) = genuine("#![no_implicit_prelude] fn main(){let f=||{};}");
++    let transaction = Digest::of_bytes(b"closure source unification");
++    let variable = InferVarKey {
++        transaction,
++        ordinal: 0,
++    };
++    let mut u = Unifier::new(transaction);
++    u.unify(&TyTerm::Infer(variable), &t).unwrap();
++    assert_eq!(u.binding(variable), Some(&t));
++}
++#[test]
++fn closure_detection_visits_array_reference_tuple_function_and_nominal_arguments() {
++    let (_, _, _, t, _) = genuine("#![no_implicit_prelude] fn main(){let f=||{};}");
++    let nested = TyTerm::Function(Box::new(Binder {
++        variables: vec![BoundKind::Type],
++        value: crate::traits::term::FunctionSignature {
++            parameters: vec![TyTerm::Tuple(vec![TyTerm::Ref(
++                crate::traits::term::RegionTerm::Static,
++                false,
++                Box::new(TyTerm::Array(
++                    Box::new(t.clone()),
++                    crate::traits::term::ConstTerm::Value(0),
++                )),
++            )])],
++            result: Box::new(TyTerm::Nominal(
++                Digest::of_bytes(b"genuine metadata container identity"),
++                vec![GenericArg::Type(t)],
++            )),
++        },
++    }));
++    assert!(nested.contains_closure().unwrap());
++    assert!(
++        !TyTerm::Primitive(PrimitiveType::Usize)
++            .contains_closure()
++            .unwrap()
++    );
++}
++#[test]
++fn closure_stable_encoding_has_its_own_retained_tag_and_key_domain() {
++    let (_, _, _, t, _) = genuine("#![no_implicit_prelude] fn main(){let f=||{};}");
++    let TyTerm::Closure(key) = t else { panic!() };
++    let mut e = StableEncoder::new(TyTerm::DOMAIN);
++    e.u32(15);
++    e.record(key.as_ref());
++    assert_eq!(
++        TyTerm::Closure(std::sync::Arc::clone(&key)).fingerprint(),
++        e.finish()
++    );
++    assert_ne!(
++        TyTerm::Closure(std::sync::Arc::clone(&key)).fingerprint(),
++        TyTerm::Tuple(vec![]).fingerprint()
++    );
++}
++#[test]
++fn dedicated_descriptor_never_derives_tuple_copy_or_native_layout_authority() {
++    let (_, _, s, _, id) = genuine("#![no_implicit_prelude] fn main(){let f=||{};}");
++    let d = s.type_descriptor(id).unwrap();
++    assert_eq!(
++        d.shape,
++        crate::runtime::shape::ShapeCategory::ClosureEnvironment
++    );
++    assert_eq!(d.copy, crate::runtime::shape::CopyStatus::Deferred);
++    assert!(matches!(
++        d.key.as_ref(),
++        crate::runtime::shape::TypeKey::ClosureEnvironment(_)
++    ));
++}
++#[test]
++fn transaction_scan_keeps_concrete_closure_distinct_from_inference_frontier() {
++    let (_, _, _, t, _) = genuine("#![no_implicit_prelude] fn main(){let f=||{};}");
++    assert!(!crate::frontend::call_contracts::contains_transaction_term(
++        &t
++    ));
++    let transaction = Digest::of_bytes(b"explicit transaction control");
++    assert!(crate::frontend::call_contracts::contains_transaction_term(
++        &TyTerm::Tuple(vec![
++            t,
++            TyTerm::Infer(InferVarKey {
++                transaction,
++                ordinal: 0
++            })
++        ])
++    ));
++}
++#[test]
++fn pure_substitution_preserves_closure_key_inside_higher_ranked_binder() {
++    let (_, _, _, t, _) = genuine("#![no_implicit_prelude] fn main(){let f=||{};}");
++    let f = TyTerm::Function(Box::new(Binder {
++        variables: vec![BoundKind::Type],
++        value: crate::traits::term::FunctionSignature {
++            parameters: vec![t.clone(), TyTerm::Bound { depth: 0, index: 0 }],
++            result: Box::new(t),
++        },
++    }));
++    assert_eq!(Substitution::default().apply(&f).unwrap(), f);
++    assert_eq!(subst::shift(&f, 1, 0).unwrap(), f);
++    assert!(subst::validate_closed(&f).is_ok());
++}
++#[test]
++fn symbolic_runtime_contract_guard_refuses_nested_closure_views_before_mutation() {
++    let (_, _, _, t, id) = genuine("#![no_implicit_prelude] fn main(){let f=||{};}");
++    let arg = crate::frontend::call_contracts::ArgumentType {
++        source: TyTerm::Tuple(vec![t]),
++        descriptor: id,
++    };
++    assert_eq!(
++        crate::frontend::call_contracts::closure_transfer_guard(&arg)
++            .unwrap_err()
++            .code,
++        "LRR-E-CLOSURE-CALL-OWNERSHIP"
++    );
++}
++#[test]
++fn closed_closure_measurement_accounts_source_owned_shared_key_retention() {
++    let (_, _, _, t, _) = genuine("#![no_implicit_prelude] fn main(){let f=||{};}");
++    assert_eq!(
++        t.heap_bytes(),
++        Some(std::mem::size_of::<
++            crate::traits::closure_identity::ClosureKey,
++        >())
++    );
++    assert!(t.validate_opaque_shape().is_ok());
++    assert!(subst::validate_closed(&TyTerm::Tuple(vec![t])).is_ok());
++}
++
++#[test]
++fn scalar_literal_construction_keeps_existing_numeric_record_materialization() {
++    let mut s = GuestStore::new(1, 10000, 10_000_000).unwrap();
++    let guard = s.begin_construction(&[TypeId(6)]).unwrap();
++    let ticket = s.integer_literal(false, 1, "1".into()).unwrap();
++    assert_eq!(s.peek_ticket(ticket).unwrap().type_id, 0);
++    s.construction_push(guard, 0, ticket).unwrap();
++    let ty = s
++        .intern_type(crate::runtime::shape::TypeKey::Tuple(Box::new([TypeId(6)])))
++        .unwrap();
++    let ticket = s.commit_construction(guard, ty).unwrap();
++    while let Some(field) = s.aggregate_cleanup_next(ticket).unwrap() {
++        s.discard(field).unwrap();
++    }
++    s.discard(ticket).unwrap();
++}
++#[test]
++fn empty_binder_instantiation_preserves_genuine_original_closure_identity() {
++    let (_, _, _, t, _) = genuine("#![no_implicit_prelude] fn main(){let f=||{};}");
++    let binder = Binder {
++        variables: vec![],
++        value: t.clone(),
++    };
++    assert_eq!(
++        subst::instantiate_binder(&binder, Digest::of_bytes(b"closure binder demand"), 1).unwrap(),
++        t
++    );
++}
++#[test]
++fn owning_editions_remain_distinct_actual_closure_keys() {
++    let mut keys = vec![];
++    for edition in [2015, 2018, 2021, 2024] {
++        let mut w = world("#![no_implicit_prelude] fn main(){let f=||{};}", edition);
++        let p = plan(&mut w);
++        let (f, mut s) = reached(&p, &w);
++        let mut v = typed(&mut w, p, &f, &mut s);
++        let (t, _) = v.runtime_view(&s).unwrap();
++        assert!(t.validate_opaque_shape().is_ok());
++        assert!(!keys.contains(&t));
++        keys.push(t);
++        v.cleanup_next(&mut s).unwrap();
++    }
++}
++#[test]
++fn closure_projection_and_owning_read_frontiers_preserve_actual_published_owner() {
++    let mut w = world("#![no_implicit_prelude] fn main(){let f=||{};}", 2024);
++    let p = plan(&mut w);
++    let (mut f, mut s) = reached(&p, &w);
++    let v = typed(&mut w, p, &f, &mut s);
++    let v = pending(&mut w, v, &mut f, &s);
++    let r = publish(&mut w, v, &mut f, &mut s);
++    let cell = f.cell(r.slot()).unwrap();
++    let before = s.owner_inventory_for_test();
++    assert_eq!(
++        s.admit_owning_read(cell).unwrap_err().code,
++        "LRR-E-CLOSURE-REPRESENTATION"
++    );
++    assert!(
++        s.project_tuple(&crate::runtime::place::Place::cell(cell), 0)
++            .is_err()
++    );
++    assert_eq!(before, s.owner_inventory_for_test());
++    f.cleanup_published_closure(&r, &mut s).unwrap();
++}
++
++#[test]
++fn aggregate_move_admission_refuses_before_consuming_actual_closure_slot_owner() {
++    let mut w = world("#![no_implicit_prelude] fn main(){let f=||{};}", 2024);
++    let p = plan(&mut w);
++    let (mut f, mut s) = reached(&p, &w);
++    let v = typed(&mut w, p, &f, &mut s);
++    let (_, descriptor) = v.runtime_view(&s).unwrap();
++    let v = pending(&mut w, v, &mut f, &s);
++    let r = publish(&mut w, v, &mut f, &mut s);
++    let cell = f.cell(r.slot()).unwrap();
++    let guard = s.begin_construction(&[descriptor]).unwrap();
++    let before = s.owner_inventory_for_test();
++    assert_eq!(
++        s.construction_move_from(guard, 0, cell).unwrap_err().code,
++        "LRR-E-CLOSURE-REPRESENTATION"
++    );
++    assert_eq!(before, s.owner_inventory_for_test());
++    f.cleanup_published_closure(&r, &mut s).unwrap();
++    assert!(s.construction_cleanup_next(guard).unwrap().is_none());
++}
++
++#[test]
++fn genuine_source_type_publishes_shared_arc_key_without_reallocating_on_view_clone() {
++    let mut w = world("#![no_implicit_prelude] fn main(){let f=||{};}", 2024);
++    let p = plan(&mut w);
++    let (f, mut s) = reached(&p, &w);
++    let mut v = typed(&mut w, p, &f, &mut s);
++    let a = v.publication_source().symbolic();
++    let b = v.publication_source().symbolic();
++    let (TyTerm::Closure(a), TyTerm::Closure(b)) = (&a, &b) else {
++        panic!()
++    };
++    assert!(std::sync::Arc::ptr_eq(a, b));
++    let cloned = TyTerm::Closure(std::sync::Arc::clone(a));
++    let TyTerm::Closure(c) = cloned else { panic!() };
++    assert!(std::sync::Arc::ptr_eq(a, &c));
++    assert!(
++        v.publication_source().metadata_bytes().unwrap()
++            >= std::mem::size_of::<crate::traits::closure_identity::ClosureKey>()
++    );
++    v.cleanup_next(&mut s).unwrap();
++}
++#[test]
++fn substitution_arc_clone_preserves_allocation_and_key_contents_without_copy_permission() {
++    let (_, _, _, t, _) = genuine("#![no_implicit_prelude] fn main(){let f=||{};}");
++    let copied = Substitution::default().apply(&t).unwrap();
++    let (TyTerm::Closure(a), TyTerm::Closure(b)) = (&t, &copied) else {
++        panic!()
++    };
++    assert!(std::sync::Arc::ptr_eq(a, b));
++    assert_eq!(t.fingerprint(), copied.fingerprint());
++}
++#[test]
++fn independent_symbolic_owner_accounts_retained_key_after_genuine_source_owner_retires() {
++    let (_, _, _, t, _) = genuine("#![no_implicit_prelude] fn main(){let f=||{};}");
++    let bytes = std::mem::size_of::<crate::traits::closure_identity::ClosureKey>();
++    assert_eq!(t.heap_bytes(), Some(bytes));
++    let nested = TyTerm::Tuple(vec![t.clone(), t]);
++    assert!(nested.heap_bytes().unwrap() >= 2 * bytes);
++    assert!(nested.validate_opaque_shape().is_ok());
++}

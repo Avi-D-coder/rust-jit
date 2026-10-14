@@ -1,0 +1,136 @@
+--- a/crates/lrr/src/runtime/cell.rs
++++ b/crates/lrr/src/runtime/cell.rs
+@@ -399,6 +399,16 @@
+             return Err(ownership());
+         }
+         let value = self.peek_ticket(ticket)?;
++        if value.kind == 8
++            && matches!(
++                self.types.descriptor(TypeId(value.type_id))?.key.as_ref(),
++                TypeKey::ClosureEnvironment(_)
++            )
++        {
++            return Err(super::shape::closure_frontier(
++                "general aggregate capture transfer",
++            ));
++        }
+         let expected = self.construction_field_type(guard, index, value)?;
+         self.object_owner(value, ValueOwner::Ticket(ticket))?;
+         self.require_initialized_value(value)?;
+@@ -460,6 +470,17 @@
+             return Err(ownership());
+         }
+         let value = self.admit_move(source)?;
++        if value.kind == 8
++            && matches!(
++                self.types.descriptor(TypeId(value.type_id))?.key.as_ref(),
++                TypeKey::ClosureEnvironment(_)
++            )
++        {
++            return Err(super::shape::closure_frontier(
++                "general aggregate owning-field transfer before ticket extraction",
++            ));
++        }
++
+         let expected = self.construction_field_type(guard, index, value)?;
+         if matches!(value.kind, 11 | 12) {
+             let literal = self.literals.get(LiteralId::from_bits(value.payload))?;
+@@ -579,7 +600,16 @@
+                     && record.expected.iter().all(|ty| *ty == Some(*element))
+             }
+             TypeKey::Nominal { .. } => record.nominal.is_some_and(|(expected, _)| expected == ty),
+-            _ => false,
++            TypeKey::ClosureEnvironment(_) => {
++                return Err(super::shape::closure_frontier(
++                    "structural constructor completion",
++                ));
++            }
++            TypeKey::Primitive(_)
++            | TypeKey::Ref { .. }
++            | TypeKey::Slice { .. }
++            | TypeKey::Function { .. }
++            | TypeKey::Facade { .. } => false,
+         };
+         if !valid {
+             return Err(ownership());
+@@ -1173,6 +1203,12 @@
+                     Diagnostic::new("LRR-E-PLACE-FIELD", "tuple field is absent".into()).into(),
+                 );
+             }
++            TypeKey::ClosureEnvironment(_) => {
++                return Err(super::shape::closure_frontier(
++                    "tuple field projection of closure environment",
++                )
++                .into());
++            }
+             _ => {
+                 return Err(Diagnostic::new(
+                     "LRR-E-OP-TYPE",
+@@ -1203,6 +1239,12 @@
+                 )
+                 .into());
+             }
++            TypeKey::ClosureEnvironment(_) => {
++                return Err(super::shape::closure_frontier(
++                    "closure indexing/source trait selection",
++                )
++                .into());
++            }
+             _ => {
+                 return Err(Diagnostic::new(
+                     "LRR-E-UNSUPPORTED",
+@@ -1230,6 +1272,12 @@
+                 return Err(Diagnostic::new(
+                     "LRR-E-OP-TYPE",
+                     "intrinsic dereference requires a guest reference".into(),
++                )
++                .into());
++            }
++            TypeKey::ClosureEnvironment(_) => {
++                return Err(super::shape::closure_frontier(
++                    "closure dereference/source trait selection",
+                 )
+                 .into());
+             }
+@@ -1531,7 +1579,17 @@
+             8 if self.types.is_string(TypeId(value.type_id)) => Ok(CleanupInventory::Leaf),
+             8 => match self.types.descriptor(TypeId(value.type_id))?.key.as_ref() {
+                 TypeKey::Tuple(_) | TypeKey::Array { .. } => Ok(CleanupInventory::Fields),
+-                _ => Ok(CleanupInventory::NeedWitness(TypeId(value.type_id))),
++                TypeKey::ClosureEnvironment(_) => Err(super::shape::closure_frontier(
++                    "generic ticket cleanup without the actual closure ledger",
++                )),
++                TypeKey::Primitive(_)
++                | TypeKey::Ref { .. }
++                | TypeKey::Slice { .. }
++                | TypeKey::Nominal { .. }
++                | TypeKey::Function { .. }
++                | TypeKey::Facade { .. } => {
++                    Ok(CleanupInventory::NeedWitness(TypeId(value.type_id)))
++                }
+             },
+             _ => Err(invalid()),
+         }
+@@ -1805,7 +1863,11 @@
+                             }
+                             TypeKey::Tuple(_) | TypeKey::Array { .. } => storage.variant.is_none(),
+                             TypeKey::Nominal { .. } => storage.variant.is_some(),
+-                            _ => false,
++                            TypeKey::Primitive(_)
++                            | TypeKey::Ref { .. }
++                            | TypeKey::Slice { .. }
++                            | TypeKey::Function { .. }
++                            | TypeKey::Facade { .. } => false,
+                         } =>
+                     {
+                         Ok(())
+@@ -2416,6 +2478,9 @@
+         }
+         let descriptor = self.types.descriptor(TypeId(value.type_id))?;
+         match descriptor.key.as_ref() {
++            TypeKey::ClosureEnvironment(_) => Err(super::shape::closure_frontier(
++                "ordinary closure read/Copy/Move selection",
++            )),
+             TypeKey::Primitive(_) => {
+                 self.admit_copy(id)?;
+                 Ok(IntrinsicRead::CopyScalar)

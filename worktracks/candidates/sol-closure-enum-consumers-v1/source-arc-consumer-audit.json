@@ -1,0 +1,57 @@
+{
+  "constructor": {
+    "authority": "SourceType::produce checks actual SourceKind currentness/private ClosureKey capture and retained size, then Arc::new once; symbolic clones same Arc",
+    "path": "crates/lrr/src/frontend/closure_type_source.rs"
+  },
+  "contents_encoding": {
+    "domain": "lrr/v2/type-term",
+    "key_domain": "lrr/v1/original-closure-symbolic-type-key",
+    "path": "crates/lrr/src/traits/term.rs",
+    "projection": "e.record(key.as_ref()), never address/refcount",
+    "tag": 15
+  },
+  "missing": [
+    "captured/nonempty generic source contexts and type argument remapping",
+    "actual callable Fn/FnMut/FnOnce/activation/copy/move/return/replacement/ABI joins",
+    "actual Rust typechecking/strict lint and root dispatcher integration"
+  ],
+  "numeric_or_serialized_arc_authority": false,
+  "prior_unchanged_consumers": [
+    {
+      "behavior": "TyTerm::Closure(key) shape validation auto-dereferences Arc; source view clone Arc does not allocate",
+      "origin": "frozen lifecycle predecessor",
+      "path": "vm/frame.rs"
+    },
+    {
+      "behavior": "admitted plan/row source views clone the retained Arc after ticket transfer, no new key allocation",
+      "origin": "frozen lifecycle predecessor",
+      "path": "vm/frame_closure_publication.rs"
+    },
+    {
+      "behavior": "binding source and restored prior views Arc-clone existing admitted keys; source Type replays actual currentness",
+      "origin": "frozen lifecycle predecessor",
+      "path": "vm/frame_closure_lifecycle.rs"
+    },
+    {
+      "behavior": "wildcard Closure pattern remains shape admission component only",
+      "origin": "frozen type-layout predecessor",
+      "path": "engine/closure_typed_creation_tests.rs"
+    }
+  ],
+  "runtime_passes": 0,
+  "runtime_source_key": [
+    "runtime/closure_layout_key.rs keeps original ClosureKey contents as worker dedicated layout identity, not an Arc address",
+    "SourceType::key returns copied fixed source key for actual physical layout/currentness comparisons"
+  ],
+  "schema_version": 1,
+  "scope": "source review only, all Rust controls unexecuted",
+  "static_consumers": [
+    "traits/closure_term_consumers.rs",
+    "traits/subst.rs",
+    "traits/unify.rs",
+    "traits/term.rs",
+    "frontend/call_contracts.rs",
+    "frontend/closure_contract_consumers.rs",
+    "vm/context.rs"
+  ]
+}

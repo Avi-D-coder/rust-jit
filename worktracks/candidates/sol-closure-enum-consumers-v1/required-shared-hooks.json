@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "scope": "uncompiled exact proposed shared attachments",
+  "order": [
+    "apply frozen closure source/type/layout/publication/lifecycle prerequisites while preserving current canonical constant/session/test-owner changes",
+    "merge TyTerm Arc representation + original key payload accounting + genuine SourceType Arc factory together",
+    "merge bounded pure symbolic consumers and ordinary call/GenericEnv typed frontier hooks",
+    "merge dedicated shape/store/copy frontier hooks with actual same-frame closure ledger dispatch from lifecycle predecessor",
+    "attach proposed component controls; sole edition worker performs actual frozen-source Rust/Clippy/runtime validation"
+  ],
+  "runtime_missing": [
+    "normal RunMachine closure creation/publication/let placement and owner continuation",
+    "Fn/FnMut/FnOnce actual trait selection/call/activation",
+    "general capture/borrow/lifetime/type inference/owned return/replacement/Copy evidence",
+    "native ABI/niche/size and exact configured execution/effects",
+    "post-cancellation owner retention + separately authorized teardown policy"
+  ],
+  "normalization_missing": [
+    "general source aliases/projections/closure coercion/captured generics remain their ordered typed prerequisites; no new solver/API invented"
+  ],
+  "not_claimed": [
+    "compiler observed enum-size/lint failure",
+    "assembled source typecheck",
+    "runtime effects/whole original passes"
+  ],
+  "no_canonical_or_target_edits": true
+}

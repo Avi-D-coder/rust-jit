@@ -1,0 +1,12 @@
+--- /dev/null
++++ b/crates/lrr/src/runtime/closure_shape_consumers.rs
+@@ -0,0 +1,9 @@
++//! Dedicated closure-environment frontiers, no inferred Fn/Copy/Drop/ABI policy.
++pub(crate) fn closure_frontier(operation: &'static str) -> crate::core::diagnostic::Diagnostic {
++    crate::core::diagnostic::Diagnostic::new(
++        "LRR-E-CLOSURE-REPRESENTATION",
++        format!(
++            "{operation} requires selected closure source/owner/capture/trait context; dedicated environment layout is not tuple, nominal, intrinsic Copy/NoDrop or native ABI permission"
++        ),
++    )
++}

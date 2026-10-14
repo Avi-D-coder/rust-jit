@@ -537,7 +537,7 @@
       "owner": "/root/stock_numeric_logic",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Frozen closure call/return and opaque instance adoption handed off; active genuine closure symbolic type and dedicated capture layout producer. Actual source/frame/store/capture facts only; generic/Fn/ABI/dispatch remain explicit prerequisites. Source-only/uncompiled.",
+      "scope": "Frozen closure enum/Arc consumers handed off with explicit runtime frontiers; active genuine retained closure body/header/source-call admission. No manufactured Fn/Copy/ABI/activation evidence, source-only/uncompiled.",
       "paths": [
         "artifacts/macos-first/sol-source-closures-v1/",
         "artifacts/macos-first/sol-closure-own-bindings-v1/",
@@ -549,11 +549,13 @@
         "artifacts/macos-first/sol-closure-instance-adoption-v1/",
         "artifacts/macos-first/sol-closure-type-layout-v1/",
         "artifacts/macos-first/sol-closure-frame-publication-v1/",
-        "artifacts/macos-first/sol-closure-enum-consumers-v1/"
+        "artifacts/macos-first/sol-closure-enum-consumers-v1/",
+        "artifacts/macos-first/sol-closure-lifecycle-transfer-v1/",
+        "artifacts/macos-first/sol-closure-source-call-admission-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T18:20:13.744910+00:00",
+      "updated_at": "2026-10-14T19:00:22.597404+00:00",
       "review_after": "2026-10-15T11:54:30.661821+00:00"
     },
     {

@@ -1,0 +1,104 @@
+--- a/crates/lrr/src/traits/unify.rs
++++ b/crates/lrr/src/traits/unify.rs
+@@ -28,10 +28,21 @@
+             })
+             .collect(),
+         TyTerm::Array(t, _) | TyTerm::Slice(t) | TyTerm::Ref(_, _, t) => vec![t],
+-        _ => vec![],
++        TyTerm::Closure(_)
++        | TyTerm::Dyn(_)
++        | TyTerm::Opaque(_, _)
++        | TyTerm::Projection(_)
++        | TyTerm::Placeholder(_)
++        | TyTerm::Bound { .. }
++        | TyTerm::Function(_)
++        | TyTerm::Primitive(_)
++        | TyTerm::Param(_)
++        | TyTerm::Infer(_)
++        | TyTerm::Never => vec![],
+     }
+ }
+ fn validate(term: &TyTerm, transaction: Digest, universe: u32) -> Result<usize, Diagnostic> {
++    term.validate_opaque_shape()?;
+     let (node_count, _) = term.measure().ok_or_else(limit)?;
+     let mut stack = vec![(term, 0)];
+     let mut count = 0usize;
+@@ -69,14 +80,42 @@
+             TyTerm::Nominal(_, args) => args
+                 .iter()
+                 .any(|arg| matches!(arg, GenericArg::Region(RegionTerm::Bound { .. }))),
+-            _ => false,
++            TyTerm::Closure(_)
++            | TyTerm::Dyn(_)
++            | TyTerm::Opaque(_, _)
++            | TyTerm::Projection(_)
++            | TyTerm::Placeholder(_)
++            | TyTerm::Bound { .. }
++            | TyTerm::Function(_)
++            | TyTerm::Primitive(_)
++            | TyTerm::Tuple(_)
++            | TyTerm::Array(_, _)
++            | TyTerm::Slice(_)
++            | TyTerm::Ref(_, _, _)
++            | TyTerm::Param(_)
++            | TyTerm::Infer(_)
++            | TyTerm::Never => false,
+         };
+         let bound_const = match term {
+             TyTerm::Array(_, ConstTerm::Bound { .. }) => true,
+             TyTerm::Nominal(_, args) => args
+                 .iter()
+                 .any(|arg| matches!(arg, GenericArg::Const(ConstTerm::Bound { .. }))),
+-            _ => false,
++            TyTerm::Closure(_)
++            | TyTerm::Dyn(_)
++            | TyTerm::Opaque(_, _)
++            | TyTerm::Projection(_)
++            | TyTerm::Placeholder(_)
++            | TyTerm::Bound { .. }
++            | TyTerm::Function(_)
++            | TyTerm::Primitive(_)
++            | TyTerm::Tuple(_)
++            | TyTerm::Array(_, _)
++            | TyTerm::Slice(_)
++            | TyTerm::Ref(_, _, _)
++            | TyTerm::Param(_)
++            | TyTerm::Infer(_)
++            | TyTerm::Never => false,
+         };
+         if bound_const {
+             return Err(fault("bound constants require ordered universe matching"));
+@@ -198,6 +237,11 @@
+                 (TyTerm::Ref(r, m, a), TyTerm::Ref(s, n, b)) if r == s && m == n => {
+                     work.push((*a, *b))
+                 }
++                (TyTerm::Closure(_), _) | (_, TyTerm::Closure(_)) => {
++                    return Err(fault(
++                        "distinct closure source identity cannot unify with another source type",
++                    ));
++                }
+                 _ => return Err(fault("reached structural type contracts disagree")),
+             }
+         }
+@@ -275,7 +319,20 @@
+                 _ => None,
+             })
+             .collect(),
+-        _ => vec![],
++        TyTerm::Closure(_)
++        | TyTerm::Dyn(_)
++        | TyTerm::Opaque(_, _)
++        | TyTerm::Projection(_)
++        | TyTerm::Bound { .. }
++        | TyTerm::Function(_)
++        | TyTerm::Primitive(_)
++        | TyTerm::Tuple(_)
++        | TyTerm::Array(_, _)
++        | TyTerm::Slice(_)
++        | TyTerm::Ref(_, _, _)
++        | TyTerm::Param(_)
++        | TyTerm::Infer(_)
++        | TyTerm::Never => vec![],
+     }
+ }
+ fn visible_substitution(

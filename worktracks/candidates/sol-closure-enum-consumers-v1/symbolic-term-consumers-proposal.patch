@@ -1,0 +1,76 @@
+--- a/crates/lrr/src/traits/term.rs
++++ b/crates/lrr/src/traits/term.rs
+@@ -99,7 +99,7 @@
+ }
+ #[derive(Debug, Clone, Eq, PartialEq)]
+ pub enum TyTerm {
+-    Closure(crate::traits::closure_identity::ClosureKey),
++    Closure(std::sync::Arc<crate::traits::closure_identity::ClosureKey>),
+     Dyn(DynSchemaKey),
+     Opaque(OpaqueKey, Vec<GenericArg>),
+     Projection(Box<ProjectionKey>),
+@@ -371,7 +371,7 @@
+             }
+             Self::Closure(key) => {
+                 e.u32(15);
+-                e.record(key);
++                e.record(key.as_ref());
+             }
+             Self::Never => e.u32(8),
+         }
+@@ -419,7 +419,14 @@
+                 }
+                 Self::Tuple(fields) => stack.extend(fields),
+                 Self::Array(ty, _) | Self::Ref(_, _, ty) | Self::Slice(ty) => stack.push(ty),
+-                _ => {}
++                Self::Closure(_)
++                | Self::Dyn(_)
++                | Self::Placeholder(_)
++                | Self::Bound { .. }
++                | Self::Primitive(_)
++                | Self::Param(_)
++                | Self::Infer(_)
++                | Self::Never => {}
+             }
+         }
+         Ok(())
+@@ -446,6 +453,10 @@
+                 }
+             }
+             match term {
++                Self::Closure(key) => {
++                    bytes = bytes.checked_add(key.retained_bytes())?;
++                }
++
+                 Self::Projection(key) => {
+                     bytes = bytes
+                         .checked_add(std::mem::size_of::<ProjectionKey>())?
+@@ -534,7 +545,13 @@
+                     bytes = bytes.checked_add(std::mem::size_of::<Self>())?;
+                     stack.push((t, depth + 1));
+                 }
+-                _ => {}
++                Self::Dyn(_)
++                | Self::Placeholder(_)
++                | Self::Bound { .. }
++                | Self::Primitive(_)
++                | Self::Param(_)
++                | Self::Infer(_)
++                | Self::Never => {}
+             }
+             if bytes > 32 * 1024 * 1024 || nodes > 100_000 {
+                 return None;
+@@ -800,6 +817,10 @@
+             definition_parameters(t, names)
+         }
+         TyTerm::Slice(t) => definition_parameters(t, names),
+-        _ => Ok(()),
+-    }
+-}
++        TyTerm::Closure(key) => key.validate(),
++        TyTerm::Dyn(_) | TyTerm::Bound { .. } | TyTerm::Primitive(_) | TyTerm::Never => Ok(()),
++    }
++}
++
++#[path = "closure_term_consumers.rs"]
++mod closure_consumers;
