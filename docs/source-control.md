@@ -17,7 +17,11 @@ python3 tools/check_source_checkpoint.py
 
 The guard rejects staged build/cache paths and blobs larger than 5 MiB. It also
 checks that staged vendor and upstream input bytes match the working files without
-Git text conversion. It checks the staged checkpoint, not previous commit history;
+Git text conversion. Source handoff patches also retain exact bytes, including
+upstream CRLF witnesses and the required blank context-line prefixes of unified
+diffs. Immutable upstream copies are exempt from Git whitespace normalization and
+linting; validate them against their pinned hashes instead of editing expected
+output formatting. It checks the staged checkpoint, not previous commit history;
 ignores do not remove already tracked files. If a generated output was accidentally
 tracked, use `git rm --cached -- path` to remove it from the index while retaining
 the local file. Review that change before committing.

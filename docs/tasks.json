@@ -5164,7 +5164,33 @@
         "normal_reached_original_panic_declarations_use_actual_message_before_publication",
         "normal_const_call_macro_uses_the_entered_helper_body_without_cold_effects",
         "normal_cold_constant_macro_branch_runs_without_macro_admission_or_activation",
-        "original_generic_local_route_is_data_and_cannot_mint_strict_constant_context"
+        "original_generic_local_route_is_data_and_cannot_mint_strict_constant_context",
+        "original_zero_iteration_while_array_length_keeps_source_and_editions",
+        "original_infinite_const_function_spends_bounded_steps_in_its_actual_body",
+        "loop_break_value_uses_owning_result_context_and_skips_the_suffix",
+        "nested_labelled_break_reaches_its_exact_outer_loop",
+        "break_in_while_condition_exits_the_selected_loop_without_body_demand",
+        "return_inside_loop_uses_const_function_return_context",
+        "continue_and_empty_loop_both_exhaust_the_same_step_budget",
+        "while_break_value_and_wrong_loop_result_remain_reached_type_errors",
+        "labelled_block_shadow_cannot_be_skipped_to_authorize_outer_loop_exit",
+        "a_function_body_cannot_break_a_callers_loop",
+        "original_mutable_parameter_and_nested_local_writes_keep_all_editions",
+        "original_shared_reference_const_function_keeps_its_reached_frontier",
+        "loop_scope_retains_outer_writes_and_pops_shadow_on_break_and_continue",
+        "primitive_compound_assignment_reads_lhs_after_rhs_scope_writes",
+        "local_replace_refuses_immutable_and_wrong_type_without_commit",
+        "local_scope_stack_caps_activation_and_balances_failure_cleanup",
+        "unchanged_ctfe_scalar_loop_infers_mutable_index_from_real_parameter_all_editions",
+        "unchanged_const_while_and_loop_components_preserve_unsuffixed_bindings",
+        "source_scope_shadow_and_return_context_cannot_alias_other_numeric_bindings",
+        "connected_opaque_calls_do_not_mint_default_local_context",
+        "cold_item_body_is_not_a_constraint_on_its_enclosing_local",
+        "header_and_namespace_probes_consume_the_callers_remaining_source_budget",
+        "a_cold_local_item_body_does_not_expand_the_source_constraint_work",
+        "unchanged_anonymous_const_headers_are_distinct_unnamed_items_all_editions",
+        "anonymous_body_edits_keep_headers_without_hiding_missing_identifiers",
+        "an_opaque_cold_use_cannot_erase_the_real_owning_return_context"
       ],
       "acceptance_contract": "array length constant, recursive bounded const fn, cycle, cold effect branch, reached forbidden effect, and two uses with independently mutable guest arrays. Constant memo contains no guest handles.",
       "commands": [],
@@ -5220,7 +5246,10 @@
         "artifacts/macos-first/root-constant-query-v1/canonical-validation-v1/constant-production-consolidation-post-checks-v2/actual-terminal-v1.json",
         "artifacts/macos-first/root-constant-candidate-harness-repair-v1/source-overlay-manifest-v1.json",
         "artifacts/macos-first/root-constant-cold-world-bound-v1/source-overlay-manifest-v1.json",
-        "artifacts/macos-first/root-constant-loop-control-v1/REVIEW.md"
+        "artifacts/macos-first/root-constant-loop-control-v1/REVIEW.md",
+        "artifacts/macos-first/sol-canonical-validation-agent-v5/HANDOFF.md",
+        "artifacts/macos-first/root-constant-length-refusal-v1/task-invariant.txt",
+        "worktracks/candidates/root-constant-local-inference-v1/REVIEW.md"
       ],
       "release_complete": false,
       "validation_scope": "Pure scalar/array evaluator, declared result shape, checked wire/memo payload now component tested/integrated. Existing ConstantKey/i128 query value/provider and current-source/type/macro/foreign/generic admission remain incomplete; fresh guest instantiation, loops/tuples/strings and full runtime contracts pending.",
@@ -5232,7 +5261,7 @@
         "task_complete": false
       },
       "current_private_typed_query_draft": {
-        "status": "source_components_passed_complete_milestone_v65_pending",
+        "status": "source_components_passed_complete_milestone_v66_running",
         "artifact": "artifacts/macos-first/root-constant-production-consolidation-v1/HANDOFF.md",
         "last_collected_source": "b970ab41775fa782bcc802542b33f856764e6937be6af5b65b0f651686b91fd7",
         "last_collected_library_passed": 840,
@@ -5333,44 +5362,75 @@
           "guest_JIT_started": false
         },
         "current_candidate_milestone": {
-          "source_member": "09ccfac2d7f040109418ac6b46b5f4f9950277ca025fc36d9e54f51bbb014c73",
-          "status": "failed_source_unchanged_collected",
-          "artifact": "artifacts/macos-first/sol-canonical-validation-agent-v1/",
+          "source_member": "5c330972fa27d030e2ff852336a32796584283481dcd4e428bbf5aaebb31a15e",
+          "status": "scoped_pass_full_gate_running",
+          "artifact": "artifacts/macos-first/sol-canonical-validation-agent-v6/",
           "validation_actor": "/root/edition_macro_logic",
-          "actual_session_id": 35195,
-          "target_clone": "cp -Rc; actual31932/5b0c8b/0; revision5-validation-agent-target-v1",
+          "actual_session_id": 99020,
+          "source_editable": false,
           "collected_scopes": {
-            "strict_lrr_library": "45918/559ec9/0",
-            "new_authority_control": "92857/68adff/0;1passed,840filtered",
-            "unfiltered_CLI": "44899/7db503/0;module64,standalone28;zero filtered",
-            "architecture": "21991/c41424/0",
-            "format": "50634/0eebf4/0"
+            "pure_source_constants": "11passed/0failed/0filtered;84680/662fef/0",
+            "strict_changed_target": "5ae036/0",
+            "architecture": "10299/ceba79/0",
+            "format": "55792/81535e/0"
           },
           "previous_failed_milestone": {
-            "passed": 1216,
-            "failed": 5,
-            "summaries": 39,
-            "remaining_bank_unexecuted": true,
-            "large_module_regression_passed": true,
-            "artifact": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-constant-candidate-milestone-v3/actual-terminal-v1.json"
+            "source_member": "2ce1bf0ad479315b3124b2aa54005125de650992190a20fe8e570ea4b00a890e",
+            "actual_terminal": "26518/3ec316/1",
+            "listed": 2950,
+            "passed": 2518,
+            "failed": 1,
+            "unexecuted": 431,
+            "library_passed": 841,
+            "proc_sessions_passed": 158,
+            "artifact": "artifacts/macos-first/sol-canonical-validation-agent-v5/HANDOFF.md",
+            "failure": "pure_anonymous_lengths_refuse_foreign_lexical_capture expected generic source diagnostic instead of parameter-length diagnostic",
+            "source_unchanged": true,
+            "original_files_exact": 470
           },
-          "repair": "opaque structural path route preserves context prerequisite; strict ConstantPathSite still refuses generic ParamEnv before constant admission",
+          "earlier_candidate_history": {
+            "source_member": "09ccfac2d7f040109418ac6b46b5f4f9950277ca025fc36d9e54f51bbb014c73",
+            "status": "failed_source_unchanged_collected",
+            "artifact": "artifacts/macos-first/sol-canonical-validation-agent-v1/",
+            "validation_actor": "/root/edition_macro_logic",
+            "actual_session_id": 35195,
+            "target_clone": "cp -Rc; actual31932/5b0c8b/0; revision5-validation-agent-target-v1",
+            "collected_scopes": {
+              "strict_lrr_library": "45918/559ec9/0",
+              "new_authority_control": "92857/68adff/0;1passed,840filtered",
+              "unfiltered_CLI": "44899/7db503/0;module64,standalone28;zero filtered",
+              "architecture": "21991/c41424/0",
+              "format": "50634/0eebf4/0"
+            },
+            "previous_failed_milestone": {
+              "passed": 1216,
+              "failed": 5,
+              "summaries": 39,
+              "remaining_bank_unexecuted": true,
+              "large_module_regression_passed": true,
+              "artifact": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-constant-candidate-milestone-v3/actual-terminal-v1.json"
+            },
+            "repair": "opaque structural path route preserves context prerequisite; strict ConstantPathSite still refuses generic ParamEnv before constant admission",
+            "MAIN_integrated": false,
+            "task_complete": false,
+            "full_stock_fixture_passes": 0,
+            "actual_terminal": "35195/57eb0b/1",
+            "project_bank": {
+              "listed": 2950,
+              "passed": 1250,
+              "failed": 1,
+              "unexecuted": 1699,
+              "library_passed": 841,
+              "ignored": 0,
+              "filtered": 0
+            },
+            "host_failure": "test_cli::rustc_original_test_listing_retains_sorted_names_and_ignore_metadata: LRR-E-CATALOG-INCOMPLETE",
+            "runner_failure": "unversioned Python resolved3.9.6; corrected3.14 libexec required for next validation, no production claim from bootstrap failure",
+            "current_source_editable": true
+          },
           "MAIN_integrated": false,
           "task_complete": false,
-          "full_stock_fixture_passes": 0,
-          "actual_terminal": "35195/57eb0b/1",
-          "project_bank": {
-            "listed": 2950,
-            "passed": 1250,
-            "failed": 1,
-            "unexecuted": 1699,
-            "library_passed": 841,
-            "ignored": 0,
-            "filtered": 0
-          },
-          "host_failure": "test_cli::rustc_original_test_listing_retains_sorted_names_and_ignore_metadata: LRR-E-CATALOG-INCOMPLETE",
-          "runner_failure": "unversioned Python resolved3.9.6; corrected3.14 libexec required for next validation, no production claim from bootstrap failure",
-          "current_source_editable": true
+          "full_stock_fixture_passes": 0
         },
         "current_loop_control_draft": {
           "artifact": "artifacts/macos-first/root-constant-loop-control-v1/REVIEW.md",
@@ -5431,7 +5491,7 @@
         },
         "current_stock_edition_preparation": {
           "source_member": "2ce1bf0ad479315b3124b2aa54005125de650992190a20fe8e570ea4b00a890e",
-          "status": "scoped_pass_full_gate_running",
+          "status": "scoped_pass_full_gate_failed_collected",
           "artifact": "artifacts/macos-first/root-stock-edition-compiler-preparation-v1/source-overlay-manifest-v1.json",
           "files": 5,
           "scope": "Positive fixture helpers use actual captured compiler profiles for unchanged2015/2018 roots and2015 auxiliary; no negative guard/producer skips or original source changes. No acceptance until actual terminals.",
@@ -5441,7 +5501,154 @@
           "test_terminal": "artifacts/macos-first/sol-canonical-validation-agent-v5/edition-banks/actual-terminal.json",
           "strict_audit_fmt": "passed",
           "complete_gate03_session": 26518,
-          "complete_gate03_status": "running_last_verified_by_test_agent"
+          "complete_gate03_status": "failed_2518_passed_1_failed_431_unexecuted",
+          "complete_gate03_terminal": "26518/3ec316/1"
+        },
+        "current_source_local_numeric_inference_draft": {
+          "artifact": "worktracks/candidates/root-constant-local-inference-v1/REVIEW.md",
+          "status": "source_only_uncompiled",
+          "source_baseline": "5c330972fa27d030e2ff852336a32796584283481dcd4e428bbf5aaebb31a15e",
+          "files": 8,
+          "Rust_controls": 26,
+          "Rust_controls_executed": 0,
+          "upstream_cases": 4,
+          "original_license_files": 9,
+          "canonical_installed": false,
+          "MAIN_integrated": false,
+          "full_stock_fixture_passes": 0,
+          "scope": "Source-owned local scalar equations/defaults, charged subordinate source probes, lexical mutable cells/loops and actual non-indexed anonymous const identities; no cold body typing/query/compiler/guest execution. for/while-let, labelled blocks, aggregate/borrowed places and complete query/live/generated contexts remain required.",
+          "controls": [
+            {
+              "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+              "name": "original_zero_iteration_while_array_length_keeps_source_and_editions",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+              "name": "original_infinite_const_function_spends_bounded_steps_in_its_actual_body",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+              "name": "loop_break_value_uses_owning_result_context_and_skips_the_suffix",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+              "name": "nested_labelled_break_reaches_its_exact_outer_loop",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+              "name": "break_in_while_condition_exits_the_selected_loop_without_body_demand",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+              "name": "return_inside_loop_uses_const_function_return_context",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+              "name": "continue_and_empty_loop_both_exhaust_the_same_step_budget",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+              "name": "while_break_value_and_wrong_loop_result_remain_reached_type_errors",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+              "name": "labelled_block_shadow_cannot_be_skipped_to_authorize_outer_loop_exit",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/frontend/constant_loop_tests.rs",
+              "name": "a_function_body_cannot_break_a_callers_loop",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/frontend/constant_locals.rs",
+              "name": "original_mutable_parameter_and_nested_local_writes_keep_all_editions",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/frontend/constant_locals.rs",
+              "name": "original_shared_reference_const_function_keeps_its_reached_frontier",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/frontend/constant_locals.rs",
+              "name": "loop_scope_retains_outer_writes_and_pops_shadow_on_break_and_continue",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/frontend/constant_locals.rs",
+              "name": "primitive_compound_assignment_reads_lhs_after_rhs_scope_writes",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/frontend/constant_locals.rs",
+              "name": "local_replace_refuses_immutable_and_wrong_type_without_commit",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/frontend/constant_locals.rs",
+              "name": "local_scope_stack_caps_activation_and_balances_failure_cleanup",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+              "name": "unchanged_ctfe_scalar_loop_infers_mutable_index_from_real_parameter_all_editions",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+              "name": "unchanged_const_while_and_loop_components_preserve_unsuffixed_bindings",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+              "name": "source_scope_shadow_and_return_context_cannot_alias_other_numeric_bindings",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+              "name": "connected_opaque_calls_do_not_mint_default_local_context",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+              "name": "cold_item_body_is_not_a_constraint_on_its_enclosing_local",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+              "name": "an_opaque_cold_use_cannot_erase_the_real_owning_return_context",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+              "name": "header_and_namespace_probes_consume_the_callers_remaining_source_budget",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/constant_local_constraints.rs",
+              "name": "a_cold_local_item_body_does_not_expand_the_source_constraint_work",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/outline.rs",
+              "name": "unchanged_anonymous_const_headers_are_distinct_unnamed_items_all_editions",
+              "status": "uncompiled"
+            },
+            {
+              "file": "crates/lrr/src/syntax/outline.rs",
+              "name": "anonymous_body_edits_keep_headers_without_hiding_missing_identifiers",
+              "status": "uncompiled"
+            }
+          ]
         }
       }
     },
@@ -18503,10 +18710,25 @@
       "acceptance_tests": [],
       "commands": [],
       "fixture_ids": [],
-      "artifact_paths": [],
+      "artifact_paths": [
+        "worktracks/candidates/sol-type-alias-prelude-integration-v1/HANDOFF.md"
+      ],
       "title": "SourceView propagation",
       "acceptance_contract": "TR003\u2013TR005, alias/field/return/default-Self variants. Depends: M017.",
-      "release_complete": false
+      "release_complete": false,
+      "source_only_proposals": [
+        {
+          "artifact": "worktracks/candidates/sol-type-alias-prelude-integration-v1/HANDOFF.md",
+          "status": "uncompiled_unintegrated",
+          "paths": 39,
+          "Rust_controls": 79,
+          "Rust_controls_executed": 0,
+          "original_cases": 18,
+          "original_files": 45,
+          "full_stock_fixture_passes": 0,
+          "scope": "Actual SourceDiscovery Type/compiler/prelude receipts and reached source/query scalar alias consumer. Generated use-site/runtime authority, combined budget and all-retained-source currentness require successor evidence."
+        }
+      ]
     },
     {
       "id": "M019",

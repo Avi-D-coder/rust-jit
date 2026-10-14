@@ -1,0 +1,566 @@
+diff --git a/crates/lrr/src/db/seals.rs b/crates/lrr/src/db/seals.rs
+--- a/crates/lrr/src/db/seals.rs
++++ b/crates/lrr/src/db/seals.rs
+@@ -122,6 +122,10 @@
+ }
+ #[derive(Debug, Clone)]
+ pub struct DiscoveryInput {
++    pub(crate) type_prelude_receipts:
++        Vec<crate::frontend::type_prelude_admission::TypePreludeReceipt>,
++    pub(crate) compiler_primitive_receipts:
++        Vec<crate::frontend::compile_input_catalog::CompilerPrimitiveReceipt>,
+     pub(crate) seal: Seal,
+     // Scope-local declaration facts; these do not grant global impl completeness.
+     pub(crate) declaration_inventory: std::sync::Arc<crate::frontend::impl_index::ImplHeaderIndex>,
+@@ -155,7 +159,115 @@
+     pub(crate) scope: Option<CertifiedScope>,
+ }
+ impl DiscoveryInput {
++    pub(crate) fn validate_type_prelude_receipts(
++        &self,
++    ) -> Result<(), crate::core::diagnostic::Diagnostic> {
++        let fail = || {
++            crate::core::diagnostic::Diagnostic::new(
++                "LRR-E-TYPE-PRELUDE-SOURCE",
++                "published Type prelude receipt source/scope/order differs".into(),
++            )
++        };
++        if self.type_prelude_receipts.len() > 100_000 {
++            return Err(fail());
++        };
++        let mut previous = None;
++        for receipt in &self.type_prelude_receipts {
++            if !self.sources.contains(receipt.source())
++                || !matches!(self.seal.domain(),SealDomain::Scope{id,namespace:Namespace::Type}if *id==receipt.scope().fingerprint())
++                || self.scope.as_ref().is_none_or(|scope| {
++                    scope.scope != *receipt.scope() || scope.namespace != Namespace::Type
++                })
++            {
++                return Err(fail());
++            };
++            let id = receipt.source().location_identity();
++            if previous.is_some_and(|old| old >= id) {
++                return Err(fail());
++            }
++            previous = Some(id);
++        }
++        Ok(())
++    }
++    pub(crate) fn type_prelude_receipt(
++        &self,
++        source: &crate::source::changes::SourceSelection,
++        scope: &crate::syntax::outline::ScopeKey,
++    ) -> Result<
++        Option<&crate::frontend::type_prelude_admission::TypePreludeReceipt>,
++        crate::core::diagnostic::Diagnostic,
++    > {
++        self.validate_type_prelude_receipts()?;
++        Ok(self
++            .type_prelude_receipts
++            .iter()
++            .find(|r| r.source() == source && r.scope() == scope))
++    }
++
++    pub(crate) fn validate_compiler_primitive_receipts(
++        &self,
++    ) -> Result<(), crate::core::diagnostic::Diagnostic> {
++        let fail = || {
++            crate::core::diagnostic::Diagnostic::new(
++                "LRR-E-GENERATED-PRIMITIVE",
++                "published compiler primitive receipt namespace/source/order differs".into(),
++            )
++        };
++        if self.compiler_primitive_receipts.len() > 100_000
++            || (!self.compiler_primitive_receipts.is_empty()
++                && !matches!(
++                    self.seal.domain(),
++                    SealDomain::Scope {
++                        namespace: Namespace::Type,
++                        ..
++                    }
++                ))
++        {
++            return Err(fail());
++        }
++        let mut previous = None;
++        for receipt in &self.compiler_primitive_receipts {
++            receipt.source().outline.parse.profile.validate_source()?;
++            let key = receipt.source().location_identity();
++            if previous.is_some_and(|old| old >= key) || !self.sources.contains(receipt.source()) {
++                return Err(fail());
++            }
++            previous = Some(key);
++        }
++        Ok(())
++    }
++
++    pub(crate) fn compiler_primitive_receipt(
++        &self,
++        source: &crate::source::changes::SourceSelection,
++    ) -> Result<
++        Option<&crate::frontend::compile_input_catalog::CompilerPrimitiveReceipt>,
++        crate::core::diagnostic::Diagnostic,
++    > {
++        if self.compiler_primitive_receipts.len() > 100_000 {
++            return Err(crate::core::diagnostic::Diagnostic::new(
++                "LRR-E-METADATA-LIMIT",
++                "published primitive receipt count".into(),
++            ));
++        }
++        let mut found = None;
++        for receipt in &self.compiler_primitive_receipts {
++            if receipt.source() == source {
++                if found.is_some() {
++                    return Err(crate::core::diagnostic::Diagnostic::new(
++                        "LRR-E-GENERATED-PRIMITIVE",
++                        "published primitive source receipt ambiguous".into(),
++                    ));
++                }
++                found = Some(receipt);
++            }
++        }
++        Ok(found)
++    }
++
+     pub(crate) fn metadata_bytes(&self) -> Result<usize, crate::core::diagnostic::Diagnostic> {
++        self.validate_compiler_primitive_receipts()?;
++        self.validate_type_prelude_receipts()?;
+         let fail = || {
+             crate::core::diagnostic::Diagnostic::new(
+                 "LRR-E-METADATA-LIMIT",
+@@ -185,6 +297,36 @@
+         for proof in &self.source_replacements {
+             bytes = bytes
+                 .checked_add(proof.metadata_bytes()?)
++                .ok_or_else(fail)?;
++        }
++        bytes = bytes
++            .checked_add(
++                self.compiler_primitive_receipts
++                    .capacity()
++                    .checked_mul(std::mem::size_of::<
++                        crate::frontend::compile_input_catalog::CompilerPrimitiveReceipt,
++                    >())
++                    .ok_or_else(fail)?,
++            )
++            .ok_or_else(fail)?;
++        for receipt in &self.compiler_primitive_receipts {
++            bytes = bytes
++                .checked_add(receipt.metadata_bytes())
++                .ok_or_else(fail)?;
++        }
++        bytes = bytes
++            .checked_add(
++                self.type_prelude_receipts
++                    .capacity()
++                    .checked_mul(std::mem::size_of::<
++                        crate::frontend::type_prelude_admission::TypePreludeReceipt,
++                    >())
++                    .ok_or_else(fail)?,
++            )
++            .ok_or_else(fail)?;
++        for receipt in &self.type_prelude_receipts {
++            bytes = bytes
++                .checked_add(receipt.metadata_bytes())
+                 .ok_or_else(fail)?;
+         }
+         for source in &self.sources {
+@@ -357,9 +499,13 @@
+     }
+ }
+ impl StableEncode for DiscoveryInput {
+-    const DOMAIN: &'static str = "lrr/v2/discovery-input/procedural-catalogs-v1";
++    const DOMAIN: &'static str = "lrr/v4/discovery-input/type-prelude-receipts-v1";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         e.record(&self.seal);
++        e.sequence(&self.type_prelude_receipts, |e, r| e.record(r));
++        e.sequence(&self.compiler_primitive_receipts, |e, receipt| {
++            e.record(receipt)
++        });
+         e.digest(self.source_dependencies);
+         e.u64(u64::try_from(self.compiler_inputs.len()).expect("bounded compiler input count"));
+         for (key, fingerprint) in &self.compiler_inputs {
+diff --git a/crates/lrr/src/expand/source_discovery.rs b/crates/lrr/src/expand/source_discovery.rs
+--- a/crates/lrr/src/expand/source_discovery.rs
++++ b/crates/lrr/src/expand/source_discovery.rs
+@@ -16,8 +16,12 @@
+ use std::collections::{BTreeMap, BTreeSet};
+ #[path = "source_discovery/compiler_profiles.rs"]
+ mod compiler_profiles;
++#[path = "source_discovery/generated_compiler_facets.rs"]
++mod generated_compiler_facets;
+ #[path = "source_discovery/original_inert.rs"]
+ mod original_inert;
++#[path = "source_discovery/type_prelude.rs"]
++pub(crate) mod type_prelude;
+ pub enum SourceDiscoveryStep {
+     NeedSourceDeriveSelection {
+         selection: std::sync::Arc<crate::service::source_derive_requests::SourceDeriveSelection>,
+@@ -391,6 +395,7 @@
+     Fragment(usize),
+ }
+ struct StagedModule {
++    compiler_facet: Option<generated_compiler_facets::PreparedGeneratedCompilerFacet>,
+     ordinary_modules: Vec<crate::frontend::source_module_declarations::SourceModuleDeclaration>,
+     provider: super::source_declarative::SourceDeclarative,
+     catalogs:
+@@ -5335,6 +5340,18 @@
+     ) -> crate::db::poll::QueryPoll<()> {
+         use crate::db::poll::QueryPoll;
+         let producer = syntax.producer();
++        if matches!(&syntax, StagedModuleSyntax::Generated(_)) {
++            let current = db.published_input(&crate::db::dependency::InputKey::ExpansionEpoch);
++            if !matches!(current, Some((crate::db::dependency::InputValue::ExpansionEpoch(epoch), _)) if *epoch == self.epoch)
++            {
++                return QueryPoll::Ready(Err(fault(
++                    "generated module compiler facet requires actual current expansion epoch",
++                )));
++            }
++            if let Err(error) = self.revalidate_staged_compiler_facets() {
++                return QueryPoll::Ready(Err(error));
++            }
++        }
+         if let Some(staged) = self.staged_modules.get(&producer) {
+             return QueryPoll::Ready(if staged.syntax.identity() == syntax.identity() {
+                 Ok(())
+@@ -5488,11 +5505,44 @@
+             {
+                 provider.install_procedural(catalog.clone())?;
+             }
+-            provider.compiler = providers
+-                .get(ordinal)
+-                .ok_or_else(|| fault("staged module compiler owner absent"))?
+-                .compiler
+-                .clone();
++            let compiler_facet = match &syntax {
++                StagedModuleSyntax::Generated(generated) => {
++                    let actual =
++                        self.generated_module_scope(generated.origin().parent_header().expansion)?;
++                    let residual = (320usize * 1024 * 1024)
++                        .checked_sub(bytes)
++                        .ok_or_else(|| fault("generated compiler facet residual metadata limit"))?
++                        .min(64 * 1024 * 1024);
++                    let proof = generated_compiler_facets::PreparedGeneratedCompilerFacet::capture_module_current(
++                        generated, actual.captured.provider, actual.catalog, self.epoch, residual,
++                    )?;
++                    proof.install_module(
++                        generated,
++                        &mut provider,
++                        actual.captured.provider,
++                        actual.catalog,
++                        self.epoch,
++                    )?;
++                    Some(proof)
++                }
++                StagedModuleSyntax::Ordinary { syntax, parent } => {
++                    let actual = &self
++                        .staged_modules
++                        .get(parent)
++                        .ok_or_else(|| fault("ordinary compiler facet immediate parent absent"))?
++                        .provider;
++                    if !actual
++                        .module_source()
++                        .same_publication(syntax.origin().declaration().source())
++                        || actual.module_source().selection()
++                            != syntax.origin().declaration().source().selection()
++                    {
++                        return Err(fault("ordinary compiler facet immediate caller differs"));
++                    }
++                    provider.compiler = actual.compiler.clone();
++                    None
++                }
++            };
+             let mut source_calls = BTreeMap::new();
+             for call in &outline.item_invocations {
+                 source_calls.insert(call.item_input, call.clone());
+@@ -5548,7 +5598,12 @@
+                     .ok_or_else(|| fault("staged module route metadata limit"))?;
+             }
+             let bytes = bytes
+-                .checked_add(route_bytes)
++                .checked_add(
++                    compiler_facet
++                        .as_ref()
++                        .map_or(0, |proof| proof.metadata_bytes()),
++                )
++                .and_then(|n| n.checked_add(route_bytes))
+                 .and_then(|n| n.checked_add(call_bytes))
+                 .and_then(|n| n.checked_add(provider.module_index_bytes().ok()?))
+                 .filter(|n| *n <= 320 * 1024 * 1024)
+@@ -5564,6 +5619,7 @@
+                 ordinary_modules,
+                 ordinal,
+                 source_calls,
++                compiler_facet,
+             ))
+         })();
+         let (
+@@ -5577,6 +5633,7 @@
+             ordinary_modules,
+             ordinal,
+             source_calls,
++            compiler_facet,
+         ) = match planned {
+             Ok(plan) => plan,
+             Err(error) => return QueryPoll::Ready(Err(error)),
+@@ -5645,6 +5702,7 @@
+         self.staged_modules.insert(
+             producer,
+             StagedModule {
++                compiler_facet,
+                 ordinary_modules,
+                 provider,
+                 catalogs: BTreeMap::new(),
+@@ -6193,6 +6251,16 @@
+     ) -> crate::db::poll::QueryPoll<ProjectionReadiness> {
+         use crate::db::poll::QueryPoll;
+         QueryPoll::Ready((|| {
++            self.revalidate_staged_compiler_facets()?;
++            if matches!(&syntax, StagedModuleSyntax::Generated(_)) {
++                let current = db.published_input(&crate::db::dependency::InputKey::ExpansionEpoch);
++                if !matches!(current, Some((crate::db::dependency::InputValue::ExpansionEpoch(epoch), _)) if *epoch == self.epoch)
++                {
++                    return Err(fault(
++                        "generated module readiness requires actual current expansion epoch",
++                    ));
++                }
++            }
+             for (key, fingerprint) in &self.compiler_inputs {
+                 if db
+                     .input(key)
+@@ -6406,11 +6474,17 @@
+                 return Err(fault("module readiness metadata limit"));
+             }
+             let macros = staged.provider.completed_published_index()?;
+-            let mut key = crate::core::digest::StableEncoder::new("lrr/v3/module-source-readiness");
++            let mut key = crate::core::digest::StableEncoder::new("lrr/v4/module-source-readiness");
+             key.record(&self.key);
+             if let Some(prepared) = &self.compiler_profiles {
+                 key.bool(true);
+                 key.digest(prepared.identity());
++            } else {
++                key.bool(false);
++            }
++            if let Some(proof) = &staged.compiler_facet {
++                key.bool(true);
++                key.digest(proof.identity());
+             } else {
+                 key.bool(false);
+             }
+@@ -7558,6 +7632,43 @@
+                 .checked_add(record.descriptor().estimated_bytes())
+                 .ok_or_else(|| fault("discovery descriptor metadata overflow"))?;
+         }
++        let compiler_primitive_receipts = if self.namespace == Namespace::Type
++            && matches!(
++                &self.key.domain,
++                SealDomain::Scope {
++                    namespace: Namespace::Type,
++                    ..
++                }
++            ) {
++            match &self.declarative {
++                Some((_, _, providers)) => {
++                    crate::frontend::compile_input_catalog::prepare_primitive_receipts(
++                        providers,
++                        (64usize * 1024 * 1024)
++                            .checked_sub(bytes)
++                            .ok_or_else(|| fault("primitive publication residual budget"))?,
++                    )?
++                }
++                None => Vec::new(),
++            }
++        } else {
++            Vec::new()
++        };
++        bytes = bytes
++            .checked_add(
++                compiler_primitive_receipts
++                    .capacity()
++                    .checked_mul(std::mem::size_of::<
++                        crate::frontend::compile_input_catalog::CompilerPrimitiveReceipt,
++                    >())
++                    .ok_or_else(|| fault("primitive publication vector overflow"))?,
++            )
++            .ok_or_else(|| fault("primitive publication vector overflow"))?;
++        for receipt in &compiler_primitive_receipts {
++            bytes = bytes
++                .checked_add(receipt.metadata_bytes())
++                .ok_or_else(|| fault("primitive publication metadata overflow"))?;
++        }
+         if bytes > 64 * 1024 * 1024 {
+             return Err(Diagnostic::new(
+                 "LRR-E-METADATA-LIMIT",
+@@ -7608,6 +7719,54 @@
+         for record in self.sealed_declaration_expansions()? {
+             descriptors.push(record.descriptor());
+             outputs.push(record);
++        }
++
++        let type_prelude_receipts = if self.namespace == Namespace::Type
++            && matches!(
++                &self.key.domain,
++                SealDomain::Scope {
++                    namespace: Namespace::Type,
++                    ..
++                }
++            ) {
++            match &self.declarative {
++                Some((_, _, providers)) => {
++                    crate::frontend::type_prelude_admission::prepare_type_prelude_receipts(
++                        providers,
++                        &sources,
++                        &self.graph,
++                        &self.scope,
++                        &outputs,
++                        &self.type_prelude_record_owners()?,
++                        &self.nested_inert_proofs,
++                        self.epoch,
++                        (32usize * 1024 * 1024).min(
++                            (64usize * 1024 * 1024)
++                                .checked_sub(bytes)
++                                .ok_or_else(|| fault("Type prelude publication residual budget"))?,
++                        ),
++                    )?
++                }
++                None => Vec::new(),
++            }
++        } else {
++            Vec::new()
++        };
++        bytes = bytes
++            .checked_add(
++                type_prelude_receipts
++                    .capacity()
++                    .checked_mul(std::mem::size_of::<
++                        crate::frontend::type_prelude_admission::TypePreludeReceipt,
++                    >())
++                    .ok_or_else(|| fault("Type prelude publication vector overflow"))?,
++            )
++            .ok_or_else(|| fault("Type prelude publication overflow"))?;
++        for receipt in &type_prelude_receipts {
++            bytes = bytes
++                .checked_add(receipt.metadata_bytes())
++                .filter(|n| *n <= 64 * 1024 * 1024)
++                .ok_or_else(|| fault("Type prelude publication metadata limit"))?;
+         }
+         let mut derived: std::collections::BTreeMap<
+             crate::db::dependency::InputKey,
+@@ -7687,6 +7846,8 @@
+                 seal: seal.clone(),
+                 declaration_inventory: std::sync::Arc::new(self.impl_header_inventory()?),
+                 source_dependencies: self.dependencies.fingerprint(),
++                compiler_primitive_receipts,
++                type_prelude_receipts,
+                 compiler_inputs: self.compiler_inputs.clone(),
+                 sources,
+                 records: descriptors,
+@@ -9621,6 +9782,23 @@
+             }
+         }
+     }
++    fn revalidate_staged_compiler_facets(&self) -> Result<(), Diagnostic> {
++        for staged in self.staged_modules.values() {
++            if let Some(proof) = &staged.compiler_facet {
++                let syntax = staged.syntax.generated()?;
++                let actual =
++                    self.generated_module_scope(syntax.origin().parent_header().expansion)?;
++                proof.revalidate_module(
++                    syntax,
++                    &staged.provider,
++                    actual.captured.provider,
++                    actual.catalog,
++                    self.epoch,
++                )?;
++            }
++        }
++        Ok(())
++    }
+     /// Available pure candidates never become a certificate without strict replay.
+     fn revalidate_original_selections(
+         &self,
+@@ -9632,6 +9810,7 @@
+         if let Some(prepared) = &self.compiler_profiles {
+             prepared.revalidate(providers)?;
+         }
++        self.revalidate_staged_compiler_facets()?;
+         let mut records = Vec::new();
+         self.calls
+             .len()
+diff --git a/crates/lrr/src/expand/source_discovery/type_prelude.rs b/crates/lrr/src/expand/source_discovery/type_prelude.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/expand/source_discovery/type_prelude.rs
+@@ -0,0 +1,72 @@
++//! Readonly completed declaration-owner facts, not a caller-supplied owner map.
++use super::*;
++pub(crate) struct TypePreludeRecordOwners<'a> {
++    discovery: &'a SourceDiscovery,
++}
++pub(crate) struct TypePreludeRecordOwner<'a> {
++    source: &'a PreparedSourceView,
++    scope: &'a ScopeKey,
++}
++impl<'a> TypePreludeRecordOwner<'a> {
++    pub(crate) fn source(&self) -> &'a PreparedSourceView {
++        self.source
++    }
++    pub(crate) fn scope(&self) -> &'a ScopeKey {
++        self.scope
++    }
++}
++impl<'a> TypePreludeRecordOwners<'a> {
++    pub(crate) fn owner(
++        &self,
++        record: &crate::expand::record::ExpansionRecord,
++    ) -> Result<Option<TypePreludeRecordOwner<'a>>, Diagnostic> {
++        let id = record.key().fingerprint();
++        let Some(current) = self.discovery.records.get(&id) else {
++            return Ok(None);
++        };
++        if !current.same_record(record) {
++            return Err(fault("Type prelude retained declaration record differs"));
++        }
++        let Some((ordinal, scope)) = self.discovery.generated_owners.get(&id) else {
++            return Ok(None);
++        };
++        let source = self
++            .discovery
++            .sources
++            .get(*ordinal)
++            .ok_or_else(|| fault("Type prelude retained source ordinal absent"))?;
++        if scope.crate_key != source.selection().outline.crate_key
++            || !scope
++                .module_path
++                .starts_with(&source.selection().outline.module_path)
++            || scope.owner.is_some()
++        {
++            return Err(fault("Type prelude actual declaration owner/scope differs"));
++        }
++        Ok(Some(TypePreludeRecordOwner { source, scope }))
++    }
++}
++impl SourceDiscovery {
++    pub(super) fn type_prelude_record_owners(
++        &self,
++    ) -> Result<TypePreludeRecordOwners<'_>, Diagnostic> {
++        let seal = self.seal.as_ref().ok_or_else(|| {
++            fault("Type prelude owner capture requires completed source discovery")
++        })?;
++        if self.namespace != Namespace::Type
++            || seal.key() != self.key
++            || !matches!(
++                &self.key.domain,
++                SealDomain::Scope {
++                    namespace: Namespace::Type,
++                    ..
++                }
++            )
++        {
++            return Err(fault(
++                "Type prelude owner capture requested outside actual Type scope",
++            ));
++        }
++        Ok(TypePreludeRecordOwners { discovery: self })
++    }
++}

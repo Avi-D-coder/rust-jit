@@ -1,0 +1,200 @@
+{
+  "canonical": "v65 2ce1bf0a; selected paths unchanged during source-only assembly",
+  "paths": [
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "before": "1955e297b948df9a446770e61343c58bf7ed0aca970adabbbe437652dc330704",
+      "after": "c87ced1ba43d1def6649b25ce3145084c6de326b03d83f08e6cea533a8b84be9"
+    },
+    {
+      "path": "crates/lrr/src/db/seals.rs",
+      "before": "62d4ec16299e6a479a0e22cff27246b902df2636528c0066b30d8ff4ff9ded16",
+      "after": "8145b3e52511049357c1f982c35d79bd6458cf9aee0bfd63f29a8a357d8045d3"
+    },
+    {
+      "path": "crates/lrr/src/db/source_alias_inputs.rs",
+      "before": null,
+      "after": "d97a2af7c4d2497aa66f7e9b11adae8feb4187f6398e2fffd761a37e40ae40c2"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "before": "c1a9a9a5d50cd13bb47d0c29750b2eb06532b46da98b14c4374297b3ab90e325",
+      "after": "e0fbfaaaca2f1d2ebb4c612a9d3ddb79f3eb7e54e16aa8b9c29a0ae47287631c"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs",
+      "before": null,
+      "after": "b47d13b810c18aa8ebf02363fd40ad7399374f54fb59b1509222f04026f6bd79"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs",
+      "before": null,
+      "after": "414de8a9e69808a4d63253793bbf7cee4b3fca9630c06f9fa5c5e2fb5577d618"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/type_prelude.rs",
+      "before": null,
+      "after": "41682a95c1fd3e74c2154646d6771155685afbaf4e2c68f429f1ecd36c12412c"
+    },
+    {
+      "path": "crates/lrr/src/frontend/compile_input_catalog.rs",
+      "before": "b958b2106020cd725138a29101105dc4edbd5f2d49afd2f0d71df4515517606a",
+      "after": "b1dfad699b116632c8c59c12c681b4749c80761fa354bec9f6b08dad818b9676"
+    },
+    {
+      "path": "crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs",
+      "before": "f5f1d44d4b4966614c5d4beac30454cedcfc4fb87a3cde4c89e72958d8e0b65e",
+      "after": "236da745e44f47d2c49e5282cf34cb71e42dbc873c925cc968bdcca4edf21958"
+    },
+    {
+      "path": "crates/lrr/src/frontend/compile_input_catalog/primitive_facet.rs",
+      "before": null,
+      "after": "5bf7b96a1349ba01de25e372319870dbc24f73cf0b16a595d2259a47eb98aac8"
+    },
+    {
+      "path": "crates/lrr/src/frontend/compile_input_catalog/type_prelude_facet.rs",
+      "before": null,
+      "after": "46cfa808b010d1688be6e742ee991d7d6feb5b4d757b9b24c17a1a47f76369c9"
+    },
+    {
+      "path": "crates/lrr/src/frontend/dollar_crate.rs",
+      "before": null,
+      "after": "178c6117be3055d875f3095e90e28e5e829952d4e4a37eb0f0e0d2187a905d51"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_constant_provenance.rs",
+      "before": null,
+      "after": "69ac4d6f9acf642017702580a67f94a8c2333d26b50bf21ede9777e3b07c493c"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_constant_provenance_tests.rs",
+      "before": null,
+      "after": "04a393ca77bfaa7bc8e138651286ffcbd09bfbdec00f55b3f23f6a145cfb61c2"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_macros.rs",
+      "before": "549bd72f7a39ae0609069f942d4a9561299096c21854f4ee7fdb8a91599675ef",
+      "after": "182d062e463fec764c93199e4dd9a432f575377f401e65c9066fc033897b0522"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_primitive_admission.rs",
+      "before": null,
+      "after": "1753a565419efc557b4f9d804b86234ba0f993061bdd7ee408789a95a2d35f58"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_primitive_admission_tests.rs",
+      "before": null,
+      "after": "6bd270a9263bf918ad8f58c4c90e18697f84183570df02f7ffbedae23b0c5b25"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_type_admission.rs",
+      "before": null,
+      "after": "e45d1883e0417f64c4fc2ef2e31e00e9389890384b23b6a43bd846da5c01a4d1"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_type_admission_tests.rs",
+      "before": null,
+      "after": "f86bd0a49f4e350e180c57b9a1be637e54230094dd677b227ce23445975cf7b9"
+    },
+    {
+      "path": "crates/lrr/src/frontend/hygiene.rs",
+      "before": "94542cdfff519dc4657a3b97106990c97969a771bd60ed6dcb84228806210b8a",
+      "after": "26c5ca2fb13facee1b6e94ded65ea34b13b9379ac16d506881410c574d75a538"
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "before": "fe1a1cfedf6c7e66c11cff3a67d6c84147c8dc5f6e4c099284fc29711949676a",
+      "after": "5cfa807bf71a6e47e28319658282fb2fde293b9134205c8b303d3460080724cc"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macros.rs",
+      "before": "afb63a0277124c3554a7de862a303ac7ca47b1cbce36b94be5d3b66167133fbc",
+      "after": "0c5a26d03a9e3568ea5e2c5b3c7c4fcb30a7052cbf08bca343c137317af8c28a"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_type_alias_normalization.rs",
+      "before": null,
+      "after": "efc767e43401ef92e720c65595fcc86adffc6d4641aed42a8d33e03a01e12d1b"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_type_alias_normalization_tests.rs",
+      "before": null,
+      "after": "aa234146a36daf6a9cfe94257e17ce98c7931e2f98cfccf82fb7a3968fffc18d"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_type_alias_query.rs",
+      "before": null,
+      "after": "b2b06cf84db94a5c7caef0941c258f2693933ea869fbc59571f93b39f7339f91"
+    },
+    {
+      "path": "crates/lrr/src/frontend/type_aliases.rs",
+      "before": "3a240ac4e758cafb1879c58edbbdb535720479d80b616a1c6e2472a33c5cccdc",
+      "after": "87a43de9c42bf1551c75ed0c11cb78ab8309c0e5b587db7ad16d89213c437a15"
+    },
+    {
+      "path": "crates/lrr/src/frontend/type_aliases/current_source.rs",
+      "before": null,
+      "after": "bfe9fb4f118a18eb4fac0a69f38ddd2bebeddc9e4204313604783fe273730a20"
+    },
+    {
+      "path": "crates/lrr/src/frontend/type_prelude_admission.rs",
+      "before": null,
+      "after": "fe35ac6296c39e7a5794efe9d4a28cb57e4486eb2f181c7c8a978920f9dbe5bc"
+    },
+    {
+      "path": "crates/lrr/src/frontend/type_prelude_admission_tests.rs",
+      "before": null,
+      "after": "f226cc7b17ec24e0dfdc113b7a822cc2b6280cca167566cfbc2e1ecf002a2ebd"
+    },
+    {
+      "path": "crates/lrr/src/source/changes.rs",
+      "before": "65c1ec8487f8f49537cdcd7f17a69b7ec726147639dbf96ddb019f2014910cb2",
+      "after": "1d2c86e1f47e97cad2fd998b7af27efb303a7bfd5bb40bb030ba01316c85ad18"
+    },
+    {
+      "path": "crates/lrr/src/source/changes/crate_policy.rs",
+      "before": null,
+      "after": "4b3af2d074828accc4044a5b44fd4a4ca22c0d80b8d57c2d125ad7ccb54f8d1d"
+    },
+    {
+      "path": "crates/lrr/src/source/changes/crate_policy_tests.rs",
+      "before": null,
+      "after": "685c0ce5ac1ecc01c2b666307a3c4a588c2c4a4c6bed2828f75c5035ef3e631f"
+    },
+    {
+      "path": "crates/lrr/src/source/dependencies.rs",
+      "before": "5f65881ca4301e0a99310b90b4a34c74a6472b8a70b5d32494fb9f8e0853bfa6",
+      "after": "2e3a5d5ca3e733c0e8dccc8c39640a604404fc88757a1436675e2df274aa0948"
+    },
+    {
+      "path": "crates/lrr/src/source/module_view.rs",
+      "before": "fdd770d2fd61b68bbb74c1af766b5d0facec3a4ce6292a9678e689d22d91fa26",
+      "after": "2dcb4afe44cac026a20ac22baa4c627effc89ec4a83651db53a3814e867634c4"
+    },
+    {
+      "path": "crates/lrr/src/syntax/generated_type_site.rs",
+      "before": null,
+      "after": "07f25853891f8302dd0c04ca1814082bcfd58f265073f1a7a90e212446f9913a"
+    },
+    {
+      "path": "crates/lrr/src/syntax/mod.rs",
+      "before": "12fab820d5ae5c445609ead5ec488f6e04864efc0522ffa1436678a2a18c010d",
+      "after": "1f3df5dc869c9c30551a044ad5de4dc8c8e29065f2edb0468083adb0bb1632ee"
+    },
+    {
+      "path": "crates/lrr/src/syntax/type_prelude_sites.rs",
+      "before": null,
+      "after": "0f521963f734ffb3a2315ca38bcb5508a6088e9b1d5998fb265f69de26a5079e"
+    },
+    {
+      "path": "xtask/tests/call_contracts.rs",
+      "before": "ee15640f3e34604dc04497bba49eebc38b177994290edc92444383e3409c882b",
+      "after": "971311e257801dd0a1bfdddc072502b6e831de15f067cc55f33a4b0a8e0fb3be"
+    },
+    {
+      "path": "xtask/tests/type_aliases.rs",
+      "before": "15b9e5327e5c4c5878b16df571f9b1bf251758d22d5453821459bb37f8196284",
+      "after": "145bd99f63bd8733287d8c9a02b1bda49cfbdc7a31ddca0176dcfa79a01dae00"
+    }
+  ]
+}

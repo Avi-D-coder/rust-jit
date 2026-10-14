@@ -1,6 +1,6 @@
 {
   "scope": "private source candidate, not integrated or release accepted",
-  "canonical_source_member": "2ce1bf0ad479315b3124b2aa54005125de650992190a20fe8e570ea4b00a890e",
+  "canonical_source_member": "5c330972fa27d030e2ff852336a32796584283481dcd4e428bbf5aaebb31a15e",
   "files": [
     {
       "path": "compat/fixtures.toml",
@@ -978,6 +978,11 @@
       "after_sha256": "7534ff870901992cb53a751832bbbe9848b247f8cb34828a1c109f2f04234386"
     },
     {
+      "path": "xtask/tests/pure_source_constants.rs",
+      "before_sha256": "c34fa8f09cb5e934b0e57fac1231d1617a85db59371d65c79c91f9dff673e48a",
+      "after_sha256": "628e12b592391b23a73a9e09d876e8d47a42bd8a56c9a309655fa96f380cce2c"
+    },
+    {
       "path": "xtask/tests/runtime_declarative_dispatch.rs",
       "before_sha256": "3de44cd63f09aa540e0d0abf530a9ecfc108c47b8e2508754c44736f297274a0",
       "after_sha256": "2e8763011997c158afd8799f40600db736a9ed3a26c02b7b41399e95187a1886"
@@ -1013,6 +1018,6 @@
       "after_sha256": "c7ffec0509a58999ed4ffe289b45aa3bec2de568b4ae8f95dd27ec3aed754e37"
     }
   ],
-  "code_patch_sha256": "e68106e7b865cea7b75f471d7fcf3e6f21fe47d0bea058d5dc83ef8ef8006659",
+  "code_patch_sha256": "d984a999da5b488927764d440753777ee9fd6daa19ec60846aad4aa5bd4311d1",
   "full_stock_fixture_passes": 0
 }

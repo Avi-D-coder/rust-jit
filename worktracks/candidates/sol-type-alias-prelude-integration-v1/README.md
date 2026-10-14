@@ -1,0 +1,7 @@
+# Current source Type/prelude/alias integration — uncompiled
+
+This39-path source-only overlay follows interpreter-constants canonical v65; its touched before bytes also match v66 (the v66 change is in a separate constant test). Apply only after verifying before-after-manifest.json against the assembled predecessor source. The complete.patch includes all hooks; separate patches expose publication/catalogue/memo/consumer boundaries for review. Do not apply both the complete patch and its component patches.
+
+The handoff connects actual SourceDiscovery/compiler Type receipts, prelude and generated-origin proofs, the existing TypeAlias query and scalar alias consumer.79 controls are uncompiled.18 official cases/45original-license-support files remain unchanged and pending. Required generated alias runtime authority and wider current-world/layout/call prerequisites are described in HANDOFF.md; previous positive assertions are retained. Root review also requests a combined-budget/all-retained-source currentness audit in the separately active successor. This packet is a frozen source proposal, not an integration or certificate of full alias support.
+
+Merge fixtures into the complete canonical inventory with tools/import_rustc_tests.py; do not replace its manifest with this subset. Preserve both upstream licenses, revisions, auxiliaries and snapshots. No target, validation log or complete workspace is included. No runtime/full-fixture/task/JIT/Linux/release acceptance is claimed.

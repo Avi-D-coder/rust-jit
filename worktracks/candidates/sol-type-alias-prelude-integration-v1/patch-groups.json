@@ -1,0 +1,73 @@
+{
+  "groups": {
+    "production.patch": [
+      "crates/lrr/src/expand/source_discovery/generated_compiler_facets.rs",
+      "crates/lrr/src/frontend/compile_input_catalog/primitive_facet.rs",
+      "crates/lrr/src/frontend/compile_input_catalog/type_prelude_facet.rs",
+      "crates/lrr/src/frontend/dollar_crate.rs",
+      "crates/lrr/src/frontend/generated_constant_provenance.rs",
+      "crates/lrr/src/frontend/generated_primitive_admission.rs",
+      "crates/lrr/src/frontend/generated_type_admission.rs",
+      "crates/lrr/src/frontend/source_type_alias_normalization.rs",
+      "crates/lrr/src/frontend/source_type_alias_query.rs",
+      "crates/lrr/src/frontend/type_prelude_admission.rs",
+      "crates/lrr/src/source/changes/crate_policy.rs",
+      "crates/lrr/src/syntax/generated_type_site.rs",
+      "crates/lrr/src/syntax/type_prelude_sites.rs"
+    ],
+    "declaration-hook.patch": [
+      "crates/lrr/src/frontend/generated_macros.rs",
+      "crates/lrr/src/frontend/hygiene.rs",
+      "crates/lrr/src/frontend/source_macros.rs",
+      "crates/lrr/src/source/changes.rs",
+      "crates/lrr/src/source/dependencies.rs",
+      "crates/lrr/src/source/module_view.rs"
+    ],
+    "catalogue-hook.patch": [
+      "crates/lrr/src/frontend/compile_input_catalog.rs",
+      "crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs"
+    ],
+    "publication-hook.patch": [
+      "crates/lrr/src/db/seals.rs",
+      "crates/lrr/src/expand/source_discovery.rs",
+      "crates/lrr/src/expand/source_discovery/type_prelude.rs"
+    ],
+    "memo-hook.patch": [
+      "crates/lrr/src/db/memo.rs",
+      "crates/lrr/src/db/source_alias_inputs.rs"
+    ],
+    "consumer-hook.patch": [
+      "crates/lrr/src/frontend/type_aliases.rs",
+      "crates/lrr/src/frontend/type_aliases/current_source.rs"
+    ],
+    "attachment.patch": [
+      "crates/lrr/src/frontend/mod.rs",
+      "crates/lrr/src/syntax/mod.rs"
+    ],
+    "acceptance.patch": [
+      "crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs",
+      "crates/lrr/src/frontend/generated_constant_provenance_tests.rs",
+      "crates/lrr/src/frontend/generated_primitive_admission_tests.rs",
+      "crates/lrr/src/frontend/generated_type_admission_tests.rs",
+      "crates/lrr/src/frontend/source_type_alias_normalization_tests.rs",
+      "crates/lrr/src/frontend/type_prelude_admission_tests.rs",
+      "crates/lrr/src/source/changes/crate_policy_tests.rs"
+    ],
+    "harness-adapters.patch": [
+      "xtask/tests/call_contracts.rs",
+      "xtask/tests/type_aliases.rs"
+    ]
+  },
+  "patches": {
+    "production.patch": "4d0cdcb1edd11178e1e0ea249ba04e4a9d170a67f18ff7f1a7e5916d54cf83dc",
+    "declaration-hook.patch": "c290d378229202eecc3134a57a9a49bb949cd0b17613f668219a43a17c5eec0c",
+    "catalogue-hook.patch": "69bc2b1bd7f6ad5b05e5183a14438a2e7bc6ee10ef756922271f900022d260b8",
+    "publication-hook.patch": "0f482357bae31065ea9c10d32aa912601bb0aa2e9fd58e5450503eef1f0bd50d",
+    "memo-hook.patch": "46e702890274984e9086fab878097af5d77f69757629cea9579b9573c133baf8",
+    "consumer-hook.patch": "15354699f163c2a5f744834d563f3f9263cc755560ef98e2293511d332e05712",
+    "attachment.patch": "cd77bec78e15a14471f65f7c150082bbdb92eb3e22baa8b703e8f6e7476eec8e",
+    "acceptance.patch": "ba28decfb0e76ba41dd178c83c0b8de0f795e4668ed956cc2f5696041bebdf75",
+    "harness-adapters.patch": "7030ce45214bcd9e2846bbb08b89bf96ebc66102cf82ec10d32ee9ffb0e6dd74",
+    "complete.patch": "6f506968d61d81e058e9c7a947503c832cefc42dcd0c5f1e109f0d276f57f5b4"
+  }
+}

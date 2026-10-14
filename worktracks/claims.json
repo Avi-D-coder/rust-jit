@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Root T054 reached-macro and exact length-child demand forwarding;840/0 private library,13 normal constant controls,9 new macro controls,architecture/fmt. Strict21 and MAIN milestone remain required; configured upstream runtime/full-fixture0.",
+      "scope": "Root T054 const/local/anonymous source logic; v66 pure bank11/0 strict/audit/fmt passed; full gate99020 running.8-file inference/loop/local successor26uncompiled controls. No MAIN/task/runtime/full-fixture acceptance.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -407,11 +407,13 @@
         "artifacts/macos-first/root-enabled-cfg-catalog-v1/",
         "artifacts/macos-first/root-constant-local-cells-v1/",
         "artifacts/macos-first/root-dependency-compiler-preparation-v1/",
-        "artifacts/macos-first/root-stock-edition-compiler-preparation-v1/"
+        "artifacts/macos-first/root-stock-edition-compiler-preparation-v1/",
+        "artifacts/macos-first/root-constant-local-inference-v1/",
+        "artifacts/macos-first/root-constant-length-refusal-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T18:53:55.136702+00:00",
+      "updated_at": "2026-10-14T20:12:59.778783+00:00",
       "review_after": "2026-10-15T05:55:00.598518+00:00"
     },
     {
@@ -448,7 +450,7 @@
       "owner": "/root/generic_call_logic",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Frozen generated hygienic type packet; active private compiler primitive facet with actual published Type membership, source/origin/policy/profile proof. Default/custom Type prelude remains prerequisite; source-only/uncompiled.",
+      "scope": "Frozen39-path Type/prelude/alias source integration published uncompiled; active actual generated alias runtime preparation plus combined-budget/all-retained-source currentness repair. No invented primitive/source/call authority.",
       "paths": [
         "artifacts/macos-first/sol-constant-macro-admission-v1/",
         "artifacts/macos-first/sol-constant-path-selection-v1/",
@@ -468,11 +470,14 @@
         "artifacts/macos-first/sol-generated-constant-provenance-v1/",
         "artifacts/macos-first/sol-generated-hygienic-source-type-v1/",
         "artifacts/macos-first/sol-generated-primitive-admission-v1/",
-        "artifacts/macos-first/sol-generated-type-prelude-admission-v1/"
+        "artifacts/macos-first/sol-generated-type-prelude-admission-v1/",
+        "artifacts/macos-first/sol-source-type-alias-normalization-v1/",
+        "artifacts/macos-first/sol-type-alias-prelude-integration-v1/",
+        "artifacts/macos-first/sol-alias-runtime-prerequisites-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T17:10:07.401527+00:00",
+      "updated_at": "2026-10-14T20:37:03.378152+00:00",
       "review_after": "2026-10-15T05:26:09.232158+00:00"
     },
     {
@@ -537,7 +542,7 @@
       "owner": "/root/stock_numeric_logic",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Frozen closure enum/Arc consumers handed off with explicit runtime frontiers; active genuine retained closure body/header/source-call admission. No manufactured Fn/Copy/ABI/activation evidence, source-only/uncompiled.",
+      "scope": "Source-only coherent interpreter closure integration: actual body/currentness, typed layout/capture/env/adoption/publication behind charged operation boundaries. Fn/Copy/ABI/activation/completion remain separate prerequisites; uncompiled.",
       "paths": [
         "artifacts/macos-first/sol-source-closures-v1/",
         "artifacts/macos-first/sol-closure-own-bindings-v1/",
@@ -551,11 +556,12 @@
         "artifacts/macos-first/sol-closure-frame-publication-v1/",
         "artifacts/macos-first/sol-closure-enum-consumers-v1/",
         "artifacts/macos-first/sol-closure-lifecycle-transfer-v1/",
-        "artifacts/macos-first/sol-closure-source-call-admission-v1/"
+        "artifacts/macos-first/sol-closure-source-call-admission-v1/",
+        "artifacts/macos-first/sol-closure-interpreter-integration-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T19:00:22.597404+00:00",
+      "updated_at": "2026-10-14T20:12:59.778783+00:00",
       "review_after": "2026-10-15T11:54:30.661821+00:00"
     },
     {

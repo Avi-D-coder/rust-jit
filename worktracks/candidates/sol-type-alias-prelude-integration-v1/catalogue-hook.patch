@@ -1,0 +1,98 @@
+diff --git a/crates/lrr/src/frontend/compile_input_catalog.rs b/crates/lrr/src/frontend/compile_input_catalog.rs
+--- a/crates/lrr/src/frontend/compile_input_catalog.rs
++++ b/crates/lrr/src/frontend/compile_input_catalog.rs
+@@ -30,6 +30,9 @@
+     allocation: Option<Digest>,
+     definitions: BTreeMap<Digest, (MacroDefinition, CompileInputDescriptor)>,
+     attributes: Option<super::builtin_attributes::BuiltinAttributeCatalog>,
++    // Language builtin Type declarations are independent of Macro/Attribute facets.
++    primitive: Option<primitive_facet::CompilerPrimitiveFacet>,
++    type_prelude: Option<type_prelude_facet::CompilerTypePreludeFacet>,
+ }
+ impl CompileInputCatalog {
+     /// Caller supplies a compiler-owned facet. User macros cannot construct descriptors.
+@@ -69,11 +72,14 @@
+             allocation: None,
+             definitions,
+             attributes: None,
++            primitive: None,
++            type_prelude: None,
+         })
+     }
+     /// Construct the pinned compiler facets for a captured standalone profile.
+     /// This supplies definition facts only, never expansion authority.
+     pub fn standalone(profile: &crate::core::profile::ProfileIdentity) -> Result<Self, Diagnostic> {
++        profile.validate_source()?;
+         let mut descriptors = Vec::new();
+         descriptors
+             .try_reserve_exact(6)
+@@ -91,12 +97,19 @@
+                     .ok_or_else(|| fault("pinned compiler inventory descriptor absent"))?,
+             );
+         }
+-        Self::new(
++        let mut catalog = Self::new(
+             crate::facade::unit(profile, "core"),
+             profile.edition,
+             descriptors,
+         )?
+-        .with_standard_facades(profile)
++        .with_standard_facades(profile)?;
++        catalog.primitive = Some(primitive_facet::CompilerPrimitiveFacet::for_profile(
++            profile,
++        )?);
++        catalog.type_prelude = Some(type_prelude_facet::CompilerTypePreludeFacet::for_profile(
++            profile,
++        )?);
++        Ok(catalog)
+     }
+     pub(crate) fn with_standard_facades(
+         mut self,
+@@ -380,3 +393,9 @@
+         }
+     }
+ }
++
++mod primitive_facet;
++
++pub(crate) use primitive_facet::{CompilerPrimitiveReceipt, prepare_primitive_receipts};
++
++mod type_prelude_facet;
+diff --git a/crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs b/crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs
+--- a/crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs
++++ b/crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs
+@@ -3,7 +3,7 @@
+ use crate::core::profile::ProfileIdentity;
+ impl CompileInputCatalog {
+     pub(crate) fn owning_profile_identity(&self) -> Result<Digest, Diagnostic> {
+-        let mut e = StableEncoder::new("lrr/v1/prepared-compiler-facet-membership");
++        let mut e = StableEncoder::new("lrr/v3/prepared-compiler-facet-membership/type-prelude-v1");
+         e.digest(self.unit);
+         e.u16(self.edition);
+         e.map(&self.facades, |e, name, unit| {
+@@ -41,6 +41,8 @@
+         } else {
+             e.bool(false)
+         }
++        e.option(&self.primitive, |e, facet| e.record(facet));
++        e.option(&self.type_prelude, |e, facet| e.record(facet));
+         Ok(e.finish())
+     }
+     pub(crate) fn canonical_standalone_member(
+@@ -90,6 +92,16 @@
+                 )
+                 .ok_or_else(|| fault("compiler Attribute metadata overflow"))?;
+         }
++        if let Some(facet) = &self.primitive {
++            bytes = bytes
++                .checked_add(facet.metadata_bytes()?)
++                .ok_or_else(|| fault("compiler primitive facet metadata overflow"))?;
++        }
++        if let Some(facet) = &self.type_prelude {
++            bytes = bytes
++                .checked_add(facet.metadata_bytes()?)
++                .ok_or_else(|| fault("Type prelude facet metadata overflow"))?;
++        }
+         if bytes > 64 * 1024 {
+             return Err(fault("compiler facet retained metadata limit"));
+         }

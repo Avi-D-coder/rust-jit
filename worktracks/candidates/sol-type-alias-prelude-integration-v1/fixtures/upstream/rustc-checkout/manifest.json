@@ -1,0 +1,434 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/rust-lang/rust",
+  "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "license": "MIT OR Apache-2.0",
+  "scope": "Selected unchanged official UI cases; no complete-suite or execution claim",
+  "files": [
+    {
+      "path": "COPYRIGHT",
+      "git_blob": "4dad74f234eaaaa3c311ca031216e16fc9c4e940",
+      "sha256": "172020dbfd5b53a226dfde77616190a48dcff519b0bc0e6deb91a8450782c4af",
+      "bytes": 1571
+    },
+    {
+      "path": "LICENSE-APACHE",
+      "git_blob": "1b5ec8b78e237b5c3b3d812a7c0a6589d0f7161d",
+      "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "bytes": 9723
+    },
+    {
+      "path": "LICENSE-MIT",
+      "git_blob": "a2070c4be7acd5316f8d0357ca3c12419a2f3c62",
+      "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "bytes": 1068
+    },
+    {
+      "path": "compiler/rustc_builtin_macros/src/standard_library_imports.rs",
+      "git_blob": "674793937c1a946a6ac3f602590eb71ee2283803",
+      "sha256": "a365af89a06b81e1799e1a8eb7d16de3962cbb72c70674b6439ceebaaca3230c",
+      "bytes": 2434
+    },
+    {
+      "path": "compiler/rustc_hir/src/hir.rs",
+      "git_blob": "ceb7f38c2a416268081995401714c9482cd61605",
+      "sha256": "d3c178a59f546b04da5fb87f5ea1de306d04bbb1e93b4123dfac37af9db916fa",
+      "bytes": 187725
+    },
+    {
+      "path": "compiler/rustc_resolve/src/build_reduced_graph.rs",
+      "git_blob": "09d7f5dd11006580603fd8188c21178cde630841",
+      "sha256": "ca475d03c0a8a15804a6e470e1052db59cf05f7c7cdb9d43515a7a5a87213946",
+      "bytes": 66967
+    },
+    {
+      "path": "compiler/rustc_resolve/src/ident.rs",
+      "git_blob": "6a5a73715c840a2c8ee2a6defd77d98c4a9f02f6",
+      "sha256": "016da0753a63b25bb3872090c00d19004cc6edf40cd88f1a2a7b44c0128e3cb1",
+      "bytes": 100833
+    },
+    {
+      "path": "compiler/rustc_resolve/src/late.rs",
+      "git_blob": "f146a6ffeaa00fdc85ea4c54a6b698e97a4bf9bd",
+      "sha256": "0c8560d97898126597085247c6255a1ba166c35859d9ba9e7a2a03613e5127e9",
+      "bytes": 252848
+    },
+    {
+      "path": "compiler/rustc_resolve/src/lib.rs",
+      "git_blob": "196a499d76baf8e083a5732841397665059953d7",
+      "sha256": "fa6191114e5ce3247dead3d3f1ebc9806ea23ae3057c52c0b219ec57d35c9a0c",
+      "bytes": 118758
+    },
+    {
+      "path": "library/core/src/prelude/mod.rs",
+      "git_blob": "8d867a269a21accf5ef1d7f31a3656c6bafbb675",
+      "sha256": "3db82d282c4ac980659183842d446e13d28b0bab609f3dc37e2036d9fefceb4c",
+      "bytes": 2868
+    },
+    {
+      "path": "library/core/src/prelude/v1.rs",
+      "git_blob": "6122ab12ec35177214419b5163f93b7984ea6f4f",
+      "sha256": "b57d120c6762622bd33114f46267dab8ba6c88be38f1433adb62d4ba36cd3a68",
+      "bytes": 5580
+    },
+    {
+      "path": "library/std/src/prelude/mod.rs",
+      "git_blob": "78eb79ac666a22dcc33d9dd75648498692d4b351",
+      "sha256": "04e3eabaab3ff44016155b2949e7b6751547f9c480be51fb8a448ac8c9b2e105",
+      "bytes": 8069
+    },
+    {
+      "path": "library/std/src/prelude/v1.rs",
+      "git_blob": "aeefec8b9e084aa82db90a0b53510be7aa228ee8",
+      "sha256": "393900118db4000a0bd90f7c8f50fcb55475939586f24285ecca70925d6a6a2c",
+      "bytes": 6332
+    },
+    {
+      "path": "tests/ui/checked-type-alias/variance-overflow.rs",
+      "git_blob": "3da7da1ed425de6326411795587994f879d09f7c",
+      "sha256": "bd82dfc0311c3880d9bd9f09fc9fe2621957ff1e448a3e471966c32fdec773cf",
+      "bytes": 1590
+    },
+    {
+      "path": "tests/ui/checked-type-alias/variance-overflow.stderr",
+      "git_blob": "3ea61d9ade9f3914ffe4e6d44b831588d57dd0ef",
+      "sha256": "b9370e806d14304a4dba887277d839fd106797e7f160fe953c559650a827abd9",
+      "bytes": 2140
+    },
+    {
+      "path": "tests/ui/const-generics/early/const-param-shadowing.rs",
+      "git_blob": "ddd15dbc41bc36c85f19647c8c87fb8206daee00",
+      "sha256": "5f170435979a90d04387ee0adeaeae6b34aeacab61c9710af477c29240468549",
+      "bytes": 133
+    },
+    {
+      "path": "tests/ui/const-generics/early/const-param-shadowing.stderr",
+      "git_blob": "3ae2c9c8e60b1190496e90d6e0d9117733549fde",
+      "sha256": "5444f935e5e3f5106f2dc504b2a7887d56838098e84d610d02e6247d2cf1da66",
+      "bytes": 487
+    },
+    {
+      "path": "tests/ui/dep-graph/dep-graph-type-alias.rs",
+      "git_blob": "a083f905b8ff9782b8a99da4e594ba506f510cf0",
+      "sha256": "5e343cc229effb4601f401200d64677da5c5f583083ff71ed4ab0b0005ce3586",
+      "bytes": 1337
+    },
+    {
+      "path": "tests/ui/dep-graph/dep-graph-type-alias.stderr",
+      "git_blob": "63312a5f249da9d235094a6abcc368797e21791d",
+      "sha256": "3e57be33bb8f348d6b41a8a6c8d2c997447b0c43e2254054708cd8e665bea794",
+      "bytes": 1957
+    },
+    {
+      "path": "tests/ui/hygiene/auxiliary/intercrate.rs",
+      "git_blob": "0685358851edda9aae3c0bd6ef27ea867d9aff66",
+      "sha256": "4bb422bdb6d2fa28647327745572600a15f87be9eec0b069c3910dba8d228df4",
+      "bytes": 996
+    },
+    {
+      "path": "tests/ui/hygiene/auxiliary/not-libstd.rs",
+      "git_blob": "babba293d03bdded07a45c0a558a857cedb7445c",
+      "sha256": "b00d6bec91daa613b0bf3f61f8c51443e871dd971b6eee9b20adca78dd28e183",
+      "bytes": 27
+    },
+    {
+      "path": "tests/ui/hygiene/auxiliary/stdlib-prelude.rs",
+      "git_blob": "81b0b7faa5ba7795c00c75919c660753c880a902",
+      "sha256": "51716c5b50e2637426bf6e18025300b0584b2fd389c0929d69bc5567153bf76f",
+      "bytes": 53
+    },
+    {
+      "path": "tests/ui/hygiene/dollar-crate-modern.rs",
+      "git_blob": "c08976c9260cfb15c9f496b0e7af77ccad1b8af4",
+      "sha256": "f06143a6474bf853238927fa95a3967d8ba567482285d8d0d4186ded496ff412",
+      "bytes": 602
+    },
+    {
+      "path": "tests/ui/hygiene/no_implicit_prelude-2018.rs",
+      "git_blob": "015bff870908e6512113e9b1dc4a790d833613a0",
+      "sha256": "74087932ad1893fb963dbe1a0277243cbeb20081a539c6201c259d73c269fd12",
+      "bytes": 187
+    },
+    {
+      "path": "tests/ui/hygiene/no_implicit_prelude-2018.stderr",
+      "git_blob": "7b124edf6f6db3cc1c5a7cb6a79a08c274e98bf3",
+      "sha256": "c4419b0ae9824cf8447bb94ba07c10ecb0c5b120f13070a584931d41e04fdf0e",
+      "bytes": 255
+    },
+    {
+      "path": "tests/ui/hygiene/no_implicit_prelude-2021.rs",
+      "git_blob": "9e793ec7c6d97a3641e05d12cbe9e7e446a6938e",
+      "sha256": "32774d49609daceb4f9c2bdde93dbdd32c8735bfa88686e7b4d00187cd22c008",
+      "bytes": 133
+    },
+    {
+      "path": "tests/ui/hygiene/no_implicit_prelude.rs",
+      "git_blob": "bfe7a6a4461430ae4aa0f24739936e0b7a5521db",
+      "sha256": "989b58d142bcf5e557029a3c7b52b4a9f1024f8658ebb65a7d79f6233962ba4d",
+      "bytes": 374
+    },
+    {
+      "path": "tests/ui/hygiene/no_implicit_prelude.stderr",
+      "git_blob": "10573662fc44291bfe3ac63697a014e6fdf82761",
+      "sha256": "33db80e11ab5f03ba44960712ff35f2a639b4f1313457487b06828d52d0785e1",
+      "bytes": 1068
+    },
+    {
+      "path": "tests/ui/hygiene/prelude-import-hygiene.rs",
+      "git_blob": "a27c375369bc4465290eab809fe972c4d0de86d7",
+      "sha256": "d502a7d586f2cfbac61dfb5e9290d4da114f96bcbbda84dcc59b8b0e465b48bf",
+      "bytes": 764
+    },
+    {
+      "path": "tests/ui/hygiene/stdlib-prelude-from-opaque-early.rs",
+      "git_blob": "f08693f221898191dc86dd6f6d860e210c46be7a",
+      "sha256": "c8acaf1fbecf5c254fda18d92aca4ad2b2de863b09be44903e83ea87f7aaeafe",
+      "bytes": 323
+    },
+    {
+      "path": "tests/ui/macros/macro-pub-matcher.rs",
+      "git_blob": "20cacab390d5a0eceb7d27d680d657ae5a3ee5e6",
+      "sha256": "d1561e1b30c1b809a77cb5a2ec22b2c119aafb9e822ed76a8d70edde655ccbd2",
+      "bytes": 4521
+    },
+    {
+      "path": "tests/ui/macros/macro-tt-matchers.rs",
+      "git_blob": "004be966cb492e7e2bba2a4b286729500cf8147f",
+      "sha256": "962222c95e211c3127a46fff6ba0a3f635d93de71748b81c5fdda1bbdc4cd6d3",
+      "bytes": 161
+    },
+    {
+      "path": "tests/ui/parser/raw/raw-idents.rs",
+      "git_blob": "fd0a4c7522a09a5c54cadc1dd1e929f777515330",
+      "sha256": "ea07c8b14ab1e180d83fe9cd408b2604b32714d635b8e85f41cc6afeeb3f1a7d",
+      "bytes": 3716
+    },
+    {
+      "path": "tests/ui/resolve/no-implicit-prelude-nested.rs",
+      "git_blob": "fae52c0edc1aab4d4772daf30f907e9c112b51c1",
+      "sha256": "8979a9c5dfae167edd859f0a9a3c44c0acb0ded6e103aad3f8e5bd4ac924a4b4",
+      "bytes": 2075
+    },
+    {
+      "path": "tests/ui/resolve/no-implicit-prelude-nested.stderr",
+      "git_blob": "5ba8dafb08baa42e5b84a20e2f7017c5c544f4c4",
+      "sha256": "9b989e5788787bfbda55498b29ec99de51ca787dd0e5400670d4e918216121a2",
+      "bytes": 5090
+    },
+    {
+      "path": "tests/ui/resolve/no-implicit-prelude.rs",
+      "git_blob": "e2074bbb8c844503b88f071436f92abfa74e0a99",
+      "sha256": "07aefb25930848b70bff32f711d521611cccead51f3b563161ef7f52351aa8f0",
+      "bytes": 808
+    },
+    {
+      "path": "tests/ui/resolve/no-implicit-prelude.stderr",
+      "git_blob": "ba34a5cb647a0661851a9bc9c347cd4287461b61",
+      "sha256": "e93d9f93dba14adb978b9abde2586a46607abde43f309c9577dd359c58bceb6f",
+      "bytes": 1648
+    },
+    {
+      "path": "tests/ui/shadowed/primitive-type-shadowing.rs",
+      "git_blob": "fdcb4246a82fc957a5cf5a795d10ac346a8b4d4a",
+      "sha256": "f8347c7e72dc88adf6f94a69f5726c214e24e0c57a569d5ddf2f8f9913da66c6",
+      "bytes": 445
+    },
+    {
+      "path": "tests/ui/traits/trait-implementation-for-primitive-type-5280.rs",
+      "git_blob": "72a4283bc7e2ba32b978ef7bd04872d96bbf0632",
+      "sha256": "ce060b90544252d2581a268da8275bc6de40fbb77584f9acaea9a5a2f7630ba6",
+      "bytes": 316
+    },
+    {
+      "path": "tests/ui/type/type-alias-bounds.rs",
+      "git_blob": "37c073fe1f95d9a5592f382b717355fbaa2f081b",
+      "sha256": "797120efbb9f3ca6534ee4531c463ade9171679ee6d689145b8d20c608b94fae",
+      "bytes": 2374
+    },
+    {
+      "path": "tests/ui/type/type-alias-bounds.stderr",
+      "git_blob": "1634440100cdcfccc041481c818bfca2443db654",
+      "sha256": "9cae2c840025aa1aea2d8d2a3fc1135ff5634f547010404e8997b86dd951c1d6",
+      "bytes": 6413
+    },
+    {
+      "path": "tests/ui/unpretty/exhaustive.expanded.stdout",
+      "git_blob": "6dd7b4c5e1f3aaf330a724930877316cf0ffa56d",
+      "sha256": "a0ad6d4e950d369233ba565aa58dc3e8d51efde82a64c0074789c08b33a542e3",
+      "bytes": 15229
+    },
+    {
+      "path": "tests/ui/unpretty/exhaustive.hir.stderr",
+      "git_blob": "5ca4b080a95e521b54c18da33c90a3e105fb6c99",
+      "sha256": "b415d7681aec69c0ff2b3ada9e61c43a5be796482fe89f6724b81247b28d5f44",
+      "bytes": 6755
+    },
+    {
+      "path": "tests/ui/unpretty/exhaustive.hir.stdout",
+      "git_blob": "025314709cf6c77172bf49852be8e9ef54f3e8fa",
+      "sha256": "916daba3c52897af13bec6ad7d0aa2c2aebccaa864d243ef2d379c8b33e41772",
+      "bytes": 17107
+    },
+    {
+      "path": "tests/ui/unpretty/exhaustive.rs",
+      "git_blob": "62a8b6b9ecc20970d85c420a00b92864c679f291",
+      "sha256": "9b68342f5b8e4cb2a236ffc318a2188ccd566f5b2d982537d2e8e365e0765604",
+      "bytes": 17537
+    }
+  ],
+  "cases": [
+    {
+      "path": "tests/ui/checked-type-alias/variance-overflow.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/const-generics/early/const-param-shadowing.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/dep-graph/dep-graph-type-alias.rs",
+      "directives": [
+        "//@ incremental",
+        "//@ compile-flags: -Z query-dep-graph"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/hygiene/dollar-crate-modern.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ aux-build:intercrate.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/hygiene/no_implicit_prelude-2018.rs",
+      "directives": [
+        "//@ edition:2018"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/hygiene/no_implicit_prelude-2021.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ edition:2021"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/hygiene/no_implicit_prelude.rs",
+      "directives": [
+        "//@ edition:2015"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/hygiene/prelude-import-hygiene.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ aux-build:not-libstd.rs",
+        "//@revisions: rust2015 rust2018",
+        "//@[rust2018] edition:2018"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/hygiene/stdlib-prelude-from-opaque-early.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ aux-build:stdlib-prelude.rs"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/macro-pub-matcher.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/macro-tt-matchers.rs",
+      "directives": [
+        "//@ build-pass (FIXME(62277): could be check-pass?)"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/parser/raw/raw-idents.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ revisions:e2015 e2018 e2021 e2024",
+        "//@[e2015] edition:2015",
+        "//@[e2018] edition:2018",
+        "//@[e2021] edition:2021",
+        "//@[e2024] edition:2024"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/resolve/no-implicit-prelude-nested.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/resolve/no-implicit-prelude.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/shadowed/primitive-type-shadowing.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/traits/trait-implementation-for-primitive-type-5280.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/type/type-alias-bounds.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/unpretty/exhaustive.rs",
+      "directives": [
+        "//@ revisions: expanded hir",
+        "//@[expanded]compile-flags: -Zunpretty=expanded",
+        "//@[expanded]check-pass",
+        "//@[hir]compile-flags: -Zunpretty=hir",
+        "//@[hir]check-fail",
+        "//@ edition:2024"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    }
+  ]
+}

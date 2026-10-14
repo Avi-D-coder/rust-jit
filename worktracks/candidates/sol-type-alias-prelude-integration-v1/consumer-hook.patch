@@ -1,0 +1,323 @@
+diff --git a/crates/lrr/src/frontend/type_aliases.rs b/crates/lrr/src/frontend/type_aliases.rs
+--- a/crates/lrr/src/frontend/type_aliases.rs
++++ b/crates/lrr/src/frontend/type_aliases.rs
+@@ -34,11 +34,31 @@
+     NeedProducer(Digest),
+     NeedOwnerContext(ScopeKey),
+     Unresolved(NameLookup),
++    NeedCurrentSource {
++        definition: Digest,
++        scope: ScopeKey,
++        missing: CurrentAliasPrerequisite,
++    },
+     Deferred {
+         definition: Digest,
+         target: Vec<TokenRecipe>,
+     },
+ }
++/// Closed negative readiness only; no primitive/source authority is exposed.
++#[derive(Debug, Clone, Eq, PartialEq)]
++pub enum CurrentAliasPrerequisite {
++    TypeNamespace(ScopeKey),
++    CompilerReceipt,
++    RetainedSource(Digest),
++    GeneratedOrigin,
++    GenericSubstitution(Digest),
++    WrittenTarget(Digest),
++    Prelude,
++    SourceType(NameLookup),
++    OwnerContext(ScopeKey),
++}
++#[path = "type_aliases/current_source.rs"]
++mod current_source;
+ struct AliasDeclaration {
+     definition: DefKey,
+     scope: ScopeKey,
+@@ -280,6 +300,9 @@
+                 }));
+             }
+             if let Some(term) = &alias.symbolic {
++                if matches!(term,TyTerm::Primitive(p) if *p!=crate::ir::op::PrimitiveType::Unit) {
++                    return self.normalize_primitive_current(db, initial, trace);
++                }
+                 return QueryPoll::Ready(Ok(AliasTarget::Type(term.clone())));
+             }
+             if alias.target.len() != 1 {
+@@ -301,8 +324,8 @@
+                 Err(error) => return QueryPoll::Ready(Err(error)),
+             };
+             match resolved {
+-                SignatureName::Primitive(p) => {
+-                    return QueryPoll::Ready(Ok(AliasTarget::Type(TyTerm::Primitive(p))));
++                SignatureName::Primitive(_) => {
++                    return self.normalize_primitive_current(db, initial, trace);
+                 }
+                 SignatureName::Str => return QueryPoll::Ready(Ok(AliasTarget::Str)),
+                 SignatureName::Source(source) => definition = source.identity,
+diff --git a/crates/lrr/src/frontend/type_aliases/current_source.rs b/crates/lrr/src/frontend/type_aliases/current_source.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/type_aliases/current_source.rs
+@@ -0,0 +1,262 @@
++//! Existing alias consumer joins actual published Type/compiler preparation and real queries.
++use super::*;
++use crate::{
++    db::seals::SealKey,
++    expand::source_declarative::SourceDeclarative,
++    frontend::{
++        compile_input_catalog::CompileInputCatalog,
++        source_type_alias_normalization::{
++            CurrentSourcePrimitiveAlias, SourceAliasOutcome, SourceAliasPrerequisite,
++        },
++        source_type_alias_query::QueriedSourcePrimitiveAlias,
++        type_prelude_admission::TypePreludePrerequisite,
++    },
++};
++use std::sync::Arc;
++const MAX: usize = 32 * 1024 * 1024;
++fn limit() -> Diagnostic {
++    Diagnostic::new(
++        "LRR-E-METADATA-LIMIT",
++        "current alias consumer metadata budget".into(),
++    )
++}
++fn charge(bytes: &mut usize, n: usize) -> Result<(), Diagnostic> {
++    *bytes = bytes
++        .checked_add(n)
++        .filter(|n| *n <= MAX)
++        .ok_or_else(limit)?;
++    Ok(())
++}
++fn replay_catalog(
++    db: &Database,
++    source: &PreparedSourceView,
++    scope: &ScopeKey,
++    bytes: &mut usize,
++) -> Result<Option<(SealKey, CompileInputCatalog)>, Diagnostic> {
++    let Some(row) = db.source_alias_type_certificate(
++        source.selection(),
++        scope,
++        MAX.checked_sub(*bytes).ok_or_else(limit)?,
++    )?
++    else {
++        return Ok(None);
++    };
++    let InputValue::DiscoverySeal(input) = row.as_ref() else {
++        return Err(fault("alias current Type certificate variant differs"));
++    };
++    let Some(receipt) = input.compiler_primitive_receipt(source.selection())? else {
++        return Ok(None);
++    };
++    // Real private published receipt is required before replaying the closed catalogue.
++    charge(bytes, 64 * 1024)?;
++    let catalog = CompileInputCatalog::standalone(&source.selection().outline.parse.profile)?;
++    if !receipt.matches(source.selection(), &catalog)? {
++        return Ok(None);
++    };
++    charge(
++        bytes,
++        catalog
++            .owning_profile_metadata_bytes()?
++            .checked_mul(2)
++            .ok_or_else(limit)?,
++    )?;
++    Ok(Some((input.seal.key(), catalog)))
++}
++fn missing(initial: Digest, scope: &ScopeKey, why: CurrentAliasPrerequisite) -> AliasTarget {
++    AliasTarget::NeedCurrentSource {
++        definition: initial,
++        scope: scope.clone(),
++        missing: why,
++    }
++}
++fn map_need(n: SourceAliasPrerequisite) -> CurrentAliasPrerequisite {
++    match n {
++        SourceAliasPrerequisite::TypeNamespace(s) => CurrentAliasPrerequisite::TypeNamespace(s),
++        SourceAliasPrerequisite::Name(n) => CurrentAliasPrerequisite::SourceType(n),
++        SourceAliasPrerequisite::RetainedDeclaration(d) => {
++            CurrentAliasPrerequisite::RetainedSource(d)
++        }
++        SourceAliasPrerequisite::GenericSubstitution(d) => {
++            CurrentAliasPrerequisite::GenericSubstitution(d)
++        }
++        SourceAliasPrerequisite::OwnerContext(s) => CurrentAliasPrerequisite::OwnerContext(s),
++        SourceAliasPrerequisite::WrittenTarget(d) => CurrentAliasPrerequisite::WrittenTarget(d),
++        SourceAliasPrerequisite::GeneratedOwner(_)
++        | SourceAliasPrerequisite::GeneratedAliasHop(_)
++        | SourceAliasPrerequisite::Origin(_) => CurrentAliasPrerequisite::GeneratedOrigin,
++        SourceAliasPrerequisite::Prelude(TypePreludePrerequisite::Member(n)) => {
++            CurrentAliasPrerequisite::SourceType(n)
++        }
++        SourceAliasPrerequisite::Prelude(TypePreludePrerequisite::TargetTypeNamespace(s)) => {
++            CurrentAliasPrerequisite::TypeNamespace(s)
++        }
++        SourceAliasPrerequisite::Prelude(_) => CurrentAliasPrerequisite::Prelude,
++        SourceAliasPrerequisite::CompilerPrimitiveFacet => {
++            CurrentAliasPrerequisite::CompilerReceipt
++        }
++        SourceAliasPrerequisite::UnknownPrimitive => {
++            CurrentAliasPrerequisite::SourceType(NameLookup::Absent)
++        }
++    }
++}
++impl AliasNormalizer<'_> {
++    pub(super) fn normalize_primitive_current(
++        &self,
++        db: &mut Database,
++        initial: Digest,
++        mut trace: Option<&mut AliasDependencyTrace>,
++    ) -> QueryPoll<AliasTarget> {
++        let result = (|| -> Result<QueryPoll<AliasTarget>, Diagnostic> {
++            db.require_coordinator()?;
++            let Some((ordinal, source, item)) =
++                self.sources.iter().enumerate().find_map(|(i, s)| {
++                    s.outline()
++                        .items
++                        .iter()
++                        .find(|item| item.def_key.fingerprint() == initial)
++                        .map(|item| (i, *s, item))
++                })
++            else {
++                let scope = match db.published_input(&InputKey::DeclarationContext(initial)) {
++                    Some((InputValue::DeclarationContext(c), _)) => {
++                        if c.scope.heap_bytes().checked_mul(2).is_none_or(|n| n > MAX) {
++                            return Err(limit());
++                        };
++                        c.scope.clone()
++                    }
++                    _ => return Err(fault("alias current initial context absent")),
++                };
++                return Ok(QueryPoll::Ready(Ok(missing(
++                    initial,
++                    &scope,
++                    CurrentAliasPrerequisite::GeneratedOrigin,
++                ))));
++            };
++            if item.def_key.item_kind != ItemKind::TypeAlias {
++                return Err(fault("alias current initial source member differs"));
++            };
++            let mut bytes = std::mem::size_of::<Vec<SourceDeclarative>>();
++            charge(
++                &mut bytes,
++                item.scope.heap_bytes().checked_mul(2).ok_or_else(limit)?,
++            )?;
++            charge(
++                &mut bytes,
++                self.sources
++                    .len()
++                    .checked_mul(std::mem::size_of::<SourceDeclarative>())
++                    .ok_or_else(limit)?,
++            )?;
++            let Some((key, initial_catalog)) = replay_catalog(db, source, &item.scope, &mut bytes)?
++            else {
++                let missing_kind = if db
++                    .source_alias_type_certificate(
++                        source.selection(),
++                        &item.scope,
++                        MAX.checked_sub(bytes).ok_or_else(limit)?,
++                    )?
++                    .is_some()
++                {
++                    CurrentAliasPrerequisite::CompilerReceipt
++                } else {
++                    CurrentAliasPrerequisite::TypeNamespace(item.scope.clone())
++                };
++                return Ok(QueryPoll::Ready(Ok(missing(
++                    initial,
++                    &item.scope,
++                    missing_kind,
++                ))));
++            };
++            let mut providers = Vec::new();
++            providers
++                .try_reserve_exact(self.sources.len())
++                .map_err(|_| crate::runtime::arena::resource())?;
++            for (i, s) in self.sources.iter().enumerate() {
++                // Reserve actual immutable source/header/index and alias-map replay before constructing a provider.
++                let source_bytes = s.prepared_metadata_bytes()?;
++                let dependencies_bytes = s.source_dependencies()?.metadata_bytes()?;
++                charge(
++                    &mut bytes,
++                    s.outline()
++                        .estimated_bytes()
++                        .checked_mul(16)
++                        .and_then(|n| n.checked_add(source_bytes.checked_mul(2)?))
++                        .and_then(|n| n.checked_add(dependencies_bytes.checked_mul(2)?))
++                        .ok_or_else(limit)?,
++                )?;
++                let mut provider = SourceDeclarative::new(s.share())?;
++                let catalog = if i == ordinal {
++                    Some(initial_catalog.clone())
++                } else {
++                    replay_catalog(db, s, &s.outline().root_scope, &mut bytes)?.map(|(_, c)| c)
++                };
++                provider.compiler = catalog.map(Arc::new);
++                providers.push(provider);
++            }
++            charge(
++                &mut bytes,
++                providers
++                    .len()
++                    .checked_mul(std::mem::size_of::<&SourceDeclarative>())
++                    .ok_or_else(limit)?,
++            )?;
++            let refs = providers.iter().collect::<Vec<_>>();
++            let owner = &providers[ordinal];
++            let source = match CurrentSourcePrimitiveAlias::capture_original_current(
++                db,
++                owner,
++                &item.scope,
++                &key,
++                &item.def_key.declared_name,
++                &refs,
++                MAX.checked_sub(bytes)
++                    .ok_or_else(limit)?
++                    .checked_div(2)
++                    .ok_or_else(limit)?,
++            )? {
++                SourceAliasOutcome::Ready(source) => source,
++                SourceAliasOutcome::Need(n) => {
++                    return Ok(QueryPoll::Ready(Ok(missing(
++                        initial,
++                        &item.scope,
++                        map_need(n),
++                    ))));
++                }
++            };
++            if source.selected_definition() != initial {
++                return Err(fault("alias current selected source identity differs"));
++            };
++            charge(&mut bytes, source.metadata_bytes())?;
++            let joined = match QueriedSourcePrimitiveAlias::capture_current(
++                db,
++                source,
++                MAX.checked_sub(bytes).ok_or_else(limit)?,
++            ) {
++                QueryPoll::Ready(Ok(p)) => p,
++                QueryPoll::Ready(Err(e)) => return Err(e),
++                QueryPoll::NeedInput(i) => return Ok(QueryPoll::NeedInput(i)),
++            };
++            if let Some(trace) = trace.as_deref_mut() {
++                for (key, expected) in joined.source().dependencies() {
++                    trace.push(DependencyStamp::Input {
++                        key: key.clone(),
++                        fingerprint: *expected,
++                    })?;
++                }
++                for (key, expected) in joined.query_dependencies() {
++                    trace.push(DependencyStamp::Query {
++                        key: key.clone(),
++                        fingerprint: *expected,
++                    })?;
++                }
++            }
++            Ok(QueryPoll::Ready(Ok(AliasTarget::Type(TyTerm::Primitive(
++                joined.source().primitive(),
++            )))))
++        })();
++        match result {
++            Ok(p) => p,
++            Err(e) => QueryPoll::Ready(Err(e)),
++        }
++    }
++}

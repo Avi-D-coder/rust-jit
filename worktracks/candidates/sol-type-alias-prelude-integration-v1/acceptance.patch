@@ -1,0 +1,3760 @@
+diff --git a/crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs b/crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/expand/source_discovery/generated_compiler_facets_tests.rs
+@@ -0,0 +1,642 @@
++//! Source/expansion/adoption components only; originals are not full fixture passes.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    db::{
++        dependency::{InputKey, InputValue},
++        key::{OutlineKey, QueryKey},
++        memo::Database,
++        poll::InputRequest,
++    },
++    expand::{generated_items::GeneratedItems, source_declarative::SourceDeclarativeDemand},
++    source::{
++        changes::{PreparedSourceInputs, SourceSelectionOutcome, SourceUnitInput},
++        dependencies::SourceDependency,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::parse::ParseKey,
++};
++use std::{collections::BTreeMap, path::Path};
++const MODERN: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/dollar-crate-modern.rs"
++);
++const INTERCRATE: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/auxiliary/intercrate.rs"
++);
++const UNUSED: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-const-eval.rs"
++);
++const MODULE: &str =
++    include_str!("../../../../../fixtures/upstream/rustc-checkout/tests/ui/modules/issue-56411.rs");
++fn unit(text: &str, path: &str, key: Digest, edition: u16) -> SourceUnitInput {
++    SourceUnitInput {
++        path: SourcePath::new(path).unwrap(),
++        crate_key: key,
++        module_path: vec![],
++        profile: ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        cfg: CfgSet::guest_default(),
++        blob: SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++    }
++}
++fn prepare(
++    units: Vec<SourceUnitInput>,
++    edges: Vec<SourceDependency>,
++) -> (Database, Vec<PreparedSourceView>, Vec<SourceDeclarative>) {
++    let selections: Vec<_> = units
++        .iter()
++        .map(|u| SourceSelection {
++            path: u.path.clone(),
++            outline: OutlineKey {
++                parse: ParseKey {
++                    content: u.blob.content(),
++                    profile: u.profile.clone(),
++                },
++                crate_key: u.crate_key,
++                module_path: u.module_path.clone(),
++                cfg: u.cfg.fingerprint(),
++            },
++        })
++        .collect();
++    let inputs =
++        PreparedSourceInputs::refresh_with_dependencies(None, units, Default::default(), edges)
++            .unwrap();
++    let views: Vec<_> = selections
++        .iter()
++        .map(|s| {
++            let SourceSelectionOutcome::Selected(v) = inputs.select(s).unwrap() else {
++                panic!()
++            };
++            v
++        })
++        .collect();
++    let mut db = Database::default();
++    inputs.publish(&mut db).unwrap();
++    db.begin_expansion_epoch(1).unwrap();
++    let mut providers: Vec<_> = views
++        .iter()
++        .map(|v| SourceDeclarative::new(v.share()).unwrap())
++        .collect();
++    let supplied = Arc::new(
++        CompileInputCatalog::standalone(&views[0].selection().outline.parse.profile).unwrap(),
++    );
++    let facets = super::super::compiler_profiles::PreparedSourceCompilerFacets::prepare(
++        &providers,
++        supplied,
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    facets.install(&mut providers).unwrap();
++    (db, views, providers)
++}
++fn expansion(
++    view: &PreparedSourceView,
++    providers: &[SourceDeclarative],
++    index: usize,
++    tail: &str,
++) -> GeneratedItems {
++    let call = view
++        .outline()
++        .item_invocations
++        .iter()
++        .find(|c| {
++            view.macro_call_at(c.range)
++                .unwrap()
++                .segments()
++                .last()
++                .is_some_and(
++                    |s| matches!(s,crate::syntax::imports::ImportSegment::Name(n) if n==tail),
++                )
++        })
++        .unwrap();
++    let routes =
++        super::super::SourceDiscovery::completed_macro_routes(providers, &BTreeMap::new()).unwrap();
++    let graph = super::super::SourceDiscovery::compiler_import_graph(&routes, providers).unwrap();
++    let SourceDeclarativeDemand::Ready(request) = providers[index]
++        .demand_for_discovery(
++            call.item_input,
++            Digest([80; 32]),
++            crate::expand::source_declarative::engine_version(),
++            &graph,
++            providers,
++        )
++        .unwrap()
++    else {
++        panic!("genuine original request must be selected")
++    };
++    GeneratedItems::admit(request.key(), Arc::new(request.expand().unwrap()), 1).unwrap()
++}
++fn catalog(view: &PreparedSourceView, items: &GeneratedItems) -> GeneratedMacroCatalog {
++    GeneratedMacroCatalog::new(
++        items,
++        view.outline().root_scope.clone(),
++        Key(items.record().key().parent_context.0),
++        view.captured_macro_cfg().unwrap(),
++        items.epoch(),
++    )
++    .unwrap()
++}
++fn nested(
++    caller: u16,
++    definition: u16,
++) -> (
++    Vec<PreparedSourceView>,
++    Vec<SourceDeclarative>,
++    GeneratedItems,
++    GeneratedMacroCatalog,
++) {
++    let root = Digest([81; 32]);
++    let aux = Digest([82; 32]);
++    let (_, views, ps) = prepare(
++        vec![
++            unit(MODERN, "modern.rs", root, caller),
++            unit(INTERCRATE, "intercrate.rs", aux, definition),
++        ],
++        vec![SourceDependency {
++            consumer: root,
++            alias: "intercrate".into(),
++            provider: aux,
++        }],
++    );
++    let items = expansion(&views[0], &ps, 0, "define_uses_dollar_crate_modern_nested");
++    let cat = catalog(&views[0], &items);
++    (views, ps, items, cat)
++}
++#[test]
++fn unchanged_cross_edition_generated_macro2_keeps_owner_facet_and_token_editions_distinct() {
++    for (caller, definition) in [(2015, 2024), (2018, 2021), (2021, 2018), (2024, 2015)] {
++        let (views, ps, items, cat) = nested(caller, definition);
++        let proof =
++            PreparedGeneratedCompilerFacet::capture_current(&ps[0], &cat, 1, 64 * 1024 * 1024)
++                .unwrap();
++        proof.revalidate_current(&ps[0], &cat, 1).unwrap();
++        assert_eq!(proof.selection.outline.parse.profile.edition, caller);
++        assert_eq!(proof.record.key().call_edition, caller);
++        assert_eq!(proof.record.key().definition_edition, definition);
++        assert_eq!(
++            proof.compiler.runtime_prelude_unit(false),
++            crate::facade::unit(&views[0].outline().profile, "core")
++        );
++        assert!(items.tokens().contexts().iter().any(|c| c.defining_unit.0
++            == views[1].selection().outline.crate_key.0
++            && c.edition
++                == match definition {
++                    2015 => crate::syntax::token_wire::Edition::E2015,
++                    2018 => crate::syntax::token_wire::Edition::E2018,
++                    2021 => crate::syntax::token_wire::Edition::E2021,
++                    2024 => crate::syntax::token_wire::Edition::E2024,
++                    _ => panic!(),
++                }));
++        assert_eq!(proof.record.output(), items.record().output());
++        assert!(proof.child.is_none()); // No physical source publication or runtime grant.
++    }
++}
++#[test]
++fn current_parent_copy_epoch_missing_catalogue_and_foreign_facet_refuse() {
++    let (_, mut ps, _, cat) = nested(2024, 2015);
++    let proof =
++        PreparedGeneratedCompilerFacet::capture_current(&ps[0], &cat, 1, 64 * 1024 * 1024).unwrap();
++    assert!(proof.revalidate_current(&ps[1], &cat, 1).is_err());
++    assert!(proof.revalidate_current(&ps[0], &cat, 2).is_err());
++    let (_, copy, _, _) = nested(2024, 2015);
++    assert!(proof.revalidate_current(&copy[0], &cat, 1).is_err());
++    ps[0].compiler = None;
++    assert_eq!(
++        PreparedGeneratedCompilerFacet::capture_current(&ps[0], &cat, 1, 64 * 1024 * 1024)
++            .err()
++            .unwrap()
++            .code,
++        "LRR-E-COMPILE-INPUT"
++    );
++    ps[0].compiler = ps[1].compiler.clone();
++    assert!(
++        PreparedGeneratedCompilerFacet::capture_current(&ps[0], &cat, 1, 64 * 1024 * 1024).is_err()
++    );
++    assert!(proof.revalidate_current(&ps[0], &cat, 1).is_err());
++}
++#[test]
++fn another_real_original_expansion_cannot_replay_the_retained_record() {
++    let (views, ps, _, cat) = nested(2024, 2015);
++    let proof =
++        PreparedGeneratedCompilerFacet::capture_current(&ps[0], &cat, 1, 64 * 1024 * 1024).unwrap();
++    let different = expansion(&views[0], &ps, 0, "define_uses_dollar_crate_legacy_nested");
++    let different = catalog(&views[0], &different);
++    assert!(proof.revalidate_current(&ps[0], &different, 1).is_err());
++}
++#[test]
++fn transfer_budget_refuses_before_retaining_or_changing_the_owner() {
++    let (_, ps, _, cat) = nested(2024, 2015);
++    let before = ps[0]
++        .compiler
++        .as_ref()
++        .unwrap()
++        .owning_profile_identity()
++        .unwrap();
++    assert_eq!(
++        PreparedGeneratedCompilerFacet::capture_current(&ps[0], &cat, 1, 1)
++            .err()
++            .unwrap()
++            .code,
++        "LRR-E-METADATA-LIMIT"
++    );
++    assert_eq!(
++        ps[0]
++            .compiler
++            .as_ref()
++            .unwrap()
++            .owning_profile_identity()
++            .unwrap(),
++        before
++    );
++}
++type AdoptedFixture = (
++    Database,
++    Vec<PreparedSourceView>,
++    Vec<SourceDeclarative>,
++    GeneratedMacroCatalog,
++    Arc<ModuleSyntaxInput>,
++);
++fn adopted_module() -> AdoptedFixture {
++    adopted_module_source(MODULE, "issue-56411.rs", "import")
++}
++fn adopted_module_source(source: &str, source_path: &str, tail: &str) -> AdoptedFixture {
++    use crate::{
++        service::{
++            expansion::{DemandContext, ExpansionCoordinator, PhaseIdentity},
++            source_capture::SourceCapture,
++        },
++        source::{
++            include_paths::{IncludeAuthorities, IncludeLocation, IncludeRoot, IncludeRootKind},
++            module_capture::AdoptedModuleCapture,
++            module_view::CapturedModuleSourceView,
++        },
++    };
++    // The default caller uses unchanged upstream module source; policy negatives
++    // supply an independent LRR snapshot. The first owner remains distinct.
++    let root = Digest([83; 32]);
++    let other = Digest([84; 32]);
++    let (mut db, views, ps) = prepare(
++        vec![
++            unit(UNUSED, "unused.rs", other, 2015),
++            unit(source, source_path, root, 2024),
++        ],
++        vec![],
++    );
++    let items = expansion(&views[1], &ps, 1, tail);
++    let cat = catalog(&views[1], &items);
++    let demand = cat.unresolved_module_sources().next().unwrap().clone();
++    assert_eq!(
++        demand.header().expansion,
++        items.record().key().fingerprint()
++    );
++    let base = items
++        .tokens()
++        .spans()
++        .iter()
++        .find(|s| s.key() == demand.site())
++        .unwrap()
++        .clone();
++    let root_path = Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("../../fixtures/upstream/rustc-checkout/tests/ui/modules")
++        .canonicalize()
++        .unwrap();
++    let roots = IncludeAuthorities::new(
++        root,
++        Digest([85; 32]),
++        [IncludeRoot {
++            identity: Digest([86; 32]),
++            path: root_path,
++            kind: IncludeRootKind::Source,
++        }],
++    )
++    .unwrap();
++    let capture = SourceCapture::open(
++        IncludeAuthorities::new(
++            root,
++            Digest([85; 32]),
++            [roots.root(Digest([86; 32])).unwrap().clone()],
++        )
++        .unwrap(),
++        BTreeMap::new(),
++    )
++    .unwrap();
++    let from = IncludeLocation {
++        unit: root,
++        root: Digest([86; 32]),
++        path: views[1].selection().path.clone(),
++        origin: base.origin,
++    };
++    let request = roots
++        .module_request(
++            &from,
++            Path::new(""),
++            demand.request().clone(),
++            demand.producer(),
++            demand.site(),
++        )
++        .unwrap();
++    let record = capture.capture_module(&request).unwrap();
++    let input = InputRequest::CaptureModule {
++        request: Box::new(request),
++        compile_environment: items.record().key().consumer_compile_env,
++    };
++    let context = DemandContext {
++        request: Digest([87; 32]),
++        session: Digest([88; 32]),
++        unit: root,
++        revision: db.source_revision(),
++        epoch: 1,
++        source_generation: Digest([85; 32]),
++        native_generation: None,
++        compile_environment: items.record().key().consumer_compile_env,
++    };
++    let mut coordinator = ExpansionCoordinator::new(context.clone());
++    let body = views[1]
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap();
++    let token = coordinator
++        .issue(
++            QueryKey::Outline(views[1].selection().outline.clone()),
++            PhaseIdentity {
++                frame: Digest([89; 32]),
++                body: body.key(),
++                index: 0,
++            },
++            input.clone(),
++        )
++        .unwrap();
++    coordinator.start(&context, &token).unwrap();
++    coordinator
++        .accept_module(&context, &token, &record)
++        .unwrap();
++    coordinator
++        .adopt_module(&context, &token, &mut db, record)
++        .unwrap();
++    let actual = db
++        .input(&InputKey::ModuleRecord(input.fingerprint()))
++        .unwrap();
++    assert!(matches!(actual.as_ref(), InputValue::ModuleRecord { .. }));
++    let lease = Arc::new(AdoptedModuleCapture::new(actual).unwrap());
++    let origin = Arc::new(
++        CapturedModuleSourceView::new(lease, items, demand, views[1].share(), base).unwrap(),
++    );
++    let syntax = Arc::new(ModuleSyntaxInput::prepare(origin).unwrap());
++    (db, views, ps, cat, syntax)
++}
++#[test]
++fn unchanged_generated_module_adopted_source_uses_actual_second_owner_once() {
++    let (_, views, ps, cat, syntax) = adopted_module();
++    let proof = PreparedGeneratedCompilerFacet::capture_module_current(
++        &syntax,
++        &ps[1],
++        &cat,
++        1,
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    let mut child = SourceDeclarative::new(syntax.prepared_source().share()).unwrap();
++    proof
++        .install_module(&syntax, &mut child, &ps[1], &cat, 1)
++        .unwrap();
++    proof
++        .revalidate_module(&syntax, &child, &ps[1], &cat, 1)
++        .unwrap();
++    assert_ne!(
++        child
++            .compiler
++            .as_ref()
++            .unwrap()
++            .owning_profile_identity()
++            .unwrap(),
++        ps[0]
++            .compiler
++            .as_ref()
++            .unwrap()
++            .owning_profile_identity()
++            .unwrap()
++    );
++    assert_eq!(
++        child.module_source().selection().outline.parse.profile,
++        views[1].selection().outline.parse.profile
++    );
++    assert_eq!(
++        child.module_source().selection().outline.module_path,
++        vec!["issue_56411_aux"]
++    );
++    assert!(
++        proof
++            .install_module(&syntax, &mut child, &ps[1], &cat, 1)
++            .is_err()
++    );
++    assert!(
++        PreparedGeneratedCompilerFacet::capture_module_current(
++            &syntax,
++            &ps[0],
++            &cat,
++            1,
++            64 * 1024 * 1024
++        )
++        .is_err()
++    );
++    // Compile-error duplicate/private reexport assertions and main are not executed.
++}
++#[test]
++fn actual_child_wrong_catalogue_and_transient_quota_refuse_before_attachment() {
++    let (_, _, ps, cat, syntax) = adopted_module();
++    let mut child = SourceDeclarative::new(syntax.prepared_source().share()).unwrap();
++    assert_eq!(
++        PreparedGeneratedCompilerFacet::capture_module_current(&syntax, &ps[1], &cat, 1, 1)
++            .err()
++            .unwrap()
++            .code,
++        "LRR-E-METADATA-LIMIT"
++    );
++    assert!(child.compiler.is_none());
++    let proof = PreparedGeneratedCompilerFacet::capture_module_current(
++        &syntax,
++        &ps[1],
++        &cat,
++        1,
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    proof
++        .install_module(&syntax, &mut child, &ps[1], &cat, 1)
++        .unwrap();
++    child.compiler = ps[0].compiler.clone();
++    assert!(
++        proof
++            .revalidate_module(&syntax, &child, &ps[1], &cat, 1)
++            .is_err()
++    );
++}
++
++#[test]
++fn actual_retained_catalogue_cfg_cannot_be_replaced_by_caller_cfg() {
++    let (views, ps, items, cat) = nested(2024, 2015);
++    let mut changed = views[0].captured_macro_cfg().unwrap().clone();
++    changed.atoms.insert("wrong_owner_cfg".into());
++    let wrong = GeneratedMacroCatalog::new(
++        &items,
++        views[0].outline().root_scope.clone(),
++        Key(items.record().key().parent_context.0),
++        &changed,
++        1,
++    )
++    .unwrap();
++    let proof =
++        PreparedGeneratedCompilerFacet::capture_current(&ps[0], &cat, 1, 64 * 1024 * 1024).unwrap();
++    assert!(
++        PreparedGeneratedCompilerFacet::capture_current(&ps[0], &wrong, 1, 64 * 1024 * 1024)
++            .is_err()
++    );
++    assert!(proof.revalidate_current(&ps[0], &wrong, 1).is_err());
++}
++#[test]
++fn stale_owner_or_epoch_cannot_attach_an_old_certificate() {
++    let (_, _, mut ps, cat, syntax) = adopted_module();
++    let proof = PreparedGeneratedCompilerFacet::capture_module_current(
++        &syntax,
++        &ps[1],
++        &cat,
++        1,
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    let mut child = SourceDeclarative::new(syntax.prepared_source().share()).unwrap();
++    assert!(
++        proof
++            .install_module(&syntax, &mut child, &ps[1], &cat, 2)
++            .is_err()
++    );
++    assert!(child.compiler.is_none());
++    ps[1].compiler = ps[0].compiler.clone();
++    assert!(
++        proof
++            .install_module(&syntax, &mut child, &ps[1], &cat, 1)
++            .is_err()
++    );
++    assert!(child.compiler.is_none());
++}
++
++#[test]
++fn genuine_generated_child_inherits_captured_no_std_root_before_facet_attachment() {
++    // Independent LRR lineage control with unchanged official captured child.
++    let source = r##"#![no_std]macro_rules! emit{()=>{#[path="issue-56411-aux.rs"]mod issue_56411_aux;}}emit!();fn main(){}"##;
++    let (_, _, ps, cat, syntax) = adopted_module_source(source, "no-std-policy.rs", "emit");
++    assert!(
++        !ps[1]
++            .module_source()
++            .macro_prelude_policy()
++            .unwrap()
++            .standard
++    );
++    assert!(
++        syntax
++            .prepared_source()
++            .local_macro_prelude_policy()
++            .unwrap()
++            .standard
++    );
++    assert!(
++        !syntax
++            .prepared_source()
++            .macro_prelude_policy()
++            .unwrap()
++            .standard
++    );
++    let proof = PreparedGeneratedCompilerFacet::capture_module_current(
++        &syntax,
++        &ps[1],
++        &cat,
++        1,
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    let mut child = SourceDeclarative::new(syntax.prepared_source().share()).unwrap();
++    proof
++        .install_module(&syntax, &mut child, &ps[1], &cat, 1)
++        .unwrap();
++    proof
++        .revalidate_module(&syntax, &child, &ps[1], &cat, 1)
++        .unwrap();
++    assert_eq!(
++        child.compiler.as_ref().unwrap().runtime_prelude_unit(
++            child
++                .module_source()
++                .macro_prelude_policy()
++                .unwrap()
++                .standard
++        ),
++        crate::facade::unit(&ps[1].module_source().outline().profile, "core")
++    );
++    assert!(
++        proof
++            .revalidate_module(&syntax, &child, &ps[1], &cat, 2)
++            .is_err()
++    );
++}
++#[test]
++fn genuine_generated_declaration_local_disable_does_not_change_root_standard_policy() {
++    let source = r##"macro_rules! emit{()=>{#[no_implicit_prelude]#[path="issue-56411-aux.rs"]mod issue_56411_aux;}}emit!();fn main(){}"##;
++    let (_, _, ps, cat, syntax) = adopted_module_source(source, "generated-disable.rs", "emit");
++    assert!(
++        ps[1]
++            .module_source()
++            .macro_prelude_policy()
++            .unwrap()
++            .disabled
++            .is_empty()
++    );
++    let policy = syntax.prepared_source().macro_prelude_policy().unwrap();
++    assert!(policy.standard);
++    assert_eq!(policy.disabled, vec![Vec::<String>::new()]);
++    let proof = PreparedGeneratedCompilerFacet::capture_module_current(
++        &syntax,
++        &ps[1],
++        &cat,
++        1,
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    let mut child = SourceDeclarative::new(syntax.prepared_source().share()).unwrap();
++    proof
++        .install_module(&syntax, &mut child, &ps[1], &cat, 1)
++        .unwrap();
++    proof
++        .revalidate_module(&syntax, &child, &ps[1], &cat, 1)
++        .unwrap();
++}
++#[test]
++fn genuine_captured_root_disabled_prelude_is_inherited_by_its_generated_child() {
++    let source = r##"#![no_implicit_prelude]macro_rules! emit{()=>{#[path="issue-56411-aux.rs"]mod issue_56411_aux;}}emit!();fn main(){}"##;
++    let (_, _, ps, cat, syntax) = adopted_module_source(source, "root-disable.rs", "emit");
++    assert_eq!(
++        syntax
++            .prepared_source()
++            .macro_prelude_policy()
++            .unwrap()
++            .disabled,
++        vec![Vec::<String>::new()]
++    );
++    let proof = PreparedGeneratedCompilerFacet::capture_module_current(
++        &syntax,
++        &ps[1],
++        &cat,
++        1,
++        64 * 1024 * 1024,
++    )
++    .unwrap();
++    let mut child = SourceDeclarative::new(syntax.prepared_source().share()).unwrap();
++    proof
++        .install_module(&syntax, &mut child, &ps[1], &cat, 1)
++        .unwrap();
++}
+diff --git a/crates/lrr/src/frontend/generated_constant_provenance_tests.rs b/crates/lrr/src/frontend/generated_constant_provenance_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/generated_constant_provenance_tests.rs
+@@ -0,0 +1,426 @@
++//! Original source/expansion components only: no current constant query or main execution.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    db::key::OutlineKey,
++    expand::source_declarative::SourceDeclarativeDemand,
++    frontend::generated_macros::GeneratedMacroCatalog,
++    source::{
++        changes::{PreparedSourceInputs, SourceSelectionOutcome, SourceUnitInput},
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::parse::ParseKey,
++};
++const VIS: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-pub-matcher.rs"
++);
++const RENDER: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/rustdoc-html/macro/const-rendering-macros-33302.rs"
++);
++fn source(text: &str, edition: u16) -> PreparedSourceView {
++    let profile = ProfileIdentity {
++        edition,
++        ..ProfileIdentity::current()
++    };
++    let unit = Digest::of_bytes(b"generated constant source component");
++    let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++    let cfg = CfgSet::guest_default();
++    let path = SourcePath::new("generated-const-original.rs").unwrap();
++    let selection = SourceSelection {
++        path: path.clone(),
++        outline: OutlineKey {
++            parse: ParseKey {
++                content: blob.content(),
++                profile: profile.clone(),
++            },
++            crate_key: unit,
++            module_path: vec![],
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let inputs = PreparedSourceInputs::refresh(
++        None,
++        vec![SourceUnitInput {
++            path,
++            crate_key: unit,
++            module_path: vec![],
++            profile,
++            cfg,
++            blob,
++        }],
++        Default::default(),
++    )
++    .unwrap();
++    let SourceSelectionOutcome::Selected(view) = inputs.select(&selection).unwrap() else {
++        panic!()
++    };
++    view
++}
++fn expand(text: &str, edition: u16, chosen: &str) -> (SourceDeclarative, GeneratedMacroCatalog) {
++    let view = source(text, edition);
++    let call = view
++        .outline()
++        .item_invocations
++        .iter()
++        .find(|row| row.range.start as usize == text.find(chosen).unwrap())
++        .unwrap()
++        .clone();
++    let providers = vec![SourceDeclarative::new(view.share()).unwrap()];
++    let routes = providers
++        .iter()
++        .flat_map(|p| p.routes_in(&providers).unwrap())
++        .collect::<Vec<_>>();
++    let graph =
++        crate::frontend::source_macro_routes::SourceMacroRoutes::discovery_graph(&routes).unwrap();
++    let SourceDeclarativeDemand::Ready(request) = providers[0]
++        .demand_for_discovery(
++            call.item_input,
++            Digest::of_bytes(b"generated constant component compile environment"),
++            crate::expand::source_declarative::engine_version(),
++            &graph,
++            &providers,
++        )
++        .unwrap()
++    else {
++        panic!("actual original source selection prerequisite")
++    };
++    let items =
++        GeneratedItems::admit(request.key(), Arc::new(request.expand().unwrap()), 1).unwrap();
++    let catalog = GeneratedMacroCatalog::new(
++        &items,
++        call.scope,
++        Key(items.record().key().parent_context.0),
++        view.captured_macro_cfg().unwrap(),
++        1,
++    )
++    .unwrap();
++    (providers.into_iter().next().unwrap(), catalog)
++}
++fn member(catalog: &GeneratedMacroCatalog, kind: GeneratedHeaderKind) -> Digest {
++    catalog
++        .captured_owner()
++        .0
++        .items()
++        .iter()
++        .find(|h| h.kind == kind)
++        .unwrap()
++        .key
++        .fingerprint()
++}
++#[test]
++fn unchanged_vis_const_retains_written_type_and_owner_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (owner, catalog) = expand(VIS, edition, "vis_passthru! { pub const A: i32 = 0; }");
++        let definition = member(&catalog, GeneratedHeaderKind::Const);
++        let proof =
++            RetainedGeneratedConstant::capture(&owner, &catalog, definition, 1, MAX_BYTES).unwrap();
++        proof.revalidate(&owner, &catalog, 1).unwrap();
++        assert_eq!(
++            proof.owner.selection().outline.parse.profile.edition,
++            edition
++        );
++        assert_eq!(proof.scope.module_path, vec!["with_pub"]);
++        assert!(matches!(proof.form(), GeneratedConstantForm::Scalar { .. }));
++        assert_eq!(proof.record.key().call_edition, edition);
++        assert_eq!(proof.record.key().definition_edition, edition);
++        assert!(proof.written_type.spans().iter().any(
++            |s| s.source.content.0 == owner.module_source().selection().outline.parse.content.0
++        ));
++        assert_eq!(
++            proof.prerequisite(),
++            GeneratedConstantPrerequisite::CurrentNamespace
++        );
++        // Retained syntax/provenance is deliberately not a Type or query proof.
++    }
++}
++#[test]
++fn unchanged_render_scalar_and_associated_array_keep_separate_origins() {
++    let (owner, catalog) = expand(RENDER, 2024, "make!(4);");
++    let (items, _, _) = catalog.captured_owner();
++    let scalar = items
++        .items()
++        .iter()
++        .find(|h| {
++            h.kind == GeneratedHeaderKind::Const && h.name.as_ref().is_some_and(|n| n.text == "CST")
++        })
++        .unwrap();
++    let proof = RetainedGeneratedConstant::capture(
++        &owner,
++        &catalog,
++        scalar.key.fingerprint(),
++        1,
++        MAX_BYTES,
++    )
++    .unwrap();
++    assert!(matches!(proof.form(), GeneratedConstantForm::Scalar { .. }));
++    let parsed = ParsedFile::from_generated_items(items).unwrap();
++    let written_array = parsed
++        .parsed
++        .tree()
++        .syntax()
++        .descendants()
++        .filter_map(ast::Const::cast)
++        .find(|c| matches!(c.ty(), Some(ast::Type::ArrayType(_))))
++        .unwrap();
++    let written_range = range(written_array.syntax().text_range());
++    let array = items
++        .items()
++        .iter()
++        .find(|h| {
++            h.kind == GeneratedHeaderKind::Const
++                && h.start == written_range.start
++                && h.end == written_range.end
++        })
++        .unwrap();
++    let proof =
++        RetainedGeneratedConstant::capture(&owner, &catalog, array.key.fingerprint(), 1, MAX_BYTES)
++            .unwrap();
++    let GeneratedConstantForm::Array { element, length } = proof.form() else {
++        panic!()
++    };
++    assert!(!element.spans().is_empty());
++    assert!(!length.spans().is_empty());
++    assert!(
++        length.spans().iter().any(
++            |s| s.source.content.0 == owner.module_source().selection().outline.parse.content.0
++        )
++    );
++    assert_eq!(
++        proof.prerequisite(),
++        GeneratedConstantPrerequisite::AssociatedMember
++    );
++    assert_ne!(length.range, proof.initializer.range);
++}
++#[test]
++fn retained_member_source_epoch_and_quota_refuse_without_authority_upgrade() {
++    let (owner, catalog) = expand(VIS, 2024, "vis_passthru! { pub const A: i32 = 0; }");
++    let definition = member(&catalog, GeneratedHeaderKind::Const);
++    let proof =
++        RetainedGeneratedConstant::capture(&owner, &catalog, definition, 1, MAX_BYTES).unwrap();
++    assert!(proof.revalidate(&owner, &catalog, 2).is_err());
++    assert!(
++        RetainedGeneratedConstant::capture(&owner, &catalog, Digest([97; 32]), 1, MAX_BYTES)
++            .is_err()
++    );
++    assert!(RetainedGeneratedConstant::capture(&owner, &catalog, definition, 1, 0).is_err());
++    let copied = SourceDeclarative::new(source(VIS, 2024)).unwrap();
++    assert!(proof.revalidate(&copied, &catalog, 1).is_err());
++}
++#[test]
++fn primitive_spelling_remains_a_type_prerequisite_when_source_shadows_it() {
++    let text = "type i32=bool;macro_rules! make{()=>{const X:i32=true;}}make!();fn main(){}";
++    let (owner, catalog) = expand(text, 2024, "make!();");
++    let proof = RetainedGeneratedConstant::capture(
++        &owner,
++        &catalog,
++        member(&catalog, GeneratedHeaderKind::Const),
++        1,
++        MAX_BYTES,
++    )
++    .unwrap();
++    assert_eq!(
++        proof.prerequisite(),
++        GeneratedConstantPrerequisite::CurrentNamespace
++    );
++    // No primitive descriptor, evaluator result or source term is minted.
++}
++#[test]
++fn unsealed_generated_definition_cannot_become_a_current_constant_request() {
++    let (owner, catalog) = expand(VIS, 2024, "vis_passthru! { pub const A: i32 = 0; }");
++    let db = Database::default();
++    let result = CurrentGeneratedConstant::capture(
++        &db,
++        &owner,
++        member(&catalog, GeneratedHeaderKind::Const),
++        MAX_BYTES,
++    );
++    assert!(result.is_err());
++}
++fn current_world(
++    text: &str,
++    module: &[&str],
++    edition: u16,
++    seal_type: bool,
++) -> (Database, SourceDeclarative, Digest) {
++    let view = source(text, edition);
++    let owner = SourceDeclarative::new(view.share()).unwrap();
++    let mut scope = view.outline().root_scope.clone();
++    scope
++        .module_path
++        .extend(module.iter().map(|s| (*s).to_string()));
++    let mut db = Database::default();
++    db.publish_inputs(view.prepared_inputs().clone()).unwrap();
++    db.begin_expansion_epoch(1).unwrap();
++    let mut definition = None;
++    for namespace in [Namespace::Value, Namespace::Type] {
++        if namespace == Namespace::Type && !seal_type {
++            continue;
++        }
++        let mut discovery = crate::expand::source_discovery::SourceDiscovery::new(
++            vec![view.share()],
++            scope.clone(),
++            namespace,
++            Digest::of_bytes(b"generated constant current world"),
++            1,
++        )
++        .unwrap()
++        .with_declarative_compiler(
++            Digest::of_bytes(b"generated constant current compile environment"),
++            crate::expand::source_declarative::engine_version(),
++            Arc::new(
++                crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                    &view.selection().outline.parse.profile,
++                )
++                .unwrap(),
++            ),
++        )
++        .unwrap();
++        loop {
++            match discovery.poll().unwrap() {
++                crate::expand::source_discovery::SourceDiscoveryStep::Sealed(_) => break,
++                crate::expand::source_discovery::SourceDiscoveryStep::NeedExpansion { request } => {
++                    discovery
++                        .admit_expansion(Arc::new(request.expand().unwrap()))
++                        .unwrap()
++                }
++                crate::expand::source_discovery::SourceDiscoveryStep::NeedGeneratedExpansion {
++                    request,
++                } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                crate::expand::source_discovery::SourceDiscoveryStep::Incomplete {
++                    diagnostic,
++                    ..
++                } => panic!(
++                    "actual generated constant preparation frontier: {} {}",
++                    diagnostic.code, diagnostic.message
++                ),
++                _ => panic!("actual generated constant source prerequisite is unestablished"),
++            }
++        }
++        if namespace == Namespace::Value {
++            let NameLookup::Defined(found) = discovery.lookup("A").unwrap() else {
++                panic!("exact generated Value member absent")
++            };
++            definition = Some(found.identity);
++        }
++        discovery.publish(&mut db).unwrap();
++    }
++    (db, owner, definition.unwrap())
++}
++#[test]
++fn unchanged_vis_current_source_pair_keeps_type_and_query_prerequisites_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, owner, definition) = current_world(VIS, &["with_pub"], edition, true);
++        let proof = CurrentGeneratedConstant::capture(&db, &owner, definition, MAX_BYTES).unwrap();
++        proof.revalidate(&db, &owner).unwrap();
++        assert_eq!(proof.retained().scope().module_path, vec!["with_pub"]);
++        assert_eq!(proof.retained().member().fingerprint(), definition);
++        assert!(
++            proof
++                .prerequisites()
++                .contains(&GeneratedConstantPrerequisite::HygienicSourceType)
++        );
++        assert!(
++            proof
++                .prerequisites()
++                .contains(&GeneratedConstantPrerequisite::ConstantQueryWorld)
++        );
++        assert!(
++            proof
++                .prerequisites()
++                .contains(&GeneratedConstantPrerequisite::RuntimeLayout)
++        );
++        assert!(proof.dependencies().contains_key(&InputKey::ExpansionEpoch));
++        assert!(proof.metadata_bytes() <= MAX_BYTES);
++        assert_ne!(proof.seal_keys().0.domain, proof.seal_keys().1.domain);
++    }
++}
++#[test]
++fn current_missing_type_epoch_publication_copy_and_quota_refuse() {
++    let (db, owner, definition) = current_world(VIS, &["with_pub"], 2024, false);
++    assert!(CurrentGeneratedConstant::capture(&db, &owner, definition, MAX_BYTES).is_err());
++    let (mut db, owner, definition) = current_world(VIS, &["with_pub"], 2024, true);
++    let proof = CurrentGeneratedConstant::capture(&db, &owner, definition, MAX_BYTES).unwrap();
++    assert!(CurrentGeneratedConstant::capture(&db, &owner, definition, 0).is_err());
++    assert!(CurrentGeneratedConstant::capture(&db, &owner, Digest([98; 32]), MAX_BYTES).is_err());
++    let copied = SourceDeclarative::new(source(VIS, 2024)).unwrap();
++    assert!(proof.revalidate(&db, &copied).is_err());
++    db.begin_expansion_epoch(2).unwrap(); // Actual between-run publication barrier.
++    assert!(proof.revalidate(&db, &owner).is_err());
++    assert!(CurrentGeneratedConstant::capture(&db, &owner, definition, MAX_BYTES).is_err());
++}
++#[test]
++fn unchanged_external_and_local_generated_consts_require_reached_body_preparation() {
++    for (text, needle, edition) in [
++        (
++            include_str!(
++                "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-external-macro-const-err.rs"
++            ),
++            "static_assert!(2 + 2 == 5)",
++            2018,
++        ),
++        (
++            include_str!(
++                "../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/block-to-expr-metavar.rs"
++            ),
++            "m_block!({ 1 })",
++            2024,
++        ),
++    ] {
++        let view = source(text, edition);
++        let parsed = ParsedFile::parse(
++            view.captured_macro_blob().unwrap(),
++            view.selection().outline.parse.profile.clone(),
++        )
++        .unwrap();
++        let selected = parsed
++            .parsed
++            .tree()
++            .syntax()
++            .descendants()
++            .filter_map(ast::MacroCall::cast)
++            .find(|call| {
++                u32::from(call.syntax().text_range().start()) as usize == text.find(needle).unwrap()
++            })
++            .unwrap();
++        let call = view
++            .macro_call_at(range(selected.syntax().text_range()))
++            .unwrap();
++        assert!(call.requires_body_entry());
++        assert_eq!(call.key(), &view.selection().outline.parse);
++        assert!(
++            !view
++                .outline()
++                .item_invocations
++                .iter()
++                .any(|i| i.range == call.range())
++        );
++        // The exact original body is cold: no local producer/constant query is fabricated.
++    }
++}
++#[test]
++fn current_exact_type_shadow_is_retained_without_primitive_authority() {
++    let text = "type i32=bool;macro_rules!make{()=>{const A:i32=true;}}make!();fn main(){}";
++    let (db, owner, definition) = current_world(text, &[], 2024, true);
++    let proof = CurrentGeneratedConstant::capture(&db, &owner, definition, MAX_BYTES).unwrap();
++    let Some((InputValue::DiscoverySeal(input), _)) =
++        db.published_input(&InputKey::DiscoverySeal(proof.seal_keys().1.clone()))
++    else {
++        panic!()
++    };
++    let bucket = BucketKey {
++        scope: proof.retained().scope().clone(),
++        namespace: Namespace::Type,
++        name: "i32".into(),
++    };
++    assert!(matches!(
++        input.scope.as_ref().unwrap().lookup(&bucket).unwrap(),
++        NameLookup::Defined(_)
++    ));
++    assert!(
++        proof
++            .prerequisites()
++            .contains(&GeneratedConstantPrerequisite::HygienicSourceType)
++    );
++}
+diff --git a/crates/lrr/src/frontend/generated_primitive_admission_tests.rs b/crates/lrr/src/frontend/generated_primitive_admission_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/generated_primitive_admission_tests.rs
+@@ -0,0 +1,587 @@
++//! Real source/expansion/header components only; no evaluator, layout or main execution.
++use super::*;
++use crate::frontend::{
++    generated_constant_provenance::CurrentGeneratedConstant,
++    generated_type_admission::{
++        GeneratedTypeOutcome, GeneratedTypePrerequisite, SelectedGeneratedType,
++    },
++};
++use crate::{
++    core::profile::ProfileIdentity,
++    db::key::OutlineKey,
++    expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    source::{
++        changes::{
++            PreparedSourceInputs, PreparedSourceView, SourceSelection, SourceSelectionOutcome,
++            SourceUnitInput,
++        },
++        dependencies::SourceDependency,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::parse::ParseKey,
++};
++use std::sync::Arc;
++const VIS: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-pub-matcher.rs"
++);
++fn input(text: &str, path: &str, unit: Digest, edition: u16) -> SourceUnitInput {
++    SourceUnitInput {
++        path: SourcePath::new(path).unwrap(),
++        crate_key: unit,
++        module_path: vec![],
++        profile: ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        cfg: CfgSet::guest_default(),
++        blob: SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++    }
++}
++fn prepare(
++    units: Vec<SourceUnitInput>,
++    edges: Vec<SourceDependency>,
++) -> (Database, Vec<PreparedSourceView>, Vec<SourceDeclarative>) {
++    let selections = units
++        .iter()
++        .map(|u| SourceSelection {
++            path: u.path.clone(),
++            outline: OutlineKey {
++                parse: ParseKey {
++                    content: u.blob.content(),
++                    profile: u.profile.clone(),
++                },
++                crate_key: u.crate_key,
++                module_path: u.module_path.clone(),
++                cfg: u.cfg.fingerprint(),
++            },
++        })
++        .collect::<Vec<_>>();
++    let inputs =
++        PreparedSourceInputs::refresh_with_dependencies(None, units, Default::default(), edges)
++            .unwrap();
++    let views = selections
++        .iter()
++        .map(|s| {
++            let SourceSelectionOutcome::Selected(v) = inputs.select(s).unwrap() else {
++                panic!()
++            };
++            v
++        })
++        .collect::<Vec<_>>();
++    let mut db = Database::default();
++    inputs.publish(&mut db).unwrap();
++    db.begin_expansion_epoch(1).unwrap();
++    let providers = views
++        .iter()
++        .map(|v| SourceDeclarative::new(v.share()).unwrap())
++        .collect();
++    (db, views, providers)
++}
++fn world(
++    text: &str,
++    edition: u16,
++    module: &[&str],
++) -> (Database, SourceDeclarative, CurrentGeneratedConstant) {
++    world_in_unit(text, edition, module, Digest([172; 32]))
++}
++fn world_in_unit(
++    text: &str,
++    edition: u16,
++    module: &[&str],
++    unit: Digest,
++) -> (Database, SourceDeclarative, CurrentGeneratedConstant) {
++    let (mut db, views, providers) =
++        prepare(vec![input(text, "type-current.rs", unit, edition)], vec![]);
++    let mut scope = views[0].outline().root_scope.clone();
++    scope.module_path.extend(module.iter().map(|m| (*m).into()));
++    let mut definition = None;
++    for namespace in [
++        crate::source::manifest::Namespace::Value,
++        crate::source::manifest::Namespace::Type,
++    ] {
++        let mut discovery = SourceDiscovery::new(
++            vec![views[0].share()],
++            scope.clone(),
++            namespace,
++            Digest::of_bytes(b"type current world"),
++            1,
++        )
++        .unwrap()
++        .with_declarative_compiler(
++            Digest::of_bytes(b"type current compile env"),
++            crate::expand::source_declarative::engine_version(),
++            Arc::new(
++                crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                    &views[0].selection().outline.parse.profile,
++                )
++                .unwrap(),
++            ),
++        )
++        .unwrap();
++        loop {
++            match discovery.poll().unwrap() {
++                SourceDiscoveryStep::Sealed(_) => break,
++                SourceDiscoveryStep::NeedExpansion { request } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                SourceDiscoveryStep::Incomplete { diagnostic, .. } => panic!(
++                    "actual type preparation frontier: {} {}",
++                    diagnostic.code, diagnostic.message
++                ),
++                _ => panic!("type source preparation is unestablished"),
++            }
++        }
++        if namespace == crate::source::manifest::Namespace::Value {
++            let NameLookup::Defined(found) = discovery.lookup("A").unwrap() else {
++                panic!()
++            };
++            definition = Some(found.identity);
++        }
++        discovery.publish(&mut db).unwrap();
++    }
++    let mut owner = providers.into_iter().next().unwrap();
++    owner.compiler = Some(Arc::new(
++        crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(owner.profile())
++            .unwrap(),
++    ));
++    let parent =
++        CurrentGeneratedConstant::capture(&db, &owner, definition.unwrap(), MAX_BYTES).unwrap();
++    (db, owner, parent)
++}
++
++#[test]
++fn unchanged_scalar_default_prelude_uses_published_current_type_prelude_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, owner, parent) = world(VIS, edition, &["with_pub"]);
++        assert!(matches!(
++            SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap(),
++            GeneratedTypeOutcome::Need(GeneratedTypePrerequisite::PrimitiveEnvironment)
++        ));
++        let GeneratedPrimitiveOutcome::Ready(proof) =
++            CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES)
++                .unwrap()
++        else {
++            panic!("genuine default Type prelude now supplies exact absence")
++        };
++        assert_eq!(proof.primitive(), PrimitiveType::I32);
++    }
++}
++#[test]
++fn actual_disabled_prelude_keeps_language_primitive_route_in_every_edition() {
++    for edition in [2015, 2018, 2021, 2024] {
++        for text in [
++            "#![no_implicit_prelude]macro_rules!m{()=>{const A:i32=1;}}m!();fn main(){}",
++            "#![no_std]#![no_implicit_prelude]macro_rules!m{()=>{const A:bool=true;}}m!();fn main(){}",
++        ] {
++            let (db, owner, parent) = world(text, edition, &[]);
++            let GeneratedPrimitiveOutcome::Ready(proof) =
++                CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES)
++                    .unwrap()
++            else {
++                panic!("actual primitive environment must be established")
++            };
++            let expected = if text.contains(":bool") {
++                PrimitiveType::Bool
++            } else {
++                PrimitiveType::I32
++            };
++            assert_eq!(proof.primitive(), expected);
++            assert_eq!(proof.profile().edition, edition);
++            assert_ne!(proof.member_identity(), Digest([0; 32]));
++            proof
++                .revalidate(&db, &owner, &parent, &[], MAX_BYTES)
++                .unwrap();
++        }
++    }
++}
++#[test]
++fn actual_alias_and_nominal_shadow_never_use_language_primitive_facet() {
++    for text in [
++        "#![no_implicit_prelude]type i32=bool;macro_rules!m{()=>{const A:i32=true;}}m!();fn main(){}",
++        "#![no_implicit_prelude]struct i32;macro_rules!m{()=>{const A:i32=i32;}}m!();fn main(){}",
++    ] {
++        let (db, owner, parent) = world(text, 2024, &[]);
++        let GeneratedPrimitiveOutcome::Need(GeneratedPrimitivePrerequisite::SourceType(
++            NameLookup::Defined(def),
++        )) = CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES)
++            .unwrap()
++        else {
++            panic!("real shadow identity must survive")
++        };
++        assert_ne!(def.identity, parent.retained().member().fingerprint());
++        assert_eq!(
++            def.defining_unit,
++            owner.module_source().selection().outline.crate_key
++        );
++    }
++}
++#[test]
++fn missing_and_foreign_profile_catalogue_cannot_grant_a_language_facet() {
++    let (db, mut owner, parent) = world(
++        "#![no_implicit_prelude]macro_rules!m{()=>{const A:i32=1;}}m!();fn main(){}",
++        2024,
++        &[],
++    );
++    owner.compiler = None;
++    assert!(matches!(
++        CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES).unwrap(),
++        GeneratedPrimitiveOutcome::Need(GeneratedPrimitivePrerequisite::CompilerPrimitiveFacet)
++    ));
++    let wrong = ProfileIdentity {
++        edition: 2015,
++        ..ProfileIdentity::current()
++    };
++    owner.compiler = Some(Arc::new(
++        crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(&wrong).unwrap(),
++    ));
++    assert!(
++        CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES).is_err()
++    );
++}
++#[test]
++fn unsupported_qualified_and_unknown_types_keep_precise_source_prerequisites() {
++    for (text, qualified) in [
++        (
++            "#![no_implicit_prelude]macro_rules!m{()=>{const A:core::primitive::i32=1;}}m!();fn main(){}",
++            true,
++        ),
++        (
++            "#![no_implicit_prelude]macro_rules!m{()=>{const A:NotAType=1;}}m!();fn main(){}",
++            false,
++        ),
++    ] {
++        let (db, owner, parent) = world(text, 2024, &[]);
++        let actual =
++            CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES)
++                .unwrap();
++        if qualified {
++            assert!(matches!(
++                actual,
++                GeneratedPrimitiveOutcome::Need(GeneratedPrimitivePrerequisite::WrittenType)
++            ));
++        } else {
++            assert!(matches!(
++                actual,
++                GeneratedPrimitiveOutcome::Need(GeneratedPrimitivePrerequisite::UnknownPrimitive)
++            ));
++        }
++    }
++}
++#[test]
++fn current_epoch_owner_quota_and_private_field_tamper_refuse_replay() {
++    let text = "#![no_implicit_prelude]macro_rules!m{()=>{const A:i32=1;}}m!();fn main(){}";
++    let (mut db, owner, parent) = world(text, 2024, &[]);
++    assert!(CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], 0).is_err());
++    let GeneratedPrimitiveOutcome::Ready(mut proof) =
++        CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES).unwrap()
++    else {
++        panic!()
++    };
++    let (_, foreign, foreign_parent) = world_in_unit(text, 2024, &[], Digest([216; 32]));
++    assert!(
++        proof
++            .revalidate(&db, &foreign, &foreign_parent, &[], MAX_BYTES)
++            .is_err()
++    );
++    let original = proof.member;
++    proof.member = Digest([213; 32]);
++    assert!(
++        proof
++            .revalidate(&db, &owner, &parent, &[], MAX_BYTES)
++            .is_err()
++    );
++    proof.member = original;
++    proof.context = Key([214; 32]);
++    assert!(
++        proof
++            .revalidate(&db, &owner, &parent, &[], MAX_BYTES)
++            .is_err()
++    );
++    db.begin_expansion_epoch(2).unwrap();
++    assert!(
++        CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES).is_err()
++    );
++}
++#[test]
++fn genuine_opaque_origin_requires_its_definition_type_seal_before_any_call_site_shadow() {
++    let text = "#![feature(decl_macro)]#![no_implicit_prelude]pub macro make(){const A:i32=1;} mod call{type i32=bool;crate::make!();}fn main(){}";
++    let (mut db, owner, parent) = world(text, 2024, &["call"]);
++    let GeneratedPrimitiveOutcome::Need(GeneratedPrimitivePrerequisite::TypeNamespace(scope)) =
++        CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES).unwrap()
++    else {
++        panic!("definition Type scope must not be replaced by caller scope")
++    };
++    assert!(scope.module_path.is_empty());
++    let mut discovery = SourceDiscovery::new(
++        vec![owner.module_source().share()],
++        scope,
++        crate::source::manifest::Namespace::Type,
++        Digest::of_bytes(b"type current world"),
++        1,
++    )
++    .unwrap()
++    .with_declarative_compiler(
++        Digest::of_bytes(b"type current compile env"),
++        crate::expand::source_declarative::engine_version(),
++        owner.compiler.clone().unwrap(),
++    )
++    .unwrap();
++    loop {
++        match discovery.poll().unwrap() {
++            SourceDiscoveryStep::Sealed(_) => break,
++            SourceDiscoveryStep::NeedExpansion { request } => discovery
++                .admit_expansion(Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                .admit_expansion(Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            _ => panic!("genuine root Type preparation required"),
++        }
++    }
++    discovery.publish(&mut db).unwrap();
++    // Genuine between-run publication requires reminting the preserved parent.
++    assert!(parent.revalidate(&db, &owner).is_err());
++    let parent = CurrentGeneratedConstant::capture(
++        &db,
++        &owner,
++        parent.retained().member().fingerprint(),
++        MAX_BYTES,
++    )
++    .unwrap();
++    let GeneratedPrimitiveOutcome::Ready(proof) =
++        CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES).unwrap()
++    else {
++        panic!()
++    };
++    assert_eq!(proof.primitive(), PrimitiveType::I32);
++    assert!(proof.scope().module_path.is_empty());
++    assert_ne!(
++        proof.context,
++        Key(parent.retained().record().key().parent_context.0)
++    );
++}
++#[test]
++fn pinned_builtin_types_exist_independently_of_stdlib_prelude_policy() {
++    let hir =
++        include_str!("../../../../fixtures/upstream/rustc-checkout/compiler/rustc_hir/src/hir.rs");
++    let ident = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/compiler/rustc_resolve/src/ident.rs"
++    );
++    assert!(hir.contains("pub const ALL: [Self; 19]"));
++    assert!(ident.contains("Scope::BuiltinTypes => true"));
++    let unavailable = crate::frontend::compile_input_catalog::CompileInputCatalog::new(
++        Digest([215; 32]),
++        2024,
++        [],
++    )
++    .unwrap();
++    assert!(
++        unavailable
++            .primitive_facet(&ProfileIdentity::current())
++            .unwrap()
++            .is_none()
++    );
++}
++
++#[test]
++fn unchanged_original_policy_and_nominal_shadow_are_distinct_source_facts() {
++    for (text, edition, path) in [
++        (
++            include_str!(
++                "../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/no_implicit_prelude.rs"
++            ),
++            2015,
++            "no-implicit-2015.rs",
++        ),
++        (
++            include_str!(
++                "../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/no_implicit_prelude-2018.rs"
++            ),
++            2018,
++            "no-implicit-2018.rs",
++        ),
++        (
++            include_str!(
++                "../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/no_implicit_prelude-2021.rs"
++            ),
++            2021,
++            "no-implicit-2021.rs",
++        ),
++    ] {
++        let (_, views, _) = prepare(vec![input(text, path, Digest([217; 32]), edition)], vec![]);
++        let actual = PreparedCratePreludePolicy::capture_current(&views[0], 1, MAX_BYTES).unwrap();
++        let policy = actual.policy();
++        assert_eq!(
++            policy.disabled,
++            if edition == 2021 {
++                vec![Vec::<String>::new()]
++            } else {
++                vec![vec!["bar".to_owned()]]
++            }
++        );
++        assert_eq!(actual.owning_root_selection(), views[0].selection());
++        // Actual policy components do not certify a Type scope or original fixture.
++    }
++    let text = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/shadowed/primitive-type-shadowing.rs"
++    );
++    let (_, views, _) = prepare(
++        vec![input(text, "primitive-shadow.rs", Digest([218; 32]), 2024)],
++        vec![],
++    );
++    let mut names =
++        crate::frontend::names::NameNamespaces::from_outlines(&[views[0].outline()]).unwrap();
++    names.resolve_imports().unwrap();
++    let actual = names
++        .lookup_unqualified(
++            Namespace::Type,
++            "bool",
++            &views[0].outline().root_scope,
++            2024,
++            None,
++        )
++        .unwrap();
++    let NameLookup::Defined(def) = actual else {
++        panic!("original nominal bool declaration must survive")
++    };
++    let nominal = views[0]
++        .outline()
++        .items
++        .iter()
++        .find(|i| {
++            i.def_key.declared_name == "bool"
++                && i.def_key.item_kind == crate::source::manifest::ItemKind::Struct
++        })
++        .unwrap();
++    assert_eq!(def.identity, nominal.def_key.fingerprint());
++    assert_ne!(
++        def.identity,
++        crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++            &views[0].outline().profile
++        )
++        .unwrap()
++        .primitive_facet(&views[0].outline().profile)
++        .unwrap()
++        .unwrap()
++        .member_identity(PrimitiveType::Bool)
++    );
++}
++
++#[test]
++fn actual_published_type_receipt_absence_and_foreign_copy_cannot_mint_primitive() {
++    let text = "#![no_implicit_prelude]macro_rules!m{()=>{const A:i32=1;}}m!();fn main(){}";
++    for foreign in [false, true] {
++        let (mut db, owner, parent) = world(text, 2024, &[]);
++        let key = InputKey::DiscoverySeal(parent.seal_keys().1.clone());
++        let Some((InputValue::DiscoverySeal(current), _)) = db.published_input(&key) else {
++            panic!()
++        };
++        assert!(
++            current
++                .compiler_primitive_receipt(owner.module_source().selection())
++                .unwrap()
++                .is_some()
++        );
++        let mut replacement = current.clone();
++        replacement.compiler_primitive_receipts.clear();
++        if foreign {
++            let (other_db, other, other_parent) = world_in_unit(text, 2024, &[], Digest([219; 32]));
++            let Some((InputValue::DiscoverySeal(other_input), _)) = other_db
++                .published_input(&InputKey::DiscoverySeal(other_parent.seal_keys().1.clone()))
++            else {
++                panic!()
++            };
++            let receipt = other_input
++                .compiler_primitive_receipt(other.module_source().selection())
++                .unwrap()
++                .unwrap();
++            assert_ne!(receipt.source(), owner.module_source().selection());
++            replacement
++                .compiler_primitive_receipts
++                .push(receipt.clone());
++        }
++        // Replay the actual sealed Type publication with its genuine retained
++        // records. Raw publish_inputs is forbidden for derived DiscoverySeal.
++        let records = replacement
++            .records
++            .iter()
++            .map(|descriptor| {
++                let Some((InputValue::ExpansionRecord(record), _)) =
++                    db.published_input(&InputKey::ExpansionRecord(descriptor.key.fingerprint()))
++                else {
++                    panic!()
++                };
++                assert_eq!(record.descriptor().fingerprint(), descriptor.fingerprint());
++                Arc::new(record.clone())
++            })
++            .collect::<Vec<_>>();
++        let publication = db.publish_discovery(*replacement, &records, &[], &[], BTreeMap::new());
++        if foreign {
++            assert_eq!(publication.unwrap_err().code, "LRR-E-GENERATED-PRIMITIVE");
++            parent.revalidate(&db, &owner).unwrap();
++            continue;
++        }
++        publication.unwrap();
++        assert!(parent.revalidate(&db, &owner).is_err());
++        let parent = CurrentGeneratedConstant::capture(
++            &db,
++            &owner,
++            parent.retained().member().fingerprint(),
++            MAX_BYTES,
++        )
++        .unwrap();
++        let trace = db.trace.events.len();
++        assert!(matches!(
++            CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES)
++                .unwrap(),
++            GeneratedPrimitiveOutcome::Need(GeneratedPrimitivePrerequisite::CompilerPrimitiveFacet)
++        ));
++        assert_eq!(trace, db.trace.events.len());
++    }
++}
++#[test]
++fn real_cfg_publication_barrier_refuses_before_any_type_or_query_authority() {
++    let (mut db, owner, parent) = world(
++        "#![no_implicit_prelude]macro_rules!m{()=>{const A:i32=1;}}m!();fn main(){}",
++        2024,
++        &[],
++    );
++    let GeneratedPrimitiveOutcome::Ready(proof) =
++        CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES).unwrap()
++    else {
++        panic!()
++    };
++    let mut cfg = owner.module_source().captured_macro_cfg().unwrap().clone();
++    cfg.atoms.insert("changed_owning_cfg".into());
++    db.publish_inputs(BTreeMap::from([(
++        InputKey::CrateCfg(owner.module_source().selection().outline.crate_key),
++        InputValue::CrateCfg(cfg),
++    )]))
++    .unwrap();
++    let trace = db.trace.events.len();
++    assert!(
++        proof
++            .revalidate(&db, &owner, &parent, &[], MAX_BYTES)
++            .is_err()
++    );
++    assert!(
++        CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES).is_err()
++    );
++    assert_eq!(trace, db.trace.events.len());
++}
++
++#[test]
++fn actual_generated_inline_module_keeps_unestablished_owning_policy_explicit() {
++    let (db, owner, parent) = world(
++        "#![no_implicit_prelude]macro_rules!m{()=>{mod made{const A:i32=1;}}}m!();fn main(){}",
++        2024,
++        &["made"],
++    );
++    assert!(matches!(
++        CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES).unwrap(),
++        GeneratedPrimitiveOutcome::Need(GeneratedPrimitivePrerequisite::GeneratedScopePolicy)
++    ));
++}
+diff --git a/crates/lrr/src/frontend/generated_type_admission_tests.rs b/crates/lrr/src/frontend/generated_type_admission_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/generated_type_admission_tests.rs
+@@ -0,0 +1,524 @@
++//! Real source/expansion/header components only; no evaluator, layout or main execution.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    db::key::OutlineKey,
++    expand::{
++        generated_items::GeneratedItems,
++        source_declarative::SourceDeclarativeDemand,
++        source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    },
++    frontend::generated_macros::GeneratedMacroCatalog,
++    source::{
++        changes::{
++            PreparedSourceInputs, PreparedSourceView, SourceSelection, SourceSelectionOutcome,
++            SourceUnitInput,
++        },
++        dependencies::SourceDependency,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::{generated_type_site::GeneratedTypeRole, parse::ParseKey},
++};
++use std::sync::Arc;
++const VIS: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-pub-matcher.rs"
++);
++const RAW: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/parser/raw/raw-idents.rs");
++const MODERN: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/dollar-crate-modern.rs"
++);
++const INTERCRATE: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/auxiliary/intercrate.rs"
++);
++fn input(text: &str, path: &str, unit: Digest, edition: u16) -> SourceUnitInput {
++    SourceUnitInput {
++        path: SourcePath::new(path).unwrap(),
++        crate_key: unit,
++        module_path: vec![],
++        profile: ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        cfg: CfgSet::guest_default(),
++        blob: SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++    }
++}
++fn prepare(
++    units: Vec<SourceUnitInput>,
++    edges: Vec<SourceDependency>,
++) -> (Database, Vec<PreparedSourceView>, Vec<SourceDeclarative>) {
++    let selections = units
++        .iter()
++        .map(|u| SourceSelection {
++            path: u.path.clone(),
++            outline: OutlineKey {
++                parse: ParseKey {
++                    content: u.blob.content(),
++                    profile: u.profile.clone(),
++                },
++                crate_key: u.crate_key,
++                module_path: u.module_path.clone(),
++                cfg: u.cfg.fingerprint(),
++            },
++        })
++        .collect::<Vec<_>>();
++    let inputs =
++        PreparedSourceInputs::refresh_with_dependencies(None, units, Default::default(), edges)
++            .unwrap();
++    let views = selections
++        .iter()
++        .map(|s| {
++            let SourceSelectionOutcome::Selected(v) = inputs.select(s).unwrap() else {
++                panic!()
++            };
++            v
++        })
++        .collect::<Vec<_>>();
++    let mut db = Database::default();
++    inputs.publish(&mut db).unwrap();
++    db.begin_expansion_epoch(1).unwrap();
++    let providers = views
++        .iter()
++        .map(|v| SourceDeclarative::new(v.share()).unwrap())
++        .collect();
++    (db, views, providers)
++}
++fn component(
++    text: &str,
++    edition: u16,
++    chosen: &str,
++) -> (SourceDeclarative, GeneratedItems, GeneratedMacroCatalog) {
++    let (_, views, providers) = prepare(
++        vec![input(text, "type-original.rs", Digest([171; 32]), edition)],
++        vec![],
++    );
++    let call = views[0]
++        .outline()
++        .item_invocations
++        .iter()
++        .find(|c| c.range.start as usize == text.find(chosen).unwrap())
++        .unwrap();
++    let routes = providers
++        .iter()
++        .flat_map(|p| p.routes_in(&providers).unwrap())
++        .collect::<Vec<_>>();
++    let graph =
++        crate::frontend::source_macro_routes::SourceMacroRoutes::discovery_graph(&routes).unwrap();
++    let SourceDeclarativeDemand::Ready(request) = providers[0]
++        .demand_for_discovery(
++            call.item_input,
++            Digest::of_bytes(b"type component compile env"),
++            crate::expand::source_declarative::engine_version(),
++            &graph,
++            &providers,
++        )
++        .unwrap()
++    else {
++        panic!("actual original type expansion prerequisite")
++    };
++    let items =
++        GeneratedItems::admit(request.key(), Arc::new(request.expand().unwrap()), 1).unwrap();
++    let catalog = GeneratedMacroCatalog::new(
++        &items,
++        call.scope.clone(),
++        Key(items.record().key().parent_context.0),
++        views[0].captured_macro_cfg().unwrap(),
++        1,
++    )
++    .unwrap();
++    (providers.into_iter().next().unwrap(), items, catalog)
++}
++fn world(
++    text: &str,
++    edition: u16,
++    module: &[&str],
++) -> (Database, SourceDeclarative, CurrentGeneratedConstant) {
++    let (mut db, views, providers) = prepare(
++        vec![input(text, "type-current.rs", Digest([172; 32]), edition)],
++        vec![],
++    );
++    let mut scope = views[0].outline().root_scope.clone();
++    scope.module_path.extend(module.iter().map(|m| (*m).into()));
++    let mut definition = None;
++    for namespace in [
++        crate::source::manifest::Namespace::Value,
++        crate::source::manifest::Namespace::Type,
++    ] {
++        let mut discovery = SourceDiscovery::new(
++            vec![views[0].share()],
++            scope.clone(),
++            namespace,
++            Digest::of_bytes(b"type current world"),
++            1,
++        )
++        .unwrap()
++        .with_declarative_compiler(
++            Digest::of_bytes(b"type current compile env"),
++            crate::expand::source_declarative::engine_version(),
++            Arc::new(
++                crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                    &views[0].selection().outline.parse.profile,
++                )
++                .unwrap(),
++            ),
++        )
++        .unwrap();
++        loop {
++            match discovery.poll().unwrap() {
++                SourceDiscoveryStep::Sealed(_) => break,
++                SourceDiscoveryStep::NeedExpansion { request } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                SourceDiscoveryStep::Incomplete { diagnostic, .. } => panic!(
++                    "actual type preparation frontier: {} {}",
++                    diagnostic.code, diagnostic.message
++                ),
++                _ => panic!("type source preparation is unestablished"),
++            }
++        }
++        if namespace == crate::source::manifest::Namespace::Value {
++            let NameLookup::Defined(found) = discovery.lookup("A").unwrap() else {
++                panic!()
++            };
++            definition = Some(found.identity);
++        }
++        discovery.publish(&mut db).unwrap();
++    }
++    let owner = providers.into_iter().next().unwrap();
++    let parent =
++        CurrentGeneratedConstant::capture(&db, &owner, definition.unwrap(), MAX_BYTES).unwrap();
++    (db, owner, parent)
++}
++#[test]
++fn unchanged_raw_generated_unit_and_alias_sites_keep_all_four_origin_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (_, items, catalog) = component(RAW, edition, "tests!(r#break);");
++        let (_, scope, _) = catalog.captured_owner();
++        let constant = items
++            .items()
++            .iter()
++            .find(|h| h.kind == crate::expand::generated_items::GeneratedHeaderKind::Const)
++            .unwrap();
++        let site = WrittenGeneratedType::capture(
++            &items,
++            scope,
++            catalog.cfg(),
++            &constant.key,
++            GeneratedTypeRole::Declaration,
++            MAX_BYTES,
++        )
++        .unwrap();
++        assert!(matches!(site.shape(), GeneratedTypeSyntax::Unit));
++        assert_eq!(site.record().key().call_edition, edition);
++        assert_eq!(site.record().key().definition_edition, edition);
++        let alias = items
++            .items()
++            .iter()
++            .find(|h| {
++                h.kind == crate::expand::generated_items::GeneratedHeaderKind::Type
++                    && items.text()[h.start as usize..h.end as usize].contains("=")
++            })
++            .unwrap();
++        let site = WrittenGeneratedType::capture(
++            &items,
++            scope,
++            catalog.cfg(),
++            &alias.key,
++            GeneratedTypeRole::AliasTarget,
++            MAX_BYTES,
++        )
++        .unwrap();
++        assert!(matches!(site.shape(), GeneratedTypeSyntax::Unit));
++        assert_eq!(site.scope().module_path.len(), 2);
++    }
++}
++#[test]
++fn unchanged_vis_alias_target_is_origin_data_never_a_primitive_spelling_grant() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (_, items, catalog) = component(VIS, edition, "vis_passthru! { pub type H = i32; }");
++        let (_, scope, _) = catalog.captured_owner();
++        let alias = items
++            .items()
++            .iter()
++            .find(|h| h.kind == crate::expand::generated_items::GeneratedHeaderKind::Type)
++            .unwrap();
++        let site = WrittenGeneratedType::capture(
++            &items,
++            scope,
++            catalog.cfg(),
++            &alias.key,
++            GeneratedTypeRole::AliasTarget,
++            MAX_BYTES,
++        )
++        .unwrap();
++        let GeneratedTypeSyntax::Path(parts) = site.shape() else {
++            panic!()
++        };
++        assert!(matches!(parts[0].kind(),GeneratedTypeSegmentKind::Name(n) if n=="i32"));
++        assert_eq!(
++            parts[0].span().edition,
++            crate::expand::source_declarative::edition(edition).unwrap()
++        );
++        assert_eq!(site.role(), GeneratedTypeRole::AliasTarget);
++    }
++}
++#[test]
++fn unchanged_scalar_type_absence_keeps_explicit_primitive_environment_frontier() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, owner, parent) = world(VIS, edition, &["with_pub"]);
++        assert!(matches!(
++            SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap(),
++            GeneratedTypeOutcome::Need(GeneratedTypePrerequisite::PrimitiveEnvironment)
++        ));
++    }
++}
++#[test]
++fn generated_alias_unit_joins_exact_header_without_original_source_fabrication() {
++    let text = "macro_rules!m{()=>{type U=();const A:U=();}}m!();fn main(){}";
++    let (db, owner, parent) = world(text, 2024, &[]);
++    let GeneratedTypeOutcome::Selected(selected) =
++        SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap()
++    else {
++        panic!()
++    };
++    let SelectedSourceType::AliasUnit(alias) = selected.result() else {
++        panic!()
++    };
++    assert_ne!(alias.identity, parent.retained().member().fingerprint());
++    assert_eq!(selected.unit_primitive(), Some(PrimitiveType::Unit));
++    assert!(selected.alias_site.is_some());
++    assert!(
++        selected
++            .dependencies()
++            .contains_key(&InputKey::DefinitionHeader(alias.identity))
++    );
++    selected.revalidate(&db, &owner, &parent, &[]).unwrap();
++}
++#[test]
++fn original_alias_unit_retains_member_identity_and_genuine_cached_header() {
++    let text = "type U=();macro_rules!m{()=>{const A:U=();}}m!();fn main(){}";
++    let (db, owner, parent) = world(text, 2024, &[]);
++    let GeneratedTypeOutcome::Selected(selected) =
++        SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap()
++    else {
++        panic!()
++    };
++    let SelectedSourceType::AliasUnit(alias) = selected.result() else {
++        panic!()
++    };
++    let actual = owner
++        .module_source()
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "U")
++        .unwrap();
++    assert_eq!(alias.identity, actual.def_key.fingerprint());
++    assert!(selected.alias_site.is_none());
++    assert_eq!(selected.unit_primitive(), Some(PrimitiveType::Unit));
++}
++#[test]
++fn primitive_shadow_and_nonunit_alias_never_collapse_to_a_descriptor() {
++    for (text, nominal) in [
++        (
++            "struct i32;macro_rules!m{()=>{const A:i32=i32;}}m!();fn main(){}",
++            true,
++        ),
++        (
++            "type i32=bool;macro_rules!m{()=>{const A:i32=true;}}m!();fn main(){}",
++            false,
++        ),
++    ] {
++        let (db, owner, parent) = world(text, 2024, &[]);
++        let GeneratedTypeOutcome::Selected(selected) =
++            SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap()
++        else {
++            panic!()
++        };
++        assert_eq!(selected.unit_primitive(), None);
++        if nominal {
++            assert!(matches!(
++                selected.result(),
++                SelectedSourceType::NominalHeader(_)
++            ));
++        } else {
++            assert!(matches!(
++                selected.result(),
++                SelectedSourceType::AliasHeader(_)
++            ));
++            assert_eq!(
++                selected.target_prerequisite(),
++                Some(GeneratedTypePrerequisite::AliasTargetHygiene)
++            );
++        }
++    }
++}
++#[test]
++fn generated_generic_alias_and_absolute_path_keep_exact_prerequisites() {
++    let (db, owner, parent) = world(
++        "macro_rules!m{()=>{type U<T>=();const A:U=();}}m!();fn main(){}",
++        2024,
++        &[],
++    );
++    assert!(matches!(
++        SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap(),
++        GeneratedTypeOutcome::Need(GeneratedTypePrerequisite::GenericOrAssociated)
++    ));
++    let (db, owner, parent) = world(
++        "type U=();macro_rules!m{()=>{const A: ::U = ();}}m!();fn main(){}",
++        2024,
++        &[],
++    );
++    assert!(matches!(
++        SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap(),
++        GeneratedTypeOutcome::Need(GeneratedTypePrerequisite::QualifiedModuleRoute)
++    ));
++}
++#[test]
++fn actual_epoch_parent_and_quota_refusal_precede_source_type_mint() {
++    let (mut db, owner, parent) = world(
++        "macro_rules!m{()=>{const A:()=();}}m!();fn main(){}",
++        2024,
++        &[],
++    );
++    assert!(SelectedGeneratedType::capture_current(&db, &owner, &parent, 0).is_err());
++    let GeneratedTypeOutcome::Selected(selected) =
++        SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap()
++    else {
++        panic!()
++    };
++    db.begin_expansion_epoch(2).unwrap();
++    assert!(selected.revalidate(&db, &owner, &parent, &[]).is_err());
++    assert!(SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).is_err());
++}
++#[test]
++fn unchanged_cross_edition_dollar_crate_retains_actual_selected_mark_and_record() {
++    for (call, definition) in [(2015, 2024), (2018, 2021), (2021, 2018), (2024, 2015)] {
++        let root = Digest([173; 32]);
++        let aux = Digest([174; 32]);
++        let (_, views, providers) = prepare(
++            vec![
++                input(MODERN, "modern.rs", root, call),
++                input(INTERCRATE, "intercrate.rs", aux, definition),
++            ],
++            vec![SourceDependency {
++                consumer: root,
++                alias: "intercrate".into(),
++                provider: aux,
++            }],
++        );
++        let call_site=views[0].outline().item_invocations.iter().find(|c| views[0].macro_call_at(c.range).unwrap().segments().last().is_some_and(|s|matches!(s,crate::syntax::imports::ImportSegment::Name(n) if n=="uses_dollar_crate_modern"))).unwrap();
++        let routes = providers
++            .iter()
++            .flat_map(|p| p.routes_in(&providers).unwrap())
++            .collect::<Vec<_>>();
++        let graph =
++            crate::frontend::source_macro_routes::SourceMacroRoutes::discovery_graph(&routes)
++                .unwrap();
++        let SourceDeclarativeDemand::Ready(request) = providers[0]
++            .demand_for_discovery(
++                call_site.item_input,
++                Digest::of_bytes(b"cross type component compile env"),
++                crate::expand::source_declarative::engine_version(),
++                &graph,
++                &providers,
++            )
++            .unwrap()
++        else {
++            panic!()
++        };
++        let items =
++            GeneratedItems::admit(request.key(), Arc::new(request.expand().unwrap()), 1).unwrap();
++        let member = items
++            .items()
++            .iter()
++            .find(|h| h.kind == crate::expand::generated_items::GeneratedHeaderKind::Type)
++            .unwrap();
++        let site = WrittenGeneratedType::capture(
++            &items,
++            &call_site.scope,
++            views[0].captured_macro_cfg().unwrap(),
++            &member.key,
++            GeneratedTypeRole::AliasTarget,
++            MAX_BYTES,
++        )
++        .unwrap();
++        let GeneratedTypeSyntax::Path(parts) = site.shape() else {
++            panic!()
++        };
++        assert!(matches!(
++            parts[0].kind(),
++            GeneratedTypeSegmentKind::Keyword(TypeKeyword::DollarCrate)
++        ));
++        let facts = items.hygiene_facts();
++        let origin = facts.dollar_crate_origin(parts[0].span().context).unwrap();
++        assert_eq!(origin.unit(), Key(aux.0));
++        assert_eq!(origin.expansion(), Key(request.key().fingerprint().0));
++        assert_eq!(
++            facts.context(origin.mark()).unwrap().expansion,
++            Some(origin.expansion())
++        );
++        assert_eq!(site.record().key().call_edition, call);
++        assert_eq!(site.record().key().definition_edition, definition);
++        assert!(facts.dollar_crate_origin(Key([175; 32])).is_err());
++        // Component provenance is not a completed provider Type seal or alias result.
++    }
++}
++#[test]
++fn unchanged_nominal_primitive_shadow_and_local_macro_scope_are_not_spelling_authority() {
++    let text = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/shadowed/primitive-type-shadowing.rs"
++    );
++    let (_, views, _) = prepare(
++        vec![input(text, "primitive-shadow.rs", Digest([176; 32]), 2024)],
++        vec![],
++    );
++    let nominal = views[0]
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "bool" && i.def_key.item_kind == ItemKind::Struct)
++        .unwrap();
++    assert_eq!(nominal.scope.crate_key, Digest([176; 32]));
++    assert_ne!(nominal.header.fingerprint(), nominal.def_key.fingerprint());
++    let text = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/generate-mod.rs"
++    );
++    let (_, views, _) = prepare(
++        vec![input(text, "generate-mod.rs", Digest([177; 32]), 2024)],
++        vec![],
++    );
++    let parsed = crate::syntax::parse::ParsedFile::parse(
++        views[0].captured_macro_blob().unwrap(),
++        views[0].outline().profile.clone(),
++    )
++    .unwrap();
++    let selected = parsed
++        .parsed
++        .tree()
++        .syntax()
++        .descendants()
++        .filter_map(ast::MacroCall::cast)
++        .find(|c| {
++            c.path()
++                .is_some_and(|p| p.syntax().text().to_string() == "genmod")
++        })
++        .unwrap();
++    let call = views[0]
++        .macro_call_at(crate::syntax::ast_adapter::range(
++            selected.syntax().text_range(),
++        ))
++        .unwrap();
++    assert!(call.requires_body_entry());
++    assert!(
++        !views[0]
++            .outline()
++            .item_invocations
++            .iter()
++            .any(|c| c.range == call.range())
++    );
++}
+diff --git a/crates/lrr/src/frontend/source_type_alias_normalization_tests.rs b/crates/lrr/src/frontend/source_type_alias_normalization_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/source_type_alias_normalization_tests.rs
+@@ -0,0 +1,708 @@
++//! Source/header/selection components, not whole-main or compiler-tool fixture passes.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    db::key::OutlineKey,
++    expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    source::{
++        changes::{
++            PreparedSourceInputs, PreparedSourceView, SourceSelection, SourceSelectionOutcome,
++            SourceUnitInput,
++        },
++        dependencies::SourceDependency,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::parse::ParseKey,
++};
++use std::sync::Arc;
++const FONT: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/traits/trait-implementation-for-primitive-type-5280.rs"
++);
++const SHADOW: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/shadowed/primitive-type-shadowing.rs"
++);
++const CYCLE: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/checked-type-alias/variance-overflow.rs"
++);
++const GENERIC: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/type/type-alias-bounds.rs");
++const CONST_PARAM: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/const-generics/early/const-param-shadowing.rs"
++);
++fn input(text: &str, path: &str, unit: Digest, edition: u16) -> SourceUnitInput {
++    SourceUnitInput {
++        path: SourcePath::new(path).unwrap(),
++        crate_key: unit,
++        module_path: vec![],
++        profile: ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        cfg: CfgSet::guest_default(),
++        blob: SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++    }
++}
++fn prepare(
++    units: Vec<SourceUnitInput>,
++    edges: Vec<SourceDependency>,
++) -> (Database, Vec<PreparedSourceView>, Vec<SourceDeclarative>) {
++    let selections = units
++        .iter()
++        .map(|u| SourceSelection {
++            path: u.path.clone(),
++            outline: OutlineKey {
++                parse: ParseKey {
++                    content: u.blob.content(),
++                    profile: u.profile.clone(),
++                },
++                crate_key: u.crate_key,
++                module_path: u.module_path.clone(),
++                cfg: u.cfg.fingerprint(),
++            },
++        })
++        .collect::<Vec<_>>();
++    let inputs =
++        PreparedSourceInputs::refresh_with_dependencies(None, units, Default::default(), edges)
++            .unwrap();
++    let views = selections
++        .iter()
++        .map(|s| {
++            let SourceSelectionOutcome::Selected(v) = inputs.select(s).unwrap() else {
++                panic!()
++            };
++            v
++        })
++        .collect::<Vec<_>>();
++    let mut db = Database::default();
++    inputs.publish(&mut db).unwrap();
++    db.begin_expansion_epoch(1).unwrap();
++    let providers = views
++        .iter()
++        .map(|v| SourceDeclarative::new(v.share()).unwrap())
++        .collect();
++    (db, views, providers)
++}
++
++fn current(text: &str, edition: u16) -> (Database, SourceDeclarative, ScopeKey, SealKey) {
++    let (mut db, views, mut owners) = prepare(
++        vec![input(text, "alias.rs", Digest([192; 32]), edition)],
++        vec![],
++    );
++    let mut owner = owners.remove(0);
++    owner.compiler = Some(Arc::new(
++        crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(owner.profile())
++            .unwrap(),
++    ));
++    let scope = views[0].outline().root_scope.clone();
++    for namespace in [Namespace::Value, Namespace::Type] {
++        let mut discovery = SourceDiscovery::new(
++            vec![views[0].share()],
++            scope.clone(),
++            namespace,
++            Digest::of_bytes(b"alias current world"),
++            1,
++        )
++        .unwrap()
++        .with_declarative_compiler(
++            Digest::of_bytes(b"alias compile environment"),
++            crate::expand::source_declarative::engine_version(),
++            owner.compiler.clone().unwrap(),
++        )
++        .unwrap();
++        loop {
++            match discovery.poll().unwrap() {
++                SourceDiscoveryStep::Sealed(_) => break,
++                SourceDiscoveryStep::NeedExpansion { request } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                SourceDiscoveryStep::Incomplete { diagnostic, .. } => panic!(
++                    "actual source preparation prerequisite: {} {}",
++                    diagnostic.code, diagnostic.message
++                ),
++                _ => panic!("actual source preparation unestablished"),
++            }
++        }
++        discovery.publish(&mut db).unwrap();
++    }
++    let key = SealKey {
++        domain: SealDomain::Scope {
++            id: scope.fingerprint(),
++            namespace: Namespace::Type,
++        },
++        unit_graph: Digest::of_bytes(b"alias current world"),
++        epoch: 1,
++    };
++    (db, owner, scope, key)
++}
++fn resolve(
++    db: &Database,
++    owner: &SourceDeclarative,
++    scope: &ScopeKey,
++    key: &SealKey,
++    name: &str,
++) -> SourceAliasOutcome {
++    CurrentSourcePrimitiveAlias::capture_original_current(
++        db,
++        owner,
++        scope,
++        key,
++        name,
++        &[],
++        MAX_BYTES,
++    )
++    .unwrap()
++}
++#[test]
++fn unchanged_font_alias_keeps_exact_source_member_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, owner, scope, key) = current(FONT, edition);
++        let SourceAliasOutcome::Ready(proof) = resolve(&db, &owner, &scope, &key, "FontTableTag")
++        else {
++            panic!("actual original primitive alias component")
++        };
++        assert_eq!(proof.primitive(), PrimitiveType::U32);
++        let defs = proof.alias_definitions().collect::<Vec<_>>();
++        assert_eq!(defs.len(), 1);
++        assert_eq!(defs[0].declared_name, "FontTableTag");
++        assert_eq!(defs[0].crate_key, scope.crate_key);
++        proof.revalidate_inputs(&db).unwrap();
++        assert!(!proof.dependencies().is_empty());
++    }
++}
++#[test]
++fn unchanged_primitive_shadow_is_a_source_nominal_frontier() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, owner, scope, key) = current(SHADOW, edition);
++        let SourceAliasOutcome::Need(SourceAliasPrerequisite::Name(NameLookup::Defined(found))) =
++            resolve(&db, &owner, &scope, &key, "bool")
++        else {
++            panic!("nominal shadow cannot become Bool")
++        };
++        let original = owner
++            .module_source()
++            .outline()
++            .items
++            .iter()
++            .find(|i| i.def_key.declared_name == "bool")
++            .unwrap();
++        assert_eq!(found.identity, original.def_key.fingerprint());
++        assert_eq!(original.def_key.item_kind, ItemKind::Struct);
++    }
++}
++#[test]
++fn unchanged_direct_self_alias_cycle_is_reached_and_bounded() {
++    let (db, owner, scope, key) = current(CYCLE, 2024);
++    let error = CurrentSourcePrimitiveAlias::capture_original_current(
++        &db,
++        &owner,
++        &scope,
++        &key,
++        "Second",
++        &[],
++        MAX_BYTES,
++    )
++    .err()
++    .unwrap();
++    assert_eq!(error.code, "LRR-E-TYPE-ALIAS-CYCLE");
++}
++#[test]
++fn unchanged_const_parameter_shadow_does_not_change_global_alias_type() {
++    let (db, owner, scope, key) = current(CONST_PARAM, 2024);
++    let SourceAliasOutcome::Ready(proof) = resolve(&db, &owner, &scope, &key, "N") else {
++        panic!("actual global alias header component")
++    };
++    assert_eq!(proof.primitive(), PrimitiveType::U32);
++    assert_eq!(proof.alias_definitions().next().unwrap().declared_name, "N");
++}
++#[test]
++fn unchanged_generic_alias_header_preserves_substitution_frontier_without_a_seal() {
++    let (db, views, _) = prepare(
++        vec![input(
++            GENERIC,
++            "generic-original.rs",
++            Digest([190; 32]),
++            2024,
++        )],
++        vec![],
++    );
++    let source = &views[0];
++    let item = source
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "SVec")
++        .unwrap();
++    let parsed = db
++        .prepared_parse(&source.selection().outline.parse)
++        .unwrap();
++    let recipe = parsed
++        .type_alias_recipe(
++            item.def_key.fingerprint(),
++            &item.header,
++            &DeclarationContext {
++                scope: item.scope.clone(),
++                range: item.declaration_span,
++            },
++        )
++        .unwrap();
++    assert_eq!(recipe.generics[0].name, "T");
++    assert!(!recipe.generics[0].bounds.is_empty());
++    assert!(!recipe.target.is_empty());
++    // This is retained-header evidence only: std::rc selection/full source preparation remains required.
++}
++#[test]
++fn ordered_alias_chain_and_symbolic_primitive_spelling_keep_namespace_authority() {
++    let text = "type i64=bool;type Mid=i64;type Final=Mid;fn cold(){missing();}fn main(){}";
++    let (db, owner, scope, key) = current(text, 2024);
++    let SourceAliasOutcome::Ready(proof) = resolve(&db, &owner, &scope, &key, "Final") else {
++        panic!("actual aliases must normalize")
++    };
++    assert_eq!(proof.primitive(), PrimitiveType::Bool);
++    assert_eq!(
++        proof
++            .alias_definitions()
++            .map(|d| d.declared_name.as_str())
++            .collect::<Vec<_>>(),
++        ["Final", "Mid", "i64"]
++    );
++    let id = proof.alias_definitions().last().unwrap().fingerprint();
++    let item = owner
++        .module_source()
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.fingerprint() == id)
++        .unwrap();
++    let recipe = db
++        .prepared_parse(&owner.module_source().selection().outline.parse)
++        .unwrap()
++        .type_alias_recipe(
++            id,
++            &item.header,
++            &DeclarationContext {
++                scope: item.scope.clone(),
++                range: item.declaration_span,
++            },
++        )
++        .unwrap();
++    assert!(proof.matches_query_recipe(&recipe));
++    let mut forged = recipe.clone();
++    forged.definition = Digest([4; 32]);
++    assert!(!proof.matches_query_recipe(&forged));
++}
++#[test]
++fn generic_and_qualified_targets_stay_precise_prerequisites() {
++    let (db, owner, scope, key) = current(
++        "type A<T>=T;type B=core::primitive::i32;type C=A<i32>;fn main(){}",
++        2024,
++    );
++    assert!(matches!(
++        resolve(&db, &owner, &scope, &key, "A"),
++        SourceAliasOutcome::Need(SourceAliasPrerequisite::GenericSubstitution(_))
++    ));
++    assert!(matches!(
++        resolve(&db, &owner, &scope, &key, "B"),
++        SourceAliasOutcome::Need(SourceAliasPrerequisite::WrittenTarget(_))
++    ));
++}
++#[test]
++fn current_epoch_publication_and_forged_terminal_dependencies_refuse_reuse() {
++    let (mut db, owner, scope, key) = current("type A=i32;fn main(){}", 2024);
++    let SourceAliasOutcome::Ready(mut proof) = resolve(&db, &owner, &scope, &key, "A") else {
++        panic!()
++    };
++    let stamp = proof.stamps.values_mut().next().unwrap();
++    *stamp = Digest([3; 32]);
++    assert_eq!(
++        proof.revalidate_inputs(&db).unwrap_err().code,
++        "LRR-E-SOURCE-ALIAS"
++    );
++    let SourceAliasOutcome::Ready(proof) = resolve(&db, &owner, &scope, &key, "A") else {
++        panic!()
++    };
++    db.begin_expansion_epoch(2).unwrap();
++    assert_eq!(
++        proof.revalidate_inputs(&db).unwrap_err().code,
++        "LRR-E-SOURCE-ALIAS"
++    );
++    assert!(
++        CurrentSourcePrimitiveAlias::capture_original_current(
++            &db,
++            &owner,
++            &scope,
++            &key,
++            "A",
++            &[],
++            MAX_BYTES
++        )
++        .is_err()
++    );
++}
++#[test]
++fn metadata_and_foreign_scope_refusal_cannot_attach_a_partial_proof() {
++    let (db, owner, scope, key) = current("type A=i32;fn main(){}", 2024);
++    let e = CurrentSourcePrimitiveAlias::capture_original_current(
++        &db,
++        &owner,
++        &scope,
++        &key,
++        "A",
++        &[],
++        0,
++    )
++    .err()
++    .unwrap();
++    assert_eq!(e.code, "LRR-E-METADATA-LIMIT");
++    let mut foreign = scope.clone();
++    foreign.crate_key = Digest([9; 32]);
++    assert!(
++        CurrentSourcePrimitiveAlias::capture_original_current(
++            &db,
++            &owner,
++            &foreign,
++            &seal_for(&foreign, &key),
++            "A",
++            &[],
++            MAX_BYTES
++        )
++        .is_err()
++    );
++    let SourceAliasOutcome::Ready(proof) = resolve(&db, &owner, &scope, &key, "A") else {
++        panic!()
++    };
++    proof.revalidate_inputs(&db).unwrap();
++}
++#[test]
++fn genuine_generated_alias_target_preserves_written_origin_and_source_member() {
++    let text = "macro_rules! make {()=>{type Alias=i32;const A:Alias=1;}}make!();fn main(){}";
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, owner, scope, key) = current(text, edition);
++        let value_key = SealKey {
++            domain: SealDomain::Scope {
++                id: scope.fingerprint(),
++                namespace: Namespace::Value,
++            },
++            ..key.clone()
++        };
++        let Some((InputValue::DiscoverySeal(input), _)) =
++            db.published_input(&InputKey::DiscoverySeal(value_key))
++        else {
++            panic!()
++        };
++        let NameLookup::Defined(a) = input
++            .scope
++            .as_ref()
++            .unwrap()
++            .lookup(&BucketKey {
++                scope: scope.clone(),
++                namespace: Namespace::Value,
++                name: "A".into(),
++            })
++            .unwrap()
++        else {
++            panic!()
++        };
++        let parent = CurrentGeneratedConstant::capture(&db, &owner, a.identity, MAX_BYTES).unwrap();
++        let crate::frontend::generated_type_admission::GeneratedTypeOutcome::Selected(selected) =
++            SelectedGeneratedType::capture_current(&db, &owner, &parent, MAX_BYTES).unwrap()
++        else {
++            panic!("actual selected generated alias")
++        };
++        let SourceAliasOutcome::Ready(proof) =
++            CurrentSourcePrimitiveAlias::capture_generated_current(
++                &db,
++                &owner,
++                &parent,
++                &selected,
++                &[],
++                MAX_BYTES,
++            )
++            .unwrap()
++        else {
++            panic!("actual written alias primitive origin")
++        };
++        assert_eq!(proof.primitive(), PrimitiveType::I32);
++        assert_eq!(
++            proof.alias_definitions().next().unwrap().declared_name,
++            "Alias"
++        );
++        assert!(proof.steps[0].written.is_some());
++        proof.revalidate_inputs(&db).unwrap();
++    }
++}
++
++#[test]
++fn unchanged_generated_generic_alias_keeps_actual_written_source_frontier() {
++    let text = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-tt-matchers.rs"
++    );
++    let (db, owner, scope, key) = current(text, 2024);
++    let Some((InputValue::DiscoverySeal(input), _)) =
++        db.published_input(&InputKey::DiscoverySeal(key))
++    else {
++        panic!()
++    };
++    let NameLookup::Defined(alias) = input
++        .scope
++        .as_ref()
++        .unwrap()
++        .lookup(&BucketKey {
++            scope,
++            namespace: Namespace::Type,
++            name: "Alias".into(),
++        })
++        .unwrap()
++    else {
++        panic!()
++    };
++    let Some((InputValue::DefinitionSource(parse), _)) =
++        db.published_input(&InputKey::DefinitionSource(alias.identity))
++    else {
++        panic!()
++    };
++    let Some((InputValue::GeneratedSyntax(unit), _)) =
++        db.published_input(&InputKey::GeneratedSyntax(parse.content))
++    else {
++        panic!()
++    };
++    let header = unit
++        .items
++        .items()
++        .iter()
++        .find(|h| h.key.fingerprint() == alias.identity)
++        .unwrap();
++    let site = WrittenGeneratedType::capture(
++        &unit.items,
++        &unit.scope,
++        &unit.cfg,
++        &header.key,
++        GeneratedTypeRole::AliasTarget,
++        MAX_BYTES,
++    )
++    .unwrap();
++    assert!(matches!(
++        site.shape(),
++        GeneratedTypeSyntax::GenericOrProjection
++    ));
++    assert_eq!(
++        site.record().key().fingerprint(),
++        unit.items.record().key().fingerprint()
++    );
++    assert!(
++        owner
++            .module_source()
++            .outline()
++            .items
++            .iter()
++            .any(|i| i.def_key.declared_name == "foo")
++    );
++}
++#[test]
++fn unchanged_incremental_alias_headers_keep_order_without_running_tool_contracts() {
++    let text = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/dep-graph/dep-graph-type-alias.rs"
++    );
++    let (db, views, _) = prepare(
++        vec![input(
++            text,
++            "dep-graph-original.rs",
++            Digest([188; 32]),
++            2024,
++        )],
++        vec![],
++    );
++    let source = &views[0];
++    let parsed = db
++        .prepared_parse(&source.selection().outline.parse)
++        .unwrap();
++    for (name, target) in [("TypeAlias2", "TypeAlias"), ("TypeAlias", "u32")] {
++        let item = source
++            .outline()
++            .items
++            .iter()
++            .find(|i| i.def_key.declared_name == name)
++            .unwrap();
++        let recipe = parsed
++            .type_alias_recipe(
++                item.def_key.fingerprint(),
++                &item.header,
++                &DeclarationContext {
++                    scope: item.scope.clone(),
++                    range: item.declaration_span,
++                },
++            )
++            .unwrap();
++        assert_eq!(recipe.target.len(), 1);
++        assert_eq!(recipe.target[0].text, target);
++    }
++    // #[rustc_if_this_changed]/query-dep-graph are original tooling assertions, unexecuted.
++}
++
++#[test]
++fn genuine_original_alias_queries_match_source_headers_and_refuse_stale_reuse() {
++    let (mut db, owner, scope, key) = current(FONT, 2024);
++    let SourceAliasOutcome::Ready(source) = resolve(&db, &owner, &scope, &key, "FontTableTag")
++    else {
++        panic!()
++    };
++    let crate::db::poll::QueryPoll::Ready(Ok(proof)) =
++        crate::frontend::source_type_alias_query::QueriedSourcePrimitiveAlias::capture_current(
++            &mut db, source, MAX_BYTES,
++        )
++    else {
++        panic!("actual reached source alias query join")
++    };
++    assert_eq!(proof.query_dependencies().len(), 1);
++    assert_eq!(proof.source().primitive(), PrimitiveType::U32);
++    assert!(matches!(
++        proof.revalidate_current(&mut db),
++        crate::db::poll::QueryPoll::Ready(Ok(()))
++    ));
++    db.begin_expansion_epoch(2).unwrap();
++    assert!(matches!(
++        proof.revalidate_current(&mut db),
++        crate::db::poll::QueryPoll::Ready(Err(_))
++    ));
++}
++
++#[test]
++fn private_payload_tamper_cannot_recover_a_primitive_from_equal_descriptors() {
++    let (db, owner, scope, key) = current("type A=i32;fn main(){}", 2024);
++    let SourceAliasOutcome::Ready(mut proof) = resolve(&db, &owner, &scope, &key, "A") else {
++        panic!()
++    };
++    proof.primitive = PrimitiveType::U32;
++    assert_eq!(
++        proof.revalidate_inputs(&db).unwrap_err().code,
++        "LRR-E-SOURCE-ALIAS"
++    );
++}
++
++#[test]
++fn unsupported_absent_type_and_actual_long_alias_chain_do_not_default() {
++    let (db, owner, scope, key) = current("type A=Unknown;fn main(){}", 2024);
++    assert!(matches!(
++        resolve(&db, &owner, &scope, &key, "A"),
++        SourceAliasOutcome::Need(SourceAliasPrerequisite::UnknownPrimitive)
++    ));
++    let mut text = String::new();
++    for i in 0..257 {
++        text.push_str(&format!("type A{i}=A{};", i + 1));
++    }
++    text.push_str("type A257=i32;fn main(){}");
++    let (db, owner, scope, key) = current(&text, 2024);
++    let e = CurrentSourcePrimitiveAlias::capture_original_current(
++        &db,
++        &owner,
++        &scope,
++        &key,
++        "A0",
++        &[],
++        MAX_BYTES,
++    )
++    .err()
++    .unwrap();
++    assert_eq!(e.code, "LRR-E-METADATA-LIMIT");
++}
++
++#[test]
++fn explicit_alias_generic_arguments_keep_the_exact_substitution_prerequisite() {
++    let (db, owner, scope, key) = current("type A<T>=T;type B=A<i32>;fn main(){}", 2024);
++    assert!(matches!(
++        resolve(&db, &owner, &scope, &key, "B"),
++        SourceAliasOutcome::Need(SourceAliasPrerequisite::GenericSubstitution(_))
++    ));
++}
++
++#[test]
++fn existing_alias_normalizer_consumes_real_type_publication_and_query_join() {
++    let (mut db, owner, scope, key) = current(
++        "type i64=bool;type A=i64;fn cold(){missing();}fn main(){}",
++        2024,
++    );
++    let graph =
++        crate::frontend::names::NameNamespaces::from_outlines(&[owner.module_source().outline()])
++            .unwrap();
++    let sources = [owner.module_source()];
++    let normalizer = crate::frontend::type_aliases::AliasNormalizer::new(&graph, &sources).unwrap();
++    let selected = owner
++        .module_source()
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "A")
++        .unwrap()
++        .def_key
++        .fingerprint();
++    let crate::db::poll::QueryPoll::Ready(Ok((
++        crate::frontend::type_aliases::AliasTarget::Type(crate::traits::term::TyTerm::Primitive(
++            PrimitiveType::Bool,
++        )),
++        deps,
++    ))) = normalizer.normalize_with_dependencies(&mut db, selected)
++    else {
++        panic!("actual existing alias consumer must preserve source shadow")
++    };
++    assert!(deps.iter().any(|d|matches!(d,crate::db::dependency::DependencyStamp::Input{key:InputKey::DiscoverySeal(actual),..}if actual==&key)));
++    assert!(deps.iter().any(|d| matches!(
++        d,
++        crate::db::dependency::DependencyStamp::Query {
++            key: crate::db::key::QueryKey::TypeAlias(_),
++            ..
++        }
++    )));
++    let cert = db
++        .source_alias_type_certificate(owner.module_source().selection(), &scope, MAX_BYTES)
++        .unwrap()
++        .unwrap();
++    let InputValue::DiscoverySeal(input) = cert.as_ref() else {
++        panic!()
++    };
++    assert!(
++        input
++            .compiler_primitive_receipt(owner.module_source().selection())
++            .unwrap()
++            .is_some()
++    );
++    assert!(
++        input
++            .type_prelude_receipt(owner.module_source().selection(), &scope)
++            .is_some()
++    );
++}
++#[test]
++fn existing_alias_consumer_reports_unprepared_type_source_instead_of_primitive_success() {
++    let (mut db, views, _) = prepare(
++        vec![input(
++            "type A=i32;fn main(){}",
++            "unprepared.rs",
++            Digest([187; 32]),
++            2024,
++        )],
++        vec![],
++    );
++    let source = &views[0];
++    let graph = crate::frontend::names::NameNamespaces::from_outlines(&[source.outline()]).unwrap();
++    let sources = [source];
++    let normalizer = crate::frontend::type_aliases::AliasNormalizer::new(&graph, &sources).unwrap();
++    let initial = source
++        .outline()
++        .items
++        .iter()
++        .find(|i| i.def_key.declared_name == "A")
++        .unwrap()
++        .def_key
++        .fingerprint();
++    assert!(matches!(
++        normalizer.normalize(&mut db, initial),
++        crate::db::poll::QueryPoll::Ready(Ok(
++            crate::frontend::type_aliases::AliasTarget::NeedCurrentSource {
++                missing: crate::frontend::type_aliases::CurrentAliasPrerequisite::TypeNamespace(_),
++                ..
++            }
++        ))
++    ));
++}
+diff --git a/crates/lrr/src/frontend/type_prelude_admission_tests.rs b/crates/lrr/src/frontend/type_prelude_admission_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/frontend/type_prelude_admission_tests.rs
+@@ -0,0 +1,552 @@
++//! Real source/expansion/header components only; no evaluator, layout or main execution.
++use super::*;
++use crate::frontend::generated_constant_provenance::CurrentGeneratedConstant;
++use crate::frontend::generated_primitive_admission::{
++    CurrentGeneratedPrimitive, GeneratedPrimitiveOutcome, GeneratedPrimitivePrerequisite,
++};
++use crate::ir::op::PrimitiveType;
++use crate::{
++    core::profile::ProfileIdentity,
++    db::key::OutlineKey,
++    expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    source::{
++        changes::{
++            PreparedSourceInputs, PreparedSourceView, SourceSelection, SourceSelectionOutcome,
++            SourceUnitInput,
++        },
++        dependencies::SourceDependency,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    syntax::parse::ParseKey,
++};
++use std::sync::Arc;
++const VIS: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-pub-matcher.rs"
++);
++fn input(text: &str, path: &str, unit: Digest, edition: u16) -> SourceUnitInput {
++    SourceUnitInput {
++        path: SourcePath::new(path).unwrap(),
++        crate_key: unit,
++        module_path: vec![],
++        profile: ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++        cfg: CfgSet::guest_default(),
++        blob: SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++    }
++}
++fn prepare(
++    units: Vec<SourceUnitInput>,
++    edges: Vec<SourceDependency>,
++) -> (Database, Vec<PreparedSourceView>, Vec<SourceDeclarative>) {
++    let selections = units
++        .iter()
++        .map(|u| SourceSelection {
++            path: u.path.clone(),
++            outline: OutlineKey {
++                parse: ParseKey {
++                    content: u.blob.content(),
++                    profile: u.profile.clone(),
++                },
++                crate_key: u.crate_key,
++                module_path: u.module_path.clone(),
++                cfg: u.cfg.fingerprint(),
++            },
++        })
++        .collect::<Vec<_>>();
++    let inputs =
++        PreparedSourceInputs::refresh_with_dependencies(None, units, Default::default(), edges)
++            .unwrap();
++    let views = selections
++        .iter()
++        .map(|s| {
++            let SourceSelectionOutcome::Selected(v) = inputs.select(s).unwrap() else {
++                panic!()
++            };
++            v
++        })
++        .collect::<Vec<_>>();
++    let mut db = Database::default();
++    inputs.publish(&mut db).unwrap();
++    db.begin_expansion_epoch(1).unwrap();
++    let providers = views
++        .iter()
++        .map(|v| SourceDeclarative::new(v.share()).unwrap())
++        .collect();
++    (db, views, providers)
++}
++fn world(
++    text: &str,
++    edition: u16,
++    module: &[&str],
++) -> (Database, SourceDeclarative, CurrentGeneratedConstant) {
++    world_in_unit(text, edition, module, Digest([172; 32]))
++}
++fn world_in_unit(
++    text: &str,
++    edition: u16,
++    module: &[&str],
++    unit: Digest,
++) -> (Database, SourceDeclarative, CurrentGeneratedConstant) {
++    let (mut db, views, providers) =
++        prepare(vec![input(text, "type-current.rs", unit, edition)], vec![]);
++    let mut scope = views[0].outline().root_scope.clone();
++    scope.module_path.extend(module.iter().map(|m| (*m).into()));
++    let mut definition = None;
++    for namespace in [
++        crate::source::manifest::Namespace::Value,
++        crate::source::manifest::Namespace::Type,
++    ] {
++        let mut discovery = SourceDiscovery::new(
++            vec![views[0].share()],
++            scope.clone(),
++            namespace,
++            Digest::of_bytes(b"type current world"),
++            1,
++        )
++        .unwrap()
++        .with_declarative_compiler(
++            Digest::of_bytes(b"type current compile env"),
++            crate::expand::source_declarative::engine_version(),
++            Arc::new(
++                crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                    &views[0].selection().outline.parse.profile,
++                )
++                .unwrap(),
++            ),
++        )
++        .unwrap();
++        loop {
++            match discovery.poll().unwrap() {
++                SourceDiscoveryStep::Sealed(_) => break,
++                SourceDiscoveryStep::NeedExpansion { request } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                    .admit_expansion(Arc::new(request.expand().unwrap()))
++                    .unwrap(),
++                SourceDiscoveryStep::Incomplete { diagnostic, .. } => panic!(
++                    "actual type preparation frontier: {} {}",
++                    diagnostic.code, diagnostic.message
++                ),
++                _ => panic!("type source preparation is unestablished"),
++            }
++        }
++        if namespace == crate::source::manifest::Namespace::Value {
++            let NameLookup::Defined(found) = discovery.lookup("A").unwrap() else {
++                panic!()
++            };
++            definition = Some(found.identity);
++        }
++        discovery.publish(&mut db).unwrap();
++    }
++    let mut owner = providers.into_iter().next().unwrap();
++    owner.compiler = Some(Arc::new(
++        crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(owner.profile())
++            .unwrap(),
++    ));
++    let parent =
++        CurrentGeneratedConstant::capture(&db, &owner, definition.unwrap(), MAX_BYTES).unwrap();
++    (db, owner, parent)
++}
++
++fn target(db: &mut Database, owner: &SourceDeclarative, module: &[&str]) {
++    let mut scope = owner.module_source().outline().root_scope.clone();
++    scope
++        .module_path
++        .extend(module.iter().map(|m| m.to_string()));
++    let mut discovery = SourceDiscovery::new(
++        vec![owner.module_source().share()],
++        scope,
++        Namespace::Type,
++        Digest::of_bytes(b"type current world"),
++        1,
++    )
++    .unwrap()
++    .with_declarative_compiler(
++        Digest::of_bytes(b"type current compile env"),
++        crate::expand::source_declarative::engine_version(),
++        owner.compiler.clone().unwrap(),
++    )
++    .unwrap();
++    loop {
++        match discovery.poll().unwrap() {
++            SourceDiscoveryStep::Sealed(_) => break,
++            SourceDiscoveryStep::NeedExpansion { request } => discovery
++                .admit_expansion(Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                .admit_expansion(Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            _ => panic!("actual target Type preparation required"),
++        }
++    }
++    discovery.publish(db).unwrap();
++}
++#[test]
++fn unchanged_default_generated_i32_joins_compiler_type_prelude_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, owner, parent) = world(VIS, edition, &["with_pub"]);
++        let GeneratedPrimitiveOutcome::Ready(proof) =
++            CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES)
++                .unwrap()
++        else {
++            panic!("actual compiler default prelude must prove i32 absence")
++        };
++        assert_eq!(proof.primitive(), PrimitiveType::I32);
++        assert_eq!(proof.profile().edition, edition);
++        proof
++            .revalidate(&db, &owner, &parent, &[], MAX_BYTES)
++            .unwrap();
++    }
++}
++#[test]
++fn no_std_and_disabled_policy_use_their_actual_owned_profile() {
++    for edition in [2015, 2018, 2021, 2024] {
++        for text in [
++            "#![no_std]macro_rules!m{()=>{const A:i32=1;}}m!();fn main(){}",
++            "#![no_implicit_prelude]macro_rules!m{()=>{const A:char='a';}}m!();fn main(){}",
++        ] {
++            let (db, owner, parent) = world(text, edition, &[]);
++            let GeneratedPrimitiveOutcome::Ready(proof) =
++                CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES)
++                    .unwrap()
++            else {
++                panic!()
++            };
++            assert_eq!(proof.profile().edition, edition);
++        }
++    }
++}
++#[test]
++fn genuine_custom_module_requires_target_seal_then_exact_absence() {
++    let text = "#![feature(prelude_import)]mod p{pub struct Present;}#[prelude_import]use crate::p::*;macro_rules!m{()=>{const A:i32=1;}}mod c{m!();}fn main(){}";
++    let (mut db, owner, parent) = world(text, 2024, &["c"]);
++    assert!(
++        matches!(CurrentGeneratedPrimitive::capture_current(&db,&owner,&parent,&[],MAX_BYTES).unwrap(),GeneratedPrimitiveOutcome::Need(GeneratedPrimitivePrerequisite::TypePreludeSelection(TypePreludePrerequisite::TargetTypeNamespace(scope)))if scope.module_path==vec!["p"])
++    );
++    target(&mut db, &owner, &["p"]);
++    assert!(parent.revalidate(&db, &owner).is_err());
++    let parent = CurrentGeneratedConstant::capture(
++        &db,
++        &owner,
++        parent.retained().member().fingerprint(),
++        MAX_BYTES,
++    )
++    .unwrap();
++    let GeneratedPrimitiveOutcome::Ready(proof) =
++        CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES).unwrap()
++    else {
++        panic!()
++    };
++    assert_eq!(proof.primitive(), PrimitiveType::I32);
++    proof
++        .revalidate(&db, &owner, &parent, &[], MAX_BYTES)
++        .unwrap();
++}
++#[test]
++fn custom_source_member_identity_never_becomes_primitive_from_equal_spelling() {
++    let text = "#![feature(prelude_import)]mod p{pub type i32=bool;}#[prelude_import]use crate::p::*;macro_rules!m{()=>{const A:i32=true;}}mod c{m!();}fn main(){}";
++    let (mut db, owner, parent) = world(text, 2024, &["c"]);
++    target(&mut db, &owner, &["p"]);
++    let parent = CurrentGeneratedConstant::capture(
++        &db,
++        &owner,
++        parent.retained().member().fingerprint(),
++        MAX_BYTES,
++    )
++    .unwrap();
++    assert!(
++        matches!(CurrentGeneratedPrimitive::capture_current(&db,&owner,&parent,&[],MAX_BYTES).unwrap(),GeneratedPrimitiveOutcome::Need(GeneratedPrimitivePrerequisite::TypePreludeSelection(TypePreludePrerequisite::Member(NameLookup::Defined(found))))if found.defining_unit==owner.module_source().selection().outline.crate_key)
++    );
++}
++#[test]
++fn actual_custom_import_alias_keeps_selected_module_identity() {
++    let text = "#![feature(prelude_import)]mod p{pub struct Present;}use crate::p as chosen;#[prelude_import]use chosen::*;macro_rules!m{()=>{const A:i32=1;}}mod c{m!();}fn main(){}";
++    let (db, owner, parent) = world(text, 2024, &["c"]);
++    let Some((InputValue::DiscoverySeal(input), _)) =
++        db.published_input(&InputKey::DiscoverySeal(parent.seal_keys().1.clone()))
++    else {
++        panic!()
++    };
++    let receipt = input
++        .type_prelude_receipt(owner.module_source().selection(), parent.retained().scope())
++        .unwrap()
++        .unwrap();
++    let PreparedMode::Custom {
++        module, directive, ..
++    } = &receipt.mode
++    else {
++        panic!("actual alias route must select original module")
++    };
++    assert_eq!(module.module_path, vec!["p"]);
++    assert!(
++        directive
++            .import()
++            .path
++            .iter()
++            .any(|p| matches!(p,crate::syntax::imports::ImportSegment::Name(n)if n=="chosen"))
++    );
++}
++#[test]
++fn multiple_custom_imports_and_generated_directives_remain_explicit() {
++    for (text, generated) in [
++        (
++            "#![feature(prelude_import)]mod p{}mod q{}#[prelude_import]use crate::p::*;#[prelude_import]use crate::q::*;macro_rules!m{()=>{const A:i32=1;}}mod c{m!();}fn main(){}",
++            false,
++        ),
++        (
++            "#![feature(prelude_import)]mod p{}macro_rules!m{()=>{#[prelude_import]use crate::p::*;const A:i32=1;}}m!();fn main(){}",
++            true,
++        ),
++    ] {
++        let (db, owner, parent) = world(text, 2024, if generated { &[] } else { &["c"] });
++        let actual =
++            CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], MAX_BYTES)
++                .unwrap();
++        if generated {
++            assert!(matches!(
++                actual,
++                GeneratedPrimitiveOutcome::Need(
++                    GeneratedPrimitivePrerequisite::TypePreludeSelection(
++                        TypePreludePrerequisite::GeneratedDirective(_)
++                    )
++                )
++            ))
++        } else {
++            assert!(matches!(
++                actual,
++                GeneratedPrimitiveOutcome::Need(
++                    GeneratedPrimitivePrerequisite::TypePreludeSelection(
++                        TypePreludePrerequisite::MultipleDirectives
++                    )
++                )
++            ))
++        }
++    }
++}
++#[test]
++fn compiler_catalogue_membership_and_prelude_spellings_are_edition_specific() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let profile = ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        };
++        let compiler =
++            crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(&profile)
++                .unwrap();
++        let facet = compiler.type_prelude_facet(&profile).unwrap().unwrap();
++        assert!(!facet.contains_export_spelling(true, "i32"));
++        assert!(!facet.contains_export_spelling(false, "bool"));
++        assert!(facet.contains_export_spelling(true, "Vec"));
++        assert!(!facet.contains_export_spelling(false, "Vec"));
++        assert_eq!(
++            facet.contains_export_spelling(false, "TryInto"),
++            edition >= 2021
++        );
++        assert_eq!(
++            facet.contains_export_spelling(true, "Future"),
++            edition == 2024
++        );
++    }
++}
++#[test]
++fn exact_epoch_profile_and_budget_refusal_have_no_provider_effect() {
++    let (mut db, owner, parent) = world(
++        "macro_rules!m{()=>{const A:i32=1;}}m!();fn main(){}",
++        2024,
++        &[],
++    );
++    let trace = db.trace.events.len();
++    assert!(CurrentGeneratedPrimitive::capture_current(&db, &owner, &parent, &[], 0).is_err());
++    let TypePreludeAbsenceOutcome::Absent(proof) = CurrentTypePreludeAbsence::capture_current(
++        &db,
++        &owner,
++        parent.retained().scope(),
++        parent.seal_keys().1,
++        "i32",
++        MAX_BYTES,
++    )
++    .unwrap() else {
++        panic!()
++    };
++    assert!(
++        proof
++            .revalidate(
++                &db,
++                &owner,
++                parent.retained().scope(),
++                parent.seal_keys().1,
++                "char",
++                MAX_BYTES
++            )
++            .is_err()
++    );
++    db.begin_expansion_epoch(2).unwrap();
++    assert!(
++        proof
++            .revalidate(
++                &db,
++                &owner,
++                parent.retained().scope(),
++                parent.seal_keys().1,
++                "i32",
++                MAX_BYTES
++            )
++            .is_err()
++    );
++    assert_eq!(trace, db.trace.events.len());
++}
++#[test]
++fn pinned_custom_and_legacy_hygiene_originals_retain_real_directives() {
++    let text = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/stdlib-prelude-from-opaque-early.rs"
++    );
++    let (_, views, _) = prepare(
++        vec![input(text, "custom-original.rs", Digest([224; 32]), 2024)],
++        vec![],
++    );
++    let parsed = ParsedFile::parse(
++        views[0].captured_macro_blob().unwrap(),
++        views[0].outline().profile.clone(),
++    )
++    .unwrap();
++    let TypePreludeSites::Captured(directives) = parsed
++        .type_prelude_sites(
++            views[0].outline(),
++            views[0].captured_macro_cfg().unwrap(),
++            MAX_BYTES,
++        )
++        .unwrap()
++    else {
++        panic!()
++    };
++    assert_eq!(directives.len(), 1);
++    assert!(matches!(
++        directives[0].import().kind,
++        crate::syntax::imports::ImportKind::Glob
++    ));
++    let text = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/prelude-import-hygiene.rs"
++    );
++    let (_, views, _) = prepare(
++        vec![input(
++            text,
++            "injection-original.rs",
++            Digest([225; 32]),
++            2015,
++        )],
++        vec![],
++    );
++    let parsed = ParsedFile::parse(
++        views[0].captured_macro_blob().unwrap(),
++        views[0].outline().profile.clone(),
++    )
++    .unwrap();
++    let TypePreludeSites::Captured(directives) = parsed
++        .type_prelude_sites(
++            views[0].outline(),
++            views[0].captured_macro_cfg().unwrap(),
++            MAX_BYTES,
++        )
++        .unwrap()
++    else {
++        panic!()
++    };
++    assert!(directives.is_empty());
++    // Imports named prelude_import are not an actual compiler-injected marker.
++}
++
++#[test]
++fn genuine_compiler_attribute_shadow_cannot_become_a_custom_prelude_marker() {
++    let text = "#![feature(prelude_import)]extern crate core;use core::prelude::v1::test as prelude_import;mod p{}#[prelude_import]use crate::p::*;fn main(){}";
++    let (_, views, _) = prepare(
++        vec![input(text, "attribute-shadow.rs", Digest([226; 32]), 2024)],
++        vec![],
++    );
++    let mut discovery = SourceDiscovery::new(
++        vec![views[0].share()],
++        views[0].outline().root_scope.clone(),
++        Namespace::Type,
++        Digest::of_bytes(b"type current world"),
++        1,
++    )
++    .unwrap()
++    .with_declarative_compiler(
++        Digest::of_bytes(b"type current compile env"),
++        crate::expand::source_declarative::engine_version(),
++        Arc::new(
++            crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                &views[0].outline().profile,
++            )
++            .unwrap(),
++        ),
++    )
++    .unwrap();
++    assert_eq!(
++        discovery
++            .poll()
++            .err()
++            .expect("exact Test vs builtin inert conflict")
++            .code,
++        "LRR-E-MACRO-AMBIGUOUS"
++    );
++}
++#[test]
++fn actual_module_import_ambiguity_is_preserved_as_a_typed_prelude_prerequisite() {
++    let text = "#![feature(prelude_import)]mod x{pub mod p{}}mod y{pub mod p{}}use crate::x::p as chosen;use crate::y::p as chosen;#[prelude_import]use chosen::*;macro_rules!m{()=>{const A:i32=1;}}mod c{m!();}fn main(){}";
++    let (db, owner, parent) = world(text, 2024, &["c"]);
++    assert!(
++        matches!(CurrentGeneratedPrimitive::capture_current(&db,&owner,&parent,&[],MAX_BYTES).unwrap(),GeneratedPrimitiveOutcome::Need(GeneratedPrimitivePrerequisite::TypePreludeSelection(TypePreludePrerequisite::Module(ModuleLookup::Ambiguous(paths))))if paths.len()==2)
++    );
++}
++#[test]
++fn published_receipt_replay_is_exactly_bound_to_source_profile_and_written_name() {
++    let (db, owner, parent) = world(
++        "macro_rules!m{()=>{const A:i32=1;}}m!();fn main(){}",
++        2024,
++        &[],
++    );
++    let TypePreludeAbsenceOutcome::Absent(mut proof) = CurrentTypePreludeAbsence::capture_current(
++        &db,
++        &owner,
++        parent.retained().scope(),
++        parent.seal_keys().1,
++        "i32",
++        MAX_BYTES,
++    )
++    .unwrap() else {
++        panic!()
++    };
++    proof.receipt = Digest([227; 32]);
++    assert!(
++        proof
++            .revalidate(
++                &db,
++                &owner,
++                parent.retained().scope(),
++                parent.seal_keys().1,
++                "i32",
++                MAX_BYTES
++            )
++            .is_err()
++    );
++    let (_, foreign, foreign_parent) = world_in_unit(
++        "macro_rules!m{()=>{const A:i32=1;}}m!();fn main(){}",
++        2015,
++        &[],
++        Digest([228; 32]),
++    );
++    assert!(
++        CurrentTypePreludeAbsence::capture_current(
++            &db,
++            &foreign,
++            foreign_parent.retained().scope(),
++            parent.seal_keys().1,
++            "i32",
++            MAX_BYTES
++        )
++        .is_err()
++    );
++}
+diff --git a/crates/lrr/src/source/changes/crate_policy_tests.rs b/crates/lrr/src/source/changes/crate_policy_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/source/changes/crate_policy_tests.rs
+@@ -0,0 +1,286 @@
++//! Structural owning-policy components; no body/diagnostic/full-fixture claims.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity, db::key::OutlineKey, source::snapshot::CfgSet,
++    syntax::parse::ParseKey,
++};
++const NO_STD: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/no-std-macros.rs"
++);
++const NO_IMPLICIT: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/no_implicit_prelude.rs"
++);
++const NO_IMPLICIT_18: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/hygiene/no_implicit_prelude-2018.rs"
++);
++const CFG: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-comma-behavior-rpass.rs"
++);
++fn original(text: &str, edition: u16, cfg: CfgSet, module: Vec<String>) -> PreparedSourceView {
++    let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
++    let path = SourcePath::new("policy.rs").unwrap();
++    let unit = Digest([101; 32]);
++    let profile = ProfileIdentity {
++        edition,
++        ..ProfileIdentity::current()
++    };
++    let selection = SourceSelection {
++        path: path.clone(),
++        outline: OutlineKey {
++            parse: ParseKey {
++                content: blob.content(),
++                profile: profile.clone(),
++            },
++            crate_key: unit,
++            module_path: module.clone(),
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let inputs = PreparedSourceInputs::refresh(
++        None,
++        vec![SourceUnitInput {
++            path,
++            crate_key: unit,
++            module_path: module,
++            profile,
++            cfg,
++            blob,
++        }],
++        Default::default(),
++    )
++    .unwrap();
++    let SourceSelectionOutcome::Selected(view) = inputs.select(&selection).unwrap() else {
++        panic!()
++    };
++    view
++}
++#[test]
++fn unchanged_no_std_original_keeps_actual_crate_root_all_owning_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let view = original(NO_STD, edition, CfgSet::guest_default(), vec![]);
++        let proof =
++            PreparedCratePreludePolicy::capture_current(&view, 1, 32 * 1024 * 1024).unwrap();
++        assert!(!proof.policy().standard);
++        assert_eq!(proof.root.selection(), view.selection());
++        assert_eq!(
++            proof.root.selection().outline.parse.profile.edition,
++            edition
++        );
++        proof.revalidate_current(&view, 1).unwrap();
++        assert!(!view.macro_prelude_policy().unwrap().standard);
++    }
++}
++#[test]
++fn unchanged_original_module_local_disabling_keeps_exact_source_scope() {
++    for (text, edition) in [(NO_IMPLICIT, 2015), (NO_IMPLICIT_18, 2018)] {
++        let view = original(text, edition, CfgSet::guest_default(), vec![]);
++        let proof =
++            PreparedCratePreludePolicy::capture_current(&view, 1, 32 * 1024 * 1024).unwrap();
++        assert!(proof.policy().standard);
++        assert_eq!(proof.policy().disabled, vec![vec!["bar".to_owned()]]);
++        proof.revalidate_current(&view, 1).unwrap();
++    }
++}
++#[test]
++fn unchanged_cfg_revision_source_selects_core_without_rewriting_original() {
++    for edition in [2015, 2018, 2021, 2024] {
++        for core in [false, true] {
++            let mut cfg = CfgSet::guest_default();
++            cfg.atoms.insert(if core { "core" } else { "std" }.into());
++            let view = original(CFG, edition, cfg, vec![]);
++            let proof =
++                PreparedCratePreludePolicy::capture_current(&view, 1, 32 * 1024 * 1024).unwrap();
++            assert_eq!(proof.policy().standard, !core);
++            assert_eq!(
++                proof.root.selection().outline.cfg,
++                view.selection().outline.cfg
++            );
++        }
++    }
++}
++#[test]
++fn missing_actual_original_root_never_becomes_default_std_authority() {
++    let view = original(
++        "fn local(){}",
++        2024,
++        CfgSet::guest_default(),
++        vec!["child".into()],
++    );
++    let error = PreparedCratePreludePolicy::capture_current(&view, 1, 32 * 1024 * 1024)
++        .err()
++        .unwrap();
++    assert_eq!(error.code, "LRR-E-CATALOG-INCOMPLETE");
++    assert!(error.message.contains("retained module origin"));
++    assert!(view.macro_prelude_policy().is_err());
++}
++#[test]
++fn current_epoch_and_copied_publication_require_new_policy_mint() {
++    let view = original(NO_STD, 2015, CfgSet::guest_default(), vec![]);
++    let proof = PreparedCratePreludePolicy::capture_current(&view, 1, 32 * 1024 * 1024).unwrap();
++    assert!(proof.revalidate_current(&view, 2).is_err());
++    assert!(PreparedCratePreludePolicy::capture_current(&view, 0, 32 * 1024 * 1024).is_err());
++    let copy = original(NO_STD, 2015, CfgSet::guest_default(), vec![]);
++    assert!(proof.revalidate_current(&copy, 1).is_err());
++}
++#[test]
++fn changed_actual_cfg_profile_and_quota_do_not_copy_policy_authority() {
++    let mut cfg = CfgSet::guest_default();
++    cfg.atoms.insert("std".into());
++    let view = original(CFG, 2018, cfg, vec![]);
++    let proof = PreparedCratePreludePolicy::capture_current(&view, 1, 32 * 1024 * 1024).unwrap();
++    let mut core = CfgSet::guest_default();
++    core.atoms.insert("core".into());
++    let changed = original(CFG, 2018, core, vec![]);
++    assert!(proof.revalidate_current(&changed, 1).is_err());
++    let foreign = original(CFG, 2024, CfgSet::guest_default(), vec![]);
++    assert!(proof.revalidate_current(&foreign, 1).is_err());
++    assert_eq!(
++        PreparedCratePreludePolicy::capture_current(&view, 1, 1)
++            .err()
++            .unwrap()
++            .code,
++        "LRR-E-METADATA-LIMIT"
++    );
++}
++const NESTED: &str = include_str!(
++    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/modules/mod_dir_recursive.rs"
++);
++fn ordinary_child(parent: &PreparedSourceView) -> PreparedSourceView {
++    use crate::{
++        db::{dependency::InputKey, key::QueryKey, memo::Database, poll::InputRequest},
++        frontend::source_module_declarations::SourceModuleDeclaration,
++        service::{
++            expansion::{DemandContext, ExpansionCoordinator, PhaseIdentity},
++            source_capture::SourceCapture,
++        },
++        source::{
++            include_paths::{IncludeAuthorities, IncludeRoot, IncludeRootKind},
++            module_capture::AdoptedModuleCapture,
++            ordinary_module::{OrdinaryModuleSourceView, OrdinaryModuleSyntaxInput},
++        },
++    };
++    use std::{collections::BTreeMap, path::Path, sync::Arc};
++    let declaration = SourceModuleDeclaration::from_captured(parent)
++        .unwrap()
++        .into_iter()
++        .next()
++        .unwrap();
++    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("../../fixtures/upstream/rustc-checkout/tests/ui/modules")
++        .canonicalize()
++        .unwrap();
++    let unit = parent.selection().outline.crate_key;
++    let authorities = IncludeAuthorities::new(
++        unit,
++        Digest([103; 32]),
++        [IncludeRoot {
++            identity: Digest([104; 32]),
++            path: root,
++            kind: IncludeRootKind::Source,
++        }],
++    )
++    .unwrap();
++    let capture = SourceCapture::open(
++        IncludeAuthorities::new(
++            unit,
++            Digest([103; 32]),
++            [authorities.root(Digest([104; 32])).unwrap().clone()],
++        )
++        .unwrap(),
++        BTreeMap::new(),
++    )
++    .unwrap();
++    let directory = Path::new(parent.selection().path.as_str())
++        .parent()
++        .unwrap_or(Path::new(""));
++    let environment = crate::expand::builtins::FrozenCompileEnvironment::new(
++        unit,
++        &crate::project::tool_manifest::CompileEnv {
++            unit,
++            host: "aarch64-apple-darwin".into(),
++            target: "aarch64-apple-darwin".into(),
++            cfg: parent.captured_macro_cfg().unwrap().clone(),
++            cargo: BTreeMap::new(),
++            rustc_env: BTreeMap::new(),
++            declared: BTreeMap::new(),
++            out_dir: None,
++        },
++    )
++    .unwrap()
++    .fingerprint();
++    let input = declaration
++        .capture_request(&authorities, directory, environment)
++        .unwrap();
++    let InputRequest::CaptureModule { request, .. } = &input else {
++        panic!()
++    };
++    let captured = capture.capture_module(request).unwrap();
++    let mut db = Database::default();
++    db.begin_expansion_epoch(1).unwrap();
++    let context = DemandContext {
++        request: Digest([106; 32]),
++        session: Digest([107; 32]),
++        unit,
++        revision: db.source_revision(),
++        epoch: 1,
++        source_generation: Digest([103; 32]),
++        native_generation: None,
++        compile_environment: environment,
++    };
++    let body = parent
++        .outline()
++        .items
++        .iter()
++        .find_map(|i| i.body.as_ref())
++        .map(|b| b.key())
++        .unwrap_or(crate::source::manifest::BodyKey {
++            definition: declaration.definition().fingerprint(),
++            exact_body_bytes: parent.selection().outline.parse.content,
++        });
++    let mut coordinator = ExpansionCoordinator::new(context.clone());
++    let token = coordinator
++        .issue(
++            QueryKey::Outline(parent.selection().outline.clone()),
++            PhaseIdentity {
++                frame: Digest([108; 32]),
++                body,
++                index: 0,
++            },
++            input.clone(),
++        )
++        .unwrap();
++    coordinator.start(&context, &token).unwrap();
++    coordinator
++        .accept_module(&context, &token, &captured)
++        .unwrap();
++    coordinator
++        .adopt_module(&context, &token, &mut db, captured)
++        .unwrap();
++    let adopted = Arc::new(
++        AdoptedModuleCapture::new(
++            db.input(&InputKey::ModuleRecord(input.fingerprint()))
++                .unwrap(),
++        )
++        .unwrap(),
++    );
++    let origin = Arc::new(OrdinaryModuleSourceView::new(&declaration, &input, adopted).unwrap());
++    OrdinaryModuleSyntaxInput::prepare(origin)
++        .unwrap()
++        .prepared_source()
++        .share()
++}
++#[test]
++fn unchanged_nested_module_actual_captures_retain_the_same_original_root() {
++    let root = original(NESTED, 2024, CfgSet::guest_default(), vec![]);
++    let first = ordinary_child(&root);
++    let second = ordinary_child(&first);
++    let proof = PreparedCratePreludePolicy::capture_current(&second, 1, 32 * 1024 * 1024).unwrap();
++    assert_eq!(proof.root.selection(), root.selection());
++    assert_eq!(proof.rows.len(), 3);
++    assert_eq!(
++        second.selection().outline.module_path,
++        vec!["mod_dir_simple", "load_another_mod", "test"]
++    );
++    assert!(proof.policy().standard);
++    proof.revalidate_current(&second, 1).unwrap();
++}

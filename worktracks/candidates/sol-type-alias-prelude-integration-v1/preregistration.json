@@ -1,0 +1,16 @@
+{
+  "task": "WT04/M018/T054 coherent Type-prelude + primitive alias integration against canonicalv65",
+  "invariant": "Real source preparation -> opaque namespace/compiler receipts -> current selected source member -> ordered alias + actual TypeAlias query. No incomplete source/prelude authority fallback.",
+  "base": "canonical v65 2ce1bf0a",
+  "preserved_packets": [
+    "sol-generated-source-compiler-facets-v1",
+    "sol-generated-crate-policy-v1",
+    "sol-generated-constant-provenance-v1",
+    "sol-generated-hygienic-source-type-v1",
+    "sol-generated-primitive-admission-v1",
+    "sol-generated-type-prelude-admission-v1",
+    "sol-source-type-alias-normalization-v1"
+  ],
+  "acceptance": "previous upstream/component and LRR authority/currentness/metadata controls retained unchanged except documented mechanical actual canonical API corrections",
+  "status": "source-only; no compilation/execution"
+}

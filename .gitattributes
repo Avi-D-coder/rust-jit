@@ -4,5 +4,8 @@
 *.toml text eol=lf
 *.md text eol=lf
 *.py text eol=lf
-**/fixtures/upstream/rustc-checkout/** -text
+# Source handoff patches carry exact bytes, including upstream CRLF witnesses.
+# A single-space blank context line is required unified-diff syntax.
+*.patch -text whitespace=-blank-at-eol,-blank-at-eof
+**/fixtures/upstream/rustc-checkout/** -text -whitespace
 vendor/** -text

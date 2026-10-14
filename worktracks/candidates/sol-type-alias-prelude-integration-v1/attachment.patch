@@ -1,0 +1,31 @@
+diff --git a/crates/lrr/src/frontend/mod.rs b/crates/lrr/src/frontend/mod.rs
+--- a/crates/lrr/src/frontend/mod.rs
++++ b/crates/lrr/src/frontend/mod.rs
+@@ -75,3 +75,15 @@
+ 
+ #[cfg(test)]
+ mod constant_foreign_path_tests;
++
++/// Readonly generated constant provenance, not constant-query permission.
++pub(crate) mod generated_constant_provenance;
++
++pub(crate) mod generated_type_admission;
++
++pub(crate) mod generated_primitive_admission;
++
++pub(crate) mod type_prelude_admission;
++
++pub(crate) mod source_type_alias_normalization;
++pub(crate) mod source_type_alias_query;
+diff --git a/crates/lrr/src/syntax/mod.rs b/crates/lrr/src/syntax/mod.rs
+--- a/crates/lrr/src/syntax/mod.rs
++++ b/crates/lrr/src/syntax/mod.rs
+@@ -76,3 +76,8 @@
+ pub(crate) mod constant_paths;
+ 
+ pub(crate) mod original_inert;
++
++/// Exact generated source type metadata; no evaluator/runtime authority.
++pub(crate) mod generated_type_site;
++
++pub(crate) mod type_prelude_sites;

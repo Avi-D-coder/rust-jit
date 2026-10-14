@@ -1,0 +1,34 @@
+{
+  "canonical": "v65 2ce1bf0a, all selected existing before paths equality checked at freeze",
+  "constructors": {
+    "DiscoveryInput": "one actual constructor SourceDiscovery publication; both receipt vectors supplied; stable encoding + validation + metadata all extended",
+    "CompileInputCatalog": "single Self constructor optional facetsNone; canonical standalone minted facets only; clone retains private fields"
+  },
+  "new_enum_consumers": {
+    "AliasTarget::NeedCurrentSource": "prepare_argument_hints propagates non-Type alias as NeedAlias; deferred-return normalize_with_dependencies propagates non-Type/Err/NeedInput; engine explicit alias scalar selection has existing unsupported fallback. No production call_contracts/engine edits needed."
+  },
+  "modified_positive_harnesses": {
+    "xtask/tests/type_aliases.rs": [
+      "reached_alias_chains_use_definition_scope_and_preserve_nominal_identity",
+      "alias_cycles_fault_only_on_demand_and_repeated_capture_uses_owned_memos"
+    ],
+    "xtask/tests/call_contracts.rs": [
+      "concrete_alias_parameter_contracts_resolve_before_runtime_descriptor_checks",
+      "argument_hints_resolve_aliases_and_source_names_before_primitive_fallback"
+    ]
+  },
+  "remaining_preparation_producers": [
+    "xtask/tests/generated_alias_runtime.rs: scalar generated aliases require actual opaque generated call-site/type member witness; unchanged assertions remain",
+    "xtask/tests/source_run.rs: explicit scalar alias type arguments require real current Type discovery/preentry preparation",
+    "other alias-return/library/source-private controls may require real Type publication; test agent must inspect actual terminals, not weaken expected outcomes"
+  ],
+  "unchanged_scope": [
+    "direct primitive SignatureNames behavior",
+    "structural Unit",
+    "generic/rigid/composite symbolic alias handling (not covered by closed scalar certificate)",
+    "constant evaluators/wire/query providers/IR/VM/run/session",
+    "syntax/outline.rs anonymous const arm"
+  ],
+  "no_added_dead_code_suppressions": true,
+  "validation": "all controls/harness changes uncompiled/unexecuted"
+}

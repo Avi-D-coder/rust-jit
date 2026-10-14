@@ -1,0 +1,138 @@
+diff --git a/xtask/tests/call_contracts.rs b/xtask/tests/call_contracts.rs
+--- a/xtask/tests/call_contracts.rs
++++ b/xtask/tests/call_contracts.rs
+@@ -214,6 +214,7 @@
+     let resolver = CallResolver::new(&graph, &sources).unwrap();
+     let mut db = Database::default();
+     inputs.publish(&mut db).unwrap();
++    prepare_current_type_source(&mut db, &view);
+     let caller = id(&view, "caller");
+     let QueryPoll::Ready(Ok(CallSelection::Source(callee))) =
+         resolver.module_function(&mut db, caller, "chosen")
+@@ -315,6 +316,7 @@
+     let resolver = CallResolver::new(&graph, &sources).unwrap();
+     let mut db = Database::default();
+     inputs.publish(&mut db).unwrap();
++    prepare_current_type_source(&mut db, &view);
+     let QueryPoll::Ready(Ok(CallSelection::Source(callee))) =
+         resolver.module_function(&mut db, id(&view, "caller"), "chosen")
+     else {
+@@ -748,3 +750,49 @@
+         Some(&TyTerm::Param(caller))
+     );
+ }
++
++// Explicit current Type preparation for positive source-alias contracts; no thunk/body entry.
++fn prepare_current_type_source(db: &mut Database, view: &PreparedSourceView) {
++    use lrr::{
++        expand::{
++            source_declarative,
++            source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++        },
++        frontend::compile_input_catalog::CompileInputCatalog,
++        source::manifest::Namespace,
++    };
++    db.begin_expansion_epoch(1).unwrap();
++    let mut discovery = SourceDiscovery::new(
++        vec![view.share()],
++        view.outline().root_scope.clone(),
++        Namespace::Type,
++        Digest::of_bytes(b"explicit alias test Type universe"),
++        1,
++    )
++    .unwrap()
++    .with_declarative_compiler(
++        Digest::of_bytes(b"explicit alias compiler input"),
++        source_declarative::engine_version(),
++        std::sync::Arc::new(
++            CompileInputCatalog::standalone(&view.selection().outline.parse.profile).unwrap(),
++        ),
++    )
++    .unwrap();
++    loop {
++        match discovery.poll().unwrap() {
++            SourceDiscoveryStep::Sealed(_) => break,
++            SourceDiscoveryStep::NeedExpansion { request } => discovery
++                .admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                .admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::Incomplete { diagnostic, .. } => panic!(
++                "actual Type preparation prerequisite: {} {}",
++                diagnostic.code, diagnostic.message
++            ),
++            _ => panic!("actual Type preparation incomplete"),
++        }
++    }
++    discovery.publish(db).unwrap();
++}
+diff --git a/xtask/tests/type_aliases.rs b/xtask/tests/type_aliases.rs
+--- a/xtask/tests/type_aliases.rs
++++ b/xtask/tests/type_aliases.rs
+@@ -86,6 +86,7 @@
+     let mut db = Database::default();
+     db.trace.detailed = true;
+     inputs.publish(&mut db).unwrap();
++    prepare_current_type_source(&mut db, &view);
+     let sources = [&view];
+     let normalizer = AliasNormalizer::new(&graph, &sources).unwrap();
+     assert_eq!(
+@@ -120,6 +121,7 @@
+     let mut db = Database::default();
+     db.trace.detailed = true;
+     inputs.publish(&mut db).unwrap();
++    prepare_current_type_source(&mut db, &view);
+     let sources = [&view];
+     let normalizer = AliasNormalizer::new(&graph, &sources).unwrap();
+     let good = id(&view, "Good");
+@@ -275,3 +277,49 @@
+         QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::FunctionSignature(_)
+     )));
+ }
++
++// Explicit current Type preparation for positive source-alias contracts; no thunk/body entry.
++fn prepare_current_type_source(db: &mut Database, view: &PreparedSourceView) {
++    use lrr::{
++        expand::{
++            source_declarative,
++            source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++        },
++        frontend::compile_input_catalog::CompileInputCatalog,
++        source::manifest::Namespace,
++    };
++    db.begin_expansion_epoch(1).unwrap();
++    let mut discovery = SourceDiscovery::new(
++        vec![view.share()],
++        view.outline().root_scope.clone(),
++        Namespace::Type,
++        Digest::of_bytes(b"explicit alias test Type universe"),
++        1,
++    )
++    .unwrap()
++    .with_declarative_compiler(
++        Digest::of_bytes(b"explicit alias compiler input"),
++        source_declarative::engine_version(),
++        std::sync::Arc::new(
++            CompileInputCatalog::standalone(&view.selection().outline.parse.profile).unwrap(),
++        ),
++    )
++    .unwrap();
++    loop {
++        match discovery.poll().unwrap() {
++            SourceDiscoveryStep::Sealed(_) => break,
++            SourceDiscoveryStep::NeedExpansion { request } => discovery
++                .admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
++                .admit_expansion(std::sync::Arc::new(request.expand().unwrap()))
++                .unwrap(),
++            SourceDiscoveryStep::Incomplete { diagnostic, .. } => panic!(
++                "actual Type preparation prerequisite: {} {}",
++                diagnostic.code, diagnostic.message
++            ),
++            _ => panic!("actual Type preparation incomplete"),
++        }
++    }
++    discovery.publish(db).unwrap();
++}

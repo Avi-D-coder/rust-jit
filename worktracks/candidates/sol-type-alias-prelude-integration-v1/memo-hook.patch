@@ -1,0 +1,166 @@
+diff --git a/crates/lrr/src/db/memo.rs b/crates/lrr/src/db/memo.rs
+--- a/crates/lrr/src/db/memo.rs
++++ b/crates/lrr/src/db/memo.rs
+@@ -18,6 +18,9 @@
+ 
+ #[path = "source_view_inputs.rs"]
+ mod source_view_inputs;
++
++#[path = "source_alias_inputs.rs"]
++mod source_alias_inputs;
+ 
+ #[derive(Debug, Clone)]
+ pub struct MemoEntry {
+diff --git a/crates/lrr/src/db/source_alias_inputs.rs b/crates/lrr/src/db/source_alias_inputs.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/db/source_alias_inputs.rs
+@@ -0,0 +1,148 @@
++//! Pure bounded selection of a real published current Type universe; no input mutation.
++use super::*;
++use crate::{
++    core::digest::StableEncode,
++    source::{changes::SourceSelection, manifest::Namespace},
++    syntax::outline::ScopeKey,
++};
++impl Database {
++    pub(crate) fn source_alias_type_certificate(
++        &self,
++        source: &SourceSelection,
++        scope: &ScopeKey,
++        byte_limit: usize,
++    ) -> Result<Option<Arc<InputValue>>, Diagnostic> {
++        self.require_coordinator()?;
++        if byte_limit > 32 * 1024 * 1024
++            || self.inputs.len() > 100_000
++            || scope
++                .heap_bytes()
++                .checked_add(source.metadata_bytes()?)
++                .and_then(|n| n.checked_add(std::mem::size_of::<Option<Arc<InputValue>>>()))
++                .is_none_or(|n| n > byte_limit)
++        {
++            return Err(fault(
++                "LRR-E-METADATA-LIMIT",
++                "alias Type universe selection budget",
++            ));
++        };
++        if scope.owner.is_some()
++            || source.outline.crate_key != scope.crate_key
++            || !scope.module_path.starts_with(&source.outline.module_path)
++        {
++            return Err(fault(
++                "LRR-E-SOURCE-ALIAS",
++                "alias Type scope/source differs",
++            ));
++        };
++        if !matches!(self.inputs.get(&InputKey::CapturedSource(source.location_identity())).map(|r|r.value.as_ref()),Some(InputValue::CapturedSource(actual))if actual==source)
++        {
++            return Err(fault("LRR-E-SOURCE-ALIAS", "alias retained source changed"));
++        };
++        let Some(InputValue::ExpansionEpoch(epoch)) = self
++            .inputs
++            .get(&InputKey::ExpansionEpoch)
++            .map(|r| r.value.as_ref())
++        else {
++            return Ok(None);
++        };
++        let Some(InputValue::SourceDependencies(graph)) = self
++            .inputs
++            .get(&InputKey::SourceDependencies)
++            .map(|r| r.value.as_ref())
++        else {
++            return Ok(None);
++        };
++        let mut selected: Option<Arc<InputValue>> = None;
++        let mut bytes = std::mem::size_of::<Option<Arc<InputValue>>>();
++        for (key, row) in &self.inputs {
++            let InputKey::DiscoverySeal(key) = key else {
++                continue;
++            };
++            if key.epoch != *epoch
++                || key.domain
++                    != (crate::db::seals::SealDomain::Scope {
++                        id: scope.fingerprint(),
++                        namespace: Namespace::Type,
++                    })
++            {
++                continue;
++            };
++            let InputValue::DiscoverySeal(input) = row.value.as_ref() else {
++                return Err(fault(
++                    "LRR-E-SOURCE-ALIAS",
++                    "alias Type certificate variant differs",
++                ));
++            };
++            let Some(cert) = &input.scope else {
++                return Err(fault(
++                    "LRR-E-SOURCE-ALIAS",
++                    "alias Type scope certificate absent",
++                ));
++            };
++            if input.seal.key() != *key
++                || input.seal.unresolved_frontiers() != 0
++                || input.source_dependencies != graph.fingerprint()
++                || cert.scope != *scope
++                || cert.namespace != Namespace::Type
++                || cert.edition != source.outline.parse.profile.edition
++                || !input.sources.contains(source)
++            {
++                continue;
++            };
++            if selected.is_some() {
++                return Err(fault(
++                    "LRR-E-SOURCE-ALIAS",
++                    "alias current Type universe is ambiguous",
++                ));
++            };
++            input.validate_compiler_primitive_receipts()?;
++            input.validate_type_prelude_receipts()?;
++            if input.compiler_inputs.len() > 100_000 || input.records.len() > 100_000 {
++                return Err(fault(
++                    "LRR-E-METADATA-LIMIT",
++                    "alias Type dependencies budget",
++                ));
++            };
++            for (dependency, fingerprint) in &input.compiler_inputs {
++                bytes = bytes
++                    .checked_add(std::mem::size_of::<(InputKey, Digest)>())
++                    .and_then(|n| n.checked_add(dependency.heap_bytes()))
++                    .filter(|n| *n <= byte_limit)
++                    .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "alias Type dependency budget"))?;
++                if self
++                    .inputs
++                    .get(dependency)
++                    .is_none_or(|actual| actual.fingerprint != *fingerprint)
++                {
++                    return Err(fault(
++                        "LRR-E-SOURCE-ALIAS",
++                        "alias Type compiler inputs changed",
++                    ));
++                };
++            }
++            for descriptor in &input.records {
++                bytes = bytes
++                    .checked_add(128)
++                    .filter(|n| *n <= byte_limit)
++                    .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "alias Type record budget"))?;
++                let key = InputKey::ExpansionRecord(descriptor.key.fingerprint());
++                if !matches!(self.inputs.get(&key).map(|r|r.value.as_ref()),Some(InputValue::ExpansionRecord(actual))if actual.descriptor().fingerprint()==descriptor.fingerprint())
++                {
++                    return Err(fault(
++                        "LRR-E-SOURCE-ALIAS",
++                        "alias Type expansion record changed",
++                    ));
++                };
++            }
++            if bytes > byte_limit {
++                return Err(fault(
++                    "LRR-E-METADATA-LIMIT",
++                    "alias Type certificate budget",
++                ));
++            };
++            selected = Some(Arc::clone(&row.value));
++        }
++        Ok(selected)
++    }
++}
