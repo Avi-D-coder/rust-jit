@@ -1,10 +1,14 @@
 # Local builds, preparation outputs, validation runs and copied source snapshots.
 /target/
 **/target/
-/.lrr/
+**/.lrr/
 /artifacts/
 /coverage/
 /logs/
+# Profiling and debug products from local runs (not fixture expectations).
+/*.profraw
+/*.profdata
+/*.dSYM/
 
 # The local upstream checkout is an input; licensed selected fixtures are committed.
 /rustc/
@@ -15,11 +19,19 @@
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.tox/
+.nox/
+.venv/
+venv/
+.coverage
+.coverage.*
+htmlcov/
 
 # Editor and macOS metadata.
 .DS_Store
 .AppleDouble/
 .LSOverride
+._*
 .idea/
 .vscode/
 *.swp
@@ -36,3 +48,6 @@
 .env.*
 !.env.example
 !.env.template
+
+# Keep Cargo.lock, source archives required by pinned dependencies, and upstream
+# .stdout/.stderr/.out/.log fixtures trackable. Do not add broad binary/log globs.
