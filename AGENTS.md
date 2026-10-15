@@ -8,6 +8,14 @@ The required deliverable is one compositional Rust interpreter, followed by the 
 
 Read [the macro architecture audit](docs/audits/macro-specific-semantics.json), [E-R5-005](docs/errata/revision5-common-macro-engine.md) and the relevant specification sections before changing affected paths. Existing violations are repair debt, never precedent or permission to extend them. Do not promote held macro-specific candidates because their historical tests pass.
 
+### Binding statement of work
+
+Implement the specified common mechanisms, rather than accumulating fixture-specific compatibility. The deliverable includes removal of superseded production routes, integration through ordinary source preparation and execution, and evidence for the required contracts. A new helper API, isolated successful execution or larger passing-test count does not by itself deliver that work.
+
+Before starting a repair, write a bounded architecture record in its claim, handoff or PR containing: the violated invariant and minimal witness; the actual shared entry points to extend; the alternate routes to remove; dependency and authority boundaries; cold-path and hot-path costs; and the evidence required for closure. Distinguish the eight failure modes listed here from the separately numbered `MA001`–`MA008` audit findings; reference the applicable findings explicitly rather than treating their numbers as interchangeable.
+
+Repair prerequisites in this order where they apply: admitted generated syntax and source/scope identity, shared expression lowering, shared source constraints/member resolution, then shared transactional patterns and their execution/cleanup. Respect Section 57 dependencies throughout. If a witness exposes missing common infrastructure, implement or explicitly track that prerequisite; do not grow a parallel evaluator to make the witness pass. Keep every affected legacy route named and held until its replacement and removal are evidenced.
+
 ### Before changing a language feature
 
 Record the following in the bounded claim, worktrack handoff or PR, using actual files and symbols:
@@ -69,6 +77,10 @@ Every language/frontend/runtime contribution must include a source-aware archite
 8. Deep copies of immutable body structures or repeated whole-file node searches.
 
 Name the actual shared entry points and changed call sites, the removed/remaining alternate routes, relevant asymptotic work and reproducible witnesses. Use an already authorized reviewer/test agent when available; this requirement does not authorize extra agents. Otherwise perform and record a separate source-review pass. Documentation checkboxes and green feature tests do not substitute for reviewing the code path.
+
+Record that review against an exact commit or source fingerprint before integration. For each applicable failure mode, cite the inspected symbols, the common route actually used, remaining exceptions and the relevant reproduction/terminal evidence. Mark unreviewed or unexecuted requirements explicitly; do not infer them from a neighboring passing case. If source changes after review or validation, identify which conclusions need rechecking and keep the old evidence attached to its original source.
+
+A repair is complete only when the replacement handles its required contexts, obsolete production dispatch/evaluator/index/verifier paths are removed, source and runtime authority checks remain sound, and the required architecture matrix and milestone have actual passing evidence. A staged migration may be checkpointed with explicit holds; it cannot be reported as the completed repair. Documentation changes establish instructions, not implementation correctness or a guarantee against recurrence.
 
 If review finds architectural drift, hold integration and feature-completion claims, record the minimal counterexample and make the common-engine repair the next implementation priority. Do not expand a shortcut's vocabulary while promising to remove it later. Do not self-authorize an exception by renaming code, writing an erratum, opening another worktrack or labeling the shortcut temporary. Only an explicit user-approved design change can change the pinned architecture. Preserve failed attempts and prior evidence, and keep component/runtime/full-fixture/diagnostic/tooling outcomes distinct.
 
