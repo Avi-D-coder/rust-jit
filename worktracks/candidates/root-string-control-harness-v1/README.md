@@ -1,0 +1,7 @@
+# Preserve terminal faults and actual dispatch in string controls
+
+V90 exposed harness failures in existing upstream-derived controls. This three-test-leaf packet keeps the originals and assertions while repairing two concrete execution assumptions: the prefix helper must finish bounded Dispatch continuations before demanding the next recipe, and a deliberately rejected VM step leaves a terminal Faulted frame. Unicode success admission now runs a fresh unchanged source prefix; it cannot revive that faulted execution. Source-discovery failure reporting retains the actual Incomplete diagnostic or explicit request kind rather than an opaque Sealed assertion. The CRLF discovery blocker is still unresolved at publication.
+
+The physical stale-plan control had interned an empty tuple, which is the existing unit descriptor and makes no registry change. It now proves that a nonempty descriptor key is absent before interning it and present afterward, then requires stale predicted IDs to be rejected before any additional effect. Foreign-store, cache reuse/double-issue, reset and quota checks stay intact. No production guard is weakened or errors converted to successes.
+
+The borrowed-str failure's V91 test-only PC diagnostic is retained. No new test bodies or edited upstream originals are introduced. Exact predecessor hashes, Rust1.99 formatting and no-fuzz/no-offset replay passed; compilation and the corrected controls remain pending. This packet is not a full-fixture pass or task acceptance.

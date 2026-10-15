@@ -1369,6 +1369,19 @@
           "artifacts/macos-first/root-cast-numeric-context-v1/component-collection-v1.json",
           "artifacts/macos-first/root-stock-fixture-reference-repair-v1/private-validation-v2/terminal.json"
         ]
+      },
+      "current_string_numeric_bounds_candidate": {
+        "status": "scoped_candidate_not_integrated",
+        "evidence": "worktracks/evidence/2026-10-15-v92-string-numeric-bounds.json",
+        "source_member": "4d40beec1122538cb3a87176b1de676b82021936131dd2c0c960c36c14848b92",
+        "scoped_bodies": {
+          "passed": 108,
+          "failed": 2
+        },
+        "full_milestone_passed": false,
+        "canonical_promotion": false,
+        "full_fixture_passes_added": 0,
+        "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete."
       }
     },
     {
@@ -1755,6 +1768,19 @@
         "status": "component_integrated_full_milestone_pending",
         "evidence_path": "worktracks/evidence/2026-10-14-byte-scalar-components.json",
         "scope": "V48actualrebuilt8controls+strict; actual2unchangedMatchcomponents only,0whole-byte-main/fullfixture passes. Stale artifact/assembly attempts retained."
+      },
+      "current_string_numeric_bounds_candidate": {
+        "status": "scoped_candidate_not_integrated",
+        "evidence": "worktracks/evidence/2026-10-15-v92-string-numeric-bounds.json",
+        "source_member": "4d40beec1122538cb3a87176b1de676b82021936131dd2c0c960c36c14848b92",
+        "scoped_bodies": {
+          "passed": 108,
+          "failed": 2
+        },
+        "full_milestone_passed": false,
+        "canonical_promotion": false,
+        "full_fixture_passes_added": 0,
+        "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete."
       }
     },
     {
@@ -4681,6 +4707,19 @@
         "status": "component_integrated_full_milestone_pending",
         "evidence_path": "worktracks/evidence/2026-10-14-byte-scalar-components.json",
         "scope": "V48actualrebuilt8controls+strict; actual2unchangedMatchcomponents only,0whole-byte-main/fullfixture passes. Stale artifact/assembly attempts retained."
+      },
+      "current_string_numeric_bounds_candidate": {
+        "status": "scoped_candidate_not_integrated",
+        "evidence": "worktracks/evidence/2026-10-15-v92-string-numeric-bounds.json",
+        "source_member": "4d40beec1122538cb3a87176b1de676b82021936131dd2c0c960c36c14848b92",
+        "scoped_bodies": {
+          "passed": 108,
+          "failed": 2
+        },
+        "full_milestone_passed": false,
+        "canonical_promotion": false,
+        "full_fixture_passes_added": 0,
+        "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete."
       }
     },
     {
@@ -6350,7 +6389,20 @@
       "commands": [],
       "fixture_ids": [],
       "artifact_paths": [],
-      "release_complete": false
+      "release_complete": false,
+      "current_string_numeric_bounds_candidate": {
+        "status": "scoped_candidate_not_integrated",
+        "evidence": "worktracks/evidence/2026-10-15-v92-string-numeric-bounds.json",
+        "source_member": "4d40beec1122538cb3a87176b1de676b82021936131dd2c0c960c36c14848b92",
+        "scoped_bodies": {
+          "passed": 108,
+          "failed": 2
+        },
+        "full_milestone_passed": false,
+        "canonical_promotion": false,
+        "full_fixture_passes_added": 0,
+        "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete."
+      }
     },
     {
       "id": "T062",
@@ -18244,6 +18296,19 @@
         "nested_gate_exit_code": null,
         "reason": "disk exhaustion; prior V58 reports not reused",
         "evidence_path": "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
+      },
+      "current_string_numeric_bounds_candidate": {
+        "status": "scoped_candidate_not_integrated",
+        "evidence": "worktracks/evidence/2026-10-15-v92-string-numeric-bounds.json",
+        "source_member": "4d40beec1122538cb3a87176b1de676b82021936131dd2c0c960c36c14848b92",
+        "scoped_bodies": {
+          "passed": 108,
+          "failed": 2
+        },
+        "full_milestone_passed": false,
+        "canonical_promotion": false,
+        "full_fixture_passes_added": 0,
+        "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete."
       }
     },
     {

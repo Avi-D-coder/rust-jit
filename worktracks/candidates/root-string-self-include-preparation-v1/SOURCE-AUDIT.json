@@ -1,0 +1,39 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "M013",
+    "T024",
+    "T061"
+  ],
+  "prerequisites": [
+    "root-string-control-harness-v1"
+  ],
+  "created_at": "2026-10-15T14:17:16.005426+00:00",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_byte_macro_literal_tests.rs",
+      "before_sha256": "e0ae08a2cae6963529f4c0ad42e690a2366eadd8c81bd0559c48be4ee080af61",
+      "after_sha256": "2210efb3d30ad35106d78d73b996279baecf8c58db2255ae5e39cc53c6b84065"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_string_macro_literal_tests.rs",
+      "before_sha256": "762488899473f1ffa2b3545142e698baf58b4e25c4dd0d19958b6190d03b3ef9",
+      "after_sha256": "c066466f09abbe6711e2ea8a041b34a78c43a445cc888bb35f8e8c0c4de42f04"
+    }
+  ],
+  "patch_sha256": "1290f7d1eba48f5f0e161a8a743e2fa015a2602e87472d79e1a69bda39c1c668",
+  "patch_bytes": 11820,
+  "static_checks": [
+    "exact V92 predecessors",
+    "Rust1.99 formatting",
+    "exact no-fuzz/no-offset replay"
+  ],
+  "new_test_bodies": 0,
+  "acceptance_pending": [
+    "compile and strict lint",
+    "both unchanged CRLF operand controls",
+    "remaining changed helper users and fresh milestone"
+  ],
+  "stock_runtime_passes_added": 0
+}

@@ -1,0 +1,90 @@
+--- a/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
+@@ -35,7 +35,19 @@
+         .unwrap(),
+     ))
+     .unwrap();
+-    assert!(matches!(d.poll().unwrap(), SourceDiscoveryStep::Sealed(_)));
++    match d.poll().unwrap() {
++        SourceDiscoveryStep::Sealed(_) => {}
++        SourceDiscoveryStep::Incomplete {
++            diagnostic,
++            blocked,
++        } => {
++            panic!("original source discovery incomplete: {diagnostic}; blocked {blocked:?}")
++        }
++        other => panic!(
++            "original source discovery requires an explicit expansion: {:?}",
++            std::mem::discriminant(&other)
++        ),
++    }
+     d
+ }
+ pub(super) fn start_source(
+--- a/crates/lrr/src/engine/run_string_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_string_macro_literal_tests.rs
+@@ -93,15 +93,27 @@
+         run.prepare_macro_byte_literal(db, contexts, id).unwrap();
+         run.prepare_macro_byte_comparison(db, contexts, id).unwrap();
+         run.revalidate_primitive_method(db, contexts, id).unwrap();
+-        assert!(matches!(
+-            step::step(
++        let mut finished = false;
++        for _ in 0..65_536 {
++            match step::step(
+                 &mut run.frame,
+                 &mut run.store,
+-                run.installed.get(id).unwrap()
++                run.installed.get(id).unwrap(),
+             )
+-            .unwrap(),
+-            StepOutcome::Next(_)
+-        ));
++            .unwrap()
++            {
++                StepOutcome::Dispatch => {}
++                StepOutcome::Next(_) => {
++                    finished = true;
++                    break;
++                }
++                other => panic!("original string prefix did not continue: {other:?}"),
++            }
++        }
++        assert!(
++            finished,
++            "original string prefix exceeded bounded dispatches"
++        );
+     }
+     panic!("original requested string member operation was not reached");
+ }
+@@ -230,6 +242,14 @@
+             .is_err()
+         );
+         assert_eq!(effects(&run), before);
++        assert_eq!(run.frame.status(), crate::vm::frame::FrameStatus::Faulted);
++        db.finish_run().unwrap();
++        // A rejected VM step is terminal. Source-admission refusal and success
++        // below use another genuine execution of the unchanged source prefix.
++        let (mut db, mut run, macros, _) = tests::start_source(ORIGINAL, edition, 1000);
++        let contexts = macros.contexts().unwrap();
++        let (id, literal, destination) = reached(&mut db, &mut run, &contexts);
++        let before = effects(&run);
+         assert!(run.prepare_macro_byte_literal(&mut db, &[], id).is_err());
+         assert_eq!(effects(&run), before);
+         run.prepare_macro_byte_literal(&mut db, &contexts, id)
+--- a/crates/lrr/src/runtime/cell_byte_comparison_tests.rs
++++ b/crates/lrr/src/runtime/cell_byte_comparison_tests.rs
+@@ -462,7 +462,12 @@
+         )
+     );
+     let plan = first.prepare_static_string_bytes(source, false).unwrap();
+-    first.types.intern(TypeKey::Tuple(Box::new([]))).unwrap();
++    // Empty tuple is the existing primitive unit descriptor; interning it
++    // does not shift the predicted IDs. Prove an actual new publication.
++    let inserted = TypeKey::Tuple(Box::new([TypeId(2), TypeId(9)]));
++    assert!(first.types.find(&inserted).is_none());
++    let inserted_id = first.types.intern(inserted.clone()).unwrap();
++    assert_eq!(first.types.find(&inserted), Some(inserted_id));
+     let before = (
+         first.budget.handles(),
+         first.budget.bytes(),

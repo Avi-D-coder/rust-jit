@@ -1,0 +1,50 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T024",
+    "T025"
+  ],
+  "prerequisites": [
+    "root-negative-local-inference-v1"
+  ],
+  "created_at": "2026-10-15T14:11:38.434129+00:00",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_plan.rs",
+      "before_sha256": "d0409fde56a7c94aacf4ba9ed6594339bf34df808acbc0c93692685304b04280",
+      "after_sha256": "233e38bd5246661f703334eb9eced98b1c89c15f95370b22b71ac4872317d95b"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_call_tests.rs",
+      "before_sha256": "96d6d77a26193cd83335bd829f6b77505c8226ec24972b2a89323f157ddc0455",
+      "after_sha256": "c017d5e3f529722011f89cfc1e25ecd1bdf8a9a35bf934c9ef79e1b6d7e11635"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_calls.rs",
+      "before_sha256": "90e03645ecff89e3c68f218075a4ba899e6f8aec17596cb2b9965299cae615ff",
+      "after_sha256": "94e08f2c8ccb7988bfee41a5dcf573661c3dc4c6ea97bea3c9b55720bb58456f"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_scalars.rs",
+      "before_sha256": "4cfb7337a4f5512e8b5bd8f04a51376985593a4eeb6414f25ff5a008bef1d035",
+      "after_sha256": "2ea18ef2f21b6753fb18924dcc68163528898c2a374feeda904371a047022dc4"
+    }
+  ],
+  "patch_sha256": "56cb2dc722cc6ac02ac1fa19a87b2421707b2ac1b0bbd7a3050378f4c8d0a133",
+  "patch_bytes": 3225,
+  "static_checks": [
+    "exact frozen V91 predecessor hashes",
+    "Rust1.99 formatting",
+    "exact no-fuzz/no-offset patch replay"
+  ],
+  "new_test_bodies": 0,
+  "existing_controls_extended": 1,
+  "stock_runtime_passes_added": 0,
+  "failure_scope": "V90 actual eb6d36/1 + de9fde/1; V91 diagnostic ada422/1",
+  "acceptance_pending": [
+    "strict compilation",
+    "affected source-selected controls",
+    "fresh integrated milestone"
+  ]
+}

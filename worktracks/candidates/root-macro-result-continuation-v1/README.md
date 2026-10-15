@@ -1,0 +1,7 @@
+# An effect-free continuation after an assertion call
+
+T024/T025 invariant: returning to an entered assertion's final source phase may inspect its predicate but must not reapply a type hint to the result's executed storage. V90's unchanged borrowed-str-match main failed in edition2015. V91 reproduced it with exact original Macro node3/phase9, showing the failure is in the caller's assertion continuation after the successful reached function, not a string-matching hint policy.
+
+The scalar planner had appended SetHint(bool) solely to create a call-resume/control-merge phase. It now appends an explicit internal Continuation. Frontend lowering admits it only as the final step and produces an empty operation list followed by the existing predicate branch. Scalar call-witness selection explicitly declines it; the initial pre-evaluation bool hint and normal assertion validation remain. No VM hint-after-storage guard, operand source authority, LRIR opcode or schema is relaxed. The same fix covers source-control merges that previously used the dummy hint.
+
+The existing terminal-call planning control now requires the initial bool hint and final Continuation; the existing unchanged upstream borrowed-str-match main remains the primary execution regression across all four editions. Original files and assertions are retained. Static formatting/hash/replay checks passed; compilation, affected runtime/macros and integrated milestone remain pending. This is a source candidate, not canonical promotion or acceptance.

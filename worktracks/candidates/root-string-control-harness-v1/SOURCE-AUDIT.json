@@ -1,0 +1,45 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T024",
+    "T061"
+  ],
+  "prerequisites": [
+    "root-macro-result-continuation-v1"
+  ],
+  "created_at": "2026-10-15T14:11:38.434129+00:00",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_byte_macro_literal_tests.rs",
+      "before_sha256": "235069b99dd098199c91417e1a60166ee3650dad8b533d8681dc12607d6f75ab",
+      "after_sha256": "e0ae08a2cae6963529f4c0ad42e690a2366eadd8c81bd0559c48be4ee080af61"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_string_macro_literal_tests.rs",
+      "before_sha256": "b94b037255ea15d89332f58daa626d2176152a35ebafcbda9314eb70e040526c",
+      "after_sha256": "762488899473f1ffa2b3545142e698baf58b4e25c4dd0d19958b6190d03b3ef9"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_comparison_tests.rs",
+      "before_sha256": "b473a5a74da55305af89c5695462e4c371dfc601a641ce0b6ceae73f31dc7010",
+      "after_sha256": "52e5f5230b5db848b69e322822a324452de0dd7a5b0335f6b8c9443392f682e8"
+    }
+  ],
+  "patch_sha256": "74a6872c7ca3646175b5963a21eda1d1cb9e96810d61239f504561d50ab76845",
+  "patch_bytes": 3644,
+  "static_checks": [
+    "exact frozen V91 predecessor hashes",
+    "Rust1.99 formatting",
+    "exact no-fuzz/no-offset patch replay"
+  ],
+  "new_test_bodies": 0,
+  "existing_controls_extended": 0,
+  "stock_runtime_passes_added": 0,
+  "failure_scope": "V90 actual eb6d36/1 + de9fde/1; V91 diagnostic ada422/1",
+  "acceptance_pending": [
+    "strict compilation",
+    "affected source-selected controls",
+    "fresh integrated milestone"
+  ]
+}

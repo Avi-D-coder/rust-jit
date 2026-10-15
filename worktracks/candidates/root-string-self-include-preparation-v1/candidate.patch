@@ -1,0 +1,297 @@
+--- a/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
+@@ -14,7 +14,13 @@
+ const ORIGINAL: &str = include_str!(
+     "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/crlf-in-byte-string-literal.rs"
+ );
+-fn discovery(view: &PreparedSourceView, graph: Digest) -> SourceDiscovery {
++fn discovery(
++    view: &PreparedSourceView,
++    graph: Digest,
++    db: &mut Database,
++    environment: &crate::expand::builtins::FrozenCompileEnvironment,
++    source_directory: Option<&std::path::Path>,
++) -> SourceDiscovery {
+     let mut d = SourceDiscovery::new(
+         vec![view.share()],
+         view.outline().root_scope.clone(),
+@@ -24,7 +30,7 @@
+     )
+     .unwrap()
+     .with_declarative(
+-        Digest::of_bytes(b"byte-macro-dispatch-expansions"),
++        environment.fingerprint(),
+         Digest::of_bytes(b"byte-macro-dispatch-generations"),
+     )
+     .unwrap()
+@@ -35,23 +41,140 @@
+         .unwrap(),
+     ))
+     .unwrap();
+-    match d.poll().unwrap() {
+-        SourceDiscoveryStep::Sealed(_) => {}
+-        SourceDiscoveryStep::Incomplete {
+-            diagnostic,
+-            blocked,
+-        } => {
+-            panic!("original source discovery incomplete: {diagnostic}; blocked {blocked:?}")
++    // Compile-input requests are prepared explicitly, before beginning a guest
++    // run. Only the named fixture directory grants a source-read capability.
++    use crate::{
++        db::poll::InputRequest,
++        service::{
++            eager_compile_inputs::EagerCompileInputPoll,
++            expansion::{DemandContext, ExpansionCoordinator, PhaseIdentity, Reply},
++            source_capture::SourceCapture,
++        },
++        source::include_paths::{IncludeAuthorities, IncludeRoot, IncludeRootKind},
++    };
++    let generation = Digest::of_bytes(b"original-string-fixture-source-generation");
++    let root_id = Digest::of_bytes(b"original-string-fixture-source-root");
++    let roots = source_directory.map(|path| IncludeRoot {
++        identity: root_id,
++        path: std::fs::canonicalize(path).unwrap(),
++        kind: IncludeRootKind::Source,
++    });
++    let authorities =
++        IncludeAuthorities::new(environment.unit(), generation, roots.clone()).unwrap();
++    let capture = source_directory.map(|_| {
++        SourceCapture::open(
++            IncludeAuthorities::new(environment.unit(), generation, roots).unwrap(),
++            Default::default(),
++        )
++        .unwrap()
++    });
++    let context = DemandContext {
++        request: graph,
++        session: view.selection().outline.parse.content,
++        unit: environment.unit(),
++        revision: db.source_revision(),
++        epoch: 1,
++        source_generation: generation,
++        native_generation: None,
++        compile_environment: environment.fingerprint(),
++    };
++    let mut coordinator = ExpansionCoordinator::new(context.clone());
++    let query = crate::db::key::QueryKey::Outline(view.selection().outline.clone());
++    let body = view
++        .outline()
++        .items
++        .iter()
++        .find(|item| item.def_key.declared_name == "main")
++        .and_then(|item| item.body.as_ref())
++        .unwrap()
++        .key();
++    for index in 0..32 {
++        match d.poll().unwrap() {
++            SourceDiscoveryStep::Sealed(_) => return d,
++            SourceDiscoveryStep::NeedExpansion { request } if request.is_compiler() => {}
++            SourceDiscoveryStep::Incomplete {
++                diagnostic,
++                blocked,
++            } => {
++                panic!("original source discovery incomplete: {diagnostic}; blocked {blocked:?}")
++            }
++            other => panic!(
++                "original source discovery requires unsupported explicit work: {:?}",
++                std::mem::discriminant(&other)
++            ),
+         }
+-        other => panic!(
+-            "original source discovery requires an explicit expansion: {:?}",
+-            std::mem::discriminant(&other)
+-        ),
++        let phase = PhaseIdentity {
++            frame: graph,
++            body: body.clone(),
++            index,
++        };
++        match d.poll_compiler(db, environment, &authorities).unwrap() {
++            EagerCompileInputPoll::NeedInput(input @ InputRequest::CaptureInclude { .. }) => {
++                let InputRequest::CaptureInclude { request, .. } = &input else {
++                    unreachable!()
++                };
++                let captured = capture
++                    .as_ref()
++                    .expect("include requires an explicitly named fixture directory")
++                    .capture(request)
++                    .unwrap();
++                let token = coordinator.issue(query.clone(), phase, input).unwrap();
++                coordinator.start(&context, &token).unwrap();
++                coordinator
++                    .accept_include(&context, &token, &captured)
++                    .unwrap();
++                coordinator
++                    .adopt_include(&context, &token, db, captured)
++                    .unwrap();
++            }
++            EagerCompileInputPoll::Produced(record) => {
++                let input = InputRequest::Expand(Box::new(crate::db::poll::ExpansionRequest {
++                    key: record.key().clone(),
++                }));
++                let token = coordinator.issue(query.clone(), phase, input).unwrap();
++                coordinator.start(&context, &token).unwrap();
++                coordinator
++                    .accept(&context, &token, Reply::success(&token, record.output()))
++                    .unwrap();
++                coordinator.adopt(&context, &token, db, record).unwrap();
++            }
++            EagerCompileInputPoll::Complete(record) => {
++                d.admit_compiler_expansion(
++                    db,
++                    environment,
++                    &authorities,
++                    std::sync::Arc::new(record),
++                )
++                .unwrap();
++            }
++            _ => panic!("fixture compile input requires unsupported explicit preparation"),
++        }
+     }
+-    d
+-}
++    panic!("original fixture discovery exceeded bounded preparation");
++}
++
+ pub(super) fn start_source(
+     source: &str,
++    edition: u16,
++    fuel: u64,
++) -> (
++    Database,
++    RunMachine,
++    CompletedStandaloneRuntimeMacros,
++    PreparedSourceInputs,
++) {
++    start_source_named(
++        source,
++        "crlf-in-byte-string-literal.rs",
++        None,
++        edition,
++        fuel,
++    )
++}
++pub(super) fn start_source_named(
++    source: &str,
++    filename: &str,
++    source_directory: Option<&std::path::Path>,
+     edition: u16,
+     fuel: u64,
+ ) -> (
+@@ -66,8 +189,22 @@
+     };
+     let cfg = CfgSet::guest_default();
+     let blob = SourceBlob::new(source.as_bytes().to_vec()).unwrap();
+-    let path = SourcePath::new("crlf-in-byte-string-literal.rs").unwrap();
++    let path = SourcePath::new(filename).unwrap();
+     let unit = Digest::of_bytes(b"original-byte-macro-dispatch");
++    let environment = crate::expand::builtins::FrozenCompileEnvironment::new(
++        unit,
++        &crate::project::tool_manifest::CompileEnv {
++            unit,
++            host: "aarch64-apple-darwin".into(),
++            target: "aarch64-apple-darwin".into(),
++            cfg: cfg.clone(),
++            cargo: Default::default(),
++            rustc_env: Default::default(),
++            declared: Default::default(),
++            out_dir: None,
++        },
++    )
++    .unwrap();
+     let selected = SourceSelection {
+         path: path.clone(),
+         outline: crate::db::key::OutlineKey {
+@@ -92,6 +229,8 @@
+         }],
+         Default::default(),
+     )
++    .unwrap()
++    .with_compile_environment(std::sync::Arc::new(environment.clone()))
+     .unwrap();
+     let mut db = Database::default();
+     db.trace.detailed = true;
+@@ -109,7 +248,14 @@
+         .as_ref()
+         .unwrap()
+         .key();
+-    let d = discovery(&view, Digest::of_bytes(b"first-sealed-dispatch"));
++    db.begin_expansion_epoch(1).unwrap();
++    let d = discovery(
++        &view,
++        Digest::of_bytes(b"first-sealed-dispatch"),
++        &mut db,
++        &environment,
++        source_directory,
++    );
+     let macros = CompletedStandaloneRuntimeMacros::from_discovery(&view, &d).unwrap();
+     db.begin_run().unwrap();
+     let run = RunMachine::start_with_discovery(&mut db, body, fuel, d)
+--- a/crates/lrr/src/engine/run_string_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_string_macro_literal_tests.rs
+@@ -227,7 +227,7 @@
+     for edition in [2015, 2018, 2021, 2024] {
+         let (mut db, mut run, macros, _) = tests::start_source(ORIGINAL, edition, 1000);
+         let contexts = macros.contexts().unwrap();
+-        let (id, literal, destination) = reached(&mut db, &mut run, &contexts);
++        let (id, literal, _destination) = reached(&mut db, &mut run, &contexts);
+         let Some(DecodedLiteral::String(payload)) = &literal.decoded else {
+             panic!("unchanged original UTF8 operand");
+         };
+@@ -418,10 +418,28 @@
+ const BYTE_VIEW_CRLF: &str = include_str!(
+     "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs"
+ );
++fn start_crlf_source(
++    edition: u16,
++) -> (
++    Database,
++    RunMachine,
++    crate::engine::standalone_macros::CompletedStandaloneRuntimeMacros,
++    crate::source::changes::PreparedSourceInputs,
++) {
++    let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("../../fixtures/upstream/rustc-checkout/tests/ui/lexer");
++    tests::start_source_named(
++        BYTE_VIEW_CRLF,
++        "lexer-crlf-line-endings-string-literal-doc-comment.rs",
++        Some(&directory),
++        edition,
++        100_000,
++    )
++}
+ #[test]
+ fn unchanged_crlf_as_bytes_operand_requires_current_source_and_publishes_once_all_editions() {
+     for edition in [2015, 2018, 2021, 2024] {
+-        let (mut db, mut run, macros, _) = tests::start_source(BYTE_VIEW_CRLF, edition, 100_000);
++        let (mut db, mut run, macros, _) = start_crlf_source(edition);
+         let contexts = macros.contexts().unwrap();
+         let (id, source, destination) = reach_string_method(&mut db, &mut run, &contexts, 46);
+         let receiver = run.frame.cell(source).unwrap();
+@@ -469,7 +487,7 @@
+ }
+ #[test]
+ fn original_as_bytes_member_and_vm_refuse_mutable_receiver_or_wrong_result_source_before_effects() {
+-    let (mut db, mut run, macros, _) = tests::start_source(BYTE_VIEW_CRLF, 2024, 100_000);
++    let (mut db, mut run, macros, _) = start_crlf_source(2024);
+     let contexts = macros.contexts().unwrap();
+     let (id, source, _) = reach_string_method(&mut db, &mut run, &contexts, 46);
+     let used = run.frame.fuel_snapshot().used;
+@@ -497,7 +515,7 @@
+     assert_eq!(effects(&run), before);
+     db.finish_run().unwrap();
+     // A separate original run avoids reusing a faulted VM frame.
+-    let (mut db, mut run, macros, _) = tests::start_source(BYTE_VIEW_CRLF, 2024, 100_000);
++    let (mut db, mut run, macros, _) = start_crlf_source(2024);
+     let contexts = macros.contexts().unwrap();
+     let (id, _, destination) = reach_string_method(&mut db, &mut run, &contexts, 46);
+     run.frame
+@@ -525,7 +543,7 @@
+     db.finish_run().unwrap();
+     // Poison only the source region; equal physical layout/backing cannot
+     // make an old method receipt authorize a different source borrow.
+-    let (mut db, mut run, macros, _) = tests::start_source(BYTE_VIEW_CRLF, 2024, 100_000);
++    let (mut db, mut run, macros, _) = start_crlf_source(2024);
+     let contexts = macros.contexts().unwrap();
+     let (id, source, _) = reach_string_method(&mut db, &mut run, &contexts, 46);
+     run.frame

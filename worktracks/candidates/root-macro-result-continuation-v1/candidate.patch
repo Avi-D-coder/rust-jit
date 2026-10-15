@@ -1,0 +1,71 @@
+--- a/crates/lrr/src/frontend/runtime_macro_plan.rs
++++ b/crates/lrr/src/frontend/runtime_macro_plan.rs
+@@ -537,6 +537,7 @@
+             Some(RuntimeScalarStep::CallSeal(call)) => (*call, RuntimeMacroCallPhase::Seal),
+             Some(
+                 RuntimeScalarStep::Operation(_)
++                | RuntimeScalarStep::Continuation
+                 | RuntimeScalarStep::PrimitiveMethod(_)
+                 | RuntimeScalarStep::Fault(_)
+                 | RuntimeScalarStep::Control(_),
+@@ -660,6 +661,14 @@
+                 match step {
+                     RuntimeScalarStep::Operation(operation) => {
+                         (vec![operation.clone()], following()?)
++                    }
++                    RuntimeScalarStep::Continuation => {
++                        if ordinal + 1 != plan.steps().len() {
++                            return Err(invalid(
++                                "scalar continuation must terminate its source plan",
++                            ));
++                        }
++                        (vec![], following()?)
+                     }
+                     RuntimeScalarStep::PrimitiveMethod(method) => {
+                         let admission = admission.ok_or_else(|| {
+--- a/crates/lrr/src/syntax/runtime_macro_call_tests.rs
++++ b/crates/lrr/src/syntax/runtime_macro_call_tests.rs
+@@ -125,11 +125,15 @@
+         assert_ne!(call.prepare_key(), call.seal_key());
+         assert_ne!(call.seal_key(), call.resume_key());
+         assert!(matches!(
+-            plan.steps().last(),
++            plan.steps().first(),
+             Some(RuntimeScalarStep::Operation(Op::SetHint {
+                 hint: HintRecipe::Primitive(PrimitiveType::Bool),
+                 ..
+             }))
++        ));
++        assert!(matches!(
++            plan.steps().last(),
++            Some(RuntimeScalarStep::Continuation)
+         ));
+         assert!(
+             plan.steps()
+--- a/crates/lrr/src/syntax/runtime_macro_calls.rs
++++ b/crates/lrr/src/syntax/runtime_macro_calls.rs
+@@ -120,6 +120,8 @@
+ #[derive(Debug)]
+ pub(crate) enum RuntimeScalarStep {
+     Operation(Op),
++    /// Final reached control phase; it never applies another value/type effect.
++    Continuation,
+     PrimitiveMethod(Box<super::RuntimePrimitiveMethod>),
+     CallPrepare(u32),
+     CallAdvance(u32, u32),
+--- a/crates/lrr/src/syntax/runtime_macro_scalars.rs
++++ b/crates/lrr/src/syntax/runtime_macro_scalars.rs
+@@ -844,10 +844,9 @@
+                 .checked_add(1)
+                 .filter(|n| *n <= usize::from(node.runtime_scalar_phases))
+                 .ok_or_else(|| invalid("scalar call terminal phase reservation exhausted"))?;
+-            operations.push(RuntimeScalarStep::Operation(Op::SetHint {
+-                child: condition,
+-                hint: HintRecipe::Primitive(PrimitiveType::Bool),
+-            }));
++            // The predicate may already own returned or branch-produced
++            // storage. A real resume phase must not apply another type hint.
++            operations.push(RuntimeScalarStep::Continuation);
+         }
+         if operations.len() > usize::from(node.runtime_scalar_phases) {
+             return Err(invalid("scalar assertion phase reservation exhausted"));

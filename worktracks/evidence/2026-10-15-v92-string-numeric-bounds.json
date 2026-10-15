@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T14:18:30.726107+00:00",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "source_member": "4d40beec1122538cb3a87176b1de676b82021936131dd2c0c960c36c14848b92",
+  "selected_distinct_executed": 110,
+  "passed": 108,
+  "failed": 2,
+  "ignored": 0,
+  "actual_terminal_ids": {
+    "strict-library": "ec1c6b/0",
+    "compile-library-tests": "c9f7db/0",
+    "priority-seven": "0c3ef0/1",
+    "remaining-string-and-original-mains": "904373/0",
+    "wire-currentness-capture": "4e023b/0",
+    "places-panic-terminal-calls": "ab3461/0"
+  },
+  "banks": [
+    {
+      "bank": "priority-seven",
+      "child_exit": 101,
+      "passed": 5,
+      "failed": 2,
+      "elapsed_seconds": 2.0392048750072718,
+      "terminal_sha256": "ba1c6151259a1536ac8960717662ef70b6cc00e674f42f3b92e81650b7520ed5"
+    },
+    {
+      "bank": "remaining-string-and-original-mains",
+      "child_exit": 0,
+      "passed": 28,
+      "failed": 0,
+      "elapsed_seconds": 2.910027874982916,
+      "terminal_sha256": "84a724019fbd3e8afb91b02d545628f114d3cce5e76f692e1614a823e3d72b6e"
+    },
+    {
+      "bank": "wire-currentness-capture",
+      "child_exit": 0,
+      "passed": 39,
+      "failed": 0,
+      "elapsed_seconds": 1.7867725420219358,
+      "terminal_sha256": "8c989dc6812197e6d0bece3ba292b754e62fcae621ebe223bfd3e1831d08b5f2"
+    },
+    {
+      "bank": "places-panic-terminal-calls",
+      "child_exit": 0,
+      "passed": 36,
+      "failed": 0,
+      "elapsed_seconds": 0.9613608329964336,
+      "terminal_sha256": "d6e9f57392058b6c24b75f988bf8987c7cae6e56522b7544d2a8b0ccff47c214"
+    }
+  ],
+  "failures": [
+    {
+      "test": "engine::run::byte_macro_literals::string_tests::original_as_bytes_member_and_vm_refuse_mutable_receiver_or_wrong_result_source_before_effects",
+      "location": "crates/lrr/src/engine/run_byte_macro_literal_tests.rs:46:18",
+      "exact_failure": "original source discovery requires an explicit expansion: Discriminant(7)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+      "bank": "priority-seven"
+    },
+    {
+      "test": "engine::run::byte_macro_literals::string_tests::unchanged_crlf_as_bytes_operand_requires_current_source_and_publishes_once_all_editions",
+      "location": "crates/lrr/src/engine/run_byte_macro_literal_tests.rs:46:18",
+      "exact_failure": "original source discovery requires an explicit expansion: Discriminant(7)",
+      "bank": "priority-seven"
+    }
+  ],
+  "all_four_original_main_controls_passed_all_four_editions": true,
+  "original_main_cases": [
+    "tests/ui/match/match-borrowed-str.rs",
+    "tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+    "tests/ui/lexer/underscores-in-unicode-escapes.rs",
+    "tests/ui/slowparse/slowparse-string.rs"
+  ],
+  "runtime_scope": "LRR original body execution controls, not configured compiletest full-fixture passes",
+  "raw_original_files": 507,
+  "retained_extras": 435,
+  "source_and_originals_unchanged": true,
+  "strict_production_library": "passed",
+  "test_compilation_warning": "unused destination in test helper at run_string_macro_literal_tests.rs:230; test strict lint still pending",
+  "handoff_sha256": "f7f659e238aad035a96494c0e64b7f3363b445842faef5ea18a0f353f15d7a8c",
+  "result_sha256": "e525f70b3e84b024affd2b4fe1ae8a1db908b396ca30abe2b6538dc9f9a9c9ca",
+  "evidence_index_sha256": "5fa2c13267d4b6a56518036dd79618ccd108577c85201ff61c7ff9b230d033b5",
+  "release_sha256": "61d089602a502488928d0c858aedbdc852dd1f782b970fac45e3f60b6bf45a87",
+  "root_verified_all_retained_evidence_hashes": true,
+  "full_milestone": "not_run",
+  "canonical_promotion": false,
+  "task_or_jit_completion": false
+}
