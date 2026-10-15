@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Integrated6exact registry/runtime/test leaves: V5664module+2parent, V584service/strict/fmt/architecture/reference passed; fullgate03 running80731 unchanged10096cc7, unaccepted. V54failure+V55probe+V57architecture failure preserved. Root qualified13/Byte12/named11 frozen/uncompiled;308cases490originals no new upstream/task/JIT/release acceptance.",
+      "scope": "V58 milestone1802pass5fail1400unexecuted preserved. Exact child harness coordinator epoch correction integrated after V59 strict/eight-body/audits passed. Seven related positive runtime harness files/12 genuine epoch setups queued V60, existing assertions/production guards unchanged. Qualified context13 V2 source review fixes frozen/uncompiled after named11/Byte12. No new upstream/task/JIT acceptance.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -453,11 +453,15 @@
         "artifacts/macos-first/root-declaration-forest-reuse-v1/",
         "artifacts/macos-first/root-adopted-source-registry-v2/",
         "artifacts/macos-first/root-named-match-context-integration-v1/",
-        "artifacts/macos-first/sol-adopted-source-registry-controls-v2/"
+        "artifacts/macos-first/sol-adopted-source-registry-controls-v2/",
+        "artifacts/macos-first/root-child-macro-epoch-v1/",
+        "artifacts/macos-first/root-named-match-context-integration-v2/",
+        "artifacts/macos-first/sol-qualified-range-owning-scope-v2/",
+        "artifacts/macos-first/root-generated-runtime-epochs-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T06:19:16.358280+00:00",
+      "updated_at": "2026-10-15T06:33:54.256860+00:00",
       "review_after": "2026-10-15T07:16:22.506011+00:00"
     },
     {

@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    "M010",
+    "M012",
+    "M013"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "problem": "Five V58 child_macro_routes runtime cases failed because shared harness omitted genuine coordinator ExpansionEpoch after source publication.",
+  "change": "Publish work.key().epoch from sealed discovery before start_with_discovery. Production epoch/Type receipt guards and all eight test bodies unchanged.",
+  "source_member": "1d9a435121d5897780fe1da24380da9e9156312c671d8de419a09769f357c000",
+  "source_file": {
+    "path": "xtask/tests/child_macro_routes.rs",
+    "before_sha256": "520db2795afd2fcb2b12f69f1a0d9dbd5d145f0c06e22951e0bbff03e6f4b4f5",
+    "sha256": "8de561e1b0c0dee35eb15d7c7e2db22c69bd1a908a70aa351f54eb8983df2851"
+  },
+  "scopes": {
+    "architecture": {
+      "scope": "architecture",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "run",
+        "-p",
+        "xtask",
+        "--locked",
+        "--offline",
+        "--",
+        "architecture-audit"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "1d9a435121d5897780fe1da24380da9e9156312c671d8de419a09769f357c000",
+      "elapsed_seconds": 7.7486954999913,
+      "started_at": "2026-10-15T06:31:20.408412+00:00",
+      "finished_at": "2026-10-15T06:31:28.157203+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e5569290196b6d771b9b3b71f6cd7fa46743536d5d842d5a8c3fb9516cf2623e",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "child-macro-eight": {
+      "scope": "child-macro-eight",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "xtask",
+        "--test",
+        "child_macro_routes",
+        "--locked",
+        "--offline",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 8,
+      "nonempty_test_scope": true,
+      "source_member": "1d9a435121d5897780fe1da24380da9e9156312c671d8de419a09769f357c000",
+      "elapsed_seconds": 16.76694845900056,
+      "started_at": "2026-10-15T06:30:49.431454+00:00",
+      "finished_at": "2026-10-15T06:31:06.198512+00:00",
+      "stdout_sha256": "b788723bd930665ebef9cd3e25c63413492293246ac3e7cee7f6d1f680f4d30d",
+      "stderr_sha256": "2d15844dd5095257e201044959b5b9188849b9c36ec8fe73177ed0252928d86e",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "fixture-reference": {
+      "scope": "fixture-reference",
+      "argv": [
+        "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/xtask",
+        "fixture-reference-audit"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "1d9a435121d5897780fe1da24380da9e9156312c671d8de419a09769f357c000",
+      "elapsed_seconds": 0.5016470420232508,
+      "started_at": "2026-10-15T06:31:39.576114+00:00",
+      "finished_at": "2026-10-15T06:31:40.077848+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "format": {
+      "scope": "format",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "1d9a435121d5897780fe1da24380da9e9156312c671d8de419a09769f357c000",
+      "elapsed_seconds": 5.07882858402445,
+      "started_at": "2026-10-15T06:31:09.089926+00:00",
+      "finished_at": "2026-10-15T06:31:14.168844+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "strict-child-macro": {
+      "scope": "strict-child-macro",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "-p",
+        "xtask",
+        "--test",
+        "child_macro_routes",
+        "--locked",
+        "--offline",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "1d9a435121d5897780fe1da24380da9e9156312c671d8de419a09769f357c000",
+      "elapsed_seconds": 7.17955874998006,
+      "started_at": "2026-10-15T06:30:19.711954+00:00",
+      "finished_at": "2026-10-15T06:30:26.891612+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "b3ec37e680a95696ea5acf04b7bd32dd36cf3cd82530c0573785f4c66fbee0b6",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    }
+  },
+  "receipts": [
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v59/HANDOFF.md",
+      "sha256": "f7b82ae13acff27f49231e71964d94e5f3549d56bd50b0e5d071786c24b66fb2"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v59/EVIDENCE-HASHES.json",
+      "sha256": "5fa53561403d3c7dc8bd2579ed5cf0efcc5ae4ff4a331dfa17b9b39ea9b520e1"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v59/COLLECTED-SCOPES.json",
+      "sha256": "e9d971f6c787597d1324b939db754419189cebbe1193fc68e4f5e1e097635f06"
+    }
+  ],
+  "acceptance": {
+    "integrated": true,
+    "child_route_tests_passed": 8,
+    "new_upstream_runtime_passes": 0,
+    "full_milestone_passed": false,
+    "task_completion_newly_claimed": false,
+    "guest_jit_gate": "closed"
+  },
+  "next": "Reasoned audit of other same-omission generated runtime harnesses; validate bounded corrections together before required full milestone. Named11/Byte12/context13 remain queued uncompiled."
+}
