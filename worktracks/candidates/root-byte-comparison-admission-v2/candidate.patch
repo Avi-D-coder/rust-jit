@@ -1,0 +1,229 @@
+diff --git a/crates/lrr/src/engine/run_byte_macro_literal_tests.rs b/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
+--- a/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
+@@ -476,3 +476,35 @@
+     );
+     db.finish_run().unwrap();
+ }
++
++#[test]
++fn original_byte_comparison_does_not_infer_rhs_descriptor_from_lhs_layout() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, mut run, macros, _) = start_source(ORIGINAL, edition, 1000);
++        let contexts = macros.contexts().unwrap();
++        let (id, op) = reach_comparison(&mut db, &mut run, &contexts);
++        let Op::NumericBinary { left, right, .. } = op else {
++            panic!("comparison")
++        };
++        assert!(matches!(
++            run.frame.source_view(left).unwrap(),
++            Some(TyTerm::Ref(_, false, _))
++        ));
++        assert!(matches!(
++            run.frame.source_view(right).unwrap(),
++            Some(TyTerm::Ref(_, false, _))
++        ));
++        // The real source recipes reached both operands. A numeric hint may
++        // select scalar width, but cannot demand identical PartialEq operands.
++        assert_eq!(run.frame.hint(right).unwrap(), None);
++        run.prepare_macro_byte_comparison(&mut db, &contexts, id)
++            .unwrap();
++        assert!(
++            run.frame
++                .prepare_byte_comparison(&op, &run.store)
++                .unwrap()
++                .is_some()
++        );
++        db.finish_run().unwrap();
++    }
++}
+diff --git a/crates/lrr/src/runtime/cell_byte_comparison.rs b/crates/lrr/src/runtime/cell_byte_comparison.rs
+--- a/crates/lrr/src/runtime/cell_byte_comparison.rs
++++ b/crates/lrr/src/runtime/cell_byte_comparison.rs
+@@ -122,6 +122,38 @@
+         })
+     }
+ 
++    /// A new VM operation must receive the still-unadvanced cursor produced by
++    /// this store for these exact current operands. Identical handle bits from
++    /// another store, replaced roots, and another fuel stream's partial cursor
++    /// cannot reserve a result cell on this operation's behalf.
++    pub(crate) fn admit_static_byte_comparison(
++        &self,
++        cursor: &StaticByteComparison,
++        left: CellId,
++        right: CellId,
++    ) -> Result<(), Diagnostic> {
++        cursor.require_operands(left, right)?;
++        if cursor.next != 0 {
++            return Err(lease_fault());
++        }
++        self.validate_static_byte_comparison(cursor)
++    }
++    fn validate_static_byte_comparison(
++        &self,
++        cursor: &StaticByteComparison,
++    ) -> Result<(), Diagnostic> {
++        if cursor.terminal
++            || cursor.session != self.pattern_binding_session
++            || cursor.epoch != self.budget.epoch()
++            || self.static_comparison_view(cursor.left.operand.cell)? != cursor.left
++            || self.static_comparison_view(cursor.right.operand.cell)? != cursor.right
++            || cursor.next > cursor.left.len.min(cursor.right.len)
++        {
++            return Err(lease_fault());
++        }
++        Ok(())
++    }
++
+     fn comparison_byte(&self, view: ByteView, offset: u32) -> Result<u8, Diagnostic> {
+         let (object, storage) = self.place_object(view.root.cell)?;
+         if object != view.object || offset >= view.len {
+@@ -172,14 +204,7 @@
+         cursor: &mut StaticByteComparison,
+         fuel: &mut RunFuel,
+     ) -> Result<StaticByteComparisonPoll, Diagnostic> {
+-        if cursor.session != self.pattern_binding_session
+-            || cursor.epoch != self.budget.epoch()
+-            || self.static_comparison_view(cursor.left.operand.cell)? != cursor.left
+-            || self.static_comparison_view(cursor.right.operand.cell)? != cursor.right
+-            || cursor.next > cursor.left.len.min(cursor.right.len)
+-        {
+-            return Err(lease_fault());
+-        }
++        self.validate_static_byte_comparison(cursor)?;
+         fuel.poll()?;
+         if cursor.left.len != cursor.right.len {
+             return Ok(StaticByteComparisonPoll::Complete {
+diff --git a/crates/lrr/src/runtime/cell_byte_comparison_tests.rs b/crates/lrr/src/runtime/cell_byte_comparison_tests.rs
+--- a/crates/lrr/src/runtime/cell_byte_comparison_tests.rs
++++ b/crates/lrr/src/runtime/cell_byte_comparison_tests.rs
+@@ -246,3 +246,92 @@
+     assert_eq!(fuel.snapshot().used, 257);
+     assert!(cursor.terminal);
+ }
++
++#[test]
++fn new_comparison_admission_rejects_foreign_stale_or_already_advanced_cursors_without_effects() {
++    let mut first = store();
++    let left = operand(&mut first, b"left", &[7; 600], ByteLiteralTarget::Array);
++    let right = operand(&mut first, b"right", &[7; 600], ByteLiteralTarget::Slice);
++    let mut second = store();
++    let other_left = operand(&mut second, b"left", &[7; 600], ByteLiteralTarget::Array);
++    let other_right = operand(&mut second, b"right", &[7; 600], ByteLiteralTarget::Slice);
++    assert_eq!(
++        (left.bits(), right.bits()),
++        (other_left.bits(), other_right.bits())
++    );
++    let mut cursor = first.prepare_static_byte_comparison(left, right).unwrap();
++    let before = (
++        first.budget.handles(),
++        first.budget.bytes(),
++        second.budget.handles(),
++        second.budget.bytes(),
++    );
++    first
++        .admit_static_byte_comparison(&cursor, left, right)
++        .unwrap();
++    assert!(
++        second
++            .admit_static_byte_comparison(&cursor, other_left, other_right)
++            .is_err()
++    );
++    assert!(
++        first
++            .admit_static_byte_comparison(&cursor, right, left)
++            .is_err()
++    );
++    let mut fuel = RunFuel::new(600).unwrap();
++    assert_eq!(
++        first
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .unwrap(),
++        StaticByteComparisonPoll::Dispatch { pairs: 256 }
++    );
++    assert!(
++        first
++            .admit_static_byte_comparison(&cursor, left, right)
++            .is_err()
++    );
++    assert_eq!(fuel.snapshot().used, 256);
++    assert_eq!(
++        (
++            first.budget.handles(),
++            first.budget.bytes(),
++            second.budget.handles(),
++            second.budget.bytes()
++        ),
++        before
++    );
++    // Continuation remains valid for its existing owner; refusal to start a new
++    // operation must neither consume it nor turn its prior charges into a replay.
++    assert_eq!(
++        first
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .unwrap(),
++        StaticByteComparisonPoll::Dispatch { pairs: 256 }
++    );
++    assert_eq!(
++        first
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .unwrap(),
++        StaticByteComparisonPoll::Complete {
++            equal: true,
++            pairs: 88
++        }
++    );
++    assert!(
++        first
++            .admit_static_byte_comparison(&cursor, left, right)
++            .is_err()
++    );
++    let cursor = first.prepare_static_byte_comparison(left, right).unwrap();
++    let reference = first.reference_from_cell(left).unwrap();
++    let root = first.references.get(reference).unwrap().root.cell;
++    first.cells.get_mut(root).unwrap().location_epoch += 1;
++    let before = (first.budget.handles(), first.budget.bytes());
++    assert!(
++        first
++            .admit_static_byte_comparison(&cursor, left, right)
++            .is_err()
++    );
++    assert_eq!((first.budget.handles(), first.budget.bytes()), before);
++}
+diff --git a/crates/lrr/src/vm/frame.rs b/crates/lrr/src/vm/frame.rs
+--- a/crates/lrr/src/vm/frame.rs
++++ b/crates/lrr/src/vm/frame.rs
+@@ -3055,7 +3055,11 @@
+             // Named operands retain their source width or remain unresolved.
+             None
+         } else if comparison {
+-            left_type
++            // This is numeric inference, not selection of PartialEq<Rhs>.
++            // In particular &[u8; N] and &[u8] may compare without sharing
++            // the same physical descriptor. The reached member is selected
++            // later from both operand source types, never from this hint.
++            left_type.filter(|ty| (2..=15).contains(&ty.0))
+         } else {
+             left_type.or(parent_type)
+         };
+diff --git a/crates/lrr/src/vm/frame_byte_comparisons.rs b/crates/lrr/src/vm/frame_byte_comparisons.rs
+--- a/crates/lrr/src/vm/frame_byte_comparisons.rs
++++ b/crates/lrr/src/vm/frame_byte_comparisons.rs
+@@ -93,6 +93,7 @@
+         physical: StaticByteComparison,
+         store: &mut GuestStore,
+     ) -> Result<(), Diagnostic> {
++        self.require_store(store)?;
+         if self.status != FrameStatus::Running
+             || self.byte_comparison_activation.is_some()
+             || self.byte_activation.is_some()
+@@ -108,7 +109,7 @@
+             .ok_or_else(|| invalid("byte comparison source admission absent"))?;
+         proof.require(self, store, op)?;
+         let (left, right, destination, _) = proof.operands();
+-        physical.require_operands(self.cell(left)?, self.cell(right)?)?;
++        store.admit_static_byte_comparison(&physical, self.cell(left)?, self.cell(right)?)?;
+         let prior_source = self.source_view_ref(destination)?.cloned();
+         Self::metadata_bytes(&self.body, self.parameter_metadata_count())
+             .and_then(|n| n.checked_add(self.constructor_mapping_bytes))

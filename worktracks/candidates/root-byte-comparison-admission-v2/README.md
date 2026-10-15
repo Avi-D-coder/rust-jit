@@ -1,0 +1,11 @@
+# Byte comparison admission and numeric hint follow-on
+
+Status: source-only, uncompiled and unexecuted. Apply this five-file delta after [the 22-file byte assertions candidate](../root-byte-assertions-v1/README.md), itself after the coherent 48-file byte prerequisite. Check every before/after hash in `SOURCE-AUDIT.json`. Claim LOCAL-024, tasks T041/T062; no task or upstream pass is claimed.
+
+New comparison activation now checks the frame's owning store and admits the physical cursor against that store's incarnation, epoch and exact current operand views before reserving its result cell. A cursor whose comparison already advanced cannot start a new operation and reuse charges from another fuel stream. Continuation uses the same currentness checks as first admission. A store control exercises foreign identical handle bits, swapped operands, progressed/completed cursors and a changed root epoch without allocation effects.
+
+Numeric comparison inference now propagates only scalar descriptors. An array/slice reference on the left cannot impose its physical descriptor on the right: the source-selected `PartialEq<Rhs>` member checks both actual operand types later. The second new control executes the unchanged rustc CRLF byte source through the first comparison in all four editions and checks that the RHS acquired no reference descriptor hint. This is a component assertion, not an extra full-fixture pass.
+
+Static receipt `3f662c/0`: all five before hashes match the sealed 22-file candidate, pinned Rust 1.99 formatting completed, and exact patch replay reproduced all after hashes. Patch SHA-256 is `c9e010a89590480349271cbc44118db589aad9c56e6d8c2fd7871ab123b3f10f`. No Rust build or execution ran.
+
+The assigned validator must collect the active V72 milestone terminal and then validate the 48-file prerequisite as already directed. After those pass, assemble the 22-file assertions candidate plus this five-file overlay before their first strict build and scoped validation. Include the two new controls, the previous source/member/physical scopes, unchanged full CRLF `main`, and affected numeric/float inference checks. Keep each validation source frozen; stop on a concrete failure for repair. Required integrated milestone acceptance remains pending.
