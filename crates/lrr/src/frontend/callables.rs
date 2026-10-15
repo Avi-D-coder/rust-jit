@@ -8,7 +8,7 @@ use crate::{
     db::{
         dependency::{InputKey, InputValue},
         key::QueryKey,
-        memo::Database,
+        memo::{Database, RetainedOriginalDeclaration, RetainedSourceLease},
         poll::QueryPoll,
         provider::SyntaxProvider,
         value::QueryValue,
@@ -37,6 +37,7 @@ pub struct SourceCallable {
     revision: u64,
     context: DeclarationContext,
     lexical: Option<Box<lexical::LexicalAdmission>>,
+    retained: Option<RetainedSourceLease>,
 }
 impl SourceCallable {
     pub fn identity(&self) -> Digest {
@@ -58,6 +59,7 @@ impl SourceCallable {
         self.lexical
             .as_ref()
             .map_or(0, |proof| proof.metadata_bytes())
+            .saturating_add(std::mem::size_of::<Option<RetainedSourceLease>>())
     }
     pub fn revalidate(&self, db: &mut Database) -> Result<(), Diagnostic> {
         if let Some(proof) = &self.lexical {
@@ -65,6 +67,16 @@ impl SourceCallable {
         }
         if db.source_revision() != self.revision {
             return Err(fault("selected callable source revision changed"));
+        }
+        if let Some(lease) = &self.retained {
+            match lease.require_current(db) {
+                QueryPoll::Ready(result) => result?,
+                QueryPoll::NeedInput(_) => {
+                    return Err(fault(
+                        "selected callable retained discovery is no longer available",
+                    ));
+                }
+            }
         }
         let definition = self.identity;
         if !matches!(db.input(&InputKey::DefinitionSource(definition)).as_deref(),Some(InputValue::DefinitionSource(key))if *key==self.source)
@@ -263,8 +275,16 @@ impl<'a> CallResolver<'a> {
     }
     fn caller_context(&self, db: &mut Database, caller: Digest) -> QueryPoll<(ScopeKey, u16)> {
         if let Some((source, item)) = self.item(caller) {
-            if !self.current(db, source, caller) {
-                return QueryPoll::Ready(Err(fault("caller source catalogue/database mismatch")));
+            match self.current(db, source, caller) {
+                QueryPoll::Ready(Ok(Some(current))) => {
+                    return QueryPoll::Ready(Ok((
+                        current.context().scope.clone(),
+                        current.header().profile.edition,
+                    )));
+                }
+                QueryPoll::Ready(Ok(None)) => {}
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
             }
             return QueryPoll::Ready(Ok((item.scope.clone(), item.header.profile.edition)));
         }
@@ -373,6 +393,7 @@ impl<'a> CallResolver<'a> {
             revision: db.source_revision(),
             context: context.clone(),
             lexical: None,
+            retained: None,
         };
         if let Err(e) = callee.revalidate(db) {
             return QueryPoll::Ready(Err(e));
@@ -392,8 +413,13 @@ impl<'a> CallResolver<'a> {
                 .map(|item| (*source, item))
         })
     }
-    fn current(&self, db: &mut Database, source: &PreparedSourceView, definition: Digest) -> bool {
-        matches!(db.input(&InputKey::DefinitionSource(definition)).as_deref(),Some(InputValue::DefinitionSource(key))if key==&source.selection().outline.parse)
+    fn current(
+        &self,
+        db: &mut Database,
+        source: &PreparedSourceView,
+        definition: Digest,
+    ) -> QueryPoll<Option<RetainedOriginalDeclaration>> {
+        db.retained_original_declaration(source, definition)
     }
     pub(crate) fn select(&self, db: &mut Database, found: NameLookup) -> QueryPoll<CallSelection> {
         let selected = match found {
@@ -412,11 +438,11 @@ impl<'a> CallResolver<'a> {
         let Some((source, item)) = self.item(selected.identity) else {
             return self.select_generated(db, selected.identity);
         };
-        if !self.current(db, source, selected.identity) {
-            return QueryPoll::Ready(Err(fault(
-                "selected function source catalogue/database mismatch",
-            )));
-        }
+        let retained = match self.current(db, source, selected.identity) {
+            QueryPoll::Ready(Ok(current)) => current,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
+        };
         if item.scope.owner.is_some() {
             return QueryPoll::Ready(Ok(CallSelection::NeedOwnerContext(item.scope.clone())));
         }
@@ -436,21 +462,47 @@ impl<'a> CallResolver<'a> {
                 "selected function signature query result mismatch",
             )));
         };
-        if signature.scope != item.scope || signature.header != item.header {
-            return QueryPoll::Ready(Err(fault("selected signature source declaration mismatch")));
-        }
-        QueryPoll::Ready(Ok(CallSelection::Source(Box::new(SourceCallable {
-            definition: item.def_key.clone(),
-            identity: selected.identity,
-            signature: signature.clone(),
-            body: item.body.clone(),
-            source: source.selection().outline.parse.clone(),
-            revision: db.source_revision(),
-            context: DeclarationContext {
+        let header = retained
+            .as_ref()
+            .map_or(&item.header, |current| current.header());
+        let context = retained.as_ref().map_or_else(
+            || DeclarationContext {
                 scope: item.scope.clone(),
                 range: item.declaration_span,
             },
+            |current| current.context().clone(),
+        );
+        if signature.scope != context.scope
+            || signature.header.fingerprint() != header.fingerprint()
+            || retained.is_none() && signature.header != *header
+        {
+            return QueryPoll::Ready(Err(fault("selected signature source declaration mismatch")));
+        }
+        // Cached signatures carry semantic header identity. Reattach the actual
+        // current header locations without changing any inferred declaration.
+        let mut signature = signature.clone();
+        signature.header = header.clone();
+        let body = retained
+            .as_ref()
+            .map_or_else(|| item.body.clone(), |current| Some(current.body().clone()));
+        let parse = retained.as_ref().map_or_else(
+            || source.selection().outline.parse.clone(),
+            |current| current.parse().clone(),
+        );
+        let callee = SourceCallable {
+            definition: item.def_key.clone(),
+            identity: selected.identity,
+            signature,
+            body,
+            source: parse,
+            revision: db.source_revision(),
+            context,
             lexical: None,
-        }))))
+            retained: retained.map(RetainedOriginalDeclaration::into_lease),
+        };
+        if let Err(error) = callee.revalidate(db) {
+            return QueryPoll::Ready(Err(error));
+        }
+        QueryPoll::Ready(Ok(CallSelection::Source(Box::new(callee))))
     }
 }

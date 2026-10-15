@@ -23,3 +23,6 @@ mod retained_syntax_tests;
 
 #[cfg(test)]
 mod retained_body_tests;
+
+#[cfg(test)]
+mod retained_callable_tests;

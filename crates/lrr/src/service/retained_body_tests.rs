@@ -128,9 +128,47 @@ fn prepared_arithmetic(
     epoch: u64,
     publish_source: bool,
 ) -> Arc<RetainedSyntaxInput> {
-    let (provider, index, inputs) = assembly::world(ARITHMETIC, edition);
-    let request = assembly::request(&provider, &index);
-    let output = assembly::output(&provider, index.scan(), &request, epoch);
+    prepare_single_expansion(db, ARITHMETIC, edition, epoch, publish_source).0
+}
+pub(super) fn prepare_single_expansion(
+    db: &mut Database,
+    text: &str,
+    edition: u16,
+    epoch: u64,
+    publish_source: bool,
+) -> (Arc<RetainedSyntaxInput>, SourceDiscovery) {
+    let (provider, index, inputs) = assembly::world(text, edition);
+    // Reuse the actual ordinary-item request path for module producers. Its
+    // invocation ID is intentionally different from declaration-scan identity.
+    let (request, output) =
+        if let Some(call) = provider.module_source().outline().item_invocations.first() {
+            let source_declarative::SourceDeclarativeDemand::Ready(request) = provider
+                .demand(
+                    call.item_input,
+                    Digest([17; 32]),
+                    source_declarative::engine_version(),
+                )
+                .unwrap()
+            else {
+                panic!("actual ordinary item request absent")
+            };
+            let output = Arc::new(
+                crate::expand::generated_declarations::GeneratedDeclarations::admit_item_output(
+                    Arc::new(request.expand().unwrap()),
+                    epoch,
+                    provider.module_source(),
+                    provider.module_source().captured_macro_cfg().unwrap(),
+                    Default::default(),
+                    &request.source_base().unwrap(),
+                )
+                .unwrap(),
+            );
+            (request, output)
+        } else {
+            let request = assembly::request(&provider, &index);
+            let output = assembly::output(&provider, index.scan(), &request, epoch);
+            (request, output)
+        };
     let prepared = Arc::new(
         SourceSyntaxAssembly::new(&provider, &index, epoch)
             .unwrap()
@@ -174,11 +212,12 @@ fn prepared_arithmetic(
             }
             SourceDiscoveryStep::Sealed(_) => {
                 discovery.publish(db).unwrap();
-                return ready(RetainedSyntaxInput::prepare(
+                let input = ready(RetainedSyntaxInput::prepare(
                     db,
                     prepared,
                     discovery.key().clone(),
                 ));
+                return (input, discovery);
             }
             _ => panic!("actual arithmetic discovery requires an unhandled phase"),
         }

@@ -307,6 +307,7 @@ pub(crate) fn admit_lexical_function(
             range: plan.item().declaration_span,
         },
         lexical: Some(Box::new(admission)),
+        retained: None,
     };
     if let Err(error) = callee.revalidate(db) {
         return QueryPoll::Ready(Err(error));

@@ -257,7 +257,7 @@ impl NormalizedDeferredReturn {
     /// namespace evidence. Input fingerprints alone cannot certify an unrelated
     /// graph; a published scope or exact original-source rebuild must agree.
     fn require_primitive_namespace(
-        db: &Database,
+        db: &mut Database,
         signature: &crate::syntax::signatures::FunctionSignature,
         sources: &[&PreparedSourceView],
         stamps: &BTreeMap<InputKey, Digest>,
@@ -265,7 +265,7 @@ impl NormalizedDeferredReturn {
         Self::require_primitive_name_namespace(db, signature, sources, stamps, None)
     }
     fn require_primitive_name_namespace(
-        db: &Database,
+        db: &mut Database,
         signature: &crate::syntax::signatures::FunctionSignature,
         sources: &[&PreparedSourceView],
         stamps: &BTreeMap<InputKey, Digest>,
@@ -283,6 +283,7 @@ impl NormalizedDeferredReturn {
         else {
             return Err(missing());
         };
+        let parse = parse.clone();
         if db
             .published_input(&InputKey::GeneratedSyntax(parse.content))
             .is_some()
@@ -293,8 +294,51 @@ impl NormalizedDeferredReturn {
                     "generated reference parameter Type authority requires its source producer",
                 ));
             }
-            return generated_result_namespace::require(db, signature, parse);
+            return generated_result_namespace::require(db, signature, &parse);
         }
+        // A body-only retained edit preserves its original declaration's Type
+        // namespace. Prove that bridge from actual admitted source/rows, not a
+        // primitive-looking return spelling or the result's runtime layout.
+        let retained_owner = if db
+            .published_input(&InputKey::RetainedSyntax(parse.content))
+            .is_some()
+        {
+            let mut owners = sources.iter().filter(|view| {
+                view.outline()
+                    .items
+                    .iter()
+                    .any(|item| item.def_key.fingerprint() == signature.definition)
+            });
+            let owner = *owners.next().ok_or_else(missing)?;
+            if owners.next().is_some() {
+                return Err(missing());
+            }
+            let proof = match db.retained_original_declaration(owner, signature.definition) {
+                QueryPoll::Ready(Ok(Some(proof))) => proof,
+                QueryPoll::Ready(Err(error)) => return Err(error),
+                QueryPoll::Ready(Ok(None)) | QueryPoll::NeedInput(_) => return Err(missing()),
+            };
+            let original = owner
+                .outline()
+                .items
+                .iter()
+                .find(|item| item.def_key.fingerprint() == signature.definition)
+                .ok_or_else(missing)?;
+            if proof.parse() != &parse
+                || proof.context().scope != signature.scope
+                || proof.header().fingerprint() != signature.header.fingerprint()
+                || original.header.fingerprint() != signature.header.fingerprint()
+            {
+                return Err(fault(
+                    "LRR-E-CALL-CONTEXT",
+                    "retained header changes require their own hygienic Type namespace",
+                ));
+            }
+            Some(owner.selection())
+        } else {
+            None
+        };
+        let owning_parse = retained_owner.map_or(&parse, |source| &source.outline.parse);
         let mut source = None;
         let mut captured_count = 0usize;
         for key in stamps.keys() {
@@ -316,7 +360,7 @@ impl NormalizedDeferredReturn {
             if selection.location_identity() != *location {
                 return Err(missing());
             }
-            if selection.outline.parse == *parse
+            if selection.outline.parse == *owning_parse
                 && selection.outline.crate_key == signature.scope.crate_key
                 && signature
                     .scope
@@ -339,7 +383,8 @@ impl NormalizedDeferredReturn {
         if !owner.outline().items.iter().any(|item| {
             item.def_key.fingerprint() == signature.definition
                 && item.scope == signature.scope
-                && item.header == signature.header
+                && item.header.fingerprint() == signature.header.fingerprint()
+                && (retained_owner.is_some() || item.header == signature.header)
         }) {
             return Err(missing());
         }

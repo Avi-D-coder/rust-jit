@@ -23,3 +23,22 @@ The source-map successor shares one bounded origin selector between existing gen
 Original member reconciliation now has a source-only candidate: the pinned adapter returns exact successful edit receipts, and `SourceSyntaxAssembly` translates original selected declaration/header/body anchors through those edits. Initial pairing happens before expansion. A copied function header inserted before an original can change duplicate ordinals; the original occurrence follows its mapped location, not the newly computed name/ordinal. Whole-expression replacement updates a surviving initializer body extent. Final anchors are checked against actual assembled nodes and explicitly encoded in the prepared-source identity. This does not publish definitions or authorize frame entry; actual derived body/source lease and generated catalog reconciliation remain next. [Exact candidate](../evidence/2026-10-15-common-original-anchors.json).
 
 The pre-entry body successor is now frozen separately for validation. `Database::publish_retained_body` binds one actual original declaration anchor to current admitted syntax and atomically publishes its ordinary source/header/body/context rows. A database registry observes source ownership held by active frames, suspended callers and prepared callees, so publication cannot retarget an existing continuation. Actual return/panic restoration transfers the matching lease; polling rechecks retained source/epoch dependencies before guest work. The candidate's nonliteral arithmetic witness enters an actual source function through ordinary `RunMachine::start` and numeric thunks. This is a bounded body-entry control, not CLI macro integration: source callable/catalog reconciliation, selected-body-only expansion with cold unrelated bodies, generic hygienic name/pattern handling, diagnostics and all eight shortcut removals remain outstanding. Full source assembly currently requires its pending call list to close; do not claim this establishes lazy per-body macro preparation. Source code and tests alone establish no pass.
+
+
+The ordinary callable successor is a **failing source candidate**, not an integrated
+migration. The ordinary name graph selects the genuine original `DefKey` and an
+opaque checked projection supplies its current retained source/header/body/context.
+Currentness checks cover the actual source publication, exact declaration rows,
+epoch and seal; unchanged semantic result headers still need existing Type-scope
+certification. No type comes from a macro name or runtime layout.
+
+V6 compiled and passed three controls, including original and retained callers of a
+real source function containing nonliteral macro output in all four editions. The
+unchanged upstream `auto-is-contextual.rs` main failed at `auto as u8`. V5 kept its
+caller on the original unresolved macro-containing tree; V6 publishes both actual
+original functions against expanded syntax and still fails because the existing
+primitive-cast planner refuses generated syntax. That is a common hygienic Type
+resolution prerequisite. Do not strip the cast, weaken its oracle, special-case
+this fixture, or remove the generated-origin refusal without source authority.
+All attempted terminals remain in [the callable receipt](../evidence/2026-10-15-common-retained-callables.json).
+The shared pattern engine and all eight alternate-path removals remain pending.

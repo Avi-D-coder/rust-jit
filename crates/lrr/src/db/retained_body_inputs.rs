@@ -8,6 +8,10 @@ use crate::{
     syntax::{outline::DeclarationContext, parse::ParsedFile},
 };
 
+#[path = "retained_callables.rs"]
+mod callables;
+pub(crate) use callables::{RetainedOriginalDeclaration, RetainedSourceLease};
+
 fn rows(
     input: &RetainedSyntaxInput,
     source: &PreparedSourceView,
@@ -140,9 +144,22 @@ fn original_rows(
 impl Database {
     fn has_definition_rows(&self, rows: &BTreeMap<InputKey, InputValue>) -> bool {
         rows.iter().all(|(key, value)| {
-            self.inputs
-                .get(key)
-                .is_some_and(|current| current.fingerprint == value.fingerprint())
+            self.inputs.get(key).is_some_and(|current| {
+                current.fingerprint == value.fingerprint()
+                    && match (current.value.as_ref(), value) {
+                        (InputValue::DefinitionSource(a), InputValue::DefinitionSource(b)) => {
+                            a == b
+                        }
+                        (InputValue::DefinitionHeader(a), InputValue::DefinitionHeader(b)) => {
+                            a == b
+                        }
+                        (InputValue::DefinitionBody(a), InputValue::DefinitionBody(b)) => a == b,
+                        (InputValue::DeclarationContext(a), InputValue::DeclarationContext(b)) => {
+                            a == b
+                        }
+                        _ => false,
+                    }
+            })
         })
     }
     /// Replace this original member's source/header/body/context as one derived

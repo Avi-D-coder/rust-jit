@@ -168,6 +168,12 @@
       "bytes": 430
     },
     {
+      "path": "tests/ui/auto-traits/auto-is-contextual.rs",
+      "git_blob": "2183a8c110c6802f4474917322a9add9ec31a1c0",
+      "sha256": "3eae28bc6190bc568227cf1c5437745d2b55920116fe52b2834c39a661352cea",
+      "bytes": 202
+    },
+    {
       "path": "tests/ui/binding/expr-match-panic.rs",
       "git_blob": "b3adc80cb8e19a6bbbefce62f28a0de03a656b4f",
       "sha256": "15f74527aa06afe722c88a5b5234a43ba032c7e229b725f5b9e756e845d803da",
@@ -3186,6 +3192,14 @@
     {
       "path": "tests/ui/attributes/unknown-attr.rs",
       "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/auto-traits/auto-is-contextual.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"
     },

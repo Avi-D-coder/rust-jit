@@ -242,5 +242,13 @@
   "pending_cumulative_promotion": "held_even_if_V123_tests_pass",
   "production_repair_status": "in_progress_retained_syntax_source_admission_original_anchors_and_frame_source_ownership_components; actual_nonliteral_user_macro_body_executes_ordinary_lowering_in_all_four_editions; common_CLI_hygienic_name_pattern_integration_and_all_eight_shortcut_removals_still_pending",
   "guest_jit_allowed": false,
-  "repair_evidence": "worktracks/evidence/2026-10-15-common-retained-body-entry.json"
+  "repair_evidence": "worktracks/evidence/2026-10-15-common-retained-body-entry.json",
+  "latest_candidate_evidence": "worktracks/evidence/2026-10-15-common-retained-callables.json",
+  "latest_candidate_state": "failing_WIP; common call route3pass1fail on V6; mechanical V7 static successor pending; all8 shortcuts still present",
+  "next_common_prerequisites": [
+    "Install actual assembled syntax through normal source preparation before root/callee frame entry; no synthetic evaluator or name-selected fallback",
+    "Use the shared hygienic Type namespace for reached paths in retained sources, including casts; do not remove generated-origin refusals without authority",
+    "Implement common transactional pattern traversal and binding/guard/cleanup for match, conditional patterns and expanded Rust",
+    "Expand standard library macro source facets through the pinned adapter and delete alternate runtime evaluators/index/verifier tracks"
+  ]
 }

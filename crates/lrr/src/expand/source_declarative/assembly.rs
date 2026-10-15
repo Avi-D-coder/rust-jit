@@ -58,6 +58,9 @@ struct CallBinding {
     // Positions in this vector follow actual AST preorder. Origin keys alone
     // cannot distinguish repeated copies of an invocation in one expansion.
     invocation: Option<Digest>,
+    // Ordinary item discovery and declaration scans retain distinct issued
+    // request IDs for the same exact original syntax occurrence.
+    original_item_invocation: Option<Digest>,
     grammar: Option<GrammarSlot>,
     parent: Arc<DeclarationScan>,
     anchor: Digest,
@@ -188,6 +191,12 @@ impl SourceSyntaxAssembly {
             }
             calls.push(CallBinding {
                 invocation: producer.map(|p| p.identity),
+                original_item_invocation: source
+                    .outline()
+                    .item_invocations
+                    .iter()
+                    .find(|item| item.range == range && item.attribute_input.is_none())
+                    .map(|item| item.item_input),
                 grammar: producer.map(|p| p.grammar),
                 parent: scan.clone(),
                 anchor: anchor(call)?,
@@ -226,7 +235,6 @@ impl SourceSyntaxAssembly {
             || key
                 .procedural_epoch
                 .is_some_and(|epoch| epoch != self.epoch)
-            || output.parent_invocation() != key.invocation
             || Digest::of_bytes(&request.input.encode().map_err(adapter)?) != key.input_tokens
         {
             return Err(fault("source syntax issued request/record/epoch differs"));
@@ -234,18 +242,19 @@ impl SourceSyntaxAssembly {
         let position = self
             .calls
             .iter()
-            .position(|c| c.invocation == Some(key.invocation))
+            .position(|c| c.matches_invocation(key.invocation))
             .ok_or_else(|| fault("source syntax issued invocation is not pending"))?;
         if self
             .calls
             .iter()
             .skip(position + 1)
-            .any(|c| c.invocation == Some(key.invocation))
+            .any(|c| c.matches_invocation(key.invocation))
         {
             return Err(fault("source syntax invocation identity is ambiguous"));
         }
         let selected = &self.calls[position];
-        if output.parent_inventory() != selected.parent.fingerprint()
+        if selected.invocation != Some(output.parent_invocation())
+            || output.parent_inventory() != selected.parent.fingerprint()
             || selected.grammar != Some(key.grammar)
         {
             return Err(fault("source syntax output parent/grammar differs"));
@@ -367,6 +376,11 @@ impl SourceSyntaxAssembly {
         })
     }
 }
+impl CallBinding {
+    fn matches_invocation(&self, invocation: Digest) -> bool {
+        self.invocation == Some(invocation) || self.original_item_invocation == Some(invocation)
+    }
+}
 fn reserve_calls(calls: &mut Vec<CallBinding>, count: usize) -> Result<(), Diagnostic> {
     charge_calls(0, count)?;
     calls
@@ -419,6 +433,7 @@ fn generated_calls(
         }
         result.push(CallBinding {
             invocation: producer.map(|p| p.identity),
+            original_item_invocation: None,
             grammar: producer.map(|p| p.grammar),
             parent: scan.clone(),
             anchor: anchor(call)?,

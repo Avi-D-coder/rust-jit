@@ -603,7 +603,7 @@ mod tests {
     #[test]
     fn original_check_uses_actual_nested_type_receipt_with_generated_answer_all_editions() {
         for edition in [2015, 2018, 2021, 2024] {
-            let (db, _, _, publication, source) = prepared_config_retained(
+            let (mut db, _, _, publication, source) = prepared_config_retained(
                 "macro_rules! emit{()=>{pub fn answer()->i64{41_i64}}}emit!();fn check()->bool{answer()==41_i64}fn main(){assert!(check());}",
                 edition,
                 true,
@@ -634,7 +634,7 @@ mod tests {
                 .unwrap();
             let stamps = db.source_view_namespace_stamps().unwrap();
             NormalizedDeferredReturn::require_primitive_namespace(
-                &db,
+                &mut db,
                 &signature,
                 &[&source],
                 &stamps,

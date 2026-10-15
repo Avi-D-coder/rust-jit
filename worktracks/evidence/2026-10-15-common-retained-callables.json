@@ -1,0 +1,674 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T22:01:54.601053+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "M014",
+    "T024",
+    "T032",
+    "T063"
+  ],
+  "erratum": "E-R5-005",
+  "source_baseline": "a29db4db4f7380193943ba3eb0bfe65b75eee496",
+  "state": "failing_source_candidate_not_accepted",
+  "scope": "Normal original module-name selection can project exact admitted retained original source/header/body/context while preserving the original DefKey and current epoch/seal ownership. Genuine issued module requests attach to the same actual source occurrence as declaration-scan requests. Unchanged semantic return headers retain existing certified Type-namespace checks. No macro-selected runtime semantics added. CLI orchestration, hygienic general Type/name/pattern integration and removal of every audited shortcut remain outstanding.",
+  "source_packet": "artifacts/macos-first/common-retained-callables-v6/SOURCE.json",
+  "source_packet_sha256": "28f96fed85a423d4fcc305540dca5b9f99236ed19f792e2e7457790be42fe1f6",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "4fdc298e947188c58f9b417cada8e958fa56e411eb78d0707fd7243d09ae99d8"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_body_inputs.rs",
+      "sha256": "60c5fcb856f5ab9dd61e371144245dacfd750ef0472c95fff77023ca5b6f315f"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_callables.rs",
+      "sha256": "e082aa4465b2bda803d41fc2af655150e882b537a7069bc7433ab9851528b7f9"
+    },
+    {
+      "path": "crates/lrr/src/frontend/callables.rs",
+      "sha256": "fac1efc5a069bf72449fac5d2cb15a24950dcd0f9763ddc434eff46b69d24ecc"
+    },
+    {
+      "path": "crates/lrr/src/frontend/lexical_callables.rs",
+      "sha256": "d8ef022893b132eb091d088f96497c36e5c61eb85c90e087673c87e914736528"
+    },
+    {
+      "path": "crates/lrr/src/service/mod.rs",
+      "sha256": "a94f8838ce677cd06f99bc6db15474610396dd0cde715fb617e4f6617471c7e2"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_body_tests.rs",
+      "sha256": "cf1846cab1872870341bb0ceb21b5c93132e891a8e82926fb42f4d4677bcc033"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_callable_tests.rs",
+      "sha256": "93f80c99af5ac14606f9eed35a1182ebd7dc5b83338a8226005f4caed949312c"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-is-contextual.rs",
+      "sha256": "3eae28bc6190bc568227cf1c5437745d2b55920116fe52b2834c39a661352cea"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/manifest.json",
+      "sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "63cefb09ff51a5e60eb59f24fb259ccd5624c0216246c355ad2d47ed25463543"
+    },
+    {
+      "path": "crates/lrr/src/frontend/call_contracts.rs",
+      "sha256": "943180165913dfc0a55d44e552e27d6e8b023a13be3e74829a2e612fea49260c"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_result_namespace.rs",
+      "sha256": "b509dbf023d1f48696645727dea95a0cf3462afb368ccf5bdfd75f5f77923daa"
+    }
+  ],
+  "attempts": [
+    {
+      "version": 1,
+      "terminal": "artifacts/macos-first/sol-common-retained-callables-validation-v1/callables-new/terminal.json",
+      "terminal_sha256": "de0d31ca3db4d8c4d008697f49466b628849a4991c68cec06e1a8f3e5ad9e1d6",
+      "actual": {
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "service::retained_callable_tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "exit_code": 101,
+        "elapsed_seconds": 15.144890499999747,
+        "source_before": {
+          "source_member": "b25a7a434612ec4bd7fe2b6cabad86b5674951fdcb44e43f0bc7066ebc3dbc8d",
+          "frozen_files": 4913,
+          "symlinks": 3,
+          "owner_sha256": "b6bc587d40cc18df61f748f926e24955687bd37209ea1b23935b58dafc8547b0",
+          "raw_files": 510,
+          "cases": 324,
+          "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 61901967360
+        },
+        "source_after": {
+          "source_member": "b25a7a434612ec4bd7fe2b6cabad86b5674951fdcb44e43f0bc7066ebc3dbc8d",
+          "frozen_files": 4913,
+          "symlinks": 3,
+          "owner_sha256": "b6bc587d40cc18df61f748f926e24955687bd37209ea1b23935b58dafc8547b0",
+          "raw_files": 510,
+          "cases": 324,
+          "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 61900742656
+        },
+        "source_unchanged": true,
+        "tests": [],
+        "bodies": 0,
+        "passed": 0,
+        "failed": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "06d6c066f68d41d754192ac0011948721922936e008e87dbabee73bf749cedcb"
+      },
+      "RELEASE.json": {
+        "path": "artifacts/macos-first/sol-common-retained-callables-validation-v1/RELEASE.json",
+        "sha256": "10e40728d32f64a9f1ab6b59eca26416cef9888fda3bcfe6f400adf8fcc1f303"
+      },
+      "HANDOFF.md": {
+        "path": "artifacts/macos-first/sol-common-retained-callables-validation-v1/HANDOFF.md",
+        "sha256": "51ac41d1a9979adc5208eee67cda7effc67af3dfd66b2fc2dd85072edbe75233"
+      }
+    },
+    {
+      "version": 2,
+      "terminal": "artifacts/macos-first/sol-common-retained-callables-validation-v2/callables-new/terminal.json",
+      "terminal_sha256": "a5363d5fc32fbecec5c7bdb38d6a0c7ead6f477ad41afb71d44854095575c264",
+      "actual": {
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "service::retained_callable_tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "exit_code": 101,
+        "elapsed_seconds": 20.211990749987308,
+        "source_before": {
+          "source_member": "c00302e91359a01c5b773cc403e4952a474c7d92607e3c83542262ea2ee6c831",
+          "frozen_files": 4913,
+          "symlinks": 3,
+          "owner_sha256": "d0fef2dece39f75c48848a4a7b390dcb2d90cce1da4c0996b36f490cc43105c3",
+          "raw_files": 510,
+          "cases": 324,
+          "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 61757136896
+        },
+        "source_after": {
+          "source_member": "c00302e91359a01c5b773cc403e4952a474c7d92607e3c83542262ea2ee6c831",
+          "frozen_files": 4913,
+          "symlinks": 3,
+          "owner_sha256": "d0fef2dece39f75c48848a4a7b390dcb2d90cce1da4c0996b36f490cc43105c3",
+          "raw_files": 510,
+          "cases": 324,
+          "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 61757718528
+        },
+        "source_unchanged": true,
+        "tests": [
+          {
+            "name": "service::retained_callable_tests::ordinary_calls_enter_retained_callee_from_original_and_retained_callers_all_editions",
+            "result": "FAILED"
+          },
+          {
+            "name": "service::retained_callable_tests::retained_callable_revalidation_refuses_an_old_expansion_epoch_before_entry",
+            "result": "ok"
+          },
+          {
+            "name": "service::retained_callable_tests::retained_syntax_alone_cannot_retarget_a_selected_original_callable",
+            "result": "ok"
+          },
+          {
+            "name": "service::retained_callable_tests::unchanged_upstream_contextual_macro_name_calls_the_original_retained_function",
+            "result": "FAILED"
+          }
+        ],
+        "bodies": 4,
+        "passed": 2,
+        "failed": 2,
+        "stdout_sha256": "e08e1d66d5a0a368e2008c94be88237a8cbc5085083ada85c28bbff0a0dcbd3c",
+        "stderr_sha256": "b8a4e1bddc33845f61ed50fc058389155bcb7d947c128436a697b2a0143352e1"
+      },
+      "RELEASE.json": {
+        "path": "artifacts/macos-first/sol-common-retained-callables-validation-v2/RELEASE.json",
+        "sha256": "acfa9abafa37a50b9ee23f041add441ee211f9d23579bbef39b305d16a45cb2a"
+      },
+      "HANDOFF.md": {
+        "path": "artifacts/macos-first/sol-common-retained-callables-validation-v2/HANDOFF.md",
+        "sha256": "7df57b9445fc3323f245523a9ec12344aee69323f44c039c23e00bf40e981f01"
+      }
+    },
+    {
+      "version": 3,
+      "terminal": "artifacts/macos-first/sol-common-retained-callables-validation-v3/callables-new/terminal.json",
+      "terminal_sha256": "128f3bd5b9882a5d4dd99794168084257249cc7cfb7f17f89e8a7b47dcfdb09d",
+      "actual": {
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "service::retained_callable_tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "exit_code": 101,
+        "elapsed_seconds": 19.787369375000708,
+        "source_before": {
+          "source_member": "2d0bdc2caafce00f898b5bb9c9797420ac93620d2bb6f1af53f7bb46c3ae81a1",
+          "frozen_files": 4913,
+          "symlinks": 3,
+          "owner_sha256": "e7077e3af3202ad8a8005d932829f91676a732af3b070328c76dbad4a651ab8c",
+          "raw_files": 510,
+          "cases": 324,
+          "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 61603311616
+        },
+        "source_after": {
+          "source_member": "2d0bdc2caafce00f898b5bb9c9797420ac93620d2bb6f1af53f7bb46c3ae81a1",
+          "frozen_files": 4913,
+          "symlinks": 3,
+          "owner_sha256": "e7077e3af3202ad8a8005d932829f91676a732af3b070328c76dbad4a651ab8c",
+          "raw_files": 510,
+          "cases": 324,
+          "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 61604286464
+        },
+        "source_unchanged": true,
+        "tests": [
+          {
+            "name": "service::retained_callable_tests::ordinary_calls_enter_retained_callee_from_original_and_retained_callers_all_editions",
+            "result": "FAILED"
+          },
+          {
+            "name": "service::retained_callable_tests::retained_callable_revalidation_refuses_an_old_expansion_epoch_before_entry",
+            "result": "ok"
+          },
+          {
+            "name": "service::retained_callable_tests::retained_syntax_alone_cannot_retarget_a_selected_original_callable",
+            "result": "ok"
+          },
+          {
+            "name": "service::retained_callable_tests::unchanged_upstream_contextual_macro_name_calls_the_original_retained_function",
+            "result": "FAILED"
+          }
+        ],
+        "bodies": 4,
+        "passed": 2,
+        "failed": 2,
+        "stdout_sha256": "0469c12adf19736f13f112cf53f23319e43420c9ec71a04fbd0d47dd1bf7174b",
+        "stderr_sha256": "d7e76fa3921567b13d75852eb3ec4a3f2702664a07817f9777b21fcf5077717b"
+      },
+      "RELEASE.json": {
+        "path": "artifacts/macos-first/sol-common-retained-callables-validation-v3/RELEASE.json",
+        "sha256": "bac81cb3d131fe07af8fc008543072b040ff9d15316c5919fd6dca69f202bca4"
+      },
+      "HANDOFF.md": {
+        "path": "artifacts/macos-first/sol-common-retained-callables-validation-v3/HANDOFF.md",
+        "sha256": "06eb8b5c6d56aba034c66fb7840787fb4bd63ae5dcf1f0ddc49b5104d5a1db94"
+      }
+    },
+    {
+      "version": 4,
+      "terminal": "artifacts/macos-first/sol-common-retained-callables-validation-v4/callables-new/terminal.json",
+      "terminal_sha256": "1c63d8032446d1215b48aa5bc4cd57fdad53f2c8124e930dc0b9690702e59e3a",
+      "actual": {
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "service::retained_callable_tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "exit_code": 101,
+        "elapsed_seconds": 9.184323624998797,
+        "source_before": {
+          "source_member": "bf80f33c7a65667fd49630a5b0465cc42f07c42fba10d0cdba6c2e09ba304d1e",
+          "frozen_files": 4913,
+          "symlinks": 3,
+          "owner_sha256": "fbd318fd6f205579388e3dff3609f7578f02df54b8092afb09bdd2d1dda05836",
+          "raw_files": 510,
+          "cases": 324,
+          "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 61466021888
+        },
+        "source_after": {
+          "source_member": "bf80f33c7a65667fd49630a5b0465cc42f07c42fba10d0cdba6c2e09ba304d1e",
+          "frozen_files": 4913,
+          "symlinks": 3,
+          "owner_sha256": "fbd318fd6f205579388e3dff3609f7578f02df54b8092afb09bdd2d1dda05836",
+          "raw_files": 510,
+          "cases": 324,
+          "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 61470277632
+        },
+        "source_unchanged": true,
+        "tests": [],
+        "bodies": 0,
+        "passed": 0,
+        "failed": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "137c4fe3eb169e836dfe64da5879fc0868b0e7a72a71f1916d49e4cdc4c2455b"
+      },
+      "RELEASE.json": {
+        "path": "artifacts/macos-first/sol-common-retained-callables-validation-v4/RELEASE.json",
+        "sha256": "740bc4005c252e6d75f1ddfa558786d17b1e3842b771b2acbacc6f259937f22f"
+      },
+      "HANDOFF.md": {
+        "path": "artifacts/macos-first/sol-common-retained-callables-validation-v4/HANDOFF.md",
+        "sha256": "ec951bc2c3c04efec0a186d47035ef58b7022e00232d1814768bd1102dc31644"
+      }
+    },
+    {
+      "version": 5,
+      "terminal": "artifacts/macos-first/sol-common-retained-callables-validation-v5/callables-new/terminal.json",
+      "terminal_sha256": "5022eeac07a7a9938360c824a5c725ee0b7f45108fa6693fa1e98ca07a760ae6",
+      "actual": {
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "service::retained_callable_tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "exit_code": 101,
+        "elapsed_seconds": 20.285862499993527,
+        "source_before": {
+          "source_member": "4656a8bdee2e4bfefc650cc58a183a400fe56498ac6a1ec679e8885285f68288",
+          "frozen_files": 4913,
+          "symlinks": 3,
+          "owner_sha256": "b1a66282841f3b0c97a9f2fdfc2ad21b553b62101a941d119a9007623abed913",
+          "raw_files": 510,
+          "cases": 324,
+          "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 61321928704
+        },
+        "source_after": {
+          "source_member": "4656a8bdee2e4bfefc650cc58a183a400fe56498ac6a1ec679e8885285f68288",
+          "frozen_files": 4913,
+          "symlinks": 3,
+          "owner_sha256": "b1a66282841f3b0c97a9f2fdfc2ad21b553b62101a941d119a9007623abed913",
+          "raw_files": 510,
+          "cases": 324,
+          "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 61320814592
+        },
+        "source_unchanged": true,
+        "tests": [
+          {
+            "name": "service::retained_callable_tests::ordinary_calls_enter_retained_callee_from_original_and_retained_callers_all_editions",
+            "result": "ok"
+          },
+          {
+            "name": "service::retained_callable_tests::retained_callable_revalidation_refuses_an_old_expansion_epoch_before_entry",
+            "result": "ok"
+          },
+          {
+            "name": "service::retained_callable_tests::retained_syntax_alone_cannot_retarget_a_selected_original_callable",
+            "result": "ok"
+          },
+          {
+            "name": "service::retained_callable_tests::unchanged_upstream_contextual_macro_name_calls_the_original_retained_function",
+            "result": "FAILED"
+          }
+        ],
+        "bodies": 4,
+        "passed": 3,
+        "failed": 1,
+        "stdout_sha256": "cdd59c1a507bfe8b1a962cf7f58af3a72d937dc6a469c4735240db30966bd756",
+        "stderr_sha256": "9e5ecad45031ad4bf78c56ff93e10cec7a0022347ed6df61afd5db426ba1c0dd"
+      },
+      "RELEASE.json": {
+        "path": "artifacts/macos-first/sol-common-retained-callables-validation-v5/RELEASE.json",
+        "sha256": "c0a6cb6433ff6e8712eeec8a29c6ebe3a5f8e999e10b15e6155152c2b8be13eb"
+      },
+      "HANDOFF.md": {
+        "path": "artifacts/macos-first/sol-common-retained-callables-validation-v5/HANDOFF.md",
+        "sha256": "dc85845fa0d677f5a3ac56e8e393527de00a32495d59aade9d84921cb257cd27"
+      }
+    },
+    {
+      "version": 6,
+      "terminal": "artifacts/macos-first/sol-common-retained-callables-validation-v6/callables-new/terminal.json",
+      "terminal_sha256": "5f11b7501d5e4a61abec0bff99ca2194ac6e693fc0be01a7dc393a501eb45760",
+      "actual": {
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "service::retained_callable_tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "exit_code": 101,
+        "elapsed_seconds": 20.45469754197984,
+        "source_before": {
+          "source_member": "2676238113f2f2f2633e24eb57ede724cafb66416e5bca7dac2e8e96bc4f2297",
+          "frozen_files": 4913,
+          "symlinks": 3,
+          "owner_sha256": "a22cca41831accd64b5b950c6643f37cd11a10c657e1099081d070a6daec3cc0",
+          "raw_files": 510,
+          "cases": 324,
+          "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 61172019200
+        },
+        "source_after": {
+          "source_member": "2676238113f2f2f2633e24eb57ede724cafb66416e5bca7dac2e8e96bc4f2297",
+          "frozen_files": 4913,
+          "symlinks": 3,
+          "owner_sha256": "a22cca41831accd64b5b950c6643f37cd11a10c657e1099081d070a6daec3cc0",
+          "raw_files": 510,
+          "cases": 324,
+          "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 61173362688
+        },
+        "source_unchanged": true,
+        "tests": [
+          {
+            "name": "service::retained_callable_tests::ordinary_calls_enter_retained_callee_from_original_and_retained_callers_all_editions",
+            "result": "ok"
+          },
+          {
+            "name": "service::retained_callable_tests::retained_callable_revalidation_refuses_an_old_expansion_epoch_before_entry",
+            "result": "ok"
+          },
+          {
+            "name": "service::retained_callable_tests::retained_syntax_alone_cannot_retarget_a_selected_original_callable",
+            "result": "ok"
+          },
+          {
+            "name": "service::retained_callable_tests::unchanged_upstream_contextual_macro_name_calls_the_original_retained_function",
+            "result": "FAILED"
+          }
+        ],
+        "bodies": 4,
+        "passed": 3,
+        "failed": 1,
+        "stdout_sha256": "c55d49b632725f05393cc690d70f01e6e235b87aad7156967e712e0d42648119",
+        "stderr_sha256": "6fc4571a3e7a655d2c92f60502c304fd6f98d01d090aa3e5a7554d53d8d06d84"
+      },
+      "RELEASE.json": {
+        "path": "artifacts/macos-first/sol-common-retained-callables-validation-v6/RELEASE.json",
+        "sha256": "c54139cf9c6fcfc158b82b4aa244f3d3dcabb3f6e6ac8cb43db30dcf0ee703b1"
+      },
+      "HANDOFF.md": {
+        "path": "artifacts/macos-first/sol-common-retained-callables-validation-v6/HANDOFF.md",
+        "sha256": "3e42247d8b726d1117a7a97849e79b8f601281977d322b213b0f376fef167cd6"
+      },
+      "ASSEMBLY-PREFLIGHT-FAILURE.json": {
+        "path": "artifacts/macos-first/sol-common-retained-callables-validation-v6/ASSEMBLY-PREFLIGHT-FAILURE.json",
+        "sha256": "87c549afc392a100d8bd486818bd9c00e9efe09a67bd0543d65426fee1928f16"
+      }
+    }
+  ],
+  "remaining_failure": {
+    "fixture": "tests/ui/auto-traits/auto-is-contextual.rs",
+    "unchanged_original": true,
+    "code": "LRR-E-UNSUPPORTED",
+    "message": "cast target requires symbolic type resolution",
+    "source_review": "syntax/primitive_cast_target.rs::resolve refuses every generated_origin, including admitted retained syntax. V5 original caller also conservatively refused an unresolved item macro in its lexical Type namespace. V6 retains both actual original function bodies before entry; it still correctly refuses without common hygienic Type authority. No cast-name/macro-specific bypass has been added.",
+    "v6_relative_range": [
+      24,
+      32
+    ],
+    "diagnostic_locations": []
+  },
+  "acceptance": {
+    "new_upstream_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "all_eight_shortcuts_removed": false,
+    "common_cli_integration": false,
+    "task_completed": false,
+    "guest_jit_allowed": false
+  },
+  "strict_static_validation": "separately_requested_pending_actual_terminal",
+  "preserved_milestone_failure": "AssemblyV3:2833 passed,1 failed,425 unstarted; no new full milestone run",
+  "current_mechanical_successor": {
+    "source_packet": "artifacts/macos-first/common-retained-callables-v7/SOURCE.json",
+    "source_packet_sha256": "6d502d87dfa3a879d8b8ea8634db8837805b376d1d587cbf97beed51b5aa8f1e",
+    "source_files": [
+      {
+        "path": "crates/lrr/src/db/memo.rs",
+        "sha256": "4fdc298e947188c58f9b417cada8e958fa56e411eb78d0707fd7243d09ae99d8"
+      },
+      {
+        "path": "crates/lrr/src/db/retained_body_inputs.rs",
+        "sha256": "60c5fcb856f5ab9dd61e371144245dacfd750ef0472c95fff77023ca5b6f315f"
+      },
+      {
+        "path": "crates/lrr/src/db/retained_callables.rs",
+        "sha256": "e082aa4465b2bda803d41fc2af655150e882b537a7069bc7433ab9851528b7f9"
+      },
+      {
+        "path": "crates/lrr/src/frontend/callables.rs",
+        "sha256": "134f3d0cdf762ae316d060ef63e4e62a4b1dfdf392abf78db8967a2fea6b3627"
+      },
+      {
+        "path": "crates/lrr/src/frontend/lexical_callables.rs",
+        "sha256": "d8ef022893b132eb091d088f96497c36e5c61eb85c90e087673c87e914736528"
+      },
+      {
+        "path": "crates/lrr/src/service/mod.rs",
+        "sha256": "a94f8838ce677cd06f99bc6db15474610396dd0cde715fb617e4f6617471c7e2"
+      },
+      {
+        "path": "crates/lrr/src/service/retained_body_tests.rs",
+        "sha256": "cf1846cab1872870341bb0ceb21b5c93132e891a8e82926fb42f4d4677bcc033"
+      },
+      {
+        "path": "crates/lrr/src/service/retained_callable_tests.rs",
+        "sha256": "93f80c99af5ac14606f9eed35a1182ebd7dc5b83338a8226005f4caed949312c"
+      },
+      {
+        "path": "fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-is-contextual.rs",
+        "sha256": "3eae28bc6190bc568227cf1c5437745d2b55920116fe52b2834c39a661352cea"
+      },
+      {
+        "path": "fixtures/upstream/rustc-checkout/manifest.json",
+        "sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8"
+      },
+      {
+        "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+        "sha256": "63cefb09ff51a5e60eb59f24fb259ccd5624c0216246c355ad2d47ed25463543"
+      },
+      {
+        "path": "crates/lrr/src/frontend/call_contracts.rs",
+        "sha256": "943180165913dfc0a55d44e552e27d6e8b023a13be3e74829a2e612fea49260c"
+      },
+      {
+        "path": "crates/lrr/src/frontend/generated_result_namespace.rs",
+        "sha256": "b509dbf023d1f48696645727dea95a0cf3462afb368ccf5bdfd75f5f77923daa"
+      }
+    ],
+    "change": "Conservative metadata overflow accounting uses saturating_add rather than checked_add/unwrap_or(MAX), as required by actual V6 strict Clippy failure. Same overflow refusal semantics; no test-body rerun on V7, runtime failure remains outstanding.",
+    "validation": "strict_static_only_pending_actual_terminal"
+  },
+  "v6_separate_static_failure": {
+    "terminal": "artifacts/macos-first/sol-common-retained-callables-validation-v6/strict-workspace/terminal.json",
+    "sha256": "afdbbea8eda03a1ddf8844f5ed779010ece6a3c62c13edd449c6761457582a2e",
+    "actual": {
+      "exit_code": 101,
+      "elapsed_seconds": 12.014245209022192,
+      "finished_at": "2026-10-15T22:01:41.249993+00:00",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "--offline",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "source_before": {
+        "source_member": "2676238113f2f2f2633e24eb57ede724cafb66416e5bca7dac2e8e96bc4f2297",
+        "frozen_files": 4913,
+        "symlinks": 3,
+        "owner_sha256": "a22cca41831accd64b5b950c6643f37cd11a10c657e1099081d070a6daec3cc0",
+        "raw_files": 510,
+        "cases": 324,
+        "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+        "licenses": {
+          "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+          "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+        },
+        "free_bytes": 61166448640
+      },
+      "source_after": {
+        "source_member": "2676238113f2f2f2633e24eb57ede724cafb66416e5bca7dac2e8e96bc4f2297",
+        "frozen_files": 4913,
+        "symlinks": 3,
+        "owner_sha256": "a22cca41831accd64b5b950c6643f37cd11a10c657e1099081d070a6daec3cc0",
+        "raw_files": 510,
+        "cases": 324,
+        "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+        "licenses": {
+          "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+          "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+        },
+        "free_bytes": 61167489024
+      },
+      "source_unchanged": true,
+      "tests": [],
+      "bodies": 0,
+      "passed": 0,
+      "failed": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "241441ab633283be61f619d4fbc6e51dde6e0825b9b04a8d2ed677776f73d0b4",
+      "architectural_hold": "E-R5-005 remains; retained-callable component only, no CLI/common-engine/architecture acceptance"
+    }
+  }
+}
