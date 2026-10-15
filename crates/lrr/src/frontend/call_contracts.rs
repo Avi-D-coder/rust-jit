@@ -207,7 +207,11 @@ impl NormalizedDeferredReturn {
             ));
         }
         let stamps = db.source_view_namespace_stamps()?;
-        if stamps.is_empty() || stamps.len() > 4096 {
+        // The coordinator already checks the full input census at100k rows and
+        //32MiB.4096 below bounds captured sources, not their derived input rows:
+        // one valid module contributes several independent source/scope facts.
+        // Keep every fingerprint; do not truncate the namespace to fit a source count.
+        if stamps.is_empty() || stamps.len() > Database::SOURCE_VIEW_INPUT_LIMIT {
             return Err(fault(
                 "LRR-E-METADATA-LIMIT",
                 "primitive result namespace dependency count",
@@ -622,7 +626,14 @@ impl NormalizedDeferredReturn {
             || contracts.result_descriptor != Some(self.descriptor)
             || primitive_runtime_id(self.source)? != self.descriptor
             || self.dependencies.is_empty()
-            || self.dependencies.len() > 4096
+            || self.dependencies.len()
+                > match self.origin {
+                    DeferredReturnOrigin::PrimitiveNamespace => Database::SOURCE_VIEW_INPUT_LIMIT,
+                    _ => 4096,
+                }
+            || self
+                .metadata_bytes()
+                .is_none_or(|bytes| bytes > 32 * 1024 * 1024)
             || self.dependencies.windows(2).any(|p| p[0] >= p[1])
         {
             return Err(fault(

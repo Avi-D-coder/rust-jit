@@ -1343,6 +1343,74 @@ impl MacroNamespaces {
             .filter_map(|path| path.components.last().cloned())
             .collect()
     }
+    /// A finite candidate subset only. Every result still needs ordinary
+    /// lookup/visibility/frontier checks. None requests the unchanged global
+    /// universe, including any original diagnostic on an unusual scope.
+    pub(super) fn scoped_member_names(
+        &self,
+        scope: &ScopeKey,
+        edition: u16,
+    ) -> Option<BTreeSet<MacroName>> {
+        if scope.owner.is_some() || !matches!(edition, 2015 | 2018 | 2021 | 2024) {
+            return None;
+        }
+        let prefix = super::source_macro_routes::module_names(&scope.module_path, edition).ok()?;
+        if prefix.len() >= 256 {
+            return None;
+        }
+        // A rewritten, ambiguous, denied or missing module may produce
+        // non-Absent outcomes for spellings with no local destination row.
+        match self
+            .lookup_module_from(scope.crate_key, &prefix, scope)
+            .ok()?
+        {
+            ModuleLookup::Defined {
+                unit, components, ..
+            } if unit == scope.crate_key && components == prefix => {}
+            _ => return None,
+        }
+        // This transient map lower bound is not published or used as a lookup
+        // path. Only here may its component prefix be empty for a crate root.
+        let start = MacroPath {
+            unit: scope.crate_key,
+            components: prefix.clone(),
+        };
+        let inside = |path: &&MacroPath| {
+            path.unit == scope.crate_key && path.components.starts_with(&prefix)
+        };
+        let mut names = BTreeSet::new();
+        for path in self
+            .bindings
+            .range(start.clone()..)
+            .map(|(path, _)| path)
+            .take_while(inside)
+        {
+            if path.components.len() == prefix.len() + 1 {
+                names.insert(path.components.last()?.clone());
+            }
+        }
+        for (path, targets) in self.glob_reexports.range(start..).take_while(|(path, _)| {
+            path.unit == scope.crate_key && path.components.starts_with(&prefix)
+        }) {
+            if path.components.len() != prefix.len() + 1 {
+                continue;
+            }
+            let name = path.components.last()?;
+            if !names.contains(name) {
+                // The old universe contains binding spellings, not arbitrary
+                // weak destinations. A real same-spelling target row proves
+                // inclusion without an all-global scan. Complex/cyclic/renamed
+                // manual weak edges conservatively keep old enumeration.
+                if !targets.keys().any(|target| {
+                    target.components.last() == Some(name) && self.bindings.contains_key(target)
+                }) {
+                    return None;
+                }
+                names.insert(name.clone());
+            }
+        }
+        Some(names)
+    }
     pub fn pending(&mut self, path: MacroPath, invocation: Digest) -> Result<(), Diagnostic> {
         if self
             .bindings

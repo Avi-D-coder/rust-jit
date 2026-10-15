@@ -83,10 +83,12 @@ impl TypeScopeReceipt {
         db: &Database,
         publication: &DiscoveryInput,
     ) -> Result<(), Diagnostic> {
+        // This immutable searched receipt does not change across candidates.
+        let fingerprint = self.fingerprint();
         if !publication
             .type_scopes
             .iter()
-            .any(|proof| proof.fingerprint() == self.fingerprint())
+            .any(|proof| proof.fingerprint() == fingerprint)
         {
             return Err(Diagnostic::new(
                 "LRR-E-CALL-CONTEXT",
@@ -116,7 +118,7 @@ impl TypeScopeReceipt {
                 "Type receipt scope/profile/frontier differs".into(),
             ));
         }
-        if !matches!(db.published_input(&InputKey::DiscoverySeal(publication.seal.key())), Some((InputValue::DiscoverySeal(current), _)) if current.fingerprint() == publication.fingerprint())
+        if !matches!(db.published_input(&InputKey::DiscoverySeal(publication.seal.key())), Some((InputValue::DiscoverySeal(current), _)) if std::ptr::eq(current.as_ref(),publication) || current.fingerprint() == publication.fingerprint())
         {
             return Err(Diagnostic::new(
                 "LRR-E-CALL-CONTEXT",
@@ -393,6 +395,8 @@ impl SourceDiscovery {
         }
         let mut receipts = Vec::new();
         let mut bytes = 0usize;
+        // One exact immutable seal is the parent of every receipt in this batch.
+        let parent = seal.fingerprint();
         for (scope, profile) in owners {
             let Some(profile) = profile else {
                 continue;
@@ -408,7 +412,7 @@ impl SourceDiscovery {
                     Err(error) => return Err(error),
                 };
             let proof = TypeScopeReceipt {
-                parent: seal.fingerprint(),
+                parent,
                 universe,
                 profile,
                 compiler_world: compiler_world.clone(),
@@ -427,3 +431,7 @@ impl SourceDiscovery {
         Ok(receipts)
     }
 }
+
+#[cfg(test)]
+#[path = "type_scope_receipt_encoding_tests.rs"]
+mod encoding_tests;

@@ -11619,3 +11619,43 @@ test = "unchanged_char_comparison_component_and_closed_comparisons_retain_intrin
 id = "T025-OPERATOR-SOURCE-6"
 path = "crates/lrr/src/vm/primitive_operator_result_source_tests.rs"
 test = "unchanged_runtime_comparison_main_executes_three_original_assertions_all_explicit_editions"
+
+[[fixture]]
+id = "T041-NAMESPACE-SCALABILITY-1"
+path = "crates/lrr/src/frontend/names_scoped_candidates_tests.rs"
+test = "many_actual_unrelated_modules_do_not_become_scope_candidates_all_editions"
+
+[[fixture]]
+id = "T041-NAMESPACE-SCALABILITY-2"
+path = "crates/lrr/src/frontend/names_scoped_candidates_tests.rs"
+test = "actual_named_renamed_glob_shadow_and_visibility_worlds_equal_old_global"
+
+[[fixture]]
+id = "T041-NAMESPACE-SCALABILITY-3"
+path = "crates/lrr/src/frontend/names_scoped_candidates_tests.rs"
+test = "aliases_module_roots_ambiguity_and_missing_scope_keep_old_fallback"
+
+[[fixture]]
+id = "T041-NAMESPACE-SCALABILITY-4"
+path = "crates/lrr/src/frontend/names_scoped_candidates_tests.rs"
+test = "genuine_frontier_and_pending_binding_refusal_equal_old_global"
+
+[[fixture]]
+id = "T041-NAMESPACE-SCALABILITY-5"
+path = "crates/lrr/src/frontend/names_scoped_candidates_tests.rs"
+test = "weak_destination_spelling_requires_real_old_binding_universe_evidence"
+
+[[fixture]]
+id = "T041-NAMESPACE-SCALABILITY-6"
+path = "crates/lrr/src/frontend/names_scoped_candidates_tests.rs"
+test = "raw_keyword_module_names_and_empty_universe_preserve_old_diagnostics"
+
+[[fixture]]
+id = "T025-NAMESPACE-SCALABILITY-7"
+path = "crates/lrr/src/expand/source_discovery/type_scope_receipt_encoding_tests.rs"
+test = "actual_published_type_receipt_and_distinct_immutable_copy_replay_identically_all_editions"
+
+[[fixture]]
+id = "T025-NAMESPACE-SCALABILITY-8"
+path = "crates/lrr/src/expand/source_discovery/type_scope_receipt_encoding_tests.rs"
+test = "actual_same_publication_row_still_refuses_after_current_epoch_changes"

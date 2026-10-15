@@ -291,7 +291,27 @@
       }
     }
   ],
-  "integrated_milestone": "pending; preceding 984/8/2060 failure remains retained",
+  "integrated_milestone": {
+    "passed": false,
+    "source_member": "cb4a0f453f72faa638f56b548301b578bf0d7e49ee89bb2595f930f57dc7855f",
+    "actual_terminal": {
+      "session_id": 92831,
+      "chunk_id": "7c42ad",
+      "wrapper_exit": 1,
+      "cargo_gate_exit": 1
+    },
+    "listed": 3092,
+    "passed_checks": 1274,
+    "failed_checks": 1,
+    "unexecuted": 1817,
+    "full_library_passed": 979,
+    "discovery_CLI_passed": 21,
+    "failed_test": "cli_many_captured_plain_modules_do_not_consume_runtime_macro_contexts",
+    "diagnostic": "LRR-E-MACRO-TIMEOUT: cumulative macro expansion deadline expired",
+    "source_unchanged": true,
+    "deadline_relaxed": false,
+    "next_action": "profile retained1040-module witness and repair demonstrated redundant preparation work"
+  },
   "imported_cases": 302,
   "unchanged_original_files": 484,
   "new_imported_cases_not_full_main_accepted": [
@@ -317,6 +337,11 @@
     {
       "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v22/VALIDATION-HANDOFF.json",
       "sha256": "8c2a4783e46a7ca8b8b549e0e5311af5f979965b7c18d2a9cf667ff5782233f9"
+    },
+    {
+      "path": "artifacts/macos-first/root-main-v69-integration-validation-v1/agent-validation-v4/VALIDATION-HANDOFF.json",
+      "sha256": "31ef8b657a6aaec09bf6aee270c8f12fc336a0cc6939d515e0d994e3062ff869"
     }
-  ]
+  ],
+  "canonical_commit": "b5015cd71fdc48766f3364590b9201c11656859b"
 }

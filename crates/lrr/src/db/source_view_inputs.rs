@@ -2,6 +2,8 @@
 use super::*;
 use crate::core::digest::StableEncode;
 impl Database {
+    /// Full source-view input rows; each captured source contributes multiple rows.
+    pub(crate) const SOURCE_VIEW_INPUT_LIMIT: usize = 100_000;
     pub(crate) fn source_view_namespace_stamps(
         &self,
     ) -> Result<BTreeMap<InputKey, Digest>, Diagnostic> {
@@ -9,7 +11,7 @@ impl Database {
         let mut stamps = BTreeMap::new();
         let mut bytes = 0usize;
         for (key, row) in &self.inputs {
-            if stamps.len() >= 100_000 {
+            if stamps.len() >= Self::SOURCE_VIEW_INPUT_LIMIT {
                 return Err(fault(
                     "LRR-E-METADATA-LIMIT",
                     "source-view current input count limit",

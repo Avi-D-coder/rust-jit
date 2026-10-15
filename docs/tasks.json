@@ -1451,7 +1451,9 @@
         "result_capacity_refusal_leaves_no_allocated_result_or_source_after_pure_preflight",
         "rigid_or_wrong_operand_source_and_rigid_result_refuse_before_fuel_or_owning_change",
         "unchanged_char_comparison_component_and_closed_comparisons_retain_intrinsic_bool_all_editions",
-        "unchanged_runtime_comparison_main_executes_three_original_assertions_all_explicit_editions"
+        "unchanged_runtime_comparison_main_executes_three_original_assertions_all_explicit_editions",
+        "actual_published_type_receipt_and_distinct_immutable_copy_replay_identically_all_editions",
+        "actual_same_publication_row_still_refuses_after_current_epoch_changes"
       ],
       "acceptance_contract": "exhaustive i8/u8 arithmetic boundary loops; random wider arithmetic/cast comparisons; works/fails context examples; signed-min literal; distinct usize/u64 contracts. Gate checks Rust constraint-aware numeric fallback and preserves known source widths; nonnumeric unknowns never default.",
       "commands": [],
@@ -1542,7 +1544,9 @@
         "T025-OPERATOR-SOURCE-3",
         "T025-OPERATOR-SOURCE-4",
         "T025-OPERATOR-SOURCE-5",
-        "T025-OPERATOR-SOURCE-6"
+        "T025-OPERATOR-SOURCE-6",
+        "T025-NAMESPACE-SCALABILITY-7",
+        "T025-NAMESPACE-SCALABILITY-8"
       ],
       "artifact_paths": [
         "docs/numeric-kernel.md",
@@ -1645,7 +1649,8 @@
         "artifacts/macos-first/root-stock-fixture-reference-repair-v1/private-validation-v2/terminal.json",
         "worktracks/evidence/2026-10-14-reached-numeric-call-components.json",
         "worktracks/evidence/2026-10-14-integrated-milestone-failure.json",
-        "worktracks/evidence/2026-10-14-labelled-interpreter-runtime.json"
+        "worktracks/evidence/2026-10-14-labelled-interpreter-runtime.json",
+        "worktracks/evidence/2026-10-14-namespace-startup-scalability.json"
       ],
       "release_complete": false,
       "validation_scope": "Original primitive numeric component complete under E-57-001. Gate02 passes 645 macOS host/doc tests and 28 numeric controls; strict audits pass. Full symbolic/generated/trait/control/call/assignment/aggregate/coercion/cleanup/JIT and release integrations remain pending through named dependencies; Linux acceptance is deferred. User-authorized E-NUM-001 reopens numeric compatibility: old strict-profile evidence remains historical; Rust constraint-aware fallback/future-use inference is not fully implemented or accepted. Integrated scoped shift V3:fmt/strictworkspaceClippy/architecture/manifest passed;495 library,67 source_run,12 numeric,6 numeric_boundary bodies passed without failures/ignored/filtered. Two selected original shift.rs functions execute their original assertions and retain written count types. Source/log/terminal reviewed independently. Source-proven closed counts defaulti32; named counts retain source width or remain unresolved. Full original main/static/lint/compiletest and future numeric constraints remain incomplete; fresh MAIN milestone pending. Current integrated shift source ad04fa4b macOS milestone independently accepted: all17 requirements across retained5-check prefix and12-check continuation; actual continuation47049/0, original prefix outer exit unobserved. 2395 project bodies/179 executables/495 library, all166 T042-T045 controls plus2 original shift controls,8 H002 aliases and2k-frame event once; seven original CLI probes/29 arithmetic assertions. Root collector1580/0 verified34 logs and unchanged source, then released hold. Full fixture/Drop/doublepanic/worker/release/Linux remain pending. V5 discarded-expression fallback integrated after ten distinct scoped commands passed across two segments: format/strict Clippy,497 unfiltered library bodies plus27 bodies across4 relevant unfiltered binaries, architecture/manifest audits and3 importer controls. Both stock-derived value controls passed once; exact sourceb181a24b and all raw/terminal receipts were reviewed. Prefix82354/runner1 is retained: Cargo library exited0, but the wrapper incorrectly required497 complete library names equal2 selected names. Root verified membership and authorized only seven untouched suffix commands; suffix92326/0. No completed test was rerun and no single all-green ten-command runner is claimed. Original doc-comment main whole-body and aux9906 foo arithmetic are component observations, not full compiletest/edition/lint/parent-linking passes. General numeric future-use/trait/container inference remains incomplete. The required integrated MAIN milestone is pending; T025/release/Linux remain incomplete. Integrated numeric MAIN milestone accepted on exact8068a263 after preparation/source ownership repair: actualroot22217/0,2421unfiltered bodies/181summaries,fresh gates00\u201303,both numeric-discard controls once,independent+root terminal/source checks. Stalecandidate failed attempt remains preserved. General source inference and fullstock/release/Linux remain incomplete. October13 interpreter follow-ups: reviewed private cfg/numeric/source-contract/captured-declaration candidates integrated with originals/controls; each scoped receipt retained. Prior MAIN Cargo command2478/189 passed but enclosing frozen-source receipt failed external docs additions, so not accepted. Required fresh combined MAIN gate remains pending. Full rustc compiletest/task/release/Linux acceptance incomplete.",
@@ -1690,6 +1695,12 @@
       "current_interpreter_source_checkpoint": {
         "source_member": "40aa4bd7e1dffeca15b0585b89a5e612273900f8a13a6267e28d5637da224214",
         "runtime_contract": "label_break_value whole main/35 assertions in all4 editions",
+        "fresh_integrated_milestone": "failed1274/1/1817;979 library and21 discoveryCLI passed; sole1040-module macro cumulative timeout remains",
+        "release_complete": false
+      },
+      "current_namespace_startup_repair": {
+        "source_member": "37bd9e6c21cb0b7de8408f85f325d168740f542bd9b6a69a0d323e07a00d7a21",
+        "scope": "1040-moduleCLI completed2939;15 earlier equivalence controls; strict/audit/fmt green",
         "fresh_integrated_milestone": "pending",
         "release_complete": false
       }
@@ -3781,7 +3792,7 @@
       "current_interpreter_source_checkpoint": {
         "source_member": "40aa4bd7e1dffeca15b0585b89a5e612273900f8a13a6267e28d5637da224214",
         "runtime_contract": "label_break_value whole main/35 assertions in all4 editions",
-        "fresh_integrated_milestone": "pending",
+        "fresh_integrated_milestone": "failed1274/1/1817;979 library and21 discoveryCLI passed; sole1040-module macro cumulative timeout remains",
         "release_complete": false
       }
     },
@@ -4186,7 +4197,13 @@
         "actual_nonzero_cleanup_resume_refuses_namespace_addition_without_repeating_prior_effects",
         "genuine_original_lexical_definition_publication_does_not_false_stale_namespace",
         "genuine_same_epoch_namespace_addition_refuses_cached_normal_dispatch_before_guest_work",
-        "physical_sidecar_retains_accounted_shared_ownership_without_changing_stable_recipe"
+        "physical_sidecar_retains_accounted_shared_ownership_without_changing_stable_recipe",
+        "many_actual_unrelated_modules_do_not_become_scope_candidates_all_editions",
+        "actual_named_renamed_glob_shadow_and_visibility_worlds_equal_old_global",
+        "aliases_module_roots_ambiguity_and_missing_scope_keep_old_fallback",
+        "genuine_frontier_and_pending_binding_refusal_equal_old_global",
+        "weak_destination_spelling_requires_real_old_binding_universe_evidence",
+        "raw_keyword_module_names_and_empty_universe_preserve_old_diagnostics"
       ],
       "acceptance_contract": "executed out-of-bounds indexing raises GuestPanic with cleanup; index-type mismatch is a runtime contract fault; same-location scalar assignment remains visible through a ref; whole move invalidates inline refs; shared writes fail; two mutable guest aliases serialize without a host RefCell panic.",
       "commands": [
@@ -4283,7 +4300,13 @@
         "T041-INSTALLED-NAMESPACE-2",
         "T041-INSTALLED-NAMESPACE-3",
         "T041-INSTALLED-NAMESPACE-4",
-        "T041-INSTALLED-NAMESPACE-5"
+        "T041-INSTALLED-NAMESPACE-5",
+        "T041-NAMESPACE-SCALABILITY-1",
+        "T041-NAMESPACE-SCALABILITY-2",
+        "T041-NAMESPACE-SCALABILITY-3",
+        "T041-NAMESPACE-SCALABILITY-4",
+        "T041-NAMESPACE-SCALABILITY-5",
+        "T041-NAMESPACE-SCALABILITY-6"
       ],
       "artifact_paths": [
         "artifacts/macos-first/t041-place-reference-unvalidated-v2/manifest.json",
@@ -4326,7 +4349,8 @@
         "artifacts/macos-first/root-alias-transitive-trace-v1/combined-component-acceptance-v2.json",
         "artifacts/macos-first/root-floating-syntax-boundary-v2/MAIN-integration-v1/integration.json",
         "worktracks/evidence/2026-10-14-integrated-milestone-failure.json",
-        "worktracks/evidence/2026-10-14-labelled-interpreter-runtime.json"
+        "worktracks/evidence/2026-10-14-labelled-interpreter-runtime.json",
+        "worktracks/evidence/2026-10-14-namespace-startup-scalability.json"
       ],
       "release_complete": false,
       "validation_scope": "Component acceptance under Section57/E-57-001: actual MAIN45274 exit0, independent collector exit0, all10 checks and fresh gates00-03; 2235 project host/doc bodies and all62 T041 registered controls passed with unchanged3689 inputs/75 include edges. Full T041/stock/JIT/release/Linux acceptance remains false; 13 full-integration fixtures and 23 later task dependencies are explicitly pending.",
@@ -4427,6 +4451,12 @@
       "current_interpreter_source_checkpoint": {
         "source_member": "40aa4bd7e1dffeca15b0585b89a5e612273900f8a13a6267e28d5637da224214",
         "runtime_contract": "label_break_value whole main/35 assertions in all4 editions",
+        "fresh_integrated_milestone": "failed1274/1/1817;979 library and21 discoveryCLI passed; sole1040-module macro cumulative timeout remains",
+        "release_complete": false
+      },
+      "current_namespace_startup_repair": {
+        "source_member": "37bd9e6c21cb0b7de8408f85f325d168740f542bd9b6a69a0d323e07a00d7a21",
+        "scope": "1040-moduleCLI completed2939;15 earlier equivalence controls; strict/audit/fmt green",
         "fresh_integrated_milestone": "pending",
         "release_complete": false
       }

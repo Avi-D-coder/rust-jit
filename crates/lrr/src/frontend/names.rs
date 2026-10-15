@@ -2349,6 +2349,62 @@ impl NameNamespaces {
         };
         self.lookup(namespace, &path, caller)
     }
+    /// Optimization eligibility is derived from the actual retained graph.
+    /// It never certifies a name, completeness or an import by itself.
+    fn scoped_certification_candidates(
+        &self,
+        scope: &ScopeKey,
+        namespace: Namespace,
+        edition: u16,
+    ) -> Option<std::collections::BTreeSet<MacroName>> {
+        if scope.owner.is_some() || !matches!(edition, 2015 | 2018 | 2021 | 2024) {
+            return None;
+        }
+        let parts = super::source_macro_routes::module_names(&scope.module_path, edition).ok()?;
+        // Preserve module-root/alias/ambiguous outcomes for spellings that need
+        // no item row. Ancestor rewrites and immediate child aliases use the
+        // old universe; unrelated module aliases do not disable this scope.
+        let relevant_alias = |path: &NamePath| {
+            path.unit == scope.crate_key
+                && (parts.starts_with(path.components())
+                    || (path.components().len() == parts.len() + 1
+                        && path.components().starts_with(&parts)))
+        };
+        if self.module_aliases.keys().any(&relevant_alias)
+            || self.named_module_links.keys().any(&relevant_alias)
+            || self.glob_module_links.keys().any(relevant_alias)
+        {
+            return None;
+        }
+        // This is the same source prefix reachability used by
+        // producer_frontier. A source module frontier only affects a Value/Type
+        // path inside that child; Macro may also acquire crate-root exports.
+        // Unknown imports/expansions always require the original full walk.
+        let semantic_parts: Vec<_> = parts.iter().map(|name| name.as_str().to_owned()).collect();
+        for length in 0..=semantic_parts.len() {
+            let prefix = ScopeKey {
+                crate_key: scope.crate_key,
+                module_path: semantic_parts[..length].to_vec(),
+                owner: None,
+            };
+            for producer in self.frontiers.get(&prefix).into_iter().flatten() {
+                if namespace != Namespace::Macro
+                    && let Some(child) = self.module_frontier_scopes.get(producer)
+                {
+                    let inside = child.crate_key == scope.crate_key
+                        && semantic_parts.starts_with(&child.module_path);
+                    let immediate = child.crate_key == scope.crate_key
+                        && child.module_path.len() == semantic_parts.len() + 1
+                        && child.module_path.starts_with(&semantic_parts);
+                    if !inside && !immediate {
+                        continue;
+                    }
+                }
+                return None;
+            }
+        }
+        self.table(namespace).scoped_member_names(scope, edition)
+    }
     /// Module member first, then an explicitly supplied prelude scope. Locals
     /// and body-local item ribs are handled by their exact entered source index.
     pub(crate) fn certified_scope(
@@ -2357,9 +2413,21 @@ impl NameNamespaces {
         namespace: Namespace,
         edition: u16,
     ) -> Result<crate::db::seals::CertifiedScope, Diagnostic> {
+        let candidates = self
+            .scoped_certification_candidates(scope, namespace, edition)
+            .unwrap_or_else(|| self.table(namespace).member_names());
+        self.certified_scope_from_candidates(scope, namespace, edition, candidates)
+    }
+    fn certified_scope_from_candidates(
+        &self,
+        scope: &ScopeKey,
+        namespace: Namespace,
+        edition: u16,
+        candidates: std::collections::BTreeSet<MacroName>,
+    ) -> Result<crate::db::seals::CertifiedScope, Diagnostic> {
         let mut names = std::collections::BTreeMap::new();
         let mut bytes = 0usize;
-        for name in self.table(namespace).member_names() {
+        for name in candidates {
             let lookup = self.lookup_unqualified(namespace, name.as_str(), scope, edition, None)?;
             if matches!(lookup, NameLookup::NeedInput(_)) {
                 return Err(Diagnostic::new(
@@ -2552,3 +2620,7 @@ mod module_frontier_tests {
 #[cfg(test)]
 #[path = "names_import_ambiguity_tests.rs"]
 mod names_import_ambiguity_tests;
+
+#[cfg(test)]
+#[path = "names_scoped_candidates_tests.rs"]
+mod names_scoped_candidates_tests;

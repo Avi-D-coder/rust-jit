@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "task_scope": "T025/T041/M013 namespace preparation scalability and currentness",
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "source_member": "37bd9e6c21cb0b7de8408f85f325d168740f542bd9b6a69a0d323e07a00d7a21",
+  "source_paths": [
+    {
+      "path": "crates/lrr/src/db/source_view_inputs.rs",
+      "bytes": 3263,
+      "sha256": "f6310db98d2c06d12f55350490cea5851fa6f3ff0cfbdda0d2797362eb90ade3",
+      "before": "42359d70aeb337e28695c7dbd36487539bbfb5343aa7eb24cc5ed39740563657"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/type_scope_receipt_encoding_tests.rs",
+      "bytes": 5001,
+      "sha256": "7abd98a769bb04097b4b12dbe19eaec78cf72727001c0c93594443301cf3f3a5",
+      "before": null
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/type_scope_receipts.rs",
+      "bytes": 17915,
+      "sha256": "a2cfe294214ca07534b3aa9092b86223c9d3dc5ffc1c9ab7920a015d6c675f76",
+      "before": "d11ceec3c8ec99cc3e29b9dace93a607ab5e9bb09e39aa1bf40d9e416ad43dec"
+    },
+    {
+      "path": "crates/lrr/src/frontend/call_contracts.rs",
+      "bytes": 62174,
+      "sha256": "300a0b3ea89bd8dafb0acdf46cf7d5c989a6a2ba8e37a365b09143f6d44a6fa8",
+      "before": "5beb06e6711c8db1dc0e1137f249f6404054c1c129426dc897fd9c7468809f74"
+    },
+    {
+      "path": "crates/lrr/src/frontend/macro_names.rs",
+      "bytes": 97527,
+      "sha256": "00a3e1db153017e45a5764d26c57e659e973df8057b61ccacfe79ab1124758ac",
+      "before": "1b126780d9c50a9c8243247ad371ab38772cd6e8874fbe10043a4c269c2e4f33"
+    },
+    {
+      "path": "crates/lrr/src/frontend/names.rs",
+      "bytes": 104831,
+      "sha256": "ef5b95defb8be404ca13d10748706208d3de4e1eb4dc1133f5ca601162047435",
+      "before": "d9f7fb717ddc4964de582e8d1fc3a4b23cd28f05a8220197688bc8659cda9ccd"
+    },
+    {
+      "path": "crates/lrr/src/frontend/names_scoped_candidates_tests.rs",
+      "bytes": 10956,
+      "sha256": "f87592d02f29ad4cab220b1110441f1e755e16311c7fca52416b5d1fd15697a9",
+      "before": null
+    }
+  ],
+  "actual_initial_milestone": {
+    "commit": "b5015cd71f",
+    "passed": 1274,
+    "failed": 1,
+    "unexecuted": 1817,
+    "full_library_passed": 979,
+    "diagnostic": "1040-module CLI cumulative macro timeout; deadline unchanged"
+  },
+  "diagnostic_reproduction": {
+    "elapsed_seconds": 117.61,
+    "exit_code": 2,
+    "different_outcome": "primitive result namespace dependency count; not timeout",
+    "inclusive_sample_counts": {
+      "main_thread": 903,
+      "type_scope_receipts": 888,
+      "certified_scope": 881,
+      "lookup_unqualified_path": 643
+    },
+    "counts_not_additive": true
+  },
+  "candidate_v5": {
+    "passed_authority_equivalence_controls": 15,
+    "stock_CLI_passed": false,
+    "stock_failure": "remaining packet4096 input-row guard masked as call-context identity/arity",
+    "source_member": "b15a850be0565833f329795993b2651e9fbebb157a73e3a7f7402492b80a5dcb"
+  },
+  "candidate_v6": {
+    "stock_test": "cli_many_captured_plain_modules_do_not_consume_runtime_macro_contexts",
+    "stock_scope_exit": 0,
+    "actual_cli_status": "completed",
+    "actual_cli_signed_value": "2939",
+    "CLIstderr_empty": true,
+    "single_test_seconds": 6.54,
+    "strict_library": "passed",
+    "architecture": "passed",
+    "format": "passed",
+    "actual_tool_terminals": {
+      "many-modules": {
+        "session_id": 59631,
+        "chunk_id": "225972",
+        "exit": 0
+      },
+      "strict-library": {
+        "session_id": 62174,
+        "chunk_id": "d75987",
+        "exit": 0
+      },
+      "architecture": {
+        "session_id": 46604,
+        "chunk_id": "1f5146",
+        "exit": 0
+      },
+      "format": {
+        "session_id": 83324,
+        "chunk_id": "c7293e",
+        "exit": 0
+      }
+    },
+    "source_unchanged": true
+  },
+  "invariants": [
+    "Scoped candidate enumeration preserves ordinary lookup; uncertain/alias/frontier cases use global fallback",
+    "Same-row immutable encoding shortcut retains all epoch/config/source/compiler/membership/record guards",
+    "Source4096 and full-census100000row/32MiB limits remain; primitive return producer and validator use the existing full-census limit",
+    "All namespace fingerprints retained; macro deadlines unchanged"
+  ],
+  "benchmark_speedup_claim": false,
+  "fresh_integrated_milestone": "pending after seven-path source integration",
+  "new_upstream_full_fixture_passes": 0,
+  "runtime_acceptance_complete": false,
+  "JIT_gate": "closed",
+  "release_complete": false,
+  "local_receipts": [
+    {
+      "path": "artifacts/macos-first/root-main-namespace-scalability-v6/agent-validation-v1/VALIDATION-HANDOFF.json",
+      "sha256": "05cf73aca0619ccb1b60acd41afe18b9ee3dc77ac0cda779d2ce02ac6a0fc30c"
+    },
+    {
+      "path": "artifacts/macos-first/root-main-namespace-scalability-v5/agent-validation-v1/VALIDATION-HANDOFF.json",
+      "sha256": "3b00e6032587b9380860b1bbd1a8f06e504efa299fe6e59ac063452cb49537dd"
+    },
+    {
+      "path": "artifacts/macos-first/root-main-v69-integration-validation-v1/timeout-diagnostic-reproduction-v1/VALIDATION-HANDOFF.json",
+      "sha256": "3dda19568490177d5df6f0e14c00af94ef1189945cf4a4d1bd9daf7c2bb80155"
+    }
+  ]
+}
