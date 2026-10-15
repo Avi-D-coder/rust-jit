@@ -120,7 +120,7 @@ fn exact_parameter_relation_ignores_cold_unknown_and_preserves_shadow_identity()
             .collect();
         let shadow = statements
             .iter()
-            .find(|s| s.syntax().text().to_string() == "let r=0;")
+            .find(|s| s.syntax().text() == "let r=0;")
             .unwrap();
         let ast::Pat::IdentPat(pattern) = shadow.pat().unwrap() else {
             panic!("test binding")

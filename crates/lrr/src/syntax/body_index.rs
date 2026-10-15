@@ -136,6 +136,8 @@ pub struct StructuralNode {
     /// Indexing does not parse or resolve the token-tree expressions.
     pub runtime_scalar_slots: Vec<SlotId>,
     pub runtime_scalar_phases: u16,
+    /// Structural range-pattern continuation only; indexing never prepares bounds.
+    pub scalar_range_phase: bool,
     /// A constructor's ownership guard is separate from its result cell.
     /// Reserving this slot never binds a type or allocates guest storage.
     pub constructor_guard: Option<SlotId>,
@@ -275,6 +277,7 @@ impl BodyIndex {
             && !(node.role == NodeRole::Expression(ExpressionKind::Macro)
                 && (n == 0 || n < node.runtime_scalar_phases)
                 && node.runtime_temporaries[0].is_some())
+            && !(node.role == NodeRole::Pattern && node.scalar_range_phase && n == 0)
         {
             return Err(fault("structural operand phase absent"));
         }
@@ -286,7 +289,7 @@ impl BodyIndex {
     }
 }
 impl StableEncode for BodyIndex {
-    const DOMAIN: &'static str = "lrr/v2/original-body-structure";
+    const DOMAIN: &'static str = "lrr/v3/original-body-structure";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.body);
         e.record(&self.profile);
@@ -329,6 +332,7 @@ impl StableEncode for BodyIndex {
             }
             e.sequence(&n.runtime_scalar_slots, |e, slot| e.u32(slot.0));
             e.u32(u32::from(n.runtime_scalar_phases));
+            e.bool(n.scalar_range_phase);
             e.option(&n.constructor_guard, |e, slot| e.u32(slot.0));
             e.option(&n.tail_scope, |e, scope| e.u32(scope.0));
             e.option(&n.condition_scope, |e, scope| e.u32(scope.0));
@@ -1139,6 +1143,8 @@ impl ParsedFile {
                 runtime_temporaries,
                 runtime_scalar_slots,
                 runtime_scalar_phases,
+                scalar_range_phase: role == NodeRole::Pattern
+                    && ast::RangePat::can_cast(frame.syntax.kind()),
                 constructor_guard,
                 tail_scope,
                 condition_scope,
@@ -1259,6 +1265,7 @@ impl ParsedFile {
                 runtime_temporaries: [Some(unit), None],
                 runtime_scalar_slots: Vec::new(),
                 runtime_scalar_phases: 0,
+                scalar_range_phase: false,
                 constructor_guard: None,
                 tail_scope: None,
                 condition_scope: None,
@@ -1352,5 +1359,76 @@ mod tests {
         let mut bytes = usize::MAX;
         assert!(charge(&mut bytes, 1, usize::MAX).is_err());
         assert_eq!(bytes, usize::MAX);
+    }
+    #[test]
+    fn range_phase_is_source_structural_encoded_and_exclusive_to_actual_range_nodes() {
+        use crate::source::snapshot::{CfgSet, SourceBlob};
+        const SOURCE: &str = "const RET:u8=1;fn chosen(c:u8){match c{0..=4=>(),_=>()}}";
+        for edition in [2015, 2018, 2021, 2024] {
+            let parsed = ParsedFile::parse(
+                &SourceBlob::new(SOURCE.as_bytes().to_vec()).unwrap(),
+                ProfileIdentity {
+                    edition,
+                    ..ProfileIdentity::current()
+                },
+            )
+            .unwrap();
+            let outline = parsed
+                .outline(Digest([237; 32]), vec![], &CfgSet::guest_default())
+                .unwrap();
+            let body = outline
+                .items
+                .iter()
+                .find(|item| item.def_key.declared_name == "chosen")
+                .unwrap()
+                .body
+                .as_ref()
+                .unwrap();
+            let index = parsed.index_body(body, Default::default()).unwrap();
+            assert_eq!(
+                <BodyIndex as StableEncode>::DOMAIN,
+                "lrr/v3/original-body-structure"
+            );
+            let ranges: Vec<_> = index
+                .nodes()
+                .iter()
+                .filter(|node| node.scalar_range_phase)
+                .collect();
+            assert_eq!(ranges.len(), 1);
+            let range = ranges[0];
+            assert_eq!(range.role, NodeRole::Pattern);
+            assert_eq!(
+                &SOURCE[(body.range.start + range.range.start) as usize
+                    ..(body.range.start + range.range.end) as usize],
+                "0..=4"
+            );
+            assert!(range.operands.is_empty());
+            assert_eq!(index.pc(range.id, Phase::Operand(0)).unwrap().phase, 3);
+            assert!(index.pc(range.id, Phase::Operand(1)).is_err());
+            for node in index.pattern_locations().filter(|node| node.id != range.id) {
+                assert!(!node.scalar_range_phase);
+                assert!(index.pc(node.id, Phase::Operand(0)).is_err());
+            }
+            let mut without_marker = index.clone();
+            without_marker.nodes[range.id.0 as usize].scalar_range_phase = false;
+            assert_ne!(index.fingerprint(), without_marker.fingerprint());
+            assert!(without_marker.pc(range.id, Phase::Operand(0)).is_err());
+            let initializer = outline
+                .items
+                .iter()
+                .find(|item| item.def_key.declared_name == "RET")
+                .unwrap()
+                .body
+                .as_ref()
+                .unwrap();
+            let constant = parsed.index_body(initializer, Default::default()).unwrap();
+            assert!(constant.nodes().iter().all(|node| !node.scalar_range_phase));
+            let return_node = constant
+                .nodes()
+                .iter()
+                .find(|node| node.role == NodeRole::InitializerReturn)
+                .unwrap();
+            assert!(constant.pc(return_node.id, Phase::Operand(0)).is_err());
+        }
     }
 }

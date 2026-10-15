@@ -1,4 +1,6 @@
 //! Reached closed scalar match phases. No queries, descriptors or guest effects.
+#[path = "scalar_match_ranges.rs"]
+mod ranges;
 use super::{draft, error, local_binding, parameter_at, primitive_cast_target, return_pc};
 use crate::{
     core::diagnostic::Diagnostic,
@@ -57,6 +59,7 @@ fn supported(ty: PrimitiveType) -> bool {
     matches!(
         ty,
         PrimitiveType::Bool
+            | PrimitiveType::Char
             | PrimitiveType::I8
             | PrimitiveType::I16
             | PrimitiveType::I32
@@ -67,9 +70,14 @@ fn supported(ty: PrimitiveType) -> bool {
             | PrimitiveType::U32
             | PrimitiveType::U64
             | PrimitiveType::Usize
+            | PrimitiveType::F32
+            | PrimitiveType::F64
     )
 }
 fn pattern_type(pat: &ast::Pat) -> Option<PrimitiveType> {
+    if let ast::Pat::RangePat(range) = pat {
+        return ranges::source_type(range);
+    }
     let ast::Pat::LiteralPat(pat) = pat else {
         return None;
     };
@@ -78,6 +86,7 @@ fn pattern_type(pat: &ast::Pat) -> Option<PrimitiveType> {
         SyntaxKind::TRUE_KW | SyntaxKind::FALSE_KW if pat.minus_token().is_none() => {
             Some(PrimitiveType::Bool)
         }
+        SyntaxKind::CHAR if pat.minus_token().is_none() => Some(PrimitiveType::Char),
         SyntaxKind::INT_NUMBER => ast::IntNumber::cast(literal.token())?
             .suffix()
             .and_then(primitive),
@@ -166,12 +175,25 @@ fn context(
         }
         ast::Expr::Literal(x) => match x.token().kind() {
             SyntaxKind::TRUE_KW | SyntaxKind::FALSE_KW => Some(PrimitiveType::Bool),
+            SyntaxKind::CHAR => Some(PrimitiveType::Char),
+            SyntaxKind::FLOAT_NUMBER => ranges::floating_context(x, expected),
             SyntaxKind::INT_NUMBER => {
+                if let Some(ty) = ranges::floating_context(x, expected) {
+                    return Ok(Some(ty));
+                }
                 ast::IntNumber::cast(x.token()).and_then(|n| match n.suffix() {
                     Some(s) => primitive(s),
                     None => Some(
                         expected
-                            .filter(|p| *p != PrimitiveType::Bool)
+                            .filter(|p| {
+                                !matches!(
+                                    *p,
+                                    PrimitiveType::Bool
+                                        | PrimitiveType::Char
+                                        | PrimitiveType::F32
+                                        | PrimitiveType::F64
+                                )
+                            })
                             .unwrap_or(PrimitiveType::I32),
                     ),
                 })
@@ -871,7 +893,18 @@ fn prepare_inner(
     {
         return unsupported("reached alternative attributes require macro integration");
     }
-    if !wildcard && binding.is_none() {
+    let range = if let ast::Pat::RangePat(pattern) = &alternative.pattern {
+        match ranges::ScalarRange::from_source(pattern) {
+            Ok(range) => Some(range),
+            Err(error) if error.code == "LRR-E-UNSUPPORTED" => {
+                return unsupported(&error.message);
+            }
+            Err(error) => return Err(error),
+        }
+    } else {
+        None
+    };
+    if !wildcard && binding.is_none() && range.is_none() {
         let ast::Pat::LiteralPat(pattern) = &alternative.pattern else {
             return unsupported("reached alternative requires scalar literal or wildcard");
         };
@@ -880,7 +913,7 @@ fn prepare_inner(
         };
         if !matches!(
             literal.token().kind(),
-            SyntaxKind::TRUE_KW | SyntaxKind::FALSE_KW | SyntaxKind::INT_NUMBER
+            SyntaxKind::TRUE_KW | SyntaxKind::FALSE_KW | SyntaxKind::INT_NUMBER | SyntaxKind::CHAR
         ) || (literal.token().kind() != SyntaxKind::INT_NUMBER
             && pattern.minus_token().is_some())
             || (literal.token().kind() == SyntaxKind::INT_NUMBER
@@ -892,6 +925,70 @@ fn prepare_inner(
         }
     }
     match phase {
+        Phase::Entry | Phase::Operand(0) if range.is_some() => {
+            let range = range
+                .as_ref()
+                .ok_or_else(|| error("range source disappeared"))?;
+            if !index.nodes()[alternative.id.0 as usize].scalar_range_phase {
+                return Err(error(
+                    "range continuation lacks its original structural marker",
+                ));
+            }
+            let upper = phase == Phase::Operand(0);
+            let literal = match if upper {
+                range.upper(body, key)
+            } else {
+                range.lower(body, key)
+            } {
+                Ok(literal) => literal,
+                Err(error) if error.code == "LRR-E-UNSUPPORTED" => {
+                    return unsupported(&error.message);
+                }
+                Err(error) => return Err(error),
+            };
+            let hint = ranges::hint(&literal, &plan.ty);
+            let mut ops = Vec::new();
+            ops.try_reserve_exact(if upper { 4 } else { 3 })
+                .map_err(|_| limit())?;
+            if upper {
+                ops.push(Op::Discard { source: test });
+            }
+            ops.extend([
+                Op::Literal {
+                    literal,
+                    hint,
+                    destination: expected,
+                },
+                Op::NumericBinary {
+                    left: source,
+                    right: expected,
+                    destination: test,
+                    operator: if upper {
+                        range.upper_comparison()
+                    } else {
+                        NumericBinary::Ge
+                    },
+                },
+                Op::Discard { source: expected },
+            ]);
+            draft(
+                index,
+                key,
+                ops,
+                RecipeExit::Branch {
+                    condition: test,
+                    yes: index.pc(
+                        alternative.id,
+                        if upper {
+                            Phase::Commit
+                        } else {
+                            Phase::Operand(0)
+                        },
+                    )?,
+                    no: index.pc(alternative.id, Phase::Exit)?,
+                },
+            )
+        }
         Phase::Entry if binding.is_some() => binding_draft(
             index,
             key,
@@ -939,6 +1036,7 @@ fn prepare_inner(
                     suffix: Some(ty), ..
                 }) => HintRecipe::Primitive(*ty),
                 _ if recipe.kind == LiteralKind::Bool => HintRecipe::Primitive(PrimitiveType::Bool),
+                Some(DecodedLiteral::Char(_)) => HintRecipe::Primitive(PrimitiveType::Char),
                 _ => plan.ty.clone(),
             };
             draft(
@@ -1042,6 +1140,10 @@ fn prepare_inner(
         _ => unsupported("invalid closed scalar alternative phase"),
     }
 }
+
+#[cfg(test)]
+#[path = "scalar_match_ranges_tests.rs"]
+mod scalar_match_ranges_tests;
 
 #[cfg(test)]
 mod binding_route_tests {

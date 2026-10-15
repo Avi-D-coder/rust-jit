@@ -203,11 +203,12 @@ fn scalar(mut expression: ast::Expr, span: &BodySpan) -> Result<LiteralRecipe, D
 
 /// Decode only a schema-checked record's owned syntax; this does not certify its
 /// publication/world or caller target. The coordinator/frontend must replay them.
-pub(crate) fn decode_break(
+/// None means no direct break candidate, never permission to execute the output.
+pub(crate) fn try_decode_break(
     input: &InputValue,
     source: BodySpan,
     caller: &PcKey,
-) -> Result<GeneratedBreak, Diagnostic> {
+) -> Result<Option<GeneratedBreak>, Diagnostic> {
     if source.body_key != caller.body
         || source.relative_start > source.relative_end
         || caller.phase != Phase::Entry.code()?
@@ -236,11 +237,6 @@ pub(crate) fn decode_break(
         lrr_expand_adapter::declaration_output::DeclarationGrammar::Statements,
     )
     .map_err(|e| Diagnostic::new(e.code, e.message))?;
-    if !output.definitions.is_empty() || !output.calls.is_empty() {
-        return Err(unsupported(
-            "generated break output contains a declaration or nested macro",
-        ));
-    }
     output
         .syntax
         .len()
@@ -273,24 +269,43 @@ pub(crate) fn decode_break(
     if roots.next().is_some() {
         return Err(unsupported("generated break output has multiple roots"));
     }
-    let mut children = root.children();
-    let statement = children
-        .next()
-        .ok_or_else(|| unsupported("generated break output is empty"))?;
-    if children.next().is_some() {
+    // Applicability is structural, not an Unsupported diagnostic recovery.
+    // A nested break in a block/function belongs to that unimplemented source
+    // route; it is never promoted to a break of the original caller frame.
+    let mut count = 0usize;
+    let mut broken = None;
+    for statement in root.children() {
+        count = count
+            .checked_add(1)
+            .filter(|n| *n <= 4096)
+            .ok_or_else(limit)?;
+        if statement.kind() == SyntaxKind::ERROR {
+            return Err(unsupported(
+                "generated break output has malformed statement syntax",
+            ));
+        }
+        let expression = if let Some(statement) = ast::ExprStmt::cast(statement.clone()) {
+            statement.expr()
+        } else {
+            ast::Expr::cast(statement)
+        };
+        if let Some(ast::Expr::BreakExpr(candidate)) = expression {
+            broken = Some(candidate);
+        }
+    }
+    let Some(broken) = broken else {
+        return Ok(None);
+    };
+    if count != 1 {
         return Err(unsupported(
             "generated break output must contain exactly one statement",
         ));
     }
-    let expression = if let Some(statement) = ast::ExprStmt::cast(statement.clone()) {
-        statement.expr()
-    } else {
-        ast::Expr::cast(statement)
+    if !output.definitions.is_empty() || !output.calls.is_empty() {
+        return Err(unsupported(
+            "generated break output contains a declaration or nested macro",
+        ));
     }
-    .ok_or_else(|| unsupported("generated break output is not an expression statement"))?;
-    let ast::Expr::BreakExpr(broken) = expression else {
-        return Err(unsupported("generated statement is not a break"));
-    };
     let mut work = 0usize;
     for node in broken.syntax().descendants() {
         work = work
@@ -395,7 +410,18 @@ pub(crate) fn decode_break(
         definition_edition: record.key().definition_edition,
     };
     decoded.allocated_bytes()?;
-    Ok(decoded)
+    Ok(Some(decoded))
+}
+
+/// Strict decoder controls retain their original closed-break expectation.
+#[cfg(test)]
+pub(crate) fn decode_break(
+    input: &InputValue,
+    source: BodySpan,
+    caller: &PcKey,
+) -> Result<GeneratedBreak, Diagnostic> {
+    try_decode_break(input, source, caller)?
+        .ok_or_else(|| unsupported("generated statement is not a break"))
 }
 
 /// Original-source label token range only. The frontend selects the target and
@@ -662,7 +688,7 @@ mod tests {
                 .filter_map(ast::MacroCall::cast)
                 .filter(|call| {
                     call.path()
-                        .is_some_and(|path| path.syntax().text().to_string() == "mac1")
+                        .is_some_and(|path| path.syntax().text() == "mac1")
                 })
                 .collect();
             assert_eq!(calls.len(), 2);
@@ -775,6 +801,60 @@ mod tests {
             assert_eq!(
                 decode_break(&value, span.clone(), &pc).err().unwrap().code,
                 "LRR-E-EXPANSION-INPUT"
+            );
+        }
+    }
+    #[test]
+    fn non_break_routes_are_not_applicable_without_hiding_real_break_or_input_errors() {
+        for owning in [2015, 2018, 2021, 2024] {
+            let (span, pc) = caller(owning);
+            for rules in [
+                "($t:lifetime)=>{1;}",
+                "($t:lifetime)=>{return 1;}",
+                "($t:lifetime)=>{{break $t 1;}}",
+                "($t:lifetime)=>{{fn cold(){} 1;}}",
+                "($t:lifetime)=>{another!();}",
+            ] {
+                let value = expanded(rules, "'a", owning);
+                assert!(
+                    try_decode_break(&value, span.clone(), &pc)
+                        .unwrap()
+                        .is_none(),
+                    "{rules}"
+                );
+                let mut foreign = pc.clone();
+                foreign.phase = Phase::Commit.code().unwrap();
+                assert_eq!(
+                    try_decode_break(&value, span.clone(), &foreign)
+                        .err()
+                        .unwrap()
+                        .code,
+                    "LRR-E-EXPANSION-INPUT"
+                );
+            }
+            for rules in [
+                "($t:lifetime)=>{break $t missing();}",
+                "($t:lifetime)=>{break $t another!();}",
+                "($t:lifetime)=>{break $t 1;break $t 2;}",
+                "($t:lifetime)=>{fn cold(){}break $t 1;}",
+            ] {
+                assert_eq!(
+                    try_decode_break(&expanded(rules, "'a", owning), span.clone(), &pc)
+                        .err()
+                        .unwrap()
+                        .code,
+                    "LRR-E-UNSUPPORTED",
+                    "{rules}"
+                );
+            }
+            assert!(
+                try_decode_break(
+                    &expanded("($t:lifetime)=>{break $t 1;}", "'a", owning),
+                    span,
+                    &pc
+                )
+                .unwrap()
+                .is_some()
             );
         }
     }

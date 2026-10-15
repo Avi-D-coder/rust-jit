@@ -2178,7 +2178,10 @@
         "unchanged_regions_infer_call_main_edition_2015",
         "unchanged_regions_infer_call_main_edition_2018",
         "unchanged_regions_infer_call_main_edition_2021",
-        "unchanged_regions_infer_call_main_edition_2024"
+        "unchanged_regions_infer_call_main_edition_2024",
+        "reference_argument_admission_keeps_scalar_match_callee_cold_all_editions",
+        "rustc_original_reference_parameter_requires_current_certificate_before_entry",
+        "rustc_original_reference_parameter_scalar_guard_refuses_before_owning_read_all_editions"
       ],
       "acceptance_contract": "uncalled invalid function signature/body does not fail another call; an unused generic bound is ignored; incompatible actual parameter/return descriptors fault only at reached boundaries; effectful arguments execute once.",
       "commands": [
@@ -2305,7 +2308,10 @@
         "T032-STOCK-REFERENCE-ED2015",
         "T032-STOCK-REFERENCE-ED2018",
         "T032-STOCK-REFERENCE-ED2021",
-        "T032-STOCK-REFERENCE-ED2024"
+        "T032-STOCK-REFERENCE-ED2024",
+        "T032-REFERENCE-MISSING-LOCAL-SOURCE",
+        "T032-REFERENCE-UNCERTIFIED-ENTRY",
+        "T032-REFERENCE-SCALAR-GUARD"
       ],
       "artifact_paths": [
         "artifacts/macos-first/t032-signature-capture-build.log",
@@ -5313,14 +5319,31 @@
       "title": "Transactional pattern engine",
       "status": "in_progress",
       "commit_id": null,
-      "acceptance_tests": [],
+      "acceptance_tests": [
+        "unchanged_integer_and_floating_range_whole_mains_require_completion_all_editions",
+        "original_range_boundaries_char_and_suffix_context_have_exact_phases_all_editions",
+        "original_macro_ranges_stay_opaque_and_lrr_signed_min_preserves_its_source",
+        "later_range_and_upper_magnitude_decode_only_at_their_reached_phase",
+        "guarded_range_commits_before_guard_and_keeps_plain_binding_admission_separate",
+        "nonliteral_wide_float_and_unbounded_ranges_remain_typed_source_frontiers",
+        "floating_range_source_family_sign_and_suffix_are_exact_all_editions"
+      ],
       "acceptance_contract": "failed arms preserve scrutinee ownership; true arms move once; conflicting moves fault before commit; or-pattern names/modes and binding order validate; overlapping alternatives can rerun false guards without replaying scrutinee evaluation.",
       "commands": [],
-      "fixture_ids": [],
+      "fixture_ids": [
+        "T050-SCALAR-RANGE-01",
+        "T050-SCALAR-RANGE-02",
+        "T050-SCALAR-RANGE-03",
+        "T050-SCALAR-RANGE-04",
+        "T050-SCALAR-RANGE-05",
+        "T050-SCALAR-RANGE-06",
+        "T050-SCALAR-RANGE-07"
+      ],
       "artifact_paths": [
         "artifacts/macos-first/root-match-integration-v1/validation-v6/terminal.json",
         "artifacts/macos-first/root-vec-facet-integration-v1/independent-component-collection-v1.json",
-        "artifacts/macos-first/root-vec-facet-integration-v1/MAIN-integration-v1.json"
+        "artifacts/macos-first/root-vec-facet-integration-v1/MAIN-integration-v1.json",
+        "worktracks/evidence/2026-10-14-scalar-range-runtime.json"
       ],
       "release_complete": false,
       "validation_scope": "Integrated bounded scalar/or/single-alternative guard and typed no-arm components;586 same-production library bodies and30 component bodies passed, strict Clippy/architecture/fmt collected. Integrated milestone pending; general transactional patterns, overlapping guard retry, full if-let/while-let/question-mark and uniform Section15.5 bound-op phase acceptance incomplete. No card or full-fixture acceptance."
@@ -5330,14 +5353,33 @@
       "title": "Match, if-let, while-let, let-else, and question mark",
       "status": "in_progress",
       "commit_id": null,
-      "acceptance_tests": [],
+      "acceptance_tests": [
+        "unchanged_match_range_infer_main_edition_2015",
+        "unchanged_match_range_infer_main_edition_2018",
+        "unchanged_match_range_infer_main_edition_2021",
+        "unchanged_match_range_infer_main_edition_2024",
+        "unchanged_match_range_main_edition_2015",
+        "unchanged_match_range_main_edition_2018",
+        "unchanged_match_range_main_edition_2021",
+        "unchanged_match_range_main_edition_2024"
+      ],
       "acceptance_contract": "untaken arms remain unprepared; no-match and let-else fallthrough diagnostics are precise; successful ? does not force conversion; failing ? calls From once and validates the enclosing return contract.",
       "commands": [],
-      "fixture_ids": [],
+      "fixture_ids": [
+        "T051-STOCK-RANGE-INFER-ED2015",
+        "T051-STOCK-RANGE-INFER-ED2018",
+        "T051-STOCK-RANGE-INFER-ED2021",
+        "T051-STOCK-RANGE-INFER-ED2024",
+        "T051-STOCK-RANGE-BOUNDARIES-ED2015",
+        "T051-STOCK-RANGE-BOUNDARIES-ED2018",
+        "T051-STOCK-RANGE-BOUNDARIES-ED2021",
+        "T051-STOCK-RANGE-BOUNDARIES-ED2024"
+      ],
       "artifact_paths": [
         "artifacts/macos-first/root-match-no-arm-v1/HANDOFF.md",
         "artifacts/macos-first/root-vec-facet-integration-v1/independent-component-collection-v1.json",
-        "artifacts/macos-first/root-vec-facet-integration-v1/MAIN-integration-v1.json"
+        "artifacts/macos-first/root-vec-facet-integration-v1/MAIN-integration-v1.json",
+        "worktracks/evidence/2026-10-14-scalar-range-runtime.json"
       ],
       "release_complete": false,
       "validation_scope": "Integrated bounded scalar/or/single-alternative guard and typed no-arm components;586 same-production library bodies and30 component bodies passed, strict Clippy/architecture/fmt collected. Integrated milestone pending; general transactional patterns, overlapping guard retry, full if-let/while-let/question-mark and uniform Section15.5 bound-op phase acceptance incomplete. No card or full-fixture acceptance."
@@ -18750,7 +18792,7 @@
     },
     {
       "id": "M016",
-      "status": "complete",
+      "status": "in_progress",
       "commit_id": null,
       "acceptance_tests": [
         "rustc_missing_macro_argument_renders_owned_invocation_and_definition_locations",
@@ -18792,7 +18834,9 @@
         "unchanged_2018_literal_expression_origin_observation",
         "untouched_2018_bytes_as_2021_literal_origin_observation",
         "untouched_2018_bytes_as_2024_literal_origin_observation",
-        "unchanged_stock_declarative_literals_execute_before_nonliteral_frontier"
+        "unchanged_stock_declarative_literals_execute_before_nonliteral_frontier",
+        "non_break_routes_are_not_applicable_without_hiding_real_break_or_input_errors",
+        "unchanged_pending_statement_originals_keep_selected_diagnostic_source_all_editions"
       ],
       "commands": [
         "cargo +1.99.0 clippy --workspace --all-targets --offline --locked -- -D warnings",
@@ -18840,7 +18884,9 @@
         "M016-DECLARATIVE-ORIGIN-2",
         "M016-DECLARATIVE-ORIGIN-3",
         "M016-DECLARATIVE-ORIGIN-4",
-        "M016-DECLARATIVE-DISPATCH-1"
+        "M016-DECLARATIVE-DISPATCH-1",
+        "M016-PENDING-STATEMENT-ROUTING",
+        "M016-PENDING-STATEMENT-ORIGIN"
       ],
       "artifact_paths": [
         "artifacts/macos-first/stock-origin-7970-owned-facts.json",
@@ -18912,7 +18958,8 @@
         "artifacts/macos-first/m016-origin-repairs-main-combined-collection-terminal.json",
         "artifacts/macos-first/m016-component-acceptance-review.json",
         "docs/m016-component-acceptance.md",
-        "artifacts/macos-first/root-declarative-dispatch-v1/integration-v1.json"
+        "artifacts/macos-first/root-declarative-dispatch-v1/integration-v1.json",
+        "worktracks/evidence/2026-10-14-namespace-startup-scalability.json"
       ],
       "title": "Origin chains and discovery diagnostics",
       "acceptance_contract": "MX033/MX034; redacted bounded diagnostic bundle. Depends: M015.",
@@ -18950,7 +18997,8 @@
         "M041",
         "M042",
         "M043"
-      ]
+      ],
+      "reopened_reason": "Fresh integrated MAINv7 fails selected pending generated-statement invocation/definition diagnostic provenance. Prior completed evidence retained; typed routing repair and fresh integrated gate required."
     },
     {
       "id": "M017",

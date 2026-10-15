@@ -147,7 +147,7 @@ fn inner_let_shadow_keeps_initializer_at_outer_arm() {
             .syntax()
             .descendants()
             .filter_map(ast::PathExpr::cast)
-            .filter(|path| path.syntax().text().to_string() == "v")
+            .filter(|path| path.syntax().text() == "v")
             .collect();
         assert_eq!(paths.len(), 3);
         assert_eq!(

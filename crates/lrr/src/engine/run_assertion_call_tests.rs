@@ -333,12 +333,14 @@ fn reference_argument_admission_keeps_scalar_match_callee_cold_all_editions() {
             panic!("a non-scalar scrutinee must require ordinary pattern integration")
         };
         assert_eq!(error.code, "LRR-E-UNSUPPORTED");
-        // This genuine whole-call control currently refuses the reference
-        // argument before the callee is admitted. It cannot cover the later
-        // scalar-match guard; its direct ownership regression lives in frame.
+        // This genuine whole-call control still refuses the argument before
+        // body admission: the unannotated numeric local has no retained source
+        // view, and a reference descriptor cannot invent its source identity.
+        // Suffix/local-source propagation remains a required runtime feature;
+        // the certified-reference scalar guard has a separate direct control.
         assert_eq!(
             error.message,
-            "argument source hints require further type integration"
+            "source view requires further value-family integration"
         );
         // Resolving the callee's parameter header is necessary to refuse its
         // reference argument. Only executable body demands must remain absent.

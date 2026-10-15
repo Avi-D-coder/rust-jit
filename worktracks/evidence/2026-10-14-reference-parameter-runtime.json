@@ -74,6 +74,24 @@
     {
       "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v27/VALIDATION-HANDOFF.json",
       "sha256": "085c1151b5c4ee68b2177117fd2898b3198216815c4b7c42a1ce6f097da83896"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v30/VALIDATION-HANDOFF.json",
+      "sha256": "5e935b73d455360c98451f7dcb558ed3bdfb13fb4e198fcdea5c4fff3cdb744c"
     }
-  ]
+  ],
+  "guard_followup": {
+    "v29_full_gate": {
+      "listed": 3148,
+      "passed_checks": 1021,
+      "failed_checks": 2,
+      "unexecuted": 2125
+    },
+    "v30_three_targeted_controls": "passed on040cb788645b4d377206602a68406712df8381b150e537fd4a0b17bc7b278ac8 actual53802/d48545/0",
+    "scope": "Actual missing local-source callee-cold refusal; missingcurrentreferencecertificate refusesbeforecontextentry; genuine currentcertified sharedoriginal/mutable source parameter refuses scalar context beforeowningread, owners/resources/leases/epochs/fuel/scopesunchanged",
+    "strict_test_lint": "failed14 (13 inherited plus test err_expect); fullgate notstarted; mechanicalsuccessor inprogress",
+    "new_lowering_or_original_changes": false,
+    "source_only_style_successor": "Err pattern and test-only enum lint annotation preserve semantics; finalstrict/fullgate pending",
+    "required_remaining_runtime_gap": "An unannotated numeric local currently lacks retained source identity for borrowed-call argument even with a numeric suffix; do not recover it from reference descriptor or classify unsupported as inapplicable."
+  }
 }

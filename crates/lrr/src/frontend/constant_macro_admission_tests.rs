@@ -79,7 +79,7 @@ fn root_evaluator_retains_actual_upstream_panic_message_and_selected_identity() 
                 definition,
                 ConstantRequest::Constant,
                 MAX_BYTES,
-                &[proof.clone()],
+                std::slice::from_ref(&proof),
             )
             .unwrap();
             current.revalidate(&db, &view).unwrap();
@@ -127,7 +127,7 @@ fn unchanged_original_qualified_empty_and_string_panics_use_real_messages() {
                 definition,
                 ConstantRequest::Constant,
                 MAX_BYTES,
-                &[proof.clone()],
+                std::slice::from_ref(&proof),
             )
             .unwrap();
             let Node::AdmittedPanic(reached) = selected_node(&current).unwrap() else {
@@ -212,7 +212,7 @@ fn wrong_body_range_and_other_definition_cannot_reuse_selected_proof() {
         y.def_key.fingerprint(),
         ConstantRequest::Constant,
         MAX_BYTES,
-        &[proof.clone()],
+        std::slice::from_ref(&proof),
     );
     // Same module proof may be retained for its own exact X range, but cannot
     // authorize the reached Y macro. Source tables may include forward constants.
@@ -371,7 +371,7 @@ fn renamed_standard_panic_uses_the_selected_identity_all_editions() {
             definition,
             ConstantRequest::Constant,
             MAX_BYTES,
-            &[proof.clone()],
+            std::slice::from_ref(&proof),
         )
         .unwrap();
         let Node::AdmittedPanic(selected) = selected_node(&admitted).unwrap() else {
@@ -423,7 +423,7 @@ fn root_current_macro_failure_cache_retains_actual_message_and_selected_proof() 
             definition,
             ConstantRequest::Constant,
             MAX_BYTES,
-            &[selected.clone()],
+            std::slice::from_ref(&selected),
         )
         .unwrap();
         let ty = ConstantWireType::Scalar(PrimitiveType::Unit);

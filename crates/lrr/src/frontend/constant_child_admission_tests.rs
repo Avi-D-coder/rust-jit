@@ -67,7 +67,7 @@ fn actual_admitted_initializer_macro_proof_is_retained_in_header_length_child() 
             definition,
             ConstantRequest::Constant,
             MAX_BYTES,
-            &[proof.clone()],
+            std::slice::from_ref(&proof),
         )
         .unwrap();
         let parent =

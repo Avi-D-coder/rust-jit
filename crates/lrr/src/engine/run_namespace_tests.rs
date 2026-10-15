@@ -204,12 +204,10 @@ fn publish_new_type_seal(db: &mut Database, view: &PreparedSourceView) {
         ),
     )
     .unwrap();
-    loop {
-        match discovery.poll().expect("actual Type discovery") {
-            SourceDiscoveryStep::Sealed(_) => break,
-            // No fixture macro or guest execution is authorized by this test.
-            _ => panic!("simple source unexpectedly needs expansion/module authority"),
-        }
+    match discovery.poll().expect("actual Type discovery") {
+        SourceDiscoveryStep::Sealed(_) => {}
+        // No fixture macro or guest execution is authorized by this test.
+        _ => panic!("simple source unexpectedly needs expansion/module authority"),
     }
     let key = InputKey::DiscoverySeal(discovery.key().clone());
     assert!(

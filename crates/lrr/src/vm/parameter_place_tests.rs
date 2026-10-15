@@ -410,6 +410,46 @@ fn repeated_mutable_parameter_dereferences_preserve_unique_owner_and_exact_cell_
     }
 }
 #[test]
+fn rustc_original_reference_parameter_scalar_guard_refuses_before_owning_read_all_editions() {
+    for edition in [2015, 2018, 2021, 2024] {
+        for mutable in [false, true] {
+            // Shared entry selects the unchanged regions-infer-call callee;
+            // mutable entry is the disclosed source-backed lease supplement.
+            // Both own actual current contracts and delivered physical cells.
+            let c = entered(edition, mutable);
+            let parameter = c.frame.parameter(0).unwrap();
+            let before = (
+                physical(&c),
+                c.store.state(parameter).unwrap(),
+                c.store.location_epoch(parameter).unwrap(),
+                c.store.reference_from_cell(parameter).unwrap(),
+                c.frame.fuel_snapshot().used,
+                c.frame.counters.operations_started,
+                c.frame.active_scopes.clone(),
+            );
+            let error = c.frame.definition_parameter_primitive(0).unwrap_err();
+            assert_eq!(error.code, "LRR-E-UNSUPPORTED");
+            assert_eq!(
+                error.message,
+                "scalar parameter context requires an admitted primitive source"
+            );
+            assert_eq!(
+                before,
+                (
+                    physical(&c),
+                    c.store.state(parameter).unwrap(),
+                    c.store.location_epoch(parameter).unwrap(),
+                    c.store.reference_from_cell(parameter).unwrap(),
+                    c.frame.fuel_snapshot().used,
+                    c.frame.counters.operations_started,
+                    c.frame.active_scopes.clone(),
+                )
+            );
+            assert_eq!(c.frame.counters.started_by_opcode[21], 0);
+        }
+    }
+}
+#[test]
 fn parameter_place_uses_no_guest_handles_or_bytes_even_at_handle_quota() {
     let mut c = entered(2024, true);
     while c.store.budget().handles() < c.store.budget().max_handles() {

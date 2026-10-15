@@ -23,6 +23,9 @@ use crate::{
 };
 // Only the actual privately source-selected construction/descriptor join may
 // create production authority. Raw key/payload/descriptor/digests cannot do so.
+// The zero-sized physical fixture variant exists only in tests. Keep the
+// production source proof inline with its accounted metadata representation.
+#[cfg_attr(test, allow(clippy::large_enum_variant))]
 enum PublicationAuthority<'a> {
     SelectedSource {
         path: &'a ConstantPathSelection,

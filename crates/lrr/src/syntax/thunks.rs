@@ -1593,7 +1593,10 @@ impl ParsedFile {
                 } else if node.role == NodeRole::Pattern {
                     matches!(
                         syntax.kind(),
-                        SyntaxKind::LITERAL_PAT | SyntaxKind::WILDCARD_PAT | SyntaxKind::IDENT_PAT
+                        SyntaxKind::LITERAL_PAT
+                            | SyntaxKind::WILDCARD_PAT
+                            | SyntaxKind::IDENT_PAT
+                            | SyntaxKind::RANGE_PAT
                     ) && syntax
                         .ancestors()
                         .any(|parent| ast::MatchArm::can_cast(parent.kind()))
@@ -1683,7 +1686,8 @@ impl ParsedFile {
             | SyntaxKind::MATCH_ARM
             | SyntaxKind::LITERAL_PAT
             | SyntaxKind::WILDCARD_PAT
-            | SyntaxKind::IDENT_PAT => match admission {
+            | SyntaxKind::IDENT_PAT
+            | SyntaxKind::RANGE_PAT => match admission {
                 Some(proof) => {
                     literal_match::prepare_binding(self, body, index, key, syntax, proof)
                 }

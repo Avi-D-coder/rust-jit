@@ -11809,3 +11809,103 @@ test = "unchanged_regions_infer_call_main_edition_2021"
 id = "T032-STOCK-REFERENCE-ED2024"
 path = "xtask/tests/stock_reference_call_runtime.rs"
 test = "unchanged_regions_infer_call_main_edition_2024"
+
+[[fixture]]
+id = "T050-SCALAR-RANGE-01"
+path = "crates/lrr/src/syntax/scalar_match_ranges_tests.rs"
+test = "unchanged_integer_and_floating_range_whole_mains_require_completion_all_editions"
+
+[[fixture]]
+id = "T050-SCALAR-RANGE-02"
+path = "crates/lrr/src/syntax/scalar_match_ranges_tests.rs"
+test = "original_range_boundaries_char_and_suffix_context_have_exact_phases_all_editions"
+
+[[fixture]]
+id = "T050-SCALAR-RANGE-03"
+path = "crates/lrr/src/syntax/scalar_match_ranges_tests.rs"
+test = "original_macro_ranges_stay_opaque_and_lrr_signed_min_preserves_its_source"
+
+[[fixture]]
+id = "T050-SCALAR-RANGE-04"
+path = "crates/lrr/src/syntax/scalar_match_ranges_tests.rs"
+test = "later_range_and_upper_magnitude_decode_only_at_their_reached_phase"
+
+[[fixture]]
+id = "T050-SCALAR-RANGE-05"
+path = "crates/lrr/src/syntax/scalar_match_ranges_tests.rs"
+test = "guarded_range_commits_before_guard_and_keeps_plain_binding_admission_separate"
+
+[[fixture]]
+id = "T050-SCALAR-RANGE-06"
+path = "crates/lrr/src/syntax/scalar_match_ranges_tests.rs"
+test = "nonliteral_wide_float_and_unbounded_ranges_remain_typed_source_frontiers"
+
+[[fixture]]
+id = "T050-SCALAR-RANGE-07"
+path = "crates/lrr/src/syntax/scalar_match_ranges_tests.rs"
+test = "floating_range_source_family_sign_and_suffix_are_exact_all_editions"
+
+[[fixture]]
+id = "T051-STOCK-RANGE-INFER-ED2015"
+path = "xtask/tests/stock_scalar_range_runtime.rs"
+test = "unchanged_match_range_infer_main_edition_2015"
+
+[[fixture]]
+id = "T051-STOCK-RANGE-INFER-ED2018"
+path = "xtask/tests/stock_scalar_range_runtime.rs"
+test = "unchanged_match_range_infer_main_edition_2018"
+
+[[fixture]]
+id = "T051-STOCK-RANGE-INFER-ED2021"
+path = "xtask/tests/stock_scalar_range_runtime.rs"
+test = "unchanged_match_range_infer_main_edition_2021"
+
+[[fixture]]
+id = "T051-STOCK-RANGE-INFER-ED2024"
+path = "xtask/tests/stock_scalar_range_runtime.rs"
+test = "unchanged_match_range_infer_main_edition_2024"
+
+[[fixture]]
+id = "T051-STOCK-RANGE-BOUNDARIES-ED2015"
+path = "xtask/tests/stock_scalar_range_runtime.rs"
+test = "unchanged_match_range_main_edition_2015"
+
+[[fixture]]
+id = "T051-STOCK-RANGE-BOUNDARIES-ED2018"
+path = "xtask/tests/stock_scalar_range_runtime.rs"
+test = "unchanged_match_range_main_edition_2018"
+
+[[fixture]]
+id = "T051-STOCK-RANGE-BOUNDARIES-ED2021"
+path = "xtask/tests/stock_scalar_range_runtime.rs"
+test = "unchanged_match_range_main_edition_2021"
+
+[[fixture]]
+id = "T051-STOCK-RANGE-BOUNDARIES-ED2024"
+path = "xtask/tests/stock_scalar_range_runtime.rs"
+test = "unchanged_match_range_main_edition_2024"
+
+[[fixture]]
+id = "M016-PENDING-STATEMENT-ROUTING"
+path = "crates/lrr/src/syntax/generated_control.rs"
+test = "non_break_routes_are_not_applicable_without_hiding_real_break_or_input_errors"
+
+[[fixture]]
+id = "M016-PENDING-STATEMENT-ORIGIN"
+path = "crates/lrr/src/frontend/runtime_macro_generated_break.rs"
+test = "unchanged_pending_statement_originals_keep_selected_diagnostic_source_all_editions"
+
+[[fixture]]
+id = "T032-REFERENCE-MISSING-LOCAL-SOURCE"
+path = "crates/lrr/src/engine/run_assertion_call_tests.rs"
+test = "reference_argument_admission_keeps_scalar_match_callee_cold_all_editions"
+
+[[fixture]]
+id = "T032-REFERENCE-UNCERTIFIED-ENTRY"
+path = "crates/lrr/src/vm/frame.rs"
+test = "rustc_original_reference_parameter_requires_current_certificate_before_entry"
+
+[[fixture]]
+id = "T032-REFERENCE-SCALAR-GUARD"
+path = "crates/lrr/src/vm/parameter_place_tests.rs"
+test = "rustc_original_reference_parameter_scalar_guard_refuses_before_owning_read_all_editions"

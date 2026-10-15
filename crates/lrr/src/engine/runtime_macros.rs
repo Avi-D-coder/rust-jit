@@ -267,68 +267,13 @@ impl<'a> RuntimeMacroContext<'a> {
             RuntimeMacroPreparation::SourceExpansion {
                 definition,
                 invocation,
-            } => {
-                use crate::{
-                    core::digest::{StableEncode, StableEncoder},
-                    source::manifest::ItemKind,
-                    syntax::{
-                        origin::{DefinitionOrigin, MacroOrigin, SourceOrigin},
-                        token_wire::{Key, SourceIdentity},
-                    },
-                };
-                // This describes the selected reached call. It grants no expansion
-                // authority and must never substitute for completing that request.
-                let selected = self.source.selection();
-                if invocation.key() != &selected.outline.parse {
-                    return Err(fault(
-                        "LRR-E-RUNTIME-MACRO",
-                        "pending diagnostic source/profile differs",
-                    ));
-                }
-                let source = SourceIdentity {
-                    unit: Key(selected.outline.crate_key.0),
-                    content: Key(selected.outline.parse.content.0),
-                    path: selected.path.as_str().into(),
-                };
-                let definition_origin = if self.source.outline().items.iter().any(|item| {
-                    item.def_key.item_kind == ItemKind::Macro
-                        && item.def_key.fingerprint() == definition.identity
-                }) {
-                    let (range, name) = self.source.macro_definition_header(definition.identity)?;
-                    Some(DefinitionOrigin {
-                        identity: definition.identity,
-                        name,
-                        location: SourceOrigin {
-                            source: source.clone(),
-                            range,
-                        },
-                    })
-                } else {
-                    None
-                };
-                // A diagnostic-only identity from the actual symbolic PC and
-                // selected definition; neither offsets nor this ID are authority.
-                let mut identity = StableEncoder::new("lrr/v2/reached-pending-macro-diagnostic");
-                identity.record(pc);
-                identity.digest(definition.identity);
-                let mut diagnostic = fault(
-                    "LRR-E-CATALOG-INCOMPLETE",
-                    "reached user macro requires source expansion integration",
-                );
-                diagnostic.macro_origin = Some(Box::new(MacroOrigin {
-                    invocation_identity: identity.finish(),
-                    invocation: Some(SourceOrigin {
-                        source,
-                        range: invocation.range(),
-                    }),
-                    definition: definition_origin,
-                    failure_kind: None,
-                    failure_span_key: None,
-                    failure_span: None,
-                    parents: Vec::new(),
-                }));
-                Err(diagnostic)
-            }
+            } => Err(pending_source_expansion(
+                self.source,
+                pc,
+                invocation.key(),
+                invocation.range(),
+                definition.identity,
+            )?),
             RuntimeMacroPreparation::Resolution { lookup, .. } => Err(match lookup {
                 PathLookup::NeedInput(_) => fault(
                     "LRR-E-CATALOG-INCOMPLETE",
@@ -348,6 +293,116 @@ impl<'a> RuntimeMacroContext<'a> {
             }),
         }
     }
+}
+
+/// Diagnostic-only selected source evidence, shared by unresolved runtime
+/// expansion and a sealed expansion outside the closed executable control lane.
+fn pending_source_expansion(
+    source: &PreparedSourceView,
+    pc: &PcKey,
+    parse: &crate::syntax::parse::ParseKey,
+    range: SourceRange,
+    definition: crate::core::digest::Digest,
+) -> Result<Diagnostic, Diagnostic> {
+    use crate::{
+        core::digest::{StableEncode, StableEncoder},
+        source::manifest::ItemKind,
+        syntax::{
+            origin::{DefinitionOrigin, MacroOrigin, SourceOrigin},
+            token_wire::{Key, SourceIdentity},
+        },
+    };
+    let selected = source.selection();
+    if parse != &selected.outline.parse {
+        return Err(fault(
+            "LRR-E-RUNTIME-MACRO",
+            "pending diagnostic source/profile differs",
+        ));
+    }
+    let identity = SourceIdentity {
+        unit: Key(selected.outline.crate_key.0),
+        content: Key(selected.outline.parse.content.0),
+        path: selected.path.as_str().into(),
+    };
+    let header = if source.outline().items.iter().any(|item| {
+        item.def_key.item_kind == ItemKind::Macro && item.def_key.fingerprint() == definition
+    }) {
+        Some(source.macro_definition_header(definition)?)
+    } else {
+        // Sealed declaration records use the captured declaration identity,
+        // not the outline member's DefKey. Follow the same original Source
+        // body-owner/header join as SourceDeclarative::declaration_demand.
+        let scan = source.declaration_inventory(Default::default())?;
+        if scan.parse() != &selected.outline.parse
+            || scan.path() != &selected.path
+            || scan.scope() != &source.outline().root_scope
+            || scan.cfg() != selected.outline.cfg
+            || scan.generated_origin().is_some()
+        {
+            return Err(fault(
+                "LRR-E-EXPANSION-INPUT",
+                "pending definition declaration source attachment differs",
+            ));
+        }
+        let mut definitions = scan
+            .macro_definitions()
+            .iter()
+            .filter(|header| header.identity == definition);
+        let captured = definitions.next();
+        if definitions.next().is_some() {
+            return Err(fault(
+                "LRR-E-EXPANSION-INPUT",
+                "pending definition declaration identity is ambiguous",
+            ));
+        }
+        if let Some(captured) = captured {
+            let shape = source.macro_definition_shape_at(captured.range)?;
+            let header = source.macro_definition_header_at(captured.range)?;
+            let edition = selected.outline.parse.profile.edition;
+            if shape.body() != captured.body
+                || crate::expand::scopes::MacroName::parse(&header.1, edition)?
+                    != crate::expand::scopes::MacroName::parse(&captured.name, edition)?
+            {
+                return Err(fault(
+                    "LRR-E-EXPANSION-INPUT",
+                    "pending definition captured body/header differs",
+                ));
+            }
+            Some(header)
+        } else {
+            // No same-source identity is not permission to guess a foreign or
+            // generated definition's location from its spelling.
+            None
+        }
+    };
+    let definition_origin = header.map(|(range, name)| DefinitionOrigin {
+        identity: definition,
+        name,
+        location: SourceOrigin {
+            source: identity.clone(),
+            range,
+        },
+    });
+    let mut invocation_identity = StableEncoder::new("lrr/v2/reached-pending-macro-diagnostic");
+    invocation_identity.record(pc);
+    invocation_identity.digest(definition);
+    let mut diagnostic = fault(
+        "LRR-E-CATALOG-INCOMPLETE",
+        "reached user macro requires source expansion integration",
+    );
+    diagnostic.macro_origin = Some(Box::new(MacroOrigin {
+        invocation_identity: invocation_identity.finish(),
+        invocation: Some(SourceOrigin {
+            source: identity,
+            range,
+        }),
+        definition: definition_origin,
+        failure_kind: None,
+        failure_span_key: None,
+        failure_span: None,
+        parents: Vec::new(),
+    }));
+    Ok(diagnostic)
 }
 
 /// Prepare an exact original-source call using its sealed discovery descriptor.
@@ -546,7 +601,7 @@ pub fn prepare_declarative_expression(
                 key: epoch_key,
                 fingerprint: epoch.fingerprint(),
             });
-            return crate::frontend::runtime_macro_plan::prepare_declarative_break(
+            if let Some(prepared) = crate::frontend::runtime_macro_plan::prepare_declarative_break(
                 crate::frontend::runtime_macro_plan::DeclarativeControlInput {
                     db,
                     source,
@@ -556,7 +611,37 @@ pub fn prepare_declarative_expression(
                     input: value.as_ref(),
                     dependencies,
                 },
-            );
+            )? {
+                return Ok(prepared);
+            }
+            let MacroIdentity::Declaration { definition } = &expected.key.macro_identity else {
+                return Err(fault(
+                    "LRR-E-EXPANSION-INPUT",
+                    "pending source macro identity differs",
+                ));
+            };
+            return Err(pending_source_expansion(
+                source,
+                pc,
+                &source.selection().outline.parse,
+                SourceRange {
+                    start: handle
+                        .range
+                        .start
+                        .checked_add(node.range.start)
+                        .ok_or_else(|| {
+                            fault("LRR-E-METADATA-LIMIT", "pending source start overflow")
+                        })?,
+                    end: handle
+                        .range
+                        .start
+                        .checked_add(node.range.end)
+                        .ok_or_else(|| {
+                            fault("LRR-E-METADATA-LIMIT", "pending source end overflow")
+                        })?,
+                },
+                *definition,
+            )?);
         }
         let span = body.span(NodeId(pc.node))?;
         let output =

@@ -1,0 +1,269 @@
+{
+  "schema_version": 1,
+  "task_scope": "M016/M013 reached original generated-statement routing and diagnostic provenance",
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "canonical_source_paths": [
+    {
+      "path": "crates/lrr/src/engine/runtime_macros.rs",
+      "before": "2b0f6c646d3f679be3ae6d1b9a5c37e4f302779f91c9eb78cbef48d1a9765b6a",
+      "sha256": "94e75a600c15f3a4649815a72ccb7ca03c89b4c343522364b44219fd04b52767"
+    },
+    {
+      "path": "crates/lrr/src/syntax/generated_control.rs",
+      "before": "c9d56c155066fa5a202047c4c831bd51d093760c6beb47c6f26d015e09cd6f37",
+      "sha256": "038545d411ad15b5ade3515ee88d1aaceaf15c325d55d2d6c86a4b87828a5653"
+    },
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_generated_break.rs",
+      "before": "512348566428df6c1e52a72fdf136e92b2d626da8dfdc8676a063d04eeef58a2",
+      "sha256": "3344589692e0484b5253b3300a81690652420527d955dc8d6000bb8883c26236"
+    }
+  ],
+  "combined_validated_member": "462d9cb8a1ebeb67b16e9b55b13b9db3f7725b33f102dc66271ca123ea2ffa67",
+  "scoped_results": {
+    "unchanged_pending_CLI": 1,
+    "generated_source_and_authority_controls": 9,
+    "unchanged_labelled_main_editions": 4,
+    "strict_library_and_3_stock_harnesses": "passed",
+    "architecture": "passed",
+    "format": "passed"
+  },
+  "initial_failure": "MAINv7: unconditional Statements break decoding changed the pending diagnostic and lost selected definition provenance",
+  "intermediate_failure": "V28 typed non-applicability restored pending code/caller but missing definition note; wrong identity domain compared declaration inventory identity with outline DefKey",
+  "invariants": [
+    "Schema-checked non-direct-break statements return typed None/pending; recognized break/input/source errors propagate",
+    "Non-executable pending output retains actual invocation and definition header notes",
+    "Definition note uses exact captured declaration identity/range/body/name and actual source header; no spelling guess or identity alias",
+    "Existing CLI source assertions and upstream originals unchanged; no native/source execution for pending output"
+  ],
+  "scope_limit": "Diagnostic-component repair, not full upstream diagnostic fixture or runtime/full-suite acceptance",
+  "upstream_fixture_passes_added": 0,
+  "diagnostic_compatibility": "incomplete; separate gate",
+  "compiler_tooling_compatibility": "incomplete; separate gate",
+  "full_suite_compatibility": "incomplete",
+  "M016_status": "in_progress; actual prior completion reopened; full gate pending",
+  "full_gate": {
+    "status": "failed",
+    "actual_session_id": 15413,
+    "actual_chunk_id": "6faeb2",
+    "exit_code": 1,
+    "source_unchanged": true,
+    "listed": 3148,
+    "passed_checks": 1021,
+    "failed_checks": 2,
+    "unexecuted_checks": 2125,
+    "library_listed": 1023,
+    "failures": [
+      "engine::run::assertion_call_tests::reference_argument_admission_keeps_scalar_match_callee_cold_all_editions: staleexactargument-source diagnostic expectation; latercoldnesschecks unexecuted",
+      "vm::frame::tests::rustc_original_reference_parameter_scalar_guard_refuses_before_owning_read: setupomits requiredcurrentreference certificate; intendedlaterguard unexecuted"
+    ],
+    "next_action": "Narrow test-only successor preserves missing-source coldness, new earlier uncertifiedentryrefusal, and genuine certifiedreference scalar-guard ownership check; newfullgate required",
+    "receipt": {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v29/VALIDATION-HANDOFF.json",
+      "sha256": "1ba6cb75110be7364ee9dfd2d9de78fbce86d8c32a7cfa65e46710b6387890a1"
+    }
+  },
+  "guest_jit_gate": "closed",
+  "release_complete": false,
+  "linux_acceptance": "unexecuted",
+  "local_scoped_terminals": [
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v29/architecture/terminal.json",
+      "sha256": "288113ccddcdccdba380f2521230b7022021630c40dab834f664065c5587fa50",
+      "scope": "architecture",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "run",
+        "-p",
+        "xtask",
+        "--locked",
+        "--offline",
+        "--",
+        "architecture-audit"
+      ],
+      "exit_code": 0,
+      "matched_test_count": null
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v29/format/terminal.json",
+      "sha256": "c4dab7d2a23be1081614458117156f7ccad3b082324478b034d1cb487c8a9408",
+      "scope": "format",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "matched_test_count": null
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v29/generated-control-nine/terminal.json",
+      "sha256": "6ba0c29675ae0ca55f49b35ad4f24e069950f58dd29e4cc13cfb1b09ba2c398c",
+      "scope": "generated-control-nine",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--lib",
+        "--locked",
+        "--offline",
+        "--",
+        "--exact",
+        "--test-threads=1",
+        "syntax::generated_control::tests::unchanged_mac1_transcriber_and_arguments_decode_real_lifetime_expansion",
+        "syntax::generated_control::tests::single_break_payload_lane_is_closed_and_callers_are_exact",
+        "syntax::generated_control::tests::target_continuation_reuses_original_block_commit_and_refuses_foreign_inputs",
+        "frontend::runtime_macro_plan::generated_break::tests::unchanged_mac1_captured_break_targets_keep_real_source_hygiene_all_editions",
+        "frontend::runtime_macro_plan::generated_break::tests::genuine_private_break_verifier_rejects_control_dependency_and_hint_tampering",
+        "frontend::runtime_macro_plan::generated_break::tests::definition_site_label_spelling_cannot_target_the_original_caller_label",
+        "frontend::runtime_macro_plan::generated_break::tests::a_new_publication_epoch_does_not_reuse_old_generated_break_authority",
+        "syntax::generated_control::tests::non_break_routes_are_not_applicable_without_hiding_real_break_or_input_errors",
+        "frontend::runtime_macro_plan::generated_break::tests::unchanged_pending_statement_originals_keep_selected_diagnostic_source_all_editions"
+      ],
+      "exit_code": 0,
+      "matched_test_count": 9
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v29/pending-cli/terminal.json",
+      "sha256": "902cab635ea688c93851151c4658c783938ce5a32d2ec1b6cbe68f07b7e29ad2",
+      "scope": "pending-cli",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--test",
+        "standalone_cli",
+        "--locked",
+        "--offline",
+        "--",
+        "--exact",
+        "--test-threads=1",
+        "rustc_reached_pending_expression_macros_keep_selected_source_locations"
+      ],
+      "exit_code": 0,
+      "matched_test_count": 1
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v29/stock-labelled/terminal.json",
+      "sha256": "0e8ce2f65f3ecd7148642b7897cb95316aec47f00a6ad764da3927e0fee124f5",
+      "scope": "stock-labelled",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "xtask",
+        "--test",
+        "stock_labelled_block_runtime",
+        "--locked",
+        "--offline",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "matched_test_count": 4
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v29/strict-library/terminal.json",
+      "sha256": "e689d8a0e079e6d8ba57f310b64e8e675f324cc99465d10d0b9219c1a1d3afcf",
+      "scope": "strict-library",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "-p",
+        "lrr",
+        "--lib",
+        "--locked",
+        "--offline",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "matched_test_count": null
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v29/strict-stock-all/terminal.json",
+      "sha256": "b978af37f46e59d71aa8341a3d1d9a7822eb9f211404196843119a5940d8d3cf",
+      "scope": "strict-stock-all",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "-p",
+        "xtask",
+        "--test",
+        "stock_labelled_block_runtime",
+        "--test",
+        "stock_reference_call_runtime",
+        "--test",
+        "stock_scalar_range_runtime",
+        "--locked",
+        "--offline",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "matched_test_count": null
+    }
+  ],
+  "mechanical_lint_successor": {
+    "source_member": "2fe250101c2318ab8116c0cec671fd2313ac0642de71f837dd9fa0dc53ff7a12",
+    "strict_lrr_library_and_tests": "passed",
+    "actual_terminal": {
+      "session_id": 35297,
+      "chunk_id": "e39d41",
+      "exit_code": 0
+    },
+    "terminal": {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v31/strict-lrr-tests/terminal.json",
+      "sha256": "590afc8222bf741bfac16957baf50c0af3b5ab56ca243d1ec72dc2403750ef64"
+    },
+    "scope": "8 mechanical style leaves plus root test-only enum allowance and err pattern. No assertion/original changes; V30 three repaired reference controls passed separately.",
+    "full_gate": "V31 running asynchronously; not accepted or collected",
+    "mechanical_source_paths": [
+      {
+        "path": "crates/lrr/src/engine/run_namespace_tests.rs",
+        "sha256": "658284afb97986f1248973933ba1f529db5979aabaa5ddbf145245f92a30e83b"
+      },
+      {
+        "path": "crates/lrr/src/frontend/constant_macro_admission_tests.rs",
+        "sha256": "9375cd7d218d084839b02312e3b8c3cbf25d958a3249768cbb7831f3f3c29a73"
+      },
+      {
+        "path": "crates/lrr/src/frontend/constant_preparation_tests.rs",
+        "sha256": "de8e8b3e79a35efa62bbcd6e7a160d52294706ac42f9aebcdfef3a1d6c17eed5"
+      },
+      {
+        "path": "crates/lrr/src/frontend/constant_child_admission_tests.rs",
+        "sha256": "956de11d489880a0b8b6cb5a825467923cc16d4f842ced2d99a9175a503b5da0"
+      },
+      {
+        "path": "crates/lrr/src/frontend/runtime_macro_numeric.rs",
+        "sha256": "c7c4846ba8a5f058045158ff8275ef15ce9855540245933ad00717e29d71ae8f"
+      },
+      {
+        "path": "crates/lrr/src/syntax/runtime_local_numeric_context_tests.rs",
+        "sha256": "6a049023f1a444f0e96a763310e6096d0e840b664f85460139e87de0e69dad2b"
+      },
+      {
+        "path": "crates/lrr/src/syntax/scalar_pattern_owner_scope_tests.rs",
+        "sha256": "07eeb5308ac9d56fc9b3a6e62ff79a652500ab16fc6795a01a15060c9f5174e0"
+      },
+      {
+        "path": "crates/lrr/src/syntax/generated_control.rs",
+        "sha256": "f5b8a0b93bc4a8fc44b085f9f42d53657f1b39db0bb59b2124348931f5916881"
+      }
+    ]
+  }
+}

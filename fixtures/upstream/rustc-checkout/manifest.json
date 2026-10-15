@@ -186,6 +186,18 @@
       "bytes": 293
     },
     {
+      "path": "tests/ui/binding/match-range-infer.rs",
+      "git_blob": "aebfa0376516dda78e0939b2e2cdfd127e1fcbee",
+      "sha256": "92c12147663967ee443767d126338a204c1bca80d601e31f1b2ea51a67a1b1d2",
+      "bytes": 422
+    },
+    {
+      "path": "tests/ui/binding/match-range.rs",
+      "git_blob": "097ccb34f87c3dc1cdc269f797d8110058fb62ae",
+      "sha256": "2df51e522ebeda27b15a88a6d7275766b464f76f31af1b0ac402bd7be7e4d8ca",
+      "bytes": 1168
+    },
+    {
       "path": "tests/ui/borrowck/assign-imm-local-twice.fixed",
       "git_blob": "dca994141bb8b4108d791dee36538207000646e2",
       "sha256": "199f1da59944f5a3b61535e86980efbef5bdd44c7964b0ac4e451619df1b23fa",
@@ -1680,6 +1692,12 @@
       "bytes": 260
     },
     {
+      "path": "tests/ui/match/match-on-negative-integer-ranges.rs",
+      "git_blob": "855686f55c326103f181b2764700d0aed84c6d3f",
+      "sha256": "d55223d431c9d0840087bcbfe2f04c369654919e262a3d5b3cb9ca9132f1b7b3",
+      "bytes": 187
+    },
+    {
       "path": "tests/ui/match/overeager-sub-match-pruning-13027.rs",
       "git_blob": "c4feb697f7d121ff654cc59dd3231f1249f9a7c0",
       "sha256": "cc84129ba72b7478705567606b06581b3ccf83bd0b970afcde9ca1a6927ab5c6",
@@ -3070,6 +3088,22 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/binding/match-range-infer.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/binding/match-range.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/borrowck/assign-imm-local-twice.rs",
       "directives": [
         "//@ run-rustfix"
@@ -4278,6 +4312,14 @@
     },
     {
       "path": "tests/ui/match/issue-26251.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/match/match-on-negative-integer-ranges.rs",
       "directives": [
         "//@ run-pass"
       ],

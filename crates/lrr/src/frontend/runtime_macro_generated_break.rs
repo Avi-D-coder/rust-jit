@@ -23,7 +23,7 @@ use crate::{
     syntax::{
         body_index::{BodyIndex, ExpressionKind, LabelId, NodeRole},
         generated_control::{
-            GeneratedBreak, decode_break, target_continuation, target_label_range,
+            GeneratedBreak, target_continuation, target_label_range, try_decode_break,
         },
         outline::BodyHandle,
         parse::ParseKey,
@@ -537,10 +537,16 @@ impl GeneratedBreakAdmission {
     }
 }
 
+/// None retains the caller's pending source-expansion route. Only Some carries
+/// a current, source-admitted same-frame executable break recipe.
 pub(crate) fn prepare_declarative_break(
     args: DeclarativeControlInput<'_>,
-) -> Result<PreparedDeclarativeExpression, Diagnostic> {
-    let output = decode_break(args.input, args.body.span(NodeId(args.pc.node))?, args.pc)?;
+) -> Result<Option<PreparedDeclarativeExpression>, Diagnostic> {
+    let Some(output) =
+        try_decode_break(args.input, args.body.span(NodeId(args.pc.node))?, args.pc)?
+    else {
+        return Ok(None);
+    };
     let bytes = output.allocated_bytes()?;
     let admission = GeneratedBreakAdmission::capture_current(&args, &output)?;
     let mut operations = Vec::new();
@@ -613,17 +619,18 @@ pub(crate) fn prepare_declarative_break(
         .filter(|bytes| *bytes <= 64 * 1024 * 1024)
         .ok_or_else(limit)?;
     let (tokens, origins) = output.into_provenance();
-    Ok(PreparedDeclarativeExpression {
+    Ok(Some(PreparedDeclarativeExpression {
         recipe: Box::new(recipe),
         tokens,
         origins,
         metadata_bytes,
-    })
+    }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::syntax::generated_control::decode_break;
     use crate::{
         core::profile::ProfileIdentity,
         db::key::OutlineKey,
@@ -813,7 +820,8 @@ mod tests {
             for ((pc, input), wanted) in calls.iter().zip(["'b", "'a"]) {
                 let prepared =
                     prepare_declarative_break(args(&db, &source, &handle, &body, pc, input))
-                        .unwrap();
+                        .unwrap()
+                        .expect("actual direct break must be applicable");
                 let RecipeExit::Control(ControlRecipe::Break {
                     target,
                     value,
@@ -868,6 +876,116 @@ mod tests {
         }
     }
     #[test]
+    fn unchanged_pending_statement_originals_keep_selected_diagnostic_source_all_editions() {
+        const ISSUE: &str = include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/issue-29084.rs"
+        );
+        const SPAN: &str = include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/span-covering-argument-1.rs"
+        );
+        for edition in [2015, 2018, 2021, 2024] {
+            for (original, name, invocation_line, definition_line) in
+                [(ISSUE, "foo!", 13, 3), (SPAN, "bad!", 12, 1)]
+            {
+                let (mut db, source, handle, body) = world(original, "main", edition);
+                let (pc, value) = {
+                    let calls = inputs(&db, &source, &handle, &body, name);
+                    assert_eq!(calls.len(), 1);
+                    (calls[0].0.clone(), (*calls[0].1).clone())
+                };
+                assert!(
+                    prepare_declarative_break(args(&db, &source, &handle, &body, &pc, &value))
+                        .unwrap()
+                        .is_none()
+                );
+                let InputValue::ExpansionRecord(record) = &value else {
+                    panic!("real record")
+                };
+                let descriptor = record.descriptor();
+                let MacroIdentity::Declaration {
+                    definition: selected,
+                } = &descriptor.key.macro_identity
+                else {
+                    panic!("actual declaration identity")
+                };
+                let scan = source.declaration_inventory(Default::default()).unwrap();
+                let captured = scan
+                    .macro_definitions()
+                    .iter()
+                    .find(|header| header.identity == *selected)
+                    .expect("actual selected declaration header");
+                // This is the real identity split which lost the V1 note; do
+                // not repair it by substituting an unrelated outline member ID.
+                assert!(
+                    !source
+                        .outline()
+                        .items
+                        .iter()
+                        .any(|item| item.def_key.fingerprint() == *selected)
+                );
+                let actual_header = source.macro_definition_header_at(captured.range).unwrap();
+                let before = (db.revision(), db.source_revision());
+                let crate::db::poll::QueryPoll::Ready(Err(diagnostic)) =
+                    crate::engine::runtime_macros::prepare_declarative_expression(
+                        &mut db,
+                        &source,
+                        &body,
+                        &pc,
+                        &descriptor,
+                    )
+                else {
+                    panic!("unimplemented original statement must remain pending")
+                };
+                assert_eq!(diagnostic.code, "LRR-E-CATALOG-INCOMPLETE");
+                assert!(
+                    diagnostic
+                        .message
+                        .contains("requires source expansion integration")
+                );
+                let origin = diagnostic
+                    .macro_origin
+                    .as_ref()
+                    .expect("actual invocation provenance");
+                let invocation = origin.invocation.as_ref().unwrap();
+                let definition = origin
+                    .definition
+                    .as_ref()
+                    .expect("actual selected definition provenance");
+                let line = |start: u32| {
+                    original.as_bytes()[..start as usize]
+                        .iter()
+                        .filter(|byte| **byte == b'\n')
+                        .count()
+                        + 1
+                };
+                assert_eq!(line(invocation.range.start), invocation_line);
+                assert_eq!(line(definition.location.range.start), definition_line);
+                assert_eq!(definition.identity, *selected);
+                assert_eq!(definition.location.range, actual_header.0);
+                assert_eq!(definition.name, actual_header.1);
+                assert_eq!(
+                    invocation.source.content,
+                    Key(source.selection().outline.parse.content.0)
+                );
+                assert_eq!(definition.location.source, invocation.source);
+                assert_eq!(definition.name, name.trim_end_matches('!'));
+                assert_eq!((db.revision(), db.source_revision()), before);
+                // Non-applicability never catches a changed descriptor/authority
+                // failure before the structural statement classifier.
+                let mut foreign = descriptor.clone();
+                foreign.wire_bytes = foreign.wire_bytes.checked_add(1).unwrap();
+                let crate::db::poll::QueryPoll::Ready(Err(error)) =
+                    crate::engine::runtime_macros::prepare_declarative_expression(
+                        &mut db, &source, &body, &pc, &foreign,
+                    )
+                else {
+                    panic!("changed real record descriptor must refuse")
+                };
+                assert_eq!(error.code, "LRR-E-EXPANSION-INPUT");
+            }
+        }
+    }
+    #[test]
     fn genuine_private_break_verifier_rejects_control_dependency_and_hint_tampering() {
         let (db, source, handle, body) = world(ORIGINAL, "label_break_macro", 2024);
         let calls = inputs(&db, &source, &handle, &body, "mac1!");
@@ -878,8 +996,9 @@ mod tests {
             &output,
         )
         .unwrap();
-        let prepared =
-            prepare_declarative_break(args(&db, &source, &handle, &body, pc, input)).unwrap();
+        let prepared = prepare_declarative_break(args(&db, &source, &handle, &body, pc, input))
+            .unwrap()
+            .expect("actual direct break must be applicable");
         let draft = || RecipeDraft {
             key: prepared.recipe().recipe().key.clone(),
             origin: prepared.recipe().recipe().origin.clone(),

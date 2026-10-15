@@ -5009,14 +5009,14 @@ mod tests {
         (frame, store, recipe, target, shared, destination)
     }
     #[test]
-    fn rustc_original_reference_parameter_scalar_guard_refuses_before_owning_read() {
-        // Component admission setup uses the unchanged upstream reference
-        // parameter witness. It does not claim full upstream/main execution or
-        // integration of reference argument preparation in RunMachine.
+    fn rustc_original_reference_parameter_requires_current_certificate_before_entry() {
+        // The unchanged upstream reference witness supplies actual symbolic
+        // signature and physical arguments, but this disclosed component packet
+        // deliberately lacks the private current-source reference certificate.
+        // Entry must refuse before context installation or any owning read.
         let PendingMutableParameter {
-            mut frame,
-            mut store,
-            packet,
+            frame,
+            store,
             ty,
             target,
             ..
@@ -5074,40 +5074,34 @@ mod tests {
             result_descriptor,
             normalized_deferred_return: None,
         };
-        frame
-            .install_context(
-                super::super::context::GenericEnv::capture(&signature, &contracts).unwrap(),
-            )
-            .unwrap();
-        frame
-            .initialize_parameters(&packet, &[(ty, false)], &mut store)
-            .unwrap();
-        let parameter = frame.parameters[0].unwrap();
         let before = (
-            store.state(parameter).unwrap(),
-            store.location_epoch(parameter).unwrap(),
+            store.owner_inventory_for_test(),
             store.location_epoch(target).unwrap(),
             store.budget().handles(),
+            store.budget().bytes(),
             frame.fuel_snapshot().used,
             frame.counters.operations_started,
         );
-        let error = frame.definition_parameter_primitive(0).unwrap_err();
-        assert_eq!(error.code, "LRR-E-UNSUPPORTED");
+        let Err(error) = super::super::context::GenericEnv::capture(&signature, &contracts) else {
+            panic!("uncertified reference context must not be captured")
+        };
+        assert_eq!(error.code, "LRR-E-CALL-CONTEXT");
         assert_eq!(
             error.message,
-            "scalar parameter context requires an admitted primitive source"
+            "closed reference parameter requires its current source certificate"
         );
         assert_eq!(
             before,
             (
-                store.state(parameter).unwrap(),
-                store.location_epoch(parameter).unwrap(),
+                store.owner_inventory_for_test(),
                 store.location_epoch(target).unwrap(),
                 store.budget().handles(),
+                store.budget().bytes(),
                 frame.fuel_snapshot().used,
                 frame.counters.operations_started,
             )
         );
+        assert!(frame.parameters.iter().all(Option::is_none));
         assert_eq!(frame.counters.started_by_opcode[21], 0);
         assert!(frame.active_scopes.is_empty());
     }

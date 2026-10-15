@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "task_scope": "WT03/T050-T051 reached scalar range patterns; T025 intrinsic source context prerequisites",
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "canonical_integration": {
+    "source_paths": 6,
+    "new_originals": 3,
+    "full_milestone": "pending combined reference/range/routing validation"
+  },
+  "upstream_runtime_acceptance": {
+    "complete": false,
+    "newly_demonstrated_runtime_contracts": 2,
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "cases": [
+      {
+        "path": "tests/ui/binding/match-range-infer.rs",
+        "whole_main_completed": true,
+        "NumericBinary_10": 6,
+        "cold_panic_macros": 3,
+        "ranges": 3
+      },
+      {
+        "path": "tests/ui/binding/match-range.rs",
+        "whole_main_completed": true,
+        "NumericBinary_10": 22,
+        "cold_panic_macros": 12,
+        "ranges": 11,
+        "cold_upper_ordinals_zero_based": [
+          2
+        ],
+        "cold_commit_ordinals_zero_based": [
+          2,
+          3,
+          9
+        ]
+      }
+    ],
+    "stock_scope_member": "9dc37f987d1ef38c7c3b76c6916c7176644ba9f3edb81941d3c1e4f93825b5b0",
+    "actual_terminal": {
+      "session_id": 16512,
+      "chunk_id": "b68c9c",
+      "exit_code": 0
+    },
+    "full_compiletest_fixture_pass": false
+  },
+  "scoped_evidence": {
+    "v8": "production compiled; test E0382 owning BodyKey harness uses;0bodies",
+    "v9": "whole stock8 edition bodies passed; component test2APIerrors/0bodies",
+    "v10": "7range/source/coldphase controls, strict library/stockrange lint,architecture/fmt passed; production/original-main harness unchanged from V9",
+    "source_member": "92f4fadfed6fe0b21114536792ba850f900ca0c33e1f4fcdbb00b5d4f5e6f5e3"
+  },
+  "invariants": [
+    "Original source range BodyIndex marker and one Operand0 phase; stable original-body-structure domainv3",
+    "Lower Ge executes before reached upper Le/Lt; existing2temps discarded before reuse; scrutinee evaluated once",
+    "Upper source-form/family/attribute admission and value decoding defer to Operand0; lower mismatch Exit does not demand upper",
+    "Written suffix/char/float source evidence and actual locals/parameters retained; no descriptor-to-source reconstruction",
+    "Original guard/commit/scope/rollback paths retained; general binding/guard work remains required"
+  ],
+  "unexecuted_originals": [
+    "tests/ui/match/match-on-negative-integer-ranges.rs: macro MatchExpr and if-let admission required"
+  ],
+  "required_runtime_frontiers": [
+    "negative original opaque expression MatchExpr/if-let",
+    "reached named/constant/open/byte/attributed endpoints",
+    "general transactional patterns and source-aware scrutinees"
+  ],
+  "original_inventory": {
+    "cases": 306,
+    "files": 488,
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "license": "MIT OR Apache-2.0; both texts retained"
+  },
+  "diagnostic_compatibility": "incomplete; separate gate",
+  "compiler_tooling_compatibility": "incomplete; separate gate",
+  "full_suite_compatibility": "incomplete",
+  "guest_jit_gate": "closed",
+  "release_complete": false,
+  "linux_acceptance": "unexecuted",
+  "local_receipts": [
+    {
+      "path": "artifacts/macos-first/root-main-range-v8-assembly-v1/agent-validation-v1/VALIDATION-HANDOFF.json",
+      "sha256": "eaa9badbbd5dbf3be6eadc4895fe194fe771620783ceac94a0dea357c9ad9050"
+    },
+    {
+      "path": "artifacts/macos-first/root-main-range-v9-api-fixes-v1/agent-validation-v1/VALIDATION-HANDOFF.json",
+      "sha256": "8f45ea6293d09148e76ada98defcd12ad4176b56eccb2de05e91e9d75002a9c2"
+    },
+    {
+      "path": "artifacts/macos-first/root-main-range-v10-api-fixes-v1/agent-validation-v1/VALIDATION-HANDOFF.json",
+      "sha256": "8901236d238c4a4600f0210268c1bba5efcb83846e14649c58eeb218a8917f60"
+    }
+  ]
+}
