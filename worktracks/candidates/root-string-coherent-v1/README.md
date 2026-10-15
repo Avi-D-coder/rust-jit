@@ -1,0 +1,7 @@
+# Coherent ordinary string interpreter candidate
+
+This single T022/T024/T041/T062 packet composes the string IR, immutable UTF-8 storage and ordinary literal VM drafts into 20 leaves. It supersedes `root-string-literal-ir-v1`, `root-static-utf8-storage-v1`, and `root-string-vm-literals-v1` for assembly; do not apply both forms. It carries the validated TypeRegistry initializer repair and the production StableEncode import forward exactly.
+
+The implementation decodes original string tokens through the pinned frontend, preserves source spans and edition, assigns distinct unsized `TyTerm::Str` identity, and constructs immutable static UTF-8 storage with bounded large-literal dispatch and cleanup. Its shared byte activation retains separate UTF-8/byte source certificates. The eleven pending controls include whole-main execution of unchanged `slowparse-string.rs` across all four editions. String equality, methods, annotated/aliased bindings and macro operands remain outstanding.
+
+This packet is held behind the byte assertion queue. Exact source composition and replay succeeded; Rust compilation, runtime controls and the milestone are pending. No stock runtime or full-fixture pass is added by packaging this candidate. Add missing Unicode/NUL/slowparse-string originals with the normal pinned importer; do not replace an existing inventory. The earlier packet audits retain the upstream source hashes and detailed invariant descriptions.

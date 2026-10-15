@@ -1,0 +1,34 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "task_cards": [
+    "T024",
+    "T041"
+  ],
+  "claim": "LOCAL-024",
+  "files": [
+    {
+      "path": "xtask/tests/stock_qualified_range_constants_runtime.rs",
+      "before_sha256": "a16a2d202190e73d0d4c4df701b8462c5ec9e43904f6be876b9b7d18b2a6d912",
+      "after_sha256": "e5524ed70e42e9533246515a062ce89f3f0c73c60d226670808e54126536ab5e"
+    }
+  ],
+  "patch_sha256": "c3d44e13db7a0672ee57d685b6dd97c1e2fc67e08b4839943bef3b5bc411b02d",
+  "failure_receipt": "V82 d41396/101: missing Type discovery seal at unchanged qualified-range main",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "upstream_witness": {
+    "path": "tests/ui/parser/issues/issue-21475.rs",
+    "sha256": "b746acc1b9c62e74b7a02eab08426a80a26c9fdc3291fe38b38b072645c8c52b"
+  },
+  "static_checks": [
+    "Rust 1.99 formatting",
+    "exact one-leaf replay",
+    "unchanged original byte identity"
+  ],
+  "stock_runtime_passes_added": 0,
+  "acceptance_pending": [
+    "exact original qualified-range main",
+    "conditional byte assertion queue",
+    "combined milestone"
+  ],
+  "created_at": "2026-10-15T11:08:12.344029+00:00"
+}

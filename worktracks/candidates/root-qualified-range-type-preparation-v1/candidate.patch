@@ -1,0 +1,121 @@
+--- a/xtask/tests/stock_qualified_range_constants_runtime.rs
++++ b/xtask/tests/stock_qualified_range_constants_runtime.rs
+@@ -177,59 +177,74 @@
+             ),
+         }
+     }
+-    // Root Type receipts do not stand in for a nested Value scope seal.
+-    // Publish the root first, then genuinely prepare each original owning
+-    // module scope. The same source/cfg/profile/epoch and unit graph are used.
+-    // No constant initializer is entered by this structural preparation.
++    // Reached named bounds require both value and type lookup in their actual
++    // owning scope. Root and nested seals are distinct prerequisites. Prepare
++    // each namespace through discovery with the same source/cfg/profile/epoch;
++    // no initializer or body execution can supply a missing namespace receipt.
+     discovery.publish(&mut db).unwrap();
+     let mut owning_seals = Vec::new();
+     for scope in view
+         .outline()
+         .scopes
+         .keys()
+-        .filter(|scope| scope.owner.is_none() && **scope != view.outline().root_scope)
++        .filter(|scope| scope.owner.is_none())
+     {
+-        let mut owning = SourceDiscovery::new(
+-            vec![view.share()],
+-            scope.clone(),
+-            Namespace::Value,
+-            Digest::of_bytes(b"LRR unchanged stock scalar-range discovery world"),
+-            1,
+-        )
+-        .unwrap()
+-        .with_declarative_compiler(
+-            Digest::of_bytes(b"LRR unchanged stock scalar-range declarative environment"),
+-            source_declarative::engine_version(),
+-            Arc::new(CompileInputCatalog::standalone(&profile).unwrap()),
+-        )
+-        .unwrap();
+-        loop {
+-            match owning.poll().unwrap_or_else(|error| {
+-                panic!("edition {edition}: original owning scope discovery fault: {error}")
+-            }) {
+-                SourceDiscoveryStep::Sealed(_) => break,
+-                SourceDiscoveryStep::NeedExpansion { request } => owning
+-                    .admit_expansion(Arc::new(request.expand().unwrap()))
+-                    .unwrap(),
+-                SourceDiscoveryStep::NeedGeneratedExpansion { request } => owning
+-                    .admit_expansion(Arc::new(request.expand().unwrap()))
+-                    .unwrap(),
+-                SourceDiscoveryStep::Incomplete {
+-                    diagnostic,
+-                    blocked,
+-                } => panic!(
+-                    "edition {edition}: original owning scope incomplete: {diagnostic}; blocked {blocked:?}"
+-                ),
+-                _ => {
+-                    panic!("edition {edition}: original owning scope needs additional preparation")
++        for namespace in [Namespace::Value, Namespace::Type] {
++            // The actual root Value producer above is also retained for macros.
++            if *scope == view.outline().root_scope && namespace == Namespace::Value {
++                continue;
++            }
++            let mut owning = SourceDiscovery::new(
++                vec![view.share()],
++                scope.clone(),
++                namespace,
++                Digest::of_bytes(b"LRR unchanged stock scalar-range discovery world"),
++                1,
++            )
++            .unwrap()
++            .with_declarative_compiler(
++                Digest::of_bytes(b"LRR unchanged stock scalar-range declarative environment"),
++                source_declarative::engine_version(),
++                Arc::new(CompileInputCatalog::standalone(&profile).unwrap()),
++            )
++            .unwrap();
++            loop {
++                match owning.poll().unwrap_or_else(|error| {
++                    panic!("edition {edition}: original owning scope discovery fault: {error}")
++                }) {
++                    SourceDiscoveryStep::Sealed(_) => break,
++                    SourceDiscoveryStep::NeedExpansion { request } => owning
++                        .admit_expansion(Arc::new(request.expand().unwrap()))
++                        .unwrap(),
++                    SourceDiscoveryStep::NeedGeneratedExpansion { request } => owning
++                        .admit_expansion(Arc::new(request.expand().unwrap()))
++                        .unwrap(),
++                    SourceDiscoveryStep::Incomplete {
++                        diagnostic,
++                        blocked,
++                    } => panic!(
++                        "edition {edition}: original owning scope incomplete: {diagnostic}; blocked {blocked:?}"
++                    ),
++                    _ => {
++                        panic!(
++                            "edition {edition}: original owning scope needs additional preparation"
++                        )
++                    }
+                 }
+             }
+-        }
+-        owning.publish(&mut db).unwrap();
+-        let key = lrr::db::dependency::InputKey::DiscoverySeal(owning.key().clone());
+-        let value = db.input(&key).expect("genuine owning scope publication");
+-        owning_seals.push((key, value.fingerprint()));
+-    }
++            owning.publish(&mut db).unwrap();
++            let key = lrr::db::dependency::InputKey::DiscoverySeal(owning.key().clone());
++            let value = db.input(&key).expect("genuine owning scope publication");
++            owning_seals.push((key, value.fingerprint()));
++        }
++    }
++    assert!(
++        db.trace.events.iter().all(|event| !matches!(
++            &event.key,
++            QueryKey::Constant(_) | QueryKey::BodyStructure(_) | QueryKey::Thunk(_)
++        )),
++        "structural namespace preparation must not execute original bodies"
++    );
+     // These are actual published inputs, not replacement namespace receipts.
+     // RunMachine::start_with_discovery republishes the root additively; verify
+     // that this operation keeps all the owning seals already published here.

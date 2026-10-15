@@ -1,0 +1,30 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T024",
+    "T041"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/syntax/pure_constants.rs",
+      "before_sha256": "1e560fcfd3f45b03f0a7cc2fff18015ad71c1f89031b26c6771af4cfa3389f9f",
+      "after_sha256": "1a98952423b48f6b2578177c5878d1fd14aa1b7a7781cca2d9822e42f056a59d"
+    }
+  ],
+  "patch_sha256": "07ea1ffb972e7f78ae06a63a721ee297689758f932e28e8b4d0aa0774c392d33",
+  "failure_receipt": "V83 e34f0d/101 original issue-21475 first qualified bound rejected parent module import",
+  "invariant": "Unqualified constant primitive lookup scans through the owning module but not its parent; current Type certificate and all owning/local shadow/import checks remain required.",
+  "regression": "unchanged_module_qualified_range_main_default_edition_2015 with actual Type/Value namespace preparation",
+  "static_checks": [
+    "pinned formatting with child traversal disabled",
+    "exact one-leaf patch replay"
+  ],
+  "stock_runtime_passes_added": 0,
+  "acceptance_pending": [
+    "exact original qualified-range main",
+    "existing constant primitive shadow/import/parameter controls",
+    "combined milestone"
+  ],
+  "created_at": "2026-10-15T11:12:16.955480+00:00"
+}

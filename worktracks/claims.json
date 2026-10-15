@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V78 byte strict builds passed; scoped library 64 pass/4 fail. V79 genuine Type preparation fixed range binding; V80 quota control passed and declaration-prefix reached correct stop but observer overcounted Dispatch. Exact counter and cold-macro contract controls queued. New seven-leaf ordinary UTF8 VM/source-identity draft plus unchanged slowparse-string main witness held behind byte/string prerequisites. No new stock runtime/full-fixture passes, full milestone, task or JIT completion.",
+      "scope": "V82 strict and 69 affected library controls passed. Unchanged slowparse-bstring whole main (400000 literal bytes) executes all four editions. V84 exact unchanged issue-21475 qualified-range main passes default2015 after genuine Type preparation and owning-module primitive scan repair. These are two upstream runtime-contract witnesses, not full compiletest acceptance or canonical integration. Strict/constant regression checks continue asynchronously before byte22+five. Twenty-leaf coherent ordinary-string candidate is held. Full milestone remains incomplete; guest JIT not started.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -505,11 +505,17 @@
         "artifacts/macos-first/root-cold-macro-contract-v1/",
         "worktracks/candidates/root-cold-macro-contract-v1/",
         "artifacts/macos-first/root-string-vm-literals-v1/",
-        "worktracks/candidates/root-string-vm-literals-v1/"
+        "worktracks/candidates/root-string-vm-literals-v1/",
+        "artifacts/macos-first/root-qualified-range-type-preparation-v1/",
+        "worktracks/candidates/root-qualified-range-type-preparation-v1/",
+        "artifacts/macos-first/root-constant-module-boundary-v1/",
+        "worktracks/candidates/root-constant-module-boundary-v1/",
+        "artifacts/macos-first/root-string-coherent-v1/",
+        "worktracks/candidates/root-string-coherent-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T10:37:01.791076+00:00",
+      "updated_at": "2026-10-15T11:14:25.395105+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

@@ -1,0 +1,17 @@
+--- a/crates/lrr/src/syntax/pure_constants.rs
++++ b/crates/lrr/src/syntax/pure_constants.rs
+@@ -836,6 +836,14 @@
+                     return Err(fault("constant primitive type is shadowed in source"));
+                 }
+             }
++            // Unqualified names do not inherit a parent module's lexical
++            // imports or type declarations. Inspect the owning module itself,
++            // including its local imports/producers, then stop. Function and
++            // block scopes encountered before it still enforce shadowing.
++            // The current owning Type certificate remains mandatory below.
++            if ast::ItemList::can_cast(scope.kind()) || ast::SourceFile::can_cast(scope.kind()) {
++                break;
++            }
+         }
+         if self.0.selection.is_some()
+             && !self
