@@ -172,7 +172,12 @@ fn require_chain(
         if selected.item_kind != crate::source::manifest::ItemKind::Macro
             || selected.crate_key != context.scope.crate_key
             || selected.module_path != context.scope.module_path
-            || context.scope != parent.scope
+            || context.scope.owner.is_some()
+            || context.scope.crate_key != parent.scope.crate_key
+            || !context
+                .scope
+                .module_path
+                .starts_with(&parent.scope.module_path)
             || context.range.start != header.start
             || context.range.end != header.end
             || declared.profile != parent.key.profile
@@ -180,6 +185,9 @@ fn require_chain(
         {
             return Err(missing());
         }
+        // The expansion insertion scope may contain an inline module whose
+        // macro owns this declaration. Use its real nested Type receipt; the
+        // retained outline below must still match that exact item and scope.
         type_scope(db, publication, &context.scope, &declared.profile, name)?;
         // Retained AST only: exact macro_rules token tree, no body lowering,
         // parsing generated display text, discovery or adapter expansion.

@@ -1,0 +1,431 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    "T032",
+    "M010",
+    "M012",
+    "M013"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "v60": {
+    "source_member": "cf0b1522474098e83e78763d6acda6a33fb5c0dc2c1a253be4ff6a4beaf23612",
+    "strict_exit_code": 0,
+    "runtime_terminal": {
+      "actual_session": 41952,
+      "actual_chunk": "ac2ce0",
+      "exit_code": 1
+    },
+    "passed": 123,
+    "failed": 1,
+    "complete_banks": {
+      "discovery_compile_inputs": 73,
+      "discovery_macro_routes": 8,
+      "external_module_discovery": 32,
+      "generated_alias_runtime": 5
+    },
+    "failed_bank": {
+      "name": "generated_calls_runtime",
+      "passed": 5,
+      "failed": 1,
+      "case": "generated_callee_return_mismatch_is_not_accepted_as_success",
+      "expected": "LRR-E-CALL-RETURN-TYPE",
+      "actual": "LRR-E-CALL-CONTEXT",
+      "full_message": "not captured by original assertion"
+    },
+    "unexecuted_banks": [
+      "generated_macro_imports",
+      "generated_qualified_calls"
+    ],
+    "audits": "unexecuted",
+    "full_milestone": "unexecuted",
+    "source_unchanged": true,
+    "extra_files_unchanged": 435,
+    "originals_unchanged": 490
+  },
+  "receipts": [
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v60/HANDOFF.md",
+      "sha256": "2adffc37efb70efc1abca0ec9b6ea2268279e4a005cb074da7f6556adbb1860b"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v60/EVIDENCE-HASHES.json",
+      "sha256": "bc1a48ca8516852ef1b6c2b5fcbc0e902e4fd609e8a42973b676db14f9419c3d"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v60/COLLECTED-SCOPES.json",
+      "sha256": "0192682901b02b4eeb89e681599f168f733aceed2b7cc574dabf22ebbf924400"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v61/HANDOFF.md",
+      "sha256": "4bfafd20bfb7b3cc9d54c78ac3aacf47c8c9fb783aa4284985c784b7b4e5c792"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v61/EVIDENCE-HASHES.json",
+      "sha256": "3fc16ecb7676f933c36a1caa687963f0398376433592059b8504fc1805dc1c6a"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v61/ACTUAL-FAILURE-DETAILS.json",
+      "sha256": "08e2124d4b5239d92730dd0bf71eac1ad45cf83bd39ef48fe8e394e04c514abb"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v62/SCOPED-HANDOFF.md",
+      "sha256": "85821b24d5b772cd4889a7cbb4737ba78647bcd37b41c8d11c46c9e43dd106cb"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v62/EVIDENCE-HASHES-SCOPED.json",
+      "sha256": "930f8dc0511d67b4fe7d80cae9099230462f904237efc50efb59b7e6b8ec2b2a"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v62/COLLECTED-SCOPES.json",
+      "sha256": "2ef607d2f44c43ce68da466576a339033811dc1ccb33bf1a1c8e2fd590fc4846"
+    }
+  ],
+  "acceptance": {
+    "integrated": true,
+    "full_milestone_passed": false,
+    "new_upstream_runtime_passes": 0,
+    "new_task_completions": 0,
+    "guest_jit_gate": "closed"
+  },
+  "v61": {
+    "source_member": "871b0d573a62df3aaa088984261e5015e4000ed9df929b8e6bf5a8d799b327aa",
+    "strict_lrr_and_xtask_exit_code": 0,
+    "return_authority_controls_passed": 23,
+    "runtime_terminal": {
+      "actual_session": 94588,
+      "actual_chunk": "22f0b5",
+      "exit_code": 1
+    },
+    "runtime_passed": 170,
+    "runtime_failed": 11,
+    "generated_return_mismatch_control": "passed with original CALL-RETURN-TYPE expectation",
+    "failed_bank": {
+      "name": "generated_macro_imports",
+      "passed": 46,
+      "failed": 11,
+      "diagnostic": "LRR-E-CALL-CONTEXT: generated result requires its current macro-definition parent source chain",
+      "source_observation": "Failed cases declare generated macros within inline modules; consumer required declaration scope equal whole expansion insertion scope despite producer retaining actual nested contexts."
+    },
+    "unexecuted_banks": [
+      "generated_qualified_calls"
+    ],
+    "audits": "unexecuted",
+    "full_milestone": "unexecuted",
+    "source_unchanged": true,
+    "extra_files_unchanged": 435,
+    "originals_unchanged": 490
+  },
+  "v62": {
+    "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
+    "scopes": {
+      "architecture": {
+        "scope": "architecture",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "run",
+          "-p",
+          "xtask",
+          "--locked",
+          "--offline",
+          "--",
+          "architecture-audit"
+        ],
+        "exit_code": 0,
+        "source_unchanged": true,
+        "matched_test_count": null,
+        "nonempty_test_scope": true,
+        "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
+        "elapsed_seconds": 8.145264334016247,
+        "started_at": "2026-10-15T06:48:01.634199+00:00",
+        "finished_at": "2026-10-15T06:48:09.776689+00:00",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e5569290196b6d771b9b3b71f6cd7fa46743536d5d842d5a8c3fb9516cf2623e",
+        "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+      },
+      "fixture-reference": {
+        "scope": "fixture-reference",
+        "argv": [
+          "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/xtask",
+          "fixture-reference-audit"
+        ],
+        "exit_code": 0,
+        "source_unchanged": true,
+        "matched_test_count": null,
+        "nonempty_test_scope": true,
+        "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
+        "elapsed_seconds": 0.47760049998760223,
+        "started_at": "2026-10-15T06:48:31.758886+00:00",
+        "finished_at": "2026-10-15T06:48:32.236542+00:00",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+      },
+      "format": {
+        "scope": "format",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "exit_code": 0,
+        "source_unchanged": true,
+        "matched_test_count": null,
+        "nonempty_test_scope": true,
+        "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
+        "elapsed_seconds": 4.8058226669963915,
+        "started_at": "2026-10-15T06:47:46.186221+00:00",
+        "finished_at": "2026-10-15T06:47:50.991864+00:00",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+      },
+      "parent-profile-two": {
+        "scope": "parent-profile-two",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "-p",
+          "lrr",
+          "--lib",
+          "frontend::call_contracts::generated_result_namespace::parent_profile_tests::",
+          "--locked",
+          "--offline",
+          "--",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit_code": 0,
+        "source_unchanged": true,
+        "matched_test_count": 2,
+        "nonempty_test_scope": true,
+        "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
+        "elapsed_seconds": 1.0609504579915665,
+        "started_at": "2026-10-15T06:47:06.555939+00:00",
+        "finished_at": "2026-10-15T06:47:07.616990+00:00",
+        "stdout_sha256": "1b5f98218775cd22965286a484d1bf6792d6ac1ae483da6944f1fc971b3debd5",
+        "stderr_sha256": "4cee670dc6d7a18399e662fcde754aa0e0a505491c2f8f979ab826c7088c9d5e",
+        "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+      },
+      "return-authority-controls": {
+        "scope": "return-authority-controls",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "-p",
+          "lrr",
+          "--lib",
+          "--locked",
+          "--offline",
+          "--",
+          "--test-threads=1",
+          "vm::context::return_tests::",
+          "engine::run::return_tests::"
+        ],
+        "exit_code": 0,
+        "source_unchanged": true,
+        "matched_test_count": 23,
+        "nonempty_test_scope": true,
+        "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
+        "elapsed_seconds": 20.783337208995363,
+        "started_at": "2026-10-15T06:44:47.877063+00:00",
+        "finished_at": "2026-10-15T06:45:08.660507+00:00",
+        "stdout_sha256": "4923528b5fa7c2cdd2e68db5687f4ef1457bfff2f2eb54463303a7f9a978b8d1",
+        "stderr_sha256": "06e7b07c2a4d2526ecb7cf4a43aff0a354eca0289107384834a8e7bdfc8b4528",
+        "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+      },
+      "runtime-seven-banks": {
+        "scope": "runtime-seven-banks",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "-p",
+          "xtask",
+          "--test",
+          "discovery_compile_inputs",
+          "--test",
+          "discovery_macro_routes",
+          "--test",
+          "external_module_discovery",
+          "--test",
+          "generated_alias_runtime",
+          "--test",
+          "generated_calls_runtime",
+          "--test",
+          "generated_macro_imports",
+          "--test",
+          "generated_qualified_calls",
+          "--locked",
+          "--offline",
+          "--",
+          "--test-threads=1"
+        ],
+        "exit_code": 0,
+        "source_unchanged": true,
+        "matched_test_count": 192,
+        "nonempty_test_scope": true,
+        "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
+        "elapsed_seconds": 59.94419291699887,
+        "started_at": "2026-10-15T06:45:39.488661+00:00",
+        "finished_at": "2026-10-15T06:46:39.432988+00:00",
+        "stdout_sha256": "2d260403b2d0252960d1b381b2b3f79996bc8f57331a08b411b50ffebefded28",
+        "stderr_sha256": "ea222b686f59f7b3c0e487fbebb2a6fcf72baa175f52e005f6e40b67a3d41c25",
+        "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+      },
+      "strict-lrr-tests": {
+        "scope": "strict-lrr-tests",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "clippy",
+          "-p",
+          "lrr",
+          "--lib",
+          "--tests",
+          "--locked",
+          "--offline",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0,
+        "source_unchanged": true,
+        "matched_test_count": null,
+        "nonempty_test_scope": true,
+        "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
+        "elapsed_seconds": 17.11127283400856,
+        "started_at": "2026-10-15T06:43:47.308399+00:00",
+        "finished_at": "2026-10-15T06:44:04.419782+00:00",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "eab0b2f3f288a261a6a1ff02ea82fd23235fb6209f213a9322eddb5f0683f24b",
+        "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+      },
+      "strict-seven": {
+        "scope": "strict-seven",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "clippy",
+          "-p",
+          "xtask",
+          "--test",
+          "discovery_compile_inputs",
+          "--test",
+          "discovery_macro_routes",
+          "--test",
+          "external_module_discovery",
+          "--test",
+          "generated_alias_runtime",
+          "--test",
+          "generated_calls_runtime",
+          "--test",
+          "generated_macro_imports",
+          "--test",
+          "generated_qualified_calls",
+          "--locked",
+          "--offline",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0,
+        "source_unchanged": true,
+        "matched_test_count": null,
+        "nonempty_test_scope": true,
+        "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
+        "elapsed_seconds": 7.459109292016365,
+        "started_at": "2026-10-15T06:44:26.075748+00:00",
+        "finished_at": "2026-10-15T06:44:33.534955+00:00",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "dbb67e0dfefff810b837053f4acc8b68c18b9df7fc320e6e7690033b4e574330",
+        "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+      }
+    },
+    "distinct_existing_tests_passed": 217,
+    "runtime_banks_passed": 192,
+    "return_authority_controls_passed": 23,
+    "parent_profile_controls_passed": 2,
+    "extra_files_unchanged": 435,
+    "originals_unchanged": 490,
+    "production_invariants": [
+      "Generated macro declaration may occupy a genuine nested module of its expansion insertion scope; actual nested Type receipt and exact retained outline/header/context/span/origin/edition/currentness remain required.",
+      "A mismatched retained supported Primitive yields CALL-RETURN-TYPE only when its actual scalar layout independently matches that source and differs from the admitted result. Rigid/nominal/missing/inconsistent/unrepresented source still refuses."
+    ],
+    "expanded_authority_control": "One existing control now uses four fresh real source/DB/frame/store setups; this is one named test, not four additional tests.",
+    "source_files": [
+      {
+        "path": "xtask/tests/discovery_compile_inputs.rs",
+        "before_canonical_sha256": "8d197e7764b357f1d72b7bd47bef904fc82756154f31cc41c2308a56685fee84",
+        "sha256": "960182e293b4d97ef55aa1199c04af7da3838e73cde11336cc6845cab2e35a12",
+        "bytes": 158065
+      },
+      {
+        "path": "xtask/tests/discovery_macro_routes.rs",
+        "before_canonical_sha256": "86ffeea6f9a2a2abdeae1066434ad0644acb9fd08f19f938325d56f987eecab4",
+        "sha256": "5abc7497fa31ad29d2d0b37e476d49bbc7f1c6ef9acb6b8b5f8b323b01241b20",
+        "bytes": 8481
+      },
+      {
+        "path": "xtask/tests/external_module_discovery.rs",
+        "before_canonical_sha256": "66054dec17139cbc736215a73c12b274aa3393fdbc1f4f9c865f5dc025fdd13f",
+        "sha256": "16574d3256accfa246e96e38bc58fb3abd30c4ce5c8aaef01df8b28beacc1ccf",
+        "bytes": 28597
+      },
+      {
+        "path": "xtask/tests/generated_alias_runtime.rs",
+        "before_canonical_sha256": "a0f00bbe45b83aa6fcc552d81854b19220d25e9901ed7ebc815fad94a61e1f10",
+        "sha256": "3360ce2b91cad1d6bf333791e098a4dacba95b7907dab287308c214569f41f3f",
+        "bytes": 6979
+      },
+      {
+        "path": "xtask/tests/generated_calls_runtime.rs",
+        "before_canonical_sha256": "065063fcccc966a0344f87e7bd81ace4783a73cdbdf9367ac19a99518542976b",
+        "sha256": "416c40346b65eefdf3e9b9c8cc4ae5656a96e73fa6bf0058eac2df2b1a8f228e",
+        "bytes": 7845
+      },
+      {
+        "path": "xtask/tests/generated_macro_imports.rs",
+        "before_canonical_sha256": "6f3ada5d63b91b87644e6737663abc3bd26bc5b814462c77c82dc9b3e090d4e5",
+        "sha256": "832f58fb90cf3e370b175619cf6ab945ef09c2c7a3d85a7c642b145fe24a63cf",
+        "bytes": 66213
+      },
+      {
+        "path": "xtask/tests/generated_qualified_calls.rs",
+        "before_canonical_sha256": "2b8d8122465fb3093b9cd2dfdeb716f1e3ccb9ff371daaa8326884f4c0db5803",
+        "sha256": "3fbf965c47b072c05e27a76b42d904ea3d3d57e411cee8a3734ce7ad32226628",
+        "bytes": 10448
+      },
+      {
+        "path": "crates/lrr/src/vm/frame.rs",
+        "before_canonical_sha256": "9c4b2fbe60b009c8bad19950595312ea2cc62754a4ae0f0a0ea63c7fe1973e33",
+        "sha256": "ede9f10dcede5cbbb9e572eeb77dcff6f2697d8c8686eded71ff0f03a1bea643",
+        "bytes": 296526
+      },
+      {
+        "path": "crates/lrr/src/frontend/generated_return_parent.rs",
+        "before_canonical_sha256": "9303a313f7194182ef5022e30c0fe2ff38e03d32e0f766265402f90abfb2053d",
+        "sha256": "31640d132795a9998ec8dbb63ef5e35a061b3538aef8aff8dc3c0407862e1428",
+        "bytes": 14941
+      },
+      {
+        "path": "crates/lrr/src/vm/context_return_tests.rs",
+        "before_canonical_sha256": "3d052f8c57627ea29b3f1de2b62fc8eaaebeb40de646ac7b5141431904b6d8ef",
+        "sha256": "b5705f49bde53ae5c79df8b40a358deda40694f139f09c1d017374b5211b8ba9",
+        "bytes": 30440
+      }
+    ]
+  },
+  "full_milestone": {
+    "status": "running",
+    "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
+    "actual_session": 8176,
+    "actual_pid": 34814,
+    "terminal": null
+  }
+}

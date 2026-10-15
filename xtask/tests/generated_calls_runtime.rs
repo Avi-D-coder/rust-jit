@@ -105,6 +105,7 @@ fn run_original(text: &str) -> (lrr::engine::run::RunReport, lrr::db::memo::Data
         .key();
     let mut db = lrr::db::memo::Database::default();
     inputs.publish(&mut db).unwrap();
+    db.begin_expansion_epoch(work.key().epoch).unwrap();
     let lrr::db::poll::QueryPoll::Ready(Ok(mut run)) =
         lrr::engine::run::RunMachine::start_with_discovery(&mut db, body, 10_000, work)
     else {
@@ -209,6 +210,7 @@ fn generated_callee_return_mismatch_is_not_accepted_as_success() {
         .key();
     let mut db = lrr::db::memo::Database::default();
     inputs.publish(&mut db).unwrap();
+    db.begin_expansion_epoch(work.key().epoch).unwrap();
     let lrr::db::poll::QueryPoll::Ready(Ok(mut run)) =
         lrr::engine::run::RunMachine::start_with_discovery(&mut db, body, 10_000, work)
     else {
@@ -217,5 +219,5 @@ fn generated_callee_return_mismatch_is_not_accepted_as_success() {
     let lrr::engine::run::RunPoll::Fault(error) = run.poll(&mut db) else {
         panic!("generated return mismatch became success")
     };
-    assert_eq!(error.code, "LRR-E-CALL-RETURN-TYPE");
+    assert_eq!(error.code, "LRR-E-CALL-RETURN-TYPE", "{error:?}");
 }

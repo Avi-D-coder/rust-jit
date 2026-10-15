@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V58 milestone1802pass5fail1400unexecuted preserved. Exact child harness coordinator epoch correction integrated after V59 strict/eight-body/audits passed. Seven related positive runtime harness files/12 genuine epoch setups queued V60, existing assertions/production guards unchanged. Qualified context13 V2 source review fixes frozen/uncompiled after named11/Byte12. No new upstream/task/JIT acceptance.",
+      "scope": "Integrated10 exact leaves after V62 strict/192runtime+23return+2parent/audits green; required fullgate03 authorizedunchangedf3f64cc5 unaccepted. Genuine nested macro parent scopes, source/layout checked return faults, sevenharness epoch setups. V60/V61 failures preserved; no new upstream/task/JIT acceptance. Named11/Byte12/context13V2queued.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -457,11 +457,15 @@
         "artifacts/macos-first/root-child-macro-epoch-v1/",
         "artifacts/macos-first/root-named-match-context-integration-v2/",
         "artifacts/macos-first/sol-qualified-range-owning-scope-v2/",
-        "artifacts/macos-first/root-generated-runtime-epochs-v1/"
+        "artifacts/macos-first/root-generated-runtime-epochs-v1/",
+        "artifacts/macos-first/root-generated-return-mismatch-v1/",
+        "artifacts/macos-first/root-generated-return-parent-repair-v1/",
+        "artifacts/macos-first/root-return-fix-future-joins-v1/",
+        "artifacts/macos-first/root-generated-runtime-coherent-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T06:33:54.256860+00:00",
+      "updated_at": "2026-10-15T06:49:56.303177+00:00",
       "review_after": "2026-10-15T07:16:22.506011+00:00"
     },
     {

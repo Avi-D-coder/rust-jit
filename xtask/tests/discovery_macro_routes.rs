@@ -108,6 +108,7 @@ fn run_original(text: &str) -> (lrr::engine::run::RunReport, lrr::db::memo::Data
         .key();
     let mut db = lrr::db::memo::Database::default();
     inputs.publish(&mut db).unwrap();
+    db.begin_expansion_epoch(work.key().epoch).unwrap();
     let lrr::db::poll::QueryPoll::Ready(Ok(mut run)) =
         lrr::engine::run::RunMachine::start_with_discovery(&mut db, body, 10_000, work)
     else {

@@ -551,6 +551,7 @@ fn included_function_executes_in_guest_and_matches_native_macos() {
     };
     let source = "include!(concat!(\"part\",\".rs\"));fn main()->i64{made()}";
     let (mut work, mut db, env, authority, path) = fixture(source);
+    db.begin_expansion_epoch(work.key().epoch).unwrap();
     complete(&mut work, &mut db, &env, &authority);
     let QueryPoll::Ready(Ok(value)) = db.fetch(
         &SyntaxProvider,
@@ -936,6 +937,7 @@ fn recursive_environment_and_concat_operand_chains_match_native_macos() {
     let source = "macro_rules! leaf{()=>{\"CON\"}}macro_rules! name{()=>{leaf!()}}macro_rules! emit{()=>{include!(env!(concat!(name!(),\"TROL\")));}}emit!();fn main()->i64{made()}";
     let (mut work, mut db, env, authority, path) =
         fixture_with_environment(source, Some("part.rs"));
+    db.begin_expansion_epoch(work.key().epoch).unwrap();
     assert_eq!(
         complete_verifying(&mut work, &mut db, &env, &authority, true),
         1
@@ -3483,6 +3485,7 @@ fn generated_external_module_function_executes_in_guest_and_matches_native_macos
     let source = "macro_rules! emit{()=>{mod child;}}emit!();fn main()->i64{child::made()}";
     let child = "pub fn made()->i64{1583_i64}";
     let (mut work, mut db, env, authority, path) = fixture(source);
+    db.begin_expansion_epoch(work.key().epoch).unwrap();
     std::fs::write(path.join("child.rs"), child).unwrap();
     let SourceDiscoveryStep::NeedExpansion { request } = work.poll().unwrap() else {
         panic!("parent request absent")

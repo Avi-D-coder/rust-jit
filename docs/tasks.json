@@ -2741,7 +2741,10 @@
         "status": "component_integrated_full_milestone_pending",
         "evidence_path": "worktracks/evidence/2026-10-14-generated-parent-profile-authority.json",
         "scope": "V49strict+namespace14+unfiltereddependency79; all49oldcohortfailuresclosed; currentfullcombinedmilestone required; shadowed mixed-site alias lanes stillrequired."
-      }
+      },
+      "evidence": [
+        "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
+      ]
     },
     {
       "id": "T033",
@@ -10031,7 +10034,8 @@
         "worktracks/evidence/2026-10-14-macro-preparation-milestone.json",
         "worktracks/evidence/2026-10-14-declaration-request-reuse.json",
         "worktracks/evidence/2026-10-14-adopted-source-registry.json",
-        "worktracks/evidence/2026-10-14-child-macro-runtime-epoch.json"
+        "worktracks/evidence/2026-10-14-child-macro-runtime-epoch.json",
+        "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
       ]
     },
     {
@@ -10531,7 +10535,8 @@
         "worktracks/evidence/2026-10-14-macro-preparation-milestone.json",
         "worktracks/evidence/2026-10-14-declaration-request-reuse.json",
         "worktracks/evidence/2026-10-14-adopted-source-registry.json",
-        "worktracks/evidence/2026-10-14-child-macro-runtime-epoch.json"
+        "worktracks/evidence/2026-10-14-child-macro-runtime-epoch.json",
+        "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
       ]
     },
     {
@@ -18156,7 +18161,8 @@
         "worktracks/evidence/2026-10-14-include-parent-milestone.json",
         "worktracks/evidence/2026-10-14-include-parent-repair.json",
         "worktracks/evidence/2026-10-14-adopted-source-registry.json",
-        "worktracks/evidence/2026-10-14-child-macro-runtime-epoch.json"
+        "worktracks/evidence/2026-10-14-child-macro-runtime-epoch.json",
+        "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
       ]
     },
     {

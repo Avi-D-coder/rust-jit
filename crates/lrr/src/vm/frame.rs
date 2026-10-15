@@ -1031,6 +1031,27 @@ impl Frame {
             }
         }
         if actual.as_ref().is_some_and(|actual| actual != &expected) {
+            // A reached concrete primitive with its matching physical value is
+            // an incompatible return, not missing source authority. Keep rigid,
+            // nominal and inconsistent source/layout identities on the strict
+            // context-refusal path; never recover their source from a descriptor.
+            if let Some(crate::traits::term::TyTerm::Primitive(actual_primitive)) = actual.as_ref()
+                && !matches!(
+                    actual_primitive,
+                    crate::ir::op::PrimitiveType::I128 | crate::ir::op::PrimitiveType::U128
+                )
+            {
+                let actual_descriptor =
+                    crate::frontend::call_contracts::primitive_runtime_id(*actual_primitive)?;
+                if actual_descriptor != descriptor
+                    && store.preview_scalar(self.cell(value)?, None)?.type_id == actual_descriptor.0
+                {
+                    return Err(Diagnostic::new(
+                        "LRR-E-CALL-RETURN-TYPE",
+                        "returned primitive differs from certified deferred result".into(),
+                    ));
+                }
+            }
             return Err(Diagnostic::new(
                 "LRR-E-CALL-CONTEXT",
                 "returned source differs from certified deferred declaration".into(),

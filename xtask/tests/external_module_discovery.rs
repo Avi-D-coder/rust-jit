@@ -126,6 +126,7 @@ fn run(files: &[(&str, &[&str], &str)]) -> String {
     finish(&mut work);
     let mut db = Database::default();
     inputs.publish(&mut db).unwrap();
+    db.begin_expansion_epoch(work.key().epoch).unwrap();
     let QueryPoll::Ready(Ok(mut run)) =
         RunMachine::start_with_discovery(&mut db, body, 10_000, work)
     else {
@@ -780,6 +781,7 @@ fn captured_macro_use_child_edit_invalidates_ready_parent_seal() {
         .key();
     let mut updated = discover(&changed);
     finish(&mut updated);
+    db.begin_expansion_epoch(updated.key().epoch).unwrap();
     let QueryPoll::Ready(Ok(mut run)) =
         RunMachine::start_with_discovery(&mut db, body, 10_000, updated)
     else {

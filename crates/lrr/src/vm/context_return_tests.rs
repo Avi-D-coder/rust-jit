@@ -319,71 +319,87 @@ fn complete_minimal_shadow_alias_call_uses_current_owned_return_certificate() {
 
 #[test]
 fn normalized_return_does_not_erase_a_rigid_actual_source_at_equal_descriptor() {
-    let (mut db, view, graph) = source(WITNESS, 2024);
-    let (callee, contracts) = contracts(&mut db, &view, &graph, "chosen");
-    let context = GenericEnv::capture_current(&mut db, &callee, &contracts).unwrap();
-    let indexed = db
-        .fetch(
-            &SyntaxProvider,
-            QueryKey::BodyStructure(callee.body().unwrap().key()),
-        )
-        .into_ready()
-        .unwrap()
-        .unwrap();
-    let QueryValue::BodyStructure(index) = indexed.value.as_ref() else {
-        panic!()
-    };
-    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
-    let mut frame = Frame::new(
-        index.as_ref().clone(),
-        index.pc(NodeId(0), Phase::Entry).unwrap(),
-        &mut store,
-    )
-    .unwrap();
-    frame.install_context(context).unwrap();
-    frame.set_fuel_limit(100).unwrap();
-    for _ in 0..32 {
-        let outcome = db
-            .fetch(&SyntaxProvider, QueryKey::Thunk(frame.pc().clone()))
+    // Each refused step faults its frame. Use fresh genuine preparation per
+    // source case so every assertion reaches the source/layout admission guard.
+    fn check(case: u8) {
+        let (mut db, view, graph) = source(WITNESS, 2024);
+        let (callee, contracts) = contracts(&mut db, &view, &graph, "chosen");
+        let context = GenericEnv::capture_current(&mut db, &callee, &contracts).unwrap();
+        let indexed = db
+            .fetch(
+                &SyntaxProvider,
+                QueryKey::BodyStructure(callee.body().unwrap().key()),
+            )
             .into_ready()
             .unwrap()
             .unwrap();
-        let QueryValue::Thunk(recipe) = outcome.value.as_ref() else {
+        let QueryValue::BodyStructure(index) = indexed.value.as_ref() else {
             panic!()
         };
-        let transfer = recipe.recipe().operations.iter().find_map(|op| match op {
-            crate::ir::op::Op::ResultTransfer {
-                source,
-                destination,
-            } if Some(*destination) == frame.body.nodes()[0].value => Some((*source, *destination)),
-            _ => None,
-        });
-        if let Some((source, _)) = transfer {
-            let cell = frame.cell(source).unwrap();
-            let value = store.read_scalar(cell).unwrap();
-            assert_eq!(value.type_id, 2);
-            let rigid = TyTerm::Param(ParamKey {
-                definition: frame.body.body().definition,
-                ordinal: 0,
+        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut frame = Frame::new(
+            index.as_ref().clone(),
+            index.pc(NodeId(0), Phase::Entry).unwrap(),
+            &mut store,
+        )
+        .unwrap();
+        frame.install_context(context).unwrap();
+        frame.set_fuel_limit(100).unwrap();
+        for _ in 0..32 {
+            let outcome = db
+                .fetch(&SyntaxProvider, QueryKey::Thunk(frame.pc().clone()))
+                .into_ready()
+                .unwrap()
+                .unwrap();
+            let QueryValue::Thunk(recipe) = outcome.value.as_ref() else {
+                panic!()
+            };
+            let transfer = recipe.recipe().operations.iter().find_map(|op| match op {
+                crate::ir::op::Op::ResultTransfer {
+                    source,
+                    destination,
+                } if Some(*destination) == frame.body.nodes()[0].value => {
+                    Some((*source, *destination))
+                }
+                _ => None,
             });
-            frame.set_source_view(source, Some(rigid.clone())).unwrap();
-            let before = (frame.fuel_snapshot(), store.budget().handles());
-            assert_eq!(
-                step(&mut frame, &mut store, recipe).unwrap_err().code,
-                "LRR-E-CALL-CONTEXT"
-            );
-            assert_eq!((frame.fuel_snapshot(), store.budget().handles()), before);
-            assert_eq!(frame.source_view(source).unwrap(), Some(rigid));
-            assert_eq!(store.read_scalar(cell).unwrap(), value);
-            assert_eq!(frame.counters.started_by_opcode[3], 0);
-            return;
+            if let Some((source, _)) = transfer {
+                let cell = frame.cell(source).unwrap();
+                let value = store.read_scalar(cell).unwrap();
+                assert_eq!(value.type_id, 2);
+                let rigid = match case {
+                    0 => TyTerm::Param(ParamKey {
+                        definition: frame.body.body().definition,
+                        ordinal: 0,
+                    }),
+                    1 => TyTerm::Primitive(PrimitiveType::I64),
+                    2 => TyTerm::Primitive(PrimitiveType::I128),
+                    3 => TyTerm::Primitive(PrimitiveType::U128),
+                    _ => unreachable!("bounded source-identity control"),
+                };
+                frame.set_source_view(source, Some(rigid.clone())).unwrap();
+                let before = (frame.fuel_snapshot(), store.budget().handles());
+                assert_eq!(
+                    step(&mut frame, &mut store, recipe).unwrap_err().code,
+                    "LRR-E-CALL-CONTEXT",
+                    "inconsistent returned source {rigid:?}",
+                );
+                assert_eq!((frame.fuel_snapshot(), store.budget().handles()), before);
+                assert_eq!(frame.source_view(source).unwrap(), Some(rigid));
+                assert_eq!(store.read_scalar(cell).unwrap(), value);
+                assert_eq!(frame.counters.started_by_opcode[3], 0);
+                return;
+            }
+            assert!(matches!(
+                step(&mut frame, &mut store, recipe).unwrap(),
+                StepOutcome::Next(_)
+            ));
         }
-        assert!(matches!(
-            step(&mut frame, &mut store, recipe).unwrap(),
-            StepOutcome::Next(_)
-        ));
+        panic!("certified root transfer was not reached")
     }
-    panic!("certified root transfer was not reached")
+    for case in 0..4 {
+        check(case);
+    }
 }
 
 #[test]

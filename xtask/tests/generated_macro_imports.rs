@@ -119,6 +119,7 @@ fn run_original(text: &str) -> (lrr::engine::run::RunReport, lrr::db::memo::Data
         .key();
     let mut db = lrr::db::memo::Database::default();
     inputs.publish(&mut db).unwrap();
+    db.begin_expansion_epoch(work.key().epoch).unwrap();
     let mut run =
         match lrr::engine::run::RunMachine::start_with_discovery(&mut db, body, 10_000, work) {
             lrr::db::poll::QueryPoll::Ready(Ok(run)) => run,
@@ -558,6 +559,7 @@ fn sibling_order_edit_invalidates_a_parked_selection_seal_before_conflict_and_re
     restored_inputs.publish(&mut db).unwrap();
     let mut work = discover(&restored);
     finish(&mut work);
+    db.begin_expansion_epoch(work.key().epoch).unwrap();
     work.publish(&mut db).unwrap();
     assert!(matches!(
         db.fetch(&SyntaxProvider, key),
