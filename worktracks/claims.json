@@ -533,11 +533,15 @@
         "artifacts/macos-first/root-string-length-v1/",
         "worktracks/candidates/root-string-length-v1/",
         "artifacts/macos-first/root-string-schema-test-repair-v1/",
-        "worktracks/candidates/root-string-schema-test-repair-v1/"
+        "worktracks/candidates/root-string-schema-test-repair-v1/",
+        "artifacts/macos-first/root-string-ordering-v1/",
+        "worktracks/candidates/root-string-ordering-v1/",
+        "artifacts/macos-first/root-or-range-frontier-contract-v1/",
+        "worktracks/candidates/root-or-range-frontier-contract-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T12:22:53.308947+00:00",
+      "updated_at": "2026-10-15T12:38:40.411232+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

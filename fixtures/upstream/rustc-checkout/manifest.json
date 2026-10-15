@@ -96,6 +96,12 @@
       "bytes": 1696
     },
     {
+      "path": "tests/ui/array-slice-vec/estr-slice.rs",
+      "git_blob": "6cac3d721f19746ab98ee456a6d167be3c8afb89",
+      "sha256": "c33f57cc8badc0315c072be7050862007ffb7fa4a4e9a974c110387f0c289453",
+      "bytes": 813
+    },
+    {
       "path": "tests/ui/array-slice-vec/eval-empty-array-expr.rs",
       "git_blob": "92e1c689436ab5ea2b3909da3846bc7a2aa06edc",
       "sha256": "a74a341bea40ce66407ba973d054645ffcb656e0333955f40fde0bebdec2d90a",
@@ -3079,6 +3085,14 @@
     },
     {
       "path": "tests/ui/array-slice-vec/byte-literals.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/array-slice-vec/estr-slice.rs",
       "directives": [
         "//@ run-pass"
       ],

@@ -1,0 +1,43 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T050",
+    "T051"
+  ],
+  "prerequisites": [
+    "V87 frozen source 2e19361df675fb87d35f2043acf691c280328cc089da17e49d049b13db410ea1"
+  ],
+  "files": [
+    {
+      "path": "xtask/tests/scalar_or_patterns.rs",
+      "before_sha256": "daa788bfa00374c7bb0218e6cd80fa6eb9734f51a18ba8f6436d12a59f24c6e0",
+      "after_sha256": "0c72f2b0f1effed129f6d588fe002a4f284329538a7c8f05767c7b041b1a9e07"
+    }
+  ],
+  "patch_sha256": "f68b3c724ae84767870d1463a19d691cfba57cf798fe7e61a3c4c19d1bdab536",
+  "patch_bytes": 3883,
+  "created_at": "2026-10-15T12:40:17.125376+00:00",
+  "static_checks": [
+    "Rust 1.99 formatting",
+    "exact no-fuzz/no-offset leaf patch replay"
+  ],
+  "stock_runtime_passes_added": 0,
+  "frozen_source_member": "2e19361df675fb87d35f2043acf691c280328cc089da17e49d049b13db410ea1",
+  "observed_failure": {
+    "gate_exit": 1,
+    "listed_bodies": 3288,
+    "passed_bodies": 2866,
+    "failed_bodies": 1,
+    "unexecuted_bodies": 421,
+    "file": "xtask/tests/scalar_or_patterns.rs",
+    "line": 331,
+    "old_test_name": "reached_or_binding_range_and_guard_frontiers_refuse_before_compare_or_commit",
+    "new_test_name": "reached_or_range_lowering_and_binding_guard_refusals_preserve_frontiers"
+  },
+  "acceptance_pending": [
+    "strict affected xtask compilation",
+    "unfiltered scalar_or_patterns test bank",
+    "fresh integrated milestone"
+  ]
+}

@@ -1,0 +1,796 @@
+--- a/crates/lrr/src/engine/run_byte_comparisons.rs
++++ b/crates/lrr/src/engine/run_byte_comparisons.rs
+@@ -28,6 +28,9 @@
+             .checked_add(self.source.profile.semantics.capacity())?
+             .checked_add(self.member.allocated_bytes()?)
+     }
++    pub(crate) fn operator(&self) -> NumericBinary {
++        self.operator
++    }
+     pub(crate) fn operands(&self) -> (SlotId, SlotId, SlotId, bool) {
+         (
+             self.left,
+@@ -69,6 +72,7 @@
+             .ok_or_else(|| call_fault("byte PartialEq right source absent"))?;
+         self.member
+             .require(frame.body.profile(), left_source, right_source)?;
++        self.member.require_operator(*operator)?;
+         let (l, r) = self.member.shapes();
+         for (slot, shape) in [(*left, l), (*right, r)] {
+             match shape {
+@@ -104,7 +108,13 @@
+         let mut selected = None;
+         for op in installed.recipe().operations.iter() {
+             let Op::NumericBinary {
+-                operator: operator @ (NumericBinary::Eq | NumericBinary::Ne),
++                operator:
++                    operator @ (NumericBinary::Eq
++                    | NumericBinary::Ne
++                    | NumericBinary::Lt
++                    | NumericBinary::Le
++                    | NumericBinary::Gt
++                    | NumericBinary::Ge),
+                 left,
+                 right,
+                 destination,
+@@ -174,7 +184,8 @@
+             if current_fingerprint != fingerprint {
+                 return Err(call_fault("byte comparison current source recipe differs"));
+             }
+-            let member = context.byte_equality_member(
++            let member = context.byte_comparison_member(
++                operator,
+                 self.frame
+                     .source_view_ref(left)?
+                     .ok_or_else(|| call_fault("byte comparison left source absent"))?,
+--- a/crates/lrr/src/engine/runtime_macros.rs
++++ b/crates/lrr/src/engine/runtime_macros.rs
+@@ -65,13 +65,15 @@
+     pub(crate) fn source(&self) -> &PreparedSourceView {
+         self.source
+     }
+-    pub(crate) fn byte_equality_member(
++    pub(crate) fn byte_comparison_member(
+         &self,
++        operator: crate::ir::op::NumericBinary,
+         left: &crate::traits::term::TyTerm,
+         right: &crate::traits::term::TyTerm,
+     ) -> Result<crate::facade::byte_equality::ByteEqualityMember, Diagnostic> {
+-        self.catalog.byte_equality_member(
++        self.catalog.byte_comparison_member(
+             &self.source.selection().outline.parse.profile,
++            operator,
+             left,
+             right,
+         )
+--- a/crates/lrr/src/facade/byte_equality.rs
++++ b/crates/lrr/src/facade/byte_equality.rs
+@@ -47,8 +47,14 @@
+ pub(crate) fn is_byte_reference(source: Option<&TyTerm>) -> bool {
+     source.and_then(shape).is_some()
+ }
++#[derive(Debug, Clone, Copy, Eq, PartialEq)]
++enum ComparisonFamily {
++    PartialEq,
++    StrPartialOrd,
++}
+ #[derive(Debug, Clone, Eq, PartialEq)]
+ pub(crate) struct ByteEqualityMember {
++    family: ComparisonFamily,
+     profile: Arc<ProfileIdentity>,
+     identity: Digest,
+     left: TyTerm,
+@@ -57,6 +63,21 @@
+     right_shape: ByteShape,
+ }
+ impl ByteEqualityMember {
++    pub(crate) fn require_operator(
++        &self,
++        operator: crate::ir::op::NumericBinary,
++    ) -> Result<(), Diagnostic> {
++        use crate::ir::op::NumericBinary::*;
++        if matches!(
++            (self.family, operator),
++            (ComparisonFamily::PartialEq, Eq | Ne)
++                | (ComparisonFamily::StrPartialOrd, Lt | Le | Gt | Ge)
++        ) {
++            Ok(())
++        } else {
++            Err(fault("comparison trait member/operator differs"))
++        }
++    }
+     pub(crate) fn require(
+         &self,
+         profile: &ProfileIdentity,
+@@ -88,7 +109,7 @@
+ impl ByteEqualityFacet {
+     pub(crate) fn for_profile(profile: &ProfileIdentity) -> Result<Self, Diagnostic> {
+         profile.validate_source()?;
+-        let mut e = StableEncoder::new("lrr/v2/core-immutable-literal-partial-eq-facet");
++        let mut e = StableEncoder::new("lrr/v3/core-immutable-literal-comparison-facet");
+         e.record(profile);
+         e.digest(super::unit(profile, "core"));
+         // Shared-reference forwarding, primitive U8 equality and the four
+@@ -103,6 +124,7 @@
+             "[u8]:[u8;N]",
+             "[u8]:[u8]",
+             "str:str via core::str::traits PartialEq byte equality",
++            "str:str via core::str::traits PartialOrd byte lexicographic order",
+         ] {
+             e.string(contract);
+         }
+@@ -123,6 +145,26 @@
+             .and_then(|n| n.checked_add(2 * std::mem::size_of::<usize>()))
+             .and_then(|n| n.checked_add(self.profile.semantics.capacity()))
+             .ok_or_else(|| fault("byte PartialEq facet metadata overflow"))
++    }
++    pub(crate) fn select_string_ordering(
++        &self,
++        profile: &ProfileIdentity,
++        left: &TyTerm,
++        right: &TyTerm,
++    ) -> Result<ByteEqualityMember, Diagnostic> {
++        let mut member = self.select(profile, left, right)?;
++        if member.shapes() != (ByteShape::Utf8, ByteShape::Utf8) {
++            return Err(fault(
++                "this PartialOrd member requires two shared str source operands",
++            ));
++        }
++        member.family = ComparisonFamily::StrPartialOrd;
++        let mut e = StableEncoder::new("lrr/v1/core-str-partial-ord-instance");
++        e.digest(self.identity);
++        e.record(left);
++        e.record(right);
++        member.identity = e.finish();
++        Ok(member)
+     }
+     pub(crate) fn select(
+         &self,
+@@ -151,6 +193,7 @@
+         e.record(left);
+         e.record(right);
+         Ok(ByteEqualityMember {
++            family: ComparisonFamily::PartialEq,
+             profile: self.profile.clone(),
+             identity: e.finish(),
+             left: left.clone(),
+@@ -181,6 +224,84 @@
+                 ByteShape::Utf8 => TyTerm::Str,
+             }),
+         )
++    }
++    #[test]
++    fn source_str_partial_ord_member_cannot_be_substituted_for_eq_or_byte_storage() {
++        use crate::ir::op::NumericBinary;
++        for edition in [2015, 2018, 2021, 2024] {
++            let profile = ProfileIdentity {
++                edition,
++                ..ProfileIdentity::current()
++            };
++            let actual = CompileInputCatalog::standalone(&profile)
++                .unwrap()
++                .runtime_catalog()
++                .unwrap()
++                .unwrap();
++            let macro_only = RuntimeMacroCatalog::standard(&profile).unwrap();
++            let text = reference(ByteShape::Utf8);
++            let eq = actual.byte_equality_member(&profile, &text, &text).unwrap();
++            for operator in [
++                NumericBinary::Lt,
++                NumericBinary::Le,
++                NumericBinary::Gt,
++                NumericBinary::Ge,
++            ] {
++                let ord = actual
++                    .byte_comparison_member(&profile, operator, &text, &text)
++                    .unwrap();
++                ord.require(&profile, &text, &text).unwrap();
++                ord.require_operator(operator).unwrap();
++                assert_ne!(ord.identity, eq.identity);
++                assert!(eq.require_operator(operator).is_err());
++                assert!(ord.require_operator(NumericBinary::Eq).is_err());
++                assert!(ord.require_operator(NumericBinary::Ne).is_err());
++                assert!(
++                    macro_only
++                        .byte_comparison_member(&profile, operator, &text, &text)
++                        .is_err()
++                );
++                for byte in [reference(ByteShape::Slice), reference(ByteShape::Array(4))] {
++                    assert!(
++                        actual
++                            .byte_comparison_member(&profile, operator, &byte, &byte)
++                            .is_err()
++                    );
++                    assert!(
++                        actual
++                            .byte_comparison_member(&profile, operator, &text, &byte)
++                            .is_err()
++                    );
++                    assert!(
++                        actual
++                            .byte_comparison_member(&profile, operator, &byte, &text)
++                            .is_err()
++                    );
++                }
++                let mutable = TyTerm::Ref(RegionTerm::Static, true, Box::new(TyTerm::Str));
++                assert!(
++                    actual
++                        .byte_comparison_member(&profile, operator, &mutable, &text)
++                        .is_err()
++                );
++                let other = ProfileIdentity {
++                    edition: if edition == 2024 { 2021 } else { 2024 },
++                    ..ProfileIdentity::current()
++                };
++                assert!(
++                    actual
++                        .byte_comparison_member(&other, operator, &text, &text)
++                        .is_err()
++                );
++            }
++            assert!(
++                actual
++                    .byte_comparison_member(&profile, NumericBinary::Add, &text, &text)
++                    .is_err()
++            );
++            eq.require_operator(NumericBinary::Eq).unwrap();
++            eq.require_operator(NumericBinary::Ne).unwrap();
++        }
+     }
+     #[test]
+     fn core_byte_equality_selects_source_impl_and_requires_actual_compiler_inventory() {
+--- a/crates/lrr/src/frontend/runtime_macro_catalog.rs
++++ b/crates/lrr/src/frontend/runtime_macro_catalog.rs
+@@ -51,6 +51,28 @@
+         self.byte_equality = Some(facet.clone());
+         Ok(self)
+     }
++    pub(crate) fn byte_comparison_member(
++        &self,
++        profile: &crate::core::profile::ProfileIdentity,
++        operator: crate::ir::op::NumericBinary,
++        left: &crate::traits::term::TyTerm,
++        right: &crate::traits::term::TyTerm,
++    ) -> Result<crate::facade::byte_equality::ByteEqualityMember, Diagnostic> {
++        use crate::ir::op::NumericBinary;
++        let member = match operator {
++            NumericBinary::Eq | NumericBinary::Ne => {
++                self.byte_equality_member(profile, left, right)?
++            }
++            NumericBinary::Lt | NumericBinary::Le | NumericBinary::Gt | NumericBinary::Ge => self
++                .byte_equality
++                .as_ref()
++                .ok_or_else(|| fault("str PartialOrd compiler facet absent"))?
++                .select_string_ordering(profile, left, right)?,
++            _ => return Err(fault("operator is not an admitted immutable comparison")),
++        };
++        member.require_operator(operator)?;
++        Ok(member)
++    }
+     pub(crate) fn byte_equality_member(
+         &self,
+         profile: &crate::core::profile::ProfileIdentity,
+--- a/crates/lrr/src/runtime/cell_byte_comparison.rs
++++ b/crates/lrr/src/runtime/cell_byte_comparison.rs
+@@ -241,3 +241,7 @@
+ #[cfg(test)]
+ #[path = "cell_byte_comparison_tests.rs"]
+ mod tests;
++
++#[path = "cell_string_ordering.rs"]
++mod string_ordering;
++pub(crate) use string_ordering::{StaticStringOrdering, StaticStringOrderingPoll};
+--- a/crates/lrr/src/runtime/cell_byte_comparison_tests.rs
++++ b/crates/lrr/src/runtime/cell_byte_comparison_tests.rs
+@@ -2,7 +2,12 @@
+ use super::*;
+ use crate::runtime::{cell::byte_literals::StaticByteChunkPoll, shape::ByteLiteralTarget};
+ 
+-fn operand(store: &mut GuestStore, site: &[u8], bytes: &[u8], view: ByteLiteralTarget) -> CellId {
++pub(super) fn operand(
++    store: &mut GuestStore,
++    site: &[u8],
++    bytes: &[u8],
++    view: ByteLiteralTarget,
++) -> CellId {
+     let frame = store.new_frame_anchor().unwrap();
+     let plan = store
+         .prepare_static_bytes(
+@@ -40,7 +45,7 @@
+     cell
+ }
+ 
+-fn store() -> GuestStore {
++pub(super) fn store() -> GuestStore {
+     GuestStore::new(1, 20_000, 8 << 20).unwrap()
+ }
+ 
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_string_ordering.rs
+@@ -0,0 +1,96 @@
++//! Lexicographic UTF-8 byte ordering over private immutable string leases.
++//! This cursor supplies physical evidence only; source PartialOrd is independent.
++use super::*;
++use std::cmp::Ordering;
++
++pub(crate) struct StaticStringOrdering {
++    comparison: StaticByteComparison,
++}
++#[derive(Debug, Eq, PartialEq)]
++pub(crate) enum StaticStringOrderingPoll {
++    Dispatch { pairs: u32 },
++    Complete { ordering: Ordering, pairs: u32 },
++}
++impl StaticStringOrdering {
++    pub(crate) fn require_operands(&self, left: CellId, right: CellId) -> Result<(), Diagnostic> {
++        self.comparison.require_operands(left, right)
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        std::mem::size_of::<Self>()
++    }
++}
++impl GuestStore {
++    pub(crate) fn prepare_static_string_ordering(
++        &self,
++        left: CellId,
++        right: CellId,
++    ) -> Result<StaticStringOrdering, Diagnostic> {
++        self.require_static_string_value(left)?;
++        self.require_static_string_value(right)?;
++        Ok(StaticStringOrdering {
++            comparison: self.prepare_static_byte_comparison(left, right)?,
++        })
++    }
++    pub(crate) fn admit_static_string_ordering(
++        &self,
++        cursor: &StaticStringOrdering,
++        left: CellId,
++        right: CellId,
++    ) -> Result<(), Diagnostic> {
++        self.require_static_string_value(left)?;
++        self.require_static_string_value(right)?;
++        self.admit_static_byte_comparison(&cursor.comparison, left, right)
++    }
++    /// One charge per inspected byte pair; at most 256 pairs per dispatch.
++    /// Different lengths decide order only after the common prefix is equal.
++    pub(crate) fn advance_static_string_ordering(
++        &self,
++        cursor: &mut StaticStringOrdering,
++        fuel: &mut RunFuel,
++    ) -> Result<StaticStringOrderingPoll, Diagnostic> {
++        let cursor = &mut cursor.comparison;
++        if cursor.terminal {
++            return Err(lease_fault());
++        }
++        let outcome = self.static_string_ordering_chunk(cursor, fuel);
++        if !matches!(outcome, Ok(StaticStringOrderingPoll::Dispatch { .. })) {
++            cursor.terminal = true;
++        }
++        outcome
++    }
++    fn static_string_ordering_chunk(
++        &self,
++        cursor: &mut StaticByteComparison,
++        fuel: &mut RunFuel,
++    ) -> Result<StaticStringOrderingPoll, Diagnostic> {
++        self.validate_static_byte_comparison(cursor)?;
++        self.require_static_string_value(cursor.left.operand.cell)?;
++        self.require_static_string_value(cursor.right.operand.cell)?;
++        fuel.poll()?;
++        let end = cursor.left.len.min(cursor.right.len);
++        let mut pairs = 0;
++        while cursor.next < end && pairs < PAIRS_PER_DISPATCH {
++            fuel.charge()?;
++            let left = self.comparison_byte(cursor.left, cursor.next)?;
++            let right = self.comparison_byte(cursor.right, cursor.next)?;
++            cursor.next = cursor.next.checked_add(1).ok_or_else(resource)?;
++            pairs += 1;
++            let ordering = left.cmp(&right);
++            if ordering != Ordering::Equal {
++                return Ok(StaticStringOrderingPoll::Complete { ordering, pairs });
++            }
++        }
++        if cursor.next == end {
++            Ok(StaticStringOrderingPoll::Complete {
++                ordering: cursor.left.len.cmp(&cursor.right.len),
++                pairs,
++            })
++        } else {
++            Ok(StaticStringOrderingPoll::Dispatch { pairs })
++        }
++    }
++}
++
++#[cfg(test)]
++#[path = "cell_string_ordering_tests.rs"]
++mod tests;
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_string_ordering_tests.rs
+@@ -0,0 +1,222 @@
++//! Unchanged upstream literal operands plus LRR continuation/authority controls.
++//! These physical controls do not execute the whole fixture or its output.
++use super::super::tests::{operand, store};
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity, runtime::shape::ByteLiteralTarget,
++    source::snapshot::SourceBlob, syntax::parse::ParsedFile,
++};
++use ra_ap_syntax::{AstNode, AstToken, ast};
++const ORIGINAL: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/estr-slice.rs"
++);
++
++#[test]
++fn unchanged_estr_literals_order_by_actual_utf8_bytes_and_equal_prefix_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let parsed = ParsedFile::parse(
++            &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
++            ProfileIdentity {
++                edition,
++                ..ProfileIdentity::current()
++            },
++        )
++        .unwrap();
++        assert!(parsed.errors.is_empty());
++        let values: Vec<_> = parsed
++            .parsed
++            .tree()
++            .syntax()
++            .descendants()
++            .filter_map(ast::LetStmt::cast)
++            .filter_map(|binding| {
++                let ast::Expr::Literal(literal) = binding.initializer()? else {
++                    return None;
++                };
++                let token = ast::String::cast(literal.token())?;
++                Some(token.value().unwrap().into_owned())
++            })
++            .collect();
++        assert_eq!(values.len(), 8);
++        let mut store = store();
++        let cells: Vec<_> = values
++            .iter()
++            .enumerate()
++            .map(|(i, text)| {
++                operand(
++                    &mut store,
++                    i.to_string().as_bytes(),
++                    text.as_bytes(),
++                    ByteLiteralTarget::Str,
++                )
++            })
++            .collect();
++        let before = (store.budget.handles(), store.budget.bytes());
++        for (a, left) in values.iter().enumerate() {
++            for (b, right) in values.iter().enumerate() {
++                let mut cursor = store
++                    .prepare_static_string_ordering(cells[a], cells[b])
++                    .unwrap();
++                store
++                    .admit_static_string_ordering(&cursor, cells[a], cells[b])
++                    .unwrap();
++                let mut fuel = RunFuel::new(100).unwrap();
++                let pairs = left
++                    .bytes()
++                    .zip(right.bytes())
++                    .take_while(|(l, r)| l == r)
++                    .count();
++                let inspected = pairs + usize::from(pairs < left.len().min(right.len()));
++                assert_eq!(
++                    store
++                        .advance_static_string_ordering(&mut cursor, &mut fuel)
++                        .unwrap(),
++                    StaticStringOrderingPoll::Complete {
++                        ordering: left.cmp(right),
++                        pairs: inspected as u32
++                    }
++                );
++                assert_eq!(fuel.snapshot().used, inspected as u64);
++                assert!(
++                    store
++                        .advance_static_string_ordering(&mut cursor, &mut fuel)
++                        .is_err()
++                );
++            }
++        }
++        assert_eq!(before, (store.budget.handles(), store.budget.bytes()));
++    }
++}
++#[test]
++fn string_ordering_does_not_rank_lengths_before_inspecting_the_common_prefix() {
++    let mut store = store();
++    for (a, b, expected, pairs) in [
++        ("z", "aaaa", Ordering::Greater, 1),
++        ("aaaa", "z", Ordering::Less, 1),
++        ("c", "cc", Ordering::Less, 1),
++        ("", "cc", Ordering::Less, 0),
++        ("\0é", "\0z", Ordering::Greater, 2),
++    ] {
++        let left = operand(
++            &mut store,
++            format!("l{a}").as_bytes(),
++            a.as_bytes(),
++            ByteLiteralTarget::Str,
++        );
++        let right = operand(
++            &mut store,
++            format!("r{b}").as_bytes(),
++            b.as_bytes(),
++            ByteLiteralTarget::Str,
++        );
++        let mut cursor = store.prepare_static_string_ordering(left, right).unwrap();
++        let mut fuel = RunFuel::new(100).unwrap();
++        assert_eq!(
++            store
++                .advance_static_string_ordering(&mut cursor, &mut fuel)
++                .unwrap(),
++            StaticStringOrderingPoll::Complete {
++                ordering: expected,
++                pairs
++            }
++        );
++        assert_eq!(fuel.snapshot().used, u64::from(pairs));
++    }
++}
++#[test]
++fn string_ordering_bounds_prefix_work_and_refuses_replay_foreign_store_and_cancellation() {
++    let mut first = store();
++    let a = format!("{}a", "c".repeat(600));
++    let b = format!("{}b", "c".repeat(600));
++    let left = operand(&mut first, b"l", a.as_bytes(), ByteLiteralTarget::Str);
++    let right = operand(&mut first, b"r", b.as_bytes(), ByteLiteralTarget::Str);
++    let before = (
++        first.budget.handles(),
++        first.budget.bytes(),
++        first.state(left).unwrap(),
++    );
++    let mut cursor = first.prepare_static_string_ordering(left, right).unwrap();
++    let mut fuel = RunFuel::new(601).unwrap();
++    for _ in 0..2 {
++        assert_eq!(
++            first
++                .advance_static_string_ordering(&mut cursor, &mut fuel)
++                .unwrap(),
++            StaticStringOrderingPoll::Dispatch { pairs: 256 }
++        );
++        assert!(
++            first
++                .admit_static_string_ordering(&cursor, left, right)
++                .is_err()
++        );
++    }
++    assert_eq!(
++        first
++            .advance_static_string_ordering(&mut cursor, &mut fuel)
++            .unwrap(),
++        StaticStringOrderingPoll::Complete {
++            ordering: Ordering::Less,
++            pairs: 89
++        }
++    );
++    assert_eq!(fuel.snapshot().used, 601);
++    assert_eq!(
++        before,
++        (
++            first.budget.handles(),
++            first.budget.bytes(),
++            first.state(left).unwrap()
++        )
++    );
++    let second = store();
++    let mut foreign = first.prepare_static_string_ordering(left, right).unwrap();
++    let mut fuel = RunFuel::new(1000).unwrap();
++    assert!(
++        second
++            .advance_static_string_ordering(&mut foreign, &mut fuel)
++            .is_err()
++    );
++    assert!(
++        first
++            .advance_static_string_ordering(&mut foreign, &mut fuel)
++            .is_err()
++    );
++    assert_eq!(fuel.snapshot().used, 0);
++    let empty = operand(&mut first, b"empty", b"", ByteLiteralTarget::Str);
++    for (left, right) in [(empty, empty), (empty, right), (left, left)] {
++        let mut cursor = first.prepare_static_string_ordering(left, right).unwrap();
++        let mut fuel = RunFuel::new(1000).unwrap();
++        fuel.cancellation().cancel();
++        assert!(
++            first
++                .advance_static_string_ordering(&mut cursor, &mut fuel)
++                .is_err()
++        );
++        assert_eq!(fuel.snapshot().used, 0);
++        assert!(
++            first
++                .advance_static_string_ordering(&mut cursor, &mut RunFuel::new(1000).unwrap())
++                .is_err()
++        );
++    }
++    let bytes = operand(&mut first, b"byte-only", b"cc", ByteLiteralTarget::Slice);
++    assert!(first.prepare_static_string_ordering(bytes, left).is_err());
++    let mut cursor = first.prepare_static_string_ordering(left, right).unwrap();
++    let mut fuel = RunFuel::new(256).unwrap();
++    assert_eq!(
++        first
++            .advance_static_string_ordering(&mut cursor, &mut fuel)
++            .unwrap(),
++        StaticStringOrderingPoll::Dispatch { pairs: 256 }
++    );
++    assert!(
++        first
++            .advance_static_string_ordering(&mut cursor, &mut fuel)
++            .is_err()
++    );
++    assert!(
++        first
++            .advance_static_string_ordering(&mut cursor, &mut RunFuel::new(1000).unwrap())
++            .is_err()
++    );
++}
+--- a/crates/lrr/src/vm/frame_byte_comparisons.rs
++++ b/crates/lrr/src/vm/frame_byte_comparisons.rs
+@@ -2,10 +2,82 @@
+ use super::*;
+ use crate::{
+     engine::run::byte_comparisons::AdmittedByteComparison,
+-    ir::op::{Op, PrimitiveType},
+-    runtime::cell::byte_comparison::{StaticByteComparison, StaticByteComparisonPoll},
++    ir::op::{NumericBinary, Op, PrimitiveType},
++    runtime::cell::byte_comparison::{
++        StaticByteComparison, StaticByteComparisonPoll, StaticStringOrdering,
++        StaticStringOrderingPoll,
++    },
+     traits::term::TyTerm,
+ };
++/// The private variant binds the selected trait family across resumptions.
++pub(crate) enum ComparisonCursor {
++    Equality(StaticByteComparison),
++    StringOrdering(StaticStringOrdering),
++}
++impl ComparisonCursor {
++    fn metadata_bytes(&self) -> usize {
++        std::mem::size_of::<Self>()
++            + match self {
++                Self::Equality(cursor) => cursor.metadata_bytes(),
++                Self::StringOrdering(cursor) => cursor.metadata_bytes(),
++            }
++    }
++    fn require_operator(&self, operator: NumericBinary) -> Result<(), Diagnostic> {
++        if matches!(
++            (self, operator),
++            (Self::Equality(_), NumericBinary::Eq | NumericBinary::Ne)
++                | (
++                    Self::StringOrdering(_),
++                    NumericBinary::Lt | NumericBinary::Le | NumericBinary::Gt | NumericBinary::Ge
++                )
++        ) {
++            Ok(())
++        } else {
++            Err(invalid("physical comparison trait/operator differs"))
++        }
++    }
++    fn require_operands(&self, left: CellId, right: CellId) -> Result<(), Diagnostic> {
++        match self {
++            Self::Equality(cursor) => cursor.require_operands(left, right),
++            Self::StringOrdering(cursor) => cursor.require_operands(left, right),
++        }
++    }
++    fn admit(&self, store: &GuestStore, left: CellId, right: CellId) -> Result<(), Diagnostic> {
++        match self {
++            Self::Equality(cursor) => store.admit_static_byte_comparison(cursor, left, right),
++            Self::StringOrdering(cursor) => store.admit_static_string_ordering(cursor, left, right),
++        }
++    }
++    fn advance(
++        &mut self,
++        store: &GuestStore,
++        fuel: &mut crate::vm::fuel::RunFuel,
++        operator: NumericBinary,
++    ) -> Result<StaticByteComparisonPoll, Diagnostic> {
++        self.require_operator(operator)?;
++        match self {
++            Self::Equality(cursor) => store.advance_static_byte_comparison(cursor, fuel),
++            Self::StringOrdering(cursor) => {
++                match store.advance_static_string_ordering(cursor, fuel)? {
++                    StaticStringOrderingPoll::Dispatch { pairs } => {
++                        Ok(StaticByteComparisonPoll::Dispatch { pairs })
++                    }
++                    StaticStringOrderingPoll::Complete { ordering, pairs } => {
++                        use std::cmp::Ordering;
++                        let equal = match operator {
++                            NumericBinary::Lt => ordering == Ordering::Less,
++                            NumericBinary::Le => ordering != Ordering::Greater,
++                            NumericBinary::Gt => ordering == Ordering::Greater,
++                            NumericBinary::Ge => ordering != Ordering::Less,
++                            _ => return Err(invalid("string ordering operator differs")),
++                        };
++                        Ok(StaticByteComparisonPoll::Complete { equal, pairs })
++                    }
++                }
++            }
++        }
++    }
++}
+ pub(super) struct BoundByteComparison {
+     pc: PcKey,
+     operation_index: usize,
+@@ -15,7 +87,7 @@
+     destination_epoch: u32,
+     scope: ScopeId,
+     prior_source: Option<TyTerm>,
+-    physical: StaticByteComparison,
++    physical: ComparisonCursor,
+ }
+ impl Frame {
+     pub(crate) fn admit_byte_comparison(
+@@ -70,7 +142,7 @@
+         &self,
+         op: &Op,
+         store: &GuestStore,
+-    ) -> Result<Option<StaticByteComparison>, Diagnostic> {
++    ) -> Result<Option<ComparisonCursor>, Diagnostic> {
+         if !matches!(op, Op::NumericBinary { .. }) {
+             return Ok(None);
+         }
+@@ -82,15 +154,23 @@
+         let (left, right, destination, _) = proof.operands();
+         self.preflight_source_view(destination, Some(&TyTerm::Primitive(PrimitiveType::Bool)))?;
+         self.preflight_write_type(destination, TypeId(2), store)?;
+-        store
+-            .prepare_static_byte_comparison(self.cell(left)?, self.cell(right)?)
+-            .map(Some)
++        let cursor = if matches!(proof.operator(), NumericBinary::Eq | NumericBinary::Ne) {
++            ComparisonCursor::Equality(
++                store.prepare_static_byte_comparison(self.cell(left)?, self.cell(right)?)?,
++            )
++        } else {
++            ComparisonCursor::StringOrdering(
++                store.prepare_static_string_ordering(self.cell(left)?, self.cell(right)?)?,
++            )
++        };
++        cursor.require_operator(proof.operator())?;
++        Ok(Some(cursor))
+     }
+     pub(crate) fn begin_byte_comparison(
+         &mut self,
+         index: usize,
+         op: &Op,
+-        physical: StaticByteComparison,
++        physical: ComparisonCursor,
+         store: &mut GuestStore,
+     ) -> Result<(), Diagnostic> {
+         self.require_store(store)?;
+@@ -109,7 +189,8 @@
+             .ok_or_else(|| invalid("byte comparison source admission absent"))?;
+         proof.require(self, store, op)?;
+         let (left, right, destination, _) = proof.operands();
+-        store.admit_static_byte_comparison(&physical, self.cell(left)?, self.cell(right)?)?;
++        physical.require_operator(proof.operator())?;
++        physical.admit(store, self.cell(left)?, self.cell(right)?)?;
+         let prior_source = self.source_view_ref(destination)?.cloned();
+         Self::metadata_bytes(&self.body, self.parameter_metadata_count())
+             .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
+@@ -170,6 +251,7 @@
+         {
+             return Err(invalid("byte comparison continuation binding changed"));
+         }
++        a.physical.require_operator(proof.operator())?;
+         a.physical.require_operands(a.left, a.right)?;
+         self.preflight_write_type(destination, TypeId(2), store)?;
+         self.preflight_source_view(destination, Some(&TyTerm::Primitive(PrimitiveType::Bool)))?;
+@@ -186,7 +268,12 @@
+             .byte_comparison_activation
+             .take()
+             .ok_or_else(|| invalid("byte comparison activation disappeared"))?;
+-        let poll = store.advance_static_byte_comparison(&mut a.physical, &mut self.fuel);
++        let operator = self
++            .byte_comparison
++            .as_ref()
++            .ok_or_else(|| invalid("comparison source proof disappeared"))?
++            .operator();
++        let poll = a.physical.advance(store, &mut self.fuel, operator);
+         self.counters.fuel_used = self.fuel.snapshot().used;
+         match poll? {
+             StaticByteComparisonPoll::Dispatch { pairs } => {

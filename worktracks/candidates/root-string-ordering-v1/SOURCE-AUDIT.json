@@ -1,0 +1,89 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T024",
+    "T062"
+  ],
+  "prerequisites": [
+    "root-string-length-v1"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_byte_comparisons.rs",
+      "before_sha256": "ddf262fae8fcbbe8ac8c8518f3b2f8f37f1cc762b893ac87dc6de1d3c6006f07",
+      "after_sha256": "e8579f7e662ffeb594a9ee9f3ab50e7c539bf20ae45bcceef8c0ec7b7f1892ae"
+    },
+    {
+      "path": "crates/lrr/src/engine/runtime_macros.rs",
+      "before_sha256": "062cb7f324f9f2c88360ca489f142cbbd8b9d3e4e310e8c734a5fecaa3be6a20",
+      "after_sha256": "a347a5b10fbeb5bf81882e1646c5a4c74f1962c3cf08fe1793e0401914b38d5e"
+    },
+    {
+      "path": "crates/lrr/src/facade/byte_equality.rs",
+      "before_sha256": "0c6573bb7692cba2827da8321fb9537fe5b13b89710023363931437c1ea00ffd",
+      "after_sha256": "8c795a754ea045b2cbfea44edb5ddffb6586db39fb4b6eb74c480e1108de9d65"
+    },
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_catalog.rs",
+      "before_sha256": "80f6d6b976fe5564911ec62f7b66bceeef6ebe7e435b8a728e12b311e02997d4",
+      "after_sha256": "49c614ea704433f8cb4af652334f6b9b172a30f2668278000252028051b48f0c"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_comparison.rs",
+      "before_sha256": "404c04df0d5eb08d345ef4d36c7d8c6d3670895ec6eb17d2ce317e8aa45f5fae",
+      "after_sha256": "349bdaa64a8971e9a57069c523923a0308a3667f58f742122a9407e0e1b3635e"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_comparison_tests.rs",
+      "before_sha256": "0b117437c1d2ca221082e36351a2688e20397742bf8719bf3b2e5e430755454a",
+      "after_sha256": "72b871c7b19215fdc0275b87289815611eed1ed341da155fde0cb6646c8a9985"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_string_ordering.rs",
+      "before_sha256": null,
+      "after_sha256": "350ef76dc89eed1323d2efc6db7008aad2ae0255ccc1a6935c907b2d1ff22da4"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_string_ordering_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "67547ce04a38ee43273c569c53a775ef2e9bc4ef7c714654cbafc8a785e8abb8"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_byte_comparisons.rs",
+      "before_sha256": "d594d1904277bfc2047d453923dc954f99a472629adb4d121316258c8522b987",
+      "after_sha256": "193369995fa8a97dcec484f7b17530374d9c68d2429b72ba9ee5e4c266d54c7b"
+    }
+  ],
+  "patch_sha256": "ce64f6f3777581d426f7cc45087019adca769e272705db85c3fd68a921340832",
+  "patch_bytes": 31076,
+  "created_at": "2026-10-15T12:36:15.520640+00:00",
+  "static_checks": [
+    "Rust 1.99 formatting",
+    "exact no-fuzz/no-offset leaf patch replay"
+  ],
+  "stock_runtime_passes_added": 0,
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "upstream_witness": {
+    "path": "tests/ui/array-slice-vec/estr-slice.rs",
+    "sha256": "c33f57cc8badc0315c072be7050862007ffb7fa4a4e9a974c110387f0c289453"
+  },
+  "pinned_core_contract": {
+    "path": "library/core/src/str/traits.rs",
+    "sha256": "9e4f51a60ae74ad2b6e5ab4718b80cd5d475f0b7b6a050cbf0895c45ed25c998",
+    "line": 48
+  },
+  "new_test_bodies": 4,
+  "comparison_facet_domain": "lrr/v3/core-immutable-literal-comparison-facet",
+  "recipe_schema_unchanged": 15,
+  "acceptance_pending": [
+    "strict build and clippy",
+    "all-edition original literal pair controls",
+    "exact source/trait/operator/member controls",
+    "bounded physical ordering and all refusal controls",
+    "guest source operator and exact one-publication execution",
+    "existing immutable equality and scalar operator scopes",
+    "unchanged whole-main estr-slice including output and byte views",
+    "integrated milestone"
+  ]
+}

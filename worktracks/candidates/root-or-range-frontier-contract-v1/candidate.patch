@@ -1,0 +1,105 @@
+--- a/xtask/tests/scalar_or_patterns.rs
++++ b/xtask/tests/scalar_or_patterns.rs
+@@ -13,7 +13,7 @@
+     },
+     engine::run::{RunMachine, RunPoll, ValueSummary},
+     ir::{
+-        op::{DecodedLiteral, HintRecipe, Op, PrimitiveType},
++        op::{DecodedLiteral, HintRecipe, NumericBinary, Op, PrimitiveType},
+         pc::Phase,
+         recipe::RecipeExit,
+     },
+@@ -267,7 +267,7 @@
+     );
+ }
+ #[test]
+-fn reached_or_binding_range_and_guard_frontiers_refuse_before_compare_or_commit() {
++fn reached_or_range_lowering_and_binding_guard_refusals_preserve_frontiers() {
+     for (text, marker, phase) in [
+         (
+             "fn value(source:i8)->bool{match source{0 | 0..=1=>true,_=>false}}fn main(){}",
+@@ -328,21 +328,69 @@
+         let QueryValue::Thunk(recipe) = fetched.value.as_ref() else {
+             panic!("unsupported reached recipe")
+         };
+-        assert!(
+-            recipe
+-                .recipe()
+-                .operations
+-                .iter()
+-                .any(|op| matches!(op, Op::Unsupported(_)))
+-        );
+-        assert!(!recipe.recipe().operations.iter().any(|op| matches!(
+-            op,
+-            Op::NumericBinary { .. }
+-                | Op::ReadLocal { .. }
+-                | Op::ReadParameter { .. }
+-                | Op::Literal { .. }
+-                | Op::ScopeEnter { .. }
+-        )));
++        if marker == "0..=1" {
++            // This range is now supported. Preserve the original regression
++            // input and require its real lower-bound/branch recipe; do not
++            // skip it or turn a general error into a successful outcome.
++            assert!(node.scalar_range_phase);
++            assert_eq!(recipe.recipe().origin.span, index.span(node.id).unwrap());
++            let [
++                Op::Literal {
++                    literal,
++                    hint,
++                    destination: expected,
++                },
++                Op::NumericBinary {
++                    operator: NumericBinary::Ge,
++                    left,
++                    right,
++                    destination: test,
++                },
++                Op::Discard { source: discarded },
++            ] = recipe.recipe().operations.as_ref()
++            else {
++                panic!("range Entry must test only its original lower bound")
++            };
++            assert_eq!(literal.spelling, "0");
++            assert!(matches!(
++                literal.decoded,
++                Some(DecodedLiteral::Integer {
++                    negative: false,
++                    magnitude: 0,
++                    ..
++                })
++            ));
++            assert_eq!(*hint, HintRecipe::Primitive(PrimitiveType::I8));
++            assert_eq!(right, expected);
++            assert_eq!(discarded, expected);
++            assert_ne!(left, right);
++            assert_ne!(test, left);
++            assert_ne!(test, right);
++            assert_eq!(
++                recipe.recipe().exit,
++                RecipeExit::Branch {
++                    condition: *test,
++                    yes: index.pc(node.id, Phase::Operand(0)).unwrap(),
++                    no: index.pc(node.id, Phase::Exit).unwrap(),
++                }
++            );
++        } else {
++            assert!(
++                recipe
++                    .recipe()
++                    .operations
++                    .iter()
++                    .any(|op| matches!(op, Op::Unsupported(_)))
++            );
++            assert!(!recipe.recipe().operations.iter().any(|op| matches!(
++                op,
++                Op::NumericBinary { .. }
++                    | Op::ReadLocal { .. }
++                    | Op::ReadParameter { .. }
++                    | Op::Literal { .. }
++                    | Op::ScopeEnter { .. }
++            )));
++        }
+         assert!(
+             db.trace
+                 .events
