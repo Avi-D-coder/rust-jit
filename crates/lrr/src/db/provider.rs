@@ -544,6 +544,29 @@ impl Provider for SyntaxProvider {
                 }
             }
             QueryKey::ParseFile(k) => {
+                if let Some(input) = db.input(&InputKey::RetainedSyntax(k.content)) {
+                    let InputValue::RetainedSyntax(unit) = input.as_ref() else {
+                        return Provided::error(
+                            "LRR-E-INTERNAL-SNAPSHOT",
+                            "retained syntax input variant differs",
+                        );
+                    };
+                    if unit.key() != k {
+                        return Provided::error(
+                            "LRR-E-INTERNAL-SNAPSHOT",
+                            "retained syntax parse key/profile differs",
+                        );
+                    }
+                    match unit.require_current(db) {
+                        QueryPoll::Ready(Ok(())) => {}
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
+                    }
+                    return match unit.replay() {
+                        Ok(parsed) => Provided::pure(QueryValue::ParseFile(Arc::new(parsed))),
+                        Err(error) => QueryPoll::Ready(Err(error)),
+                    };
+                }
                 if let Some(input) = db.input(&InputKey::GeneratedSyntax(k.content)) {
                     let InputValue::GeneratedSyntax(unit) = input.as_ref() else {
                         return Provided::error(

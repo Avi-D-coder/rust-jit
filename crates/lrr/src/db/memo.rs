@@ -25,6 +25,8 @@ mod source_view_inputs;
 
 #[path = "prepared_modules.rs"]
 mod prepared_modules;
+#[path = "retained_syntax_inputs.rs"]
+mod retained_syntax_inputs;
 
 #[derive(Debug, Clone)]
 pub struct MemoEntry {
@@ -710,6 +712,7 @@ impl Database {
                     | InputValue::IncludeRecord { .. }
                     | InputValue::DiscoverySeal(_)
                     | InputValue::GeneratedSyntax(_)
+                    | InputValue::RetainedSyntax(_)
             )
         }) {
             return Err(fault(

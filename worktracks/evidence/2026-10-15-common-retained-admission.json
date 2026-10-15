@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T20:44:11.339577+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "M014",
+    "T024",
+    "T063"
+  ],
+  "erratum": "E-R5-005",
+  "source_baseline": "a77f2c386b3fc123aeefa50f4702b38cd81937d3",
+  "scope": "Typed retained source parsing provenance, current source/epoch/seal admission, atomic derived input publication. Source-only candidate awaiting asynchronous validation.",
+  "implemented_candidate": [
+    "RetainedSyntaxInput requires genuine current source publication and lease, explicit current expansion epoch, closed syntax and actual discovery certificate covering each retained output descriptor",
+    "Canonical typed input identity binds prepared syntax, actual seal and publication; no manufactured SourceBlob or textual reparse",
+    "Existing pure ParseFile provider observes retained input/currentness dependencies and structurally replays ordinary AST",
+    "Atomic coordinator publication checks metadata and revision before inserting input; generic source-universe publication rejects derived retained syntax",
+    "Original DefinitionSource/body rows remain unchanged pending actual generated member and scope reconciliation",
+    "Six service controls use unchanged stock nested-statement source; exercise missing discovery suspension, all four editions, cached-parse epoch invalidation, source replacement, incomplete output and generic-publication refusal"
+  ],
+  "source_packet_sha256": "390da3f31ff8ea48e860b919769fd52f9f3c61e7d2cfc29a38a3aae7634dac83",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/db/dependency.rs",
+      "sha256": "d809796f47662bdbec65508578cc0270a2662ea2a032b8ae65b6394db8a1348c"
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "1e1b4cd013ee42375f70d344b6becf8d00c6f166228c5040345fc3fd1ca968c8"
+    },
+    {
+      "path": "crates/lrr/src/db/mod.rs",
+      "sha256": "dd7317f52358775e336d4b441df6526ce2c5a62707997067c4a55cf6edad486a"
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "0357548739898ce11ec555cbff13e6f5bc04481bbf2a93dc136eaea6e28a47b7"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_syntax.rs",
+      "sha256": "920a617173e832e77b9df0b23e55d0096e35551bee568866ce26d0c1c253286f"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_syntax_inputs.rs",
+      "sha256": "4eea74a6d687e1d29143afa6f83c15f8a5b8a3116617bfa6556ff2f87e9f364f"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "0c2b9ac0de94db642b201e39408aa0c896910f3156b730c562f42fbc198236b4"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly_tests.rs",
+      "sha256": "f5dad1acabcada92f952f33236d76de2c9a48b8660ec4e7bee66b24a37990638"
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse_retained.rs",
+      "sha256": "2362a34f73c5c19acbf115642bd6ecc14a661b2c2e7ab8b42ac57bc501d1167b"
+    },
+    {
+      "path": "crates/lrr/src/service/mod.rs",
+      "sha256": "31460b1a82002c320e7efa5ebe8f4b9b99ee4fc02c1cc0544f5bdfd7a7750868"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_syntax_tests.rs",
+      "sha256": "831286d54850d3300ef1ce4901a1ce845c92b5225f3545c37a90b592e1338a53"
+    }
+  ],
+  "validation": {
+    "state": "queued_after_existing_assembly_v3_gate_terminal_and_target_release",
+    "agent": "/root/edition_macro_logic",
+    "target": "artifacts/macos-first/root-constant-next-validation-v1/validation-target",
+    "frozen_packet": "artifacts/macos-first/common-retained-admission-v1/SOURCE.json",
+    "rust_tests_executed_for_this_candidate": 0,
+    "root_rustfmt_exit": 0,
+    "planning_check": "12 tracks,60 items,35 claims; no runtime acceptance",
+    "source_unchanged_since_freeze": true
+  },
+  "required_next": [
+    "Collect actual scoped/strict terminals on exact frozen source; repair any failures without changing oracles",
+    "Complete actual retained source-map leases and reconcile original/generated declaration/member/scope identities",
+    "Install assembled body before VM entry and remove all eight audited shortcuts via shared expression/pattern/control lowering",
+    "Collect fresh milestone and upstream runtime acceptance separately"
+  ],
+  "acceptance": {
+    "candidate_compiles": false,
+    "candidate_tests_pass": false,
+    "ordinary_vm_route": false,
+    "common_macro_engine": false,
+    "eight_shortcuts_removed": false,
+    "new_guest_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "task_complete": false,
+    "guest_jit_prerequisite": false
+  }
+}

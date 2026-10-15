@@ -17,6 +17,17 @@ use crate::{
 };
 
 fn provider(text: &str, edition: u16) -> (SourceDeclarative, Arc<DeclarationMacroIndex>) {
+    let (provider, index, _) = world(text, edition);
+    (provider, index)
+}
+pub(crate) fn world(
+    text: &str,
+    edition: u16,
+) -> (
+    SourceDeclarative,
+    Arc<DeclarationMacroIndex>,
+    PreparedSourceInputs,
+) {
     let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
     let mut profile = ProfileIdentity::current();
     profile.edition = edition;
@@ -97,9 +108,9 @@ fn provider(text: &str, edition: u16) -> (SourceDeclarative, Arc<DeclarationMacr
             .accept_inert_attribute(identity, proof.name().unwrap())
             .unwrap();
     }
-    (provider, Arc::new(index))
+    (provider, Arc::new(index), inputs)
 }
-fn request(
+pub(crate) fn request(
     provider: &SourceDeclarative,
     index: &DeclarationMacroIndex,
 ) -> Box<SourceDeclarativeRequest> {
@@ -123,7 +134,7 @@ fn request(
     };
     request
 }
-fn output(
+pub(crate) fn output(
     provider: &SourceDeclarative,
     parent: &DeclarationScan,
     request: &SourceDeclarativeRequest,

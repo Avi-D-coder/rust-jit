@@ -96,6 +96,30 @@ impl PreparedSourceSyntax {
     pub fn outputs(&self) -> &[Arc<GeneratedDeclarations>] {
         &self.outputs
     }
+    pub(crate) fn metadata_excluding_snapshot(&self) -> Result<usize, Diagnostic> {
+        let mut bytes = charge(
+            std::mem::size_of::<Self>(),
+            self.source.selection().metadata_bytes()?,
+        )?;
+        for (capacity, size) in [
+            (
+                self.outputs.capacity(),
+                std::mem::size_of::<Arc<GeneratedDeclarations>>(),
+            ),
+            (self.pending.capacity(), std::mem::size_of::<Digest>()),
+        ] {
+            bytes = charge(
+                bytes,
+                capacity
+                    .checked_mul(size)
+                    .ok_or_else(|| fault("retained syntax metadata overflow"))?,
+            )?;
+        }
+        for output in &self.outputs {
+            bytes = charge(bytes, output.metadata_bytes()?)?;
+        }
+        Ok(bytes)
+    }
 }
 
 impl SourceSyntaxAssembly {
@@ -384,4 +408,4 @@ fn generated_calls(
 
 #[cfg(test)]
 #[path = "assembly_tests.rs"]
-mod tests;
+pub(crate) mod tests;

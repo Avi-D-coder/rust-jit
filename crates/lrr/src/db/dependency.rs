@@ -11,6 +11,7 @@ use std::sync::Arc;
 pub enum InputKey {
     SourceDependencies,
     GeneratedSyntax(Digest),
+    RetainedSyntax(Digest),
     DiscoverySeal(super::seals::SealKey),
     CapturedSource(Digest),
     DefinitionSource(Digest),
@@ -33,6 +34,7 @@ pub enum InputKey {
 pub enum InputValue {
     SourceDependencies(Arc<crate::source::dependencies::SourceDependencies>),
     GeneratedSyntax(Arc<crate::expand::generated_syntax::GeneratedSyntaxInput>),
+    RetainedSyntax(Arc<super::retained_syntax::RetainedSyntaxInput>),
     DiscoverySeal(Box<super::seals::DiscoveryInput>),
     CapturedSource(crate::source::changes::SourceSelection),
     DefinitionSource(crate::syntax::parse::ParseKey),
@@ -96,6 +98,7 @@ impl InputValue {
         match self {
             Self::SourceDependencies(graph) => add(graph.metadata_bytes()?)?,
             Self::GeneratedSyntax(input) => add(input.metadata_bytes()?)?,
+            Self::RetainedSyntax(input) => add(input.metadata_bytes()?)?,
             Self::DiscoverySeal(input) => add(input.metadata_bytes()?)?,
             Self::CapturedSource(source) => add(source.metadata_bytes()?)?,
             Self::ExpansionEpoch(_) => {}
@@ -134,6 +137,9 @@ impl InputValue {
         Ok(bytes)
     }
     pub fn matches(&self, k: &InputKey) -> bool {
+        if let (Self::RetainedSyntax(input), InputKey::RetainedSyntax(key)) = (self, k) {
+            return input.key().content == *key;
+        }
         if let (Self::GeneratedSyntax(input), InputKey::GeneratedSyntax(key)) = (self, k) {
             return input.key.content == *key;
         }
@@ -176,6 +182,10 @@ impl InputValue {
     pub fn fingerprint(&self) -> Digest {
         let mut e = StableEncoder::new("lrr/v2/input-value");
         match self {
+            Self::RetainedSyntax(input) => {
+                e.u32(29);
+                e.record(input.as_ref());
+            }
             Self::SourceDependencies(graph) => {
                 e.u32(27);
                 e.record(graph.as_ref());
@@ -308,6 +318,10 @@ impl StableEncode for InputKey {
     const DOMAIN: &'static str = "lrr/v2/input-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::RetainedSyntax(id) => {
+                e.u32(29);
+                e.digest(*id);
+            }
             Self::SourceDependencies => e.u32(27),
             Self::GeneratedSyntax(id) => {
                 e.u32(26);

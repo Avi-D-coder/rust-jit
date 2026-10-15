@@ -7,4 +7,5 @@ pub mod provider;
 pub mod trace;
 pub mod value;
 
+pub mod retained_syntax;
 pub mod seals;

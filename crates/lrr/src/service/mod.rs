@@ -17,3 +17,6 @@ pub mod source_derive_requests;
 
 #[cfg(test)]
 mod prepared_module_registry_tests;
+
+#[cfg(test)]
+mod retained_syntax_tests;

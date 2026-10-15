@@ -83,6 +83,9 @@ fn snapshot_bytes(snapshot: &SyntaxSnapshot) -> Result<usize, Diagnostic> {
 }
 
 impl ParsedFile {
+    pub(crate) fn snapshot_metadata_bytes(snapshot: &SyntaxSnapshot) -> Result<usize, Diagnostic> {
+        snapshot_bytes(snapshot)
+    }
     /// Pure representation conversion, never a source/namespace publication.
     /// The opaque snapshot supplies its exact structural identity and closed
     /// origin records. No caller-provided digest or fallback edition is used.

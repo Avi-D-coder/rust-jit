@@ -240,6 +240,6 @@
   "existing_execution_receipts_preserved": true,
   "existing_stock_counts_are_not_common_engine_acceptance": true,
   "pending_cumulative_promotion": "held_even_if_V123_tests_pass",
-  "production_repair_status": "not_started_in_this_audit",
+  "production_repair_status": "in_progress_retained_syntax_attachment_and_ordinary_parser_components_committed_typed_current_source_admission_candidate_unvalidated_no_vm_integration_or_shortcut_removal",
   "guest_jit_allowed": false
 }
