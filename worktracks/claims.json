@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Interpreter-first WT02. V94 failed full milestone retained; V95 boundary/condition repair27 controls and strict/fmt/architecture passed. V97 corrected both selectors, real fixture audit8d3fc4/0 passed; one fresh full gate remains live on frozen3243e3b9 with source/owner guards. Root prepared103-leaf promotion inventory, str::is_empty(schema18/op47) and source-selected contains<&str>(final schema19/op48) candidates while validation ran. Contains includes bounded UTF8 search, PC/cell/source-bound VM continuation and4 pending controls including unchanged complete CRLF main. Both successors uncompiled/unexecuted, planned as one combined schema19 batch after prior milestone/promotion and7 queued original CLI observations. No canonical byte/string promotion, new stock full-fixture/task/JIT acceptance or weakened file verification.",
+      "scope": "Interpreter-first WT02. V97 full milestone failed:3074 named passes,4 failures,1 interrupted,249 unstarted of3328. Five additional unchanged owning-edition CLI runtime contracts pass;2 constant-range CLI failures retained. V98 seven-leaf producer/context/startup repair passed119 distinct controls (source_run67, authority/local-context52), strict lints, format and real architecture/reference audits; unchanged256KiB/2000-frame test passes. Canonical byte/string promotion remains held for a fresh full milestone. Separate reached constant Value/Type scope successor is in asynchronous validation; held is_empty/contains schema19 source remains uncompiled. No full-fixture/task/JIT/Linux completion.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -575,11 +575,18 @@
         "worktracks/candidates/root-string-search-kernel-v1/",
         "artifacts/macos-first/root-string-search-kernel-v1/",
         "worktracks/candidates/root-string-contains-v1/",
-        "artifacts/macos-first/root-string-contains-v1/"
+        "artifacts/macos-first/root-string-contains-v1/",
+        "worktracks/evidence/2026-10-15-v97-string-interpreter-milestone.json",
+        "worktracks/evidence/2026-10-15-selected-string-runtime.json",
+        "worktracks/evidence/2026-10-15-v98-source-context-repair.json",
+        "worktracks/candidates/root-v97-source-context-repair-v1/",
+        "artifacts/macos-first/root-v97-source-context-repair-v1/",
+        "worktracks/candidates/root-reached-constant-scopes-v1/",
+        "artifacts/macos-first/root-reached-constant-scopes-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T15:39:56.588063+00:00",
+      "updated_at": "2026-10-15T16:04:13.937999+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

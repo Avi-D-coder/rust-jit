@@ -1,0 +1,222 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T16:03:35.360333+00:00",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "source_member": "3243e3b9a266c947140df89f478382858e0d41236ab3400561ad2b9339f9dc09",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "actual_cli_terminal": "3409ed/1",
+  "interpretation": "batch exit1 retains two failed cases; five individual runtime contracts passed",
+  "actual_capture_verifier_terminal": "f28281/0",
+  "capture_refusal_controls_passed": 85,
+  "selected_cases": [
+    {
+      "case": "tests/ui/match/match-borrowed-str.rs",
+      "owning_edition": 2015,
+      "status": "runtime_contract_pass",
+      "source_sha256": "b4eac0329eed1a049e713e374d30a7a0a4999b512db6c700b5f8aaf2e49a86b5",
+      "original_source_unchanged": true,
+      "cli_exit_code": 0,
+      "capture_checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "actual_terminal": {
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        },
+        "operations_started": 37,
+        "operations_completed": 37,
+        "return_scopes_cleaned": 2
+      }
+    },
+    {
+      "case": "tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+      "owning_edition": 2015,
+      "status": "runtime_contract_pass",
+      "source_sha256": "f502f13f4f96fe146c05a02dd1a387eb3d4d9932915da35c047975d40eade4a6",
+      "original_source_unchanged": true,
+      "cli_exit_code": 0,
+      "capture_checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "actual_terminal": {
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        },
+        "operations_started": 393,
+        "operations_completed": 393,
+        "return_scopes_cleaned": 19
+      }
+    },
+    {
+      "case": "tests/ui/lexer/underscores-in-unicode-escapes.rs",
+      "owning_edition": 2015,
+      "status": "runtime_contract_pass",
+      "source_sha256": "327799cc480a05d9bd4ae754063f084c26ad64148af3cfe23e9f0d7a77561dbd",
+      "original_source_unchanged": true,
+      "cli_exit_code": 0,
+      "capture_checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "actual_terminal": {
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        },
+        "operations_started": 24,
+        "operations_completed": 24,
+        "return_scopes_cleaned": 1
+      }
+    },
+    {
+      "case": "tests/ui/parser/slowparse-string.rs",
+      "owning_edition": 2015,
+      "status": "runtime_contract_pass",
+      "source_sha256": "7632dd3828b2aeb68c85141ba2023d72fbbbe97469f6a6920d4c16c88d369f28",
+      "original_source_unchanged": true,
+      "cli_exit_code": 0,
+      "capture_checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "actual_terminal": {
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        },
+        "operations_started": 7,
+        "operations_completed": 7,
+        "return_scopes_cleaned": 1
+      }
+    },
+    {
+      "case": "tests/ui/match/match-range-char-const.rs",
+      "owning_edition": 2015,
+      "status": "interpreter_failure",
+      "source_sha256": "210f8f4a84773a4ccd4ba3c5189d6ae3861016903e8b7be692a56943fc8e6ff6",
+      "original_source_unchanged": true,
+      "cli_exit_code": 2,
+      "capture_checks": null,
+      "actual_terminal": {
+        "status": "suspended",
+        "code": "LRR-E-UNSUPPORTED",
+        "message": "runtime capture requires later input/macro authority",
+        "phase": "executor"
+      }
+    },
+    {
+      "case": "tests/ui/parser/issues/issue-21475.rs",
+      "owning_edition": 2015,
+      "status": "interpreter_failure",
+      "source_sha256": "b746acc1b9c62e74b7a02eab08426a80a26c9fdc3291fe38b38b072645c8c52b",
+      "original_source_unchanged": true,
+      "cli_exit_code": 2,
+      "capture_checks": null,
+      "actual_terminal": {
+        "status": "fault",
+        "code": "LRR-E-CALL-CONTEXT",
+        "message": "lexical source Value namespace is not currently sealed",
+        "phase": "executor"
+      }
+    },
+    {
+      "case": "tests/ui/parser/slowparse-bstring.rs",
+      "owning_edition": 2015,
+      "status": "runtime_contract_pass",
+      "source_sha256": "250348b97c69e228e0a9ac9bd6b85ba9a7852a900776508454e520d5c72dcfca",
+      "original_source_unchanged": true,
+      "cli_exit_code": 0,
+      "capture_checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "actual_terminal": {
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        },
+        "operations_started": 7,
+        "operations_completed": 7,
+        "return_scopes_cleaned": 1
+      }
+    }
+  ],
+  "runtime_contract_passes": 5,
+  "interpreter_failures": 2,
+  "new_distinct_owning_edition_cli_runtime_programs": 5,
+  "historical_distinct_cli_runtime_programs": 11,
+  "historical_count_spans_different_source_members": true,
+  "current_successor_build_not_executed_by_these_captures": true,
+  "full_fixture_passes_added": 0,
+  "native_execution": false,
+  "interpreter_sha256": "066f2fbf8db8a1a4d1a5b6cdd9ebea527bbe2a00ae608bd5f866eab0d037d86b",
+  "source_digester_sha256": "3aca313ab953aa98128e034c88162a11ba69e219058f62a668ce88e8b1fd0990",
+  "report_sha256": "27672efbe5536dbd647960e5229ade0c3d01b3ee1c4063987dcc80e771fd89ea",
+  "results_sha256": "4ddb8731341ab795e2ce17e38b12ae9c340102e56895a4bddf37793e131f104f",
+  "release_sha256": "8647a42dc670a677d5e40ef402a8fbd6eb5b07617dd2bfed7151fd6c99924c2d",
+  "evidence_index_sha256": "ddf34611d6040229db23a7c0100c94816dbef3045f8da23f3f961166e43c4368",
+  "root_verified_all_retained_index_hashes": true,
+  "source_originals_owner_binaries_unchanged": true,
+  "full_milestone_passed": false,
+  "canonical_byte_string_promotion": false
+}

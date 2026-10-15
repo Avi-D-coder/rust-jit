@@ -1,0 +1,62 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T024",
+    "T054",
+    "M018"
+  ],
+  "source_baseline": "bd94d882fedc1d35bf444374b66a9a547bfd606fb4a144233b16dc766112eaf7",
+  "created_at": "2026-10-15T16:02:22.374435+00:00",
+  "patch_sha256": "fe4a7b7c1030eecf60bc79e3c6e3f212c7627c339391352a4481392645f3459a",
+  "files": [
+    {
+      "path": "compat/fixtures.toml",
+      "before_sha256": "c2d9af3ed07cf73d9e67b90f63d895d01a2ed4394922b1fd3d4d3087d56f1b84",
+      "after_sha256": "22eaa3e803286ed3c7f8e17aa8c0b21ecd9b963f7486470fb0374e8e355ee53e"
+    },
+    {
+      "path": "crates/lrr/src/cli/mod.rs",
+      "before_sha256": "42896b25dee5c876c0100857eed8ac3289d9cbfbfe284087af0c47be3d66e753",
+      "after_sha256": "f28e4f4acce88752649645c3f240eba23b4dc56fc2d3c2831ad90dd7492da9e5"
+    },
+    {
+      "path": "crates/lrr/src/cli/reached_scopes.rs",
+      "before_sha256": null,
+      "after_sha256": "00bb8fa408b7ff06c746032a312d482f47aa74e4a79de22772301c7083a28c67"
+    },
+    {
+      "path": "crates/lrr/src/cli/runtime_capture_tests.rs",
+      "before_sha256": "190712885d5f8346748f32ae7cc3965eba4f98d7dd80210c1231134816f832df",
+      "after_sha256": "b7e359c74d855af396b321646ed3582edbca44186cae6d2ca6fdac7e9dc80b9f"
+    },
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "before_sha256": "ce73e247911c1fab2e2ca30397535c1a63308fd1a4f33308c5992e0db7258fe3",
+      "after_sha256": "9a41eb6575d562b1bb7c788d582c1b75589f9fc671dccdc720bbfc7192466c29"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_source_constants.rs",
+      "before_sha256": "8c8f31873f35cdb5cd8a429fdb85ef32d6777fcbef76f53758dbc027e1a88c60",
+      "after_sha256": "9d780b83186bbbbb0efccfdc6ad24bc2c4bfd44cdf130c8321ec6f5c5cf8a0ac"
+    },
+    {
+      "path": "docs/tasks.json",
+      "before_sha256": "8fc7c75d3ce99eccc2c8065498734feefe3df284b2a3b9ff64f56409d732c0f0",
+      "after_sha256": "250e5b2ce5d901c26d0f196d0f5a96f4bce976f8c01ced9ff798a39eebc8032f"
+    }
+  ],
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "exact_replay_without_offset_or_fuzz": true,
+    "json_and_toml": true,
+    "two_exact_pending_selectors": true
+  },
+  "pending_acceptance": [
+    "unchanged_constant_ranges_complete_through_reached_scopes_all_editions",
+    "reached_scope_requests_refuse_foreign_world_epoch_scope_and_duplicate_progress"
+  ],
+  "stock_originals_changed": false,
+  "full_milestone_passed": false,
+  "canonical_promotion": false
+}

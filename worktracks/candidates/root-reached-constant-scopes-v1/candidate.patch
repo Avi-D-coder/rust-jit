@@ -1,0 +1,557 @@
+--- a/compat/fixtures.toml
++++ b/compat/fixtures.toml
+@@ -12179,3 +12179,13 @@
+ id = "M017-GENERATED-SOURCE-AUTHORITY-07"
+ path = "crates/lrr/src/frontend/generated_return_parent_profile_tests.rs"
+ test = "genuine_generated_export_retains_actual_parent_record_and_original_tokens"
++
++[[fixture]]
++id = "T054-REACHED-SCOPE-01"
++path = "crates/lrr/src/cli/runtime_capture_tests.rs"
++test = "unchanged_constant_ranges_complete_through_reached_scopes_all_editions"
++
++[[fixture]]
++id = "T054-REACHED-SCOPE-02"
++path = "crates/lrr/src/cli/reached_scopes.rs"
++test = "reached_scope_requests_refuse_foreign_world_epoch_scope_and_duplicate_progress"
+--- a/crates/lrr/src/cli/mod.rs
++++ b/crates/lrr/src/cli/mod.rs
+@@ -9,6 +9,7 @@
+ mod preentry_loader;
+ #[cfg(test)]
+ mod preentry_loader_tests;
++mod reached_scopes;
+ #[cfg(test)]
+ mod ref_pattern_tests;
+ mod render;
+@@ -368,6 +369,7 @@
+             "main has no executable body".into(),
+         ))?
+         .key();
++    let mut reached_scopes = reached_scopes::ReachedScopes::from_discovery(&discovery)?;
+     let startup = RunMachine::start_with_discovery(&mut db, body, 1_000_000, discovery);
+     db.begin_run()?;
+     let result = match startup {
+@@ -380,7 +382,11 @@
+             match enabled {
+                 Err(error) => Err(error),
+                 Ok(()) => {
+-                    let polled = run.poll_with_runtime_macros(&mut db, &contexts);
++                    let polled = run.poll_with_runtime_macros_servicing(
++                        &mut db,
++                        &contexts,
++                        &mut |db, request| reached_scopes.fulfill(request, db, &compiler, snapshot),
++                    );
+                     if capture.enabled {
+                         if let RunPoll::Fault(error) = &polled
+                             && let Some(authority) = authority
+--- /dev/null
++++ b/crates/lrr/src/cli/reached_scopes.rs
+@@ -0,0 +1,223 @@
++//! Reached original-module metadata discovery in the existing captured world.
++//! No query provider, native execution or implicit procedural-macro authority.
++use crate::{
++    core::{diagnostic::Diagnostic, digest::StableEncode},
++    db::{
++        dependency::{InputKey, InputValue},
++        memo::Database,
++        poll::InputRequest,
++        seals::{SealDomain, SealKey},
++    },
++    expand::source_discovery::SourceDiscovery,
++    source::{changes::PreparedSourceView, manifest::Namespace, snapshot::Snapshot},
++};
++use std::{collections::BTreeSet, sync::Arc};
++fn invalid(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-CATALOG-INCOMPLETE", message.into())
++}
++pub(super) struct ReachedScopes {
++    parent: SealKey,
++    sources: Vec<PreparedSourceView>,
++    fulfilled: BTreeSet<SealKey>,
++}
++impl ReachedScopes {
++    pub(super) fn from_discovery(discovery: &SourceDiscovery) -> Result<Self, Diagnostic> {
++        let sources = discovery.completed_test_sources()?;
++        let bytes = sources.iter().try_fold(0usize, |bytes, source| {
++            bytes.checked_add(source.selection().metadata_bytes().ok()?)
++        });
++        if sources.len() > 100_000 || bytes.is_none_or(|bytes| bytes > 32 << 20) {
++            return Err(crate::runtime::arena::resource());
++        }
++        Ok(Self {
++            parent: discovery.key().clone(),
++            sources,
++            fulfilled: BTreeSet::new(),
++        })
++    }
++    pub(super) fn fulfill(
++        &mut self,
++        request: &InputRequest,
++        db: &mut Database,
++        compiler: &super::compile_inputs::PreparedCompileInputs,
++        snapshot: &mut Arc<Snapshot>,
++    ) -> Result<bool, Diagnostic> {
++        let InputRequest::Discover { key } = request else {
++            return Ok(false);
++        };
++        key.validate()?;
++        if key.unit_graph != self.parent.unit_graph
++            || key.epoch != self.parent.epoch
++            || !matches!(db.published_input(&InputKey::ExpansionEpoch),
++                Some((InputValue::ExpansionEpoch(epoch), _)) if *epoch == key.epoch)
++        {
++            return Err(invalid(
++                "reached scope request belongs to another world or epoch",
++            ));
++        }
++        let SealDomain::Scope { id, namespace } = &key.domain else {
++            return Ok(false);
++        };
++        if !matches!(namespace, Namespace::Value | Namespace::Type) {
++            return Ok(false);
++        }
++        let mut scopes = self
++            .sources
++            .iter()
++            .flat_map(|source| source.outline().scopes.keys())
++            .filter(|scope| scope.fingerprint() == *id);
++        let Some(scope) = scopes.next().cloned() else {
++            return Err(invalid(
++                "reached scope is absent from captured source membership",
++            ));
++        };
++        if scope.owner.is_some() || scopes.any(|other| other != &scope) {
++            return Err(invalid("reached module scope is lexical or ambiguous"));
++        }
++        if self.fulfilled.len() >= 256 || !self.fulfilled.insert(key.clone()) {
++            return Err(invalid("reached scope demand made no bounded progress"));
++        }
++        let mut discovery = SourceDiscovery::new(
++            self.sources.iter().map(PreparedSourceView::share).collect(),
++            scope,
++            *namespace,
++            key.unit_graph,
++            key.epoch,
++        )?
++        .with_declarative_compiler(
++            compiler.environment_identity(),
++            crate::expand::source_declarative::engine_version(),
++            compiler.catalog.clone(),
++        )?;
++        if discovery.key() != key {
++            return Err(invalid(
++                "reached discovery key differs from its exact request",
++            ));
++        }
++        compiler.discover_diagnostic(&mut discovery, db, snapshot)?;
++        discovery.publish(db)?;
++        if !matches!(db.published_input(&InputKey::DiscoverySeal(key.clone())),
++            Some((InputValue::DiscoverySeal(input), _)) if input.seal.key() == key)
++        {
++            return Err(invalid(
++                "reached scope discovery did not publish its requested seal",
++            ));
++        }
++        Ok(true)
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn reached_scope_requests_refuse_foreign_world_epoch_scope_and_duplicate_progress() {
++        let path = std::path::Path::new(concat!(
++            env!("CARGO_MANIFEST_DIR"),
++            "/../../fixtures/upstream/rustc-checkout/tests/ui/match/match-range-char-const.rs"
++        ));
++        let (prepared, view, sources, mut snapshot) =
++            super::super::capture_standalone_edition(path, false, 2015).unwrap();
++        let (compiler, prepared, view, sources) =
++            super::super::compile_inputs::PreparedCompileInputs::prepare(
++                path, prepared, view, sources,
++            )
++            .unwrap();
++        let mut db = Database::default();
++        prepared.publish(&mut db).unwrap();
++        db.begin_expansion_epoch(1).unwrap();
++        let mut discovery = SourceDiscovery::new(
++            sources,
++            view.outline().root_scope.clone(),
++            Namespace::Value,
++            view.selection().outline.crate_key,
++            1,
++        )
++        .unwrap()
++        .with_declarative_compiler(
++            compiler.environment_identity(),
++            crate::expand::source_declarative::engine_version(),
++            compiler.catalog.clone(),
++        )
++        .unwrap();
++        compiler
++            .discover_diagnostic(&mut discovery, &mut db, &mut snapshot)
++            .unwrap();
++        discovery.publish(&mut db).unwrap();
++        let mut service = ReachedScopes::from_discovery(&discovery).unwrap();
++        let mut expected = discovery.key().clone();
++        expected.domain = SealDomain::Scope {
++            id: view.outline().root_scope.fingerprint(),
++            namespace: Namespace::Type,
++        };
++        let revision = db.revision();
++        for bad in [0, 1, 2] {
++            let mut key = expected.clone();
++            match bad {
++                0 => {
++                    key.unit_graph =
++                        crate::core::digest::Digest::of_bytes(b"another captured world")
++                }
++                1 => key.epoch += 1,
++                _ => {
++                    key.domain = SealDomain::Scope {
++                        id: crate::core::digest::Digest::of_bytes(b"unknown scope"),
++                        namespace: Namespace::Type,
++                    }
++                }
++            }
++            assert!(
++                service
++                    .fulfill(
++                        &InputRequest::Discover { key },
++                        &mut db,
++                        &compiler,
++                        &mut snapshot
++                    )
++                    .is_err()
++            );
++            assert_eq!(db.revision(), revision, "rejected request must not publish");
++        }
++        assert!(
++            !service
++                .fulfill(
++                    &InputRequest::CaptureCompileEnvironment {
++                        unit: expected.unit_graph
++                    },
++                    &mut db,
++                    &compiler,
++                    &mut snapshot
++                )
++                .unwrap()
++        );
++        assert_eq!(db.revision(), revision);
++        assert!(
++            service
++                .fulfill(
++                    &InputRequest::Discover {
++                        key: expected.clone()
++                    },
++                    &mut db,
++                    &compiler,
++                    &mut snapshot
++                )
++                .unwrap()
++        );
++        let sealed = db.revision();
++        assert!(
++            service
++                .fulfill(
++                    &InputRequest::Discover { key: expected },
++                    &mut db,
++                    &compiler,
++                    &mut snapshot
++                )
++                .is_err()
++        );
++        assert_eq!(
++            db.revision(),
++            sealed,
++            "duplicate request cannot repeat discovery"
++        );
++    }
++}
+--- a/crates/lrr/src/cli/runtime_capture_tests.rs
++++ b/crates/lrr/src/cli/runtime_capture_tests.rs
+@@ -174,3 +174,33 @@
+             .contains("managed output integration")
+     );
+ }
++
++#[test]
++fn unchanged_constant_ranges_complete_through_reached_scopes_all_editions() {
++    for (case, expected) in [
++        ("tests/ui/match/match-range-char-const.rs", include_bytes!(
++            "../../../../fixtures/upstream/rustc-checkout/tests/ui/match/match-range-char-const.rs"
++        ).as_slice()),
++        ("tests/ui/parser/issues/issue-21475.rs", include_bytes!(
++            "../../../../fixtures/upstream/rustc-checkout/tests/ui/parser/issues/issue-21475.rs"
++        ).as_slice()),
++    ] {
++        let path = fixtures().join(case);
++        assert_eq!(std::fs::read(&path).unwrap(), expected);
++        for edition in [2015, 2018, 2021, 2024] {
++            let outcome = standalone_edition_with_capture(&path, None, edition, true, None).unwrap();
++            let StandaloneOutcome::Captured(packet) = outcome else { panic!("capture route missing") };
++            let json = serde_json::to_value(&packet).unwrap();
++            assert_eq!(packet.exit_code(), 0, "{case}/{edition}: {json}");
++            assert!(packet.guest_complete(), "{case}/{edition}: {json}");
++            assert_eq!(packet.guest_stdout(), Some(&[][..]));
++            assert_eq!(packet.guest_stderr(), Some(&[][..]));
++            assert_eq!(json["terminal"]["value"]["kind"], "unit");
++            assert_eq!(json["snapshot"]["owning_edition"], edition);
++            assert!(json["capture"]["facts"]["vm_dispatches"].as_u64().unwrap() > 0);
++            let content = serde_json::to_value(Digest::of_bytes(expected)).unwrap();
++            assert!(json["snapshot"]["files"].as_array().unwrap().iter().any(|file| file["content"] == content));
++        }
++        assert_eq!(std::fs::read(&path).unwrap(), expected);
++    }
++}
+--- a/crates/lrr/src/engine/run.rs
++++ b/crates/lrr/src/engine/run.rs
+@@ -1551,8 +1551,40 @@
+         db: &mut Database,
+         contexts: &[super::runtime_macros::RuntimeMacroContext<'_>],
+     ) -> RunPoll {
++        self.poll_with_runtime_macros_servicing(db, contexts, &mut |_, _| Ok(false))
++    }
++    /// A coordinator can satisfy reached metadata requests before exposing a
++    /// poll boundary. Unhandled suspensions keep the ordinary incomplete latch;
++    /// physical execution and its observations stay within this same machine.
++    pub(crate) fn poll_with_runtime_macros_servicing(
++        &mut self,
++        db: &mut Database,
++        contexts: &[super::runtime_macros::RuntimeMacroContext<'_>],
++        service: &mut dyn FnMut(&mut Database, &InputRequest) -> Result<bool, Diagnostic>,
++    ) -> RunPoll {
+         let was_terminal = self.terminal;
+         let mut result = self.poll_runtime_macros_inner(db, contexts);
++        let mut serviced = 0u32;
++        while let RunPoll::NeedInput(request) = &result {
++            let admission = if serviced >= 256 {
++                Err(crate::runtime::arena::resource())
++            } else {
++                service(db, request)
++            };
++            match admission {
++                Ok(false) => break,
++                Ok(true) => {
++                    serviced += 1;
++                    result = self.poll_runtime_macros_inner(db, contexts);
++                }
++                Err(error) => {
++                    self.terminal = true;
++                    self.frame.status = crate::vm::frame::FrameStatus::Faulted;
++                    result = RunPoll::Fault(error);
++                    break;
++                }
++            }
++        }
+         if !was_terminal && self.terminal && self.terminal_facts.is_none() {
+             let outcome = match &result {
+                 RunPoll::Completed(report) => Some(TerminalExecution::Completed {
+--- a/crates/lrr/src/engine/run_source_constants.rs
++++ b/crates/lrr/src/engine/run_source_constants.rs
+@@ -29,6 +29,10 @@
+     },
+ };
+ const LIMIT: usize = 32 << 20;
++enum ReachedConstantPath {
++    Selected(Box<(ConstantPathSelection, Option<ScalarRangeConstantSite>)>),
++    NeedScope(Box<InputRequest>),
++}
+ pub(super) struct SourceConstantPlan {
+     caller: usize,
+     target: usize,
+@@ -129,6 +133,64 @@
+             }
+         }
+     }
++    /// Derive a missing original module Value demand from this source's actual
++    /// current root publication. This does not manufacture a completed seal.
++    fn required_constant_value_scope(
++        db: &Database,
++        source: &PreparedSourceView,
++        scope: &crate::syntax::outline::ScopeKey,
++        views: &[PreparedSourceView],
++    ) -> Result<Option<InputRequest>, Diagnostic> {
++        if db
++            .optional_lexical_scope_certificate(source.selection(), scope)?
++            .is_some()
++        {
++            db.source_view_scope_certificate(source.selection(), scope)?;
++            return Ok(None);
++        }
++        if scope.owner.is_some()
++            || scope.crate_key != source.selection().outline.crate_key
++            || !source.outline().scopes.contains_key(scope)
++        {
++            return Err(call_fault(
++                "constant demand requires an original captured module scope",
++            ));
++        }
++        let mut world: Option<crate::db::seals::SealKey> = None;
++        for candidate in views {
++            let root_scope = &candidate.outline().root_scope;
++            if db
++                .optional_lexical_scope_certificate(candidate.selection(), root_scope)?
++                .is_none()
++            {
++                continue;
++            }
++            let published = db.source_view_scope_certificate(candidate.selection(), root_scope)?;
++            let InputValue::DiscoverySeal(root) = published.as_ref() else {
++                return Err(call_fault("constant root Value publication differs"));
++            };
++            if !root.sources.contains(source.selection()) {
++                continue;
++            }
++            if world.as_ref().is_some_and(|prior| {
++                prior.unit_graph != root.seal.key().unit_graph
++                    || prior.epoch != root.seal.key().epoch
++            }) {
++                return Err(call_fault(
++                    "constant scope demand has ambiguous published worlds",
++                ));
++            }
++            world = Some(root.seal.key().clone());
++        }
++        let mut key = world
++            .ok_or_else(|| call_fault("constant scope demand lacks a current captured world"))?;
++        key.domain = SealDomain::Scope {
++            id: scope.fingerprint(),
++            namespace: Namespace::Value,
++        };
++        key.validate()?;
++        Ok(Some(InputRequest::Discover { key }))
++    }
+     /// Demand a Type seal only from the exact actual Value seal's selected world.
+     /// Never synthesize a world identity or execute preparation inside a provider.
+     fn required_constant_type(
+@@ -193,23 +255,34 @@
+             };
+         };
+         let caller = *caller;
+-        let prepare = || -> Result<Option<(ConstantPathSelection,Option<ScalarRangeConstantSite>)>, Diagnostic> {
++        let prepare = || -> Result<Option<ReachedConstantPath>, Diagnostic> {
+             let source = &self.sources[caller];
+             let parsed = db
+                 .prepared_parse(&source.selection().outline.parse)
+                 .ok_or_else(|| call_fault("constant source parse is not actually prepared"))?;
+-            let range_site=if range_candidate {
+-                match parsed.scalar_range_constant_site(source,body,&self.frame.body,&pc)? {
+-                    Some(site)=>Some(site),None=>return Ok(None),
+-                }
+-            }else{None};
+-            let range=match &range_site {
+-                Some(site)=>site.endpoint_range(),
+-                None=>{
+-                    let span=self.frame.body.span(NodeId(pc.node))?;
++            let range_site = if range_candidate {
++                match parsed.scalar_range_constant_site(source, body, &self.frame.body, &pc)? {
++                    Some(site) => Some(site),
++                    None => return Ok(None),
++                }
++            } else {
++                None
++            };
++            let range = match &range_site {
++                Some(site) => site.endpoint_range(),
++                None => {
++                    let span = self.frame.body.span(NodeId(pc.node))?;
+                     SourceRange {
+-                        start:body.range.start.checked_add(span.relative_start).ok_or_else(||call_fault("constant source start overflow"))?,
+-                        end:body.range.start.checked_add(span.relative_end).ok_or_else(||call_fault("constant source end overflow"))?,
++                        start: body
++                            .range
++                            .start
++                            .checked_add(span.relative_start)
++                            .ok_or_else(|| call_fault("constant source start overflow"))?,
++                        end: body
++                            .range
++                            .start
++                            .checked_add(span.relative_end)
++                            .ok_or_else(|| call_fault("constant source end overflow"))?,
+                     }
+                 }
+             };
+@@ -218,19 +291,47 @@
+             };
+             // Routing only. Real source/local/namespace admission follows below;
+             // this graph never grants execution or overrides a local shadow.
+-            if !matches!(graph.lookup_source_path(Namespace::Value,site.segments(),site.absolute(),&site.context().scope,
+-                source.selection().outline.parse.profile.edition)?,NameLookup::Defined(ref def) if self.sources.iter().any(|v|v.outline().items.iter().any(|item|item.def_key.fingerprint()==def.identity && item.def_key.item_kind==ItemKind::Constant)))
+-            {
++            let NameLookup::Defined(definition) = graph.lookup_source_path(
++                Namespace::Value,
++                site.segments(),
++                site.absolute(),
++                &site.context().scope,
++                source.selection().outline.parse.profile.edition,
++            )?
++            else {
+                 return Ok(None);
+-            }
+-            // The constant preparation bound belongs to this reached candidate,
+-            // not to unrelated execution in a large captured source world.
++            };
++            let target = self.sources.iter().find_map(|view| {
++                view.outline()
++                    .items
++                    .iter()
++                    .find(|item| {
++                        item.def_key.fingerprint() == definition.identity
++                            && item.def_key.item_kind == ItemKind::Constant
++                    })
++                    .map(|item| (view, &item.scope))
++            });
++            let Some((target_source, target_scope)) = target else {
++                return Ok(None);
++            };
+             if self.sources.len() > 256 {
+                 return Err(call_fault("constant source set exceeds bounded profile"));
+             }
++            for (owner, scope) in [
++                (source, &site.context().scope),
++                (target_source, target_scope),
++            ] {
++                if let Some(request) =
++                    Self::required_constant_value_scope(db, owner, scope, &self.sources)?
++                {
++                    return Ok(Some(ReachedConstantPath::NeedScope(Box::new(request))));
++                }
++            }
+             let views = self.sources.iter().collect::<Vec<_>>();
+             match ConstantPathSelection::capture_current(db, source, body, range, &views, LIMIT)? {
+-                ConstantPathOutcome::Selected(path) => Ok(Some((*path,range_site))),
++                ConstantPathOutcome::Selected(path) => Ok(Some(ReachedConstantPath::Selected(
++                    Box::new((*path, range_site)),
++                ))),
+                 ConstantPathOutcome::LocalBinding(_) | ConstantPathOutcome::OtherValueMember(_) => {
+                     Ok(None)
+                 }
+@@ -238,7 +339,10 @@
+             }
+         };
+         let (path, range) = match prepare() {
+-            Ok(Some(path)) => path,
++            Ok(Some(ReachedConstantPath::Selected(selection))) => *selection,
++            Ok(Some(ReachedConstantPath::NeedScope(request))) => {
++                return QueryPoll::NeedInput(*request);
++            }
+             Ok(None) => return QueryPoll::Ready(Ok(None)),
+             Err(e) => return QueryPoll::Ready(Err(e)),
+         };
+--- a/docs/tasks.json
++++ b/docs/tasks.json
+@@ -5687,7 +5687,9 @@
+         "repeat_length_locals_do_not_require_executing_the_ordinary_function",
+         "length_context_replays_parameter_outer_local_generic_and_closure_refusals",
+         "local_context_refuses_a_foreign_ast_and_charges_exact_length_admission",
+-        "cold_unresolved_exits_do_not_grant_targets_or_precheck_the_reached_scalar"
++        "cold_unresolved_exits_do_not_grant_targets_or_precheck_the_reached_scalar",
++        "unchanged_constant_ranges_complete_through_reached_scopes_all_editions",
++        "reached_scope_requests_refuse_foreign_world_epoch_scope_and_duplicate_progress"
+       ],
+       "acceptance_contract": "array length constant, recursive bounded const fn, cycle, cold effect branch, reached forbidden effect, and two uses with independently mutable guest arrays. Constant memo contains no guest handles.",
+       "commands": [],

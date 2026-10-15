@@ -1,0 +1,238 @@
+--- a/crates/lrr/src/engine/run.rs
++++ b/crates/lrr/src/engine/run.rs
+@@ -403,15 +403,15 @@
+         if let Err(error) = graph.resolve_imports() {
+             return QueryPoll::Ready(Err(error));
+         }
+-        match Self::start(db, body, fuel_limit) {
+-            QueryPoll::Ready(Ok(mut run)) => {
+-                run.sources = sources;
+-                run.graph = Some(graph);
+-                QueryPoll::Ready(Ok(run))
+-            }
+-            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+-            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+-        }
++        // Mutate the returned machine in place. Moving this large enum through
++        // separate match arms duplicates its stack temporaries in debug builds,
++        // including on the deliberately bounded host-thread stack.
++        let mut outcome = Self::start(db, body, fuel_limit);
++        if let QueryPoll::Ready(Ok(run)) = &mut outcome {
++            run.sources = sources;
++            run.graph = Some(graph);
++        }
++        outcome
+     }
+     pub(crate) fn start_with_test_catalog(
+         db: &mut Database,
+--- a/crates/lrr/src/syntax/runtime_local_numeric_context.rs
++++ b/crates/lrr/src/syntax/runtime_local_numeric_context.rs
+@@ -471,3 +471,30 @@
+ #[cfg(test)]
+ #[path = "runtime_local_numeric_context_tests.rs"]
+ mod tests;
++
++/// A strong Result relation has already proved the written primitive annotation
++/// in its source namespace. Reuse it for a directly entered root as well as a
++/// callee; conditional/parameter relations still require the runtime environment.
++pub(super) fn local_hint(
++    parsed: &ParsedFile,
++    index: &BodyIndex,
++    body: &BodyHandle,
++    context: DefinitionNumericContext,
++) -> Result<crate::ir::op::HintRecipe, Diagnostic> {
++    use crate::ir::op::HintRecipe;
++    if context != DefinitionNumericContext::Result {
++        return Ok(HintRecipe::DefinitionNumeric(context));
++    }
++    if body.key() != *index.body() || parsed.profile != *index.profile() {
++        return Err(super::error("numeric result hint body/profile mismatch"));
++    }
++    let root = parsed.entered_body_root(body)?;
++    let ty = root
++        .parent()
++        .and_then(ast::Fn::cast)
++        .and_then(|function| function.ret_type())
++        .and_then(|result| result.ty())
++        .ok_or_else(|| super::error("strong numeric result annotation absent"))?;
++    super::local_numeric_constraints::source_primitive_annotation(parsed, index, ty)
++        .map(HintRecipe::Primitive)
++}
+--- a/crates/lrr/src/syntax/runtime_local_numeric_context_tests.rs
++++ b/crates/lrr/src/syntax/runtime_local_numeric_context_tests.rs
+@@ -263,17 +263,28 @@
+             );
+         }
+     }
+-    for source in [
+-        "fn chosen()->u32{let n=0;n}",
+-        "fn chosen()->f64{let n=0.0;n}",
+-        "fn chosen()->u32{let n=0;if false{return n;}1}",
+-        "fn chosen()->f64{let n=0.0;if false{return n;}1.0}",
++    for (source, primitive) in [
++        ("fn chosen()->u32{let n=0;n}", PrimitiveType::U32),
++        ("fn chosen()->f64{let n=0.0;n}", PrimitiveType::F64),
++        (
++            "fn chosen()->u32{let n=0;if false{return n;}1}",
++            PrimitiveType::U32,
++        ),
++        (
++            "fn chosen()->f64{let n=0.0;if false{return n;}1.0}",
++            PrimitiveType::F64,
++        ),
+     ] {
+         for edition in [2015, 2018, 2021, 2024] {
+             let (parsed, body, index) = entered(source, edition, "chosen");
+             assert_eq!(
+                 selected(&parsed, &body, &index, 0),
+                 Some(DefinitionNumericContext::Result),
++                "{edition}: {source}"
++            );
++            assert_eq!(
++                local_hint(&parsed, &index, &body, DefinitionNumericContext::Result).unwrap(),
++                HintRecipe::Primitive(primitive),
+                 "{edition}: {source}"
+             );
+         }
+--- a/crates/lrr/src/syntax/thunks.rs
++++ b/crates/lrr/src/syntax/thunks.rs
+@@ -2376,7 +2376,7 @@
+                         self, index, body, &statement, &pattern,
+                     )?
+                 {
+-                    hint = HintRecipe::DefinitionNumeric(context);
++                    hint = runtime_local_numeric_context::local_hint(self, index, body, context)?;
+                 }
+                 if hint == HintRecipe::None
+                     && !by_reference
+--- a/crates/lrr/src/vm/frame.rs
++++ b/crates/lrr/src/vm/frame.rs
+@@ -3354,7 +3354,9 @@
+         Ok(())
+     }
+     /// A primitive operator may retain only its independently admitted result
+-    /// source. Expected rigid/nominal context cannot be overwritten at equal layout.
++    /// source. A soft primitive expectation is checked at its call/return
++    /// boundary, after argument evaluation. Rigid/nominal contexts and strict
++    /// storage cannot be overwritten at equal layout.
+     pub(crate) fn preflight_primitive_operator_result(
+         &self,
+         destination: SlotId,
+@@ -3367,7 +3369,8 @@
+         if let Some(expected) = self.source_view_ref(destination)? {
+             match expected {
+                 TyTerm::Primitive(expected)
+-                    if primitive.is_none_or(|actual| actual == *expected) => {}
++                    if primitive.is_none_or(|actual| actual == *expected)
++                        || !self.slot(destination)?.strict_hint => {}
+                 _ => {
+                     return Err(Diagnostic::new(
+                         "LRR-E-GENERIC-BINDING",
+--- a/crates/lrr/src/vm/step.rs
++++ b/crates/lrr/src/vm/step.rs
+@@ -304,7 +304,7 @@
+ /// Ordinary Bool/Char/Byte literals and explicitly suffixed numeric literals
+ /// carry their written primitive identity. Generated literals keep their
+ /// separate validated expansion route. Unsuffixed integers may retain an already
+-/// admitted strict primitive context; defaults and descriptors cannot mint one.
++/// admitted primitive source context; defaults and descriptors cannot mint one.
+ fn intrinsic_literal_preflight(
+     frame: &Frame,
+     store: &GuestStore,
+@@ -330,28 +330,40 @@
+                     suffix: Some(primitive),
+                     ..
+                 }) => *primitive,
+-                Some(DecodedLiteral::Integer { suffix: None, .. }) => {
+-                    // Frame::write clears source metadata. Retain an already
+-                    // admitted strict source across that write; a descriptor
+-                    // or a numeric default cannot create this evidence.
+-                    let Some(TyTerm::Primitive(primitive)) =
+-                        frame.literal_source_context(destination)?
++                Some(DecodedLiteral::Integer { suffix: None, .. })
++                | Some(DecodedLiteral::Float { suffix: None, .. }) => {
++                    // A propagated source constraint can type an unsuffixed
++                    // literal even when this temporary is not strict storage.
++                    // Keep that existing source through Frame::write; neither
++                    // a descriptor nor a default supplies a missing source.
++                    let Some(TyTerm::Primitive(primitive)) = frame.source_view_ref(destination)?
+                     else {
+                         return Ok(prepared);
+                     };
+-                    if !matches!(
+-                        primitive,
+-                        PrimitiveType::I8
+-                            | PrimitiveType::I16
+-                            | PrimitiveType::I32
+-                            | PrimitiveType::I64
+-                            | PrimitiveType::Isize
+-                            | PrimitiveType::U8
+-                            | PrimitiveType::U16
+-                            | PrimitiveType::U32
+-                            | PrimitiveType::U64
+-                            | PrimitiveType::Usize
+-                    ) {
++                    let family_matches = if literal.kind == LiteralKind::Float {
++                        matches!(primitive, PrimitiveType::F32 | PrimitiveType::F64)
++                    } else {
++                        matches!(
++                            primitive,
++                            PrimitiveType::I8
++                                | PrimitiveType::I16
++                                | PrimitiveType::I32
++                                | PrimitiveType::I64
++                                | PrimitiveType::Isize
++                                | PrimitiveType::U8
++                                | PrimitiveType::U16
++                                | PrimitiveType::U32
++                                | PrimitiveType::U64
++                                | PrimitiveType::Usize
++                        )
++                    };
++                    if !family_matches
++                        || prepared.ty()
++                            != Some(
++                                crate::runtime::shape::PrimitiveIdentity::from_recipe(*primitive)?
++                                    .id(),
++                            )
++                    {
+                         return Ok(prepared);
+                     }
+                     *primitive
+--- a/xtask/tests/source_run.rs
++++ b/xtask/tests/source_run.rs
+@@ -748,7 +748,7 @@
+         assert!(matches!(run.poll(&mut db),RunPoll::Fault(error) if error.code=="LRR-E-OP-TYPE"));
+     }
+     let (mut db, mut run, _) = start("fn live(){if true {\"text\"}}", "live", 1000);
+-    assert!(matches!(run.poll(&mut db),RunPoll::Fault(error) if error.code=="LRR-E-UNSUPPORTED"));
++    assert!(matches!(run.poll(&mut db),RunPoll::Fault(error) if error.code=="LRR-E-OP-TYPE"));
+ }
+ 
+ #[test]
+@@ -1185,7 +1185,24 @@
+             ("arity", RunPoll::Fault(e)) => assert_eq!(e.code, "LRR-E-CALL-ARITY"),
+             ("missing", RunPoll::Fault(e)) => assert_eq!(e.code, "LRR-E-NAME-MISSING"),
+             ("type", RunPoll::Fault(e)) => assert_eq!(e.code, "LRR-E-CALL-ARG-TYPE"),
+-            _ => panic!("wrong call boundary outcome"),
++            (expected, RunPoll::Fault(error)) => {
++                panic!("{source}: expected {expected}, actual fault {error}")
++            }
++            (expected, RunPoll::Panicked(report)) => {
++                panic!(
++                    "{source}: expected {expected}, actual guest panic {:?}",
++                    report.panic
++                )
++            }
++            (expected, RunPoll::Completed(report)) => {
++                panic!(
++                    "{source}: expected {expected}, actual completed {:?}",
++                    report.value
++                )
++            }
++            (expected, RunPoll::NeedInput(request)) => {
++                panic!("{source}: expected {expected}, actual input {request:?}")
++            }
+         }
+     }
+ }

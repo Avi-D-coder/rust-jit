@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T16:04:13.937504+00:00",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "source_member": "bd94d882fedc1d35bf444374b66a9a547bfd606fb4a144233b16dc766112eaf7",
+  "source_candidate": "worktracks/candidates/root-v97-source-context-repair-v1/README.md",
+  "scoped_seal_terminal": "08cdfd/0",
+  "source_run": {
+    "listed": 67,
+    "passed": 67,
+    "failed": 0,
+    "filtered": 0,
+    "ignored": 0
+  },
+  "library_authority_controls": {
+    "listed": 1192,
+    "selected": 52,
+    "passed": 52,
+    "other_library_bodies_not_run": 1140,
+    "breakdown": {
+      "engine_returns": 14,
+      "vm_return_authority": 9,
+      "local_numeric_context": 11,
+      "intrinsic_literal_source": 12,
+      "primitive_operator_result_source": 6
+    }
+  },
+  "distinct_test_bodies_passed": 119,
+  "total_body_executions": 124,
+  "priority_repetitions": 5,
+  "all_four_prior_named_failures_passed": true,
+  "unchanged_256kib_2000_frame_test_passed": true,
+  "no_stack_or_profile_override": true,
+  "strict_library_tests_passed": true,
+  "strict_source_run_passed": true,
+  "format_architecture_fixture_reference_passed": true,
+  "upstream_originals_verified": 507,
+  "imported_cases_pending": 322,
+  "source_extras_originals_owner_unchanged": true,
+  "root_verified_retained_evidence_hashes": 115,
+  "handoff_sha256": "7f505610388bbf1a250d4c89f02a8fa5a821827ce0d0276ac5c186ae9fdd7c1b",
+  "results_sha256": "a4d88e466a121208f3d63fdd586f6bbf31463b18ae11f577b168bc967790fde3",
+  "release_sha256": "e0b0e64801483af3fa3b9cf324b90abe7e37e5dce653857921ff085b16a96cdd",
+  "evidence_index_sha256": "249a7955110065691ce4c0b8f1a01b6953422908724d0acacb40636224cb0be3",
+  "prior_failed_full_gate_remains_failed": true,
+  "full_milestone_run_on_this_member": false,
+  "canonical_byte_string_promotion": false,
+  "stock_full_fixture_passes_added": 0
+}

@@ -1,0 +1,61 @@
+{
+  "status": "scoped_validation_green_full_milestone_pending",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T022",
+    "T024",
+    "T032",
+    "T080"
+  ],
+  "created_at": "2026-10-15T15:53:47.694704+00:00",
+  "source_baseline": "3243e3b9a266c947140df89f478382858e0d41236ab3400561ad2b9339f9dc09",
+  "patch_sha256": "3914bb511eae83d5468b63d0d0664281d1d755994059098e7f82106346d1c706",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "before_sha256": "68eb44156f483262fabc4a151d212be1ecbae58b97ef978e06c5b0afa928e4a2",
+      "after_sha256": "ce73e247911c1fab2e2ca30397535c1a63308fd1a4f33308c5992e0db7258fe3"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_local_numeric_context.rs",
+      "before_sha256": "ceccbe88d9f4a52a2dbbbc6a7c51d15496d0ceed11c744783816049ca6684d6f",
+      "after_sha256": "43922bd698f001ef298ba723908c47adece9365a22ec85ccaaa071ad03fc21a1"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_local_numeric_context_tests.rs",
+      "before_sha256": "4068776bc30c0d896021a4f372a53157312afd3edc1ca027769d4451ed9195e0",
+      "after_sha256": "0f993052f43663ebd2fb36fcda770bbf69c28eb63b1f532afc8123cfe43c8a79"
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "before_sha256": "701ecf1828790678caa5d7b2de16c9afc0432db6e80c015039ddd47c9ba86cde",
+      "after_sha256": "b4398081b7941cb6b9464689f035ee714a9f17fc5e707ea70bec3c3f87b1e5bc"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "before_sha256": "7cbeb272b5235f2d7e8b9689d024cf9ce6661744f9c5c5efda8f5b50860db43e",
+      "after_sha256": "7468528b40f61bd18f6fd44923934ac5a4fe2cc6716d9edee24d53beadaa1756"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "before_sha256": "2c15c1b920d5fa4a883ec308ac7442fee616c4f97fa628c2bdfc40fbbdd771c2",
+      "after_sha256": "035489f462d040eaa28443adf5b096d8b63a664fe3b19c2b8c047a023a3911fc"
+    },
+    {
+      "path": "xtask/tests/source_run.rs",
+      "before_sha256": "619e4e43a1276fc94318b4ec81514e0b4f7b661c558931f5a8e5d5fa144c46a9",
+      "after_sha256": "6e30de2b3cb1fc706a200354f14fdfd2cd1670473eb1f0f5a15579884d8ab17c"
+    }
+  ],
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "exact_patch_replay": true,
+    "no_offset_or_fuzz": true
+  },
+  "acceptance_pending": [
+    "fresh full milestone before canonical integration"
+  ],
+  "tested_source_member": "bd94d882fedc1d35bf444374b66a9a547bfd606fb4a144233b16dc766112eaf7",
+  "scoped_evidence": "worktracks/evidence/2026-10-15-v98-source-context-repair.json",
+  "distinct_controls_passed": 119
+}

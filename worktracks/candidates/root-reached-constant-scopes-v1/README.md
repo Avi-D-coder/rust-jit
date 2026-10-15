@@ -1,0 +1,11 @@
+# Reached constant namespace preparation
+
+T024/T054/M018 invariant: a reached constant needs actual current Value and Type namespace publications. Missing original module scope is a typed demand, never fabricated completeness or a reason to execute a query-provider side effect. This candidate follows V98's seven-leaf source-context repair and excludes the held schema18/19 features.
+
+The unchanged originals tests/ui/match/match-range-char-const.rs and tests/ui/parser/issues/issue-21475.rs failed the V97 CLI batch: the first suspended for constant Type discovery, the second lacked a nested module Value seal. Original hashes and failures are retained separately. These are required runtime gaps.
+
+The constant coordinator now derives missing module Value requests from an actual current published world containing that exact captured source; existing source/member/type admission still runs after publication. The standalone coordinator retains completed source membership and handles only original module Value/Type Discover requests in its matching world/epoch. It validates the requested scope, bounded progress, exact resulting seal and ordinary declaration discovery. Other requests remain explicit suspension; procedural execution retains separate authority. At most256 metadata requests are serviced per poll.
+
+Handled preparation occurs before exposing an external poll result, within the same RunMachine. Actual VM dispatches retain their capture observer. The public poll path still leaves unhandled NeedInput observations permanently incomplete; its refusal tests remain unchanged. Compiler/build/macro-host output is never promoted to guest stdout/stderr. No capture counter, guest effect, original source, seal, schema or expected result is synthesized.
+
+Two pending bodies execute the entire unchanged originals under all four editions through the actual standalone capture route and check foreign world/epoch/scope, unhandled compile-environment request and duplicate nonprogress refusal. Runtime main/closed-stream results require execution; this uncompiled source packet claims none. Both copied originals, inventory and licenses stay unchanged. The full milestone remains required before canonical integration, and no task/JIT/Linux/full-fixture completion is claimed.
