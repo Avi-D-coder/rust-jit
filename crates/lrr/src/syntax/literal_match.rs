@@ -102,9 +102,8 @@ fn parameter_context(
     body: &BodyHandle,
     expression: &ast::Expr,
 ) -> Result<Option<HintRecipe>, Diagnostic> {
-    if parsed.generated_origin.is_some() {
-        return Ok(None);
-    }
+    // Ordinary parameter lookup checks the actual token context in retained
+    // syntax as well. The ordinal still grants no primitive/source authority.
     let mut expression = expression.clone();
     for _ in 0..256 {
         match expression {
@@ -155,13 +154,23 @@ fn context(
     if depth >= 256 {
         return Err(limit());
     }
-    if parsed.generated_origin.is_some()
-        || expr
-            .syntax()
-            .children()
-            .any(|n| ast::Attr::can_cast(n.kind()))
+    if expr
+        .syntax()
+        .children()
+        .any(|n| ast::Attr::can_cast(n.kind()))
     {
         return Ok(None);
+    }
+    // All ordinary control expressions forward the same known result
+    // constraint into reached child slots. This is a source constraint, not
+    // evidence about which branch executes or its runtime/source identity.
+    // Do not inspect cold result shapes merely to rediscover this constraint.
+    if matches!(
+        expr,
+        ast::Expr::MatchExpr(_) | ast::Expr::IfExpr(_) | ast::Expr::BlockExpr(_)
+    ) && let Some(expected) = expected.filter(|ty| supported(*ty))
+    {
+        return Ok(Some(expected));
     }
     Ok(match expr {
         ast::Expr::ParenExpr(x) => match x.expr() {
@@ -203,6 +212,12 @@ fn context(
             _ => None,
         },
         ast::Expr::PathExpr(x) => {
+            // Intrinsic literals and control structure above/below have the
+            // same meaning in retained syntax. Names still need their actual
+            // hygienic binding/source join; printed paths grant no authority.
+            if parsed.generated_origin.is_some() {
+                return Ok(None);
+            }
             let Some(path) = x.path() else {
                 return Ok(None);
             };
@@ -295,6 +310,10 @@ fn context(
             }
         }
         ast::Expr::MatchExpr(x) => {
+            // Without a concrete surrounding constraint, the existing partial
+            // result-type collector still needs the general source goal engine.
+            // Do not default an unresolved nonnumeric/call result or claim that
+            // this fallback implements complete lazy result-type inference.
             let Some(list) = x.match_arm_list() else {
                 return Ok(None);
             };

@@ -33,6 +33,8 @@ pub(crate) use receipt::SyntaxRequestReceipt;
 #[path = "assembly_anchors.rs"]
 mod anchors;
 pub use anchors::OriginalDeclarationAnchor;
+#[path = "body_selection.rs"]
+mod body_selection;
 
 const MAX_CALLS: usize = 100_000;
 const MAX_METADATA: usize = 128 * 1024 * 1024;
@@ -88,6 +90,8 @@ pub struct PreparedSourceSyntax {
     outputs: Vec<Arc<GeneratedDeclarations>>,
     originals: Vec<OriginalDeclarationAnchor>,
     pending: Vec<Digest>,
+    // Only finish_for_body may mint a body-scoped readiness certificate.
+    selected_body: Option<Digest>,
     identity: Digest,
 }
 impl PreparedSourceSyntax {
@@ -108,6 +112,15 @@ impl PreparedSourceSyntax {
     /// These are pending markers, never authority to issue an expansion.
     pub fn pending_calls(&self) -> &[Digest] {
         &self.pending
+    }
+    pub(crate) fn ready_for_admission(&self) -> bool {
+        self.selected_body.is_some() || self.pending.is_empty()
+    }
+    pub(crate) fn permits_body(&self, definition: Digest) -> bool {
+        self.selected_body.map_or_else(
+            || self.pending.is_empty(),
+            |selected| selected == definition,
+        )
     }
     pub fn outputs(&self) -> &[Arc<GeneratedDeclarations>] {
         &self.outputs
@@ -370,7 +383,13 @@ impl SourceSyntaxAssembly {
         Ok(self)
     }
 
-    pub fn finish(mut self) -> Result<PreparedSourceSyntax, Diagnostic> {
+    pub fn finish(self) -> Result<PreparedSourceSyntax, Diagnostic> {
+        self.finish_scope(None)
+    }
+    fn finish_scope(
+        mut self,
+        selected_body: Option<Digest>,
+    ) -> Result<PreparedSourceSyntax, Diagnostic> {
         let mut pending = Vec::new();
         pending
             .try_reserve_exact(self.calls.len())
@@ -382,7 +401,14 @@ impl SourceSyntaxAssembly {
         anchors::validate(&self.source, syntax.clone(), &self.originals)?;
         self.outputs
             .sort_by_key(|output| output.record().key().fingerprint());
-        let mut identity = StableEncoder::new("lrr/v2/prepared-source-syntax/original-anchors");
+        let mut identity = StableEncoder::new(if selected_body.is_some() {
+            "lrr/v3/prepared-source-syntax/selected-original-body"
+        } else {
+            "lrr/v2/prepared-source-syntax/original-anchors"
+        });
+        if let Some(definition) = selected_body {
+            identity.digest(definition);
+        }
         identity.string(self.source.selection().path.as_str());
         identity.record(&self.source.selection().outline);
         identity.u64(self.epoch);
@@ -406,6 +432,7 @@ impl SourceSyntaxAssembly {
             outputs: self.outputs,
             originals: self.originals,
             pending,
+            selected_body,
             identity: identity.finish(),
         })
     }

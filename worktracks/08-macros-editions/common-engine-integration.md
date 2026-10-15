@@ -70,3 +70,28 @@ ID, preventing their omission from a completeness result. These changes are
 unvalidated. They do not establish selective body preparation: source assembly
 still requires closure of the pending call set, and cfg-disabled/unselected
 syntax needs its own sound selective preparation before common CLI integration.
+
+
+The later discovery/body-join V1 component passes 22 scoped controls and strict
+workspace/all-targets Clippy. Nested-match V2 passes 1,151 library bodies plus two
+separate scalar-phase controls. Selected-body V2 then passes 1,154 library bodies,
+all five scalar-phase controls and strict workspace/all-targets Clippy. These
+counts overlap; do not add them. It forwards known constraints through ordinary
+Match/If/Block expressions and scopes structural readiness to one exact original
+function, retaining other/nested calls as pending. Wrong-body publication and
+stale epochs refuse without mutation. The prior milestone failure is preserved;
+a fresh unfiltered milestone is running on this exact frozen selected-body V2,
+with no actual terminal yet. [Exact source and earlier failed attempts](../evidence/2026-10-15-common-selected-body-preparation.json).
+
+The independent lexical-source-context successor is **uncompiled/unexecuted**.
+The existing pinned parse conversion captures local-name comparison classes
+alongside owning token editions; ordinary local/parameter lookup compares actual
+Name/NameRef occurrences. Generated locals cannot capture same-spelled caller
+references by spelling alone. This permits removal of the match parameter-context
+blanket source exclusion while preserving the actual VM source/scalar guard.
+Full definition-site scope adjustment remains required, and an explicit refusal
+control is not a runtime pass for its valid Rust program. A separate correction
+excludes immutable parsing-only retained inputs from the conservative namespace
+census; actual namespace/source/seal/epoch dependencies and separate definition
+leases remain checked. This does not repair the global census's hot-path cost.
+[Exact source, review against all eight modes and queued validation](../evidence/2026-10-15-common-lexical-source-context.json).

@@ -1,0 +1,275 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T23:01:38.147003+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "M014",
+    "T024",
+    "T032",
+    "T063"
+  ],
+  "state": "scoped_component_pass_architecture_held",
+  "source_baseline": "77fa3603a8613cf249c5276553aacbfd8c83b2da",
+  "source_packet": "artifacts/macos-first/common-discovery-body-join-v1/SOURCE.json",
+  "source_packet_sha256": "c1a1f906b9f175221c72c3737aa2c9344dbf888f027d9e3049e47c174d2abce6",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/db/body_structure_accounting_tests.rs",
+      "sha256": "24ac3e5ee97a4764390ddea91afef5aeabb93c5bb906b2632dd32444c68d1f68"
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "972e41cde413ee2ca73f6dadcac1e303543a3de8c7b3cc1ce905b25158afdd40"
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "57a260d303f3546cbf131eccd25f000ee28dbc5cf9ac7ed10d6de125ea986906"
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "sha256": "c1c84eead1256bbc9f09214887e8ccd0bea0d2c9a19981191682ab0b7fc7d9e3"
+    },
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "a4d63e319a700a1757faad03778de47161b82455019e0cd8392a4347f5a706ad"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_body_sharing_tests.rs",
+      "sha256": "584089c5b3ba4d3ee770be81f8fe96a66ed1c6c4ee8e88312da2ac54401c4190"
+    },
+    {
+      "path": "crates/lrr/src/expand/declaration_fragment.rs",
+      "sha256": "5ddff003dd7e6c247d1b8a6359e017b6919577fef59f9e1dc229cd7e35a07f0c"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "dd4855c88d210402543e9286f4bb5e05c26e2c376f99f9522b6d7948712f7d90"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly_tests.rs",
+      "sha256": "280703e914189a8a00363197c0ebfb8c1266773c3946f80532455c7957a8b73e"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/syntax_receipt.rs",
+      "sha256": "18c1dbd53b6741790e101061ff770492ae33cceb9fce5e825e272962b4a87a7d"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "59a2e4d592f464bf391cfaad868b1ba293ab9d2c1d362a052be9ae172341a809"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/source_syntax.rs",
+      "sha256": "7f065cef2efc582cbee55b6cf6c68b6876471f61f598614fe165d65336b6e2d9"
+    },
+    {
+      "path": "crates/lrr/src/frontend/call_contracts.rs",
+      "sha256": "219ca227372d89a192bd89aa90ac6d9e4a31cdc4a806f3bdc606205cc6d82b6e"
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "sha256": "07c3be667ce25dde7d2674740c86b7a7029825afe4684585cb3b535fffb89553"
+    },
+    {
+      "path": "crates/lrr/src/frontend/primitive_type_names.rs",
+      "sha256": "eceefed4356a540b079ce531c6e48b41672a7547b474510457f4de82a0d59427"
+    },
+    {
+      "path": "crates/lrr/src/frontend/type_name_namespace.rs",
+      "sha256": "2850945e96d9d1c6ddeb38d30f99e0e761c82e67bde5bf621fc9dae012f23041"
+    },
+    {
+      "path": "crates/lrr/src/service/mod.rs",
+      "sha256": "1e7f5270d6eb86ee40ed60c063e7ff9bd3e1c7f40611a34cf9c9fca9d6e88d76"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_body_tests.rs",
+      "sha256": "d5e47808d90cd4aca9f30184d27d126191adf0ddb66627edc3a3a3db03e42c99"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_callable_tests.rs",
+      "sha256": "1fbb96c037cff4089b4b5a88af65718dabdaab2cfedaf2f7e027a8ccc7f8278b"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_source_preparation_tests.rs",
+      "sha256": "2469d42b524796b767933779980608d39b04dbbcb9d9e89f912d7db1dee22817"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_type_name_tests.rs",
+      "sha256": "9f69cd5aba9215d2b5d9fb6559512728342ed50efbe11aeb49a0fb2e94cc1388"
+    },
+    {
+      "path": "crates/lrr/src/syntax/condition_ranges.rs",
+      "sha256": "bd7b5de96fe241b083886a6bee820f10ef1b92a40c17d66445108ff71f722a9c"
+    },
+    {
+      "path": "crates/lrr/src/syntax/literal_match.rs",
+      "sha256": "1850c82b589c9def6212eb4a959efd6ac1f57ad2d3f4d5e25a7e38f026b7293e"
+    },
+    {
+      "path": "crates/lrr/src/syntax/local_numeric_constraints.rs",
+      "sha256": "90af2f387f42f40d7ec39289a28fb8d4b3f7b17c99430a0b090acc06d3ca8a84"
+    },
+    {
+      "path": "crates/lrr/src/syntax/mod.rs",
+      "sha256": "bdeb7d059b4a52f98996dfbbf749909e66ff6c325fe676804f3a974012abd423"
+    },
+    {
+      "path": "crates/lrr/src/syntax/node_lookup.rs",
+      "sha256": "6807be68674df1c46ef2973ecf90d289c69c24fdef7f4170ab2b5899d2c3accd"
+    },
+    {
+      "path": "crates/lrr/src/syntax/node_lookup_tests.rs",
+      "sha256": "7891da10c61e1e7410e52293ee186d3e6b72baad3f534f37ede1981e6d0115ec"
+    },
+    {
+      "path": "crates/lrr/src/syntax/primitive_cast_target.rs",
+      "sha256": "a8a38b7f5a03447ee009aac93ec08014e435776f3aab643b4ec0c7f85a00dd3b"
+    },
+    {
+      "path": "crates/lrr/src/syntax/primitive_type_names.rs",
+      "sha256": "4e52fc5d1fdbcde34d891dffe94d2cce46f13cec8cc6e7e5e90871c0f424f9fb"
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "sha256": "46da32d79a104e7cc78e78b3d671d75bcd3655133629df0abbcd36bb82f026a2"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "sha256": "bf984833d5e56cbf0059f7e714425114718f9853a248473098745af0240165ec"
+    }
+  ],
+  "frozen_source_member": "c2c59979493eb2e74ec7c5f2455e16996bac6d6430bd83d9e5f8025d5154e1c0",
+  "source_diff_from_validated_body_sharing": [
+    "crates/lrr/src/expand/source_declarative/assembly.rs",
+    "crates/lrr/src/expand/source_declarative/assembly_tests.rs",
+    "crates/lrr/src/service/retained_body_tests.rs",
+    "crates/lrr/src/service/retained_callable_tests.rs",
+    "crates/lrr/src/service/retained_type_name_tests.rs"
+  ],
+  "scope": "Actual completed discovery request receipts/admitted outputs now drive retained body/callable/Type integration controls, replacing duplicate manual expansion. Assembly finish retains pending structural anchors even without a certified producer ID. No closure claim for unknown/cfg-disabled call markers.",
+  "validation": {
+    "release": "artifacts/macos-first/sol-common-discovery-body-join-validation-v1/RELEASE.json",
+    "release_sha256": "1f5f74dc416a102be8ee0423a251ded284a5a7921f058722bd832cebda03f19e",
+    "stages": {
+      "assembly": {
+        "actual_tool_observation": "572553/0",
+        "child_terminal_sha256": "bc3ee140b905776f83fa9307456f4760189e00e2959079836d281b12fa642c95",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "expand::source_declarative::assembly::tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "child_exit_code": 0,
+        "elapsed_seconds": 23.59058170800563,
+        "bodies": 10
+      },
+      "body-regression": {
+        "actual_tool_observation": "4c7e4a/0 serial sequence",
+        "child_terminal_sha256": "34e20d29ed3ded4195960ec78079ad5aa7bafb703b92f389090fcd3bb22cab9e",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "service::retained_body_tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "child_exit_code": 0,
+        "elapsed_seconds": 0.9568722500116564,
+        "bodies": 4
+      },
+      "callables-regression": {
+        "actual_tool_observation": "4c7e4a/0 serial sequence",
+        "child_terminal_sha256": "37052875304a9a390e3a322994f30a8347cb9ce5d52c2f82bb86c7f42906f8c4",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "service::retained_callable_tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "child_exit_code": 0,
+        "elapsed_seconds": 1.013196916988818,
+        "bodies": 4
+      },
+      "type-names-regression": {
+        "actual_tool_observation": "4c7e4a/0 serial sequence",
+        "child_terminal_sha256": "ba45be1a2b44b660d2bd0ce410093128a3e4267ada54d9875149dfa1c859ffa4",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "service::retained_type_name_tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "child_exit_code": 0,
+        "elapsed_seconds": 0.8329406669945456,
+        "bodies": 4
+      },
+      "strict-workspace": {
+        "actual_tool_observation": "4c7e4a/0 serial sequence",
+        "child_terminal_sha256": "896632f3223c5d7e4bb78029e9a0233c752ddeab67545231a52e3e3eded01c76",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "clippy",
+          "--offline",
+          "--locked",
+          "--workspace",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "child_exit_code": 0,
+        "elapsed_seconds": 27.15511650001281,
+        "bodies": 0
+      }
+    },
+    "distinct_passed_bodies": 22,
+    "full_lrr_library_repeated": false,
+    "full_milestone_executed": false,
+    "source_and_originals_unchanged": true,
+    "target_inactive_release": "artifacts/macos-first/sol-common-discovery-body-join-validation-v1/TARGET-INACTIVE-AFTER.json",
+    "target_inactive_sha256": "60d77262d49b897ee7f048f8593fb502251efe0b3ce796017ae46be721fa6505"
+  },
+  "architecture_review": {
+    "1_to_5": "No macro-selected evaluator/inference/member/pattern semantics added; original typed body/callable authority and shared source operations retained. All8 legacy routes remain held.",
+    "6": "No query producer effects or installed-operation planner added. Source assembly still operates over whole-source call closure; per-phase Type proof recapture remains held.",
+    "7": "Global namespace census unchanged and still held.",
+    "8": "Body-sharing V1 remains separately validated on its exact source; independent frozen delta proves unchanged source except five assembly/test-helper leaves."
+  },
+  "acceptance": {
+    "new_configured_upstream_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "common_cli_integration": false,
+    "task_completed": false,
+    "all_eight_shortcuts_removed": false,
+    "guest_jit_allowed": false
+  }
+}

@@ -1,0 +1,261 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T23:25:17.294814+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T024",
+    "T050",
+    "T051",
+    "M014"
+  ],
+  "state": "scoped_component_pass_architecture_held",
+  "scope": "Known surrounding primitive constraints forward through ordinary nested Match; cold source calls/undefined calls are not executable-shape prerequisites. Frozen V2 covers nested Match only, including handwritten/user/wrapper paths; later If/Block propagation belongs to selected-body V2.",
+  "versions": [
+    {
+      "version": 1,
+      "source_baseline": "2b0e4918a1334c605111666f13ed9d5d5d47ced5",
+      "source_packet": "artifacts/macos-first/common-nested-match-context-v1/SOURCE.json",
+      "source_packet_sha256": "319ac5a89084407386b7bff64dd08f145c02abeb9352291eee4da1bb75ae5c63",
+      "source_files": [
+        {
+          "path": "crates/lrr/src/engine/run.rs",
+          "sha256": "307b58d9df7e859df9f7b393710fecd5264077d84af2da711a5743eee25a3922"
+        },
+        {
+          "path": "crates/lrr/src/engine/run_nested_match_context_tests.rs",
+          "sha256": "e71bf50158b09a21aec3053ed9ec2fd94e4763e40bb86c32a814336eb4c7cf4c"
+        },
+        {
+          "path": "crates/lrr/src/syntax/literal_match.rs",
+          "sha256": "2bb5491a3dc20cbeaa181e081bb1d059f8b83bd94033a464739e1033129ccef8"
+        }
+      ],
+      "frozen_source_member": "1b3e0855b97775371f51cf21f726be6a33de74d3fb2a629d29d8787c90cfcc5c",
+      "release": "artifacts/macos-first/sol-common-nested-match-context-validation-v1/RELEASE.json",
+      "release_sha256": "555ef47c2780250fc7a4eaf323f3d67e40c68dd263264e766e5e3d64e48dfc4f",
+      "outcome": "compile_failure_zero_test_bodies",
+      "actual_terminal": "ec6527/1",
+      "cargo_exit_code": 101,
+      "diagnostics": [
+        {
+          "code": "E0308",
+          "path": "crates/lrr/src/engine/run_nested_match_context_tests.rs",
+          "line": 33,
+          "message": "ValueSummary::Signed expects String, integer7 supplied"
+        },
+        {
+          "code": "E0658",
+          "path": "crates/lrr/src/engine/run_nested_match_context_tests.rs",
+          "line": 80,
+          "message": "operations.as_slice() rejected as unstable str_as_str"
+        }
+      ],
+      "executed_test_bodies": 0
+    },
+    {
+      "version": 2,
+      "source_baseline": "2b0e4918a1334c605111666f13ed9d5d5d47ced5",
+      "source_packet": "artifacts/macos-first/common-nested-match-context-v2/SOURCE.json",
+      "source_packet_sha256": "dd624f7f93b9a7980edc258f1eabb5af86c7e46a67517107e9d002312c366505",
+      "source_files": [
+        {
+          "path": "crates/lrr/src/engine/run.rs",
+          "sha256": "307b58d9df7e859df9f7b393710fecd5264077d84af2da711a5743eee25a3922"
+        },
+        {
+          "path": "crates/lrr/src/engine/run_nested_match_context_tests.rs",
+          "sha256": "3fcf635a29659dabd26596d238659dcb9fd31f9d60d4450fa4e2d4f489736546"
+        },
+        {
+          "path": "crates/lrr/src/syntax/literal_match.rs",
+          "sha256": "8e2cdbf787378ed8c8c2a859548d61dffc375b0aac36bbc913f18792f53dd9c6"
+        },
+        {
+          "path": "crates/lrr/src/service/mod.rs",
+          "sha256": "e5b72a664e1d99577ed855648628bf43d9f136086edbf24cb120f0052f2f0899"
+        },
+        {
+          "path": "crates/lrr/src/service/retained_nested_match_tests.rs",
+          "sha256": "3801dcf5d9150392daaa80aa38797ebf760596e0cb5d97ed30e04fcbb0e2ad3e"
+        }
+      ],
+      "frozen_source_member": "9eb33b1208bb023203c356e6b652cdcb1c6c5271b9888ea72d668a02a91bc933",
+      "release": "artifacts/macos-first/sol-common-nested-match-context-validation-v2/RELEASE.json",
+      "release_sha256": "a796bb5341aab64b456544fd6a0c6769114c3e74af8ec15d384c3a7570eb2eed",
+      "stages": {
+        "nested-new": {
+          "actual_tool_observation": "663093/0",
+          "child_terminal_sha256": "f69d4747f5cec590f838f5ca3e3e873cada225925430b94f8b3860dde3f3d1a4",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "engine::run::nested_match_context_tests",
+            "--",
+            "--test-threads=1"
+          ],
+          "child_exit_code": 0,
+          "elapsed_seconds": 23.85361758401268,
+          "bodies": 2,
+          "filtered_counts_in_actual_summaries": [
+            1149
+          ]
+        },
+        "retained-matrix": {
+          "actual_tool_observation": "c006ab/0",
+          "child_terminal_sha256": "03a70647b98a79f43abc3eec7b76d28351a2e26a5cddd3dd157e0e08c0ec9fc9",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "service::retained_nested_match_tests",
+            "--",
+            "--test-threads=1"
+          ],
+          "child_exit_code": 0,
+          "elapsed_seconds": 0.9594793749856763,
+          "bodies": 1,
+          "filtered_counts_in_actual_summaries": [
+            1150
+          ]
+        },
+        "stock-nested": {
+          "actual_tool_observation": "ecf92e intermediate; final serial1da5ac/0",
+          "child_terminal_sha256": "8c5ab8cd666346cbec495077f06d4537b60e69e92cc51a30df4991e63227c3fb",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "xtask",
+            "--test",
+            "scalar_match_phases",
+            "unchanged_bool_match_selected_bodies_execute_and_panic_arm_stays_cold",
+            "--",
+            "--test-threads=1"
+          ],
+          "child_exit_code": 0,
+          "elapsed_seconds": 28.60523416599608,
+          "bodies": 1,
+          "filtered_counts_in_actual_summaries": [
+            4
+          ]
+        },
+        "selected-scalar": {
+          "actual_tool_observation": "ecf92e intermediate; final serial1da5ac/0",
+          "child_terminal_sha256": "1a37e5a209220762c165f0e48b543f55066cb0cd5150fb1cca8518b2edb083ba",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "xtask",
+            "--test",
+            "scalar_match_phases",
+            "disclosed_scalar_matches_select_once_preserve_local_copy_and_cold_arm",
+            "--",
+            "--test-threads=1"
+          ],
+          "child_exit_code": 0,
+          "elapsed_seconds": 0.37210962499375455,
+          "bodies": 1,
+          "filtered_counts_in_actual_summaries": [
+            4
+          ]
+        },
+        "lrr-library": {
+          "actual_tool_observation": "8e3afd intermediate; final serial1da5ac/0",
+          "child_terminal_sha256": "df2cbdb03f4912ab11a0c182afe296275d380540f2f4311495b171dc3b54f30f",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "--",
+            "--test-threads=1"
+          ],
+          "child_exit_code": 0,
+          "elapsed_seconds": 209.1947161249991,
+          "bodies": 1151,
+          "filtered_counts_in_actual_summaries": [
+            0
+          ]
+        },
+        "strict-workspace": {
+          "actual_tool_observation": "1da5ac/0",
+          "child_terminal_sha256": "243e16e592b8ecba788ff9117ee7671d454a5dc5492ec81ab838d0bb2ae1ba41",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "clippy",
+            "--offline",
+            "--locked",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings"
+          ],
+          "child_exit_code": 0,
+          "elapsed_seconds": 33.57630629200139,
+          "bodies": 0,
+          "filtered_counts_in_actual_summaries": []
+        }
+      },
+      "distinct_passed_bodies": 1153,
+      "passed_body_executions": 1156,
+      "repeated_selected_lrr_executions_inside_library": 3,
+      "strict_workspace_alltargets_passed": true,
+      "source_guard": {
+        "source_member": "9eb33b1208bb023203c356e6b652cdcb1c6c5271b9888ea72d668a02a91bc933",
+        "frozen_files": 4929,
+        "symlinks": 3,
+        "owner_sha256": "0c430066778927a06e973060ac879e0ead4ed641d4ea741165205e948eefbc79",
+        "raw_files": 510,
+        "cases": 324,
+        "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+        "licenses": {
+          "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+          "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+        },
+        "free_bytes": 58172190720
+      },
+      "full_milestone": "not run",
+      "lrr_library_passed_bodies": 1151,
+      "additional_xtask_passed_bodies": 2,
+      "outcome": "scoped_component_pass_architecture_held"
+    }
+  ],
+  "architecture_review": {
+    "1_to_4": "Ordinary syntax and verified VM operations shared; no new macro evaluator or name-selected rule. Name-sensitive retained paths keep required hygiene refusals.",
+    "5": "Known source constraint no longer causes recursive cold result-arm shape checks; broader demand-driven Type goals and transactional patterns remain required.",
+    "6_to_8": "No installed planner or source walk added; existing global census/per-phase Type capture remain held; Arc/index components unchanged."
+  },
+  "acceptance": {
+    "new_configured_upstream_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "common_cli_integration": false,
+    "task_completed": false,
+    "all_eight_shortcuts_removed": false,
+    "guest_jit_allowed": false,
+    "remaining": "All8 legacy macro routes, standard macro source expansion/common CLI integration, general transactional patterns, full source/type/member goals and scoped cached namespace dependencies remain open."
+  }
+}

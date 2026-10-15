@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T23:26:56.971552+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T014",
+    "T024",
+    "T032",
+    "M014"
+  ],
+  "state": "uncompiled_unexecuted_source_candidate",
+  "source_baseline": "4eb1cda2a38fcede1f3e715a373e59fae1a30700",
+  "source_packet": "artifacts/macos-first/common-lexical-source-context-v1/SOURCE.json",
+  "source_packet_sha256": "35750aa1b041ea40842c53af01da51336b6df731a911d47977b9b9565e874ffd",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/db/body_leases.rs",
+      "sha256": "c12761aa4cd2547c615ec0f12cc9a4c4ab3e403896b845faa4b68fcb8f3b8b9d"
+    },
+    {
+      "path": "crates/lrr/src/db/lexical_inputs.rs",
+      "sha256": "60aa56687b90faf9b2912b9e0815f5c6aedf882a69611c25462b99a6e73c01df"
+    },
+    {
+      "path": "crates/lrr/src/db/namespace_witness.rs",
+      "sha256": "1e87cb07cf5fbf7aee59eda081937dd7c6d1fc12d0d45e72c449b92b29d34113"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_body_inputs.rs",
+      "sha256": "b2719b29ec2ffdc176b29cb5bb46c391ccc04f358d4d457dc27e1b12c9f52062"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_syntax.rs",
+      "sha256": "908a42ba934f85987dfa64a612f43e08475991acede3d42ee88f6a591a7f0a43"
+    },
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "307b58d9df7e859df9f7b393710fecd5264077d84af2da711a5743eee25a3922"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_nested_match_context_tests.rs",
+      "sha256": "a5b71013da319cb480e7811457bd829ccc5bb20847483b0e068bed7f3e42c771"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "6774ca1732c640faa6b0a1420c96e471946dfbe00111ce1576d5b87ac08c13bb"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/body_selection.rs",
+      "sha256": "c2df1b63be776da4ed8b19eb8ab0646da2c19e34875940ec529549a1aa422dbd"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/source_syntax.rs",
+      "sha256": "ba590242af30a976ea80f430349da61897b36225db1fee1e643469f534f94b99"
+    },
+    {
+      "path": "crates/lrr/src/service/mod.rs",
+      "sha256": "9ff8cc82d77fd1f1a3b6414ff98df46a728881374e09ae61f613f7664c710c07"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_body_tests.rs",
+      "sha256": "342c4977a60b00d53b416a218778ec30120792e06576e230074e02301dfe17ae"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_lexical_tests.rs",
+      "sha256": "e7a0a3236736761c032f4682b45f6df5ebc8dc7c1571db467464dc29d4ed4844"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_nested_match_tests.rs",
+      "sha256": "6b3a54e5eaa85de5aa879076a8e844a534fe87677aa6128446bc92261adb697f"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_selected_body_tests.rs",
+      "sha256": "46b1e3e8670d1bd5d9b51f5154ad1769a7487f97277491b1b3c1d3113681ecfd"
+    },
+    {
+      "path": "crates/lrr/src/syntax/lexical_hygiene.rs",
+      "sha256": "8783a5bb41e25367fb0ef2a01363455982c6ff07a4a6c0fcf61541c4a62e1e6a"
+    },
+    {
+      "path": "crates/lrr/src/syntax/literal_match.rs",
+      "sha256": "5f8c699a62f8b9d2df94dd15a9f2e7b5ea647d75e0c376dae880270b4a4b2983"
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse.rs",
+      "sha256": "7692bce0762fd950b63ac119077f0ae00a00a77f703387232e97d809522297b4"
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse_retained.rs",
+      "sha256": "ddb31219c03d63cd8a1be62cee34dc59db864e1825d2a36a5ed457103835d236"
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "sha256": "0399aadff68f09e01a60b017df87c9d55cb71209c123f7020363304dc8fa7cd4"
+    },
+    {
+      "path": "crates/lrr/src/vm/parameter_place_tests.rs",
+      "sha256": "351e396f43d8c99d2b0bccd21f9fe3dc466f3386fc23a19d29e50335e09d2b07"
+    },
+    {
+      "path": "xtask/tests/scalar_match_phases.rs",
+      "sha256": "9e33f9878075bcef7692beb26c7a647ba29510fef0690530cc0b30cdac613487"
+    }
+  ],
+  "source_delta_from_validated_selected_body_v2": [
+    "crates/lrr/src/db/lexical_inputs.rs",
+    "crates/lrr/src/db/namespace_witness.rs",
+    "crates/lrr/src/service/mod.rs",
+    "crates/lrr/src/service/retained_lexical_tests.rs",
+    "crates/lrr/src/service/retained_selected_body_tests.rs",
+    "crates/lrr/src/syntax/lexical_hygiene.rs",
+    "crates/lrr/src/syntax/literal_match.rs",
+    "crates/lrr/src/syntax/parse.rs",
+    "crates/lrr/src/syntax/parse_retained.rs",
+    "crates/lrr/src/syntax/thunks.rs"
+  ],
+  "invariant": "Only actual identifier token context equality plus lexical location can select a local/parameter; immutable parsing provenance alone is not namespace publication. No macro-selected runtime semantics, hygiene bypass, changed source scalar guard or body retarget while owned.",
+  "upstream_witness": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "path": "tests/ui/macros/macro-stmt-2.rs",
+    "git_blob": "663d8ddc4843ab88aced41cebc17c0b11ce61754",
+    "sha256": "92f2c3552719e505f7d5d73abe1f541cf68fd258202494a4674c0bbb2daa5bb3",
+    "bytes": 348,
+    "asserted_contract": "check-pass",
+    "component_scope": "Entire unchanged main through ordinary retained BindLocal; unexecuted on this candidate, not compile acceptance."
+  },
+  "architecture_review": {
+    "review_kind": "separate source review of exact22 overlay leaves; no runtime acceptance",
+    "1": "Existing local_binding_at and parameter_at choose source bindings for ordinary verified ReadLocal/ReadParameter; no alternate evaluator added. Legacy assertion executor remains held.",
+    "2": "Existing generated syntax attachment and ordinary body/index route reused; no literal/break decoder added.",
+    "3": "No macro identity or method whitelist selects this behavior. Identifiers use their actual token edition plus pinned local-name comparison class. Numeric inference unchanged.",
+    "4": "Remove only retained match parameter-context blanket refusal after the shared parameter resolver checks actual token identity; DefinitionParameter still defers scalar/source check to unchanged VM. General generated method/reference/signature joins remain pending.",
+    "5": "No new pattern traversal or cold-arm executable check; shared transactional pattern engine still required. Definition-site adjustment across unequal local-name classes remains unresolved and is never replaced with caller spelling lookup.",
+    "6": "One pinned normal-form capture during existing generated/retained parse conversion, retained in bounded token intervals; no adapter normalization/parse during installed dispatch. Existing per-phase Type proof debt remains.",
+    "7": "Only parsing-only RetainedSyntax excluded from conservative census; exact captured source/epoch/seal/record/generated namespace dependencies and separate current body/definition checks retained. All consumers inspected: provider, Type receipts, lexical callables, scalar binding, primitive names, closed references, legacy numeric. Global hot census and proper bucket dependency replacement still held.",
+    "8": "Binary token-interval lookup, bounded/charged capacity and checked metadata sizes; no BodyIndex copies. Existing lexical statement scans and full function-header searches are not claimed optimized.",
+    "actual_shared_symbols": [
+      "ParsedFile::attach_generated_token_editions",
+      "ParsedFile::token_context",
+      "ParsedFile::same_local_name_context",
+      "thunks::binding_name_matches",
+      "thunks::local_binding_at",
+      "thunks::parameter_at",
+      "literal_match::parameter_context",
+      "Database::lexical_namespace_stamps",
+      "InstalledRecipes::get_current"
+    ],
+    "removed_routes": "No legacy macro dispatch/evaluator/index/verifier route removed; only source-exclusion guard and irrelevant parse-only membership corrected. All8 audit findings remain open.",
+    "source_change_rule": "Earlier selected-body V2 validation/milestone stays tied to frozen ae254ae5. This successor is not covered by it; exact delta requires its own asynchronous validation."
+  },
+  "validation": {
+    "state": "queued_after_actual_selected_body_v2_milestone_terminal",
+    "owner": "/root/edition_macro_logic",
+    "target": "artifacts/macos-first/root-constant-next-validation-v1/validation-target",
+    "planned_scopes": [
+      "service::retained_lexical_tests (4)",
+      "service::retained_selected_body_tests (3)",
+      "engine::run::namespace_tests",
+      "syntax::parse tests",
+      "lrr --lib",
+      "strict workspace/all-targets Clippy"
+    ],
+    "actual_commands": []
+  },
+  "acceptance": {
+    "new_configured_upstream_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "common_cli_integration": false,
+    "task_completed": false,
+    "all_eight_shortcuts_removed": false,
+    "guest_jit_allowed": false
+  }
+}

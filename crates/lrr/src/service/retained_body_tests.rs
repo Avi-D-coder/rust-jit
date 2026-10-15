@@ -2,7 +2,7 @@
 //! supplemental programs exercise LRR currentness and representation invariants.
 use super::retained_syntax_tests::{admit, fixture, seal};
 use crate::{
-    core::digest::Digest,
+    core::digest::{Digest, StableEncode},
     db::{
         dependency::{InputKey, InputValue},
         key::QueryKey,
@@ -137,6 +137,25 @@ pub(super) fn prepare_expanded_source(
     epoch: u64,
     publish_source: bool,
 ) -> (Arc<RetainedSyntaxInput>, SourceDiscovery) {
+    prepare_source_scope(db, text, edition, epoch, publish_source, None)
+}
+pub(super) fn prepare_expanded_body_source(
+    db: &mut Database,
+    text: &str,
+    edition: u16,
+    epoch: u64,
+    name: &str,
+) -> (Arc<RetainedSyntaxInput>, SourceDiscovery) {
+    prepare_source_scope(db, text, edition, epoch, true, Some(name))
+}
+fn prepare_source_scope(
+    db: &mut Database,
+    text: &str,
+    edition: u16,
+    epoch: u64,
+    publish_source: bool,
+    selected: Option<&str>,
+) -> (Arc<RetainedSyntaxInput>, SourceDiscovery) {
     let (provider, _index, inputs) = assembly::world(text, edition);
     let source = provider.module_source();
     let mut discovery = SourceDiscovery::new(
@@ -174,7 +193,26 @@ pub(super) fn prepare_expanded_source(
             SourceDiscoveryStep::Sealed(_) => {
                 // Assemble only the exact requests and outputs retained by
                 // this completed discovery, not a separately expanded copy.
-                let prepared = discovery.prepare_source_syntax(source.selection()).unwrap();
+                let prepared = match selected {
+                    Some(name) => {
+                        let definition = source
+                            .outline()
+                            .items
+                            .iter()
+                            .find(|item| {
+                                item.def_key.declared_name == name
+                                    && item.def_key.item_kind
+                                        == crate::source::manifest::ItemKind::Function
+                            })
+                            .unwrap()
+                            .def_key
+                            .fingerprint();
+                        discovery
+                            .prepare_body_syntax(source.selection(), definition)
+                            .unwrap()
+                    }
+                    None => discovery.prepare_source_syntax(source.selection()).unwrap(),
+                };
                 discovery.publish(db).unwrap();
                 let input = ready(RetainedSyntaxInput::prepare(
                     db,

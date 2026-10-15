@@ -32,3 +32,12 @@ mod retained_type_name_tests;
 
 #[cfg(test)]
 mod retained_source_preparation_tests;
+
+#[cfg(test)]
+mod retained_nested_match_tests;
+
+#[cfg(test)]
+mod retained_selected_body_tests;
+
+#[cfg(test)]
+mod retained_lexical_tests;

@@ -1,0 +1,399 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T23:25:17.294814+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T014",
+    "T024",
+    "T050",
+    "T051",
+    "T063",
+    "M014"
+  ],
+  "state": "scoped_component_pass_architecture_held",
+  "scope": "Actual selected original-body syntax readiness retains pending calls in other or nested functions, scopes identity/admission/body entry to that exact definition, and preserves current source/epoch/seal checks. Ordinary Match/If/Block forward known source constraints; runtime primitive source guard precedes parameter reads. Stale scalar phase oracle corrected without changing guest source or relaxing VM guard.",
+  "versions": [
+    {
+      "version": 1,
+      "source_baseline": "2b0e4918a1334c605111666f13ed9d5d5d47ced5",
+      "source_packet": "artifacts/macos-first/common-selected-body-preparation-v1/SOURCE.json",
+      "source_packet_sha256": "f60cbf87f84eaf7a1292a701feb731c2063e5cbf1a8a9c9a555d664bb9440b99",
+      "source_files": [
+        {
+          "path": "crates/lrr/src/db/body_leases.rs",
+          "sha256": "c12761aa4cd2547c615ec0f12cc9a4c4ab3e403896b845faa4b68fcb8f3b8b9d"
+        },
+        {
+          "path": "crates/lrr/src/db/retained_body_inputs.rs",
+          "sha256": "b2719b29ec2ffdc176b29cb5bb46c391ccc04f358d4d457dc27e1b12c9f52062"
+        },
+        {
+          "path": "crates/lrr/src/db/retained_syntax.rs",
+          "sha256": "908a42ba934f85987dfa64a612f43e08475991acede3d42ee88f6a591a7f0a43"
+        },
+        {
+          "path": "crates/lrr/src/engine/run.rs",
+          "sha256": "307b58d9df7e859df9f7b393710fecd5264077d84af2da711a5743eee25a3922"
+        },
+        {
+          "path": "crates/lrr/src/engine/run_nested_match_context_tests.rs",
+          "sha256": "a5b71013da319cb480e7811457bd829ccc5bb20847483b0e068bed7f3e42c771"
+        },
+        {
+          "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+          "sha256": "6774ca1732c640faa6b0a1420c96e471946dfbe00111ce1576d5b87ac08c13bb"
+        },
+        {
+          "path": "crates/lrr/src/expand/source_declarative/body_selection.rs",
+          "sha256": "c2df1b63be776da4ed8b19eb8ab0646da2c19e34875940ec529549a1aa422dbd"
+        },
+        {
+          "path": "crates/lrr/src/expand/source_discovery/source_syntax.rs",
+          "sha256": "ba590242af30a976ea80f430349da61897b36225db1fee1e643469f534f94b99"
+        },
+        {
+          "path": "crates/lrr/src/service/mod.rs",
+          "sha256": "5d555527cb2fb7adb97ffc8f8474cb5fdf0e229030adcc771ecebdf3da948ffc"
+        },
+        {
+          "path": "crates/lrr/src/service/retained_body_tests.rs",
+          "sha256": "1515ef4ae73b9429412d66b550cd10e82793a0143ada75b877cae4643ece14e2"
+        },
+        {
+          "path": "crates/lrr/src/service/retained_nested_match_tests.rs",
+          "sha256": "6b3a54e5eaa85de5aa879076a8e844a534fe87677aa6128446bc92261adb697f"
+        },
+        {
+          "path": "crates/lrr/src/service/retained_selected_body_tests.rs",
+          "sha256": "3b75d9ae52cecf59d9c1c5d1ae27235cc5e636230463ca97d241f62c304202ec"
+        },
+        {
+          "path": "crates/lrr/src/syntax/literal_match.rs",
+          "sha256": "fae7db17af398f78029d9c27ca7d91a63a24151c436d91d1ee26fb98100d8045"
+        }
+      ],
+      "frozen_source_member": "cb624c8cd9d3bd3f97341ac7ae25e8b32bbe4c9769ba2804849d119e15e2b3df",
+      "release": "artifacts/macos-first/sol-common-selected-body-preparation-validation-v1/RELEASE.json",
+      "release_sha256": "66f486fc700a8b3f03e9283ace05751bad41f6d9cb6517cda3005c6d7d80b124",
+      "outcome": "compile_failure_zero_test_bodies",
+      "actual_terminal": "26d117/1",
+      "cargo_exit_code": 101,
+      "diagnostics": {
+        "code": "E0599",
+        "path": "crates/lrr/src/service/retained_body_tests.rs",
+        "line": 209,
+        "detail": "DefKey::fingerprint requires StableEncode trait in scope",
+        "stderr_sha256": "17b9c1749600c53fdebabe1426a3e033df530f04846375064674910ec71a54b3"
+      },
+      "executed_test_bodies": 0
+    },
+    {
+      "version": 2,
+      "source_baseline": "2b0e4918a1334c605111666f13ed9d5d5d47ced5",
+      "source_packet": "artifacts/macos-first/common-selected-body-preparation-v2/SOURCE.json",
+      "source_packet_sha256": "15cec1e6bdbbea492c68600e3cd3c2c5cec880190d4a696e9f385a656d02af08",
+      "source_files": [
+        {
+          "path": "crates/lrr/src/db/body_leases.rs",
+          "sha256": "c12761aa4cd2547c615ec0f12cc9a4c4ab3e403896b845faa4b68fcb8f3b8b9d"
+        },
+        {
+          "path": "crates/lrr/src/db/retained_body_inputs.rs",
+          "sha256": "b2719b29ec2ffdc176b29cb5bb46c391ccc04f358d4d457dc27e1b12c9f52062"
+        },
+        {
+          "path": "crates/lrr/src/db/retained_syntax.rs",
+          "sha256": "908a42ba934f85987dfa64a612f43e08475991acede3d42ee88f6a591a7f0a43"
+        },
+        {
+          "path": "crates/lrr/src/engine/run.rs",
+          "sha256": "307b58d9df7e859df9f7b393710fecd5264077d84af2da711a5743eee25a3922"
+        },
+        {
+          "path": "crates/lrr/src/engine/run_nested_match_context_tests.rs",
+          "sha256": "a5b71013da319cb480e7811457bd829ccc5bb20847483b0e068bed7f3e42c771"
+        },
+        {
+          "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+          "sha256": "6774ca1732c640faa6b0a1420c96e471946dfbe00111ce1576d5b87ac08c13bb"
+        },
+        {
+          "path": "crates/lrr/src/expand/source_declarative/body_selection.rs",
+          "sha256": "c2df1b63be776da4ed8b19eb8ab0646da2c19e34875940ec529549a1aa422dbd"
+        },
+        {
+          "path": "crates/lrr/src/expand/source_discovery/source_syntax.rs",
+          "sha256": "ba590242af30a976ea80f430349da61897b36225db1fee1e643469f534f94b99"
+        },
+        {
+          "path": "crates/lrr/src/service/mod.rs",
+          "sha256": "5d555527cb2fb7adb97ffc8f8474cb5fdf0e229030adcc771ecebdf3da948ffc"
+        },
+        {
+          "path": "crates/lrr/src/service/retained_body_tests.rs",
+          "sha256": "342c4977a60b00d53b416a218778ec30120792e06576e230074e02301dfe17ae"
+        },
+        {
+          "path": "crates/lrr/src/service/retained_nested_match_tests.rs",
+          "sha256": "6b3a54e5eaa85de5aa879076a8e844a534fe87677aa6128446bc92261adb697f"
+        },
+        {
+          "path": "crates/lrr/src/service/retained_selected_body_tests.rs",
+          "sha256": "3b75d9ae52cecf59d9c1c5d1ae27235cc5e636230463ca97d241f62c304202ec"
+        },
+        {
+          "path": "crates/lrr/src/syntax/literal_match.rs",
+          "sha256": "fae7db17af398f78029d9c27ca7d91a63a24151c436d91d1ee26fb98100d8045"
+        },
+        {
+          "path": "crates/lrr/src/vm/parameter_place_tests.rs",
+          "sha256": "351e396f43d8c99d2b0bccd21f9fe3dc466f3386fc23a19d29e50335e09d2b07"
+        },
+        {
+          "path": "xtask/tests/scalar_match_phases.rs",
+          "sha256": "9e33f9878075bcef7692beb26c7a647ba29510fef0690530cc0b30cdac613487"
+        }
+      ],
+      "frozen_source_member": "ae254ae5c7093f4ecb169595fe4467cf2bccc0d87e2b88a0ed05b33eb545132a",
+      "release": "artifacts/macos-first/sol-common-selected-body-preparation-validation-v2/RELEASE.json",
+      "release_sha256": "78d63b327821433f53fe677a5f1aed9b4829713ec0c9e878d2a7d1a554d8a2b8",
+      "stages": {
+        "selected-body": {
+          "actual_tool_observation": "acafb1/0",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "service::retained_selected_body_tests",
+            "--",
+            "--test-threads=1"
+          ],
+          "terminal_sha256": "8753563b87bba9ffabf0d7af2f54e778b48e2976f07bf63679c72b14a0d4470b",
+          "elapsed_seconds": 21.544636416976573,
+          "bodies": 2,
+          "passed": 2,
+          "failed": 0
+        },
+        "retained-matrix": {
+          "actual_tool_observation": "620ecf intermediate; final e3e8fe/0",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "service::retained_nested_match_tests",
+            "--",
+            "--test-threads=1"
+          ],
+          "terminal_sha256": "16374c36ef6f7a1148e7670f6809ce1ee05217c9d7e54f338650143127600e5e",
+          "elapsed_seconds": 2.440256624977337,
+          "bodies": 1,
+          "passed": 1,
+          "failed": 0
+        },
+        "vm-guard": {
+          "actual_tool_observation": "620ecf intermediate; final e3e8fe/0",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "definition_parameter_hint_rejects_nonscalar_sources_before_opcode_or_owning_read",
+            "--",
+            "--test-threads=1"
+          ],
+          "terminal_sha256": "7860c42769ebaa529646bc979858a24da56d54ac534436bdf7691430741f3bb7",
+          "elapsed_seconds": 0.16546387498965487,
+          "bodies": 1,
+          "passed": 1,
+          "failed": 0
+        },
+        "scalar-bank": {
+          "actual_tool_observation": "620ecf intermediate; final e3e8fe/0",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "xtask",
+            "--test",
+            "scalar_match_phases",
+            "--",
+            "--test-threads=1"
+          ],
+          "terminal_sha256": "4308c9b9d3fa4d2eb33f833599275ec19a3616e0c93f4e1aaff5f57877092fca",
+          "elapsed_seconds": 22.871243417001097,
+          "bodies": 5,
+          "passed": 5,
+          "failed": 0
+        },
+        "assembly": {
+          "actual_tool_observation": "620ecf intermediate; final e3e8fe/0",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "expand::source_declarative::assembly::tests",
+            "--",
+            "--test-threads=1"
+          ],
+          "terminal_sha256": "fbd97d5e6211d960fb7d3b1e46511737a161e5c31650e817f3480fbc517cb546",
+          "elapsed_seconds": 0.8782383750076406,
+          "bodies": 10,
+          "passed": 10,
+          "failed": 0
+        },
+        "retained-body": {
+          "actual_tool_observation": "620ecf intermediate; final e3e8fe/0",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "service::retained_body_tests",
+            "--",
+            "--test-threads=1"
+          ],
+          "terminal_sha256": "24d6032b01246bcd3fcea6143efcda928bd69fff8756df47fdcc89af1b2083dd",
+          "elapsed_seconds": 0.894022499996936,
+          "bodies": 4,
+          "passed": 4,
+          "failed": 0
+        },
+        "lrr-library": {
+          "actual_tool_observation": "620ecf intermediate; final e3e8fe/0",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "--",
+            "--test-threads=1"
+          ],
+          "terminal_sha256": "1f75b49fec71ee14d6068ad6b7d4354e1bfdfcfc2881df05f7696626d26fe12d",
+          "elapsed_seconds": 209.83322412500274,
+          "bodies": 1154,
+          "passed": 1154,
+          "failed": 0
+        },
+        "strict-workspace": {
+          "actual_tool_observation": "620ecf intermediate; final e3e8fe/0",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "clippy",
+            "--offline",
+            "--locked",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings"
+          ],
+          "terminal_sha256": "659d2cfd07fdd00c77a62aa713e8eabf2fa3a42d68e9ca567fa038de2c14b1bb",
+          "elapsed_seconds": 28.071177540987264,
+          "bodies": 0,
+          "passed": 0,
+          "failed": 0
+        }
+      },
+      "distinct_passed_bodies": 1159,
+      "passed_body_executions": 1177,
+      "repeated_selected_lrr_executions_inside_library": 18,
+      "strict_workspace_alltargets_passed": true,
+      "source_guard": {
+        "source_member": "ae254ae5c7093f4ecb169595fe4467cf2bccc0d87e2b88a0ed05b33eb545132a",
+        "frozen_files": 4931,
+        "symlinks": 3,
+        "owner_sha256": "3b4008bdb7f8f294032db0de46f84ea6a83a663de963754c9364dbdae8833a0c",
+        "raw_files": 510,
+        "cases": 324,
+        "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+        "licenses": {
+          "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+          "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+        },
+        "free_bytes": 57379807232
+      },
+      "matrix_scope": "3forms x3origins x4editions=36 executions within one host body; no standard-macro acceptance",
+      "full_milestone": "not run in scoped batch; historical AssemblyV3 failure retained",
+      "selected_body_scope": {
+        "editions": [
+          2015,
+          2018,
+          2021,
+          2024
+        ],
+        "effects": "wrong-definition publication and stale epoch refused with unchanged DB revision; selected function runs with unowned cold calls pending; completed opcode counts balanced",
+        "upstream_component": "unchanged nested-statement body readiness only; generic original calls not executed"
+      },
+      "lrr_library_passes": 1154,
+      "scalar_match_phases_full_bank_passes": 5,
+      "outcome": "scoped_component_pass_architecture_held"
+    }
+  ],
+  "architecture_review": {
+    "1_to_4": "Same discovery receipts -> syntax attachment -> admitted parse -> exact original definition rows -> ordinary BodyIndex/thunks/VM. No new macro-specific evaluator/inference/member route; all8 prior routes still held.",
+    "5": "Function ownership derived from actual nearest retained Fn and translated original anchor; cold function macros remain pending. Known primitive context forwards through Match/If/Block. Whole declaration producer closure and fuller Type goals still required.",
+    "6": "Structural pre-entry replay is coordinator work; no producer or installed operation planner side effect. Selected-body readiness is distinct from whole-source completeness.",
+    "7": "Existing global census unchanged in this frozen candidate; later canonical parse-only exclusion is unvalidated.",
+    "8": "Existing Arc sharing/direct node lookup retained; new body ownership uses indexed range syntax access and bounded ancestry."
+  },
+  "acceptance": {
+    "new_configured_upstream_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "common_cli_integration": false,
+    "task_completed": false,
+    "all_eight_shortcuts_removed": false,
+    "guest_jit_allowed": false,
+    "remaining": "All8 legacy macro routes, standard macro source expansion/common CLI integration, general transactional patterns, full source/type/member goals and scoped cached namespace dependencies remain open."
+  },
+  "fresh_full_milestone": {
+    "status": "running_no_terminal",
+    "source_member": "ae254ae5c7093f4ecb169595fe4467cf2bccc0d87e2b88a0ed05b33eb545132a",
+    "argv": [
+      "cargo",
+      "+1.99.0",
+      "run",
+      "--offline",
+      "--locked",
+      "-p",
+      "xtask",
+      "--",
+      "gate",
+      "03"
+    ],
+    "actual_launch": "5c6213 session23908 PID18106",
+    "last_live_observation": "175b0e child cargo test workspace PID22457 / lrr unittest22458",
+    "run_directory": "artifacts/macos-first/sol-common-selected-body-preparation-validation-v2/gate03",
+    "prior_milestone": "AssemblyV3 failed 2833 pass /1 fail /425 unstarted; failure preserved in common-source-assembly receipt"
+  }
+}

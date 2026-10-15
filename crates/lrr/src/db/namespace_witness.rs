@@ -20,7 +20,8 @@ impl NamespaceWitness {
     pub(crate) fn require_current(&self, db: &Database) -> Result<(), Diagnostic> {
         // Compare membership, not just old fingerprints: immutable derived
         // publication may add names without changing source_revision or epoch.
-        // The common bounded census excludes only legitimate lexical rows.
+        // Parsing-only retained inputs and exact definition rows do not add
+        // names. Their source/body consumers retain separate currentness checks.
         if db.lexical_namespace_stamps()? != self.stamps {
             return Err(fault(
                 "LRR-E-NAMESPACE-STALE",

@@ -605,7 +605,10 @@ fn local_binding(
     let Some(reference) = source_path.segment().and_then(|segment| segment.name_ref()) else {
         return Ok(None);
     };
-    let Ok(name) = MacroName::parse(reference.text(), parsed.edition) else {
+    let Ok(name) = MacroName::parse(
+        reference.text(),
+        parsed.token_edition(super::ast_adapter::range(reference.syntax().text_range()))?,
+    ) else {
         return Ok(None);
     };
     local_binding_at(parsed, index, body, path.syntax(), &name)
@@ -636,6 +639,43 @@ fn statement_cfg(
             .any(|meta| !matches!(meta, ast::Meta::CfgMeta(_))),
     ))
 }
+/// A lexical spelling is only a candidate. For retained/generated syntax the
+/// actual NameRef and binding Name must also share the pinned local-name class.
+fn binding_name_matches(
+    parsed: &ParsedFile,
+    reference: &SyntaxNode,
+    wanted: &MacroName,
+    candidate: &ast::Name,
+) -> Result<bool, Diagnostic> {
+    let binding_range = super::ast_adapter::range(candidate.syntax().text_range());
+    if !MacroName::parse(candidate.text(), parsed.token_edition(binding_range)?)
+        .is_ok_and(|name| &name == wanted)
+    {
+        return Ok(false);
+    }
+    if parsed.generated_origin.is_none() {
+        return Ok(true);
+    }
+    let reference = ast::PathExpr::cast(reference.clone())
+        .and_then(|path| path.path())
+        .filter(|path| path.qualifier().is_none())
+        .and_then(|path| path.segment())
+        .and_then(|segment| segment.name_ref())
+        .ok_or_else(|| {
+            Diagnostic::new(
+                "LRR-E-UNSUPPORTED",
+                "lexical binding requires its actual hygienic identifier occurrence".into(),
+            )
+        })?;
+    let reference_range = super::ast_adapter::range(reference.syntax().text_range());
+    let actual = MacroName::parse(reference.text(), parsed.token_edition(reference_range)?)?;
+    if &actual != wanted {
+        return Err(error(
+            "lexical reference spelling differs from its source occurrence",
+        ));
+    }
+    parsed.same_local_name_context(reference_range, binding_range)
+}
 fn local_binding_at(
     parsed: &ParsedFile,
     index: &BodyIndex,
@@ -663,8 +703,7 @@ fn local_binding_at(
                     }
                     if let Some(ast::Pat::IdentPat(pattern)) = statement.pat()
                         && let Some(candidate) = pattern.name()
-                        && MacroName::parse(candidate.text(), parsed.edition)
-                            .is_ok_and(|candidate| &candidate == name)
+                        && binding_name_matches(parsed, syntax, name, &candidate)?
                     {
                         binding = Some(id_for(index, body, pattern.syntax())?);
                     }
@@ -693,8 +732,7 @@ fn local_binding_at(
                     .children()
                     .any(|node| ast::Attr::can_cast(node.kind()))
                 && let Some(candidate) = pattern.name()
-                && MacroName::parse(candidate.text(), parsed.edition)
-                    .is_ok_and(|candidate| &candidate == name)
+                && binding_name_matches(parsed, syntax, name, &candidate)?
             {
                 // This is the exact lexical binding location, not a proof that
                 // the pattern name denotes a binding. The reached pattern must
@@ -763,8 +801,7 @@ fn local_binding_at(
                 && pattern.ref_token().is_none()
                 && pattern.at_token().is_none()
                 && let Some(candidate) = pattern.name()
-                && MacroName::parse(candidate.text(), parsed.edition)
-                    .is_ok_and(|candidate| &candidate == name)
+                && binding_name_matches(parsed, syntax, name, &candidate)?
             {
                 binding = Some(id_for(index, body, pattern.syntax())?);
             }
@@ -790,8 +827,7 @@ fn parameter_at(
                 && pattern.ref_token().is_none()
                 && pattern.at_token().is_none()
                 && let Some(candidate) = pattern.name()
-                && MacroName::parse(candidate.text(), parsed.edition)
-                    .is_ok_and(|candidate| &candidate == name)
+                && binding_name_matches(parsed, syntax, name, &candidate)?
             {
                 let ordinal = ordinal
                     .checked_add(usize::from(params.self_param().is_some()))

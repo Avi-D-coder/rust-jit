@@ -22,6 +22,11 @@ fn rows(
     if input.prepared().source() != source.selection() || parsed.key() != *input.key() {
         return Err(invalid("retained definition selected source differs"));
     }
+    if !input.prepared().permits_body(definition) {
+        return Err(invalid(
+            "retained syntax readiness belongs to another original body",
+        ));
+    }
     let original = source
         .outline()
         .items

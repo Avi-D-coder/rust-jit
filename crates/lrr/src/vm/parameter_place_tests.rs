@@ -628,3 +628,78 @@ fn zero_fuel_refuses_before_opcode_entry_and_successful_place_is_not_replayed() 
     assert_eq!(c.frame.counters.started_by_opcode[44], 1);
     assert_eq!(physical(&c), before);
 }
+
+#[test]
+fn definition_parameter_hint_rejects_nonscalar_sources_before_opcode_or_owning_read() {
+    for edition in [2015, 2018, 2021, 2024] {
+        for bad in 0..3 {
+            let mut c = entered(edition, false);
+            // The base reference source is genuinely delivered by the caller.
+            // Other cases are explicit adversarial source sidecars, never
+            // alternate native signatures or accepted interpreter execution.
+            match bad {
+                0 => {}
+                1 => {
+                    c.frame.parameter_sources[0] = TyTerm::Param(crate::traits::term::ParamKey {
+                        definition: c.frame.body.body().definition,
+                        ordinal: 0,
+                    })
+                }
+                2 => c.frame.parameter_sources[0] = TyTerm::Tuple(vec![]),
+                _ => unreachable!(),
+            }
+            let key = c.frame.pc().clone();
+            let node = &c.frame.body.nodes()[key.node as usize];
+            let target = node.value.unwrap();
+            let recipe = crate::ir::validate::verify(
+                crate::ir::recipe::RecipeDraft {
+                    key: key.clone(),
+                    origin: crate::ir::recipe::Origin {
+                        span: c.frame.body.span(node.id).unwrap(),
+                        expansion_ancestry: vec![],
+                    },
+                    operations: vec![Op::SetHint {
+                        child: target,
+                        hint: crate::ir::op::HintRecipe::DefinitionParameter(0),
+                    }],
+                    exits: vec![crate::ir::recipe::RecipeExit::Next(
+                        c.frame.body.pc(node.id, Phase::Exit).unwrap(),
+                    )],
+                    dependencies: vec![],
+                },
+                &c.frame.body,
+            )
+            .unwrap();
+            let parameter = c.frame.parameter(0).unwrap();
+            let before = (
+                physical(&c),
+                c.store.state(parameter).unwrap(),
+                c.store.location_epoch(parameter).unwrap(),
+                c.frame.fuel_snapshot().used,
+                c.frame.counters.operations_started,
+                c.frame.source_view(target).unwrap(),
+                c.frame.hint(target).unwrap(),
+            );
+            let error = step(&mut c.frame, &mut c.store, &recipe).unwrap_err();
+            assert_eq!(error.code, "LRR-E-UNSUPPORTED");
+            assert_eq!(
+                error.message,
+                "scalar parameter context requires an admitted primitive source"
+            );
+            assert_eq!(
+                before,
+                (
+                    physical(&c),
+                    c.store.state(parameter).unwrap(),
+                    c.store.location_epoch(parameter).unwrap(),
+                    c.frame.fuel_snapshot().used,
+                    c.frame.counters.operations_started,
+                    c.frame.source_view(target).unwrap(),
+                    c.frame.hint(target).unwrap()
+                )
+            );
+            assert_eq!(c.frame.counters.started_by_opcode[21], 0);
+            assert_eq!(c.frame.counters.started_by_opcode[2], 0);
+        }
+    }
+}

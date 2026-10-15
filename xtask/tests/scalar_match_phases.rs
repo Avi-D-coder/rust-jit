@@ -79,7 +79,13 @@ fn source(text: &str, edition: u16) -> (Database, PreparedSourceView) {
     inputs.publish(&mut db).unwrap();
     (db, view)
 }
-fn entry(text: &str, function: &str, expected: Option<PrimitiveType>) {
+#[derive(Clone, Copy)]
+enum EntryContext {
+    Primitive(PrimitiveType),
+    Parameter(u32),
+    Unsupported,
+}
+fn entry(text: &str, function: &str, expected: EntryContext) {
     for edition in [2015, 2018, 2021, 2024] {
         let (mut db, view) = source(text, edition);
         let handle = view
@@ -117,33 +123,49 @@ fn entry(text: &str, function: &str, expected: Option<PrimitiveType>) {
         };
         assert_eq!(recipe.recipe().key, pc);
         assert_eq!(recipe.recipe().origin.span, index.span(node.id).unwrap());
-        if let Some(ty) = expected {
-            assert!(recipe.recipe().operations.iter().any(
-                |op| matches!(op,Op::SetHint{hint:HintRecipe::Primitive(found),..} if *found==ty)
-            ));
-            assert!(
-                !recipe
-                    .recipe()
-                    .operations
-                    .iter()
-                    .any(|op| matches!(op, Op::Unsupported(_) | Op::Literal { .. }))
-            );
-            assert!(matches!(recipe.recipe().exit, RecipeExit::Next(_)));
-        } else {
-            assert!(
-                recipe
-                    .recipe()
-                    .operations
-                    .iter()
-                    .any(|op| matches!(op, Op::Unsupported(_)))
-            );
-            assert!(!recipe.recipe().operations.iter().any(|op| matches!(
-                op,
-                Op::SetHint { .. }
-                    | Op::ReadLocal { .. }
-                    | Op::ReadParameter { .. }
-                    | Op::Literal { .. }
-            )));
+        match expected {
+            EntryContext::Primitive(ty) => {
+                assert!(recipe.recipe().operations.iter().any(
+                    |op| matches!(op,Op::SetHint{hint:HintRecipe::Primitive(found),..} if *found==ty)
+                ));
+                assert!(
+                    !recipe
+                        .recipe()
+                        .operations
+                        .iter()
+                        .any(|op| matches!(op, Op::Unsupported(_) | Op::Literal { .. }))
+                );
+                assert!(matches!(recipe.recipe().exit, RecipeExit::Next(_)));
+            }
+            EntryContext::Parameter(ordinal) => {
+                assert!(recipe.recipe().operations.iter().any(
+                    |op| matches!(op, Op::SetHint { hint: HintRecipe::DefinitionParameter(found), .. } if *found == ordinal)
+                ));
+                assert!(!recipe.recipe().operations.iter().any(|op| matches!(
+                    op,
+                    Op::Unsupported(_)
+                        | Op::Literal { .. }
+                        | Op::ReadLocal { .. }
+                        | Op::ReadParameter { .. }
+                )));
+                assert!(matches!(recipe.recipe().exit, RecipeExit::Next(_)));
+            }
+            EntryContext::Unsupported => {
+                assert!(
+                    recipe
+                        .recipe()
+                        .operations
+                        .iter()
+                        .any(|op| matches!(op, Op::Unsupported(_)))
+                );
+                assert!(!recipe.recipe().operations.iter().any(|op| matches!(
+                    op,
+                    Op::SetHint { .. }
+                        | Op::ReadLocal { .. }
+                        | Op::ReadParameter { .. }
+                        | Op::Literal { .. }
+                )));
+            }
         }
         assert!(
             db.trace
@@ -155,9 +177,21 @@ fn entry(text: &str, function: &str, expected: Option<PrimitiveType>) {
 }
 #[test]
 fn unchanged_scalar_match_sources_prepare_exact_entry_without_arm_thunks() {
-    entry(MATCH_EXPR, "test_basic", Some(PrimitiveType::Bool));
-    entry(MATCH_PANIC, "test_simple", Some(PrimitiveType::Bool));
-    entry(MATCH_LIT, "altlit", Some(PrimitiveType::Isize));
+    entry(
+        MATCH_EXPR,
+        "test_basic",
+        EntryContext::Primitive(PrimitiveType::Bool),
+    );
+    entry(
+        MATCH_PANIC,
+        "test_simple",
+        EntryContext::Primitive(PrimitiveType::Bool),
+    );
+    entry(
+        MATCH_LIT,
+        "altlit",
+        EntryContext::Primitive(PrimitiveType::Isize),
+    );
 }
 fn run(text: &str, function: &str, expected: Option<bool>) {
     for edition in [2015, 2018, 2021, 2024] {
@@ -342,7 +376,7 @@ fn disclosed_scalar_matches_select_once_preserve_local_copy_and_cold_arm() {
     }
 }
 #[test]
-fn unknown_noncopy_rigid_and_shadowed_matches_refuse_before_source_read() {
+fn parameter_scrutinees_defer_to_source_guard_and_qualified_names_refuse_before_read() {
     for (text, name) in [
         (
             "fn value(input:String)->bool{match input{_=>true}}fn main(){}",
@@ -361,7 +395,15 @@ fn unknown_noncopy_rigid_and_shadowed_matches_refuse_before_source_read() {
             "main",
         ),
     ] {
-        entry(text, name, None)
+        // The ordinal is a deferred source relation, not acceptance of String,
+        // a rigid T or a shadowed bool as a primitive. Actual VM guard controls
+        // in parameter_place_tests reject nonprimitive sources before effects.
+        let expected = if name == "main" {
+            EntryContext::Unsupported
+        } else {
+            EntryContext::Parameter(0)
+        };
+        entry(text, name, expected)
     }
 }
 #[test]

@@ -4,7 +4,9 @@ use crate::{core::digest::StableEncode, frontend::callables::lexical::LexicalAdm
 
 impl Database {
     /// Namespace membership and epoch stamps include absence by map equality.
-    /// Appending exact Definition* rows does not alter the namespace universe.
+    /// Exact Definition* rows and admitted parsing-only retained syntax do not
+    /// alter the namespace universe. Their consumers check their own leases;
+    /// source, epoch, records and discovery certificates remain in this census.
     pub(crate) fn lexical_namespace_stamps(
         &self,
     ) -> Result<BTreeMap<InputKey, Digest>, Diagnostic> {
@@ -18,6 +20,7 @@ impl Database {
                     | InputKey::DefinitionBody(_)
                     | InputKey::DeclarationContext(_)
                     | InputKey::SourceBlob(_)
+                    | InputKey::RetainedSyntax(_)
             ) {
                 continue;
             }

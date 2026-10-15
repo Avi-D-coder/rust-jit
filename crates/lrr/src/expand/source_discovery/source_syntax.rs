@@ -46,6 +46,24 @@ impl SourceDiscovery {
         &self,
         source: &SourceSelection,
     ) -> Result<Arc<PreparedSourceSyntax>, Diagnostic> {
+        self.prepare_syntax(source, None)
+    }
+
+    /// Prepare one exact original function before entry. Calls owned by cold
+    /// functions remain structurally pending and cannot authorize their entry.
+    pub fn prepare_body_syntax(
+        &self,
+        source: &SourceSelection,
+        definition: Digest,
+    ) -> Result<Arc<PreparedSourceSyntax>, Diagnostic> {
+        self.prepare_syntax(source, Some(definition))
+    }
+
+    fn prepare_syntax(
+        &self,
+        source: &SourceSelection,
+        definition: Option<Digest>,
+    ) -> Result<Arc<PreparedSourceSyntax>, Diagnostic> {
         if let Some(error) = &self.failed {
             return Err(error.clone());
         }
@@ -128,7 +146,14 @@ impl SourceDiscovery {
             }
         }
         let mut assembly = SourceSyntaxAssembly::new(provider, index, self.epoch)?;
-        while let Some((invocation, alias)) = assembly.next_pending_invocation()? {
+        loop {
+            let pending = match definition {
+                Some(definition) => assembly.next_body_invocation(definition)?,
+                None => assembly.next_pending_invocation()?,
+            };
+            let Some((invocation, alias)) = pending else {
+                break;
+            };
             let direct = outputs.remove(&invocation);
             let alternate = alias.and_then(|alias| outputs.remove(&alias));
             let output = match (direct, alternate) {
@@ -152,13 +177,16 @@ impl SourceDiscovery {
                 })?;
             assembly = assembly.attach_receipt(receipt, output)?;
         }
-        if !outputs.is_empty() {
+        if definition.is_none() && !outputs.is_empty() {
             return Err(fault(
                 "source syntax output requires further structural reconciliation",
             ));
         }
-        let prepared = assembly.finish()?;
-        if !prepared.pending_calls().is_empty() {
+        let prepared = match definition {
+            Some(definition) => assembly.finish_for_body(definition)?,
+            None => assembly.finish()?,
+        };
+        if !prepared.ready_for_admission() {
             return Err(fault("source syntax preparation left pending calls"));
         }
         Ok(Arc::new(prepared))

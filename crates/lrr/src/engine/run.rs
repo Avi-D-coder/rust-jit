@@ -59,6 +59,9 @@ mod floating_constant_tests;
 #[path = "run_floating_constants.rs"]
 mod floating_constants;
 #[cfg(test)]
+#[path = "run_nested_match_context_tests.rs"]
+mod nested_match_context_tests;
+#[cfg(test)]
 #[path = "run_observed_constructors_tests.rs"]
 mod observed_constructor_tests;
 #[cfg(test)]

@@ -137,7 +137,7 @@ fn current(
     seal: &SealKey,
     expected: Option<Digest>,
 ) -> QueryPoll<Digest> {
-    if prepared.epoch() != seal.epoch || !prepared.pending_calls().is_empty() {
+    if prepared.epoch() != seal.epoch || !prepared.ready_for_admission() {
         return QueryPoll::Ready(Err(fault(
             "retained syntax epoch differs or expansion calls remain pending",
         )));

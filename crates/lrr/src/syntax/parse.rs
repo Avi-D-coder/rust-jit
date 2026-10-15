@@ -68,9 +68,18 @@ pub struct ParsedFile {
     pub(crate) generated_origin: Option<Digest>,
     pub(crate) declaration_grammar: Option<crate::expand::identity::GrammarSlot>,
     estimated_bytes: usize,
-    token_editions: Option<Vec<(u32, u16)>>,
+    token_contexts: Option<Vec<TokenContext>>,
     retained_syntax: Option<retained::RetainedSyntax>,
 }
+// Comparison-only normal forms from the pinned adapter, never source authority.
+#[derive(Debug)]
+struct TokenContext {
+    end: u32,
+    edition: u16,
+    local: lrr_expand_adapter::token_wire::NameContextKey,
+}
+#[path = "lexical_hygiene.rs"]
+mod lexical_hygiene;
 impl ParsedFile {
     pub(crate) fn has_runtime_macro_syntax(&self) -> bool {
         self.parsed
@@ -150,7 +159,7 @@ impl ParsedFile {
             errors,
             parsed,
             estimated_bytes,
-            token_editions: None,
+            token_contexts: None,
             generated_origin: None,
             declaration_grammar: None,
             retained_syntax: None,
@@ -229,7 +238,7 @@ impl ParsedFile {
             errors: Vec::new(),
             parsed,
             estimated_bytes,
-            token_editions: None,
+            token_contexts: None,
             generated_origin: Some(items.record().descriptor().fingerprint()),
             declaration_grammar: Some(crate::expand::identity::GrammarSlot::Items),
             retained_syntax: None,
@@ -322,7 +331,7 @@ impl ParsedFile {
             errors: Vec::new(),
             parsed,
             estimated_bytes,
-            token_editions: None,
+            token_contexts: None,
             generated_origin: Some(identity),
             declaration_grammar: Some(grammar),
             retained_syntax: None,
@@ -360,12 +369,20 @@ impl ParsedFile {
             .contexts()
             .len()
             .checked_add(tokens.spans().len())
-            .and_then(|n| n.checked_mul(128))
+            .and_then(|n| n.checked_mul(256))
             .filter(|n| *n <= 128 * 1024 * 1024)
             .ok_or_else(fail)?;
         let mut hygiene = lrr_expand_adapter::hygiene::HygieneStore::default();
         hygiene
             .import(tokens.contexts())
+            .map_err(|e| Diagnostic::new(e.code, e.message))?;
+        let mut demanded = Vec::new();
+        demanded
+            .try_reserve_exact(tokens.contexts().len())
+            .map_err(|_| fail())?;
+        demanded.extend(tokens.contexts().iter().map(|context| context.key()));
+        let names = hygiene
+            .name_contexts(&demanded)
             .map_err(|e| Diagnostic::new(e.code, e.message))?;
         let contexts = hygiene
             .records()
@@ -377,14 +394,23 @@ impl ParsedFile {
                     lrr_expand_adapter::token_wire::Edition::E2021 => 2021,
                     lrr_expand_adapter::token_wire::Edition::E2024 => 2024,
                 };
-                (c.key(), edition)
+                let local = names
+                    .binary_search_by_key(&c.key(), |row| row.original)
+                    .map(|index| names[index].local)
+                    .map_err(|_| fail())?;
+                Ok((c.key(), (edition, local)))
             })
-            .collect::<std::collections::BTreeMap<_, _>>();
+            .collect::<Result<std::collections::BTreeMap<_, _>, Diagnostic>>()?;
         let spans = tokens
             .spans()
             .iter()
             .map(|s| (s.key(), s.context))
             .collect::<std::collections::BTreeMap<_, _>>();
+        origins
+            .len()
+            .checked_mul(std::mem::size_of::<TokenContext>())
+            .filter(|n| *n <= 32 * 1024 * 1024)
+            .ok_or_else(fail)?;
         let mut editions = Vec::new();
         editions
             .try_reserve_exact(origins.len())
@@ -395,34 +421,34 @@ impl ParsedFile {
                 return Err(fail());
             }
             let context = spans.get(&span).ok_or_else(fail)?;
-            let edition = *contexts.get(context).ok_or_else(fail)?;
-            editions.push((next_end, edition));
+            let (edition, local) = *contexts.get(context).ok_or_else(fail)?;
+            editions.push(TokenContext {
+                end: next_end,
+                edition,
+                local,
+            });
             end = next_end;
         }
         if end != u32::from(self.parsed.syntax_node().text_range().len()) {
             return Err(fail());
         }
         let bytes = editions
-            .len()
-            .checked_mul(std::mem::size_of::<(u32, u16)>())
+            .capacity()
+            .checked_mul(std::mem::size_of::<TokenContext>())
             .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(fail)?;
-        self.estimated_bytes = self.estimated_bytes.checked_add(bytes).ok_or_else(fail)?;
-        self.token_editions = Some(editions);
+        self.estimated_bytes = self
+            .estimated_bytes
+            .checked_add(bytes)
+            .filter(|n| *n <= 128 * 1024 * 1024)
+            .ok_or_else(fail)?;
+        self.token_contexts = Some(editions);
         Ok(self)
     }
     pub(crate) fn token_edition(&self, range: SourceRange) -> Result<u16, Diagnostic> {
-        let Some(editions) = &self.token_editions else {
-            return Ok(self.profile.edition);
-        };
-        let index = editions.partition_point(|(end, _)| *end <= range.start);
-        match editions.get(index) {
-            Some((end, edition)) if range.start < range.end && range.end <= *end => Ok(*edition),
-            _ => Err(Diagnostic::new(
-                "LRR-E-MACRO-OUTPUT",
-                "generated name crosses token edition attachment".into(),
-            )),
-        }
+        Ok(self
+            .token_context(range)?
+            .map_or(self.profile.edition, |context| context.edition))
     }
     pub fn key(&self) -> ParseKey {
         ParseKey {

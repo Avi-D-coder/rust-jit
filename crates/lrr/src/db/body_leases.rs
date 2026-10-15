@@ -40,7 +40,15 @@ impl BodyExecutionLease {
             }
         }
         match self.0._source.as_ref() {
-            InputValue::RetainedSyntax(input) => input.require_current(db),
+            InputValue::RetainedSyntax(input) => {
+                if !input.prepared().permits_body(self.0.body.definition) {
+                    return QueryPoll::Ready(Err(fault(
+                        "LRR-E-EXPANSION-INPUT",
+                        "retained syntax readiness belongs to another frame body",
+                    )));
+                }
+                input.require_current(db)
+            }
             InputValue::GeneratedSyntax(input) => match db.fetch(
                 &super::super::provider::SyntaxProvider,
                 QueryKey::DiscoverySeal(input.seal.clone()),
@@ -167,6 +175,14 @@ impl Database {
                 "frame source ownership absent",
             )));
         };
+        if let InputValue::RetainedSyntax(input) = source.as_ref()
+            && !input.prepared().permits_body(body.definition)
+        {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-EXPANSION-INPUT",
+                "retained syntax readiness belongs to another frame body",
+            )));
+        }
         let result = (|| {
             let live = self
                 .body_leases

@@ -258,7 +258,7 @@ impl ParsedFile {
             generated_origin: Some(identity),
             declaration_grammar: Some(crate::expand::identity::GrammarSlot::Items),
             estimated_bytes,
-            token_editions: None,
+            token_contexts: None,
             retained_syntax: None,
         }
         .with_generated_token_editions(snapshot.origin_records(), &syntax.origins)?;
@@ -324,18 +324,19 @@ impl ParsedFile {
         encoder: &mut StableEncoder,
     ) -> Result<(), Diagnostic> {
         let editions = self
-            .token_editions
+            .token_contexts
             .as_ref()
             .ok_or_else(|| fault("retained body edition map absent"))?;
-        let mut index = editions.partition_point(|(end, _)| *end <= range.start);
+        let mut index = editions.partition_point(|context| context.end <= range.start);
         let mut position = range.start;
         // A fused syntax token (e.g. ::) can cross origin intervals. Coalesce
         // equal owning editions, without interpreting punctuation or names.
         let mut run: Option<(u32, u16)> = None;
         while position < range.end {
-            let &(end, edition) = editions
+            let context = editions
                 .get(index)
                 .ok_or_else(|| fault("retained body edition coverage incomplete"))?;
+            let (end, edition) = (context.end, context.edition);
             let next = end.min(range.end);
             if next <= position {
                 return Err(fault("retained body edition range differs"));
