@@ -265,5 +265,30 @@
         "sha256": "f5b8a0b93bc4a8fc44b085f9f42d53657f1b39db0bb59b2124348931f5916881"
       }
     ]
+  },
+  "successor_full_gate": {
+    "version": 31,
+    "source_member": "2fe250101c2318ab8116c0cec671fd2313ac0642de71f837dd9fa0dc53ff7a12",
+    "listed": 3149,
+    "passed": 1433,
+    "failed": 1,
+    "unexecuted": 1715,
+    "library_passed": 1024,
+    "actual_terminal": {
+      "session_id": 83481,
+      "chunk_id": "4b2fe1",
+      "exit_code": 1
+    },
+    "source_and_427_planning_inputs_unchanged": true,
+    "originals_unchanged": 488,
+    "failure": "cli_std_macro_alias_preserves_identity_and_source_predicate_calls",
+    "direct_cli_guest_exit": 1,
+    "direct_cli_diagnostic": "LRR-E-CALL-CONTEXT: primitive result requires its current owning Type namespace",
+    "next_action": "Validate genuine TestCatalog nested Type receipt selection; no weakening currentness/ownership or primitive identity guards",
+    "receipt": {
+      "version": 31,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v31/VALIDATION-HANDOFF.json",
+      "sha256": "45a2c629b5f55608dea2e965b955b3633a73ae5732f3fe7810424e869d2354e0"
+    }
   }
 }

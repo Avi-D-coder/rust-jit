@@ -323,41 +323,41 @@ fn alias_bool_match_uses_actual_primitive_parameter_source_all_editions() {
     }
 }
 #[test]
-fn reference_argument_admission_keeps_scalar_match_callee_cold_all_editions() {
+fn suffixed_reference_argument_reaches_scalar_match_guard_before_owning_read_all_editions() {
     const SOURCE: &str =
         "fn chosen(x:&mut u8){match x{true=>(),_=>()}}fn main(){let mut n=0u8;chosen(&mut n);}";
     for edition in EDITIONS {
         let (mut db, mut run) = start(SOURCE, edition);
         let chosen = body(&run, "chosen");
         let RunPoll::Fault(error) = poll(&mut db, &mut run) else {
-            panic!("a non-scalar scrutinee must require ordinary pattern integration")
+            panic!("a reference scrutinee must not become a scalar")
         };
         assert_eq!(error.code, "LRR-E-UNSUPPORTED");
-        // This genuine whole-call control still refuses the argument before
-        // body admission: the unannotated numeric local has no retained source
-        // view, and a reference descriptor cannot invent its source identity.
-        // Suffix/local-source propagation remains a required runtime feature;
-        // the certified-reference scalar guard has a separate direct control.
         assert_eq!(
             error.message,
-            "source view requires further value-family integration"
+            "scalar parameter context requires an admitted primitive source"
         );
-        // Resolving the callee's parameter header is necessary to refuse its
-        // reference argument. Only executable body demands must remain absent.
-        for event in &db.trace.events {
-            let cold = match &event.key {
-                QueryKey::BodyStructure(body) => body != &chosen,
-                QueryKey::Thunk(pc) => pc.body != chosen,
-                _ => true,
-            };
-            assert!(
-                cold,
-                "callee body demanded before argument admission: {:?}",
-                event.key
-            );
-        }
-        assert_ne!(run.frame.body.body(), &chosen);
+        assert_eq!(run.frame.body.body(), &chosen);
+        assert!(db.trace.events.iter().any(|event| matches!(&event.key,
+            QueryKey::BodyStructure(body) if body == &chosen)));
+        // The actual suffix supplied source identity at argument admission.
+        // Once entered, a reference still cannot masquerade as a scalar value.
         assert_eq!(run.frame.counters().started_by_opcode[21], 0);
+        db.finish_run().unwrap();
+    }
+}
+
+#[test]
+fn suffixed_local_reference_call_retains_source_without_invented_descriptor_identity_all_editions()
+{
+    // LRR call/certificate regression; stock acceptance uses unchanged files.
+    const SOURCE: &str = "fn chosen(x:&mut u8){} fn main(){let mut n=0u8;chosen(&mut n);}";
+    for edition in EDITIONS {
+        let (mut db, mut run) = start(SOURCE, edition);
+        let chosen = body(&run, "chosen");
+        completed(&mut db, &mut run, 0, 1);
+        assert!(db.trace.events.iter().any(|event| matches!(&event.key,
+            QueryKey::BodyStructure(body) if body == &chosen)));
         db.finish_run().unwrap();
     }
 }

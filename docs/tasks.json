@@ -1453,7 +1453,9 @@
         "unchanged_char_comparison_component_and_closed_comparisons_retain_intrinsic_bool_all_editions",
         "unchanged_runtime_comparison_main_executes_three_original_assertions_all_explicit_editions",
         "actual_published_type_receipt_and_distinct_immutable_copy_replay_identically_all_editions",
-        "actual_same_publication_row_still_refuses_after_current_epoch_changes"
+        "actual_same_publication_row_still_refuses_after_current_epoch_changes",
+        "official_suffixed_numeric_initializers_retain_written_source_through_binding_all_editions",
+        "suffixed_numeric_source_attachment_preserves_exact_fuel_prefix_and_no_replay"
       ],
       "acceptance_contract": "exhaustive i8/u8 arithmetic boundary loops; random wider arithmetic/cast comparisons; works/fails context examples; signed-min literal; distinct usize/u64 contracts. Gate checks Rust constraint-aware numeric fallback and preserves known source widths; nonnumeric unknowns never default.",
       "commands": [],
@@ -1703,6 +1705,11 @@
         "scope": "1040-moduleCLI completed2939;15 earlier equivalence controls; strict/audit/fmt green",
         "fresh_integrated_milestone": "pending",
         "release_complete": false
+      },
+      "current_numeric_suffix_source": {
+        "status": "component_integrated_full_milestone_pending",
+        "evidence_path": "worktracks/evidence/2026-10-14-numeric-suffix-source.json",
+        "scope": "V32 unaffected26 and V33 corrected initializer1, strict lrrlibtests; actual source-backed mutable reference succeeds; no new whole-stock/full-fixture acceptance"
       }
     },
     {
@@ -2179,9 +2186,14 @@
         "unchanged_regions_infer_call_main_edition_2018",
         "unchanged_regions_infer_call_main_edition_2021",
         "unchanged_regions_infer_call_main_edition_2024",
-        "reference_argument_admission_keeps_scalar_match_callee_cold_all_editions",
+        "suffixed_reference_argument_reaches_scalar_match_guard_before_owning_read_all_editions",
         "rustc_original_reference_parameter_requires_current_certificate_before_entry",
-        "rustc_original_reference_parameter_scalar_guard_refuses_before_owning_read_all_editions"
+        "rustc_original_reference_parameter_scalar_guard_refuses_before_owning_read_all_editions",
+        "suffixed_local_reference_call_retains_source_without_invented_descriptor_identity_all_editions",
+        "genuine_test_catalog_primitive_result_certificate_keeps_owning_type_authority_all_editions",
+        "selected_aliased_assertion_executes_predicate_and_keeps_message_and_unselected_body_cold_all_editions",
+        "test_catalog_type_shadow_cannot_be_erased_by_unrelated_supplied_graph",
+        "actual_test_catalog_epoch_change_refuses_retained_primitive_return_certificate"
       ],
       "acceptance_contract": "uncalled invalid function signature/body does not fail another call; an unused generic bound is ignored; incompatible actual parameter/return descriptors fault only at reached boundaries; effectful arguments execute once.",
       "commands": [
@@ -2620,7 +2632,17 @@
           "status": "pending",
           "evidence_paths": []
         }
-      ]
+      ],
+      "current_numeric_suffix_source": {
+        "status": "component_integrated_full_milestone_pending",
+        "evidence_path": "worktracks/evidence/2026-10-14-numeric-suffix-source.json",
+        "scope": "V32 unaffected26 and V33 corrected initializer1, strict lrrlibtests; actual source-backed mutable reference succeeds; no new whole-stock/full-fixture acceptance"
+      },
+      "current_test_catalog_type_authority": {
+        "status": "component_integrated_full_milestone_running",
+        "evidence_path": "worktracks/evidence/2026-10-14-test-catalog-type-authority.json",
+        "scope": "V34CLI1/authority3; V36positiveall4/strict/audit/fmt. Earlier test-only failures retained; no sourceauthority weakening."
+      }
     },
     {
       "id": "T033",

@@ -432,9 +432,9 @@ impl NormalizedDeferredReturn {
             }
             return Ok(());
         }
-        // A genuine completed Value publication may retain independently
-        // certified Type facts. This is source-created Type evidence, not an
-        // inference that Value completion implies Type completion.
+        // A genuine completed Value or TestCatalog publication may retain
+        // independently certified Type facts. The parent domain alone never
+        // establishes Type completion; the retained receipt must replay below.
         let mut nested = None;
         for key in stamps.keys() {
             let InputKey::DiscoverySeal(key) = key else {
@@ -446,7 +446,7 @@ impl NormalizedDeferredReturn {
                     SealDomain::Scope {
                         namespace: Namespace::Value,
                         ..
-                    }
+                    } | SealDomain::TestCatalog { .. }
                 )
             {
                 continue;
@@ -1720,3 +1720,7 @@ mod primitive_namespace_authority_tests {
         assert!(GenericEnv::capture_current(&mut db, &callee, &packet).is_err());
     }
 }
+
+#[cfg(test)]
+#[path = "test_catalog_primitive_namespace_tests.rs"]
+mod test_catalog_primitive_namespace_tests;

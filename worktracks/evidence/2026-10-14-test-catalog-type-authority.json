@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    "T032",
+    "M017"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "source_paths": [
+    {
+      "path": "crates/lrr/src/frontend/call_contracts.rs",
+      "before": "ab0735cb197f7250971a22cd83fcc521bcad1f0bf3c7958f5eadbb5a1f0eba39",
+      "sha256": "032730b673bbd6a36cd252e36af4bdafbe1faaf49c4c571d1058cbbed7302877"
+    },
+    {
+      "path": "crates/lrr/src/frontend/test_catalog_primitive_namespace_tests.rs",
+      "before": null,
+      "sha256": "4b417144adcdeac98798e78d070005ce7439127d52929ff3757dea19bfea8343"
+    }
+  ],
+  "validated_source_member": "d8b8ddc450beb7d8fbb9f47abe04a22ee8608efa1ce23c1eacca01235197bc0e",
+  "problem": "SourceDiscovery::for_tests actually publishes independently minted TypeScopeReceipts within TestCatalog. Primitive result admission searched only Scope(Value) parents, then bare original graph fallback could not resolve a compiler macro alias.",
+  "change": "Admit the existing nested Type receipt under a genuine current TestCatalog parent, retaining every owning source/scope/profile/currentness/name-absence/ambiguity check; no primitive/layout guesses, fabricated Type completion, engine shortcut or compiler execution.",
+  "validation": {
+    "v34": "Original failing CLI1 passed;3authority controls passed;positivecompletedUnit but staleAssert count1failed(actual0),remainingchecks unexecuted.",
+    "v35": "Positive completed Unit but incorrect query-event observer failed; runtime intrinsic preparations bypass Thunk provider. Failure retained.",
+    "v36": "Corrected positive all4editions passed; observes actual selected runtime installed Entry/Operand0/Exit order/noCommit, CallSeal1, Assert0, completedUnit, predicate entry and cold unselected/message; strict lrr libtests, architecture and format passed. V34other3authority+CLI evidence retained separately.",
+    "new_upstream_fixture_passes": 0
+  },
+  "full_gate": {
+    "status": "running; uncollected",
+    "session_id": 12759,
+    "pid": 74021,
+    "source_member": "d8b8ddc450beb7d8fbb9f47abe04a22ee8608efa1ce23c1eacca01235197bc0e",
+    "scope": "Required fresh unfiltered gate03; source4266/default+428planninginputs immutable; no futurefeature packets applied"
+  },
+  "upstream_runtime_acceptance": "incomplete",
+  "diagnostic_compatibility": "incomplete; separate gate",
+  "compiler_tooling_compatibility": "incomplete; separate gate",
+  "full_suite_compatibility": "incomplete",
+  "guest_jit_gate": "closed",
+  "release_complete": false,
+  "linux_acceptance": "unexecuted",
+  "local_receipts": [
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v34/VALIDATION-HANDOFF.json",
+      "sha256": "155499b676f55ae4d2aafa6f559749ea1a9a3a48b0d487765f15dcd4a95d704f"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v35/VALIDATION-HANDOFF.json",
+      "sha256": "fbee161c9a1feeb07b35bd998dab430c4ea0ad04ea7291040accf95cc8fe6bb8"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v36/strict-lrr-tests/terminal.json",
+      "sha256": "2c4e51277ccf877eeac6ce4a95d1083543839ac3b5647dd9de83a23f4835e9a4",
+      "scope": "strict-lrr-tests",
+      "exit_code": 0
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v36/architecture/terminal.json",
+      "sha256": "a0cbc81464d12b1cd2eb3de2d1c68abf076870fe257b85d79cf3a0eaffa96632",
+      "scope": "architecture",
+      "exit_code": 0
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v36/format/terminal.json",
+      "sha256": "f7dee000fe00d3e1ff5c0788c0c92348159d3a27082335d5b6b4a90bbc954403",
+      "scope": "format",
+      "exit_code": 0
+    }
+  ],
+  "v36_actual_scope_terminals": [
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v36/test-catalog-positive-exact/terminal.json",
+      "sha256": "b647de3b61567e18da4d35dc60dba3003d28310e5f0fb75dac81a7982d41c6f5",
+      "scope": "test-catalog-positive-exact",
+      "exit_code": 0
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v36/architecture/terminal.json",
+      "sha256": "a0cbc81464d12b1cd2eb3de2d1c68abf076870fe257b85d79cf3a0eaffa96632",
+      "scope": "architecture",
+      "exit_code": 0
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v36/format/terminal.json",
+      "sha256": "f7dee000fe00d3e1ff5c0788c0c92348159d3a27082335d5b6b4a90bbc954403",
+      "scope": "format",
+      "exit_code": 0
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v36/strict-lrr-tests/terminal.json",
+      "sha256": "2c4e51277ccf877eeac6ce4a95d1083543839ac3b5647dd9de83a23f4835e9a4",
+      "scope": "strict-lrr-tests",
+      "exit_code": 0
+    }
+  ]
+}

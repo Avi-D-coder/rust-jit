@@ -11898,7 +11898,7 @@ test = "unchanged_pending_statement_originals_keep_selected_diagnostic_source_al
 [[fixture]]
 id = "T032-REFERENCE-MISSING-LOCAL-SOURCE"
 path = "crates/lrr/src/engine/run_assertion_call_tests.rs"
-test = "reference_argument_admission_keeps_scalar_match_callee_cold_all_editions"
+test = "suffixed_reference_argument_reaches_scalar_match_guard_before_owning_read_all_editions"
 
 [[fixture]]
 id = "T032-REFERENCE-UNCERTIFIED-ENTRY"
@@ -11909,3 +11909,38 @@ test = "rustc_original_reference_parameter_requires_current_certificate_before_e
 id = "T032-REFERENCE-SCALAR-GUARD"
 path = "crates/lrr/src/vm/parameter_place_tests.rs"
 test = "rustc_original_reference_parameter_scalar_guard_refuses_before_owning_read_all_editions"
+
+[[fixture]]
+id = "T025-SUFFIX-SOURCE-INITIALIZER"
+path = "crates/lrr/src/vm/intrinsic_literal_source_tests.rs"
+test = "official_suffixed_numeric_initializers_retain_written_source_through_binding_all_editions"
+
+[[fixture]]
+id = "T025-SUFFIX-SOURCE-FUEL"
+path = "crates/lrr/src/vm/intrinsic_literal_source_tests.rs"
+test = "suffixed_numeric_source_attachment_preserves_exact_fuel_prefix_and_no_replay"
+
+[[fixture]]
+id = "T032-SUFFIX-REFERENCE-CALL"
+path = "crates/lrr/src/engine/run_assertion_call_tests.rs"
+test = "suffixed_local_reference_call_retains_source_without_invented_descriptor_identity_all_editions"
+
+[[fixture]]
+id = "T032-TEST-CATALOG-TYPE-01"
+path = "crates/lrr/src/frontend/test_catalog_primitive_namespace_tests.rs"
+test = "genuine_test_catalog_primitive_result_certificate_keeps_owning_type_authority_all_editions"
+
+[[fixture]]
+id = "T032-TEST-CATALOG-TYPE-02"
+path = "crates/lrr/src/frontend/test_catalog_primitive_namespace_tests.rs"
+test = "selected_aliased_assertion_executes_predicate_and_keeps_message_and_unselected_body_cold_all_editions"
+
+[[fixture]]
+id = "T032-TEST-CATALOG-TYPE-03"
+path = "crates/lrr/src/frontend/test_catalog_primitive_namespace_tests.rs"
+test = "test_catalog_type_shadow_cannot_be_erased_by_unrelated_supplied_graph"
+
+[[fixture]]
+id = "T032-TEST-CATALOG-TYPE-04"
+path = "crates/lrr/src/frontend/test_catalog_primitive_namespace_tests.rs"
+test = "actual_test_catalog_epoch_change_refuses_retained_primitive_return_certificate"

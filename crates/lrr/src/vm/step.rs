@@ -130,16 +130,19 @@ enum PreparedLiteral {
         negative: bool,
         magnitude: u128,
         ty: Option<TypeId>,
+        source: Option<PrimitiveType>,
     },
     Float {
         ty: Option<TypeId>,
+        source: Option<PrimitiveType>,
     },
 }
 impl PreparedLiteral {
     fn intrinsic_source(&self) -> Option<PrimitiveType> {
         match self {
             Self::IntrinsicScalar { primitive, .. } => Some(*primitive),
-            _ => None,
+            Self::Integer { source, .. } | Self::Float { source, .. } => *source,
+            Self::Scalar(_) => None,
         }
     }
     fn ty(&self) -> Option<TypeId> {
@@ -147,7 +150,7 @@ impl PreparedLiteral {
             Self::Scalar(value) | Self::IntrinsicScalar { value, .. } => {
                 Some(TypeId(value.type_id))
             }
-            Self::Integer { ty, .. } | Self::Float { ty } => *ty,
+            Self::Integer { ty, .. } | Self::Float { ty, .. } => *ty,
         }
     }
 }
@@ -210,6 +213,7 @@ fn prepare_literal(
                 negative,
                 magnitude,
                 ty,
+                source: None,
             })
         }
         LiteralKind::Float => {
@@ -225,7 +229,7 @@ fn prepare_literal(
             if let Some(ty) = ty {
                 GuestStore::preview_float(decimal, ty)?;
             }
-            Ok(PreparedLiteral::Float { ty })
+            Ok(PreparedLiteral::Float { ty, source: None })
         }
         LiteralKind::Char => match recipe.decoded {
             Some(DecodedLiteral::Char(value)) => {
@@ -259,11 +263,12 @@ fn commit_literal(
             negative,
             magnitude,
             ty,
+            ..
         } => (
             store.integer_literal(negative, magnitude, recipe.spelling.clone())?,
             ty,
         ),
-        PreparedLiteral::Float { ty } => {
+        PreparedLiteral::Float { ty, .. } => {
             let Some(DecodedLiteral::Float { decimal, .. }) = &recipe.decoded else {
                 return Err(invalid("prepared float data absent"));
             };
@@ -278,9 +283,10 @@ fn commit_literal(
         Ok(ticket)
     }
 }
-/// Ordinary source literals carry intrinsic Bool/Char identity. Generated
-/// literals keep their separate validated expansion route; numeric defaults,
-/// bytes, variables and arbitrary descriptors cannot mint this source view.
+/// Ordinary Bool/Char literals and explicitly suffixed numeric literals carry
+/// their written primitive identity. Generated literals keep their separate
+/// validated expansion route; numeric defaults, bytes, variables and arbitrary
+/// descriptors cannot mint this source view.
 fn intrinsic_literal_preflight(
     frame: &Frame,
     store: &GuestStore,
@@ -295,6 +301,19 @@ fn intrinsic_literal_preflight(
     let primitive = match literal.kind {
         LiteralKind::Bool => PrimitiveType::Bool,
         LiteralKind::Char => PrimitiveType::Char,
+        LiteralKind::Integer | LiteralKind::NegativeInteger | LiteralKind::Float => {
+            match &literal.decoded {
+                Some(DecodedLiteral::Integer {
+                    suffix: Some(primitive),
+                    ..
+                })
+                | Some(DecodedLiteral::Float {
+                    suffix: Some(primitive),
+                    ..
+                }) => *primitive,
+                _ => return Ok(prepared),
+            }
+        }
         _ => return Ok(prepared),
     };
     let node = frame
@@ -331,15 +350,35 @@ fn intrinsic_literal_preflight(
         ));
     }
     frame.preflight_source_view(destination, Some(&source))?;
-    // preflight_literal has required an unallocated temporary. Admit the whole
-    // ticket and cell arena batch before either allocation or opcode fuel.
-    store.preflight_owning_read_result(true, false)?;
-    let PreparedLiteral::Scalar(value) = prepared else {
-        return Err(invalid(
-            "intrinsic literal did not decode to its closed scalar",
-        ));
-    };
-    Ok(PreparedLiteral::IntrinsicScalar { value, primitive })
+    match prepared {
+        PreparedLiteral::Scalar(value) => {
+            // Bool/Char keep their existing single ticket/cell admission.
+            store.preflight_owning_read_result(true, false)?;
+            Ok(PreparedLiteral::IntrinsicScalar { value, primitive })
+        }
+        PreparedLiteral::Integer {
+            negative,
+            magnitude,
+            ty,
+            ..
+        } => {
+            // Retain the numeric literal ticket/materialization path. Source
+            // metadata does not allocate a scalar or skip numeric evaluation.
+            Ok(PreparedLiteral::Integer {
+                negative,
+                magnitude,
+                ty,
+                source: Some(primitive),
+            })
+        }
+        PreparedLiteral::Float { ty, .. } => Ok(PreparedLiteral::Float {
+            ty,
+            source: Some(primitive),
+        }),
+        PreparedLiteral::IntrinsicScalar { .. } => {
+            Err(invalid("intrinsic literal source admission repeated"))
+        }
+    }
 }
 fn literal_preflight(
     frame: &Frame,
@@ -1033,7 +1072,7 @@ fn execute(
             let prepared =
                 prepared.ok_or_else(|| invalid("literal bypassed immutable admission"))?;
             let source = prepared.intrinsic_source();
-            if source.is_some() {
+            if matches!(&prepared, PreparedLiteral::IntrinsicScalar { .. }) {
                 // Immutable admission proved this ordinary temporary needs a
                 // new cell and one ticket. Reserve before publishing either.
                 store.reserve_owning_read_result(true, false)?;

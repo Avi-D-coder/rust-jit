@@ -383,6 +383,16 @@ fn ordinary_literals_reject_rigid_nominal_or_wrong_primitive_source_before_entry
             LiteralKind::Char,
             PrimitiveType::Char,
         ),
+        (
+            "fn main(){let value=7u8;}",
+            LiteralKind::Integer,
+            PrimitiveType::U8,
+        ),
+        (
+            "fn main(){let value=1.5f32;}",
+            LiteralKind::Float,
+            PrimitiveType::F32,
+        ),
     ] {
         for bad in [0, 1, 2] {
             let mut c = literal_context(text, 2024, kind, 100, 1000, 1_000_000);
@@ -572,5 +582,136 @@ fn byte_and_unsuffixed_integer_do_not_gain_primitive_source_metadata() {
         let mut c = literal_context(text, 2024, kind, 100, 1000, 1_000_000);
         assert!(matches!(run(&mut c).unwrap(), StepOutcome::Next(_)));
         assert!(c.frame.source_view(c.destination).unwrap().is_none());
+    }
+}
+
+// Only the genuine first initializer and its binding are exercised here. The
+// original files remain byte-identical; this is not a full-fixture pass.
+#[test]
+fn official_suffixed_numeric_initializers_retain_written_source_through_binding_all_editions() {
+    const RADIX: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-radix.rs"
+    );
+    const FLOAT: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/floatlits.rs"
+    );
+    for edition in [2015, 2018, 2021, 2024] {
+        for (original, kind, primitive, expected) in [
+            (
+                RADIX,
+                LiteralKind::Integer,
+                PrimitiveType::Isize,
+                ValueRepr::signed(TypeId(8), 48879).unwrap(),
+            ),
+            (
+                FLOAT,
+                LiteralKind::Float,
+                PrimitiveType::F64,
+                ValueRepr::f64(4.999999999999),
+            ),
+        ] {
+            let mut c = literal_context(original, edition, kind, 100, 1000, 1_000_000);
+            assert!(matches!(run(&mut c).unwrap(), StepOutcome::Next(_)));
+            assert_eq!(
+                c.store
+                    .read_scalar(c.frame.cell(c.destination).unwrap())
+                    .unwrap(),
+                expected
+            );
+            assert_eq!(
+                c.frame.source_view(c.destination).unwrap(),
+                Some(TyTerm::Primitive(primitive))
+            );
+            assert_eq!(c.frame.counters.started_by_opcode[0], 1);
+            let query =
+                c.db.fetch(&SyntaxProvider, QueryKey::Thunk(c.frame.pc().clone()))
+                    .into_ready()
+                    .unwrap()
+                    .unwrap();
+            let QueryValue::Thunk(next) = query.value.as_ref() else {
+                panic!()
+            };
+            let binding = next
+                .recipe()
+                .operations
+                .iter()
+                .find_map(|op| match op {
+                    Op::BindLocal { binding, .. } => Some(*binding),
+                    _ => None,
+                })
+                .expect("original initializer's next statement must bind its value");
+            // ScopeLeave can yield while scanning this original body's
+            // reserved macro temporaries. Resume that exact recipe; only its
+            // real Next exit completes the binding observation.
+            let mut finished = false;
+            for _ in 0..10_000 {
+                match step(&mut c.frame, &mut c.store, next).unwrap() {
+                    StepOutcome::Dispatch => {
+                        assert_eq!(c.frame.pc(), &next.recipe().key);
+                        assert_eq!(c.frame.counters.started_by_opcode[0], 1);
+                    }
+                    StepOutcome::Next(_) => {
+                        finished = true;
+                        break;
+                    }
+                    outcome => panic!("original binding produced unexpected outcome: {outcome:?}"),
+                }
+            }
+            assert!(
+                finished,
+                "original binding did not finish its bounded cleanup"
+            );
+            assert_eq!(
+                c.frame.binding_sources[binding.0 as usize],
+                Some(TyTerm::Primitive(primitive))
+            );
+            let bound = c.frame.bindings[binding.0 as usize].unwrap();
+            assert_eq!(c.store.read_scalar(bound).unwrap(), expected);
+            assert_eq!(c.frame.counters.started_by_opcode[7], 1);
+        }
+    }
+}
+
+#[test]
+fn suffixed_numeric_source_attachment_preserves_exact_fuel_prefix_and_no_replay() {
+    for (text, kind, primitive) in [
+        (
+            "fn main(){let value=7u8;}",
+            LiteralKind::Integer,
+            PrimitiveType::U8,
+        ),
+        (
+            "fn main(){let value=1.5f32;}",
+            LiteralKind::Float,
+            PrimitiveType::F32,
+        ),
+    ] {
+        let probe = literal_context(text, 2024, kind, 100, 1000, 1_000_000);
+        let prefix = prefix(&probe);
+        for limit in 0..=prefix + 1 {
+            let mut c = literal_context(text, 2024, kind, limit, 1000, 1_000_000);
+            let before = footprint(&c);
+            let error = run(&mut c).unwrap_err();
+            assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
+            assert_eq!(error.message, "guest opcode fuel exhausted");
+            assert_eq!(c.frame.fuel_snapshot().used, limit);
+            assert_eq!(c.frame.counters.operations_started, limit);
+            assert_eq!(c.frame.counters.operations_completed, limit);
+            assert_eq!(c.frame.counters.exits_completed, 0);
+            if limit <= prefix {
+                assert_untouched(&c, before, None);
+            } else {
+                assert_eq!(c.frame.counters.started_by_opcode[0], 1);
+                assert_eq!(
+                    c.frame.source_view(c.destination).unwrap(),
+                    Some(TyTerm::Primitive(primitive))
+                );
+            }
+            let stopped = footprint(&c);
+            let started = c.frame.counters.operations_started;
+            assert!(run(&mut c).is_err());
+            assert_eq!(footprint(&c), stopped);
+            assert_eq!(c.frame.counters.operations_started, started);
+        }
     }
 }

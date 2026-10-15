@@ -202,6 +202,7 @@ fn arithmetic_unary_forward_only_actual_written_source_and_source_less_arithmeti
         for text in [
             "fn main(){let x:i64=40; x+1_i64;}",
             "fn main(){let x:i64=40; -x;}",
+            "fn main(){1_i64+2_i64;}",
         ] {
             let mut c = reached(text, edition);
             assert_eq!(
@@ -214,7 +215,7 @@ fn arithmetic_unary_forward_only_actual_written_source_and_source_less_arithmeti
                 Some(TyTerm::Primitive(PrimitiveType::I64))
             );
         }
-        let mut c = reached("fn main(){1_i64+2_i64;}", edition);
+        let mut c = reached("fn main(){1+2;}", edition);
         assert_eq!(c.frame.source_view(left(&c)).unwrap(), None);
         run(&mut c);
         assert_eq!(

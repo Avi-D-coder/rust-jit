@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    "T025",
+    "T032",
+    "M017"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "source_paths": [
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "before": "4eb33407f9f2fff2429760cb54b05468e006d1dd69321a7ca8cb1021edfd10fa",
+      "sha256": "fbed836355dcb0f55273f0e8a3c5e92dd78ea3ca6a8eda49b6b9005c620634f2"
+    },
+    {
+      "path": "crates/lrr/src/vm/intrinsic_literal_source_tests.rs",
+      "before": "2df135e1accc0230b1028fee92eda11cd7a8becf69c8a2a2be93136a6156f12f",
+      "sha256": "0b3cea2d89181cce3af1969cee65c2f23e25f3e5314bdaff443daf811bdc9a75"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_assertion_call_tests.rs",
+      "before": "36f18b05a7b61d2e30f60843c4d7f71f3a7004f6a9ff44abedb6db2dc8777737",
+      "sha256": "2eb52675a762c368d938277eada11ace08f99b00a40d01f9433e3a101c81a348"
+    },
+    {
+      "path": "crates/lrr/src/vm/primitive_operator_result_source_tests.rs",
+      "before": "30f4aeee7c115ac4821fbd67395e10ea848e28f5ffc690878614ecb523d046a1",
+      "sha256": "ab13f57953fa9ec1e05aa4dc63a3c4c8dfc93c81e03819e481858d0bee616db3"
+    }
+  ],
+  "source_member_v32": "7c9d4cec6803bab0e47c5344454a2e37980f3dd40d85401cbf5826230f03ed3d",
+  "source_member_v33": "305fb81a69ba871b3567d3c0907b2843d3234b584b1a5acd819599d6b2ea93ee",
+  "scoped_results": {
+    "v32": "26passed1failed of27; engine11/11,operator6/6,intrinsic9/10. Strict lrr libtests passed. The failed initializer control incorrectly assumed whole ScopeLeave completes in one Dispatch.",
+    "v33": "Only corrected initializer body rerun:1passed all4editions; strict lrr libtests passed. Production bytes unchanged from V32. Real Dispatch resumes same recipe, only actual Next completes; errors fail.",
+    "original_components": "Unchanged integer-literal-radix.rs positive initializer and floatlits.rs initializer plus actual BindLocal/source metadata all4editions. These are components, not whole fixture passes.",
+    "new_runtime_fixture_passes": 0
+  },
+  "invariants": [
+    "Actual current ordinary Literal kind/Entry/destination/span and decoded written suffix admit primitive source; no descriptor reconstruction",
+    "Strict symbolic source mismatch fails before numeric opcode effects",
+    "Integer/Float materialization and literal-ticket allocation path retained; only existing Bool/Char reserve scalar batch",
+    "Frame write then actual BindLocal retain primitive source; source-backed mutable reference call enters original target",
+    "Reference scrutinee scalar guard still refuses before ReadParameter; genuine missing certificate entry still refused",
+    "Unsuffixed/default/byte source identity is not synthesized; folded signed prefix/source and generated routes remain separate required work"
+  ],
+  "latest_predecessor_full_gate": {
+    "version": 31,
+    "listed": 3149,
+    "passed": 1433,
+    "failed": 1,
+    "unexecuted": 1715,
+    "library_passed": 1024,
+    "failure": "cli_std_macro_alias_preserves_identity_and_source_predicate_calls",
+    "direct_cli_failure": "LRR-E-CALL-CONTEXT primitive result requires its current owning Type namespace",
+    "scope_limit": "V31 predates numeric suffix production repair. Fresh integrated milestone remains pending separate TestCatalog receipt repair."
+  },
+  "upstream_runtime_acceptance": "incomplete",
+  "diagnostic_compatibility": "incomplete; separate gate",
+  "compiler_tooling_compatibility": "incomplete; separate gate",
+  "full_suite_compatibility": "incomplete",
+  "guest_jit_gate": "closed",
+  "release_complete": false,
+  "linux_acceptance": "unexecuted",
+  "local_receipts": [
+    {
+      "version": 31,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v31/VALIDATION-HANDOFF.json",
+      "sha256": "45a2c629b5f55608dea2e965b955b3633a73ae5732f3fe7810424e869d2354e0"
+    },
+    {
+      "version": 32,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v32/VALIDATION-HANDOFF.json",
+      "sha256": "2469b1623ac8b970203b9e16c1d47fd8c23feea8ce9eef57761f3fef1afa470f"
+    },
+    {
+      "version": 33,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v33/VALIDATION-HANDOFF.json",
+      "sha256": "047aee7529d3e1bcb90251e394a09dc0684f008ca05590f2cc72ed45144dd4b1"
+    }
+  ]
+}
