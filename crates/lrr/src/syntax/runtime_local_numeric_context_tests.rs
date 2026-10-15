@@ -318,3 +318,134 @@ fn conditional_family_requires_exact_owning_result_binding() {
         assert_eq!(selected(&parsed, &body, &index, 0), None);
     }
 }
+
+#[test]
+fn unchanged_borrowed_compound_original_uses_written_binding_and_reference_sources_all_editions() {
+    const ORIGINAL: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/binop/compound-assign-by-ref.rs"
+    );
+    let expected = [
+        (PrimitiveType::I8, PrimitiveType::I8),
+        (PrimitiveType::I16, PrimitiveType::I16),
+        (PrimitiveType::F32, PrimitiveType::F32),
+        (PrimitiveType::F64, PrimitiveType::F64),
+        (PrimitiveType::I64, PrimitiveType::I64),
+        (PrimitiveType::U8, PrimitiveType::U8),
+        (PrimitiveType::U16, PrimitiveType::U16),
+        (PrimitiveType::U32, PrimitiveType::U32),
+        (PrimitiveType::U64, PrimitiveType::U32),
+        (PrimitiveType::U64, PrimitiveType::I16),
+    ];
+    for edition in [2015, 2018, 2021, 2024] {
+        let (parsed, body, index) = entered(ORIGINAL, edition, "main");
+        let root = parsed.entered_body_root(&body).unwrap();
+        let compounds: Vec<_> = root
+            .descendants()
+            .filter_map(ast::BinExpr::cast)
+            .filter(|binary| {
+                binary.op_token().is_some_and(|token| {
+                    matches!(
+                        token.text(),
+                        "+=" | "-=" | "*=" | "/=" | "%=" | "|=" | "&=" | "^=" | "<<=" | ">>="
+                    )
+                })
+            })
+            .collect();
+        assert_eq!(compounds.len(), expected.len());
+        for (binary, (left, right)) in compounds.into_iter().zip(expected) {
+            let node = id_for(&index, &body, binary.syntax()).unwrap();
+            let pc = index.pc(node, Phase::Entry).unwrap();
+            let recipe = parsed.initial_thunk(&body, &index, &pc).unwrap();
+            let operations: Vec<_> = recipe
+                .recipe()
+                .operations
+                .iter()
+                .filter(|op| !matches!(op, Op::ScopeEnter { .. }))
+                .cloned()
+                .collect();
+            let [
+                Op::CompoundHint {
+                    child,
+                    kind:
+                        AssignKind::Primitive {
+                            left: actual_left,
+                            right: actual_right,
+                        },
+                    ..
+                },
+                Op::SetHint {
+                    child: reference_slot,
+                    hint:
+                        HintRecipe::Reference {
+                            region,
+                            mutable: false,
+                            target,
+                        },
+                },
+                Op::SetHint {
+                    hint: HintRecipe::Primitive(computed),
+                    ..
+                },
+            ] = operations.as_slice()
+            else {
+                panic!(
+                    "edition {edition}: original compound lost its source preparation: {operations:?}"
+                );
+            };
+            assert_eq!(*actual_left, left);
+            assert_eq!(*actual_right, right);
+            assert_eq!(*target, right);
+            assert_eq!(*computed, left);
+            assert_eq!(child, reference_slot);
+            let reference = binary
+                .rhs()
+                .and_then(|expression| super::super::compound_shared_rhs(expression).unwrap())
+                .unwrap();
+            let range = reference.syntax().text_range();
+            assert_eq!(
+                *region,
+                crate::traits::term::RegionTerm::Local {
+                    definition: body.def_key,
+                    start: u32::from(range.start()),
+                    end: u32::from(range.end()),
+                }
+            );
+            // This preparation cannot evaluate or borrow the operand itself.
+            assert!(recipe.recipe().operations.iter().all(|op| matches!(
+                op,
+                Op::ScopeEnter { .. } | Op::CompoundHint { .. } | Op::SetHint { .. }
+            )));
+            let rhs = binary.rhs().unwrap();
+            let rhs_id = id_for(&index, &body, rhs.syntax()).unwrap();
+            assert_eq!(
+                recipe.recipe().exit,
+                crate::ir::recipe::RecipeExit::Next(index.pc(rhs_id, Phase::Entry).unwrap())
+            );
+        }
+    }
+}
+
+#[test]
+fn borrowed_compound_does_not_invent_source_for_unknown_or_nested_reference_operands() {
+    for source in [
+        "fn main(){let mut x=missing();x+=&1i8;}",
+        "fn main(){let mut x=1i8;x+=&&2i8;}",
+        "fn main(){let mut x=1i8;x+=&mut 2i8;}",
+        "fn main(){let mut x=1i8;x+=&raw const 2i8;}",
+        "fn main(){let mut x=1i8;x+=&missing();}",
+    ] {
+        let (parsed, body, index) = entered(source, 2024, "main");
+        let binary = parsed
+            .entered_body_root(&body)
+            .unwrap()
+            .descendants()
+            .filter_map(ast::BinExpr::cast)
+            .find(|binary| binary.op_token().is_some_and(|token| token.text() == "+="))
+            .unwrap();
+        let node = id_for(&index, &body, binary.syntax()).unwrap();
+        let error = parsed
+            .initial_thunk(&body, &index, &index.pc(node, Phase::Entry).unwrap())
+            .unwrap_err();
+        assert_eq!(error.code, "LRR-E-TYPE-CONTEXT", "{source}: {error:?}");
+    }
+}

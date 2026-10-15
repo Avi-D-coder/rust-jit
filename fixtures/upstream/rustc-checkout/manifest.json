@@ -198,6 +198,12 @@
       "bytes": 1168
     },
     {
+      "path": "tests/ui/binop/compound-assign-by-ref.rs",
+      "git_blob": "e1f519a137fc99c25b3e0754413411ae22f08dab",
+      "sha256": "611273fd769b2ab9f60bdcf5ade32f32ef1c50097c9f2cefdb14a2a14d29653c",
+      "bytes": 1265
+    },
+    {
       "path": "tests/ui/borrowck/assign-imm-local-twice.fixed",
       "git_blob": "dca994141bb8b4108d791dee36538207000646e2",
       "sha256": "199f1da59944f5a3b61535e86980efbef5bdd44c7964b0ac4e451619df1b23fa",
@@ -3097,6 +3103,14 @@
     },
     {
       "path": "tests/ui/binding/match-range.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/binop/compound-assign-by-ref.rs",
       "directives": [
         "//@ run-pass"
       ],

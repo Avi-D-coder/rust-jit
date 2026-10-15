@@ -1456,7 +1456,11 @@
         "actual_same_publication_row_still_refuses_after_current_epoch_changes",
         "official_suffixed_numeric_initializers_retain_written_source_through_binding_all_editions",
         "suffixed_numeric_source_attachment_preserves_exact_fuel_prefix_and_no_replay",
-        "official_signed_radix_prefix_marker_is_exact_structural_and_encoded_all_editions"
+        "official_signed_radix_prefix_marker_is_exact_structural_and_encoded_all_editions",
+        "unchanged_float2_main_edition_2015",
+        "unchanged_float2_main_edition_2018",
+        "unchanged_float2_main_edition_2021",
+        "unchanged_float2_main_edition_2024"
       ],
       "acceptance_contract": "exhaustive i8/u8 arithmetic boundary loops; random wider arithmetic/cast comparisons; works/fails context examples; signed-min literal; distinct usize/u64 contracts. Gate checks Rust constraint-aware numeric fallback and preserves known source widths; nonnumeric unknowns never default.",
       "commands": [],
@@ -1550,7 +1554,11 @@
         "T025-OPERATOR-SOURCE-6",
         "T025-NAMESPACE-SCALABILITY-7",
         "T025-NAMESPACE-SCALABILITY-8",
-        "T025-NEGATIVE-SUFFIX-STRUCTURE"
+        "T025-NEGATIVE-SUFFIX-STRUCTURE",
+        "T025-STOCK-FLOAT2-ED2015",
+        "T025-STOCK-FLOAT2-ED2018",
+        "T025-STOCK-FLOAT2-ED2021",
+        "T025-STOCK-FLOAT2-ED2024"
       ],
       "artifact_paths": [
         "docs/numeric-kernel.md",
@@ -1655,7 +1663,8 @@
         "worktracks/evidence/2026-10-14-integrated-milestone-failure.json",
         "worktracks/evidence/2026-10-14-labelled-interpreter-runtime.json",
         "worktracks/evidence/2026-10-14-namespace-startup-scalability.json",
-        "worktracks/evidence/2026-10-14-negative-suffix-and-milestone.json"
+        "worktracks/evidence/2026-10-14-negative-suffix-and-milestone.json",
+        "worktracks/evidence/2026-10-14-stock-numeric-whole-mains.json"
       ],
       "release_complete": false,
       "validation_scope": "Original primitive numeric component complete under E-57-001. Gate02 passes 645 macOS host/doc tests and 28 numeric controls; strict audits pass. Full symbolic/generated/trait/control/call/assignment/aggregate/coercion/cleanup/JIT and release integrations remain pending through named dependencies; Linux acceptance is deferred. User-authorized E-NUM-001 reopens numeric compatibility: old strict-profile evidence remains historical; Rust constraint-aware fallback/future-use inference is not fully implemented or accepted. Integrated scoped shift V3:fmt/strictworkspaceClippy/architecture/manifest passed;495 library,67 source_run,12 numeric,6 numeric_boundary bodies passed without failures/ignored/filtered. Two selected original shift.rs functions execute their original assertions and retain written count types. Source/log/terminal reviewed independently. Source-proven closed counts defaulti32; named counts retain source width or remain unresolved. Full original main/static/lint/compiletest and future numeric constraints remain incomplete; fresh MAIN milestone pending. Current integrated shift source ad04fa4b macOS milestone independently accepted: all17 requirements across retained5-check prefix and12-check continuation; actual continuation47049/0, original prefix outer exit unobserved. 2395 project bodies/179 executables/495 library, all166 T042-T045 controls plus2 original shift controls,8 H002 aliases and2k-frame event once; seven original CLI probes/29 arithmetic assertions. Root collector1580/0 verified34 logs and unchanged source, then released hold. Full fixture/Drop/doublepanic/worker/release/Linux remain pending. V5 discarded-expression fallback integrated after ten distinct scoped commands passed across two segments: format/strict Clippy,497 unfiltered library bodies plus27 bodies across4 relevant unfiltered binaries, architecture/manifest audits and3 importer controls. Both stock-derived value controls passed once; exact sourceb181a24b and all raw/terminal receipts were reviewed. Prefix82354/runner1 is retained: Cargo library exited0, but the wrapper incorrectly required497 complete library names equal2 selected names. Root verified membership and authorized only seven untouched suffix commands; suffix92326/0. No completed test was rerun and no single all-green ten-command runner is claimed. Original doc-comment main whole-body and aux9906 foo arithmetic are component observations, not full compiletest/edition/lint/parent-linking passes. General numeric future-use/trait/container inference remains incomplete. The required integrated MAIN milestone is pending; T025/release/Linux remain incomplete. Integrated numeric MAIN milestone accepted on exact8068a263 after preparation/source ownership repair: actualroot22217/0,2421unfiltered bodies/181summaries,fresh gates00\u201303,both numeric-discard controls once,independent+root terminal/source checks. Stalecandidate failed attempt remains preserved. General source inference and fullstock/release/Linux remain incomplete. October13 interpreter follow-ups: reviewed private cfg/numeric/source-contract/captured-declaration candidates integrated with originals/controls; each scoped receipt retained. Prior MAIN Cargo command2478/189 passed but enclosing frozen-source receipt failed external docs additions, so not accepted. Required fresh combined MAIN gate remains pending. Full rustc compiletest/task/release/Linux acceptance incomplete.",
@@ -1718,6 +1727,11 @@
         "status": "component_integrated_full_milestone_failed",
         "evidence_path": "worktracks/evidence/2026-10-14-negative-suffix-and-milestone.json",
         "scope": "V37 three exact library bodies pass, each exercises all four released editions; strict library/test Clippy passed. BodyIndex structural encoding domain advances from original-body-structure-v3 to v4. No whole upstream fixture pass from these components."
+      },
+      "current_stock_numeric_whole_mains": {
+        "status": "component_integrated_full_milestone_pending",
+        "evidence_path": "worktracks/evidence/2026-10-14-stock-numeric-whole-mains.json",
+        "scope": "V40float4 +V42compound4/source2/strict; two distinct unchanged whole original mains all4editions; configured compiletest/full-suite prerequisite incomplete."
       }
     },
     {
@@ -1836,7 +1850,12 @@
           "status": "pending",
           "evidence_paths": []
         }
-      ]
+      ],
+      "current_stock_numeric_whole_mains": {
+        "status": "component_integrated_full_milestone_pending",
+        "evidence_path": "worktracks/evidence/2026-10-14-stock-numeric-whole-mains.json",
+        "scope": "V40float4 +V42compound4/source2/strict; two distinct unchanged whole original mains all4editions; configured compiletest/full-suite prerequisite incomplete."
+      }
     },
     {
       "id": "T031",
@@ -5114,7 +5133,7 @@
     {
       "id": "T044",
       "title": "User Drop and explicit cleanup machine",
-      "status": "complete",
+      "status": "in_progress",
       "commit_id": null,
       "acceptance_tests": [
         "rustc_record_cleanup_retains_each_dropping_location_until_owned_completion",
@@ -5153,7 +5172,13 @@
         "rustc_local_array_replacement_cancellation_keeps_rhs_and_old_continuation",
         "rustc_local_array_replacement_batch_refusal_leaves_both_owners_live",
         "rustc_local_array_replacement_skips_moved_old_field_without_consuming_extracted_owner",
-        "rustc_original_assignment_unit_program_executes_ordinary_and_compound_assertions"
+        "rustc_original_assignment_unit_program_executes_ordinary_and_compound_assertions",
+        "unchanged_compound_assign_by_ref_main_edition_2015",
+        "unchanged_compound_assign_by_ref_main_edition_2018",
+        "unchanged_compound_assign_by_ref_main_edition_2021",
+        "unchanged_compound_assign_by_ref_main_edition_2024",
+        "unchanged_borrowed_compound_original_uses_written_binding_and_reference_sources_all_editions",
+        "borrowed_compound_does_not_invent_source_for_unknown_or_nested_reference_operands"
       ],
       "acceptance_contract": "normal/drop/replace/early-return paths drop once; cold Drop body enters only on drop; partial moves skip moved fields; conditional applicable Drop works and reached ambiguity fails explicitly.",
       "commands": [],
@@ -5194,7 +5219,13 @@
         "T044-STOCK-LOCAL-REPLACE-CANCEL",
         "T044-STOCK-LOCAL-REPLACE-RESERVATION",
         "T044-STOCK-LOCAL-REPLACEMENT-PARTIAL-OLD",
-        "T044-STOCK-WHOLE-ASSIGNMENT-UNIT-PROGRAM"
+        "T044-STOCK-WHOLE-ASSIGNMENT-UNIT-PROGRAM",
+        "T044-STOCK-COMPOUND-REF-ED2015",
+        "T044-STOCK-COMPOUND-REF-ED2018",
+        "T044-STOCK-COMPOUND-REF-ED2021",
+        "T044-STOCK-COMPOUND-REF-ED2024",
+        "T044-STOCK-COMPOUND-REF-SOURCE",
+        "T044-STOCK-COMPOUND-REF-REFUSAL"
       ],
       "artifact_paths": [
         "artifacts/macos-first/t044-cleanup-draft-v1/review.md",
@@ -5223,7 +5254,8 @@
         "artifacts/macos-first/t025-rust-shift-fallback-v3/current-main-milestone-v1-continuation/source-hold-release-v1.json",
         "docs/t044-t045-component-acceptance.md",
         "artifacts/macos-first/t044-t045-ordered-component-closure-v1/proposed-ledger-delta-v1.json",
-        "artifacts/macos-first/t003-revision4-fixture-ledger-v1/integrated-main-milestone-v1/root-failure-review-v1.json"
+        "artifacts/macos-first/t003-revision4-fixture-ledger-v1/integrated-main-milestone-v1/root-failure-review-v1.json",
+        "worktracks/evidence/2026-10-14-stock-numeric-whole-mains.json"
       ],
       "release_complete": false,
       "validation_scope": "Integrated scoped V19: all34commands0,478library/37T044/73T042/41T043 once,17affected bins,8H002aliases; importer/imports/architecture/manifest/Clippy; freshCLI unchanged assignment main/bothhelpers/all12assertions/3compound entries and native2015/2024 references. Independentcollection+release+68logs verified. Fresh MAIN milestone all17commands0,2378host bodies/179executables,478library,151T042\u2013T044 controls once,8H002 aliases/2kframe once,7 unchangedCLI probes; root verified34distinctlogs, terminal/gates/CLI/source closure; fullstock0/fullT044/release/Linux false.2kframe notselected in V19. Subsequent integrated V15 milestone:17/17checks exit0,2393 project bodies/179 executables,493 library tests,all37 T044 and166 T042\u2013T045 controls once,8 H002aliases and2kframe once. Exact source/terminal/log/CLI receipts independently checked. Full T044 remains in_progress. Current integrated shift source ad04fa4b macOS milestone independently accepted: all17 requirements across retained5-check prefix and12-check continuation; actual continuation47049/0, original prefix outer exit unobserved. 2395 project bodies/179 executables/495 library, all166 T042-T045 controls plus2 original shift controls,8 H002 aliases and2k-frame event once; seven original CLI probes/29 arithmetic assertions. Root collector1580/0 verified34 logs and unchanged source, then released hold. Full fixture/Drop/doublepanic/worker/release/Linux remain pending. Available component accepted under Section57/E-57-001 after current MAIN control review and accepted T003 fixture-ledger guard. Exact Drop, full user-code doublepanic/output and worker isolation remain pending. Current post-transition milestone required; no full task/release/stock/JIT/Linux pass follows. Post-transition c97f4aec gate03 actual4300/1:2063 passing bodies/1 cumulative macro deadline failure/144 summaries; zero ignored/filtered;297 fixture names unobserved after stop. All final gates failed/prerequisite-failed; no integrated milestone pass. Root collected raw logs/terminal and unchanged source; source hold released for reviewed successor. Prior scoped component evidence remains distinct.",
@@ -5260,7 +5292,12 @@
       "pending_integration_requirements": [
         "Exact selected user Drop witness and required predicates, ambiguity, cold body and changed-impl invalidation; entered guest destructor frame.",
         "Full original normal/drop/replace/early-return/partial-move transcripts; intrinsic String/array adaptations are component coverage only."
-      ]
+      ],
+      "current_stock_numeric_whole_mains": {
+        "status": "component_integrated_full_milestone_pending",
+        "evidence_path": "worktracks/evidence/2026-10-14-stock-numeric-whole-mains.json",
+        "scope": "V40float4 +V42compound4/source2/strict; two distinct unchanged whole original mains all4editions; configured compiletest/full-suite prerequisite incomplete."
+      }
     },
     {
       "id": "T045",

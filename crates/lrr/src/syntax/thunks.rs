@@ -272,9 +272,24 @@ fn compound_local_primitive(
     let Some(statement) = statement else {
         return Ok(None);
     };
-    let Some(HintRecipe::Primitive(ty)) = annotation_hint(parsed, statement.ty(), body.def_key)?
-    else {
-        return Ok(None);
+    let ty = if let Some(annotation) = statement.ty() {
+        let Some(HintRecipe::Primitive(ty)) =
+            annotation_hint(parsed, Some(annotation), body.def_key)?
+        else {
+            return Ok(None);
+        };
+        ty
+    } else {
+        let Some(initializer) = statement.initializer() else {
+            return Ok(None);
+        };
+        // A suffix belongs to the literal syntax even when an identically
+        // spelled type name is shadowed. Use this exact binding's source;
+        // neither a runtime descriptor nor a later use supplies it.
+        let Some(Some(ty)) = runtime_local_numeric_context::literal_suffix(initializer)? else {
+            return Ok(None);
+        };
+        ty
     };
     Ok(Some((binding, ty)))
 }
@@ -290,6 +305,39 @@ fn compound_local_definition_context(
     runtime_local_numeric_context::binding_context(parsed, index, body, binding)
         .map(|context| context.map(|context| (binding, context)))
 }
+/// Retain the actual outer shared borrow; nested or modified borrows are not
+/// primitive forwarding. This never reads or executes the borrowed expression.
+fn compound_shared_rhs(mut expression: ast::Expr) -> Result<Option<ast::RefExpr>, Diagnostic> {
+    for _ in 0..256 {
+        if expression
+            .syntax()
+            .children()
+            .any(|n| ast::Attr::can_cast(n.kind()))
+        {
+            return Ok(None);
+        }
+        match expression {
+            ast::Expr::ParenExpr(group) => {
+                let Some(inner) = group.expr() else {
+                    return Ok(None);
+                };
+                expression = inner;
+            }
+            ast::Expr::RefExpr(reference)
+                if reference.mut_token().is_none()
+                    && reference.raw_token().is_none()
+                    && reference.const_token().is_none() =>
+            {
+                return Ok(Some(reference));
+            }
+            _ => return Ok(None),
+        }
+    }
+    Err(Diagnostic::new(
+        "LRR-E-BODY-INDEX-LIMIT",
+        "compound shared RHS source nesting budget".into(),
+    ))
+}
 fn compound_rhs_primitive(
     parsed: &ParsedFile,
     index: &BodyIndex,
@@ -297,7 +345,20 @@ fn compound_rhs_primitive(
     mut expression: ast::Expr,
     context: PrimitiveType,
 ) -> Result<Option<PrimitiveType>, Diagnostic> {
+    if let Some(reference) = compound_shared_rhs(expression.clone())? {
+        let Some(inner) = reference.expr() else {
+            return Ok(None);
+        };
+        expression = inner;
+    }
     for _ in 0..256 {
+        if expression
+            .syntax()
+            .children()
+            .any(|n| ast::Attr::can_cast(n.kind()))
+        {
+            return Ok(None);
+        }
         match expression {
             ast::Expr::ParenExpr(parenthesis) => {
                 let Some(inner) = parenthesis.expr() else {
@@ -3319,6 +3380,25 @@ impl ParsedFile {
                 } else {
                     return Err(Diagnostic::new("LRR-E-TYPE-CONTEXT", "compound assignment requires a primitive source annotation or exact definition source before operands".into()));
                 };
+                let shared_rhs = compound_shared_rhs(right.clone())?;
+                let right_reference_hint = match (&kind, shared_rhs) {
+                    (
+                        crate::ir::op::AssignKind::Primitive { right: target, .. },
+                        Some(reference),
+                    ) => {
+                        let range = reference.syntax().text_range();
+                        Some(HintRecipe::Reference {
+                            region: crate::traits::term::RegionTerm::Local {
+                                definition: body.def_key,
+                                start: u32::from(range.start()),
+                                end: u32::from(range.end()),
+                            },
+                            mutable: false,
+                            target: *target,
+                        })
+                    }
+                    _ => None,
+                };
                 let left = id_for(index, body, left.syntax())?;
                 let right = id_for(index, body, right.syntax())?;
                 let lhs = index.nodes()[left.0 as usize]
@@ -3333,22 +3413,30 @@ impl ParsedFile {
                     .value
                     .ok_or_else(|| error("compound Unit result absent"))?;
                 match phase {
-                    Phase::Entry => draft(
-                        index,
-                        key,
-                        vec![
-                            Op::CompoundHint {
-                                binding,
-                                child: rhs,
-                                kind,
-                            },
-                            Op::SetHint {
-                                child: computed,
-                                hint: computed_hint,
-                            },
-                        ],
-                        RecipeExit::Next(index.pc(right, Phase::Entry)?),
-                    ),
+                    Phase::Entry => {
+                        // Admit the local source before evaluating either
+                        // operand. An actual shared RHS then gets its reference
+                        // expectation before entry; BorrowTarget forwards only
+                        // the pointee context to its evaluated expression.
+                        let mut operations = vec![Op::CompoundHint {
+                            binding,
+                            child: rhs,
+                            kind,
+                        }];
+                        if let Some(hint) = right_reference_hint {
+                            operations.push(Op::SetHint { child: rhs, hint });
+                        }
+                        operations.push(Op::SetHint {
+                            child: computed,
+                            hint: computed_hint,
+                        });
+                        draft(
+                            index,
+                            key,
+                            operations,
+                            RecipeExit::Next(index.pc(right, Phase::Entry)?),
+                        )
+                    }
                     Phase::Operand(1) => draft(
                         index,
                         key,

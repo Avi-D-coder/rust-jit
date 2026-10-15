@@ -11954,3 +11954,53 @@ test = "official_signed_radix_prefix_marker_is_exact_structural_and_encoded_all_
 id = "T032-NEGATIVE-SUFFIX-REFERENCE"
 path = "crates/lrr/src/engine/run_assertion_call_tests.rs"
 test = "negative_suffixed_local_reference_call_keeps_written_source_all_editions"
+
+[[fixture]]
+id = "T025-STOCK-FLOAT2-ED2015"
+path = "xtask/tests/stock_numeric_source_runtime.rs"
+test = "unchanged_float2_main_edition_2015"
+
+[[fixture]]
+id = "T025-STOCK-FLOAT2-ED2018"
+path = "xtask/tests/stock_numeric_source_runtime.rs"
+test = "unchanged_float2_main_edition_2018"
+
+[[fixture]]
+id = "T025-STOCK-FLOAT2-ED2021"
+path = "xtask/tests/stock_numeric_source_runtime.rs"
+test = "unchanged_float2_main_edition_2021"
+
+[[fixture]]
+id = "T025-STOCK-FLOAT2-ED2024"
+path = "xtask/tests/stock_numeric_source_runtime.rs"
+test = "unchanged_float2_main_edition_2024"
+
+[[fixture]]
+id = "T044-STOCK-COMPOUND-REF-ED2015"
+path = "xtask/tests/stock_numeric_source_runtime.rs"
+test = "unchanged_compound_assign_by_ref_main_edition_2015"
+
+[[fixture]]
+id = "T044-STOCK-COMPOUND-REF-ED2018"
+path = "xtask/tests/stock_numeric_source_runtime.rs"
+test = "unchanged_compound_assign_by_ref_main_edition_2018"
+
+[[fixture]]
+id = "T044-STOCK-COMPOUND-REF-ED2021"
+path = "xtask/tests/stock_numeric_source_runtime.rs"
+test = "unchanged_compound_assign_by_ref_main_edition_2021"
+
+[[fixture]]
+id = "T044-STOCK-COMPOUND-REF-ED2024"
+path = "xtask/tests/stock_numeric_source_runtime.rs"
+test = "unchanged_compound_assign_by_ref_main_edition_2024"
+
+[[fixture]]
+id = "T044-STOCK-COMPOUND-REF-SOURCE"
+path = "crates/lrr/src/syntax/runtime_local_numeric_context_tests.rs"
+test = "unchanged_borrowed_compound_original_uses_written_binding_and_reference_sources_all_editions"
+
+[[fixture]]
+id = "T044-STOCK-COMPOUND-REF-REFUSAL"
+path = "crates/lrr/src/syntax/runtime_local_numeric_context_tests.rs"
+test = "borrowed_compound_does_not_invent_source_for_unknown_or_nested_reference_operands"

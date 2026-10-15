@@ -109,7 +109,9 @@ fn suffix_primitive(suffix: Option<&str>) -> Option<Option<PrimitiveType>> {
     };
     Some(Some(primitive))
 }
-fn literal_suffix(mut expression: ast::Expr) -> Result<Option<Option<PrimitiveType>>, Diagnostic> {
+pub(super) fn literal_suffix(
+    mut expression: ast::Expr,
+) -> Result<Option<Option<PrimitiveType>>, Diagnostic> {
     for _ in 0..256 {
         match expression {
             ast::Expr::ParenExpr(group) => {

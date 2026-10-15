@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    "T025",
+    "T030",
+    "T044"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "originals": [
+    {
+      "path": "tests/ui/binop/compound-assign-by-ref.rs",
+      "git_blob": "e1f519a137fc99c25b3e0754413411ae22f08dab",
+      "sha256": "611273fd769b2ab9f60bdcf5ade32f32ef1c50097c9f2cefdb14a2a14d29653c",
+      "bytes": 1265
+    },
+    {
+      "path": "tests/ui/numbers-arithmetic/float2.rs",
+      "git_blob": "515220fee9ffeee0b8260b7b4a68ef65989e67c0",
+      "sha256": "102d6451a4a519b355845c3761e888ef29ecb353e91e14148100c5dceea3d38c",
+      "bytes": 468
+    }
+  ],
+  "source_paths": [
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "before": "28704376a60ffd532f5cbfb12c4493a7f265857e7c5228e39a31b82ee36bd552",
+      "sha256": "15d8c9bd148a90a2a08d65ea758cb827ce256dd6ab4ca3e68ce60c8d97e01957"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_local_numeric_context.rs",
+      "before": "dcb472ea4c09ca3da7b45c2b7320f51e1669e63b8ed335d3eaa32e724ad9b8cf",
+      "sha256": "ceccbe88d9f4a52a2dbbbc6a7c51d15496d0ceed11c744783816049ca6684d6f"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_local_numeric_context_tests.rs",
+      "before": "6a049023f1a444f0e96a763310e6096d0e840b664f85460139e87de0e69dad2b",
+      "sha256": "4068776bc30c0d896021a4f372a53157312afd3edc1ca027769d4451ed9195e0"
+    },
+    {
+      "path": "xtask/tests/stock_numeric_source_runtime.rs",
+      "before": "7834f7aca1e88866e68df63f5e032c52d7678d2fa84753ae64ee7f272c400c72",
+      "sha256": "45ec2ce56ba48483c8b1b39c29c8171f338498cef18a680206441ce79b849f0a"
+    }
+  ],
+  "invariants": [
+    "Actual exact lexical binding with written suffixed initializer supplies primitive compound source. One shared RHS borrow preserves reference source and pointee width, including independent shift count. CompoundHint admission precedes RHS evaluation; no descriptors-to-source fallback/new opcode/source rewrite.",
+    "Observe actual coordinator-installed assertion recipes in source order and require cold failure phases; retain all original main Unit/counter/nohelper/source assertions, and all noncompletion failures. No guest source/production change.",
+    "Shared RHS has its actual source reference region and pointee type before entry; the existing numeric forwarding/lease validation, right-before-left evaluation, assignment and cleanup paths execute unchanged. No opcode/schema/runtime source guessing."
+  ],
+  "validation": {
+    "V39": "strict passed;8 failed. Compound4 real Entry TYPE-CONTEXT, float4 test-only query observer after CompletedUnit. All failed evidence retained.",
+    "V40": {
+      "source_member": "368c477b7bb490678c7d86a8ec6e00bca57a8af31c5d06528d952f248ee91adc",
+      "passed": 4,
+      "scope": "Four untouched float2 whole mains,11 suffix locals,9 assertions/9 NumericBinary,actual installed assertion source order and coldCommit,Unit/nohelper/noPanic."
+    },
+    "V42": {
+      "source_member": "e92e544de47bb0081be9bba13d97a37b223a13e00e2ed9265f4250bba8e9d986",
+      "passed": 6,
+      "scope": "Two source/authority controls and four untouched compound-assign-by-ref whole mains. Each main completes all10 compound commits,10 shared borrows,10 assertions/20 NumericBinary,including independent u32/i16 shift counts. Strict lrrlibtests passed."
+    }
+  },
+  "new_demonstrated_whole_main_programs": 2,
+  "owning_editions": [
+    2015,
+    2018,
+    2021,
+    2024
+  ],
+  "whole_main_edition_runs_passed": 8,
+  "configured_compiletest_full_fixture_passes": 0,
+  "scope_limit": "Whole-original interpreter runtime evidence, not a configured compiletest run or complete upstream-runtime prerequisite. Frozen upstream matrix, guest output capture and complete inventory acceptance remain separate requirements. Full milestone required after joining generated namespace repair.",
+  "inventory": {
+    "cases": 307,
+    "unchanged_original_files": 489
+  },
+  "latest_required_full_gate": "V36 failed1667passed49failed1440unexecuted; source predates these components.",
+  "upstream_runtime_acceptance": "incomplete",
+  "diagnostic_compatibility": "incomplete; separate gate",
+  "compiler_tooling_compatibility": "incomplete; separate gate",
+  "full_suite_compatibility": "incomplete",
+  "guest_jit_gate": "closed",
+  "release_complete": false,
+  "linux_acceptance": "unexecuted",
+  "local_receipts": [
+    {
+      "version": 39,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v39/VALIDATION-HANDOFF.json",
+      "sha256": "51ecbaf349ad6b7edf2998652c7d5183f6e1abb0a1752f1fdb8c668908b10c67"
+    },
+    {
+      "version": 40,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v40/VALIDATION-HANDOFF.json",
+      "sha256": "e19c165b68543e62ec6a377731bd803f1efa338468cc55203f62f67a0e0b4f67"
+    },
+    {
+      "version": 42,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v42/VALIDATION-HANDOFF.json",
+      "sha256": "dd9d511101bdb70bb3465fc30973ec7ab6efaa042166d021f4fdfe30e7d46bcb"
+    }
+  ]
+}

@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Integrated validated negative-suffix structural/source retention after V37 three controls/all4 editions and strict lint. Required V36 milestone failed1667/49/1440; all1031library/29CLI green. Root owns captured-dependency lifecycle, byte source/patterns and integration; stock worker owns cross-crate generated Type proof, generic worker owns joined ordinary/generated negative-range controls. New whole-stock numeric adapter validates separately; no fixture/task/JIT/Linux/release claim.",
+      "scope": "Root integrated validated negative suffix and compound/shared-RHS source prep plus unchanged float2/compound whole mains all4editions (V40/V42). V36requiredmilestone failed1667/49/1440; cross-crate generated Type proof V43 tests, joined negative-range control/if-let source-only queued. Root owns integration/compound syntax; worker owns mixed-site result Type and byte scalar disjoint scopes. No fullfixture/task/JIT/Linux/release claim.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -441,11 +441,14 @@
         "artifacts/macos-first/root-stock-range-successor-v3/",
         "artifacts/macos-first/root-negative-suffix-source-v1/",
         "artifacts/macos-first/root-captured-dependency-lifecycle-v1/",
-        "artifacts/macos-first/root-byte-scalar-source-v1/"
+        "artifacts/macos-first/root-byte-scalar-source-v1/",
+        "artifacts/macos-first/root-compound-borrowed-source-v1/",
+        "artifacts/macos-first/root-condition-compound-join-v1/",
+        "xtask/tests/stock_numeric_source_runtime.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T04:16:22.484505+00:00",
+      "updated_at": "2026-10-15T04:27:10.780959+00:00",
       "review_after": "2026-10-15T07:16:22.506011+00:00"
     },
     {
