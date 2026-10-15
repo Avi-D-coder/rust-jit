@@ -11163,7 +11163,7 @@ test = "copied_same_header_proof_refuses_changed_alias_source_and_derived_revisi
 [[fixture]]
 id = "T031-ALIAS-RETURN-4"
 path = "crates/lrr/src/vm/context_return_tests.rs"
-test = "official_shadowed_nominal_and_named_primitive_controls_are_not_normalized_aliases"
+test = "official_shadowed_nominal_and_named_primitive_controls_keep_owning_source_kind"
 
 [[fixture]]
 id = "T031-ALIAS-RETURN-5"

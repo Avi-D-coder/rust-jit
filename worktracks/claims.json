@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Root integrated S4v10 reached numeric/source/call/constant components. Prior937 library positives, separate corrected caller-cold and direct upstream-reference guard controls, and strict/static suffix collected; fresh integrated MAIN milestone pending. Unchanged label_break_value passes13 pre-match assertions and first match call in four editions, next guarded binding fails. Zero new full stock cases; no task/JIT/Linux/release acceptance.",
+      "scope": "Root implements compound numeric inference and explicit CLI epoch preparation while generated Type receipts and installed namespace witnesses proceed on disjoint agent slices. MAIN160fb8a failed984/8/2060; library939 passed. Private stock main advances through guarded bindings to x+=1, zero new full stock passes. No task/JIT/Linux/release acceptance.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -426,11 +426,13 @@
         "artifacts/macos-first/root-assertion-call-legacy-regression-repair-v1/",
         "artifacts/macos-first/root-stock-local-numeric-validation-v1/",
         "artifacts/macos-first/root-scalar-pattern-copy-v1/",
-        "artifacts/macos-first/root-scalar-guard-coverage-v1/"
+        "artifacts/macos-first/root-scalar-guard-coverage-v1/",
+        "artifacts/macos-first/root-runtime-macro-numeric-context-v1/",
+        "artifacts/macos-first/root-cli-discovery-epoch-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T00:26:52.640839+00:00",
+      "updated_at": "2026-10-15T01:04:10.310567+00:00",
       "review_after": "2026-10-15T05:55:00.598518+00:00"
     },
     {

@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "task_scope": "T025/T034/T041 interpreter integration and source authority",
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "integrated_source_commit": "160fb8a1ab",
+  "main": {
+    "source_member": "7c9021d8b2861a60938fe1bbed9fbe343fed81e363aca4954107db4e0e1031ec",
+    "actual_terminal": {
+      "session_id": 53346,
+      "chunk_id": "d8c521",
+      "wrapper_exit_code": 1,
+      "xtask_exit_code": 1
+    },
+    "host_command_exit_code": 101,
+    "listed_bodies": 3052,
+    "actual_named_bodies": 992,
+    "passed": 984,
+    "failed": 8,
+    "ignored": 0,
+    "filtered": 0,
+    "unexecuted_listed_bodies": 2060,
+    "named_failures": [
+      "cli_captured_external_generated_import_uses_actual_parent_body",
+      "cli_captured_macro_use_generated_export_preserves_completed_index",
+      "cli_generated_import_and_macro_reach_the_actual_fixed_point",
+      "cli_generated_output_leaves_cold_body_errors_unprepared",
+      "cli_inline_path_directory_does_not_become_a_logical_module_name",
+      "cli_recursive_generated_entry_uses_actual_generated_callee_records",
+      "cli_runtime_assertion_uses_the_completed_macro_scope",
+      "native_oracle_agrees_with_cli_generated_import_and_macro_fixture"
+    ],
+    "library_bank_actual_passed": 939,
+    "gate_passed": false,
+    "source_unchanged": true,
+    "originals_verified": 482,
+    "imported_cases": 300
+  },
+  "required_test_registry_repair": {
+    "old": "official_shadowed_nominal_and_named_primitive_controls_are_not_normalized_aliases",
+    "actual": "official_shadowed_nominal_and_named_primitive_controls_keep_owning_source_kind",
+    "files": [
+      "compat/fixtures.toml",
+      "docs/tasks.json"
+    ],
+    "direct_fixture_audit": {
+      "actual_chunk": "daa8cf",
+      "exit_code": 0
+    },
+    "failed_main_gates_retained": true
+  },
+  "private_generated_type_scope_candidate": {
+    "source_member": "99ccd15adeea24368586238eea754b53759285523bf7ecc786a9ee5dd5a65110",
+    "production_compile_succeeded": true,
+    "test_compile_succeeded": true,
+    "CLI_exact8_failed": 8,
+    "CLI_filtered": 13,
+    "source_authority_new3_passed": 3,
+    "existing_source_result9_passed": 9,
+    "library_filtered": 941,
+    "source_unchanged": true,
+    "originals_verified": 484,
+    "imported_cases": 302
+  },
+  "private_guarded_binding_candidate": {
+    "source_member": "9efe664004288ae7b996c7ba0de85e4861ab806673449f5333adc22acee42228",
+    "library_passed": 948,
+    "library_failed": 2,
+    "subsequent_exact_selector_repairs_passed": 2,
+    "fresh_full_library_pass_claimed": false,
+    "stock_edition_runs_passed": 0,
+    "stock_edition_runs_failed": 4,
+    "next_failure": "LRR-E-TYPE-CONTEXT at x += 1 in label_break_match, original line108; earlier guarded bindings/guards and cleanup reached",
+    "full_fixture_pass": false
+  },
+  "new_complete_stock_fixture_passes": 0,
+  "runtime_acceptance_complete": false,
+  "guest_jit_gate": "closed",
+  "linux_acceptance": "unexecuted",
+  "release_complete": false,
+  "local_receipts": [
+    {
+      "path": "artifacts/macos-first/root-main-v69-integration-validation-v1/agent-validation-v3/VALIDATION-HANDOFF.json",
+      "sha256": "cfe5fa82333ba319b41d81f01ecd249fc33e8c8ce49c3c50b13711c7cde4a7c0"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v13/VALIDATION-HANDOFF.json",
+      "sha256": "8d6f0a20cdf3bae5cdad4764861292ca9a4094bb0edfc1076f284bd0ef140917"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v11/VALIDATION-HANDOFF.json",
+      "sha256": "606e3c02987c95434c24904f3b3203539d13a45a54b4554f49531233103aeec1"
+    }
+  ],
+  "reproduction": [
+    "cargo +1.99.0 run -p xtask --locked --offline -- gate 03",
+    "cargo +1.99.0 test -p lrr --test discovery_cli --locked --offline -- --test-threads=1"
+  ],
+  "note": "Internal host/component counts are not upstream full-fixture pass counts. Private candidate source is not canonical integration. Exact command arguments and terminal/output/source receipts retained locally."
+}
