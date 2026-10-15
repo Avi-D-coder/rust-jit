@@ -8666,7 +8666,9 @@ impl SourceDiscovery {
                             }
                         }
                     }
-                    super::source_declarative::SourceDeclarativeDemand::Ready(_) => {}
+                    super::source_declarative::SourceDeclarativeDemand::Ready(request) => {
+                        prepared_request = Some(*request);
+                    }
                 }
             }
             let input = DeclarationFragmentInput {

@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    "M010",
+    "M012",
+    "M017"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "source_member": "c12a79af0cfa7513f658f0c9415ca0b9a38ec54bbfe95d4bfdcf1a9cea252f8d",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "before_sha256": "9502737e51f50a7b78bb44ca70604f01e073f596c13fd978123c07350b6945c5",
+      "after_sha256": "dbc57438d597e627615f0d60b6810ba61c97f559e2a5593e27a2bd7ee316144a"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "before_sha256": "9d19338d4b8224a25a7e69b8e99a114cfb1e33dc21420e638f3be9cfbd92bc1f",
+      "after_sha256": "a30d13dd4f14a3a34ad0e880a897f49c640ba23f40454028ccb676ec04c217f6"
+    }
+  ],
+  "changes": [
+    "Retain the genuine already-prepared declaration request instead of discarding and recomputing it.",
+    "Reuse the existing exact immutable source token forest when selecting a source macro definition body.",
+    "Select the same genuine compiler catalogue facet before constructing its argument forest."
+  ],
+  "invariants": "Same current source/index/producer/hygiene/grammar/compile-env/epoch/budget checks; deadlines and authorities unchanged.",
+  "validated_scopes": {
+    "strict-lrr-tests": {
+      "scope": "strict-lrr-tests",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "-p",
+        "lrr",
+        "--lib",
+        "--tests",
+        "--locked",
+        "--offline",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "c12a79af0cfa7513f658f0c9415ca0b9a38ec54bbfe95d4bfdcf1a9cea252f8d",
+      "elapsed_seconds": 25.673724291002145,
+      "started_at": "2026-10-15T05:44:26.687848+00:00",
+      "finished_at": "2026-10-15T05:44:52.361843+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "3774946c85f029a5ceb4840f8543e6cb6968b2871f48f8baf1361dcb853fae8d",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "generated-break-two": {
+      "scope": "generated-break-two",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--lib",
+        "--locked",
+        "--offline",
+        "--",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1",
+        "frontend::runtime_macro_plan::generated_break::tests::unchanged_mac1_captured_break_targets_keep_real_source_hygiene_all_editions",
+        "frontend::runtime_macro_plan::generated_break::tests::a_new_publication_epoch_does_not_reuse_old_generated_break_authority"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 2,
+      "nonempty_test_scope": true,
+      "source_member": "c12a79af0cfa7513f658f0c9415ca0b9a38ec54bbfe95d4bfdcf1a9cea252f8d",
+      "elapsed_seconds": 24.26796812500106,
+      "started_at": "2026-10-15T05:44:56.073950+00:00",
+      "finished_at": "2026-10-15T05:45:20.342012+00:00",
+      "stdout_sha256": "9fe8cdd23db5490f5fd8022b2aed237b7c3eafa9b0154594368c41c04e9a7286",
+      "stderr_sha256": "f3b33cb4cc3035e53ad2e2d4c0c611105fd8babacaefaf21b97090c0c523fb77",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "original-source-declarative-bank": {
+      "scope": "original-source-declarative-bank",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "xtask",
+        "--test",
+        "source_declarative",
+        "--locked",
+        "--offline",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 11,
+      "nonempty_test_scope": true,
+      "source_member": "c12a79af0cfa7513f658f0c9415ca0b9a38ec54bbfe95d4bfdcf1a9cea252f8d",
+      "elapsed_seconds": 21.08266887499485,
+      "started_at": "2026-10-15T05:45:53.428986+00:00",
+      "finished_at": "2026-10-15T05:46:14.511728+00:00",
+      "stdout_sha256": "197a738c717e994e397b3803de4c629adc78b54a99390d576d31c9b490edb32b",
+      "stderr_sha256": "00488ec2486367597b1155296ecbaaab47dd4a340fcedddb68f4ad8b4e86b801",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "declaration-context-exact": {
+      "scope": "declaration-context-exact",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "xtask",
+        "--test",
+        "signature_names",
+        "--locked",
+        "--offline",
+        "--",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1",
+        "exact_declaration_context_distinguishes_bodyless_trait_signatures_and_rejects_stale_graph"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 1,
+      "nonempty_test_scope": true,
+      "source_member": "c12a79af0cfa7513f658f0c9415ca0b9a38ec54bbfe95d4bfdcf1a9cea252f8d",
+      "elapsed_seconds": 1.435509875009302,
+      "started_at": "2026-10-15T05:46:54.600262+00:00",
+      "finished_at": "2026-10-15T05:46:56.035856+00:00",
+      "stdout_sha256": "ac74a52c470766e2a8acba81ccb268142b9e4966a85129ce54ff1470dd599cb3",
+      "stderr_sha256": "ec02592b74d2c57478cc31c7f294c8c1e5e01deedc079c6ef548071053d673e2",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "format": {
+      "scope": "format",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "c12a79af0cfa7513f658f0c9415ca0b9a38ec54bbfe95d4bfdcf1a9cea252f8d",
+      "elapsed_seconds": 4.873302291991422,
+      "started_at": "2026-10-15T05:47:13.514727+00:00",
+      "finished_at": "2026-10-15T05:47:18.388116+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "architecture": {
+      "scope": "architecture",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "run",
+        "-p",
+        "xtask",
+        "--locked",
+        "--offline",
+        "--",
+        "architecture-audit"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "c12a79af0cfa7513f658f0c9415ca0b9a38ec54bbfe95d4bfdcf1a9cea252f8d",
+      "elapsed_seconds": 7.723004875006154,
+      "started_at": "2026-10-15T05:47:40.326231+00:00",
+      "finished_at": "2026-10-15T05:47:48.049339+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "c03d1d699eb450154d3e7f532c99a42bc83885d93ebaf74d3d6b4777898c49bd",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "fixture-reference": {
+      "scope": "fixture-reference",
+      "argv": [
+        "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/xtask",
+        "fixture-reference-audit"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "c12a79af0cfa7513f658f0c9415ca0b9a38ec54bbfe95d4bfdcf1a9cea252f8d",
+      "elapsed_seconds": 0.4810814999800641,
+      "started_at": "2026-10-15T05:48:07.375699+00:00",
+      "finished_at": "2026-10-15T05:48:07.856872+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    }
+  },
+  "distinct_passed_controls": 14,
+  "upstream_inventory": {
+    "cases": 308,
+    "unchanged_original_files": 490
+  },
+  "prior_failure": "V52 full milestone1069 passed/1 publication-entry cumulative deadline failure/2133 unexecuted preserved. No per-stage timing establishes its cause.",
+  "timing_limit": "The scoped test timings are not a controlled performance comparison with the full library bank; no speedup or timeout-causation claim.",
+  "full_milestone": {
+    "status": "running",
+    "scope": "gate03",
+    "source_member": "c12a79af0cfa7513f658f0c9415ca0b9a38ec54bbfe95d4bfdcf1a9cea252f8d",
+    "actual_session": 75958,
+    "actual_pid": 10998,
+    "terminal": null
+  },
+  "receipts": [
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v53/HANDOFF.md",
+      "sha256": "2af348ebb3d02dcbf31ede699e7e760cffb8b20dd1ff8c410f1b8c56d64b0755"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v54/SCOPED-HANDOFF.md",
+      "sha256": "8da2bc9fdd1d8c3d7dea86c6a7fbdac59dbda6887e7933f5ebe91839ec1181f1"
+    }
+  ],
+  "acceptance": {
+    "additional_upstream_runtime_contract_passes_claimed": 0,
+    "configured_full_fixture_passes": 0,
+    "task_complete": false,
+    "guest_jit_gate": "closed",
+    "release_complete": false
+  }
+}

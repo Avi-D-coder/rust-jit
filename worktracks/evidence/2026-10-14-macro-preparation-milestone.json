@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    "M010",
+    "M012",
+    "M017"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "source_member": "0c390c3ccd60e832aa47a2ae78e39627e89bfe6228cb0612a3cc140b9011a591",
+  "actual_gate": {
+    "scope": "gate03",
+    "argv": [
+      "cargo",
+      "+1.99.0",
+      "run",
+      "--offline",
+      "--locked",
+      "-p",
+      "xtask",
+      "--",
+      "gate",
+      "03"
+    ],
+    "exit_code": 1,
+    "source_unchanged": true,
+    "matched_test_count": null,
+    "nonempty_test_scope": true,
+    "source_member": "0c390c3ccd60e832aa47a2ae78e39627e89bfe6228cb0612a3cc140b9011a591",
+    "elapsed_seconds": 1232.2914753750083,
+    "started_at": "2026-10-15T05:12:56.517597+00:00",
+    "finished_at": "2026-10-15T05:33:28.806886+00:00",
+    "stdout_sha256": "0f7e3cf65cdf79f89dfea162780d9f68e49a18a557c4fcc0c425f203785ce8a9",
+    "stderr_sha256": "ea878a31bbb203adc7fb552570b42baa62721de4b8681d6b24f2fc63364107ce",
+    "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+  },
+  "inventory": {
+    "listed": 3203,
+    "passed": 1069,
+    "failed": 1,
+    "unexecuted": 2133,
+    "library_executed": 1070
+  },
+  "failure": {
+    "test": "frontend::runtime_macro_plan::generated_break::tests::a_new_publication_epoch_does_not_reuse_old_generated_break_authority",
+    "code": "LRR-E-MACRO-TIMEOUT",
+    "message": "cumulative macro expansion deadline expired",
+    "phase": "SourceDiscovery::publish entry deadline check, after the helper asserted Sealed",
+    "library_wall_seconds": 917.95,
+    "failing_test_or_world_elapsed": "not captured",
+    "accounting_limit": "The deadline check precedes publication work. The final sealing poll can return Sealed after its last budget check; the elapsed time of that tail and the failing test were not measured. This does not show publication itself consumed the expired budget."
+  },
+  "read_only_sample": {
+    "test": "frontend::runtime_macro_plan::generated_break::tests::unchanged_mac1_captured_break_targets_keep_real_source_hygiene_all_editions",
+    "observed": "active declaration request/token-forest preparation",
+    "terminal": "passed",
+    "limit": "The sampled test differs from the failed test. Library process age is not a named-test duration or proof of a fixed-point cycle. Host load and inherited QoS were not captured."
+  },
+  "environment": {
+    "cargo_build_jobs": 2,
+    "rust_test_threads": 1,
+    "dev_test_optimization": 0,
+    "debug_assertions": true,
+    "incremental": false
+  },
+  "checks": {
+    "architecture": "passed",
+    "fixture_references": "passed",
+    "task_ledger": "passed",
+    "licenses_bootstrap": "passed",
+    "source_unchanged": true,
+    "raw_originals_unchanged": 490,
+    "imported_cases": 308
+  },
+  "receipts": [
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v52/HANDOFF.md",
+      "sha256": "d0f2828ea8fefd941cd8516ee2019b5fd063ea36917d2f93276e51420008663b"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v52/COLLECTED-SCOPES.json",
+      "sha256": "927ebd53948ba33e0e0ef809f766629294828a327e8eccea3b75fefe81fc7828"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v52/ACTUAL-FAILURE-DETAILS.json",
+      "sha256": "192903dd62a3c064989cc5eb58d36c56789311bc180b1a702a832b7f3eb5c6e2"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v52/ENVIRONMENT-AND-RUNTIME-OBSERVATIONS.json",
+      "sha256": "b40e855c1f92fb42c8e2b9ae147e306316d8477ff5c3281aca6001e4299365d1"
+    }
+  ],
+  "next": "Narrow source-only correction retains the genuine already-prepared declaration request instead of discarding and recomputing it. Cumulative deadline and all request/grammar/source/epoch checks remain unchanged; actual validation remains required.",
+  "acceptance": {
+    "full_milestone_passed": false,
+    "additional_upstream_runtime_contract_passes_claimed": 0,
+    "configured_full_fixture_passes": 0,
+    "guest_jit_gate": "closed",
+    "release_complete": false
+  }
+}

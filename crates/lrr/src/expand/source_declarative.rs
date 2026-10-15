@@ -1660,6 +1660,14 @@ impl SourceDeclarative {
         else {
             return Ok(None);
         };
+        // Probe only the selected compiler facet. Ordinary source macros build
+        // their argument forest in declaration_demand instead.
+        let Some(catalog) = &self.compiler else {
+            return Ok(None);
+        };
+        if catalog.select(&definition)?.is_none() {
+            return Ok(None);
+        }
         let producer = index.producer(invocation)?;
         let input = group(
             &self.owned_forest()?,
@@ -2143,7 +2151,7 @@ impl SourceDeclarative {
                         "cold macro body attachment differs",
                     ));
                 }
-                self.original_definition_body(header.range)?
+                original_definition_body(&self.source, header.range, &forest)?
             }
             crate::frontend::impl_index::DeclarationBodyOwner::Argument(argument) => {
                 DeclarativeBody::Source(
