@@ -22,6 +22,8 @@ use ra_ap_syntax::{
     AstNode, AstToken, SyntaxKind, SyntaxNode,
     ast::{self, HasArgList, HasGenericArgs, HasGenericParams, HasLoopBody, HasName},
 };
+#[path = "condition_ranges.rs"]
+mod condition_ranges;
 #[path = "literal_match.rs"]
 mod literal_match;
 #[path = "local_numeric_constraints.rs"]
@@ -2350,6 +2352,9 @@ impl ParsedFile {
                         ),
                         _ => unsupported("invalid condition binding phase"),
                     };
+                }
+                if condition_ranges::selected(&pattern) {
+                    return condition_ranges::prepare(self, body, index, key, &expression);
                 }
                 let ast::Pat::LiteralPat(pattern) = pattern else {
                     return unsupported(

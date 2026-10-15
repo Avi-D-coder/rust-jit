@@ -47,10 +47,19 @@ pub(crate) use calls::{
     RuntimeMacroCall, RuntimeMacroCallPhase, RuntimeScalarPlan, RuntimeScalarStep,
 };
 
+#[cfg(test)]
+#[path = "runtime_macro_control_tests.rs"]
+mod control_tests;
+#[path = "runtime_macro_controls.rs"]
+mod controls;
+pub(crate) use controls::{RuntimeScalarControl, RuntimeScalarMatchExhaustion};
 enum Work {
     Expression(ast::Expr, SlotId, u32, Option<u32>),
     Operation(Op),
     Step(RuntimeScalarStep),
+    Mark(controls::Label),
+    Control(controls::Draft),
+    Fault(Diagnostic, BodySpan),
 }
 impl ParsedFile {
     pub(crate) fn runtime_macro_scalar_plan(
@@ -131,7 +140,9 @@ impl ParsedFile {
         };
         let mut stack = Vec::new();
         let mut operations = Vec::new();
+        let mut fault_origins = Vec::new();
         let mut calls: Vec<CallDraft> = Vec::new();
+        let mut controls = controls::Builder::new(usize::from(node.runtime_scalar_phases));
         stack
             .try_reserve_exact(usize::from(node.runtime_scalar_phases))
             .map_err(|_| invalid("scalar assertion work allocation"))?;
@@ -195,10 +206,34 @@ impl ParsedFile {
                         operations.push(RuntimeScalarStep::Operation(operation))
                     }
                     Work::Step(step) => operations.push(step),
+                    Work::Mark(label) => controls.mark(label, operations.len())?,
+                    Work::Control(draft) => controls.emit(draft, &mut operations)?,
+                    Work::Fault(error, span) => {
+                        fault_origins
+                            .try_reserve(1)
+                            .map_err(|_| invalid("scalar fault origin allocation"))?;
+                        fault_origins.push((operations.len(), span));
+                        operations.push(RuntimeScalarStep::Fault(error));
+                    }
                     _ => unreachable!(),
                 }
                 continue;
             };
+            let original_span = |expression: &ast::Expr| -> Result<BodySpan, Diagnostic> {
+                let range = expression.syntax().text_range();
+                let map = |offset: TextSize| {
+                    u32::from(offset)
+                        .checked_sub(prefix_len)
+                        .and_then(|offset| base.checked_add(offset))
+                        .ok_or_else(|| invalid("scalar operand origin overflow"))
+                };
+                Ok(BodySpan {
+                    body_key: key.body.clone(),
+                    relative_start: map(range.start())?,
+                    relative_end: map(range.end())?,
+                })
+            };
+            let fault_span = original_span(&expression)?;
             let lowered = (|| -> Result<(), Diagnostic> {
                 if expression
                     .syntax()
@@ -207,21 +242,56 @@ impl ParsedFile {
                 {
                     return Err(unsupported());
                 }
-                let original_span = |expression: &ast::Expr| -> Result<BodySpan, Diagnostic> {
-                    let range = expression.syntax().text_range();
-                    let map = |offset: TextSize| {
-                        u32::from(offset)
-                            .checked_sub(prefix_len)
-                            .and_then(|offset| base.checked_add(offset))
-                            .ok_or_else(|| invalid("scalar operand origin overflow"))
-                    };
-                    Ok(BodySpan {
-                        body_key: key.body.clone(),
-                        relative_start: map(range.start())?,
-                        relative_end: map(range.end())?,
-                    })
-                };
                 match expression {
+                    ast::Expr::MatchExpr(expression) => {
+                        let written = original_span(&ast::Expr::MatchExpr(expression.clone()))?;
+                        controls::require_written(self, body, &written, expression.syntax())?;
+                        controls.match_expression(
+                            expression,
+                            controls::Context {
+                                destination,
+                                base,
+                                parent,
+                            },
+                            &mut allocate,
+                            &mut stack,
+                            &original_span,
+                        )?;
+                    }
+                    ast::Expr::IfExpr(expression) => {
+                        let written = original_span(&ast::Expr::IfExpr(expression.clone()))?;
+                        controls::require_written(self, body, &written, expression.syntax())?;
+                        controls.if_expression(
+                            expression,
+                            controls::Context {
+                                destination,
+                                base,
+                                parent,
+                            },
+                            &mut allocate,
+                            &mut stack,
+                            &original_span,
+                        )?;
+                    }
+                    ast::Expr::BlockExpr(block) => {
+                        if block.modifier().is_some() {
+                            return Err(unsupported());
+                        }
+                        let statements = block.stmt_list().ok_or_else(unsupported)?;
+                        if statements.statements().next().is_some()
+                            || statements
+                                .syntax()
+                                .children()
+                                .any(|node| ast::Attr::can_cast(node.kind()))
+                        {
+                            return Err(unsupported());
+                        }
+                        if let Some(tail) = statements.tail_expr() {
+                            stack.push(Work::Expression(tail, destination, base, parent));
+                        } else {
+                            stack.push(Work::Operation(Op::Unit { destination }));
+                        }
+                    }
                     ast::Expr::TupleExpr(tuple) if tuple.fields().next().is_none() => {
                         // Unit is a closed primitive operand; use the existing
                         // checked Unit operation and ordinary comparison semantics.
@@ -282,6 +352,15 @@ impl ParsedFile {
                             .iter()
                             .position(|slot| *slot == destination)
                             .ok_or_else(unsupported)?;
+                        let mut whole = ast::Expr::RefExpr(reference.clone());
+                        while let Some(paren) =
+                            whole.syntax().parent().and_then(ast::ParenExpr::cast)
+                        {
+                            whole = ast::Expr::ParenExpr(paren);
+                        }
+                        if original_span(&whole)? != owner.argument_spans[argument] {
+                            return Err(unsupported());
+                        }
                         if owner.argument_borrows[argument].is_some() {
                             return Err(unsupported());
                         }
@@ -649,10 +728,16 @@ impl ParsedFile {
                 if error.code != "LRR-E-UNSUPPORTED" {
                     return Err(error);
                 }
+                fault_origins
+                    .try_reserve(1)
+                    .map_err(|_| invalid("scalar fault origin allocation"))?;
+                fault_origins.push((operations.len(), fault_span));
                 operations.push(RuntimeScalarStep::Fault(error));
             }
         }
-        if matches!(operations.last(), Some(RuntimeScalarStep::CallSeal(_))) {
+        if matches!(operations.last(), Some(RuntimeScalarStep::CallSeal(_)))
+            || controls.needs_tail(operations.len())
+        {
             operations
                 .len()
                 .checked_add(1)
@@ -666,9 +751,18 @@ impl ParsedFile {
         if operations.len() > usize::from(node.runtime_scalar_phases) {
             return Err(invalid("scalar assertion phase reservation exhausted"));
         }
+        drop(stack);
+        controls.finish(
+            &mut operations,
+            index,
+            key,
+            self.key(),
+            (arguments.invocation(), body.range.start),
+        )?;
         RuntimeScalarPlan::finish(
             operations,
             calls,
+            fault_origins,
             index,
             key,
             self.key(),

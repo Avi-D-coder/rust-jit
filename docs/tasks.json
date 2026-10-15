@@ -1891,7 +1891,13 @@
         "inactive_continue_target_preflight_preserves_live_outer_scope",
         "rejected_break_result_preserves_value_and_crossed_scopes",
         "invalid_literal_spelling_suffix_and_range_precede_fuel_and_guest_allocation",
-        "scope_cleanup_charges_before_each_cell_and_preserves_unprocessed_ownership"
+        "scope_cleanup_charges_before_each_cell_and_preserves_unprocessed_ownership",
+        "nested_constant_and_static_conditions_cannot_select_outer_function_parameter_all_editions",
+        "ordinary_literals_open_ranges_and_existing_bool_have_real_source_recipes_all_editions",
+        "original_signed_if_let_range_component_preserves_bounds_and_lazy_cleanup_all_editions",
+        "scalar_condition_runtime_components_have_actual_branch_results_and_cold_upper_all_editions",
+        "unchanged_negative_range_original_whole_main_requires_real_completion_all_editions",
+        "upper_source_frontier_is_deferred_and_parameter_source_is_checked_before_owning_read"
       ],
       "acceptance_contract": "cold undefined branch and short-circuit RHS have zero thunk/query events; hot condition loops terminate correctly; nested labeled break/continue choose correct scopes. Fuel exhaustion is deterministic.",
       "commands": [],
@@ -1924,7 +1930,13 @@
         "T031-CONTINUE-PREFLIGHT",
         "T031-BREAK-PREFLIGHT",
         "T031-LITERAL-PREFLIGHT",
-        "T031-CLEANUP-ELEMENT-FUEL"
+        "T031-CLEANUP-ELEMENT-FUEL",
+        "T031-NEGATIVE-RANGE-CONTROL-17",
+        "T031-NEGATIVE-RANGE-CONTROL-18",
+        "T031-NEGATIVE-RANGE-CONTROL-19",
+        "T031-NEGATIVE-RANGE-CONTROL-20",
+        "T031-NEGATIVE-RANGE-CONTROL-21",
+        "T031-NEGATIVE-RANGE-CONTROL-22"
       ],
       "artifact_paths": [
         "artifacts/macos-first/t031-branch-tests.log",
@@ -2051,7 +2063,8 @@
         "artifacts/macos-first/t031-final-checkpoint.json",
         "artifacts/macos-first/t041-t034-integrated-main-milestone-v1/independent-collection.json",
         "artifacts/macos-first/t031-stock-six-additional-originals-integration-v1/integration.json",
-        "docs/errata/numeric-rust-compatibility.md"
+        "docs/errata/numeric-rust-compatibility.md",
+        "worktracks/evidence/2026-10-14-negative-range-whole-main.json"
       ],
       "release_complete": false,
       "validation_scope": "Original-source control-flow component accepted under E-57-001: 682 actual macOS Rust1.99 host/doc tests, all twenty-nine selected T031 controls, Gate00/01/02 and strict audits pass. Scalar cleanup charges per occupied cell; exact source quota is 19 units. Full generated/source-view, reference/user Drop, bounded resumable activations, multiframe/service and JIT integrations remain mandatory and unverified. Additional unchanged-stock observations: six programs/23 assertions passed on the exact previously collected scalar-v3 CLI and separate explicitly authorized native2015/2024 references; originals integrated without runtime source edits. MAIN127 cases/221 files; fresh combined milestone pending. Full compiletest0. User-authorized E-NUM-001 reopens numeric compatibility: old strict-profile evidence remains historical; Rust constraint-aware fallback/future-use inference is not fully implemented or accepted.",
@@ -2084,7 +2097,12 @@
           "status": "pending",
           "evidence_paths": []
         }
-      ]
+      ],
+      "current_negative_range_whole_main": {
+        "status": "component_integrated_full_milestone_pending",
+        "evidence_path": "worktracks/evidence/2026-10-14-negative-range-whole-main.json",
+        "scope": "V46all22controls+strict,one complete unchanged original main all4editions; no configured/fullfixture/task/JIT completion."
+      }
     },
     {
       "id": "T032",
@@ -5409,7 +5427,23 @@
         "later_range_and_upper_magnitude_decode_only_at_their_reached_phase",
         "guarded_range_commits_before_guard_and_keeps_plain_binding_admission_separate",
         "nonliteral_wide_float_and_unbounded_ranges_remain_typed_source_frontiers",
-        "floating_range_source_family_sign_and_suffix_are_exact_all_editions"
+        "floating_range_source_family_sign_and_suffix_are_exact_all_editions",
+        "exhausted_opaque_match_faults_after_its_actual_scrutinee_all_editions",
+        "exhaustion_exit_fuel_refusal_preserves_the_completed_scrutinee_prefix",
+        "exhaustive_opaque_bool_matches_and_an_unselected_exhaustion_complete_normally",
+        "opaque_match_scrutinee_call_or_reached_fault_is_not_replayed_or_replaced_by_exhaustion",
+        "selected_scalar_control_result_keeps_unknown_future_arm_and_upper_cold",
+        "selected_unknown_scalar_result_remains_the_actual_reached_unsupported_fault",
+        "unchanged_negative_integer_range_entire_main_edition_2015",
+        "unchanged_negative_integer_range_entire_main_edition_2018",
+        "unchanged_negative_integer_range_entire_main_edition_2021",
+        "unchanged_negative_integer_range_entire_main_edition_2024",
+        "both_unchanged_original_arguments_have_bounded_forward_source_branches_all_editions",
+        "conditional_ref_result_cannot_mint_whole_argument_borrow_authority",
+        "opaque_match_exhaustion_needs_actual_source_proof_and_public_match_exit_stays_indexed",
+        "unknown_upper_guard_and_future_result_remain_source_positioned_fault_steps",
+        "genuine_control_refuses_modified_condition_target_and_span_without_remint",
+        "match_exhaustion_cannot_be_reminted_by_copying_a_phase_slot_or_source_range"
       ],
       "acceptance_contract": "failed arms preserve scrutinee ownership; true arms move once; conflicting moves fault before commit; or-pattern names/modes and binding order validate; overlapping alternatives can rerun false guards without replaying scrutinee evaluation.",
       "commands": [],
@@ -5420,16 +5454,38 @@
         "T050-SCALAR-RANGE-04",
         "T050-SCALAR-RANGE-05",
         "T050-SCALAR-RANGE-06",
-        "T050-SCALAR-RANGE-07"
+        "T050-SCALAR-RANGE-07",
+        "T050-NEGATIVE-RANGE-CONTROL-01",
+        "T050-NEGATIVE-RANGE-CONTROL-02",
+        "T050-NEGATIVE-RANGE-CONTROL-03",
+        "T050-NEGATIVE-RANGE-CONTROL-04",
+        "T050-NEGATIVE-RANGE-CONTROL-05",
+        "T050-NEGATIVE-RANGE-CONTROL-06",
+        "T050-NEGATIVE-RANGE-CONTROL-07",
+        "T050-NEGATIVE-RANGE-CONTROL-08",
+        "T050-NEGATIVE-RANGE-CONTROL-09",
+        "T050-NEGATIVE-RANGE-CONTROL-10",
+        "T050-NEGATIVE-RANGE-CONTROL-11",
+        "T050-NEGATIVE-RANGE-CONTROL-12",
+        "T050-NEGATIVE-RANGE-CONTROL-13",
+        "T050-NEGATIVE-RANGE-CONTROL-14",
+        "T050-NEGATIVE-RANGE-CONTROL-15",
+        "T050-NEGATIVE-RANGE-CONTROL-16"
       ],
       "artifact_paths": [
         "artifacts/macos-first/root-match-integration-v1/validation-v6/terminal.json",
         "artifacts/macos-first/root-vec-facet-integration-v1/independent-component-collection-v1.json",
         "artifacts/macos-first/root-vec-facet-integration-v1/MAIN-integration-v1.json",
-        "worktracks/evidence/2026-10-14-scalar-range-runtime.json"
+        "worktracks/evidence/2026-10-14-scalar-range-runtime.json",
+        "worktracks/evidence/2026-10-14-negative-range-whole-main.json"
       ],
       "release_complete": false,
-      "validation_scope": "Integrated bounded scalar/or/single-alternative guard and typed no-arm components;586 same-production library bodies and30 component bodies passed, strict Clippy/architecture/fmt collected. Integrated milestone pending; general transactional patterns, overlapping guard retry, full if-let/while-let/question-mark and uniform Section15.5 bound-op phase acceptance incomplete. No card or full-fixture acceptance."
+      "validation_scope": "Integrated bounded scalar/or/single-alternative guard and typed no-arm components;586 same-production library bodies and30 component bodies passed, strict Clippy/architecture/fmt collected. Integrated milestone pending; general transactional patterns, overlapping guard retry, full if-let/while-let/question-mark and uniform Section15.5 bound-op phase acceptance incomplete. No card or full-fixture acceptance.",
+      "current_negative_range_whole_main": {
+        "status": "component_integrated_full_milestone_pending",
+        "evidence_path": "worktracks/evidence/2026-10-14-negative-range-whole-main.json",
+        "scope": "V46all22controls+strict,one complete unchanged original main all4editions; no configured/fullfixture/task/JIT completion."
+      }
     },
     {
       "id": "T051",
@@ -19089,6 +19145,11 @@
         "failed": 49,
         "unexecuted": 1440,
         "evidence_path": "worktracks/evidence/2026-10-14-negative-suffix-and-milestone.json"
+      },
+      "current_negative_range_whole_main": {
+        "status": "component_integrated_full_milestone_pending",
+        "evidence_path": "worktracks/evidence/2026-10-14-negative-range-whole-main.json",
+        "scope": "V46all22controls+strict,one complete unchanged original main all4editions; no configured/fullfixture/task/JIT completion."
       }
     },
     {

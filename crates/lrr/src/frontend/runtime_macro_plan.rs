@@ -532,7 +532,11 @@ impl RuntimeIntrinsicPlan {
                 (*call, RuntimeMacroCallPhase::Advance(*arg))
             }
             Some(RuntimeScalarStep::CallSeal(call)) => (*call, RuntimeMacroCallPhase::Seal),
-            Some(RuntimeScalarStep::Operation(_) | RuntimeScalarStep::Fault(_)) => return Ok(None),
+            Some(
+                RuntimeScalarStep::Operation(_)
+                | RuntimeScalarStep::Fault(_)
+                | RuntimeScalarStep::Control(_),
+            ) => return Ok(None),
             None => {
                 return Err(Diagnostic::new(
                     "LRR-E-RUNTIME-MACRO",
@@ -615,7 +619,13 @@ impl RuntimeIntrinsicPlan {
                     RuntimeScalarStep::Operation(operation) => {
                         (vec![operation.clone()], following()?)
                     }
+                    RuntimeScalarStep::Control(control) => {
+                        control.require(&source.selection().outline.parse, body, key)?;
+                        (vec![], control.recipe_exit())
+                    }
                     RuntimeScalarStep::Fault(diagnostic) => {
+                        plan.fault_span(key)
+                            .ok_or_else(|| invalid("scalar reached fault source origin absent"))?;
                         // Existing LRIR has a typed reached-unsupported template.
                         // Do not erase another authority/currentness/source error.
                         if !matches!(
@@ -747,7 +757,28 @@ impl RuntimeIntrinsicPlan {
                 )
             }
         };
-        let origin_span = if let Some(call) = &call_witness {
+        let control_span = scalar_plan.as_ref().and_then(|plan| {
+            let ordinal = match Phase::from_code(key.phase) {
+                Phase::Entry => 0,
+                Phase::Operand(n) => usize::from(n) + 1,
+                _ => return None,
+            };
+            match plan.steps().get(ordinal) {
+                Some(crate::syntax::runtime_macro_scalars::RuntimeScalarStep::Control(control)) => {
+                    Some(control.span().clone())
+                }
+                _ => None,
+            }
+        });
+        let fault_span = scalar_plan
+            .as_ref()
+            .and_then(|plan| plan.fault_span(key))
+            .cloned();
+        let origin_span = if let Some(span) = control_span {
+            span
+        } else if let Some(span) = fault_span {
+            span
+        } else if let Some(call) = &call_witness {
             call.span().clone()
         } else {
             body.span(id)?
@@ -765,7 +796,22 @@ impl RuntimeIntrinsicPlan {
                 dependencies: vec![],
             },
         )?;
-        let recipe = if let Some(plan) = &scalar_plan
+        let exhaustion = scalar_plan.as_ref().and_then(|plan| {
+            let ordinal = match Phase::from_code(key.phase) {
+                Phase::Entry => 0,
+                Phase::Operand(n) => usize::from(n) + 1,
+                _ => return None,
+            };
+            match plan.steps().get(ordinal) {
+                Some(crate::syntax::runtime_macro_scalars::RuntimeScalarStep::Control(control)) => {
+                    control.exhaustion()
+                }
+                _ => None,
+            }
+        });
+        let recipe = if let Some(exhaustion) = exhaustion {
+            crate::ir::validate::verify_runtime_scalar_match_exhaustion(draft, body, &exhaustion)?
+        } else if let Some(plan) = &scalar_plan
             && plan.argument_borrow_at(key)?.is_some()
         {
             crate::ir::validate::verify_runtime_scalar_borrow(draft, body, plan)?
@@ -926,3 +972,7 @@ mod generated_break;
 pub(crate) use generated_break::{
     DeclarativeControlInput, GeneratedBreakAdmission, prepare_declarative_break,
 };
+
+#[cfg(test)]
+#[path = "runtime_macro_control_recipe_tests.rs"]
+mod control_recipe_tests;

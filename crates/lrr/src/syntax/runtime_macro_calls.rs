@@ -124,6 +124,7 @@ pub(crate) enum RuntimeScalarStep {
     CallAdvance(u32, u32),
     CallSeal(u32),
     Fault(Diagnostic),
+    Control(Box<super::RuntimeScalarControl>),
 }
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum RuntimeMacroCallPhase {
@@ -135,10 +136,16 @@ pub(crate) enum RuntimeMacroCallPhase {
 pub(crate) struct RuntimeScalarPlan {
     steps: Vec<RuntimeScalarStep>,
     calls: Vec<Arc<RuntimeMacroCall>>,
+    fault_origins: Vec<(PcKey, BodySpan)>,
 }
 impl RuntimeScalarPlan {
     pub(crate) fn steps(&self) -> &[RuntimeScalarStep] {
         &self.steps
+    }
+    pub(crate) fn fault_span(&self, key: &PcKey) -> Option<&BodySpan> {
+        self.fault_origins
+            .iter()
+            .find_map(|(pc, span)| (pc == key).then_some(span))
     }
     pub(crate) fn call(&self, ordinal: u32) -> Result<&Arc<RuntimeMacroCall>, Diagnostic> {
         self.calls
@@ -176,6 +183,7 @@ impl RuntimeScalarPlan {
     pub(super) fn finish(
         steps: Vec<RuntimeScalarStep>,
         drafts: Vec<CallDraft>,
+        origins: Vec<(usize, BodySpan)>,
         index: &BodyIndex,
         key: &PcKey,
         source: ParseKey,
@@ -212,6 +220,60 @@ impl RuntimeScalarPlan {
             })
             .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(|| invalid("scalar plan metadata limit"))?;
+        retained_bytes = retained_bytes
+            .checked_add(
+                origins
+                    .len()
+                    .checked_mul(std::mem::size_of::<(PcKey, BodySpan)>())
+                    .ok_or_else(|| invalid("scalar fault origin bytes overflow"))?,
+            )
+            .and_then(|n| {
+                n.checked_add(
+                    origins
+                        .capacity()
+                        .checked_mul(std::mem::size_of::<(usize, BodySpan)>())?,
+                )
+            })
+            .filter(|n| *n <= 32 * 1024 * 1024)
+            .ok_or_else(|| invalid("scalar fault origin metadata limit"))?;
+        let mut fault_origins = Vec::new();
+        fault_origins
+            .try_reserve_exact(origins.len())
+            .map_err(|_| invalid("scalar fault PC allocation"))?;
+        let node = index
+            .nodes()
+            .get(key.node as usize)
+            .ok_or_else(|| invalid("scalar fault macro node absent"))?;
+        let mut previous = None;
+        for (at, span) in origins {
+            if previous.is_some_and(|old| at <= old)
+                || !matches!(steps.get(at), Some(RuntimeScalarStep::Fault(_)))
+                || span.body_key != key.body
+                || span.relative_start >= span.relative_end
+                || span.relative_start < node.range.start
+                || span.relative_end > node.range.end
+            {
+                return Err(invalid("scalar fault source phase/span differs"));
+            }
+            previous = Some(at);
+            fault_origins.push((pc(at)?, span));
+        }
+        if fault_origins.len()
+            != steps
+                .iter()
+                .filter(|step| matches!(step, RuntimeScalarStep::Fault(_)))
+                .count()
+        {
+            return Err(invalid("scalar fault lacks exact source origin"));
+        }
+        for step in &steps {
+            if let RuntimeScalarStep::Control(control) = step {
+                retained_bytes = retained_bytes
+                    .checked_add(control.allocated_bytes()?)
+                    .filter(|n| *n <= 32 * 1024 * 1024)
+                    .ok_or_else(|| invalid("scalar control plan metadata limit"))?;
+            }
+        }
         let mut work = 0usize;
         for draft in drafts {
             let mut prepare = None;
@@ -475,7 +537,11 @@ impl RuntimeScalarPlan {
             call.identity = e.finish();
             calls.push(Arc::new(call));
         }
-        Ok(Self { steps, calls })
+        Ok(Self {
+            steps,
+            calls,
+            fault_origins,
+        })
     }
 }
 

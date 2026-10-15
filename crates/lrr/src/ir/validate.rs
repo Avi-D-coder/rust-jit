@@ -183,7 +183,25 @@ fn macro_scalar_place(
             .is_some_and(|value| macro_scalar_value(node, SlotId(value)))
 }
 pub fn verify(draft: RecipeDraft, body: &BodyIndex) -> Result<VerifiedRecipe, Diagnostic> {
-    verify_inner(draft, body, None, false)
+    verify_inner(draft, body, None, false, None)
+}
+/// A genuine actual MatchExpr source plan may reach exhaustion at its reserved
+/// opaque operand PC. This does not authorize general opaque MatchNoArm exits.
+pub(crate) fn verify_runtime_scalar_match_exhaustion(
+    draft: RecipeDraft,
+    body: &BodyIndex,
+    proof: &crate::syntax::runtime_macro_scalars::RuntimeScalarMatchExhaustion<'_>,
+) -> Result<VerifiedRecipe, Diagnostic> {
+    proof.require(body, &draft.key)?;
+    if !draft.operations.is_empty()
+        || !matches!(draft.exits.as_slice(), [RecipeExit::MatchNoArm])
+        || &draft.origin.span != proof.span()
+    {
+        return Err(invalid(
+            "opaque match exhaustion recipe differs from source proof",
+        ));
+    }
+    verify_inner(draft, body, None, false, Some(proof))
 }
 /// General macro call admission consumes a genuine privately minted source
 /// witness. The ordinary public verifier never acquires this authority.
@@ -193,7 +211,7 @@ pub(crate) fn verify_runtime_scalar_call(
     call: &crate::syntax::runtime_macro_scalars::RuntimeMacroCall,
 ) -> Result<VerifiedRecipe, Diagnostic> {
     require_runtime_scalar_call(&draft, body, call)?;
-    verify_inner(draft, body, Some(call), false)
+    verify_inner(draft, body, Some(call), false, None)
 }
 /// Only a freshly source-replayed scalar plan can admit an opaque argument's
 /// borrow phases. Public verification retains ordinary indexed borrow rules.
@@ -282,7 +300,7 @@ pub(crate) fn verify_runtime_scalar_borrow(
     if !matches {
         return Err(invalid("scalar borrow source role differs"));
     }
-    verify_inner(draft, body, None, true)
+    verify_inner(draft, body, None, true, None)
 }
 fn require_runtime_scalar_call(
     draft: &RecipeDraft,
@@ -426,6 +444,7 @@ fn verify_inner(
     body: &BodyIndex,
     macro_call: Option<&crate::syntax::runtime_macro_scalars::RuntimeMacroCall>,
     macro_borrow: bool,
+    scalar_match: Option<&crate::syntax::runtime_macro_scalars::RuntimeScalarMatchExhaustion<'_>>,
 ) -> Result<VerifiedRecipe, Diagnostic> {
     pc(body, &draft.key)?;
     span(body, &draft.origin.span)?;
@@ -1426,7 +1445,12 @@ fn verify_inner(
             charge(&mut bytes, d.message.len())?;
         }
         RecipeExit::MatchNoArm => {
-            if !draft.operations.is_empty()
+            if let Some(proof) = scalar_match {
+                proof.require(body, &draft.key)?;
+                if !draft.operations.is_empty() || &draft.origin.span != proof.span() {
+                    return Err(invalid("opaque match exhaustion source shape differs"));
+                }
+            } else if !draft.operations.is_empty()
                 || draft.key.phase != Phase::Exit.code()?
                 || node.role
                     != crate::syntax::body_index::NodeRole::Expression(

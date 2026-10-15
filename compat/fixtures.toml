@@ -12004,3 +12004,113 @@ test = "unchanged_borrowed_compound_original_uses_written_binding_and_reference_
 id = "T044-STOCK-COMPOUND-REF-REFUSAL"
 path = "crates/lrr/src/syntax/runtime_local_numeric_context_tests.rs"
 test = "borrowed_compound_does_not_invent_source_for_unknown_or_nested_reference_operands"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-01"
+path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
+test = "exhausted_opaque_match_faults_after_its_actual_scrutinee_all_editions"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-02"
+path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
+test = "exhaustion_exit_fuel_refusal_preserves_the_completed_scrutinee_prefix"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-03"
+path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
+test = "exhaustive_opaque_bool_matches_and_an_unselected_exhaustion_complete_normally"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-04"
+path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
+test = "opaque_match_scrutinee_call_or_reached_fault_is_not_replayed_or_replaced_by_exhaustion"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-05"
+path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
+test = "selected_scalar_control_result_keeps_unknown_future_arm_and_upper_cold"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-06"
+path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
+test = "selected_unknown_scalar_result_remains_the_actual_reached_unsupported_fault"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-07"
+path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
+test = "unchanged_negative_integer_range_entire_main_edition_2015"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-08"
+path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
+test = "unchanged_negative_integer_range_entire_main_edition_2018"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-09"
+path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
+test = "unchanged_negative_integer_range_entire_main_edition_2021"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-10"
+path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
+test = "unchanged_negative_integer_range_entire_main_edition_2024"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-11"
+path = "crates/lrr/src/syntax/runtime_macro_control_tests.rs"
+test = "both_unchanged_original_arguments_have_bounded_forward_source_branches_all_editions"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-12"
+path = "crates/lrr/src/syntax/runtime_macro_control_tests.rs"
+test = "conditional_ref_result_cannot_mint_whole_argument_borrow_authority"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-13"
+path = "crates/lrr/src/syntax/runtime_macro_control_tests.rs"
+test = "opaque_match_exhaustion_needs_actual_source_proof_and_public_match_exit_stays_indexed"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-14"
+path = "crates/lrr/src/syntax/runtime_macro_control_tests.rs"
+test = "unknown_upper_guard_and_future_result_remain_source_positioned_fault_steps"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-15"
+path = "crates/lrr/src/syntax/runtime_macro_control_tests.rs"
+test = "genuine_control_refuses_modified_condition_target_and_span_without_remint"
+
+[[fixture]]
+id = "T050-NEGATIVE-RANGE-CONTROL-16"
+path = "crates/lrr/src/syntax/runtime_macro_control_tests.rs"
+test = "match_exhaustion_cannot_be_reminted_by_copying_a_phase_slot_or_source_range"
+
+[[fixture]]
+id = "T031-NEGATIVE-RANGE-CONTROL-17"
+path = "crates/lrr/src/syntax/condition_ranges_tests.rs"
+test = "nested_constant_and_static_conditions_cannot_select_outer_function_parameter_all_editions"
+
+[[fixture]]
+id = "T031-NEGATIVE-RANGE-CONTROL-18"
+path = "crates/lrr/src/syntax/condition_ranges_tests.rs"
+test = "ordinary_literals_open_ranges_and_existing_bool_have_real_source_recipes_all_editions"
+
+[[fixture]]
+id = "T031-NEGATIVE-RANGE-CONTROL-19"
+path = "crates/lrr/src/syntax/condition_ranges_tests.rs"
+test = "original_signed_if_let_range_component_preserves_bounds_and_lazy_cleanup_all_editions"
+
+[[fixture]]
+id = "T031-NEGATIVE-RANGE-CONTROL-20"
+path = "crates/lrr/src/syntax/condition_ranges_tests.rs"
+test = "scalar_condition_runtime_components_have_actual_branch_results_and_cold_upper_all_editions"
+
+[[fixture]]
+id = "T031-NEGATIVE-RANGE-CONTROL-21"
+path = "crates/lrr/src/syntax/condition_ranges_tests.rs"
+test = "unchanged_negative_range_original_whole_main_requires_real_completion_all_editions"
+
+[[fixture]]
+id = "T031-NEGATIVE-RANGE-CONTROL-22"
+path = "crates/lrr/src/syntax/condition_ranges_tests.rs"
+test = "upper_source_frontier_is_deferred_and_parameter_source_is_checked_before_owning_read"

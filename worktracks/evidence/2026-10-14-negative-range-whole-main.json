@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    "T031",
+    "T050",
+    "M016"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "original": {
+    "path": "tests/ui/match/match-on-negative-integer-ranges.rs",
+    "git_blob": "855686f55c326103f181b2764700d0aed84c6d3f",
+    "sha256": "d55223d431c9d0840087bcbfe2f04c369654919e262a3d5b3cb9ca9132f1b7b3",
+    "bytes": 187
+  },
+  "source_paths": [
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "before": null,
+      "sha256": "d616e5c60c52e227fad0a5405b17496b1a5694c4c4167be325cdab7dd0a2e7d5",
+      "candidate": "artifacts/macos-first/root-negative-range-test-import-v2/candidate/crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
+    },
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_plan.rs",
+      "before": "595a1177969bb9c6cd8145e2440d39590d810f9f359c2b7d080f3fb5b2f10320",
+      "sha256": "3ed3d2033c3b5641d95ec1f5ccf1e8cdd3a96fc94e3398d8cec4d61b11f4041b",
+      "candidate": "artifacts/macos-first/sol-negative-range-patterns-joined-v1/replay/crates/lrr/src/frontend/runtime_macro_plan.rs"
+    },
+    {
+      "path": "crates/lrr/src/ir/validate.rs",
+      "before": "32c0685b69fe9b5d29286efb04bb7a600889c127f02b7a05a186d6efcffc73da",
+      "sha256": "7ce7a4306494d3a111e91a90f3f4dcfb9d32590cfa553decb4a4f926ff2d720f",
+      "candidate": "artifacts/macos-first/sol-negative-range-patterns-joined-v1/replay/crates/lrr/src/ir/validate.rs"
+    },
+    {
+      "path": "crates/lrr/src/syntax/condition_ranges.rs",
+      "before": null,
+      "sha256": "4c1386a90c1369ac1c2a103af0f606b8946b0617c50471ba610e0311265282c1",
+      "candidate": "artifacts/macos-first/sol-negative-range-patterns-joined-v1/replay/crates/lrr/src/syntax/condition_ranges.rs"
+    },
+    {
+      "path": "crates/lrr/src/syntax/condition_ranges_tests.rs",
+      "before": null,
+      "sha256": "bce3b2016332e2b00b43e15efa2f4c28e1d64eb5e58c048a9647de375d5a5198",
+      "candidate": "artifacts/macos-first/sol-negative-range-patterns-joined-v1/replay/crates/lrr/src/syntax/condition_ranges_tests.rs"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_calls.rs",
+      "before": "870d9de5753438b5c9510f41f1908f7f147b7cd076a63c0145fd16824981d264",
+      "sha256": "fa08b416c8859442cd8acaf2fee3c56407adb9a5c388dd87ac49a177f8854db7",
+      "candidate": "artifacts/macos-first/sol-negative-range-patterns-joined-v1/replay/crates/lrr/src/syntax/runtime_macro_calls.rs"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_control_tests.rs",
+      "before": null,
+      "sha256": "5afaf0be4bdfdc71ca665793655e197485af32d90bc693482b29ee8823518edd",
+      "candidate": "artifacts/macos-first/sol-negative-range-patterns-joined-v1/replay/crates/lrr/src/syntax/runtime_macro_control_tests.rs"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_controls.rs",
+      "before": null,
+      "sha256": "15fc2a7edb6b047af0a18595b211c9a4a6bf977fef32ce8ca43f35649dc1e43c",
+      "candidate": "artifacts/macos-first/sol-negative-range-patterns-joined-v1/replay/crates/lrr/src/syntax/runtime_macro_controls.rs"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_scalars.rs",
+      "before": "cdb6b551dc7e0887e120d48825b7d61851c2634cb56eb9edda48194ec0c3b9f7",
+      "sha256": "8bf8c3fac8f3334db06dda1f5cf81aabb951aabc2d9eba421acb28c8cfbd743f",
+      "candidate": "artifacts/macos-first/sol-negative-range-patterns-joined-v1/replay/crates/lrr/src/syntax/runtime_macro_scalars.rs"
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "before": "15d8c9bd148a90a2a08d65ea758cb827ce256dd6ab4ca3e68ce60c8d97e01957",
+      "sha256": "f69441aa2f0bc6ee8927a80832ae5589bf54390af3f2bbd433d9ff7415cc87ba",
+      "candidate": "artifacts/macos-first/root-condition-compound-join-v1/candidate/crates/lrr/src/syntax/thunks.rs"
+    }
+  ],
+  "validation_source_member": "43ef2358578b52ccf3c744f1e4f1c3df8ab9ba20d7dd50d296e8f951caf1fb2e",
+  "scoped_results": {
+    "V45": "Compile-only E0599 missing StableEncode trait import in new adapter;zero Rust bodies ran; raw failure retained.",
+    "V46": "Strict lrrlibtests passed;22 macro/ordinary condition controls passed, including four complete unchanged main edition runs. Only the actual test API trait import changed after V45."
+  },
+  "new_demonstrated_whole_main_programs": 1,
+  "owning_editions": [
+    2015,
+    2018,
+    2021,
+    2024
+  ],
+  "whole_main_edition_runs_passed": 4,
+  "guards": "Unit result,2 actual Assert,6 NumericBinary, no helper calls or guest panic in each original run. Exact source/phase/span/argument-borrow and public MatchNoArm authority, cold future arms/bounds/results and reached faults/fuel remain checked.",
+  "invariants": [
+    "Lower actual source match/if/if-let argument branches at existing reserved macro operand phases; scrutinee executes once and branches select forward source targets.",
+    "Only a genuine compiler-owned actual MatchExpr proof admits zero-op opaque exhaustion; public ordinary verifier still requires exact source-indexed Match exit.",
+    "Ordinary scalar if-let uses existing indexed clause/operand/bound/commit/exit and scope slots; owning-body check prevents nested const/static initializer from borrowing an outer function parameter ordinal.",
+    "Existing compound source/borrow lowering retained by exact two-hunk thunks join; no opcode/schema change."
+  ],
+  "acceptance_controls": [
+    {
+      "scope": "control-recipes-ten",
+      "test": "exhausted_opaque_match_faults_after_its_actual_scrutinee_all_editions",
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "control-recipes-ten",
+      "test": "exhaustion_exit_fuel_refusal_preserves_the_completed_scrutinee_prefix",
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "control-recipes-ten",
+      "test": "exhaustive_opaque_bool_matches_and_an_unselected_exhaustion_complete_normally",
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "control-recipes-ten",
+      "test": "opaque_match_scrutinee_call_or_reached_fault_is_not_replayed_or_replaced_by_exhaustion",
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "control-recipes-ten",
+      "test": "selected_scalar_control_result_keeps_unknown_future_arm_and_upper_cold",
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "control-recipes-ten",
+      "test": "selected_unknown_scalar_result_remains_the_actual_reached_unsupported_fault",
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "control-recipes-ten",
+      "test": "unchanged_negative_integer_range_entire_main_edition_2015",
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "control-recipes-ten",
+      "test": "unchanged_negative_integer_range_entire_main_edition_2018",
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "control-recipes-ten",
+      "test": "unchanged_negative_integer_range_entire_main_edition_2021",
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "control-recipes-ten",
+      "test": "unchanged_negative_integer_range_entire_main_edition_2024",
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "control-source-six",
+      "test": "both_unchanged_original_arguments_have_bounded_forward_source_branches_all_editions",
+      "path": "crates/lrr/src/syntax/runtime_macro_control_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "control-source-six",
+      "test": "conditional_ref_result_cannot_mint_whole_argument_borrow_authority",
+      "path": "crates/lrr/src/syntax/runtime_macro_control_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "control-source-six",
+      "test": "opaque_match_exhaustion_needs_actual_source_proof_and_public_match_exit_stays_indexed",
+      "path": "crates/lrr/src/syntax/runtime_macro_control_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "control-source-six",
+      "test": "unknown_upper_guard_and_future_result_remain_source_positioned_fault_steps",
+      "path": "crates/lrr/src/syntax/runtime_macro_control_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "control-source-six",
+      "test": "genuine_control_refuses_modified_condition_target_and_span_without_remint",
+      "path": "crates/lrr/src/syntax/runtime_macro_control_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "control-source-six",
+      "test": "match_exhaustion_cannot_be_reminted_by_copying_a_phase_slot_or_source_range",
+      "path": "crates/lrr/src/syntax/runtime_macro_control_tests.rs",
+      "task": "T050"
+    },
+    {
+      "scope": "condition-ranges-six",
+      "test": "nested_constant_and_static_conditions_cannot_select_outer_function_parameter_all_editions",
+      "path": "crates/lrr/src/syntax/condition_ranges_tests.rs",
+      "task": "T031"
+    },
+    {
+      "scope": "condition-ranges-six",
+      "test": "ordinary_literals_open_ranges_and_existing_bool_have_real_source_recipes_all_editions",
+      "path": "crates/lrr/src/syntax/condition_ranges_tests.rs",
+      "task": "T031"
+    },
+    {
+      "scope": "condition-ranges-six",
+      "test": "original_signed_if_let_range_component_preserves_bounds_and_lazy_cleanup_all_editions",
+      "path": "crates/lrr/src/syntax/condition_ranges_tests.rs",
+      "task": "T031"
+    },
+    {
+      "scope": "condition-ranges-six",
+      "test": "scalar_condition_runtime_components_have_actual_branch_results_and_cold_upper_all_editions",
+      "path": "crates/lrr/src/syntax/condition_ranges_tests.rs",
+      "task": "T031"
+    },
+    {
+      "scope": "condition-ranges-six",
+      "test": "unchanged_negative_range_original_whole_main_requires_real_completion_all_editions",
+      "path": "crates/lrr/src/syntax/condition_ranges_tests.rs",
+      "task": "T031"
+    },
+    {
+      "scope": "condition-ranges-six",
+      "test": "upper_source_frontier_is_deferred_and_parameter_source_is_checked_before_owning_read",
+      "path": "crates/lrr/src/syntax/condition_ranges_tests.rs",
+      "task": "T031"
+    }
+  ],
+  "separate_private_regression": "V46 provider-edit epoch2/newresult659 control passed but its xtask lifecycle/namespace candidate is not integrated in this checkpoint. V44 dependency bank72pass7fail,with6provenance/1epoch; source-specific and not a full milestone.",
+  "configured_compiletest_full_fixture_passes": 0,
+  "scope_limit": "Whole-original LRR runtime evidence; configured upstream harness/matrix/output capture and full-suite prerequisite incomplete. No extra original pass counted for duplicate ordinary control adapters.",
+  "upstream_runtime_acceptance": "incomplete",
+  "diagnostic_compatibility": "incomplete; separate gate",
+  "compiler_tooling_compatibility": "incomplete; separate gate",
+  "full_suite_compatibility": "incomplete",
+  "guest_jit_gate": "closed",
+  "release_complete": false,
+  "linux_acceptance": "unexecuted",
+  "local_receipts": [
+    {
+      "version": 44,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v44/VALIDATION-HANDOFF.json",
+      "sha256": "3a88e2b6c4cc0bc30dbc0d5a5782de30b275adf57f7d577dad5a50dcb364ba39"
+    },
+    {
+      "version": 45,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v45/VALIDATION-HANDOFF.json",
+      "sha256": "dbb133a3417c9a5f5d90fb363aa4a71e485fbd601a227a60d20837842bc68777"
+    },
+    {
+      "version": 46,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v46/VALIDATION-HANDOFF.json",
+      "sha256": "87961c9d435e32b69a0d12b3014a14bafade2fc595f4098b05f24b828902c780"
+    }
+  ]
+}
