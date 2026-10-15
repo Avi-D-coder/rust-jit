@@ -1,0 +1,2699 @@
+--- a/crates/lrr/src/engine/run_argument_hints.rs
++++ b/crates/lrr/src/engine/run_argument_hints.rs
+@@ -141,7 +141,7 @@
+                 end,
+             },
+             proof.mutable(),
+-            Box::new(TyTerm::Primitive(proof.pointee())),
++            Box::new(proof.pointee().clone()),
+         )
+     });
+     // Materialize only the checked descriptor, after source admission.
+--- a/crates/lrr/src/engine/run_byte_comparisons.rs
++++ b/crates/lrr/src/engine/run_byte_comparisons.rs
+@@ -1,9 +1,9 @@
+-//! Reached source/member admission for byte equality in resolved runtime macros.
++//! Reached source/member admission for immutable literal equality in runtime macros.
+ use super::*;
+ use crate::{
+     core::digest::Digest,
+     db::dependency::{InputKey, InputValue},
+-    facade::byte_equality::{ByteEqualityMember, is_byte_reference},
++    facade::byte_equality::{ByteEqualityMember, ByteShape, is_byte_reference},
+     ir::op::NumericBinary,
+     syntax::{
+         body_index::{ExpressionKind, NodeRole},
+@@ -70,8 +70,13 @@
+         self.member
+             .require(frame.body.profile(), left_source, right_source)?;
+         let (l, r) = self.member.shapes();
+-        store.require_static_byte_value(frame.cell(*left)?, l.length())?;
+-        store.require_static_byte_value(frame.cell(*right)?, r.length())
++        for (slot, shape) in [(*left, l), (*right, r)] {
++            match shape {
++                ByteShape::Utf8 => store.require_static_string_value(frame.cell(slot)?)?,
++                _ => store.require_static_byte_value(frame.cell(slot)?, shape.length())?,
++            }
++        }
++        Ok(())
+     }
+ }
+ impl RunMachine {
+--- a/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
+@@ -38,7 +38,7 @@
+     assert!(matches!(d.poll().unwrap(), SourceDiscoveryStep::Sealed(_)));
+     d
+ }
+-fn start_source(
++pub(super) fn start_source(
+     source: &str,
+     edition: u16,
+     fuel: u64,
+@@ -114,10 +114,20 @@
+     run: &mut RunMachine,
+     contexts: &[crate::engine::runtime_macros::RuntimeMacroContext<'_>],
+ ) -> (crate::engine::install::RecipeId, LiteralRecipe, SlotId) {
++    reach_literal_kind(db, run, contexts, LiteralKind::ByteString, false)
++}
++pub(super) fn reach_literal_kind(
++    db: &mut Database,
++    run: &mut RunMachine,
++    contexts: &[crate::engine::runtime_macros::RuntimeMacroContext<'_>],
++    kind: LiteralKind,
++    macro_only: bool,
++) -> (crate::engine::install::RecipeId, LiteralRecipe, SlotId) {
+     for _ in 0..64 {
+         let key = run.frame.pc().clone();
+-        let node = &run.frame.body.nodes()[key.node as usize];
+-        let prepared = if node.role == NodeRole::Expression(ExpressionKind::Macro) {
++        let macro_node = run.frame.body.nodes()[key.node as usize].role
++            == NodeRole::Expression(ExpressionKind::Macro);
++        let prepared = if macro_node {
+             contexts.iter().find_map(|context| {
+                 context
+                     .resolve_at(
+@@ -152,7 +162,8 @@
+                 destination,
+                 ..
+             } = op
+-                && literal.kind == LiteralKind::ByteString
++                && literal.kind == kind
++                && (!macro_only || macro_node)
+             {
+                 return (id, literal.clone(), *destination);
+             }
+@@ -236,7 +247,7 @@
+         recipe: run.installed.get(id).unwrap().recipe().fingerprint(),
+         span: literal.source.clone(),
+         destination,
+-        payload: payload.clone(),
++        payload: MacroLiteralPayload::Bytes(payload.clone()),
+     };
+     proof
+         .require(&run.frame.body, run.frame.pc(), &literal, destination)
+--- a/crates/lrr/src/engine/run_byte_macro_literals.rs
++++ b/crates/lrr/src/engine/run_byte_macro_literals.rs
+@@ -1,4 +1,4 @@
+-//! Current compiler-intrinsic source admission for a byte literal in opaque
++//! Current compiler-intrinsic source admission for an immutable literal in opaque
+ //! macro operands. A verified recipe alone cannot grant that source authority.
+ use super::*;
+ use crate::{
+@@ -10,8 +10,42 @@
+         byte_string_literals::ByteStringLiteral,
+         parse::ParseKey,
+         spans::BodySpan,
++        string_literals::StringLiteral,
+     },
+ };
++
++/// Bytes may share physical storage, but their decoder/source types are distinct.
++#[derive(Clone)]
++enum MacroLiteralPayload {
++    Bytes(ByteStringLiteral),
++    Utf8(StringLiteral),
++}
++impl MacroLiteralPayload {
++    fn from_literal(literal: &LiteralRecipe) -> Result<Self, Diagnostic> {
++        match (literal.kind, &literal.decoded) {
++            (LiteralKind::ByteString, Some(DecodedLiteral::ByteString(payload))) => {
++                Ok(Self::Bytes(payload.clone()))
++            }
++            (LiteralKind::String, Some(DecodedLiteral::String(payload))) => {
++                Ok(Self::Utf8(payload.clone()))
++            }
++            _ => Err(call_fault("macro immutable literal decoder kind differs")),
++        }
++    }
++    fn allocated_bytes(&self) -> Option<usize> {
++        match self {
++            Self::Bytes(payload) => payload.allocated_bytes(),
++            Self::Utf8(payload) => payload.allocated_bytes(),
++        }
++    }
++    fn same_decoded_payload(&self, other: &Self) -> bool {
++        match (self, other) {
++            (Self::Bytes(left), Self::Bytes(right)) => left.same_decoded_payload(right),
++            (Self::Utf8(left), Self::Utf8(right)) => left.same_decoded_payload(right),
++            _ => false,
++        }
++    }
++}
+ 
+ /// Constructed only after current source/name resolution reproduces the actual
+ /// installed operation. It is run-owned, never a cached query or guest value.
+@@ -22,7 +56,7 @@
+     recipe: Digest,
+     span: BodySpan,
+     destination: SlotId,
+-    payload: ByteStringLiteral,
++    payload: MacroLiteralPayload,
+ }
+ impl AdmittedMacroByteLiteral {
+     pub(crate) fn allocated_bytes(&self) -> Option<usize> {
+@@ -50,9 +84,7 @@
+             .nodes()
+             .get(pc.node as usize)
+             .ok_or_else(|| call_fault("macro byte literal source node missing"))?;
+-        let Some(DecodedLiteral::ByteString(payload)) = &literal.decoded else {
+-            return Err(call_fault("macro byte literal decoder certificate missing"));
+-        };
++        let payload = MacroLiteralPayload::from_literal(literal)?;
+         if &self.pc != pc
+             || &pc.body != body.body()
+             || self.source.profile != *body.profile()
+@@ -65,8 +97,7 @@
+             || self.span.relative_end > node.range.end
+             || self.span.relative_start >= self.span.relative_end
+             || self.destination != destination
+-            || literal.kind != LiteralKind::ByteString
+-            || !self.payload.same_decoded_payload(payload)
++            || !self.payload.same_decoded_payload(&payload)
+         {
+             return Err(call_fault(
+                 "macro byte literal source/phase/destination differs",
+@@ -103,7 +134,9 @@
+                     literal,
+                     destination,
+                     ..
+-                } if literal.kind == LiteralKind::ByteString => Some((literal, *destination)),
++                } if matches!(literal.kind, LiteralKind::ByteString | LiteralKind::String) => {
++                    Some((literal, *destination))
++                }
+                 _ => None,
+             });
+         let Some((literal, destination)) = literals.next() else {
+@@ -147,9 +180,7 @@
+                     "macro byte literal current source recipe differs",
+                 ));
+             }
+-            let Some(DecodedLiteral::ByteString(payload)) = &literal.decoded else {
+-                return Err(call_fault("macro byte literal payload absent"));
+-            };
++            let payload = MacroLiteralPayload::from_literal(literal)?;
+             let admission = AdmittedMacroByteLiteral {
+                 pc: key.clone(),
+                 source: source.selection().outline.parse.clone(),
+@@ -157,7 +188,7 @@
+                 recipe: fingerprint,
+                 span: literal.source.clone(),
+                 destination,
+-                payload: payload.clone(),
++                payload,
+             };
+             admission.require(&self.frame.body, key, literal, destination)?;
+             return self.frame.admit_macro_byte_literal(Some(admission));
+@@ -171,3 +202,7 @@
+ #[cfg(test)]
+ #[path = "run_byte_macro_literal_tests.rs"]
+ mod tests;
++
++#[cfg(test)]
++#[path = "run_string_macro_literal_tests.rs"]
++mod string_tests;
+--- /dev/null
++++ b/crates/lrr/src/engine/run_string_macro_literal_tests.rs
+@@ -0,0 +1,179 @@
++//! Actual unchanged upstream assertion operand and LRR source-authority controls.
++//! These stop before string comparison and are not whole-fixture passes.
++use super::*;
++use crate::{
++    ir::op::PrimitiveType,
++    runtime::shape::TypeKey,
++    traits::term::{RegionTerm, TyTerm},
++};
++const ORIGINAL: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/parser/unicode-escape-sequences.rs"
++);
++fn reached(
++    db: &mut Database,
++    run: &mut RunMachine,
++    contexts: &[crate::engine::runtime_macros::RuntimeMacroContext<'_>],
++) -> (crate::engine::install::RecipeId, LiteralRecipe, SlotId) {
++    tests::reach_literal_kind(db, run, contexts, LiteralKind::String, true)
++}
++fn effects(run: &RunMachine) -> (u64, u32, usize, usize, u64) {
++    (
++        run.frame.counters().operations_started,
++        run.store.budget().handles(),
++        run.store.budget().bytes(),
++        run.store.type_metadata_bytes(),
++        run.frame.fuel_snapshot().used,
++    )
++}
++#[test]
++fn unchanged_unicode_macro_string_operand_requires_current_source_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, mut run, macros, _) = tests::start_source(ORIGINAL, edition, 1000);
++        let contexts = macros.contexts().unwrap();
++        let (id, literal, destination) = reached(&mut db, &mut run, &contexts);
++        let Some(DecodedLiteral::String(payload)) = &literal.decoded else {
++            panic!("unchanged original UTF8 operand");
++        };
++        assert_eq!(payload.text(), "☃");
++        let before = effects(&run);
++        assert!(
++            step::step(
++                &mut run.frame,
++                &mut run.store,
++                run.installed.get(id).unwrap()
++            )
++            .is_err()
++        );
++        assert_eq!(effects(&run), before);
++        assert!(run.prepare_macro_byte_literal(&mut db, &[], id).is_err());
++        assert_eq!(effects(&run), before);
++        run.prepare_macro_byte_literal(&mut db, &contexts, id)
++            .unwrap();
++        assert_eq!(effects(&run), before);
++        run.frame
++            .require_macro_byte_literal(&literal, destination)
++            .unwrap();
++        assert!(matches!(
++            step::step(
++                &mut run.frame,
++                &mut run.store,
++                run.installed.get(id).unwrap()
++            )
++            .unwrap(),
++            StepOutcome::Next(_)
++        ));
++        assert_eq!(
++            run.frame.source_view(destination).unwrap(),
++            Some(TyTerm::Ref(
++                RegionTerm::Static,
++                false,
++                Box::new(TyTerm::Str)
++            ))
++        );
++        let reference_type = run
++            .store
++            .find_type(&TypeKey::Ref {
++                mutable: false,
++                target: crate::runtime::shape::TypeId(16),
++            })
++            .unwrap();
++        let cell = run.frame.cell(destination).unwrap();
++        let reference = run.store.reference_from_cell(cell).unwrap();
++        let ticket = run.store.reference_ticket(reference).unwrap();
++        assert_eq!(
++            run.store.peek_ticket(ticket).unwrap().type_id,
++            reference_type.0
++        );
++        run.store.discard(ticket).unwrap();
++        assert_eq!(run.frame.counters().operations_started, before.0 + 1);
++        db.finish_run().unwrap();
++    }
++}
++#[test]
++fn macro_string_certificate_cannot_change_kind_span_slot_or_source_context() {
++    let (mut db, mut run, macros, _) = tests::start_source(ORIGINAL, 2024, 1000);
++    let contexts = macros.contexts().unwrap();
++    let (id, literal, destination) = reached(&mut db, &mut run, &contexts);
++    run.prepare_macro_byte_literal(&mut db, &contexts, id)
++        .unwrap();
++    let before = effects(&run);
++    let mut wrong = literal.clone();
++    wrong.kind = LiteralKind::ByteString;
++    assert!(
++        run.frame
++            .require_macro_byte_literal(&wrong, destination)
++            .is_err()
++    );
++    wrong = literal.clone();
++    wrong.source.relative_end += 1;
++    assert!(
++        run.frame
++            .require_macro_byte_literal(&wrong, destination)
++            .is_err()
++    );
++    assert!(
++        run.frame
++            .require_macro_byte_literal(&literal, SlotId(u32::MAX))
++            .is_err()
++    );
++    // Current macro authority cannot overwrite a conflicting reached source type.
++    run.frame
++        .set_source_view(destination, Some(TyTerm::Primitive(PrimitiveType::U8)))
++        .unwrap();
++    assert!(
++        step::step(
++            &mut run.frame,
++            &mut run.store,
++            run.installed.get(id).unwrap()
++        )
++        .is_err()
++    );
++    assert_eq!(effects(&run), before);
++    db.finish_run().unwrap();
++}
++#[test]
++fn unchanged_macro_string_operand_refuses_republished_source_before_effects() {
++    let (mut db, mut run, macros, inputs) = tests::start_source(ORIGINAL, 2024, 1000);
++    let contexts = macros.contexts().unwrap();
++    let (id, _, _) = reached(&mut db, &mut run, &contexts);
++    run.prepare_macro_byte_literal(&mut db, &contexts, id)
++        .unwrap();
++    let before = effects(&run);
++    db.finish_run().unwrap();
++    inputs.publish(&mut db).unwrap();
++    db.begin_run().unwrap();
++    assert!(matches!(
++        run.poll_with_runtime_macros(&mut db, &contexts),
++        RunPoll::Fault(Diagnostic {
++            code: "LRR-E-INTERNAL-SNAPSHOT",
++            ..
++        })
++    ));
++    assert_eq!(effects(&run), before);
++    db.finish_run().unwrap();
++}
++
++#[test]
++fn unchanged_unicode_underscore_main_completes_string_and_char_assertions_all_editions() {
++    const ORIGINAL: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/underscores-in-unicode-escapes.rs"
++    );
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, mut run, macros, _) = tests::start_source(ORIGINAL, edition, 1000);
++        let contexts = macros.contexts().unwrap();
++        let report = match run.poll_with_runtime_macros(&mut db, &contexts) {
++            RunPoll::Completed(report) => report,
++            RunPoll::Fault(error) => panic!("edition {edition}: {error}"),
++            RunPoll::NeedInput(input) => panic!("edition {edition}: {input:?}"),
++            RunPoll::Panicked(report) => panic!("edition {edition}: {report:?}"),
++        };
++        assert!(matches!(report.value, ValueSummary::Unit));
++        assert_eq!(report.opcode_counters.started_by_opcode[26], 2);
++        assert_eq!(report.opcode_counters.started_by_opcode[10], 2);
++        assert_eq!(
++            report.opcode_counters.operations_started,
++            report.opcode_counters.operations_completed
++        );
++        db.finish_run().unwrap();
++    }
++}
+--- a/crates/lrr/src/facade/byte_equality.rs
++++ b/crates/lrr/src/facade/byte_equality.rs
+@@ -1,4 +1,4 @@
+-//! Closed core PartialEq declarations for shared U8 array/slice operands.
++//! Closed core PartialEq declarations for shared U8 arrays/slices and UTF-8 str.
+ //! Source terms select members; runtime descriptors only check that selection.
+ use crate::{
+     core::{
+@@ -17,12 +17,13 @@
+ pub(crate) enum ByteShape {
+     Array(u32),
+     Slice,
++    Utf8,
+ }
+ impl ByteShape {
+     pub(crate) fn length(self) -> Option<u32> {
+         match self {
+             Self::Array(n) => Some(n),
+-            Self::Slice => None,
++            Self::Slice | Self::Utf8 => None,
+         }
+     }
+ }
+@@ -31,6 +32,7 @@
+         return None;
+     };
+     match pointee.as_ref() {
++        TyTerm::Str => Some(ByteShape::Utf8),
+         TyTerm::Array(element, ConstTerm::Value(n))
+             if **element == TyTerm::Primitive(PrimitiveType::U8) =>
+         {
+@@ -86,11 +88,12 @@
+ impl ByteEqualityFacet {
+     pub(crate) fn for_profile(profile: &ProfileIdentity) -> Result<Self, Diagnostic> {
+         profile.validate_source()?;
+-        let mut e = StableEncoder::new("lrr/v1/core-byte-partial-eq-facet");
++        let mut e = StableEncoder::new("lrr/v2/core-immutable-literal-partial-eq-facet");
+         e.record(profile);
+         e.digest(super::unit(profile, "core"));
+         // Shared-reference forwarding, primitive U8 equality and the four
+-        // pinned array/slice implementation families, including equal-N arrays.
++        // pinned array/slice implementation families, including equal-N arrays,
++        // plus core/src/str/traits.rs PartialEq for str over UTF-8 bytes.
+         for contract in [
+             "PartialEq::eq",
+             "&A:&B forwarding",
+@@ -99,6 +102,7 @@
+             "[u8;N]:[u8]",
+             "[u8]:[u8;N]",
+             "[u8]:[u8]",
++            "str:str via core::str::traits PartialEq byte equality",
+         ] {
+             e.string(contract);
+         }
+@@ -129,14 +133,20 @@
+         if profile != self.profile.as_ref() {
+             return Err(fault("byte PartialEq compiler profile differs"));
+         }
+-        let l = shape(left)
+-            .ok_or_else(|| fault("byte PartialEq left source is not a closed shared U8 view"))?;
+-        let r = shape(right)
+-            .ok_or_else(|| fault("byte PartialEq right source is not a closed shared U8 view"))?;
++        let l = shape(left).ok_or_else(|| {
++            fault("literal PartialEq left source requires shared str or U8 array/slice")
++        })?;
++        let r = shape(right).ok_or_else(|| {
++            fault("literal PartialEq right source requires shared str or U8 array/slice")
++        })?;
++        // Shared physical bytes never create a cross-family PartialEq impl.
++        if (l == ByteShape::Utf8) != (r == ByteShape::Utf8) {
++            return Err(fault("str PartialEq requires two str source operands"));
++        }
+         if matches!((l, r), (ByteShape::Array(a), ByteShape::Array(b)) if a != b) {
+             return Err(fault("array PartialEq requires equal source const lengths"));
+         }
+-        let mut e = StableEncoder::new("lrr/v1/core-byte-partial-eq-instance");
++        let mut e = StableEncoder::new("lrr/v2/core-immutable-literal-partial-eq-instance");
+         e.digest(self.identity);
+         e.record(left);
+         e.record(right);
+@@ -168,6 +178,7 @@
+             Box::new(match shape {
+                 ByteShape::Array(n) => TyTerm::Array(element, ConstTerm::Value(n.into())),
+                 ByteShape::Slice => TyTerm::Slice(element),
++                ByteShape::Utf8 => TyTerm::Str,
+             }),
+         )
+     }
+@@ -184,8 +195,18 @@
+                 .unwrap()
+                 .unwrap();
+             let macro_only = RuntimeMacroCatalog::standard(&profile).unwrap();
+-            for l in [ByteShape::Array(0), ByteShape::Array(600), ByteShape::Slice] {
+-                for r in [ByteShape::Array(0), ByteShape::Array(600), ByteShape::Slice] {
++            for l in [
++                ByteShape::Array(0),
++                ByteShape::Array(600),
++                ByteShape::Slice,
++                ByteShape::Utf8,
++            ] {
++                for r in [
++                    ByteShape::Array(0),
++                    ByteShape::Array(600),
++                    ByteShape::Slice,
++                    ByteShape::Utf8,
++                ] {
+                     let left = reference(l);
+                     let right = reference(r);
+                     assert!(
+@@ -194,7 +215,9 @@
+                             .is_err()
+                     );
+                     let result = actual.byte_equality_member(&profile, &left, &right);
+-                    if matches!((l,r), (ByteShape::Array(a),ByteShape::Array(b)) if a!=b) {
++                    if matches!((l,r), (ByteShape::Array(a),ByteShape::Array(b)) if a!=b)
++                        || (l == ByteShape::Utf8) != (r == ByteShape::Utf8)
++                    {
+                         assert!(result.is_err());
+                     } else {
+                         let selected = result.unwrap();
+--- a/crates/lrr/src/frontend/closed_reference_calls.rs
++++ b/crates/lrr/src/frontend/closed_reference_calls.rs
+@@ -29,7 +29,7 @@
+     Parameter(ParamKey),
+     Elided { definition: Digest, ordinal: u32 },
+ }
+-/// Source-created parameter syntax plus current owning primitive lookup.
++/// Source-created parameter syntax plus current owning intrinsic type lookup.
+ #[derive(Debug, Clone)]
+ pub struct ClosedReferenceParameter {
+     syntax: ClosedReferenceSyntax,
+@@ -37,7 +37,7 @@
+     signature: Digest,
+     region: DeclaredRegion,
+     source: TyTerm,
+-    primitive: PrimitiveType,
++    pointee: TyTerm,
+     revision: u64,
+     source_revision: u64,
+     inputs: BTreeMap<InputKey, Digest>,
+@@ -80,13 +80,14 @@
+         if syntax.parse() != &parsed.key() {
+             return Err(invalid("reference syntax parser differs"));
+         }
+-        let primitive = match SignatureNames::from_database(db, graph, signature)?
++        let pointee = match SignatureNames::from_database(db, graph, signature)?
+             .unqualified(syntax.target(), None)?
+         {
+-            SignatureName::Primitive(primitive) => primitive,
++            SignatureName::Primitive(primitive) => TyTerm::Primitive(primitive),
++            SignatureName::Str if !syntax.mutable() => TyTerm::Str,
+             _ => return Ok(None), // Existing typed NeedType/NeedName frontier remains.
+         };
+-        primitive_runtime_id(primitive)?;
++        reference_target_id(&pointee)?;
+         let inputs = db.lexical_namespace_stamps()?;
+         if inputs.len() > 4096 {
+             return Err(limit());
+@@ -128,18 +129,14 @@
+                 index: ordinal,
+             },
+         };
+-        let source = TyTerm::Ref(
+-            source_region,
+-            syntax.mutable(),
+-            Box::new(TyTerm::Primitive(primitive)),
+-        );
++        let source = TyTerm::Ref(source_region, syntax.mutable(), Box::new(pointee.clone()));
+         let proof = Self {
+             syntax,
+             definition: signature.definition,
+             signature: signature.fingerprint(),
+             region,
+             source,
+-            primitive,
++            pointee,
+             revision: db.revision(),
+             source_revision: db.source_revision(),
+             inputs,
+@@ -149,8 +146,8 @@
+         }
+         Ok(Some(Arc::new(proof)))
+     }
+-    pub fn pointee(&self) -> PrimitiveType {
+-        self.primitive
++    pub fn pointee(&self) -> &TyTerm {
++        &self.pointee
+     }
+     pub fn ordinal(&self) -> u32 {
+         self.syntax.ordinal()
+@@ -196,7 +193,7 @@
+     pub fn materialize_hint(&self, store: &mut GuestStore) -> Result<TypeId, Diagnostic> {
+         store.intern_type(TypeKey::Ref {
+             mutable: self.syntax.mutable(),
+-            target: primitive_runtime_id(self.primitive)?,
++            target: reference_target_id(&self.pointee)?,
+         })
+     }
+     pub fn allocated_bytes(&self) -> Result<usize, Diagnostic> {
+@@ -236,7 +233,7 @@
+                 "reference argument source is not an admitted reference",
+             ));
+         };
+-        if !matches!(target.as_ref(), TyTerm::Primitive(_))
++        if !matches!(target.as_ref(), TyTerm::Primitive(_) | TyTerm::Str)
+             || matches!(
+                 region,
+                 RegionTerm::Placeholder(_) | RegionTerm::Bound { .. }
+@@ -282,13 +279,21 @@
+     let TyTerm::Ref(_, mutable, target) = source else {
+         return Err(invalid("reference source shape differs"));
+     };
+-    let TyTerm::Primitive(primitive) = target.as_ref() else {
+-        return Err(invalid("reference source pointee is not primitive"));
+-    };
++    let target_id = reference_target_id(target)?;
++    if target.as_ref() == &TyTerm::Str {
++        if *mutable {
++            return Err(invalid(
++                "immutable UTF-8 argument cannot supply mutable access",
++            ));
++        }
++        // A matching descriptor alone cannot manufacture a UTF-8 view.
++        // Require the committed literal root and its private string lease.
++        store.require_static_string_value(cell)?;
++    }
+     store.reference_from_cell(cell)?; // actual lease/owner/access/target validation
+     let descriptor = store.type_descriptor(TypeId(value.type_id))?;
+     if value.kind != 9
+-        || !matches!(descriptor.key.as_ref(),TypeKey::Ref{mutable:actual,target} if actual==mutable && *target==primitive_runtime_id(*primitive)?)
++        || !matches!(descriptor.key.as_ref(),TypeKey::Ref{mutable:actual,target} if actual==mutable && *target==target_id)
+     {
+         return Err(invalid(
+             "reference source/access/pointee and actual descriptor disagree",
+@@ -296,6 +301,18 @@
+     }
+     Ok(())
+ }
++/// Only the source-selected intrinsic cases admitted above have physical targets.
++/// `str` is unsized; this ID is used solely as a reference pointee.
++fn reference_target_id(target: &TyTerm) -> Result<TypeId, Diagnostic> {
++    match target {
++        TyTerm::Primitive(primitive) => primitive_runtime_id(*primitive),
++        TyTerm::Str => Ok(TypeId(16)),
++        _ => Err(invalid(
++            "reference pointee requires further source integration",
++        )),
++    }
++}
++
+ #[derive(Debug, Clone)]
+ struct ReferenceBinding {
+     ordinal: usize,
+@@ -370,7 +387,7 @@
+                 || signature.parameters[ordinal].receiver
+                 || signature.parameters[ordinal].variadic
+                 || !matches!(source,TyTerm::Ref(_,mutable,target)
+-                    if *mutable==parameter.mutable() && target.as_ref()==&TyTerm::Primitive(parameter.primitive))
++                    if *mutable==parameter.mutable() && target.as_ref()==&parameter.pointee)
+                 || source != &binding.argument.source
+                 || packet.parameter_descriptors[ordinal] != TypeId(binding.argument.value.type_id)
+             {
+@@ -486,12 +503,10 @@
+         let TyTerm::Ref(region, mutable, target) = &argument.source else {
+             return Err(invalid("reference actual source absent"));
+         };
+-        if *mutable != parameter.syntax.mutable()
+-            || target.as_ref() != &TyTerm::Primitive(parameter.primitive)
+-        {
++        if *mutable != parameter.syntax.mutable() || target.as_ref() != &parameter.pointee {
+             return Err(fault(
+                 "LRR-E-CALL-ARG-TYPE",
+-                "reference argument source differs from selected primitive pointee/access",
++                "reference argument source differs from selected source pointee/access",
+             ));
+         }
+         for previous in &bindings {
+@@ -559,7 +574,10 @@
+     const ORIGINAL: &str = include_str!(
+         "../../../../fixtures/upstream/rustc-checkout/tests/ui/regions/regions-infer-call.rs"
+     );
+-    fn source(text: &str, edition: u16) -> (Database, PreparedSourceView, NameNamespaces) {
++    pub(super) fn source(
++        text: &str,
++        edition: u16,
++    ) -> (Database, PreparedSourceView, NameNamespaces) {
+         let profile = ProfileIdentity {
+             edition,
+             ..ProfileIdentity::current()
+@@ -601,7 +619,7 @@
+         assert!(imports.pending.is_empty() && imports.missing.is_empty());
+         (db, source, graph)
+     }
+-    fn callable(
++    pub(super) fn callable(
+         db: &mut Database,
+         source: &PreparedSourceView,
+         graph: &NameNamespaces,
+@@ -906,3 +924,7 @@
+         assert!(certificate.validate_packet(&different, &packet).is_err());
+     }
+ }
++
++#[cfg(test)]
++#[path = "closed_string_reference_tests.rs"]
++mod string_reference_tests;
+--- /dev/null
++++ b/crates/lrr/src/frontend/closed_string_reference_tests.rs
+@@ -0,0 +1,405 @@
++//! Source-call component controls using unchanged upstream headers and literal
++//! execution. Joining these two witnesses is not execution of either full main.
++use super::{
++    tests::{callable, source},
++    *,
++};
++use crate::{
++    db::{key::QueryKey, provider::SyntaxProvider, value::QueryValue},
++    ir::{
++        op::{LiteralKind, Op},
++        pc::{NodeId, Phase},
++    },
++    vm::step::{StepOutcome, step},
++};
++const BORROWED: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/match/match-borrowed-str.rs"
++);
++const NULS: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/str/nul-char-equivalence.rs"
++);
++
++/// Execute the real first initializer, including its actual preceding recipes.
++/// A source view or reference value is never manufactured for this producer.
++fn literal_argument(edition: u16) -> (Frame, GuestStore, SlotId) {
++    let mut store = GuestStore::new(1, 10_000, 4_000_000).unwrap();
++    let (frame, slot) = literal_argument_in(edition, &mut store);
++    (frame, store, slot)
++}
++fn literal_argument_in(edition: u16, store: &mut GuestStore) -> (Frame, SlotId) {
++    let (mut db, view, _) = source(NULS, edition);
++    let body = view
++        .outline()
++        .items
++        .iter()
++        .find(|item| item.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap()
++        .key();
++    let fetched = db
++        .fetch(&SyntaxProvider, QueryKey::BodyStructure(body))
++        .into_ready()
++        .unwrap()
++        .unwrap();
++    let QueryValue::BodyStructure(index) = fetched.value.as_ref() else {
++        panic!()
++    };
++    let mut frame = Frame::new(
++        index.as_ref().clone(),
++        index.pc(NodeId(0), Phase::Entry).unwrap(),
++        store,
++    )
++    .unwrap();
++    frame.set_fuel_limit(1000).unwrap();
++    for _ in 0..128 {
++        let fetched = db
++            .fetch(&SyntaxProvider, QueryKey::Thunk(frame.pc().clone()))
++            .into_ready()
++            .unwrap()
++            .unwrap();
++        let QueryValue::Thunk(recipe) = fetched.value.as_ref() else {
++            panic!()
++        };
++        let destination = recipe.recipe().operations.iter().find_map(|op| match op {
++            Op::Literal {
++                literal,
++                destination,
++                ..
++            } if literal.kind == LiteralKind::String => Some(*destination),
++            _ => None,
++        });
++        assert!(matches!(
++            step(&mut frame, store, recipe).unwrap(),
++            StepOutcome::Next(_)
++        ));
++        if let Some(destination) = destination {
++            return (frame, destination);
++        }
++    }
++    panic!("unchanged NUL initializer did not execute");
++}
++
++fn read_original_parameter(
++    db: &mut Database,
++    callee: &SourceCallable,
++    contracts: &PreparedCallContracts,
++    cells: &[CellId],
++    store: &mut GuestStore,
++) {
++    use crate::{
++        runtime::cell::CellState,
++        syntax::body_index::{ExpressionKind, NodeRole},
++        vm::call::ArgumentPacket,
++    };
++    let body = callee.body().unwrap().key();
++    let fetched = db
++        .fetch(&SyntaxProvider, QueryKey::BodyStructure(body))
++        .into_ready()
++        .unwrap()
++        .unwrap();
++    let QueryValue::BodyStructure(index) = fetched.value.as_ref() else {
++        panic!()
++    };
++    let mut selected = None;
++    for node in index
++        .nodes()
++        .iter()
++        .filter(|node| node.role == NodeRole::Expression(ExpressionKind::Path))
++    {
++        let key = index.pc(node.id, Phase::Entry).unwrap();
++        let fetched = db
++            .fetch(&SyntaxProvider, QueryKey::Thunk(key))
++            .into_ready()
++            .unwrap()
++            .unwrap();
++        let QueryValue::Thunk(recipe) = fetched.value.as_ref() else {
++            panic!()
++        };
++        if let [
++            Op::ReadParameter {
++                ordinal: 0,
++                destination,
++            },
++        ] = recipe.recipe().operations.as_ref()
++        {
++            selected = Some((node.scope, *destination, recipe.clone()));
++            break;
++        }
++    }
++    let (scope, destination, recipe) = selected.expect("original compare parameter read absent");
++    let mut frame = Frame::new(index.as_ref().clone(), recipe.recipe().key.clone(), store).unwrap();
++    frame.set_fuel_limit(1000).unwrap();
++    frame
++        .install_parameter_sources(contracts.source_parameters.clone())
++        .unwrap();
++    let mut wrong = Frame::new(index.as_ref().clone(), recipe.recipe().key.clone(), store).unwrap();
++    wrong.set_fuel_limit(1000).unwrap();
++    wrong
++        .install_parameter_sources(vec![
++            TyTerm::Ref(
++                RegionTerm::Static,
++                false,
++                Box::new(TyTerm::Primitive(PrimitiveType::U8))
++            );
++            2
++        ])
++        .unwrap();
++    let packet = ArgumentPacket::seal(store, cells, &contracts.parameter_descriptors).unwrap();
++    assert!(
++        cells
++            .iter()
++            .all(|cell| store.state(*cell).unwrap() == CellState::Moved)
++    );
++    let parameter_contracts: Vec<_> = contracts
++        .parameter_descriptors
++        .iter()
++        .map(|ty| (*ty, false))
++        .collect();
++    let effects = (
++        store.budget().handles(),
++        store.budget().bytes(),
++        wrong.fuel_snapshot(),
++    );
++    assert_eq!(
++        wrong
++            .initialize_parameters(&packet, &parameter_contracts, store)
++            .unwrap_err()
++            .code,
++        "LRR-E-OWNERSHIP"
++    );
++    assert_eq!(
++        (
++            store.budget().handles(),
++            store.budget().bytes(),
++            wrong.fuel_snapshot()
++        ),
++        effects
++    );
++    packet
++        .check_types(store, &contracts.parameter_descriptors)
++        .unwrap();
++    frame
++        .initialize_parameters(&packet, &parameter_contracts, store)
++        .unwrap();
++    let effects = (
++        store.budget().handles(),
++        store.budget().bytes(),
++        frame.fuel_snapshot(),
++    );
++    assert!(
++        frame
++            .initialize_parameters(&packet, &parameter_contracts, store)
++            .is_err()
++    );
++    assert_eq!(
++        (
++            store.budget().handles(),
++            store.budget().bytes(),
++            frame.fuel_snapshot()
++        ),
++        effects
++    );
++    let mut scopes = vec![scope];
++    while let Some(parent) = index.scopes()[scopes.last().unwrap().0 as usize].parent {
++        scopes.push(parent);
++    }
++    for scope in scopes.into_iter().rev() {
++        frame.enter(scope).unwrap();
++    }
++    assert!(matches!(
++        step(&mut frame, store, &recipe).unwrap(),
++        StepOutcome::Next(_)
++    ));
++    assert_eq!(
++        frame.source_view(destination).unwrap(),
++        Some(contracts.source_parameters[0].clone())
++    );
++    store
++        .require_static_string_value(frame.cell(destination).unwrap())
++        .unwrap();
++    assert_eq!(frame.counters().operations_started, 1);
++    assert_eq!(frame.counters().operations_completed, 1);
++}
++
++#[test]
++fn unchanged_borrowed_str_headers_and_actual_utf8_arguments_join_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, view, graph) = source(BORROWED, edition);
++        let callee = callable(&mut db, &view, &graph, "compare");
++        let (frame, mut store, slot) = literal_argument(edition);
++        let reference = ClosedReferenceArgument::capture(&frame, slot, &store).unwrap();
++        let (other_frame, other_slot) = literal_argument_in(edition, &mut store);
++        let other_reference =
++            ClosedReferenceArgument::capture(&other_frame, other_slot, &store).unwrap();
++        assert_ne!(
++            frame.cell(slot).unwrap(),
++            other_frame.cell(other_slot).unwrap()
++        );
++        assert_eq!(
++            reference.source,
++            TyTerm::Ref(RegionTerm::Static, false, Box::new(TyTerm::Str))
++        );
++        for ordinal in 0..2 {
++            let QueryPoll::Ready(Ok(ArgumentHintPreparation::Ready(hints))) =
++                prepare_argument_hint(&mut db, &callee, &graph, &[&view], ordinal)
++            else {
++                panic!("upstream str parameter not admitted")
++            };
++            let [hint] = hints.as_slice() else { panic!() };
++            let proof = hint.closed_reference.as_ref().unwrap();
++            proof.validate_hint(hint).unwrap();
++            proof.require_current(&mut db, &callee).unwrap();
++            assert_eq!(proof.pointee(), &TyTerm::Str);
++            assert_eq!(
++                hint.source,
++                TyTerm::Ref(
++                    RegionTerm::Bound {
++                        depth: 0,
++                        index: ordinal as u32,
++                    },
++                    false,
++                    Box::new(TyTerm::Str)
++                )
++            );
++            assert_eq!(
++                proof.materialize_hint(&mut store).unwrap(),
++                TypeId(reference.value.type_id)
++            );
++        }
++        let actual = ArgumentType {
++            source: reference.source.clone(),
++            descriptor: TypeId(reference.value.type_id),
++        };
++        let actuals = [actual.clone(), actual];
++        let references = [Some(reference), Some(other_reference)];
++        let QueryPoll::Ready(Ok(ContractPreparation::Ready(mut packet))) =
++            prepare_contracts_with_references(
++                &mut db,
++                &callee,
++                &graph,
++                &[&view],
++                &[],
++                None,
++                ReferenceCallArguments {
++                    store: &store,
++                    arguments: &actuals,
++                    references: &references,
++                },
++            )
++        else {
++            panic!("actual immutable str source/cell join failed")
++        };
++        let proof = packet.closed_references.as_ref().unwrap().clone();
++        proof.validate_packet(callee.signature(), &packet).unwrap();
++        proof
++            .require_argument_cells(
++                &store,
++                &[
++                    frame.cell(slot).unwrap(),
++                    other_frame.cell(other_slot).unwrap(),
++                ],
++                &actuals,
++            )
++            .unwrap();
++        assert_eq!(packet.source_parameters, vec![actuals[0].source.clone(); 2]);
++        packet.source_parameters[0] = TyTerm::Ref(
++            RegionTerm::Static,
++            false,
++            Box::new(TyTerm::Slice(Box::new(TyTerm::Primitive(
++                PrimitiveType::U8,
++            )))),
++        );
++        assert_eq!(
++            proof
++                .validate_packet(callee.signature(), &packet)
++                .unwrap_err()
++                .code,
++            "LRR-E-CALL-CONTEXT"
++        );
++        packet.source_parameters[0] = actuals[0].source.clone();
++        let cells = [
++            frame.cell(slot).unwrap(),
++            other_frame.cell(other_slot).unwrap(),
++        ];
++        read_original_parameter(&mut db, &callee, &packet, &cells, &mut store);
++    }
++}
++
++#[test]
++fn str_parameter_spelling_does_not_override_shadow_or_grant_mutable_view() {
++    for text in [
++        "type str=bool;fn take(x:&str){}fn main(){}",
++        "fn take(x:&mut str){}fn main(){}",
++    ] {
++        let (mut db, view, graph) = source(text, 2024);
++        let callee = callable(&mut db, &view, &graph, "take");
++        assert!(
++            ClosedReferenceParameter::capture(&mut db, &callee, &graph, &[&view], 0)
++                .unwrap()
++                .is_none()
++        );
++    }
++}
++
++#[test]
++fn utf8_argument_capture_rejects_changed_source_access_and_store_before_effects() {
++    let (mut frame, store, slot) = literal_argument(2024);
++    let captured = ClosedReferenceArgument::capture(&frame, slot, &store).unwrap();
++    let effects = (
++        store.budget().handles(),
++        store.budget().bytes(),
++        store.type_metadata_bytes(),
++        frame.fuel_snapshot(),
++    );
++    for source in [
++        TyTerm::Ref(RegionTerm::Static, true, Box::new(TyTerm::Str)),
++        TyTerm::Ref(
++            RegionTerm::Static,
++            false,
++            Box::new(TyTerm::Primitive(PrimitiveType::U8)),
++        ),
++    ] {
++        frame.set_source_view(slot, Some(source)).unwrap();
++        assert!(ClosedReferenceArgument::capture(&frame, slot, &store).is_err());
++    }
++    let other = GuestStore::new(1, 10_000, 4_000_000).unwrap();
++    let actual = ArgumentType {
++        source: captured.source.clone(),
++        descriptor: TypeId(captured.value.type_id),
++    };
++    assert!(captured.require(&other, &actual).is_err());
++    assert_eq!(
++        (
++            store.budget().handles(),
++            store.budget().bytes(),
++            store.type_metadata_bytes(),
++            frame.fuel_snapshot()
++        ),
++        effects
++    );
++}
++
++#[test]
++fn str_header_receipt_rejects_changed_hint_and_expansion_epoch() {
++    let (mut db, view, graph) = source(BORROWED, 2024);
++    let callee = callable(&mut db, &view, &graph, "compare");
++    let QueryPoll::Ready(Ok(ArgumentHintPreparation::Ready(hints))) =
++        prepare_argument_hint(&mut db, &callee, &graph, &[&view], 0)
++    else {
++        panic!()
++    };
++    let proof = hints[0].closed_reference.as_ref().unwrap();
++    let mut wrong = hints[0].clone();
++    wrong.source = TyTerm::Ref(RegionTerm::Static, false, Box::new(TyTerm::Str));
++    assert_eq!(
++        proof.validate_hint(&wrong).unwrap_err().code,
++        "LRR-E-CALL-CONTEXT"
++    );
++    db.begin_expansion_epoch(1).unwrap();
++    assert_eq!(
++        proof.require_current(&mut db, &callee).unwrap_err().code,
++        "LRR-E-CALL-CONTEXT"
++    );
++}
+--- a/crates/lrr/src/ir/definition_numeric_wire_tests.rs
++++ b/crates/lrr/src/ir/definition_numeric_wire_tests.rs
+@@ -259,8 +259,8 @@
+ }
+ #[test]
+ fn recipe_schema_separates_definition_context_from_prior_cache_world() {
+-    assert_eq!(crate::ir::op::LRIR_RECIPE_SCHEMA, 13);
+-    assert_eq!(Recipe::DOMAIN, "lrr/v13/lrir-recipe");
++    assert_eq!(crate::ir::op::LRIR_RECIPE_SCHEMA, 14);
++    assert_eq!(Recipe::DOMAIN, "lrr/v14/lrir-recipe");
+     let body = body();
+     let recipe = verify(
+         draft(
+@@ -274,7 +274,7 @@
+     )
+     .unwrap();
+     let recipe = recipe.recipe();
+-    let mut expected = StableEncoder::new("lrr/v13/lrir-recipe");
++    let mut expected = StableEncoder::new("lrr/v14/lrir-recipe");
+     expected.record(&recipe.key);
+     expected.record(&recipe.origin.span.body_key);
+     expected.u32(recipe.origin.span.relative_start);
+--- a/crates/lrr/src/ir/op.rs
++++ b/crates/lrr/src/ir/op.rs
+@@ -130,7 +130,7 @@
+     }
+ }
+ /// Explicit recipe/cache compatibility, independent of host enum layout.
+-pub const LRIR_RECIPE_SCHEMA: u32 = 13;
++pub const LRIR_RECIPE_SCHEMA: u32 = 14;
+ pub const DECODED_INTEGER_SCHEMA: u32 = 1;
+ #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+ pub enum IntegerLexicalError {
+@@ -164,6 +164,7 @@
+     Char(char),
+     Byte(u8),
+     ByteString(crate::syntax::byte_string_literals::ByteStringLiteral),
++    String(crate::syntax::string_literals::StringLiteral),
+     Float {
+         decimal: String,
+         suffix: Option<PrimitiveType>,
+--- a/crates/lrr/src/ir/parameter_place_wire_tests.rs
++++ b/crates/lrr/src/ir/parameter_place_wire_tests.rs
+@@ -22,8 +22,8 @@
+ );
+ #[test]
+ fn unchanged_dereference_parameters_address_original_cells_without_owning_read_all_editions() {
+-    assert_eq!(LRIR_RECIPE_SCHEMA, 13);
+-    assert_eq!(Recipe::DOMAIN, "lrr/v13/lrir-recipe");
++    assert_eq!(LRIR_RECIPE_SCHEMA, 14);
++    assert_eq!(Recipe::DOMAIN, "lrr/v14/lrir-recipe");
+     assert_eq!(SOURCE_CONSTANT_OPCODE, 43);
+     assert_eq!(OPCODE_COUNT, 45);
+     for edition in [2015, 2018, 2021, 2024] {
+--- a/crates/lrr/src/ir/recipe.rs
++++ b/crates/lrr/src/ir/recipe.rs
+@@ -225,7 +225,7 @@
+     }
+ }
+ impl StableEncode for Recipe {
+-    const DOMAIN: &'static str = "lrr/v13/lrir-recipe";
++    const DOMAIN: &'static str = "lrr/v14/lrir-recipe";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         e.record(&self.key);
+         span(e, &self.origin.span);
+@@ -394,6 +394,10 @@
+                         e.option(suffix, |e, ty| e.u32(ty.tag()));
+                         e.u32(reason.tag());
+                     }
++                    super::op::DecodedLiteral::String(value) => {
++                        e.u32(7);
++                        e.string(value.text());
++                    }
+                     super::op::DecodedLiteral::ByteString(value) => {
+                         e.u32(6);
+                         e.bytes(value.bytes());
+--- a/crates/lrr/src/ir/validate.rs
++++ b/crates/lrr/src/ir/validate.rs
+@@ -1068,6 +1068,18 @@
+                         return Err(invalid(
+                             "integer literal requires matched pinned decoded data",
+                         ));
++                    }
++                    (LiteralKind::String, Some(DecodedLiteral::String(value))) => {
++                        value.require(&literal.spelling, &literal.source)?;
++                        charge(
++                            &mut bytes,
++                            value
++                                .allocated_bytes()
++                                .ok_or_else(|| invalid("string literal metadata overflow"))?,
++                        )?;
++                    }
++                    (LiteralKind::String, _) => {
++                        return Err(invalid("string literal requires its pinned source payload"));
+                     }
+                     (LiteralKind::ByteString, Some(DecodedLiteral::ByteString(value))) => {
+                         value.require(&literal.spelling, &literal.source)?;
+--- a/crates/lrr/src/runtime/cell_byte_chunks.rs
++++ b/crates/lrr/src/runtime/cell_byte_chunks.rs
+@@ -265,6 +265,7 @@
+                                 root: None,
+                                 array_reference: None,
+                                 slice_reference: None,
++                                string_reference: None,
+                             },
+                             index_bytes()?,
+                             &mut self.budget,
+@@ -482,7 +483,7 @@
+                         root: stamp,
+                         enclosing: Vec::new(),
+                         final_cell: stamp,
+-                        static_slice: if a.plan.view == ByteLiteralTarget::Slice {
++                        static_slice: if a.plan.view != ByteLiteralTarget::Array {
+                             Some(allocation)
+                         } else {
+                             None
+@@ -548,6 +549,7 @@
+             match a.plan.view {
+                 ByteLiteralTarget::Array => record.array_reference = Some(reference),
+                 ByteLiteralTarget::Slice => record.slice_reference = Some(reference),
++                ByteLiteralTarget::Str => record.string_reference = Some(reference),
+             }
+         }
+         a.reference = None;
+--- a/crates/lrr/src/runtime/cell_byte_comparison.rs
++++ b/crates/lrr/src/runtime/cell_byte_comparison.rs
+@@ -1,4 +1,4 @@
+-//! Bounded read-only equality of genuine immutable byte-literal roots.
++//! Bounded read-only equality of genuine immutable byte/UTF-8 literal roots.
+ //!
+ //! This is a physical operation, not trait resolution. Its caller must retain
+ //! the source PartialEq/member admission and bind the cursor to the reached
+@@ -87,6 +87,9 @@
+             } if *element == TypeId(9) && *view_len == len && reference.static_slice.is_none() => {}
+             TypeKey::Slice { element }
+                 if *element == TypeId(9) && reference.static_slice == Some(allocation) => {}
++            _ if reference.target == TypeId(16) && reference.static_slice == Some(allocation) => {
++                self.require_static_string_value(operand)?;
++            }
+             _ => return Err(ownership()),
+         }
+         let (object, storage) = self.place_object(reference.root.cell)?;
+--- a/crates/lrr/src/runtime/cell_byte_literals.rs
++++ b/crates/lrr/src/runtime/cell_byte_literals.rs
+@@ -13,6 +13,8 @@
+     root: Option<CellId>,
+     array_reference: Option<RefId>,
+     slice_reference: Option<RefId>,
++    // Publication proves the immutable backing bytes passed UTF-8 validation.
++    string_reference: Option<RefId>,
+ }
+ pub(crate) struct PreparedStaticBytes {
+     session: StoreSession,
+@@ -53,6 +55,7 @@
+         let reference = match view {
+             ByteLiteralTarget::Array => record.array_reference,
+             ByteLiteralTarget::Slice => record.slice_reference,
++            ByteLiteralTarget::Str => record.string_reference,
+         };
+         if let Some(reference) = reference {
+             self.validate_reference_record(self.references.get(reference)?)?;
+@@ -72,6 +75,12 @@
+                 "LRR-E-UNSUPPORTED",
+                 "byte-string payload exceeds its decoder limit".into(),
+             ));
++        }
++        // A str descriptor alone never establishes UTF-8. This bounded, pure
++        // validation precedes descriptor publication, guest handles or writes.
++        // Large allocation and reuse still take the per-byte resumable path.
++        if view == ByteLiteralTarget::Str && std::str::from_utf8(bytes).is_err() {
++            return Err(ownership());
+         }
+         let len = u32::try_from(bytes.len()).map_err(|_| resource())?;
+         let types = self.types.preview_byte_literal_types(len, view)?;
+@@ -266,6 +275,7 @@
+                         root: None,
+                         array_reference: None,
+                         slice_reference: None,
++                        string_reference: None,
+                     },
+                     index_bytes,
+                     &mut self.budget,
+@@ -356,7 +366,7 @@
+                         root: stamp,
+                         enclosing: Vec::new(),
+                         final_cell: stamp,
+-                        static_slice: if plan.view == ByteLiteralTarget::Slice {
++                        static_slice: if plan.view != ByteLiteralTarget::Array {
+                             Some(allocation)
+                         } else {
+                             None
+@@ -370,6 +380,7 @@
+             match plan.view {
+                 ByteLiteralTarget::Array => record.array_reference = Some(reference),
+                 ByteLiteralTarget::Slice => record.slice_reference = Some(reference),
++                ByteLiteralTarget::Str => record.string_reference = Some(reference),
+             };
+             reference
+         };
+@@ -408,7 +419,9 @@
+         if reference.access != Access::Shared
+             || reference.final_cell != reference.root
+             || !reference.enclosing.is_empty()
+-            || !matches!(self.types.descriptor(reference.target)?.key.as_ref(),TypeKey::Slice{element} if *element==TypeId(9))
++            || !(matches!(self.types.descriptor(reference.target)?.key.as_ref(),TypeKey::Slice{element} if *element==TypeId(9))
++                || (reference.target == TypeId(16)
++                    && self.static_literals.get(id)?.string_reference.is_some()))
+         {
+             return Err(lease_fault());
+         }
+@@ -418,6 +431,26 @@
+             return Err(lease_fault());
+         }
+         Ok(())
++    }
++    /// A physical UTF-8 view must have the private committed string lease.
++    /// A descriptor or byte-array backing alone cannot establish that fact.
++    pub(crate) fn require_static_string_value(&self, cell: CellId) -> Result<(), Diagnostic> {
++        let value = self.admit_move(cell)?;
++        if value.kind != 9
++            || !matches!(
++                self.types.descriptor(TypeId(value.type_id))?.key.as_ref(),
++                TypeKey::Ref { mutable: false, target } if *target == TypeId(16)
++            )
++        {
++            return Err(ownership());
++        }
++        let reference = self.references.get(self.reference_from_cell(cell)?)?;
++        if reference.target != TypeId(16) || reference.static_slice.is_none() {
++            return Err(lease_fault());
++        }
++        // This checks immutable root membership and its retained UTF-8 lease,
++        // not a scan or a reinterpretation of arbitrary byte storage.
++        self.validate_reference_record(reference)
+     }
+     pub(crate) fn require_static_byte_value(
+         &self,
+@@ -530,3 +563,7 @@
+ #[cfg(test)]
+ #[path = "cell_byte_hint_preflight_tests.rs"]
+ mod hint_preflight_tests;
++
++#[cfg(test)]
++#[path = "cell_static_utf8_tests.rs"]
++mod static_utf8_tests;
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_static_utf8_tests.rs
+@@ -0,0 +1,251 @@
++//! Original-token storage witnesses and LRR lease/cancellation controls.
++//! These are physical component checks, not execution of the upstream mains.
++use super::*;
++use ra_ap_syntax::{AstNode, SyntaxKind};
++const UNICODE: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/parser/unicode-escape-sequences.rs"
++);
++const NULS: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/str/nul-char-equivalence.rs"
++);
++const CRLF: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs"
++);
++fn key() -> crate::core::digest::Digest {
++    crate::core::digest::Digest::of_bytes(b"physical UTF8 storage witness")
++}
++fn source_strings(source: &str, edition: u16) -> Vec<String> {
++    let ra_edition = match edition {
++        2015 => ra_ap_syntax::Edition::Edition2015,
++        2018 => ra_ap_syntax::Edition::Edition2018,
++        2021 => ra_ap_syntax::Edition::Edition2021,
++        2024 => ra_ap_syntax::Edition::Edition2024,
++        _ => unreachable!(),
++    };
++    let parsed = ra_ap_syntax::SourceFile::parse(source, ra_edition);
++    parsed
++        .tree()
++        .syntax()
++        .descendants_with_tokens()
++        .filter_map(|child| child.into_token())
++        .filter(|token| token.kind() == SyntaxKind::STRING)
++        .map(|token| crate::syntax::ast_adapter::string_value(token.text(), edition).unwrap())
++        .collect()
++}
++fn stored_bytes(store: &GuestStore, ticket: TicketId) -> Vec<u8> {
++    let value = store.peek_ticket(ticket).unwrap();
++    let reference = store
++        .references
++        .get(RefId::from_bits(value.payload))
++        .unwrap();
++    assert_eq!(reference.target, TypeId(16));
++    store.validate_reference_record(reference).unwrap();
++    let (_, storage) = store.place_object(reference.root.cell).unwrap();
++    storage
++        .fields
++        .iter()
++        .map(|cell| {
++            assert!(!store.cells.get(*cell).unwrap().writable);
++            u8::try_from(store.read_scalar(*cell).unwrap().payload).unwrap()
++        })
++        .collect()
++}
++#[test]
++fn upstream_unicode_nul_and_crlf_strings_retain_exact_utf8_in_immutable_roots_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        for (source, count) in [(UNICODE, 7), (NULS, 8), (CRLF, 9)] {
++            let values = source_strings(source, edition);
++            assert_eq!(values.len(), count);
++            for text in values {
++                let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++                let plan = store
++                    .prepare_static_bytes(
++                        key(),
++                        text.as_bytes(),
++                        ByteLiteralTarget::Str,
++                        None,
++                        false,
++                    )
++                    .unwrap();
++                let ty = plan.reference_type();
++                let ticket = store.instantiate_static_bytes(plan).unwrap();
++                assert_eq!(store.peek_ticket(ticket).unwrap().type_id, ty.0);
++                assert_eq!(stored_bytes(&store, ticket), text.as_bytes());
++                let reference = RefId::from_bits(store.peek_ticket(ticket).unwrap().payload);
++                let frame = store.new_frame_anchor().unwrap();
++                let cell = store
++                    .new_cell(
++                        StorageContract::Exact(ty),
++                        false,
++                        CellOwner::FrameSlot { frame, slot: 0 },
++                    )
++                    .unwrap();
++                store.initialize(cell, ticket).unwrap();
++                let returned = store.reference_ticket(reference).unwrap();
++                let dropped = store.begin_drop(cell).unwrap();
++                store.discard(dropped).unwrap();
++                store.retire_cell(cell).unwrap();
++                assert_eq!(stored_bytes(&store, returned), text.as_bytes());
++                store.reset(2).unwrap();
++                assert!(store.reference_ticket(reference).is_err());
++                assert!(store.static_literal_index.is_empty());
++            }
++        }
++    }
++}
++#[test]
++fn invalid_utf8_and_forged_str_views_publish_no_string_authority() {
++    let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++    for bytes in [
++        &[0xff][..],
++        &[0xc0, 0x80],
++        &[0xed, 0xa0, 0x80],
++        &[0xf0, 0x9f],
++    ] {
++        let before = (
++            store.budget.handles(),
++            store.budget.bytes(),
++            store.types.metadata_bytes(),
++        );
++        assert!(
++            store
++                .prepare_static_bytes(key(), bytes, ByteLiteralTarget::Str, None, false)
++                .is_err()
++        );
++        assert_eq!(
++            before,
++            (
++                store.budget.handles(),
++                store.budget.bytes(),
++                store.types.metadata_bytes()
++            )
++        );
++        assert!(store.static_literal_index.is_empty());
++    }
++    let plan = store
++        .prepare_static_bytes(key(), &[0xff], ByteLiteralTarget::Slice, None, false)
++        .unwrap();
++    let ticket = store.instantiate_static_bytes(plan).unwrap();
++    let value = store.peek_ticket(ticket).unwrap();
++    let reference = store
++        .references
++        .get(RefId::from_bits(value.payload))
++        .unwrap();
++    store.validate_reference_record(reference).unwrap();
++    let forged = ReferenceRecord {
++        access: Access::Shared,
++        owner: None,
++        target: TypeId(16),
++        root: reference.root,
++        enclosing: Vec::new(),
++        final_cell: reference.final_cell,
++        static_slice: reference.static_slice,
++    };
++    assert!(store.validate_reference_record(&forged).is_err());
++    let id = reference.static_slice.unwrap();
++    assert!(
++        store
++            .static_literals
++            .get(id)
++            .unwrap()
++            .string_reference
++            .is_none()
++    );
++}
++#[test]
++fn utf8_and_byte_slice_views_share_only_the_verified_immutable_backing() {
++    let text = source_strings(UNICODE, 2024).remove(0);
++    let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++    let plan = store
++        .prepare_static_bytes(
++            key(),
++            text.as_bytes(),
++            ByteLiteralTarget::Slice,
++            None,
++            false,
++        )
++        .unwrap();
++    let bytes = store.instantiate_static_bytes(plan).unwrap();
++    let byte_ref = RefId::from_bits(store.peek_ticket(bytes).unwrap().payload);
++    let byte_root = store.references.get(byte_ref).unwrap().root;
++    let plan = store
++        .prepare_static_bytes(key(), text.as_bytes(), ByteLiteralTarget::Str, None, false)
++        .unwrap();
++    let first = store.instantiate_static_bytes(plan).unwrap();
++    let string_ref = RefId::from_bits(store.peek_ticket(first).unwrap().payload);
++    assert_ne!(string_ref, byte_ref);
++    assert_eq!(store.references.get(string_ref).unwrap().root, byte_root);
++    assert_eq!(stored_bytes(&store, first), text.as_bytes());
++    let plan = store
++        .prepare_static_bytes(key(), text.as_bytes(), ByteLiteralTarget::Str, None, false)
++        .unwrap();
++    let second = store.instantiate_static_bytes(plan).unwrap();
++    assert_ne!(first, second);
++    assert_eq!(
++        store.peek_ticket(first).unwrap(),
++        store.peek_ticket(second).unwrap()
++    );
++    let before = (
++        store.budget.handles(),
++        store.budget.bytes(),
++        store.types.metadata_bytes(),
++    );
++    assert!(
++        store
++            .prepare_static_bytes(key(), b"abc", ByteLiteralTarget::Str, None, false)
++            .is_err()
++    );
++    assert_eq!(
++        before,
++        (
++            store.budget.handles(),
++            store.budget.bytes(),
++            store.types.metadata_bytes()
++        )
++    );
++}
++#[test]
++fn utf8_chunk_boundaries_publish_only_complete_valid_roots_and_charge_each_byte() {
++    // Repeat an actual original Unicode token across 256-byte dispatch edges.
++    // This is an LRR bounded-construction supplement, not a new language fixture.
++    let text = source_strings(UNICODE, 2024).remove(0).repeat(171);
++    assert_eq!(text.len(), 513);
++    for cancel in [false, true] {
++        let mut store = GuestStore::new(1, 4000, 4 << 20).unwrap();
++        let plan = store
++            .prepare_static_bytes(key(), text.as_bytes(), ByteLiteralTarget::Str, None, false)
++            .unwrap();
++        let mut activation = store.prepare_static_byte_chunks(plan).unwrap();
++        let mut fuel = crate::vm::fuel::RunFuel::new(2000).unwrap();
++        let mut dispatches = 0;
++        loop {
++            assert!(store.static_literal_index.is_empty());
++            match store.advance_static_byte_chunks(&mut activation, &mut fuel) {
++                StaticByteChunkPoll::Dispatch { steps, bytes, .. } => {
++                    assert!(steps > 0 && steps <= 256 && bytes <= 64 << 10);
++                    dispatches += 1;
++                    if cancel {
++                        fuel.cancellation().cancel();
++                    }
++                }
++                StaticByteChunkPoll::Ready => {
++                    assert!(!cancel);
++                    assert!(dispatches > 0);
++                    assert_eq!(activation.fields_charged(), text.len() as u64);
++                    assert_eq!(fuel.snapshot().used, text.len() as u64);
++                    let ticket = store.commit_static_byte_chunks(&mut activation).unwrap();
++                    assert_eq!(stored_bytes(&store, ticket), text.as_bytes());
++                    assert!(store.commit_static_byte_chunks(&mut activation).is_err());
++                    break;
++                }
++                StaticByteChunkPoll::Failed(error) => {
++                    assert!(cancel);
++                    assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
++                    assert!(activation.finished());
++                    assert!(store.static_literal_index.is_empty());
++                    break;
++                }
++            }
++        }
++    }
++}
+--- a/crates/lrr/src/runtime/shape_byte_literals.rs
++++ b/crates/lrr/src/runtime/shape_byte_literals.rs
+@@ -4,6 +4,8 @@
+ pub(crate) enum ByteLiteralTarget {
+     Array,
+     Slice,
++    /// Immutable UTF-8 view; physical preparation validates the bytes.
++    Str,
+ }
+ pub(crate) struct ByteLiteralTypes {
+     count: usize,
+@@ -54,6 +56,7 @@
+             len,
+         })?;
+         let target = match view {
++            ByteLiteralTarget::Str => TypeId(16),
+             ByteLiteralTarget::Array => array,
+             ByteLiteralTarget::Slice => select(TypeKey::Slice { element: TypeId(9) })?,
+         };
+--- a/crates/lrr/src/syntax/mod.rs
++++ b/crates/lrr/src/syntax/mod.rs
+@@ -89,3 +89,5 @@
+ pub(crate) mod scalar_range_constant_sites;
+ 
+ pub(crate) mod range_bound_header;
++
++pub mod string_literals;
+--- /dev/null
++++ b/crates/lrr/src/syntax/string_literal_ir_tests.rs
+@@ -0,0 +1,244 @@
++//! Original source decoding and recipe admission, not whole-fixture execution.
++use super::*;
++use crate::{
++    core::{
++        digest::{Digest, StableEncode},
++        profile::ProfileIdentity,
++    },
++    ir::{
++        op::{DecodedLiteral, LiteralKind, Op},
++        pc::Phase,
++        recipe::RecipeDraft,
++        validate::verify,
++    },
++    source::snapshot::{CfgSet, SourceBlob},
++    syntax::{
++        body_index::{ExpressionKind, NodeRole},
++        parse::ParsedFile,
++    },
++};
++const CRLF: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs"
++);
++const ESCAPES: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/str/str-escape.rs");
++const INVALID: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/lex-bare-cr-string-literal-doc-comment.rs"
++);
++const UNICODE: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/parser/unicode-escape-sequences.rs"
++);
++const NULS: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/str/nul-char-equivalence.rs"
++);
++#[test]
++fn unchanged_string_tokens_decode_to_utf8_without_changing_source_spans_all_editions() {
++    let cases: [(&str, &[&str]); 4] = [
++        (
++            CRLF,
++            &[
++                "string\nliteral",
++                "string\nliteral",
++                "literal with escaped newline",
++                "literal with escaped newline",
++                "string\nliteral",
++                "string\nliteral",
++                "byte string\nliteral",
++                "lexer-crlf-line-endings-string-literal-doc-comment.rs",
++                "string\r\nliteral",
++            ],
++        ),
++        (ESCAPES, &["", "", "ab", "ab", "ab", "ab"]),
++        (UNICODE, &["☃", "☃", "⨐⨁⪠", "⨐⨁⪠", "\\{20}", "\\", "{20}"]),
++        (
++            NULS,
++            &[
++                "\0\0\0\0",
++                "\0\0\0\0",
++                "\0\0\0\0",
++                "\0\0\0\0",
++                "Hello World",
++                "Hello \0World",
++                "Hello World",
++                "Hello World\0",
++            ],
++        ),
++    ];
++    for edition in [2015, 2018, 2021, 2024] {
++        for (original, expected) in cases {
++            let blob = SourceBlob::new(original.as_bytes().to_vec()).unwrap();
++            let parsed = ParsedFile::parse(
++                &blob,
++                ProfileIdentity {
++                    edition,
++                    ..ProfileIdentity::current()
++                },
++            )
++            .unwrap();
++            let outline = parsed
++                .outline(
++                    Digest::of_bytes(b"original UTF8 literal input"),
++                    vec![],
++                    &CfgSet::guest_default(),
++                )
++                .unwrap();
++            let handle = outline
++                .items
++                .iter()
++                .find(|item| item.def_key.declared_name == "main")
++                .unwrap()
++                .body
++                .as_ref()
++                .unwrap();
++            let tokens = parsed
++                .entered_body_root(handle)
++                .unwrap()
++                .descendants_with_tokens()
++                .filter_map(|element| element.into_token())
++                .filter_map(ast::String::cast)
++                .collect::<Vec<_>>();
++            assert_eq!(tokens.len(), expected.len());
++            for (token, expected) in tokens.iter().zip(expected) {
++                let range = token.syntax().text_range();
++                let span = BodySpan {
++                    body_key: handle.key(),
++                    relative_start: u32::from(range.start()) - handle.range.start,
++                    relative_end: u32::from(range.end()) - handle.range.start,
++                };
++                let value = decode_token(token, &span).unwrap();
++                assert_eq!(value.text(), *expected);
++                let written =
++                    &original[u32::from(range.start()) as usize..u32::from(range.end()) as usize];
++                assert_eq!(written, token.text());
++                value.require(written, &span).unwrap();
++                assert!(value.allocated_bytes().unwrap() >= written.len() + expected.len());
++                let mut changed = span.clone();
++                changed.relative_end += 1;
++                assert!(value.require(written, &changed).is_err());
++                if written.contains("\r\n") {
++                    assert!(
++                        value
++                            .require(&written.replace("\r\n", "\n"), &span)
++                            .is_err()
++                    );
++                }
++            }
++            assert_eq!(blob.bytes(), original.as_bytes());
++        }
++    }
++}
++#[test]
++fn original_bare_cr_string_tokens_cannot_mint_decoded_payloads() {
++    // Use structural tokens even though this is an upstream diagnostic fixture.
++    // Only lexical rejection is checked; exact rustc diagnostics remain separate.
++    let parsed = ast::SourceFile::parse(INVALID, ra_ap_syntax::Edition::Edition2024);
++    let valid = ParsedFile::parse(
++        &SourceBlob::new(CRLF.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity::current(),
++    )
++    .unwrap();
++    let outline = valid
++        .outline(Digest([205; 32]), vec![], &CfgSet::guest_default())
++        .unwrap();
++    let body = outline
++        .items
++        .iter()
++        .find(|item| item.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap()
++        .key();
++    let mut count = 0;
++    for token in parsed
++        .tree()
++        .syntax()
++        .descendants_with_tokens()
++        .filter_map(|e| e.into_token())
++        .filter_map(ast::String::cast)
++    {
++        let range = token.syntax().text_range();
++        let span = BodySpan {
++            body_key: body.clone(),
++            relative_start: u32::from(range.start()),
++            relative_end: u32::from(range.end()),
++        };
++        assert!(token.text().contains('\r'));
++        assert!(decode_token(&token, &span).is_err());
++        count += 1;
++    }
++    assert_eq!(count, 3);
++}
++#[test]
++fn original_string_initializer_recipes_require_their_own_decoded_source_payloads() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let parsed = ParsedFile::parse(
++            &SourceBlob::new(CRLF.as_bytes().to_vec()).unwrap(),
++            ProfileIdentity {
++                edition,
++                ..ProfileIdentity::current()
++            },
++        )
++        .unwrap();
++        let outline = parsed
++            .outline(Digest([206; 32]), vec![], &CfgSet::guest_default())
++            .unwrap();
++        let handle = outline
++            .items
++            .iter()
++            .find(|item| item.def_key.declared_name == "main")
++            .unwrap()
++            .body
++            .as_ref()
++            .unwrap();
++        let body = parsed.index_body(handle, Default::default()).unwrap();
++        let mut count = 0;
++        for node in body
++            .nodes()
++            .iter()
++            .filter(|node| node.role == NodeRole::Expression(ExpressionKind::Literal))
++        {
++            let key = body.pc(node.id, Phase::Entry).unwrap();
++            let verified = parsed.initial_thunk(handle, &body, &key).unwrap();
++            let recipe = verified.recipe();
++            let Some(index) = recipe.operations.iter().position(|op| matches!(op, Op::Literal { literal, .. } if literal.kind == LiteralKind::String)) else { continue; };
++            let make = || RecipeDraft {
++                key: recipe.key.clone(),
++                origin: recipe.origin.clone(),
++                operations: recipe.operations.to_vec(),
++                exits: vec![recipe.exit.clone()],
++                dependencies: recipe.dependencies.to_vec(),
++            };
++            let expected = [
++                "string\nliteral",
++                "literal with escaped newline",
++                "string\nliteral",
++            ][count];
++            let Op::Literal { literal, .. } = &recipe.operations[index] else {
++                unreachable!()
++            };
++            let Some(DecodedLiteral::String(decoded)) = &literal.decoded else {
++                panic!("original string has no data")
++            };
++            assert_eq!(decoded.text(), expected);
++            assert_eq!(
++                verify(make(), &body).unwrap().recipe().fingerprint(),
++                recipe.fingerprint()
++            );
++            let mut missing = make();
++            let Op::Literal { literal, .. } = &mut missing.operations[index] else {
++                unreachable!()
++            };
++            literal.decoded = None;
++            assert!(verify(missing, &body).is_err());
++            let mut changed = make();
++            let Op::Literal { literal, .. } = &mut changed.operations[index] else {
++                unreachable!()
++            };
++            literal.spelling.push(' ');
++            assert!(verify(changed, &body).is_err());
++            count += 1;
++        }
++        assert_eq!(count, 3);
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/syntax/string_literals.rs
+@@ -0,0 +1,127 @@
++//! Source-bound UTF-8 string token data; no guest storage or reference authority.
++use crate::{core::diagnostic::Diagnostic, syntax::spans::BodySpan};
++use ra_ap_syntax::{
++    AstNode, AstToken, SyntaxKind,
++    ast::{self, IsString},
++};
++#[derive(Debug, Clone, Eq, PartialEq)]
++pub struct StringLiteral(std::sync::Arc<StringData>);
++#[derive(Debug, Eq, PartialEq)]
++struct StringData {
++    text: String,
++    spelling: String,
++    source: BodySpan,
++}
++impl StringLiteral {
++    /// Retained immutable decoder agreement, never source/member authority.
++    pub(crate) fn same_decoded_payload(&self, other: &Self) -> bool {
++        std::sync::Arc::ptr_eq(&self.0, &other.0)
++    }
++    pub(crate) fn text(&self) -> &str {
++        &self.0.text
++    }
++    pub(crate) fn require(&self, spelling: &str, source: &BodySpan) -> Result<(), Diagnostic> {
++        if self.0.spelling != spelling || self.0.source != *source {
++            return Err(Diagnostic::new(
++                "LRR-E-IR-VERIFY",
++                "string decoded source certificate differs".into(),
++            ));
++        }
++        Ok(())
++    }
++    pub(crate) fn allocated_bytes(&self) -> Option<usize> {
++        self.0
++            .text
++            .capacity()
++            .checked_add(self.0.spelling.capacity())
++            .and_then(|n| {
++                n.checked_add(std::mem::size_of::<StringData>() + 2 * std::mem::size_of::<usize>())
++            })
++    }
++}
++pub(super) fn decode(
++    literal: &ast::Literal,
++    source: &BodySpan,
++) -> Result<StringLiteral, Diagnostic> {
++    let invalid = || {
++        Diagnostic::new(
++            "LRR-E-UNSUPPORTED",
++            "string requires a valid pinned string token".into(),
++        )
++    };
++    let token = literal
++        .syntax()
++        .children_with_tokens()
++        .filter_map(|child| child.into_token())
++        .find(|token| token.kind() == SyntaxKind::STRING)
++        .and_then(ast::String::cast)
++        .ok_or_else(invalid)?;
++    decode_token(&token, source)
++}
++fn decode_token(token: &ast::String, source: &BodySpan) -> Result<StringLiteral, Diagnostic> {
++    let invalid = || {
++        Diagnostic::new(
++            "LRR-E-UNSUPPORTED",
++            "string requires a valid pinned string token".into(),
++        )
++    };
++    if token.syntax().text().len() > 1024 * 1024 {
++        return Err(Diagnostic::new(
++            "LRR-E-BODY-INDEX-LIMIT",
++            "string lexical payload exceeds source budget".into(),
++        ));
++    }
++    let range = token.text_range_between_quotes().ok_or_else(invalid)?;
++    let content = &token.text()[range - token.syntax().text_range().start()];
++    // rustc normalizes source CRLF before lexing. Preserve our source spelling
++    // and offsets, and normalize only the content passed to its pinned decoder.
++    let content = normalize_crlf(content)?;
++    let mut text = String::new();
++    text.try_reserve_exact(content.len())
++        .map_err(|_| crate::runtime::arena::resource())?;
++    let mut failed = false;
++    let mut emit = |_, value: Result<char, ra_ap_syntax::unescape::EscapeError>| match value {
++        Ok(value) => text.push(value),
++        Err(error) => failed |= error.is_fatal(),
++    };
++    if token.is_raw() {
++        // The pinned validator also rejects standalone CR while retaining valid Unicode.
++        ra_ap_syntax::unescape::check_raw_str(&content, &mut emit);
++    } else {
++        ra_ap_syntax::unescape::unescape_str(&content, &mut emit);
++    }
++    if failed {
++        return Err(invalid());
++    }
++    let mut spelling = String::new();
++    spelling
++        .try_reserve_exact(token.text().len())
++        .map_err(|_| crate::runtime::arena::resource())?;
++    spelling.push_str(token.text());
++    Ok(StringLiteral(std::sync::Arc::new(StringData {
++        text,
++        spelling,
++        source: source.clone(),
++    })))
++}
++fn normalize_crlf(text: &str) -> Result<std::borrow::Cow<'_, str>, Diagnostic> {
++    if !text.contains("\r\n") {
++        return Ok(std::borrow::Cow::Borrowed(text));
++    }
++    let mut normalized = String::new();
++    normalized
++        .try_reserve_exact(text.len())
++        .map_err(|_| crate::runtime::arena::resource())?;
++    for line in text.split_inclusive('\n') {
++        if let Some(prefix) = line.strip_suffix("\r\n") {
++            normalized.push_str(prefix);
++            normalized.push('\n');
++        } else {
++            normalized.push_str(line);
++        }
++    }
++    Ok(std::borrow::Cow::Owned(normalized))
++}
++#[cfg(test)]
++#[path = "string_literal_ir_tests.rs"]
++mod tests;
+--- a/crates/lrr/src/syntax/thunks.rs
++++ b/crates/lrr/src/syntax/thunks.rs
+@@ -964,7 +964,12 @@
+             (LiteralKind::Byte, Some(DecodedLiteral::Byte(value)))
+         }
+         SyntaxKind::TRUE_KW | SyntaxKind::FALSE_KW => (LiteralKind::Bool, None),
+-        SyntaxKind::STRING => (LiteralKind::String, None),
++        SyntaxKind::STRING => (
++            LiteralKind::String,
++            Some(DecodedLiteral::String(super::string_literals::decode(
++                literal, &source,
++            )?)),
++        ),
+         SyntaxKind::BYTE_STRING => (
+             LiteralKind::ByteString,
+             Some(DecodedLiteral::ByteString(
+--- a/crates/lrr/src/traits/term.rs
++++ b/crates/lrr/src/traits/term.rs
+@@ -99,11 +99,16 @@
+ }
+ #[derive(Debug, Clone, Eq, PartialEq)]
+ pub enum TyTerm {
++    /// Intrinsic unsized UTF-8 string source type, distinct from a byte slice.
++    Str,
+     Dyn(DynSchemaKey),
+     Opaque(OpaqueKey, Vec<GenericArg>),
+     Projection(Box<ProjectionKey>),
+     Placeholder(PlaceholderKey),
+-    Bound { depth: u32, index: u32 },
++    Bound {
++        depth: u32,
++        index: u32,
++    },
+     Function(Box<Binder<FunctionSignature>>),
+     Primitive(PrimitiveType),
+     Nominal(Digest, Vec<GenericArg>),
+@@ -305,6 +310,7 @@
+     const DOMAIN: &'static str = "lrr/v2/type-term";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         match self {
++            Self::Str => e.u32(15),
+             Self::Dyn(key) => {
+                 e.u32(13);
+                 e.record(key);
+--- a/crates/lrr/src/vm/frame.rs
++++ b/crates/lrr/src/vm/frame.rs
+@@ -644,6 +644,18 @@
+                         "parameter reference access differs from its source view".into(),
+                     ));
+                 }
++                if target.as_ref() == &TyTerm::Str {
++                    // This check precedes parameter-cell publication. Actual
++                    // UTF-8 lease admission belongs to the closed source call
++                    // contract; parameter reads validate the delivered lease.
++                    if *mutable || *actual_target != TypeId(16) {
++                        return Err(Diagnostic::new(
++                            "LRR-E-OWNERSHIP",
++                            "shared str parameter differs from its reference descriptor".into(),
++                        ));
++                    }
++                    return Ok(());
++                }
+                 Self::require_borrow_source_target(Some(target.as_ref()), *actual_target, store)
+             }
+             // Rigid parameters retain their identities under the existing
+@@ -1129,7 +1141,7 @@
+         self.context = Some(context);
+         Ok(())
+     }
+-    /// Current closed-source component also retains primitive-reference views.
++    /// Closed-source calls retain scalar references and shared UTF-8 references.
+     /// Abstract/composite parameter tables still require later source integration.
+     pub(crate) fn install_parameter_sources(
+         &mut self,
+@@ -1144,8 +1156,9 @@
+                         source,
+                         crate::traits::term::TyTerm::Primitive(_)
+                             | crate::traits::term::TyTerm::Param(_)
+-                    ) && !matches!(source, crate::traits::term::TyTerm::Ref(_, _, target)
+-                    if matches!(target.as_ref(), crate::traits::term::TyTerm::Primitive(_))))
++                    ) && !matches!(source, crate::traits::term::TyTerm::Ref(_, mutable, target)
++                    if matches!(target.as_ref(), crate::traits::term::TyTerm::Primitive(_))
++                        || (!*mutable && target.as_ref() == &crate::traits::term::TyTerm::Str)))
+             })
+         {
+             return Err(invalid(
+@@ -1208,7 +1221,7 @@
+     fn supported_source(source: &crate::traits::term::TyTerm) -> bool {
+         use crate::traits::term::TyTerm;
+         matches!(source, TyTerm::Primitive(_) | TyTerm::Param(_))
+-            || matches!(source, TyTerm::Ref(region, _, target) if !matches!(region, crate::traits::term::RegionTerm::Placeholder(_)) && (matches!(target.as_ref(), TyTerm::Primitive(_))
++            || matches!(source, TyTerm::Ref(region, _, target) if !matches!(region, crate::traits::term::RegionTerm::Placeholder(_)) && (matches!(target.as_ref(), TyTerm::Primitive(_) | TyTerm::Str)
+                 || matches!(target.as_ref(), TyTerm::Nominal(_, args) if args.is_empty())
+                 || matches!(target.as_ref(), TyTerm::Slice(element) if matches!(element.as_ref(), TyTerm::Primitive(crate::ir::op::PrimitiveType::U8)))
+                 || matches!(target.as_ref(), TyTerm::Array(element, crate::traits::term::ConstTerm::Value(len))
+--- a/crates/lrr/src/vm/frame_byte_literals.rs
++++ b/crates/lrr/src/vm/frame_byte_literals.rs
+@@ -6,9 +6,59 @@
+     runtime::cell::byte_literals::{
+         PreparedStaticBytes, StaticByteChunkActivation, StaticByteChunkPoll,
+     },
+-    syntax::byte_string_literals::ByteStringLiteral,
++    syntax::{byte_string_literals::ByteStringLiteral, string_literals::StringLiteral},
+     traits::term::TyTerm,
+ };
++
++/// Both literal kinds use immutable bytes physically, but keep distinct source
++/// certificates. Equality of their bytes never makes their source types equal.
++#[derive(Clone)]
++enum StaticLiteralPayload {
++    Bytes(ByteStringLiteral),
++    Utf8(StringLiteral),
++}
++impl StaticLiteralPayload {
++    fn from_literal(literal: &crate::ir::op::LiteralRecipe) -> Result<Self, Diagnostic> {
++        match (literal.kind, &literal.decoded) {
++            (LiteralKind::ByteString, Some(DecodedLiteral::ByteString(value))) => {
++                Ok(Self::Bytes(value.clone()))
++            }
++            (LiteralKind::String, Some(DecodedLiteral::String(value))) => {
++                Ok(Self::Utf8(value.clone()))
++            }
++            _ => Err(invalid("immutable literal decoder certificate absent")),
++        }
++    }
++    fn bytes(&self) -> &[u8] {
++        match self {
++            Self::Bytes(value) => value.bytes(),
++            Self::Utf8(value) => value.text().as_bytes(),
++        }
++    }
++    fn allocated_bytes(&self) -> Option<usize> {
++        match self {
++            Self::Bytes(value) => value.allocated_bytes(),
++            Self::Utf8(value) => value.allocated_bytes(),
++        }
++    }
++    fn permits(&self, target: crate::runtime::shape::ByteLiteralTarget) -> bool {
++        use crate::runtime::shape::ByteLiteralTarget;
++        matches!(
++            (self, target),
++            (
++                Self::Bytes(_),
++                ByteLiteralTarget::Array | ByteLiteralTarget::Slice
++            ) | (Self::Utf8(_), ByteLiteralTarget::Str)
++        )
++    }
++    fn same_decoded_payload(&self, other: &Self) -> bool {
++        match (self, other) {
++            (Self::Bytes(a), Self::Bytes(b)) => a.same_decoded_payload(b),
++            (Self::Utf8(a), Self::Utf8(b)) => a.same_decoded_payload(b),
++            _ => false,
++        }
++    }
++}
+ 
+ pub(super) struct BoundByteLiteral {
+     pc: PcKey,
+@@ -17,7 +67,7 @@
+     scope: ScopeId,
+     cell: CellId,
+     cell_epoch: u32,
+-    payload: ByteStringLiteral,
++    payload: StaticLiteralPayload,
+     span: crate::syntax::spans::BodySpan,
+     hint: HintRecipe,
+     prior_source: Option<TyTerm>,
+@@ -78,10 +128,8 @@
+         else {
+             return Err(invalid("byte literal construction requires Literal"));
+         };
+-        let Some(DecodedLiteral::ByteString(payload)) = &literal.decoded else {
+-            return Err(invalid("byte literal decoder certificate absent"));
+-        };
+-        if literal.kind != LiteralKind::ByteString
++        let payload = StaticLiteralPayload::from_literal(literal)?;
++        if !payload.permits(plan.target())
+             || plan.len() <= 256
+             || plan.len() != payload.bytes().len()
+         {
+@@ -145,19 +193,17 @@
+         else {
+             return Err(invalid("byte activation resumed at a different opcode"));
+         };
+-        let Some(DecodedLiteral::ByteString(payload)) = &literal.decoded else {
+-            return Err(invalid("resumed byte literal decoder certificate absent"));
+-        };
++        let payload = StaticLiteralPayload::from_literal(literal)?;
+         // O(1) comparison of the actual retained immutable decode. No new
+         // certificate, payload scan, decode or query is performed on Dispatch.
+         if self.status != FrameStatus::Running
+             || a.pc != self.pc
+             || a.operation_index != index
+             || a.destination != *destination
+-            || literal.kind != LiteralKind::ByteString
++            || !payload.permits(a.physical.target())
+             || a.span != literal.source
+             || a.hint != *hint
+-            || !a.payload.same_decoded_payload(payload)
++            || !a.payload.same_decoded_payload(&payload)
+             || self.constant_activation.is_some()
+             || self.copy_activation.is_some()
+             || self.cleanup_activation.is_some()
+--- a/crates/lrr/src/vm/step.rs
++++ b/crates/lrr/src/vm/step.rs
+@@ -1,6 +1,8 @@
+ //! Execute a verified recipe. No parser, resolver, compiler, or successor fetch.
+ #[path = "step_byte_literals.rs"]
+ mod byte_literals;
++#[path = "step_string_literals.rs"]
++mod string_literals;
+ use super::frame::{Frame, FrameStatus, invalid};
+ use crate::{
+     core::diagnostic::Diagnostic,
+@@ -129,6 +131,7 @@
+     frame_hint(frame, hint, required, store)
+ }
+ enum PreparedLiteral {
++    String(crate::runtime::cell::byte_literals::PreparedStaticBytes),
+     ByteString(crate::runtime::cell::byte_literals::PreparedStaticBytes),
+     Scalar(ValueRepr),
+     /// Private immutable admission from the ordinary indexed literal's kind,
+@@ -153,12 +156,12 @@
+         match self {
+             Self::IntrinsicScalar { primitive, .. } => Some(*primitive),
+             Self::Integer { source, .. } | Self::Float { source, .. } => *source,
+-            Self::Scalar(_) | Self::ByteString(_) => None,
++            Self::Scalar(_) | Self::ByteString(_) | Self::String(_) => None,
+         }
+     }
+     fn ty(&self) -> Option<TypeId> {
+         match self {
+-            Self::ByteString(plan) => Some(plan.reference_type()),
++            Self::ByteString(plan) | Self::String(plan) => Some(plan.reference_type()),
+             Self::Scalar(value) | Self::IntrinsicScalar { value, .. } => {
+                 Some(TypeId(value.type_id))
+             }
+@@ -268,7 +271,9 @@
+     store: &mut GuestStore,
+ ) -> Result<TicketId, Diagnostic> {
+     let (ticket, ty) = match prepared {
+-        PreparedLiteral::ByteString(plan) => return store.instantiate_static_bytes(plan),
++        PreparedLiteral::ByteString(plan) | PreparedLiteral::String(plan) => {
++            return store.instantiate_static_bytes(plan);
++        }
+         PreparedLiteral::Scalar(value) | PreparedLiteral::IntrinsicScalar { value, .. } => {
+             return store.ticket(value);
+         }
+@@ -419,7 +424,7 @@
+             ty,
+             source: Some(primitive),
+         }),
+-        PreparedLiteral::ByteString(_) => {
++        PreparedLiteral::ByteString(_) | PreparedLiteral::String(_) => {
+             Err(invalid("byte-string entered scalar source admission"))
+         }
+         PreparedLiteral::IntrinsicScalar { .. } => {
+@@ -448,6 +453,10 @@
+         ));
+     }
+     let hint = explicit.or(inherited);
++    if literal.kind == LiteralKind::String {
++        return string_literals::prepare(frame, store, literal, *destination, hint)
++            .map(|plan| Some(PreparedLiteral::String(plan)));
++    }
+     if literal.kind == LiteralKind::ByteString {
+         return byte_literals::prepare(frame, store, literal, *destination, hint)
+             .map(|plan| Some(PreparedLiteral::ByteString(plan)));
+@@ -1133,10 +1142,10 @@
+             let hint = explicit.or(inherited);
+             let prepared =
+                 prepared.ok_or_else(|| invalid("literal bypassed immutable admission"))?;
+-            let byte_source = if let PreparedLiteral::ByteString(plan) = &prepared {
+-                Some(byte_literals::source(plan)?)
+-            } else {
+-                None
++            let byte_source = match &prepared {
++                PreparedLiteral::ByteString(plan) => Some(byte_literals::source(plan)?),
++                PreparedLiteral::String(_) => Some(string_literals::source()),
++                _ => None,
+             };
+             let source = prepared.intrinsic_source();
+             if matches!(&prepared, PreparedLiteral::IntrinsicScalar { .. }) {
+@@ -1466,6 +1475,20 @@
+                 }));
+             }
+             let prepared = match prepared {
++                Some(PreparedLiteral::String(plan)) if plan.len() > 256 => {
++                    frame.begin_byte_literal_op(
++                        index,
++                        op,
++                        plan,
++                        string_literals::source(),
++                        store,
++                    )?;
++                    if !frame.advance_byte_literal_op(index, op, store)? {
++                        return Ok(StepOutcome::Dispatch);
++                    }
++                    increment(&mut frame.counters.operations_completed)?;
++                    continue;
++                }
+                 Some(PreparedLiteral::ByteString(plan)) if plan.len() > 256 => {
+                     let source = byte_literals::source(&plan)?;
+                     frame.begin_byte_literal_op(index, op, plan, source, store)?;
+--- a/crates/lrr/src/vm/step_byte_literals.rs
++++ b/crates/lrr/src/vm/step_byte_literals.rs
+@@ -13,6 +13,10 @@
+ pub(super) fn source(plan: &PreparedStaticBytes) -> Result<TyTerm, Diagnostic> {
+     let element = Box::new(TyTerm::Primitive(PrimitiveType::U8));
+     let target = match plan.target() {
++        // Physical UTF-8 storage cannot invent byte-literal source authority.
++        ByteLiteralTarget::Str => {
++            return Err(invalid("string storage requires its own source admission"));
++        }
+         ByteLiteralTarget::Slice => TyTerm::Slice(element),
+         ByteLiteralTarget::Array => TyTerm::Array(
+             element,
+--- /dev/null
++++ b/crates/lrr/src/vm/step_string_literal_tests.rs
+@@ -0,0 +1,291 @@
++//! Actual ordinary literal execution from unchanged upstream sources.
++//! Initializer selection is component evidence, not whole-main execution.
++use super::*;
++use crate::{
++    core::{digest::Digest, profile::ProfileIdentity},
++    ir::{pc::Phase, recipe::VerifiedRecipe},
++    runtime::{cell::CellState, shape::TypeKey},
++    source::snapshot::{CfgSet, SourceBlob},
++    syntax::{body_index::BodyIndex, parse::ParsedFile},
++};
++use ra_ap_syntax::{AstNode, SyntaxKind, ast};
++const UNICODE: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/parser/unicode-escape-sequences.rs"
++);
++const NULS: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/str/nul-char-equivalence.rs"
++);
++const CRLF: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs"
++);
++fn recipes(original: &str, edition: u16) -> Vec<(BodyIndex, VerifiedRecipe)> {
++    let parsed = ParsedFile::parse(
++        &SourceBlob::new(original.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++    )
++    .unwrap();
++    let outline = parsed
++        .outline(
++            Digest::of_bytes(b"original UTF8 VM initializer"),
++            vec![],
++            &CfgSet::guest_default(),
++        )
++        .unwrap();
++    let body = outline
++        .items
++        .iter()
++        .find(|item| item.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap();
++    let index = parsed.index_body(body, Default::default()).unwrap();
++    parsed
++        .entered_body_root(body)
++        .unwrap()
++        .descendants()
++        .filter_map(ast::LetStmt::cast)
++        .filter_map(|statement| statement.initializer())
++        .filter_map(|expr| match expr {
++            ast::Expr::Literal(literal) if literal.token().kind() == SyntaxKind::STRING => {
++                Some(literal)
++            }
++            _ => None,
++        })
++        .map(|literal| {
++            let range = literal.syntax().text_range();
++            let node = index
++                .nodes()
++                .iter()
++                .find(|node| {
++                    node.role == NodeRole::Expression(ExpressionKind::Literal)
++                        && node.range.start + body.range.start == u32::from(range.start())
++                        && node.range.end + body.range.start == u32::from(range.end())
++                })
++                .unwrap();
++            let pc = index.pc(node.id, Phase::Entry).unwrap();
++            let recipe = parsed.initial_thunk(body, &index, &pc).unwrap();
++            (index.clone(), recipe)
++        })
++        .collect()
++}
++fn frame(index: &BodyIndex, recipe: &VerifiedRecipe) -> (Frame, GuestStore) {
++    let mut store = GuestStore::new(1, 10_000, 16 << 20).unwrap();
++    let mut frame = Frame::new(index.clone(), recipe.recipe().key.clone(), &mut store).unwrap();
++    let mut next = Some(index.nodes()[recipe.recipe().key.node as usize].scope);
++    let mut ancestors = Vec::new();
++    while let Some(scope) = next {
++        ancestors.push(scope);
++        next = index.scopes()[scope.0 as usize].parent;
++    }
++    for scope in ancestors.into_iter().rev() {
++        frame.enter(scope).unwrap();
++    }
++    frame.set_fuel_limit(1000).unwrap();
++    (frame, store)
++}
++#[test]
++fn original_unicode_nul_crlf_initializers_execute_with_intrinsic_str_source_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        for (original, count) in [(UNICODE, 3), (NULS, 4), (CRLF, 3)] {
++            let cases = recipes(original, edition);
++            assert_eq!(cases.len(), count);
++            for (index, recipe) in cases {
++                let [
++                    Op::Literal {
++                        literal,
++                        destination,
++                        ..
++                    },
++                ] = recipe.recipe().operations.as_ref()
++                else {
++                    panic!("ordinary original literal");
++                };
++                let Some(DecodedLiteral::String(payload)) = &literal.decoded else {
++                    panic!("original UTF8 certificate");
++                };
++                assert!(payload.text().len() <= 256);
++                let (mut frame, mut store) = frame(&index, &recipe);
++                assert!(matches!(
++                    super::super::step(&mut frame, &mut store, &recipe).unwrap(),
++                    StepOutcome::Next(_)
++                ));
++                assert_eq!(frame.source_view(*destination).unwrap(), Some(source()));
++                let ty = store
++                    .find_type(&TypeKey::Ref {
++                        mutable: false,
++                        target: TypeId(16),
++                    })
++                    .unwrap();
++                let cell = frame.cell(*destination).unwrap();
++                let CellState::Live(value) = store.state(cell).unwrap() else {
++                    panic!("initialized UTF8 reference");
++                };
++                assert_eq!(value.type_id, ty.0);
++                let reference = store.reference_from_cell(cell).unwrap();
++                let returned = store.reference_ticket(reference).unwrap();
++                assert_eq!(store.peek_ticket(returned).unwrap(), value);
++                store.discard(returned).unwrap();
++                assert_eq!(frame.counters().started_by_opcode[0], 1);
++                assert_eq!(frame.counters().operations_completed, 1);
++            }
++        }
++    }
++}
++#[test]
++fn string_literal_admission_rejects_changed_source_slot_kind_and_descriptor_before_effects() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (index, recipe) = recipes(UNICODE, edition).remove(0);
++        let [
++            Op::Literal {
++                literal,
++                destination,
++                ..
++            },
++        ] = recipe.recipe().operations.as_ref()
++        else {
++            panic!("ordinary literal");
++        };
++        let (mut frame, store) = frame(&index, &recipe);
++        let before = (
++            store.budget().handles(),
++            store.budget().bytes(),
++            store.type_metadata_bytes(),
++            frame.fuel_snapshot(),
++            frame.counters().operations_started,
++        );
++        assert!(prepare(&frame, &store, literal, SlotId(u32::MAX), None).is_err());
++        assert!(prepare(&frame, &store, literal, *destination, Some(TypeId(9))).is_err());
++        let mut wrong = literal.clone();
++        wrong.spelling.push(' ');
++        assert!(prepare(&frame, &store, &wrong, *destination, None).is_err());
++        wrong = literal.clone();
++        wrong.source.relative_end += 1;
++        assert!(prepare(&frame, &store, &wrong, *destination, None).is_err());
++        wrong = literal.clone();
++        wrong.kind = LiteralKind::ByteString;
++        assert!(prepare(&frame, &store, &wrong, *destination, None).is_err());
++        frame
++            .set_source_view(*destination, Some(TyTerm::Primitive(PrimitiveType::U8)))
++            .unwrap();
++        assert!(prepare(&frame, &store, literal, *destination, None).is_err());
++        assert_eq!(
++            before,
++            (
++                store.budget().handles(),
++                store.budget().bytes(),
++                store.type_metadata_bytes(),
++                frame.fuel_snapshot(),
++                frame.counters().operations_started
++            )
++        );
++        assert!(frame.cell(*destination).is_err());
++    }
++}
++#[test]
++fn symbolic_str_identity_is_distinct_from_byte_slice_and_uses_append_only_tag() {
++    let mut expected = StableEncoder::new(TyTerm::DOMAIN);
++    expected.u32(15);
++    assert_eq!(TyTerm::Str.fingerprint(), expected.finish());
++    assert_ne!(
++        TyTerm::Str,
++        TyTerm::Slice(Box::new(TyTerm::Primitive(PrimitiveType::U8)))
++    );
++    assert_eq!(TyTerm::Str.heap_bytes(), Some(0));
++    let mut unifier = crate::traits::unify::Unifier::new(Digest::of_bytes(b"UTF8 type identity"));
++    unifier.unify(&source(), &source()).unwrap();
++    assert!(
++        unifier
++            .unify(
++                &TyTerm::Str,
++                &TyTerm::Slice(Box::new(TyTerm::Primitive(PrimitiveType::U8)))
++            )
++            .is_err()
++    );
++}
++#[test]
++fn unchanged_slowparse_string_main_executes_one_literal_and_completes_all_editions() {
++    use crate::{
++        db::{key::OutlineKey, memo::Database},
++        engine::run::{RunMachine, RunPoll, ValueSummary},
++        source::{
++            changes::{
++                PreparedSourceInputs, SourceSelection, SourceSelectionOutcome, SourceUnitInput,
++            },
++            snapshot::SourcePath,
++        },
++        syntax::parse::ParseKey,
++    };
++    const ORIGINAL: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/parser/slowparse-string.rs"
++    );
++    for edition in [2015, 2018, 2021, 2024] {
++        let profile = ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        };
++        let blob = SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap();
++        let path = SourcePath::new("tests/ui/parser/slowparse-string.rs").unwrap();
++        let owner = Digest::of_bytes(b"unchanged slowparse string main");
++        let cfg = CfgSet::guest_default();
++        let selection = SourceSelection {
++            path: path.clone(),
++            outline: OutlineKey {
++                parse: ParseKey {
++                    content: blob.content(),
++                    profile: profile.clone(),
++                },
++                crate_key: owner,
++                module_path: vec![],
++                cfg: cfg.fingerprint(),
++            },
++        };
++        let inputs = PreparedSourceInputs::refresh(
++            None,
++            vec![SourceUnitInput {
++                path,
++                blob,
++                profile,
++                cfg,
++                crate_key: owner,
++                module_path: vec![],
++            }],
++            Default::default(),
++        )
++        .unwrap();
++        let SourceSelectionOutcome::Selected(source) = inputs.select(&selection).unwrap() else {
++            panic!("original source");
++        };
++        let body = source
++            .outline()
++            .items
++            .iter()
++            .find(|item| item.def_key.declared_name == "main")
++            .unwrap()
++            .body
++            .as_ref()
++            .unwrap()
++            .key();
++        let mut db = Database::default();
++        inputs.publish(&mut db).unwrap();
++        db.begin_run().unwrap();
++        let mut run = RunMachine::start_with_sources(&mut db, body, 2_000_000, vec![source])
++            .into_ready()
++            .unwrap()
++            .unwrap();
++        let RunPoll::Completed(report) = run.poll(&mut db) else {
++            panic!("unchanged long string main must complete in edition {edition}");
++        };
++        assert!(matches!(report.value, ValueSummary::Unit));
++        assert_eq!(report.opcode_counters.started_by_opcode[0], 1);
++        assert_eq!(report.opcode_counters.started_by_opcode[7], 0);
++        assert_eq!(
++            report.opcode_counters.operations_started,
++            report.opcode_counters.operations_completed
++        );
++        db.finish_run().unwrap();
++    }
++}
+--- /dev/null
++++ b/crates/lrr/src/vm/step_string_literals.rs
+@@ -0,0 +1,72 @@
++//! Intrinsic ordinary UTF-8 literals: source identity precedes physical storage.
++use super::*;
++use crate::{
++    core::digest::{StableEncode, StableEncoder},
++    ir::pc::SlotId,
++    runtime::{cell::byte_literals::PreparedStaticBytes, shape::ByteLiteralTarget},
++    syntax::body_index::{ExpressionKind, NodeRole},
++    traits::term::{RegionTerm, TyTerm},
++};
++pub(super) fn source() -> TyTerm {
++    TyTerm::Ref(RegionTerm::Static, false, Box::new(TyTerm::Str))
++}
++pub(super) fn prepare(
++    frame: &Frame,
++    store: &GuestStore,
++    literal: &LiteralRecipe,
++    destination: SlotId,
++    hint: Option<TypeId>,
++) -> Result<PreparedStaticBytes, Diagnostic> {
++    let Some(DecodedLiteral::String(payload)) = &literal.decoded else {
++        return Err(invalid("string pinned payload absent"));
++    };
++    if literal.kind != LiteralKind::String {
++        return Err(invalid("string payload has another literal kind"));
++    }
++    payload.require(&literal.spelling, &literal.source)?;
++    let node = frame
++        .body
++        .nodes()
++        .get(frame.pc().node as usize)
++        .ok_or_else(|| invalid("string indexed node absent"))?;
++    // Opaque macro operands require the current source/compiler receipt. A
++    // verified Literal operation alone cannot grant string source identity.
++    if node.role == NodeRole::Expression(ExpressionKind::Macro) {
++        frame.require_macro_byte_literal(literal, destination)?;
++    } else if node.role != NodeRole::Expression(ExpressionKind::Literal)
++        || frame.pc().phase != 0
++        || node.value != Some(destination)
++        || frame.body.span(node.id)? != literal.source
++    {
++        return Err(invalid("string requires its exact ordinary literal entry"));
++    }
++    let source = source();
++    if frame
++        .source_view_ref(destination)?
++        .is_some_and(|context| context != &source)
++    {
++        return Err(invalid(
++            "string cannot overwrite a different source context",
++        ));
++    }
++    frame.preflight_source_view(destination, Some(&source))?;
++    let needs_cell = frame.literal_destination_needs_cell(destination)?;
++    let mut identity = StableEncoder::new("lrr/v1/static-utf8-literal-site");
++    identity.record(frame.body.body());
++    identity.record(frame.body.profile());
++    identity.digest(frame.body.cfg().fingerprint());
++    identity.u32(literal.source.relative_start);
++    identity.u32(literal.source.relative_end);
++    let plan = store.prepare_static_bytes(
++        identity.finish(),
++        payload.text().as_bytes(),
++        ByteLiteralTarget::Str,
++        hint,
++        needs_cell,
++    )?;
++    frame.preflight_literal(destination, Some(plan.reference_type()), hint, store)?;
++    Ok(plan)
++}
++#[cfg(test)]
++#[path = "step_string_literal_tests.rs"]
++mod tests;

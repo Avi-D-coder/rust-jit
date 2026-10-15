@@ -1,0 +1,280 @@
+--- a/crates/lrr/src/frontend/closed_string_reference_tests.rs
++++ b/crates/lrr/src/frontend/closed_string_reference_tests.rs
+@@ -22,6 +22,11 @@
+ /// Execute the real first initializer, including its actual preceding recipes.
+ /// A source view or reference value is never manufactured for this producer.
+ fn literal_argument(edition: u16) -> (Frame, GuestStore, SlotId) {
++    let mut store = GuestStore::new(1, 10_000, 4_000_000).unwrap();
++    let (frame, slot) = literal_argument_in(edition, &mut store);
++    (frame, store, slot)
++}
++fn literal_argument_in(edition: u16, store: &mut GuestStore) -> (Frame, SlotId) {
+     let (mut db, view, _) = source(NULS, edition);
+     let body = view
+         .outline()
+@@ -41,11 +46,10 @@
+     let QueryValue::BodyStructure(index) = fetched.value.as_ref() else {
+         panic!()
+     };
+-    let mut store = GuestStore::new(1, 10_000, 4_000_000).unwrap();
+     let mut frame = Frame::new(
+         index.as_ref().clone(),
+         index.pc(NodeId(0), Phase::Entry).unwrap(),
+-        &mut store,
++        store,
+     )
+     .unwrap();
+     frame.set_fuel_limit(1000).unwrap();
+@@ -67,14 +71,156 @@
+             _ => None,
+         });
+         assert!(matches!(
+-            step(&mut frame, &mut store, recipe).unwrap(),
++            step(&mut frame, store, recipe).unwrap(),
+             StepOutcome::Next(_)
+         ));
+         if let Some(destination) = destination {
+-            return (frame, store, destination);
++            return (frame, destination);
+         }
+     }
+     panic!("unchanged NUL initializer did not execute");
++}
++
++fn read_original_parameter(
++    db: &mut Database,
++    callee: &SourceCallable,
++    contracts: &PreparedCallContracts,
++    cells: &[CellId],
++    store: &mut GuestStore,
++) {
++    use crate::{
++        runtime::cell::CellState,
++        syntax::body_index::{ExpressionKind, NodeRole},
++        vm::call::ArgumentPacket,
++    };
++    let body = callee.body().unwrap().key();
++    let fetched = db
++        .fetch(&SyntaxProvider, QueryKey::BodyStructure(body))
++        .into_ready()
++        .unwrap()
++        .unwrap();
++    let QueryValue::BodyStructure(index) = fetched.value.as_ref() else {
++        panic!()
++    };
++    let mut selected = None;
++    for node in index
++        .nodes()
++        .iter()
++        .filter(|node| node.role == NodeRole::Expression(ExpressionKind::Path))
++    {
++        let key = index.pc(node.id, Phase::Entry).unwrap();
++        let fetched = db
++            .fetch(&SyntaxProvider, QueryKey::Thunk(key))
++            .into_ready()
++            .unwrap()
++            .unwrap();
++        let QueryValue::Thunk(recipe) = fetched.value.as_ref() else {
++            panic!()
++        };
++        if let [
++            Op::ReadParameter {
++                ordinal: 0,
++                destination,
++            },
++        ] = recipe.recipe().operations.as_ref()
++        {
++            selected = Some((node.scope, *destination, recipe.clone()));
++            break;
++        }
++    }
++    let (scope, destination, recipe) = selected.expect("original compare parameter read absent");
++    let mut frame = Frame::new(index.as_ref().clone(), recipe.recipe().key.clone(), store).unwrap();
++    frame.set_fuel_limit(1000).unwrap();
++    frame
++        .install_parameter_sources(contracts.source_parameters.clone())
++        .unwrap();
++    let mut wrong = Frame::new(index.as_ref().clone(), recipe.recipe().key.clone(), store).unwrap();
++    wrong.set_fuel_limit(1000).unwrap();
++    wrong
++        .install_parameter_sources(vec![
++            TyTerm::Ref(
++                RegionTerm::Static,
++                false,
++                Box::new(TyTerm::Primitive(PrimitiveType::U8))
++            );
++            2
++        ])
++        .unwrap();
++    let packet = ArgumentPacket::seal(store, cells, &contracts.parameter_descriptors).unwrap();
++    assert!(
++        cells
++            .iter()
++            .all(|cell| store.state(*cell).unwrap() == CellState::Moved)
++    );
++    let parameter_contracts: Vec<_> = contracts
++        .parameter_descriptors
++        .iter()
++        .map(|ty| (*ty, false))
++        .collect();
++    let effects = (
++        store.budget().handles(),
++        store.budget().bytes(),
++        wrong.fuel_snapshot(),
++    );
++    assert_eq!(
++        wrong
++            .initialize_parameters(&packet, &parameter_contracts, store)
++            .unwrap_err()
++            .code,
++        "LRR-E-OWNERSHIP"
++    );
++    assert_eq!(
++        (
++            store.budget().handles(),
++            store.budget().bytes(),
++            wrong.fuel_snapshot()
++        ),
++        effects
++    );
++    packet
++        .check_types(store, &contracts.parameter_descriptors)
++        .unwrap();
++    frame
++        .initialize_parameters(&packet, &parameter_contracts, store)
++        .unwrap();
++    let effects = (
++        store.budget().handles(),
++        store.budget().bytes(),
++        frame.fuel_snapshot(),
++    );
++    assert!(
++        frame
++            .initialize_parameters(&packet, &parameter_contracts, store)
++            .is_err()
++    );
++    assert_eq!(
++        (
++            store.budget().handles(),
++            store.budget().bytes(),
++            frame.fuel_snapshot()
++        ),
++        effects
++    );
++    let mut scopes = vec![scope];
++    while let Some(parent) = index.scopes()[scopes.last().unwrap().0 as usize].parent {
++        scopes.push(parent);
++    }
++    for scope in scopes.into_iter().rev() {
++        frame.enter(scope).unwrap();
++    }
++    assert!(matches!(
++        step(&mut frame, store, &recipe).unwrap(),
++        StepOutcome::Next(_)
++    ));
++    assert_eq!(
++        frame.source_view(destination).unwrap(),
++        Some(contracts.source_parameters[0].clone())
++    );
++    store
++        .require_static_string_value(frame.cell(destination).unwrap())
++        .unwrap();
++    assert_eq!(frame.counters().operations_started, 1);
++    assert_eq!(frame.counters().operations_completed, 1);
+ }
+ 
+ #[test]
+@@ -84,6 +230,13 @@
+         let callee = callable(&mut db, &view, &graph, "compare");
+         let (frame, mut store, slot) = literal_argument(edition);
+         let reference = ClosedReferenceArgument::capture(&frame, slot, &store).unwrap();
++        let (other_frame, other_slot) = literal_argument_in(edition, &mut store);
++        let other_reference =
++            ClosedReferenceArgument::capture(&other_frame, other_slot, &store).unwrap();
++        assert_ne!(
++            frame.cell(slot).unwrap(),
++            other_frame.cell(other_slot).unwrap()
++        );
+         assert_eq!(
+             reference.source,
+             TyTerm::Ref(RegionTerm::Static, false, Box::new(TyTerm::Str))
+@@ -120,7 +273,7 @@
+             descriptor: TypeId(reference.value.type_id),
+         };
+         let actuals = [actual.clone(), actual];
+-        let references = [Some(reference.clone()), Some(reference)];
++        let references = [Some(reference), Some(other_reference)];
+         let QueryPoll::Ready(Ok(ContractPreparation::Ready(mut packet))) =
+             prepare_contracts_with_references(
+                 &mut db,
+@@ -141,7 +294,14 @@
+         let proof = packet.closed_references.as_ref().unwrap().clone();
+         proof.validate_packet(callee.signature(), &packet).unwrap();
+         proof
+-            .require_argument_cells(&store, &[frame.cell(slot).unwrap(); 2], &actuals)
++            .require_argument_cells(
++                &store,
++                &[
++                    frame.cell(slot).unwrap(),
++                    other_frame.cell(other_slot).unwrap(),
++                ],
++                &actuals,
++            )
+             .unwrap();
+         assert_eq!(packet.source_parameters, vec![actuals[0].source.clone(); 2]);
+         packet.source_parameters[0] = TyTerm::Ref(
+@@ -158,6 +318,12 @@
+                 .code,
+             "LRR-E-CALL-CONTEXT"
+         );
++        packet.source_parameters[0] = actuals[0].source.clone();
++        let cells = [
++            frame.cell(slot).unwrap(),
++            other_frame.cell(other_slot).unwrap(),
++        ];
++        read_original_parameter(&mut db, &callee, &packet, &cells, &mut store);
+     }
+ }
+ 
+--- a/crates/lrr/src/vm/frame.rs
++++ b/crates/lrr/src/vm/frame.rs
+@@ -644,6 +644,18 @@
+                         "parameter reference access differs from its source view".into(),
+                     ));
+                 }
++                if target.as_ref() == &TyTerm::Str {
++                    // This check precedes parameter-cell publication. Actual
++                    // UTF-8 lease admission belongs to the closed source call
++                    // contract; parameter reads validate the delivered lease.
++                    if *mutable || *actual_target != TypeId(16) {
++                        return Err(Diagnostic::new(
++                            "LRR-E-OWNERSHIP",
++                            "shared str parameter differs from its reference descriptor".into(),
++                        ));
++                    }
++                    return Ok(());
++                }
+                 Self::require_borrow_source_target(Some(target.as_ref()), *actual_target, store)
+             }
+             // Rigid parameters retain their identities under the existing
+@@ -1129,7 +1141,7 @@
+         self.context = Some(context);
+         Ok(())
+     }
+-    /// Current closed-source component also retains primitive-reference views.
++    /// Closed-source calls retain scalar references and shared UTF-8 references.
+     /// Abstract/composite parameter tables still require later source integration.
+     pub(crate) fn install_parameter_sources(
+         &mut self,
+@@ -1144,8 +1156,9 @@
+                         source,
+                         crate::traits::term::TyTerm::Primitive(_)
+                             | crate::traits::term::TyTerm::Param(_)
+-                    ) && !matches!(source, crate::traits::term::TyTerm::Ref(_, _, target)
+-                    if matches!(target.as_ref(), crate::traits::term::TyTerm::Primitive(_))))
++                    ) && !matches!(source, crate::traits::term::TyTerm::Ref(_, mutable, target)
++                    if matches!(target.as_ref(), crate::traits::term::TyTerm::Primitive(_))
++                        || (!*mutable && target.as_ref() == &crate::traits::term::TyTerm::Str)))
+             })
+         {
+             return Err(invalid(

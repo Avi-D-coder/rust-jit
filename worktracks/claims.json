@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V86 full combined milestone failed:1150 library passes,1 nested-tuple initialization failure,2136 listed bodies unexecuted. Root traced failure to new static-mutation ancestry guard hard limit256 versus existing512-depth witness, not demonstrated memory exhaustion. Two-leaf production repair preserves test depth/budget and adds cycle guard; strict/runtime/milestone pending. Three-leaf source-selected shared-str argument draft plus unchanged match-borrowed-str import prepared independently, uncompiled/unexecuted; held string chain and canonical promotion remain pending.",
+      "scope": "V87 strict and22 scoped initialization/immutable-root controls passed after production ancestry repair; existing512depth/16MiB witness unchanged. Required combined milestone queued on frozen2e19361d. Root implemented shared-str parameter entry/read and composed29 string leaves against exactV87 base with repaired owner guard retained; source-only, uncompiled/unexecuted and held. Byte canonical promotion and all string acceptance pending; no new full-fixture count or JIT.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -521,11 +521,15 @@
         "artifacts/macos-first/root-string-reference-arguments-v1/",
         "worktracks/candidates/root-string-reference-arguments-v1/",
         "artifacts/macos-first/root-static-owner-depth-repair-v1/",
-        "worktracks/candidates/root-static-owner-depth-repair-v1/"
+        "worktracks/candidates/root-static-owner-depth-repair-v1/",
+        "artifacts/macos-first/root-string-reference-entry-v1/",
+        "worktracks/candidates/root-string-reference-entry-v1/",
+        "artifacts/macos-first/root-string-call-coherent-v2/",
+        "worktracks/candidates/root-string-call-coherent-v2/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T11:36:31.408234+00:00",
+      "updated_at": "2026-10-15T11:41:33.070646+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

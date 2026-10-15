@@ -1,0 +1,39 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T041",
+    "T062"
+  ],
+  "prerequisites": [
+    "root-string-reference-arguments-v1",
+    "root-string-coherent-v1"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/closed_string_reference_tests.rs",
+      "before_sha256": "0b7c075131a9ea2eb787407e5ebd9a5e5e3ccb6f9e20e766ca3fe2aff82e0e75",
+      "after_sha256": "b63830c374a5c5dd458a0b25882c5e14cc526505a84f97662b1056f58aa23194"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "before_sha256": "43984237c7bd1f85d5a969eaed81230daa62a9e7b2cc064108f3254af50bee69",
+      "after_sha256": "ea7dddfa4e3466b1f92191b7b168af4a6d2d9f363076b06df8c0285f009a3c26"
+    }
+  ],
+  "patch_sha256": "5eed7c71bb17aedb3ced7aafd4fed8d631ad1d11fa825062a5a52f16a77e0964",
+  "patch_bytes": 10396,
+  "static_checks": [
+    "Rust 1.99 formatting",
+    "exact patch replay"
+  ],
+  "new_test_bodies": 0,
+  "extended_test_bodies": 1,
+  "stock_runtime_passes_added": 0,
+  "acceptance_pending": [
+    "strict build",
+    "actual source parameter entry/read component across editions",
+    "integrated milestone"
+  ],
+  "created_at": "2026-10-15T11:40:25.749313+00:00"
+}
