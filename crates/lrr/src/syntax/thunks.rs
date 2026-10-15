@@ -1561,7 +1561,7 @@ impl ParsedFile {
         index: &BodyIndex,
         key: &PcKey,
     ) -> Result<VerifiedRecipe, Diagnostic> {
-        self.initial_thunk_admission(body, index, key, None, None)
+        self.initial_thunk_admission(body, index, key, None, None, None)
     }
     pub(crate) fn initial_thunk_with_scalar_binding(
         &self,
@@ -1571,7 +1571,7 @@ impl ParsedFile {
         admission: &crate::frontend::scalar_pattern_binding::ScalarPatternBindingAdmission,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         admission.require(self, body, index, key, NodeId(key.node))?;
-        self.initial_thunk_admission(body, index, key, Some(admission), None)
+        self.initial_thunk_admission(body, index, key, Some(admission), None, None)
     }
     pub(crate) fn runtime_macro_numeric_request(
         &self,
@@ -1589,8 +1589,17 @@ impl ParsedFile {
         proof: &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         proof.context(self, body, index, key)?;
-        let recipe = self.initial_thunk_admission(body, index, key, None, Some(proof))?;
+        let recipe = self.initial_thunk_admission(body, index, key, None, Some(proof), None)?;
         proof.attach(recipe, index)
+    }
+    pub(crate) fn initial_thunk_with_primitive_name(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        proof: &crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        self.initial_thunk_admission(body, index, key, None, None, Some(proof))
     }
     fn initial_thunk_admission(
         &self,
@@ -1601,6 +1610,7 @@ impl ParsedFile {
         numeric_admission: Option<
             &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
         >,
+        type_name: Option<&crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission>,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         if body.key() != *index.body() || key.body != body.key() {
             return Err(error("selected thunk body identity changed"));
@@ -1634,41 +1644,7 @@ impl ParsedFile {
                 super::conditions::ConditionLimits::default(),
             )?;
         }
-        let start = body
-            .range
-            .start
-            .checked_add(node.range.start)
-            .ok_or_else(|| error("phase range overflow"))?;
-        let end = body
-            .range
-            .start
-            .checked_add(node.range.end)
-            .ok_or_else(|| error("phase range overflow"))?;
-        let syntax = self.parsed.tree().syntax().descendants().find(|syntax| {
-            u32::from(syntax.text_range().start()) == start
-                && u32::from(syntax.text_range().end()) == end
-                && if matches!(node.role, NodeRole::Expression(_)) {
-                    ast::Expr::can_cast(syntax.kind())
-                } else if node.role == NodeRole::Statement {
-                    ast::Stmt::can_cast(syntax.kind())
-                } else if node.role == NodeRole::MatchArm {
-                    ast::MatchArm::can_cast(syntax.kind())
-                } else if node.role == NodeRole::Pattern {
-                    matches!(
-                        syntax.kind(),
-                        SyntaxKind::LITERAL_PAT
-                            | SyntaxKind::WILDCARD_PAT
-                            | SyntaxKind::IDENT_PAT
-                            | SyntaxKind::RANGE_PAT
-                    ) && syntax
-                        .ancestors()
-                        .any(|parent| ast::MatchArm::can_cast(parent.kind()))
-                } else if node.role == NodeRole::OpaqueItem {
-                    ast::Item::can_cast(syntax.kind())
-                } else {
-                    false
-                }
-        });
+        let syntax = self.entered_node_syntax(body, index, id)?;
         let fallback = index.pc(id, Phase::Exit)?;
         let Some(syntax) = syntax else {
             return thunks::unsupported(
@@ -1768,7 +1744,7 @@ impl ParsedFile {
                 self.initial_binary_thunk(body, index, key, syntax, numeric_admission)
             }
             SyntaxKind::CAST_EXPR | SyntaxKind::LITERAL => {
-                self.initial_scalar_thunk(body, index, key, syntax)
+                self.initial_scalar_thunk(body, index, key, syntax, type_name)
             }
             _ => unsupported("entered node phase awaits its ordered lowering task"),
         }
@@ -2088,6 +2064,22 @@ impl ParsedFile {
                         return Err(error("numeric initializer proof names another binding"));
                     }
                     hint = HintRecipe::DefinitionNumeric(context);
+                }
+                // Default only a closed local inference variable. This source
+                // proof treats casts/discarded reads as unconstraining uses;
+                // annotations, calls, patterns and opaque uses remain deferred.
+                if hint == HintRecipe::None
+                    && !by_reference
+                    && let Some(primitive) = local_numeric_constraints::unconstrained_literal(
+                        self,
+                        index,
+                        body,
+                        &statement,
+                        &pattern,
+                        &initializer,
+                    )?
+                {
+                    hint = HintRecipe::Primitive(primitive);
                 }
                 // Otherwise preserve the existing closed-operator fallback.
                 // A written type always wins.
@@ -3553,6 +3545,7 @@ impl ParsedFile {
         index: &BodyIndex,
         key: &PcKey,
         syntax: SyntaxNode,
+        type_name: Option<&crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission>,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let id = NodeId(key.node);
         let node = &index.nodes()[key.node as usize];
@@ -3569,7 +3562,12 @@ impl ParsedFile {
                 // Admit the target in its original lexical source context.
                 // A hoisted local type or generic parameter may shadow a
                 // primitive spelling; it requires later symbolic resolution.
-                let Some(target) = primitive_cast_target::resolve(self, index, expression.ty())?
+                let Some(target) = primitive_cast_target::resolve(
+                    self,
+                    index,
+                    expression.ty(),
+                    type_name.map(|proof| (key, proof)),
+                )?
                 else {
                     return unsupported("cast target requires symbolic type resolution");
                 };

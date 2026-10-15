@@ -66,6 +66,7 @@ struct SourcePin {
     attachments: std::sync::Weak<crate::syntax::spans::SpanAttachments>,
 }
 struct QueryPin {
+    body: std::sync::Weak<crate::syntax::body_index::BodyIndex>,
     value: std::sync::Weak<QueryValue>,
     parsed: std::sync::Weak<crate::syntax::parse::ParsedFile>,
     outline: std::sync::Weak<crate::syntax::outline::Outline>,
@@ -76,12 +77,14 @@ impl QueryPin {
     fn new(value: &Arc<QueryValue>) -> Self {
         let mut pin = Self {
             value: Arc::downgrade(value),
+            body: std::sync::Weak::new(),
             parsed: std::sync::Weak::new(),
             outline: std::sync::Weak::new(),
             signature: std::sync::Weak::new(),
             inventory: std::sync::Weak::new(),
         };
         match value.as_ref() {
+            QueryValue::BodyStructure(v) => pin.body = Arc::downgrade(v),
             QueryValue::ParseFile(v) => pin.parsed = Arc::downgrade(v),
             QueryValue::Outline(v) => pin.outline = Arc::downgrade(v),
             QueryValue::Signature(v) => pin.signature = Arc::downgrade(v),
@@ -98,6 +101,11 @@ impl QueryPin {
                 .get(&(self.value.as_ptr() as usize))
                 .copied()
                 .unwrap_or(0)
+            || self.body.strong_count()
+                > inner
+                    .get(&(self.body.as_ptr() as usize))
+                    .copied()
+                    .unwrap_or(0)
             || self.parsed.strong_count()
                 > inner
                     .get(&(self.parsed.as_ptr() as usize))
@@ -180,6 +188,7 @@ impl Database {
             *count += 1;
             if *count == 1 {
                 let allocation = match memo.value.as_ref() {
+                    QueryValue::BodyStructure(v) => Some(Arc::as_ptr(v) as usize),
                     QueryValue::ParseFile(v) => Some(Arc::as_ptr(v) as usize),
                     QueryValue::Outline(v) => Some(Arc::as_ptr(v) as usize),
                     QueryValue::Signature(v) => Some(Arc::as_ptr(v) as usize),
@@ -420,6 +429,10 @@ impl Database {
         let mut parse_allocations = std::collections::BTreeSet::new();
         let mut outline_allocations = std::collections::BTreeSet::new();
         let mut signature_allocations = std::collections::BTreeSet::new();
+        let mut body_allocations = std::collections::BTreeSet::new();
+        // Account each immutable body once, independently of its memo wrappers.
+        // In particular, a retained outer Outcome also pins the inner body.
+        let mut cached_bodies = BTreeMap::new();
         let (memo_outer, memo_inner) = self.memo_owners();
         for memo in self.memos.values() {
             if let QueryValue::ParseFile(parsed) = memo.value.as_ref() {
@@ -435,7 +448,23 @@ impl Database {
                 inventory_allocations.insert(Arc::as_ptr(inventory));
             }
             let parse = memo.value.parse_bytes();
-            let bytes = memo.estimated_bytes.saturating_sub(parse);
+            let body_bytes = if let QueryValue::BodyStructure(body) = memo.value.as_ref() {
+                let pinned = Arc::strong_count(&memo.value)
+                    > memo_outer[&(Arc::as_ptr(&memo.value) as usize)]
+                    || Arc::strong_count(body) > memo_inner[&(Arc::as_ptr(body) as usize)];
+                cached_bodies
+                    .entry(Arc::as_ptr(body))
+                    .and_modify(|(_, previous): &mut (_, bool)| *previous |= pinned)
+                    .or_insert((body, pinned));
+                account_add(body.estimated_bytes(), 2 * std::mem::size_of::<usize>())?
+            } else {
+                0
+            };
+            let bytes = memo
+                .estimated_bytes
+                .saturating_sub(parse)
+                .checked_sub(body_bytes)
+                .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "shared body accounting underflow"))?;
             usage.memo_bytes = account_add(usage.memo_bytes, bytes)?;
             usage.parse_bytes = account_add(usage.parse_bytes, parse)?;
             if Arc::strong_count(&memo.value) > 1
@@ -444,6 +473,14 @@ impl Database {
             {
                 usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, bytes)?;
                 usage.pinned_parse_bytes = account_add(usage.pinned_parse_bytes, parse)?;
+            }
+        }
+        for (allocation, (body, pinned)) in cached_bodies {
+            body_allocations.insert(allocation);
+            let bytes = account_add(body.estimated_bytes(), 2 * std::mem::size_of::<usize>())?;
+            usage.memo_bytes = account_add(usage.memo_bytes, bytes)?;
+            if pinned {
+                usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, bytes)?;
             }
         }
         let prepared: Vec<_> = prepared_sources
@@ -495,6 +532,9 @@ impl Database {
             .collect();
         for value in &retired_values {
             let inner_bytes = match value.as_ref() {
+                QueryValue::BodyStructure(v) => {
+                    account_add(v.estimated_bytes(), 2 * std::mem::size_of::<usize>())?
+                }
                 QueryValue::ParseFile(v) => v.estimated_bytes(),
                 QueryValue::Outline(v) => v.estimated_bytes(),
                 QueryValue::Signature(v) => v.estimated_bytes(),
@@ -512,6 +552,19 @@ impl Database {
                     })?,
                 16,
             )?;
+            usage.memo_bytes = account_add(usage.memo_bytes, bytes)?;
+            usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, bytes)?;
+        }
+        // Frames retain inner body handles after their outer query Outcome is
+        // gone. Weak pins preserve accounting even after memo invalidation.
+        let query_bodies: Vec<_> = self
+            .query_pins
+            .values()
+            .filter(|pin| body_allocations.insert(pin.body.as_ptr()))
+            .filter_map(|pin| pin.body.upgrade())
+            .collect();
+        for body in &query_bodies {
+            let bytes = account_add(body.estimated_bytes(), 2 * std::mem::size_of::<usize>())?;
             usage.memo_bytes = account_add(usage.memo_bytes, bytes)?;
             usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, bytes)?;
         }
@@ -659,7 +712,11 @@ impl Database {
         let mut candidates: Vec<_> = self
             .memos
             .iter()
-            .filter(|(_, m)| Arc::strong_count(&m.value) == 1 && !m.value.is_pinned())
+            .filter(|(_, m)| {
+                Arc::strong_count(&m.value) == 1
+                    && !m.value.is_pinned()
+                    && !QueryPin::new(&m.value).external(&memo_outer, &memo_inner)
+            })
             .map(|(key, m)| (m.last_used_counter, key.clone()))
             .collect();
         candidates.sort();
@@ -679,9 +736,17 @@ impl Database {
             }
             let memo = self.memos.remove(&key).expect("selected retained memo");
             let parse = memo.value.parse_bytes();
-            after.memo_bytes = after
-                .memo_bytes
-                .saturating_sub(memo.estimated_bytes.saturating_sub(parse));
+            let shared_body = match memo.value.as_ref() {
+                QueryValue::BodyStructure(body) if Arc::strong_count(body) > 1 => {
+                    account_add(body.estimated_bytes(), 2 * std::mem::size_of::<usize>())?
+                }
+                _ => 0,
+            };
+            after.memo_bytes = after.memo_bytes.saturating_sub(
+                memo.estimated_bytes
+                    .saturating_sub(parse)
+                    .saturating_sub(shared_body),
+            );
             after.parse_bytes = after.parse_bytes.saturating_sub(parse);
             after.memo_entries -= 1;
             self.trace.record(
@@ -2663,3 +2728,7 @@ mod tests {
 mod prepared_module_registry_snapshot;
 #[cfg(test)]
 pub(crate) use prepared_module_registry_snapshot::PreparedModuleRegistrySnapshot;
+
+#[cfg(test)]
+#[path = "body_structure_accounting_tests.rs"]
+mod body_structure_accounting_tests;

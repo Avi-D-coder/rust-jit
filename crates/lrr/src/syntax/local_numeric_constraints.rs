@@ -347,3 +347,122 @@ pub(super) fn operator_type(
         None => Ok(default),
     }
 }
+
+/// Rust fallback for an unsuffixed local whose captured uses cannot constrain
+/// its numeric type. Unknown uses remain deferred for the ordinary goal engine.
+/// A cast does not equate its operand's type with its result's type.
+pub(super) fn unconstrained_literal(
+    parsed: &ParsedFile,
+    index: &BodyIndex,
+    body: &BodyHandle,
+    statement: &ast::LetStmt,
+    pattern: &ast::IdentPat,
+    initializer: &ast::Expr,
+) -> Result<Option<PrimitiveType>, Diagnostic> {
+    let Some(default) = super::super::numeric_fallback::literal_only(initializer)? else {
+        return Ok(None);
+    };
+    let Some(list) = statement.syntax().parent().and_then(ast::StmtList::cast) else {
+        return Ok(None);
+    };
+    let Some(name) = pattern.name() else {
+        return Ok(None);
+    };
+    let wanted = MacroName::parse(name.text(), parsed.edition)?;
+    let binding = super::id_for(index, body, pattern.syntax())?;
+    let mut budget = Budget::default();
+    // Origin records are immutable source facts. Equal printed names with
+    // different contexts do not establish a binding relation in retained syntax.
+    let binding_origins = parsed.retained_source_spans(crate::syntax::ast_adapter::range(
+        name.syntax().text_range(),
+    ))?;
+    if binding_origins
+        .as_ref()
+        .is_some_and(|origins| origins.len() != 1)
+    {
+        return Ok(None);
+    }
+    for syntax in list
+        .syntax()
+        .children()
+        .filter(|syntax| syntax.text_range().start() >= statement.syntax().text_range().end())
+    {
+        budget.charge()?;
+        let (enabled, attributed) = super::statement_cfg(&syntax, index.cfg())?;
+        if !enabled {
+            continue;
+        }
+        if attributed {
+            return Ok(None);
+        }
+        for node in syntax.descendants() {
+            budget.charge()?;
+            if ast::MacroCall::can_cast(node.kind()) {
+                return Ok(None);
+            }
+            if let Some(other) = ast::IdentPat::cast(node.clone())
+                && other.name().is_some_and(|name| {
+                    MacroName::parse(name.text(), parsed.edition).is_ok_and(|name| name == wanted)
+                })
+            {
+                return Ok(None);
+            }
+            let Some(read) = ast::PathExpr::cast(node) else {
+                continue;
+            };
+            if !named(&read, &wanted, parsed.edition) {
+                continue;
+            }
+            budget.read()?;
+            if super::local_binding(parsed, index, body, &read)? != Some(binding) {
+                return Ok(None);
+            }
+            if let Some(binding_origins) = &binding_origins {
+                let Some(path) = read
+                    .path()
+                    .and_then(|path| path.segment())
+                    .and_then(|segment| segment.name_ref())
+                else {
+                    return Ok(None);
+                };
+                let Some(origins) = parsed.retained_source_spans(
+                    crate::syntax::ast_adapter::range(path.syntax().text_range()),
+                )?
+                else {
+                    return Ok(None);
+                };
+                let [origin] = origins.as_slice() else {
+                    return Ok(None);
+                };
+                let binding = &binding_origins[0];
+                if origin.source != binding.source
+                    || origin.context != binding.context
+                    || origin.edition != binding.edition
+                {
+                    return Ok(None);
+                }
+            }
+            let mut expression = read.syntax().clone();
+            let mut closed = false;
+            for _ in 0..256 {
+                budget.charge()?;
+                let Some(parent) = expression.parent() else {
+                    break;
+                };
+                if ast::ParenExpr::can_cast(parent.kind()) {
+                    expression = parent;
+                    continue;
+                }
+                closed = ast::ExprStmt::can_cast(parent.kind())
+                    || ast::CastExpr::cast(parent)
+                        .and_then(|cast| cast.expr())
+                        .is_some_and(|operand| operand.syntax() == &expression);
+                break;
+            }
+            if !closed {
+                return Ok(None);
+            }
+        }
+    }
+    Ok(Some(default))
+}

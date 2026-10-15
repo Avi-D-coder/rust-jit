@@ -18,6 +18,8 @@ use std::collections::{BTreeMap, BTreeSet};
 mod compiler_profiles;
 #[path = "source_discovery/original_inert.rs"]
 mod original_inert;
+#[path = "source_discovery/source_syntax.rs"]
+mod source_syntax;
 #[path = "source_discovery/type_scope_receipts.rs"]
 mod type_scope_receipts;
 pub(crate) use type_scope_receipts::TypeScopeReceipt;
@@ -525,6 +527,8 @@ pub struct SourceDiscovery {
     generated_headers: usize,
     records: BTreeMap<Digest, std::sync::Arc<super::record::ExpansionRecord>>,
     retained_record_bytes: usize,
+    syntax_requests: BTreeMap<Digest, super::source_declarative::assembly::SyntaxRequestReceipt>,
+    syntax_request_bytes: usize,
     generated_procedural_origins:
         BTreeMap<Digest, std::sync::Arc<crate::syntax::origin::MacroOrigin>>,
     generated_procedural_origin_bytes: usize,
@@ -1008,6 +1012,8 @@ impl SourceDiscovery {
             generated_headers: 0,
             records: BTreeMap::new(),
             retained_record_bytes: 0,
+            syntax_requests: BTreeMap::new(),
+            syntax_request_bytes: 0,
             generated_procedural_origins: BTreeMap::new(),
             generated_procedural_origin_bytes: 0,
             generated_owners: BTreeMap::new(),
@@ -8865,6 +8871,13 @@ impl SourceDiscovery {
         }
     }
     pub fn poll(&mut self) -> Result<SourceDiscoveryStep, Diagnostic> {
+        let step = self.poll_inner()?;
+        if let SourceDiscoveryStep::NeedExpansion { request } = &step {
+            self.remember_syntax_request(request)?;
+        }
+        Ok(step)
+    }
+    fn poll_inner(&mut self) -> Result<SourceDiscoveryStep, Diagnostic> {
         self.expansion_budget.freeze()?;
         self.started = true;
         if let Some(error) = &self.failed {

@@ -1,0 +1,312 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T22:38:54.633643+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "M014",
+    "T024",
+    "T025",
+    "T032",
+    "T034",
+    "T063"
+  ],
+  "erratum": "E-R5-005",
+  "state": "scoped_component_pass_architecture_and_integration_held",
+  "scope": "Common Type namespace service, unchanged-original Type-name authority, source-constrained numeric fallback, actual issued-request receipt coordinator assembly, and direct indexed syntax lookup. No macro-specific runtime semantics added.",
+  "source_baseline": "77fa3603a8613cf249c5276553aacbfd8c83b2da",
+  "source_packet": "artifacts/macos-first/common-source-preparation-v1/SOURCE.json",
+  "source_packet_sha256": "12dec6fe8ffad49c780bcd6219b0316010f3ccf2294d3747b5b5eea05edc5f5f",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "3b8a85df98b5e91d8db63785231246667af6e7dc94210ed593351e34ac9be143"
+    },
+    {
+      "path": "crates/lrr/src/expand/declaration_fragment.rs",
+      "sha256": "5ddff003dd7e6c247d1b8a6359e017b6919577fef59f9e1dc229cd7e35a07f0c"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "d9c473333334b3cad001078e604741abc8b21b417c3275ba3e033a97f1406ba1"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly_tests.rs",
+      "sha256": "cd6cf6d591baec6b7e21541f337d6736997cb56905c56c3880eee17635186f22"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/syntax_receipt.rs",
+      "sha256": "18c1dbd53b6741790e101061ff770492ae33cceb9fce5e825e272962b4a87a7d"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "59a2e4d592f464bf391cfaad868b1ba293ab9d2c1d362a052be9ae172341a809"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/source_syntax.rs",
+      "sha256": "7f065cef2efc582cbee55b6cf6c68b6876471f61f598614fe165d65336b6e2d9"
+    },
+    {
+      "path": "crates/lrr/src/frontend/call_contracts.rs",
+      "sha256": "219ca227372d89a192bd89aa90ac6d9e4a31cdc4a806f3bdc606205cc6d82b6e"
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "sha256": "07c3be667ce25dde7d2674740c86b7a7029825afe4684585cb3b535fffb89553"
+    },
+    {
+      "path": "crates/lrr/src/frontend/primitive_type_names.rs",
+      "sha256": "eceefed4356a540b079ce531c6e48b41672a7547b474510457f4de82a0d59427"
+    },
+    {
+      "path": "crates/lrr/src/frontend/type_name_namespace.rs",
+      "sha256": "2850945e96d9d1c6ddeb38d30f99e0e761c82e67bde5bf621fc9dae012f23041"
+    },
+    {
+      "path": "crates/lrr/src/service/mod.rs",
+      "sha256": "1e7f5270d6eb86ee40ed60c063e7ff9bd3e1c7f40611a34cf9c9fca9d6e88d76"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_source_preparation_tests.rs",
+      "sha256": "2469d42b524796b767933779980608d39b04dbbcb9d9e89f912d7db1dee22817"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_type_name_tests.rs",
+      "sha256": "3607958632eaeb8bd32c5b4c33b15bae57f06c1bb8b6b3367f16a3002f47b7c4"
+    },
+    {
+      "path": "crates/lrr/src/syntax/condition_ranges.rs",
+      "sha256": "bd7b5de96fe241b083886a6bee820f10ef1b92a40c17d66445108ff71f722a9c"
+    },
+    {
+      "path": "crates/lrr/src/syntax/literal_match.rs",
+      "sha256": "1850c82b589c9def6212eb4a959efd6ac1f57ad2d3f4d5e25a7e38f026b7293e"
+    },
+    {
+      "path": "crates/lrr/src/syntax/local_numeric_constraints.rs",
+      "sha256": "90af2f387f42f40d7ec39289a28fb8d4b3f7b17c99430a0b090acc06d3ca8a84"
+    },
+    {
+      "path": "crates/lrr/src/syntax/mod.rs",
+      "sha256": "bdeb7d059b4a52f98996dfbbf749909e66ff6c325fe676804f3a974012abd423"
+    },
+    {
+      "path": "crates/lrr/src/syntax/node_lookup.rs",
+      "sha256": "6807be68674df1c46ef2973ecf90d289c69c24fdef7f4170ab2b5899d2c3accd"
+    },
+    {
+      "path": "crates/lrr/src/syntax/node_lookup_tests.rs",
+      "sha256": "7891da10c61e1e7410e52293ee186d3e6b72baad3f534f37ede1981e6d0115ec"
+    },
+    {
+      "path": "crates/lrr/src/syntax/primitive_cast_target.rs",
+      "sha256": "a8a38b7f5a03447ee009aac93ec08014e435776f3aab643b4ec0c7f85a00dd3b"
+    },
+    {
+      "path": "crates/lrr/src/syntax/primitive_type_names.rs",
+      "sha256": "4e52fc5d1fdbcde34d891dffe94d2cce46f13cec8cc6e7e5e90871c0f424f9fb"
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "sha256": "46da32d79a104e7cc78e78b3d671d75bcd3655133629df0abbcd36bb82f026a2"
+    }
+  ],
+  "frozen_source_member": "00a16c7c9cb08facaf02b8ff706cde0d9badb1f4844762c50f20a69d8d6f31f2",
+  "validation": {
+    "release": "artifacts/macos-first/sol-common-source-preparation-validation-v1/RELEASE.json",
+    "release_sha256": "0f09719a7ab92fe35ab665cde944446cbf25cce9cdcb89a2f99a68c06c6a6138",
+    "stages": {
+      "preparation-new": {
+        "actual_tool_observation": "1d9202/0",
+        "child_terminal_sha256": "9882363a199b48d4f3e4b13d880339cffcec4f98a25371093d7700051e6cbc9d",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "service::retained_source_preparation_tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "child_exit_code": 0,
+        "elapsed_seconds": 28.64666858399869,
+        "bodies": 3
+      },
+      "node-lookup": {
+        "actual_tool_observation": "4df02d intermediate; final serial0294bc/0",
+        "child_terminal_sha256": "03f2a9dccdb5e4955edfb7abbd0a60f9a2c2651df07117e7fb75d9eb60054c59",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "syntax::node_lookup::tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "child_exit_code": 0,
+        "elapsed_seconds": 0.12089041699073277,
+        "bodies": 2
+      },
+      "assembly": {
+        "actual_tool_observation": "049837 intermediate; final serial0294bc/0",
+        "child_terminal_sha256": "12815122e5e179a1373a2e61575a7bfca45cf419155e8ea2a04834afaba798b5",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "expand::source_declarative::assembly::tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "child_exit_code": 0,
+        "elapsed_seconds": 0.8780224169895519,
+        "bodies": 9
+      },
+      "type-names-regression": {
+        "actual_tool_observation": "049837 intermediate; final serial0294bc/0",
+        "child_terminal_sha256": "6eb95b07f5464f267b2ed9dcc426e9b2daceadd6505acb7f9457ee527b668a34",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "service::retained_type_name_tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "child_exit_code": 0,
+        "elapsed_seconds": 0.8966612079821061,
+        "bodies": 4
+      },
+      "callables-regression": {
+        "actual_tool_observation": "049837 intermediate; final serial0294bc/0",
+        "child_terminal_sha256": "a3771abffcd32ae0362e183e90d3c5d7fadd7852876305dea3fa04549d87a273",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "service::retained_callable_tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "child_exit_code": 0,
+        "elapsed_seconds": 1.1068852500175126,
+        "bodies": 4
+      },
+      "lrr-library": {
+        "actual_tool_observation": "0294bc/0 serial sequence",
+        "child_terminal_sha256": "02c3237bf16b7d61ec42b16f0bb88547954a5b394aeafe295395d90ad96bcaf8",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "--",
+          "--test-threads=1"
+        ],
+        "child_exit_code": 0,
+        "elapsed_seconds": 207.00512337501277,
+        "bodies": 1143
+      },
+      "strict-workspace": {
+        "actual_tool_observation": "0294bc/0 serial sequence",
+        "child_terminal_sha256": "8fd7efc8cfc92f0980ca6c9106311eb64d849272087740497eb7265629736edf",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "clippy",
+          "--offline",
+          "--locked",
+          "--workspace",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "child_exit_code": 0,
+        "elapsed_seconds": 31.864328083000146,
+        "bodies": 0
+      }
+    },
+    "distinct_library_bodies": 1143,
+    "selected_duplicate_executions": 22,
+    "full_milestone_executed": false,
+    "source_and_originals_unchanged": true,
+    "raw_original_files": 510,
+    "cases": 324,
+    "target_inactive_release": "artifacts/macos-first/sol-common-source-preparation-validation-v1/TARGET-INACTIVE-AFTER.json",
+    "target_inactive_sha256": "9df3706ac1f5c5fe606926d8febd6114a3301a8c6819d87574cb809e0046f752",
+    "sealer_harness_failure": {
+      "terminal": "1d61d0/1",
+      "reason": "writer-only SyntaxError before execution; corrected writer, no Rust rerun"
+    }
+  },
+  "primary_witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-is-contextual.rs",
+    "sha256": "3eae28bc6190bc568227cf1c5437745d2b55920116fe52b2834c39a661352cea",
+    "executed": "unchanged whole main via admitted retained bodies and ordinary RunMachine, editions 2015/2018/2021/2024; component preparation, no configured upstream CLI/compiletest acceptance"
+  },
+  "prior_attempts": [
+    {
+      "release": "artifacts/macos-first/sol-common-primitive-type-names-validation-v1/RELEASE.json",
+      "sha256": "fafcf48e58b179b07ec9b7e49f62ecc686e4657ced2fa5a4070add51bf87c19a",
+      "summary": "compile E0061 at three preexisting cast-target callers; zero bodies"
+    },
+    {
+      "release": "artifacts/macos-first/sol-common-primitive-type-names-validation-v2/RELEASE.json",
+      "sha256": "ddebb8f1262413bae0ceaf26c54fb724541c792b208dd06e8a0b54abc06eb888",
+      "summary": "three callable controls pass, unchanged contextual main fails numeric context"
+    },
+    {
+      "release": "artifacts/macos-first/sol-common-primitive-type-names-validation-v3/RELEASE.json",
+      "sha256": "f79e3218ba63225203579c92bd399cda52289df1906b9007eb9e91c21bc461c1",
+      "summary": "1137 library pass; strict cmp_owned fails; later borrowed syntax comparison repairs this lint"
+    }
+  ],
+  "architecture_review": {
+    "1_assertion_evaluator": "Unchanged legacy runtime_macro_scalars remains held; no new macro-selected evaluator.",
+    "2_generated_execution": "Actual SourceDiscovery issued receipt -> SourceSyntaxAssembly -> retained parser/BodyIndex/thunk/VM is the candidate route; old literal/break execution remains pending removal.",
+    "3_context_specific_selection": "New local fallback derives ordinary binding uses, not assertion identity; existing runtime_macro_numeric/method paths remain held.",
+    "4_generated_exclusions": "Only exact original-token Type scope admitted; marked generated contexts still explicitly unsupported until hygienic Type authority is implemented.",
+    "5_pattern_and_coldness": "Shared transactional engine and selective body producer closure remain open. Coordinator source assembly currently requires all selected file calls closed and is not lazy per-body CLI admission.",
+    "6_repeated_planning": "New Type-name admission is non-cacheable and is currently recaptured for individual cast phases; proper immutable per-source Type lookup/dependency caching remains required. No installed-operation source planner was added, but this preparatory candidate does not satisfy prepare-once acceptance. Old runtime macro planning also remains held.",
+    "7_namespace_cost": "New shared primitive Type proof retains existing global namespace witness; no full architecture acceptance until relevant sealed dependency guards replace it.",
+    "8_immutable_structure": "Direct range lookup uses pinned Rowan child-range descent, replacing whole-file scans at ordinary entered thunk and Type-name sites. Arc BodyIndex sharing/cache accounting is a separate unvalidated successor."
+  },
+  "acceptance": {
+    "new_configured_upstream_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "common_cli_integration": false,
+    "all_eight_shortcuts_removed": false,
+    "task_completed": false,
+    "guest_jit_allowed": false
+  },
+  "preserved_milestone_failure": "AssemblyV3: 2833 passed, 1 failed, 425 unstarted; not rerun on this candidate",
+  "next_candidate": "BodyIndex Arc sharing and cache pin accounting; coordinator test integration uses actual discovery assembly instead of separately expanded preparation, both unvalidated against this receipt"
+}

@@ -26,3 +26,9 @@ mod retained_body_tests;
 
 #[cfg(test)]
 mod retained_callable_tests;
+
+#[cfg(test)]
+mod retained_type_name_tests;
+
+#[cfg(test)]
+mod retained_source_preparation_tests;

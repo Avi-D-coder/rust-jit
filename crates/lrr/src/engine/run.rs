@@ -34,12 +34,15 @@ use crate::{
     },
 };
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 #[path = "run_argument_hints.rs"]
 mod argument_hints;
 #[cfg(test)]
 #[path = "run_body_lease_tests.rs"]
 mod body_lease_tests;
+#[cfg(test)]
+#[path = "run_body_sharing_tests.rs"]
+mod body_sharing_tests;
 #[cfg(test)]
 #[path = "run_borrows.rs"]
 mod borrows;
@@ -166,7 +169,7 @@ struct PreparedSourceCall {
     context: Option<crate::vm::context::GenericEnv>,
     callee: Box<SourceCallable>,
     contracts: PreparedCallContracts,
-    body: BodyIndex,
+    body: Arc<BodyIndex>,
     body_lease: Option<crate::db::memo::BodyExecutionLease>,
     retained_bytes: usize,
 }
@@ -328,7 +331,7 @@ impl RunMachine {
         let initialize = (|| {
             let mut store = GuestStore::new(1, 2_000_000, 256 * 1024 * 1024)?;
             let mut frame = Frame::new(
-                index.as_ref().clone(),
+                Arc::clone(index),
                 index.pc(NodeId(0), Phase::Entry)?,
                 &mut store,
             )?;
@@ -1001,8 +1004,10 @@ impl RunMachine {
                         Ok(bytes) => bytes,
                         Err(e) => return QueryPoll::Ready(Err(e)),
                     };
-                    let bytes = body
-                        .estimated_bytes()
+                    // The query cache owns and charges the shared immutable
+                    // body. This call retains two handles (plan and frame),
+                    // plus independently allocated mutable execution metadata.
+                    let bytes = std::mem::size_of::<Arc<BodyIndex>>()
                         .checked_mul(2)
                         .and_then(|n| {
                             Frame::metadata_bytes(body, contracts.source_parameters.len())
@@ -1069,7 +1074,7 @@ impl RunMachine {
                         context: Some(context),
                         callee,
                         contracts,
-                        body: body.as_ref().clone(),
+                        body: Arc::clone(body),
                         body_lease: Some(body_lease),
                         retained_bytes,
                     }))

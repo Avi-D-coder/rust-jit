@@ -276,13 +276,18 @@ fn source_hint(
                         continue;
                     }
                     if statement.ty().is_some() {
-                        return primitive_cast_target::resolve(parsed, index, statement.ty())?
-                            .map(HintRecipe::Primitive)
-                            .ok_or_else(|| {
-                                unsupported(
-                                    "condition local requires admitted primitive source annotation",
-                                )
-                            });
+                        return primitive_cast_target::resolve(
+                            parsed,
+                            index,
+                            statement.ty(),
+                            None,
+                        )?
+                        .map(HintRecipe::Primitive)
+                        .ok_or_else(|| {
+                            unsupported(
+                                "condition local requires admitted primitive source annotation",
+                            )
+                        });
                     }
                     let Some(initializer) = statement.initializer() else {
                         return Err(unsupported("condition local initializer source absent"));

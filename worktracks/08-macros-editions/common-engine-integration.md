@@ -42,3 +42,31 @@ resolution prerequisite. Do not strip the cast, weaken its oracle, special-case
 this fixture, or remove the generated-origin refusal without source authority.
 All attempted terminals remain in [the callable receipt](../evidence/2026-10-15-common-retained-callables.json).
 The shared pattern engine and all eight alternate-path removals remain pending.
+
+
+The later source-preparation V1 component supersedes the callable cast failure
+only within its exact preparation scope: 1,143 library bodies and strict
+workspace/all-targets Clippy pass. The unchanged contextual-auto main executes
+in all four editions after the genuine original Type-name join and ordinary
+local numeric fallback. Actual discovery request receipts now support structural
+assembly, and ordinary node lookup follows indexed ranges through the pinned
+tree. These are component results, not configured upstream runtime/full-fixture
+or common CLI acceptance. [Exact sources, prior failures and all eight review
+holds](../evidence/2026-10-15-common-source-preparation.json).
+
+The next source candidate shares immutable `BodyIndex` allocations from the
+query cache into root frames, prepared calls and callee frames. Mutable frame
+state, fuel, source leases and return cleanup keep their existing owners. Weak
+query pins and allocation-aware accounting retain body charges after outer query
+results or stale memo wrappers retire; call metadata charges handles instead of
+two structural copies. Four new LRR allocation/quota controls use unchanged
+`return-nil.rs`. Its frozen library result is 1,147 passes and strict workspace/all-targets
+Clippy passes; [exact evidence](../evidence/2026-10-15-common-body-sharing.json). This does not remove the legacy macro routes or namespace census.
+
+An independent successor replaces duplicate manual expansion in retained-body
+integration controls with the actual completed discovery's assembly API. It also
+keeps an explicit structural pending marker for captured calls without a producer
+ID, preventing their omission from a completeness result. These changes are
+unvalidated. They do not establish selective body preparation: source assembly
+still requires closure of the pending call set, and cfg-disabled/unselected
+syntax needs its own sound selective preparation before common CLI integration.

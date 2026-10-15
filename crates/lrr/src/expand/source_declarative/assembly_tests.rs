@@ -506,3 +506,60 @@ fn repeated_origin_keys_keep_distinct_generated_invocation_occurrences() {
     assert!(prepared.pending_calls().is_empty());
     assert_eq!(prepared.outputs().len(), 3);
 }
+
+#[test]
+fn issued_attachment_receipt_cannot_authorize_other_token_roots_or_sites() {
+    let (provider, index, _) = world(
+        "macro_rules! value { () => { 1_i32 + 2_i32 } } fn main() { value!(); }",
+        2024,
+    );
+    let request = request(&provider, &index);
+    let output = output(&provider, index.scan(), &request, 1);
+    let receipt = SyntaxRequestReceipt::capture(&request).unwrap();
+    for alter_site in [false, true] {
+        let mut wrong = receipt.clone();
+        if alter_site {
+            wrong.site = lrr_expand_adapter::token_wire::Key([0; 32]);
+        } else {
+            wrong.roots = Digest([0; 32]);
+        }
+        let error = match SourceSyntaxAssembly::new(&provider, &index, 1)
+            .unwrap()
+            .attach_receipt(&wrong, output.clone())
+        {
+            Ok(_) => panic!("wrong issued attachment was accepted"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code, "LRR-E-EXPANSION-INPUT");
+        assert!(error.message.contains("tokens/site differ"));
+    }
+}
+
+#[test]
+fn unowned_structural_calls_cannot_disappear_from_the_pending_result() {
+    // Declaration discovery correctly excludes this cfg-disabled body. The raw
+    // retained syntax still contains a call, so it cannot be represented as a
+    // completely attached source. A selective/cfg-aware preparation may leave
+    // the disabled body cold; dropping the pending marker is not that proof.
+    for edition in [2015, 2018, 2021, 2024] {
+        let (provider, index) = provider(
+            "#[cfg(any())] fn cold() { unknown!(); } fn main() {}",
+            edition,
+        );
+        assert!(
+            !index
+                .scan()
+                .producers()
+                .iter()
+                .any(|p| p.kind == DeclarationProducerKind::Macro)
+        );
+        let assembly = SourceSyntaxAssembly::new(&provider, &index, 1).unwrap();
+        assert_eq!(assembly.calls.len(), 1);
+        assert!(assembly.calls[0].invocation.is_none());
+        assert!(assembly.next_pending_invocation().is_err());
+        let expected = assembly.calls[0].anchor;
+        let prepared = assembly.finish().unwrap();
+        assert_eq!(prepared.pending_calls(), &[expected]);
+        assert!(prepared.outputs().is_empty());
+    }
+}

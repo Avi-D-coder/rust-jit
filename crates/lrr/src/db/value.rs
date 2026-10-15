@@ -27,7 +27,7 @@ pub enum QueryValue {
         key: super::seals::SealKey,
         inventory: Arc<crate::frontend::impl_index::ImplHeaderIndex>,
     },
-    BodyStructure(Box<crate::syntax::body_index::BodyIndex>),
+    BodyStructure(Arc<crate::syntax::body_index::BodyIndex>),
     Thunk(Box<crate::ir::recipe::VerifiedRecipe>),
     ExpansionInput(Box<crate::expand::record::ExpansionDescriptor>),
     ParseFile(Arc<ParsedFile>),
@@ -218,7 +218,9 @@ impl QueryValue {
             Self::DiscoverySeal(seal) => seal.metadata_bytes().unwrap_or(usize::MAX),
             Self::ScopeDeclarationInventory { inventory, .. } => inventory.metadata_bytes(),
             Self::ExpansionInput(descriptor) => descriptor.estimated_bytes(),
-            Self::BodyStructure(value) => value.estimated_bytes(),
+            Self::BodyStructure(value) => value
+                .estimated_bytes()
+                .saturating_add(2 * std::mem::size_of::<usize>()),
             Self::Thunk(value) => value.metadata_bytes(),
             Self::ParseFile(v) => v.estimated_bytes(),
             Self::Outline(v) => v.estimated_bytes(),

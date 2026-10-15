@@ -1,6 +1,6 @@
 //! Ordinary module calls select the genuine original declaration after its
 //! retained body publication. No macro-name runtime dispatch is authorized here.
-use super::retained_body_tests::prepare_single_expansion;
+use super::retained_body_tests::prepare_expanded_source;
 use crate::{
     core::digest::StableEncode,
     db::{memo::Database, poll::QueryPoll, retained_syntax::RetainedSyntaxInput},
@@ -72,7 +72,7 @@ fn ordinary_calls_enter_retained_callee_from_original_and_retained_callers_all_e
     for edition in [2015, 2018, 2021, 2024] {
         for retain_caller in [false, true] {
             let mut db = Database::default();
-            let (input, discovery) = prepare_single_expansion(&mut db, CALL, edition, 1, true);
+            let (input, discovery) = prepare_expanded_source(&mut db, CALL, edition, 1, true);
             let source = source(&db, &input);
             let original_main = body(&source, "main");
             let original_value = body(&source, "value");
@@ -108,7 +108,7 @@ fn unchanged_upstream_contextual_macro_name_calls_the_original_retained_function
     );
     for edition in [2015, 2018, 2021, 2024] {
         let mut db = Database::default();
-        let (input, discovery) = prepare_single_expansion(&mut db, ORIGINAL, edition, 1, true);
+        let (input, discovery) = prepare_expanded_source(&mut db, ORIGINAL, edition, 1, true);
         let source = source(&db, &input);
         let main = body(&source, "main");
         let auto = body(&source, "auto");
@@ -135,7 +135,7 @@ fn unchanged_upstream_contextual_macro_name_calls_the_original_retained_function
 #[test]
 fn retained_syntax_alone_cannot_retarget_a_selected_original_callable() {
     let mut db = Database::default();
-    let (input, _) = prepare_single_expansion(&mut db, CALL, 2024, 1, true);
+    let (input, _) = prepare_expanded_source(&mut db, CALL, 2024, 1, true);
     let source = source(&db, &input);
     let main = body(&source, "main");
     let original = body(&source, "value");
@@ -154,7 +154,7 @@ fn retained_syntax_alone_cannot_retarget_a_selected_original_callable() {
 #[test]
 fn retained_callable_revalidation_refuses_an_old_expansion_epoch_before_entry() {
     let mut db = Database::default();
-    let (input, _) = prepare_single_expansion(&mut db, CALL, 2024, 1, true);
+    let (input, _) = prepare_expanded_source(&mut db, CALL, 2024, 1, true);
     let source = source(&db, &input);
     let main = body(&source, "main");
     let original = body(&source, "value");

@@ -871,7 +871,7 @@ impl Provider for SyntaxProvider {
                     );
                 };
                 match parsed.index_body_with_cfg(handle, cfg, Default::default()) {
-                    Ok(index) => QueryValue::BodyStructure(Box::new(index)),
+                    Ok(index) => QueryValue::BodyStructure(Arc::new(index)),
                     Err(error) => QueryValue::Error(error),
                 }
             }
@@ -974,6 +974,25 @@ impl Provider for SyntaxProvider {
                         Err(error) => QueryValue::Error(error),
                     }
                 } else {
+                    match parsed.retained_primitive_type_name_site(handle, index, pc) {
+                        Ok(Some(site)) => {
+                            let proof = match crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission::capture(db, parsed, handle, pc, site) {
+                                QueryPoll::Ready(Ok(proof)) => proof,
+                                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Ok(Provided { value: QueryValue::Error(error), cacheable: false })),
+                                QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
+                            };
+                            let recipe = proof.lower_current(db, parsed, handle, index, pc);
+                            return QueryPoll::Ready(Ok(Provided {
+                                value: match recipe {
+                                    Ok(recipe) => QueryValue::Thunk(Box::new(recipe)),
+                                    Err(error) => QueryValue::Error(error),
+                                },
+                                cacheable: false,
+                            }));
+                        }
+                        Ok(None) => {}
+                        Err(error) => return QueryPoll::Ready(Err(error)),
+                    }
                     match parsed.scalar_match_binding_site(handle, index, pc) {
                         Ok(Some(_)) => {
                             let prepared =

@@ -26,6 +26,10 @@ use std::{
     sync::Arc,
 };
 
+#[path = "syntax_receipt.rs"]
+mod receipt;
+pub(crate) use receipt::SyntaxRequestReceipt;
+
 #[path = "assembly_anchors.rs"]
 mod anchors;
 pub use anchors::OriginalDeclarationAnchor;
@@ -99,6 +103,9 @@ impl PreparedSourceSyntax {
     pub fn identity(&self) -> Digest {
         self.identity
     }
+    /// Every remaining structural call, including calls without a certified
+    /// declaration producer (represented by their structural attachment anchor).
+    /// These are pending markers, never authority to issue an expansion.
     pub fn pending_calls(&self) -> &[Digest] {
         &self.pending
     }
@@ -225,17 +232,42 @@ impl SourceSyntaxAssembly {
     /// Consume the builder so any failure discards the entire candidate. No
     /// partially attached tree or publication can escape a failed transaction.
     pub fn attach(
-        mut self,
+        self,
         request: &SourceDeclarativeRequest,
         output: Arc<GeneratedDeclarations>,
     ) -> Result<Self, Diagnostic> {
-        let key = request.key();
+        let receipt = SyntaxRequestReceipt::capture(request)?;
+        self.attach_receipt(&receipt, output)
+    }
+
+    pub(crate) fn next_pending_invocation(
+        &self,
+    ) -> Result<Option<(Digest, Option<Digest>)>, Diagnostic> {
+        self.calls
+            .first()
+            .map(|call| {
+                call.invocation
+                    .map(|id| (id, call.original_item_invocation))
+                    .ok_or_else(|| {
+                        fault("retained source call lacks an actual declaration producer")
+                    })
+            })
+            .transpose()
+    }
+
+    /// Coordinator replay consumes the receipt of the genuine issued request,
+    /// never a caller-supplied key, generated text or runtime macro recipe.
+    pub(crate) fn attach_receipt(
+        mut self,
+        receipt: &SyntaxRequestReceipt,
+        output: Arc<GeneratedDeclarations>,
+    ) -> Result<Self, Diagnostic> {
+        let key = receipt.key();
         if output.record().key() != key
             || output.epoch() != self.epoch
             || key
                 .procedural_epoch
                 .is_some_and(|epoch| epoch != self.epoch)
-            || Digest::of_bytes(&request.input.encode().map_err(adapter)?) != key.input_tokens
         {
             return Err(fault("source syntax issued request/record/epoch differs"));
         }
@@ -262,8 +294,8 @@ impl SourceSyntaxAssembly {
         let before = self.tree.materialize().map_err(adapter)?;
         verify_calls(&self.calls, &before.calls)?;
         let call = &before.calls[position];
-        if call.site != request.site
-            || call.input.roots() != request.input.roots()
+        if call.site != receipt.site
+            || receipt::roots_identity(call.input.roots())? != receipt.roots
             || call.edition != key.call_edition
         {
             return Err(fault("source syntax issued call tokens/site differ"));
@@ -343,7 +375,9 @@ impl SourceSyntaxAssembly {
         pending
             .try_reserve_exact(self.calls.len())
             .map_err(|_| fault("source syntax pending allocation"))?;
-        pending.extend(self.calls.iter().filter_map(|c| c.invocation));
+        // An unowned structural call must not vanish from the completeness
+        // result. Its anchor records pending work; it grants no producer ID.
+        pending.extend(self.calls.iter().map(|c| c.invocation.unwrap_or(c.anchor)));
         let syntax = Arc::new(self.tree.snapshot().map_err(adapter)?);
         anchors::validate(&self.source, syntax.clone(), &self.originals)?;
         self.outputs

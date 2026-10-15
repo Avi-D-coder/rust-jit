@@ -31,6 +31,7 @@ use crate::{
     syntax::body_index::{BodyIndex, ScopeId},
 };
 use serde::Serialize;
+use std::sync::Arc;
 
 pub(crate) fn invalid(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTERNAL-IR", message.into())
@@ -181,7 +182,7 @@ impl PreparedProjection {
     }
 }
 pub struct Frame {
-    pub(crate) body: BodyIndex,
+    pub(crate) body: Arc<BodyIndex>,
     pub(crate) pc: PcKey,
     pub(crate) status: FrameStatus,
     pub(crate) counters: OpcodeCounters,
@@ -273,7 +274,12 @@ impl Frame {
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<scope_cleanup_frame::Activation>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<crate::runtime::cell::StoreSession>()))
     }
-    pub fn new(body: BodyIndex, entry: PcKey, store: &mut GuestStore) -> Result<Self, Diagnostic> {
+    pub fn new(
+        body: impl Into<Arc<BodyIndex>>,
+        entry: PcKey,
+        store: &mut GuestStore,
+    ) -> Result<Self, Diagnostic> {
+        let body = body.into();
         if entry.body != *body.body() {
             return Err(invalid("frame entry belongs to another body"));
         }
@@ -428,7 +434,7 @@ impl Frame {
     /// Create a callee in the same run without replenishing fuel or interruption state.
     /// The dispatcher must supply the caller's GuestStore and accept the call first.
     pub fn new_in_run(
-        body: BodyIndex,
+        body: impl Into<Arc<BodyIndex>>,
         entry: PcKey,
         store: &mut GuestStore,
         caller: &mut Self,

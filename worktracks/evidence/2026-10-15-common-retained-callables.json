@@ -552,7 +552,43 @@
     "task_completed": false,
     "guest_jit_allowed": false
   },
-  "strict_static_validation": "separately_requested_pending_actual_terminal",
+  "strict_static_validation": {
+    "state": "passed_strict_only_no_runtime_rerun",
+    "release": "artifacts/macos-first/sol-common-retained-callables-validation-v7/RELEASE.json",
+    "release_sha256": "3a7410f640ee323c24660355dc7d9215c4f1d8c1ecf47ed6508531f3b6e1bbd4",
+    "actual": {
+      "at": "2026-10-15T22:04:11.200609+00:00",
+      "source_member": "dcf8fdcda0aef69f022a5436fdd74e64988861a471fafb6538fcc1ef4a7e78b5",
+      "actual_tool_terminal": "e23afd/0",
+      "cargo_exit_code": 0,
+      "activity": "strict workspace/all-targets Clippy only",
+      "test_bodies_executed": 0,
+      "source_diff_from_v6": [
+        "crates/lrr/src/frontend/callables.rs"
+      ],
+      "strict_stderr_sha256": "27a7f30734bd9de6431108b35668124cf2c9e08d1941560fc8f4050fcc9de040",
+      "prior_results": "V6 runtime3pass/1cast failure and static Clippy failure preserved separately; no V7 runtime execution",
+      "unresolved_frontier": "primitive_cast_target::resolve blanket refusal for generated_origin needs genuine hygienic Type authority; not changed by this lint-only successor",
+      "source_guard": {
+        "source_member": "dcf8fdcda0aef69f022a5436fdd74e64988861a471fafb6538fcc1ef4a7e78b5",
+        "frozen_files": 4913,
+        "symlinks": 3,
+        "owner_sha256": "464caba7b9a225679fff89437aa7255c37e164b7b01a55c7985e5abb8779f31e",
+        "raw_files": 510,
+        "cases": 324,
+        "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+        "licenses": {
+          "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+          "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+        },
+        "free_bytes": 61013577728
+      },
+      "target_inactive": true,
+      "released": true,
+      "no_source_fixes_or_test_reruns_or_full_gate": true,
+      "architectural_hold": "E-R5-005 and all eight shortcut blockers remain; failing WIP, no runtime/full-fixture/task acceptance"
+    }
+  },
   "preserved_milestone_failure": "AssemblyV3:2833 passed,1 failed,425 unstarted; no new full milestone run",
   "current_mechanical_successor": {
     "source_packet": "artifacts/macos-first/common-retained-callables-v7/SOURCE.json",
@@ -612,7 +648,7 @@
       }
     ],
     "change": "Conservative metadata overflow accounting uses saturating_add rather than checked_add/unwrap_or(MAX), as required by actual V6 strict Clippy failure. Same overflow refusal semantics; no test-body rerun on V7, runtime failure remains outstanding.",
-    "validation": "strict_static_only_pending_actual_terminal"
+    "validation": "strict_only_passed_e23afd_0; no runtime rerun"
   },
   "v6_separate_static_failure": {
     "terminal": "artifacts/macos-first/sol-common-retained-callables-validation-v6/strict-workspace/terminal.json",
@@ -670,5 +706,6 @@
       "stderr_sha256": "241441ab633283be61f619d4fbc6e51dde6e0825b9b04a8d2ed677776f73d0b4",
       "architectural_hold": "E-R5-005 remains; retained-callable component only, no CLI/common-engine/architecture acceptance"
     }
-  }
+  },
+  "later_runtime_component_successor": "worktracks/evidence/2026-10-15-common-source-preparation.json"
 }

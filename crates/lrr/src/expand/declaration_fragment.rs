@@ -734,6 +734,39 @@ impl CompletedDeclarationFragment {
         }
         Ok(masks)
     }
+    /// Actual admitted syntax outputs, retaining their original parent scans.
+    /// Attributes/derives may need further structural reconciliation; listing
+    /// these handles grants no attachment or namespace authority.
+    pub(crate) fn syntax_outputs(&self) -> Result<Vec<Arc<GeneratedDeclarations>>, Diagnostic> {
+        let mut pending = vec![self];
+        let mut outputs = Vec::new();
+        let mut work = 0usize;
+        while let Some(fragment) = pending.pop() {
+            work = work
+                .checked_add(1)
+                .filter(|n| *n <= 4096)
+                .ok_or_else(limit)?;
+            for index in std::iter::once(&fragment.index).chain(&fragment.completed_indexes) {
+                if outputs.len() >= 100_000 {
+                    return Err(limit());
+                }
+                outputs.try_reserve_exact(1).map_err(|_| limit())?;
+                outputs.push(index.output().clone());
+            }
+            for argument in &fragment.completed_arguments {
+                pending
+                    .len()
+                    .checked_add(argument.assembly.completed.len())
+                    .filter(|n| *n <= 4096)
+                    .ok_or_else(limit)?;
+                pending
+                    .try_reserve_exact(argument.assembly.completed.len())
+                    .map_err(|_| limit())?;
+                pending.extend(argument.assembly.completed.iter().map(Arc::as_ref));
+            }
+        }
+        Ok(outputs)
+    }
     pub fn records(&self) -> &[Arc<ExpansionRecord>] {
         &self.records
     }

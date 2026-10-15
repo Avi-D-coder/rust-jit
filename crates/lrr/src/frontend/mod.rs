@@ -79,3 +79,6 @@ mod constant_foreign_path_tests;
 pub(crate) mod scalar_pattern_binding;
 
 pub(crate) mod runtime_macro_numeric;
+
+pub(crate) mod primitive_type_names;
+pub(crate) mod type_name_namespace;

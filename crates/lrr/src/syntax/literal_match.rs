@@ -248,10 +248,13 @@ fn context(
                     if binding.ref_token().is_some() || binding.at_token().is_some() {
                         return Ok(None);
                     }
-                    return Ok(
-                        primitive_cast_target::resolve(parsed, index, statement.ty())?
-                            .filter(|p| supported(*p)),
-                    );
+                    return Ok(primitive_cast_target::resolve(
+                        parsed,
+                        index,
+                        statement.ty(),
+                        None,
+                    )?
+                    .filter(|p| supported(*p)));
                 }
                 None
             } else {
@@ -276,7 +279,7 @@ fn context(
                 let Some(parameter) = parameters.params().nth(ordinal as usize) else {
                     return Ok(None);
                 };
-                primitive_cast_target::resolve(parsed, index, parameter.ty())?
+                primitive_cast_target::resolve(parsed, index, parameter.ty(), None)?
                     .filter(|p| supported(*p))
             }
         }

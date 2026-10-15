@@ -31,14 +31,30 @@ pub(super) fn resolve(
     parsed: &ParsedFile,
     index: &BodyIndex,
     ty: Option<ast::Type>,
+    admission: Option<(
+        &crate::ir::pc::PcKey,
+        &crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission,
+    )>,
 ) -> Result<Option<PrimitiveType>, Diagnostic> {
     let Some(ty) = ty else { return Ok(None) };
-    if parsed.generated_origin.is_some() || u32::from(ty.syntax().text_range().len()) > 32 {
+    if u32::from(ty.syntax().text_range().len()) > 32 {
         return Ok(None);
     }
     let Some(HintRecipe::Primitive(primitive)) = hint(Some(ty.clone())) else {
         return Ok(None);
     };
+    if parsed.generated_origin.is_some() {
+        let Some((pc, admission)) = admission else {
+            return Ok(None);
+        };
+        admission.require(
+            parsed,
+            index,
+            pc,
+            crate::syntax::ast_adapter::range(ty.syntax().text_range()),
+            primitive,
+        )?;
+    }
     // Unit has no name to resolve; its cast legality remains VM preflight's job.
     if primitive == PrimitiveType::Unit {
         return Ok(Some(primitive));
