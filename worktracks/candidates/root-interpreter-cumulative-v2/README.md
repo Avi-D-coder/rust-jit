@@ -1,3 +1,5 @@
+> **Withdrawn from integration under E-R5-005.** This packet extends or contains the rejected macro-specific execution design. Preserve it as historical source/evidence only; do not apply or promote it. Generic source changes and upstream regressions may be salvaged through the common engine. The architecture is not repaired. See [the source audit](../../../docs/audits/macro-specific-semantics.json).
+
 # Combined interpreter successor for review
 
 This single source patch reproduces 129 net source/test/fixture/ledger leaves from the recorded canonical preimages, folding the cumulative byte/string interpreter candidate and its assertion-constant, cast-context, local-match, opaque-guard/result-context and observer successors. It includes the real Type-preparation, test-diagnostic, static-owner-inspector and exact selector-history follow-ons. No build products, caches or complete source snapshots are included. SOURCE-AUDIT.json records the component hashes and every exact preimage/result hash; zero-offset/zero-fuzz replay is checked.

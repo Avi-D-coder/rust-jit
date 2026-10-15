@@ -1791,6 +1791,15 @@
         "full_milestone_failure_evidence": "worktracks/evidence/2026-10-15-v94-full-milestone-failure.json",
         "latest_scoped_evidence": "worktracks/evidence/2026-10-15-v95-v96-string-boundary.json",
         "latest_status": "V95 scoped27/27, strict/fmt/architecture passed; V96 stale compat selector audit failed; exact metadata repair and fresh full milestone pending"
+      },
+      "common_macro_engine_rework": {
+        "status": "required_unimplemented",
+        "erratum": "E-R5-005",
+        "audit": "docs/audits/macro-specific-semantics.json",
+        "old_component_evidence_preserved": true,
+        "old_macro_specific_passes_establish_common_engine": false,
+        "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
+        "guest_jit_authorized": false
       }
     },
     {
@@ -1918,7 +1927,16 @@
       "evidence": [
         "worktracks/evidence/2026-10-14-include-parent-milestone.json",
         "worktracks/evidence/2026-10-14-include-parent-repair.json"
-      ]
+      ],
+      "common_macro_engine_rework": {
+        "status": "required_unimplemented",
+        "erratum": "E-R5-005",
+        "audit": "docs/audits/macro-specific-semantics.json",
+        "old_component_evidence_preserved": true,
+        "old_macro_specific_passes_establish_common_engine": false,
+        "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
+        "guest_jit_authorized": false
+      }
     },
     {
       "id": "T031",
@@ -2165,6 +2183,15 @@
         "status": "component_integrated_full_milestone_pending",
         "evidence_path": "worktracks/evidence/2026-10-14-negative-range-whole-main.json",
         "scope": "V46all22controls+strict,one complete unchanged original main all4editions; no configured/fullfixture/task/JIT completion."
+      },
+      "common_macro_engine_rework": {
+        "status": "required_unimplemented",
+        "erratum": "E-R5-005",
+        "audit": "docs/audits/macro-specific-semantics.json",
+        "old_component_evidence_preserved": true,
+        "old_macro_specific_passes_establish_common_engine": false,
+        "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
+        "guest_jit_authorized": false
       }
     },
     {
@@ -2804,6 +2831,15 @@
         "nested_gate_exit_code": null,
         "reason": "disk exhaustion; prior V58 reports not reused",
         "evidence_path": "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
+      },
+      "common_macro_engine_rework": {
+        "status": "required_unimplemented",
+        "erratum": "E-R5-005",
+        "audit": "docs/audits/macro-specific-semantics.json",
+        "old_component_evidence_preserved": true,
+        "old_macro_specific_passes_establish_common_engine": false,
+        "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
+        "guest_jit_authorized": false
       }
     },
     {
@@ -4047,6 +4083,15 @@
         "runtime_contract": "label_break_value whole main/35 assertions in all4 editions",
         "fresh_integrated_milestone": "failed1274/1/1817;979 library and21 discoveryCLI passed; sole1040-module macro cumulative timeout remains",
         "release_complete": false
+      },
+      "common_macro_engine_rework": {
+        "status": "required_unimplemented",
+        "erratum": "E-R5-005",
+        "audit": "docs/audits/macro-specific-semantics.json",
+        "old_component_evidence_preserved": true,
+        "old_macro_specific_passes_establish_common_engine": false,
+        "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
+        "guest_jit_authorized": false
       }
     },
     {
@@ -5634,6 +5679,15 @@
         "status": "component_integrated_full_milestone_pending",
         "evidence_path": "worktracks/evidence/2026-10-14-byte-scalar-components.json",
         "scope": "V48actualrebuilt8controls+strict; actual2unchangedMatchcomponents only,0whole-byte-main/fullfixture passes. Stale artifact/assembly attempts retained."
+      },
+      "common_macro_engine_rework": {
+        "status": "required_unimplemented",
+        "erratum": "E-R5-005",
+        "audit": "docs/audits/macro-specific-semantics.json",
+        "old_component_evidence_preserved": true,
+        "old_macro_specific_passes_establish_common_engine": false,
+        "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
+        "guest_jit_authorized": false
       }
     },
     {
@@ -6448,6 +6502,15 @@
         "compose_with_empty_parent_before_validation": true,
         "full_fixture_passes_added": 0,
         "canonical_promotion": false
+      },
+      "common_macro_engine_rework": {
+        "status": "required_unimplemented",
+        "erratum": "E-R5-005",
+        "audit": "docs/audits/macro-specific-semantics.json",
+        "old_component_evidence_preserved": true,
+        "old_macro_specific_passes_establish_common_engine": false,
+        "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
+        "guest_jit_authorized": false
       }
     },
     {
@@ -6460,7 +6523,16 @@
       "commands": [],
       "fixture_ids": [],
       "artifact_paths": [],
-      "release_complete": false
+      "release_complete": false,
+      "common_macro_engine_rework": {
+        "status": "required_unimplemented",
+        "erratum": "E-R5-005",
+        "audit": "docs/audits/macro-specific-semantics.json",
+        "old_component_evidence_preserved": true,
+        "old_macro_specific_passes_establish_common_engine": false,
+        "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
+        "guest_jit_authorized": false
+      }
     },
     {
       "id": "T063",
@@ -18895,7 +18967,16 @@
           "status": "pending",
           "evidence_paths": []
         }
-      ]
+      ],
+      "common_macro_engine_rework": {
+        "status": "required_unimplemented",
+        "erratum": "E-R5-005",
+        "audit": "docs/audits/macro-specific-semantics.json",
+        "old_component_evidence_preserved": true,
+        "old_macro_specific_passes_establish_common_engine": false,
+        "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
+        "guest_jit_authorized": false
+      }
     },
     {
       "id": "M015",
@@ -19452,6 +19533,15 @@
         "status": "component_integrated_full_milestone_pending",
         "evidence_path": "worktracks/evidence/2026-10-14-generated-parent-profile-authority.json",
         "scope": "V49strict+namespace14+unfiltereddependency79; all49oldcohortfailuresclosed; currentfullcombinedmilestone required; shadowed mixed-site alias lanes stillrequired."
+      },
+      "common_macro_engine_rework": {
+        "status": "required_unimplemented",
+        "erratum": "E-R5-005",
+        "audit": "docs/audits/macro-specific-semantics.json",
+        "old_component_evidence_preserved": true,
+        "old_macro_specific_passes_establish_common_engine": false,
+        "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
+        "guest_jit_authorized": false
       }
     },
     {

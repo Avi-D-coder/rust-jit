@@ -1,0 +1,39 @@
+{
+  "status": "source_only_pending_acceptance_metadata",
+  "at": "2026-10-15T18:54:42.099828+00:00",
+  "claim": "LOCAL-024",
+  "patch_sha256": "19d09b9311bbab34fe7ee25cc2139bd595a5d75145770993840cf7e7d152ca42",
+  "files": [
+    {
+      "path": "compat/fixtures.toml",
+      "before_sha256": "e1833b34575b6f7b42ef4ee46680f098084ee5c7907f8e337ebd11163e41588b",
+      "after_sha256": "763396f8213b9c846da7a216de32ff467036374e552b4261c23c34d8b5da15d0",
+      "bytes": 417769
+    },
+    {
+      "path": "docs/tasks.json",
+      "before_sha256": "a56126fa14bcb9abf3ac50bb228af3ef2b7f26e0760047c6d39f7902d615252c",
+      "after_sha256": "9f0714bcc4a4958e3e14135734925eab099c0ae1553c3c88b74b417be1aaa5bf",
+      "bytes": 1440566
+    }
+  ],
+  "requires_or_patch_sha256": "1647b6103bf96d9e72e056827ed084cb303f6ecadf9630e18e79972fea4589ee",
+  "source_controls_registered": 4,
+  "selector_migration": {
+    "from": "unchanged_overlapping_match_function_preserves_first_assertion_and_local_numeric_frontier_all_editions",
+    "to": "unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions",
+    "pending_execution": true
+  },
+  "task_status_history_release_flags_preserved": true,
+  "exact_zero_offset_zero_fuzz": true,
+  "raw_originals_changed": 0,
+  "new_upstream_or_host_passes": 0,
+  "canonical_promotion": false,
+  "architecture_hold": {
+    "erratum": "E-R5-005",
+    "at": "2026-10-15T19:03:00.719817+00:00",
+    "status": "do_not_apply_or_promote",
+    "reason": "Requires migration to common macro/expression/pattern engine; old execution evidence is preserved",
+    "production_repair_passed": false
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "at": "2026-10-15T18:53:56.560062+00:00",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T025",
+    "T050"
+  ],
+  "requires_positive_local_patch_sha256": "bd83371330fa8d815e9b992e993a85cd7992bce4a4482553de1bf18683e91453",
+  "patch_sha256": "1647b6103bf96d9e72e056827ed084cb303f6ecadf9630e18e79972fea4589ee",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "before_sha256": "5a9c66aff8ab65f2545ab01eea051eeaa0ab12b25096ee2d69521b789904cec7",
+      "after_sha256": "254135259477291cd51658a74c0108fc1a835759815cb7480392cce5f76f22ea",
+      "bytes": 22499
+    },
+    {
+      "path": "crates/lrr/src/syntax/numeric_fallback.rs",
+      "before_sha256": "0f92c4a12edcd66cad90c613f59c29e76833c506e1220296bd84345ed12739a3",
+      "after_sha256": "65c4a0b58740fe57c50c51b7e3f77e3d364f102df63c97015ad77a812c270702",
+      "bytes": 26878
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_control_tests.rs",
+      "before_sha256": "52b9f4bb804c282f4abe04de3b1817b1dd3509e61f6578b5c22a6ce3547e2328",
+      "after_sha256": "385e9dc996887401b5c66306559a74ff28f6fcb754111022aed625fafd1e51a1",
+      "bytes": 14168
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_controls.rs",
+      "before_sha256": "a498829c5d33fe5b630c2b5af02c5166df9d6893759f59e2919c15eec9bd0315",
+      "after_sha256": "03589a56d587a3559ec67e6e2550a9fe97a1eaaa65411c8045225ca9ee06d938",
+      "bytes": 42313
+    }
+  ],
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "exact_replay_zero_offset_zero_fuzz": true
+  },
+  "new_pending_host_bodies": [
+    "unchanged_overlapping_or_match_functions_execute_all_original_assertions_all_editions",
+    "opaque_or_guard_retries_matching_alternatives_without_replaying_scrutinee"
+  ],
+  "modified_existing_source_control": "result_numeric_island_excludes_scrutinee_guard_and_rigid_arm_constraints",
+  "unchanged_upstream_components": [
+    "multi_pats_shadow_lit",
+    "multi_pats_shadow_range",
+    "lit_shadow_multi_pats",
+    "range_shadow_multi_pats"
+  ],
+  "upstream_case": "tests/ui/match/overeager-sub-match-pruning-13027.rs",
+  "pending_edition_matrix": [
+    2015,
+    2018,
+    2021,
+    2024
+  ],
+  "full_original_main_pass": false,
+  "newly_accepted_upstream_contracts": 0,
+  "new_full_fixture_passes": 0,
+  "full_milestone_passed": false,
+  "canonical_promotion": false,
+  "frozen_v123_source_changed": false,
+  "runtime_gap": "Full original still requires later static and aggregate/binding behavior; named/suffixed constraints and general transactional patterns remain required",
+  "architecture_hold": {
+    "erratum": "E-R5-005",
+    "at": "2026-10-15T19:03:00.719817+00:00",
+    "status": "do_not_apply_or_promote",
+    "reason": "Requires migration to common macro/expression/pattern engine; old execution evidence is preserved",
+    "production_repair_passed": false
+  }
+}

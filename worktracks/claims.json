@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Interpreter-first T024/T025/T050/T054. V11639 scoped passes includes unchanged issue26251 whole main all4 editions with exact registered static roots; V118 compile error and V119/V120 failed three-assert assumption retained. V12118 host controls preserve explicit first-assertion partial witness; whole overlapping-match main remains failed. V122 final audits green and129 cumulative-v2 source leaves independently matched. V123 rebuilt CLI reports48/67 across115 unchanged run-pass programs,13 output-incomplete run-fail panic observations+1fault,2test-harness cases blocked; fresh full milestone preparing/running separately. Canonical cumulative promotion remains held. Root positive-local fallback successor uses existing private admission,3 source/test leaves formatted/exact-replayed but uncompiled/unexecuted. No task/JIT/Linux/fullfixture completion.",
+      "scope": "E-R5-005 architecture correction now owns priority. Source audit confirms8 macro/expression/pattern fragmentation blockers. No promotion of cumulative-v2/positive-local/opaque-or packets, even on green historical V123 gate. Root owns common-engine audit/migration; production repair and route regressions pending. All actual prior scoped/runtime/failure evidence preserved; no JIT/task/fullfixture acceptance.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -612,11 +612,18 @@
         "worktracks/candidates/root-match-local-numeric-frontier-v1/",
         "worktracks/candidates/root-positive-local-fallback-v1/",
         "artifacts/macos-first/root-positive-local-fallback-v1/",
-        "crates/lrr/src/ir/definition_numeric_wire_tests.rs"
+        "crates/lrr/src/ir/definition_numeric_wire_tests.rs",
+        "worktracks/candidates/root-opaque-or-patterns-v1/",
+        "artifacts/macos-first/root-opaque-or-patterns-v1/",
+        "docs/audits/macro-specific-semantics.json",
+        "docs/errata/revision5-common-macro-engine.md",
+        "worktracks/candidates/root-positive-or-acceptance-ledger-v1/",
+        "AGENTS.md",
+        "lrr_rust2024_macros_traits_implementation_spec.md"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T18:46:37.062084+00:00",
+      "updated_at": "2026-10-15T19:03:00.719817+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

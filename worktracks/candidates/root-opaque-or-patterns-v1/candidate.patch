@@ -1,0 +1,430 @@
+--- a/crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs
++++ b/crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs
+@@ -454,3 +454,90 @@
+         }
+     }
+ }
++
++#[test]
++fn unchanged_overlapping_or_match_functions_execute_all_original_assertions_all_editions() {
++    const TEXT: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/match/overeager-sub-match-pruning-13027.rs"
++    );
++    // Four complete unchanged function components; main still requires its
++    // other functions, statics and structural patterns. Never a fixture pass.
++    for edition in [2015, 2018, 2021, 2024] {
++        for entry in [
++            "multi_pats_shadow_lit",
++            "multi_pats_shadow_range",
++            "lit_shadow_multi_pats",
++            "range_shadow_multi_pats",
++        ] {
++            let (_, machine, outcome) = run_entry(
++                TEXT,
++                edition,
++                100_000,
++                entry,
++                "tests/ui/match/overeager-sub-match-pruning-13027.rs",
++            );
++            let report = match outcome {
++                RunPoll::Completed(report) => report,
++                RunPoll::Fault(error) => panic!("{edition}/{entry}: {error}"),
++                RunPoll::NeedInput(input) => panic!("{edition}/{entry}: {input:?}"),
++                RunPoll::Panicked(report) => panic!("{edition}/{entry}: {report:?}"),
++            };
++            assert!(matches!(report.value, ValueSummary::Unit));
++            assert_eq!(report.opcode_counters.started_by_opcode[26], 1);
++            assert_eq!(report.opcode_counters.started_by_opcode[19], 0);
++            assert_eq!(report.opcode_counters.started_by_opcode[25], 0);
++            assert_eq!(
++                report.opcode_counters.operations_started,
++                report.opcode_counters.operations_completed
++            );
++            assert_eq!(machine.terminal_facts().unwrap().cleanup_ran, Some(true));
++            assert_eq!(machine.action_snapshot().pending, None);
++        }
++    }
++}
++
++#[test]
++fn opaque_or_guard_retries_matching_alternatives_without_replaying_scrutinee() {
++    // LRR exact-once and cold-frontier controls supplement stock components.
++    for edition in [2015, 2018, 2021, 2024] {
++        for (text, calls) in [
++            (
++                "fn value()->i32{1}fn guard()->bool{false}fn main(){assert_eq!(2,match value(){1|1 if guard()=>0,_=>2});}",
++                3,
++            ),
++            (
++                "const LATER:i32=2;fn value()->i32{1}fn guard()->bool{true}fn main(){assert_eq!(2,match value(){1|LATER if guard()=>2,_=>0});}",
++                2,
++            ),
++            (
++                "fn value()->i32{1}fn guard()->bool{loop{}}fn main(){assert_eq!(2,match value(){0|2 if guard()=>0,_=>2});}",
++                1,
++            ),
++        ] {
++            let (db, machine, outcome) = run(text, edition);
++            let report = match outcome {
++                RunPoll::Completed(report) => report,
++                RunPoll::Fault(error) => panic!("or guard fault: {error}"),
++                RunPoll::NeedInput(input) => panic!("or guard needs input: {input:?}"),
++                RunPoll::Panicked(report) => panic!("or guard panicked: {report:?}"),
++            };
++            assert!(matches!(report.value, ValueSummary::Unit));
++            assert_eq!(report.opcode_counters.started_by_opcode[19], calls);
++            assert_eq!(report.opcode_counters.started_by_opcode[26], 1);
++            assert_eq!(report.opcode_counters.started_by_opcode[25], 0);
++            assert_eq!(
++                report.opcode_counters.operations_started,
++                report.opcode_counters.operations_completed
++            );
++            assert_eq!(machine.action_snapshot().published, calls);
++            assert_eq!(machine.action_snapshot().consumed, calls);
++            assert_eq!(machine.action_snapshot().pending, None);
++            assert!(
++                db.trace
++                    .events
++                    .iter()
++                    .all(|event| !matches!(&event.key, QueryKey::Constant(_)))
++            );
++        }
++    }
++}
+--- a/crates/lrr/src/syntax/numeric_fallback.rs
++++ b/crates/lrr/src/syntax/numeric_fallback.rs
+@@ -410,6 +410,84 @@
+         }
+     }
+     Ok(family)
++}
++
++/// Flatten only source alternative/group structure, preserving written order.
++/// Unsupported leaves remain data so a preceding successful alternative keeps
++/// them cold. This grants no binding/type/namespace or executable authority.
++pub(super) fn scalar_pattern_alternatives(
++    pattern: ast::Pat,
++    work: &mut usize,
++) -> Result<Vec<ast::Pat>, Diagnostic> {
++    let limit = || {
++        Diagnostic::new(
++            "LRR-E-METADATA-LIMIT",
++            "scalar alternative source budget".into(),
++        )
++    };
++    let mut pending = Vec::new();
++    let mut output = Vec::new();
++    pending
++        .try_reserve(1)
++        .map_err(|_| crate::runtime::arena::resource())?;
++    pending.push((pattern, 0usize));
++    while let Some((pattern, depth)) = pending.pop() {
++        source_work(work)?;
++        if depth >= 256 {
++            return Err(limit());
++        }
++        let attributed = pattern
++            .syntax()
++            .children()
++            .any(|node| ast::Attr::can_cast(node.kind()));
++        let mut children = Vec::new();
++        match &pattern {
++            ast::Pat::OrPat(or) if !attributed => {
++                for child in or.pats() {
++                    source_work(work)?;
++                    if children.len() >= 4096 {
++                        return Err(limit());
++                    }
++                    children
++                        .try_reserve(1)
++                        .map_err(|_| crate::runtime::arena::resource())?;
++                    children.push(child);
++                }
++                if children.is_empty() {
++                    return Err(limit());
++                }
++            }
++            ast::Pat::ParenPat(group) if !attributed => {
++                let Some(inner) = group.pat() else {
++                    return Err(limit());
++                };
++                children
++                    .try_reserve(1)
++                    .map_err(|_| crate::runtime::arena::resource())?;
++                children.push(inner);
++            }
++            _ => {
++                if output.len() >= 4096 {
++                    return Err(limit());
++                }
++                output
++                    .try_reserve(1)
++                    .map_err(|_| crate::runtime::arena::resource())?;
++                output.push(pattern);
++                continue;
++            }
++        }
++        pending
++            .len()
++            .checked_add(children.len())
++            .filter(|n| *n <= 4096)
++            .ok_or_else(limit)?;
++        pending
++            .try_reserve(children.len())
++            .map_err(|_| crate::runtime::arena::resource())?;
++        pending.extend(children.into_iter().rev().map(|child| (child, depth + 1)));
++    }
++    Ok(output)
+ }
+ 
+ // A literal scrutinee is an independent inference island only when every
+@@ -448,35 +526,44 @@
+         {
+             return Ok(None);
+         }
+-        let endpoints = match pattern {
+-            ast::Pat::WildcardPat(_) => continue,
+-            ast::Pat::LiteralPat(literal) => [Some(ast::Pat::LiteralPat(literal)), None],
+-            ast::Pat::RangePat(range) => [range.start(), range.end()],
+-            _ => return Ok(None),
+-        };
+-        for endpoint in endpoints.into_iter().flatten() {
+-            source_work(&mut visited)?;
+-            let ast::Pat::LiteralPat(endpoint) = endpoint else {
++        for pattern in scalar_pattern_alternatives(pattern, &mut visited)? {
++            if pattern
++                .syntax()
++                .children()
++                .any(|node| ast::Attr::can_cast(node.kind()))
++            {
+                 return Ok(None);
++            }
++            let endpoints = match pattern {
++                ast::Pat::WildcardPat(_) => continue,
++                ast::Pat::LiteralPat(literal) => [Some(ast::Pat::LiteralPat(literal)), None],
++                ast::Pat::RangePat(range) => [range.start(), range.end()],
++                _ => return Ok(None),
+             };
+-            let Some(literal) = endpoint.literal() else {
+-                return Ok(None);
+-            };
+-            let compatible = match literal.token().kind() {
+-                SyntaxKind::INT_NUMBER => {
+-                    family == PrimitiveType::I32
+-                        && ast::IntNumber::cast(literal.token())
+-                            .is_some_and(|number| number.suffix().is_none())
+-                }
+-                SyntaxKind::FLOAT_NUMBER => {
+-                    family == PrimitiveType::F64
+-                        && ast::FloatNumber::cast(literal.token())
+-                            .is_some_and(|number| number.suffix().is_none())
+-                }
+-                _ => false,
+-            };
+-            if !compatible {
+-                return Ok(None);
++            for endpoint in endpoints.into_iter().flatten() {
++                source_work(&mut visited)?;
++                let ast::Pat::LiteralPat(endpoint) = endpoint else {
++                    return Ok(None);
++                };
++                let Some(literal) = endpoint.literal() else {
++                    return Ok(None);
++                };
++                let compatible = match literal.token().kind() {
++                    SyntaxKind::INT_NUMBER => {
++                        family == PrimitiveType::I32
++                            && ast::IntNumber::cast(literal.token())
++                                .is_some_and(|number| number.suffix().is_none())
++                    }
++                    SyntaxKind::FLOAT_NUMBER => {
++                        family == PrimitiveType::F64
++                            && ast::FloatNumber::cast(literal.token())
++                                .is_some_and(|number| number.suffix().is_none())
++                    }
++                    _ => false,
++                };
++                if !compatible {
++                    return Ok(None);
++                }
+             }
+         }
+     }
+--- a/crates/lrr/src/syntax/runtime_macro_control_tests.rs
++++ b/crates/lrr/src/syntax/runtime_macro_control_tests.rs
+@@ -345,6 +345,10 @@
+         ("match 1{1_u8=>1,_=>2}", None),
+         ("match 1{LIMIT=>1,_=>2}", None),
+         ("match 1{_=>2}", Some(PrimitiveType::I32)),
++        ("match 1{0|1..=2=>1,_=>2}", Some(PrimitiveType::I32)),
++        ("match 1{(0|1..=2)=>1,_=>2}", Some(PrimitiveType::I32)),
++        ("match 1{0|1_u8=>1,_=>2}", None),
++        ("match 1{0|LIMIT=>1,_=>2}", None),
+     ] {
+         let ast::Expr::MatchExpr(expression) =
+             ast::Expr::parse(text, ra_ap_syntax::Edition::Edition2024).tree()
+--- a/crates/lrr/src/syntax/runtime_macro_controls.rs
++++ b/crates/lrr/src/syntax/runtime_macro_controls.rs
+@@ -447,28 +447,60 @@
+         let scrutinee_span = span(&scrutinee)?;
+         let result = self.label()?;
+         let mut arms = Vec::new();
++        let mut source_work = 0usize;
++        let mut alternative_count = 0usize;
++        let mut sequence_work = 5usize;
+         for arm in expression.match_arm_list().ok_or_else(unsupported)?.arms() {
+             if arms.len() >= 4096 {
+                 return Err(invalid("scalar match arm limit"));
+             }
++            let attributed = arm
++                .syntax()
++                .children()
++                .any(|node| ast::Attr::can_cast(node.kind()));
++            let patterns = super::super::numeric_fallback::scalar_pattern_alternatives(
++                arm.pat().ok_or_else(unsupported)?,
++                &mut source_work,
++            )?;
++            alternative_count = alternative_count
++                .checked_add(patterns.len())
++                .filter(|n| *n <= 4096)
++                .ok_or_else(|| invalid("scalar match alternative limit"))?;
++            let mut alternatives = Vec::new();
++            alternatives
++                .try_reserve_exact(patterns.len())
++                .map_err(|_| invalid("scalar match alternatives allocation"))?;
++            sequence_work = sequence_work
++                .checked_add(4)
++                .ok_or_else(|| invalid("scalar match body work overflow"))?;
++            for pattern in patterns {
++                // Source-shape upper bound for the work vector, not an eager
++                // semantic check. Unsupported cold patterns remain fault steps.
++                let pattern_work = match pattern {
++                    ast::Pat::LiteralPat(_) => 11usize,
++                    ast::Pat::RangePat(_) => 23,
++                    _ => 1,
++                };
++                let guard_work = if !attributed && arm.guard().is_some() {
++                    9
++                } else {
++                    1
++                };
++                sequence_work = sequence_work
++                    .checked_add(pattern_work)
++                    .and_then(|n| n.checked_add(2 + guard_work))
++                    .ok_or_else(|| invalid("scalar match alternative work overflow"))?;
++                alternatives.push((pattern, self.label()?));
++            }
++            if alternatives.is_empty() {
++                return Err(invalid("scalar match alternatives absent"));
++            }
+             arms.try_reserve(1)
+                 .map_err(|_| invalid("scalar match arm allocation"))?;
+-            arms.push((arm, self.label()?));
++            arms.push((arm, alternatives));
+         }
+         let end = self.label()?;
+-        let guard_work = arms
+-            .iter()
+-            .filter(|(arm, _)| arm.guard().is_some())
+-            .count()
+-            .checked_mul(12)
+-            .ok_or_else(|| invalid("scalar match guard work overflow"))?;
+-        let mut sequence = self.sequence(
+-            arms.len()
+-                .checked_mul(32)
+-                .and_then(|n| n.checked_add(guard_work))
+-                .and_then(|n| n.checked_add(4))
+-                .ok_or_else(|| invalid("scalar match work overflow"))?,
+-        )?;
++        let mut sequence = self.sequence(sequence_work)?;
+         if let Some(primitive) = super::super::numeric_fallback::match_scrutinee(&expression)? {
+             sequence.push(Work::Operation(Op::SetHint {
+                 child: source,
+@@ -481,42 +513,41 @@
+             context.base,
+             context.parent,
+         ));
+-        for (ordinal, (arm, entry)) in arms.iter().enumerate() {
+-            sequence.push(Work::Mark(*entry));
+-            let yes = self.label()?;
+-            let no = arms.get(ordinal + 1).map_or(end, |(_, entry)| *entry);
+-            let pattern = arm.pat().ok_or_else(unsupported)?;
++        for (ordinal, (arm, alternatives)) in arms.iter().enumerate() {
++            let next_arm = arms
++                .get(ordinal + 1)
++                .map_or(end, |(_, alternatives)| alternatives[0].1);
++            let body = self.label()?;
+             let attributed = arm
+                 .syntax()
+                 .children()
+                 .any(|child| ast::Attr::can_cast(child.kind()));
+-            self.pattern(
+-                Pattern {
+-                    pattern,
+-                    source,
+-                    yes,
+-                    no,
+-                    origin: &origin,
+-                },
+-                context,
+-                allocate,
+-                &mut sequence,
+-                span,
+-            )?;
+-            sequence.push(Work::Mark(yes));
+-            if attributed {
+-                sequence.push(Work::Fault(
+-                    unsupported(),
+-                    map_syntax(arm.syntax(), context, &origin)?,
+-                ));
+-            } else {
+-                if let Some(guard) = arm.guard() {
++            for (alternative, (pattern, entry)) in alternatives.iter().enumerate() {
++                sequence.push(Work::Mark(*entry));
++                let yes = self.label()?;
++                let no = alternatives
++                    .get(alternative + 1)
++                    .map_or(next_arm, |(_, entry)| *entry);
++                self.pattern(
++                    Pattern {
++                        pattern: pattern.clone(),
++                        source,
++                        yes,
++                        no,
++                        origin: &origin,
++                    },
++                    context,
++                    allocate,
++                    &mut sequence,
++                    span,
++                )?;
++                sequence.push(Work::Mark(yes));
++                if !attributed && let Some(guard) = arm.guard() {
+                     let guard_expression = guard.condition().ok_or_else(unsupported)?;
+                     let guard_span = span(&guard_expression)?;
+                     let condition = allocate()?;
+                     let accepted = self.label()?;
+                     let rejected = self.label()?;
+-                    let body = self.label()?;
+                     sequence.push(Work::Operation(Op::SetHint {
+                         child: condition,
+                         hint: HintRecipe::Primitive(PrimitiveType::Bool),
+@@ -534,8 +565,17 @@
+                     sequence.push(Work::Mark(accepted));
+                     sequence.push(Work::Operation(Op::Discard { source: condition }));
+                     sequence.push(Self::jump(&guard_span, body));
+-                    sequence.push(Work::Mark(body));
++                } else if alternative + 1 != alternatives.len() {
++                    sequence.push(Self::jump(&origin, body));
+                 }
++            }
++            sequence.push(Work::Mark(body));
++            if attributed {
++                sequence.push(Work::Fault(
++                    unsupported(),
++                    map_syntax(arm.syntax(), context, &origin)?,
++                ));
++            } else {
+                 sequence.push(Work::Expression(
+                     arm.expr().ok_or_else(unsupported)?,
+                     context.destination,

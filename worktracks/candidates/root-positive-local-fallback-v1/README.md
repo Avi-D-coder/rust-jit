@@ -1,3 +1,5 @@
+> **Withdrawn from integration under E-R5-005.** This packet extends or contains the rejected macro-specific execution design. Preserve it as historical source/evidence only; do not apply or promote it. Generic source changes and upstream regressions may be salvaged through the common engine. The architecture is not repaired. See [the source audit](../../../docs/audits/macro-specific-semantics.json).
+
 # Positive deferred integer locals use the existing source admission
 
 T024/T025/T050, LOCAL-024. The unchanged upstream overlapping-match case faults at its second assertion, `match x+1`, with `let x=0`. Its source read already requests the private `LocalIntegerFallback` admission, but the initializer matcher recognizes only a negative prefix. This candidate admits a plain unsuffixed integer literal through that same bounded original-source matcher. Parentheses, annotations, reference patterns, suffixes, lexical binding identity, owning body/index/destination/phase, verifier and VM authority checks are preserved. No runtime opcode, wire encoding, trait selection or type namespace rule changes.

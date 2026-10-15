@@ -1,0 +1,166 @@
+--- a/compat/fixtures.toml
++++ b/compat/fixtures.toml
+@@ -12270,7 +12270,7 @@
+ [[fixture]]
+ id = "T050-OPAQUE-GUARD-STOCK"
+ path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
+-test = "unchanged_overlapping_match_function_preserves_first_assertion_and_local_numeric_frontier_all_editions"
++test = "unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions"
+ 
+ [[fixture]]
+ id = "T050-OPAQUE-GUARD-ONCE"
+@@ -12281,3 +12281,23 @@
+ id = "T025-MATCH-RESULT-ISLAND"
+ path = "crates/lrr/src/syntax/runtime_macro_control_tests.rs"
+ test = "result_numeric_island_excludes_scrutinee_guard_and_rigid_arm_constraints"
++
++[[fixture]]
++id = "T025-POSITIVE-LOCAL-WIRE"
++path = "crates/lrr/src/ir/definition_numeric_wire_tests.rs"
++test = "original_positive_local_fallback_wire_requires_exact_source_read_phase_and_destination"
++
++[[fixture]]
++id = "T025-POSITIVE-LOCAL-CONTEXT"
++path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
++test = "positive_local_fallback_keeps_reached_argument_and_rigid_source_contexts"
++
++[[fixture]]
++id = "T050-OPAQUE-OR-STOCK"
++path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
++test = "unchanged_overlapping_or_match_functions_execute_all_original_assertions_all_editions"
++
++[[fixture]]
++id = "T050-OPAQUE-OR-GUARD-RETRY"
++path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
++test = "opaque_or_guard_retries_matching_alternatives_without_replaying_scrutinee"
+--- a/docs/tasks.json
++++ b/docs/tasks.json
+@@ -1494,7 +1494,9 @@
+         "unchanged_float2_main_edition_2024",
+         "byte_literal_guards_source_descriptor_origin_and_stale_body_before_entry_all_editions",
+         "byte_literal_fuel_and_combined_ticket_cell_quota_refuse_without_source_invention_all_editions",
+-        "result_numeric_island_excludes_scrutinee_guard_and_rigid_arm_constraints"
++        "result_numeric_island_excludes_scrutinee_guard_and_rigid_arm_constraints",
++        "original_positive_local_fallback_wire_requires_exact_source_read_phase_and_destination",
++        "positive_local_fallback_keeps_reached_argument_and_rigid_source_contexts"
+       ],
+       "acceptance_contract": "exhaustive i8/u8 arithmetic boundary loops; random wider arithmetic/cast comparisons; works/fails context examples; signed-min literal; distinct usize/u64 contracts. Gate checks Rust constraint-aware numeric fallback and preserves known source widths; nonnumeric unknowns never default.",
+       "commands": [],
+@@ -1595,7 +1597,9 @@
+         "T025-STOCK-FLOAT2-ED2024",
+         "T025-BYTE-SCALAR-02",
+         "T025-BYTE-SCALAR-03",
+-        "T025-MATCH-RESULT-ISLAND"
++        "T025-MATCH-RESULT-ISLAND",
++        "T025-POSITIVE-LOCAL-WIRE",
++        "T025-POSITIVE-LOCAL-CONTEXT"
+       ],
+       "artifact_paths": [
+         "docs/numeric-kernel.md",
+@@ -1797,11 +1801,11 @@
+       "opaque_match_guard_result_candidate": {
+         "status": "source_only_uncompiled_unexecuted",
+         "upstream_case": "tests/ui/match/overeager-sub-match-pruning-13027.rs",
+-        "scope": "original lit_shadow_range first-assertion partial witness then exact required local-numeric frontier; separate guard/source controls; zero full-main/upstream passes",
++        "scope": "positive-local and opaque-or successor pending: three-assertion/static frontier plus four unchanged or-pattern function components; complete original main remains mandatory and unpassed",
+         "pending_controls": [
+           "result_numeric_island_excludes_scrutinee_guard_and_rigid_arm_constraints"
+         ],
+-        "required_runtime_gap": "complete unchanged main still requires deferred local context in match x+1, later statics and aggregate/pattern support; unsupported cannot make these inapplicable"
++        "required_runtime_gap": "complete original main, later static and aggregate/binding behavior, general cross-use numeric inference; unsupported does not make tests inapplicable"
+       },
+       "acceptance_selector_history": [
+         {
+@@ -1810,7 +1814,21 @@
+           "reason": "Rust-compatible independent shift fallback already implemented; current source bank passed in V108",
+           "scope": "name alignment only; old selector never counts as executed; new execution evidence remains separately source-bound"
+         }
+-      ]
++      ],
++      "positive_local_or_successor": {
++        "status": "source_only_uncompiled_unexecuted",
++        "source_candidates": [
++          "worktracks/candidates/root-positive-local-fallback-v1/README.md",
++          "worktracks/candidates/root-opaque-or-patterns-v1/README.md"
++        ],
++        "new_pending_controls": [
++          "original_positive_local_fallback_wire_requires_exact_source_read_phase_and_destination",
++          "positive_local_fallback_keeps_reached_argument_and_rigid_source_contexts"
++        ],
++        "new_upstream_passes": 0,
++        "full_milestone_passed": false,
++        "canonical_promotion": false
++      }
+     },
+     {
+       "id": "T030",
+@@ -5632,8 +5650,10 @@
+         "byte_range_unknown_or_wrong_family_upper_is_cold_until_lower_matches",
+         "unchanged_guarded_char_local_entire_main_takes_second_arm_all_editions",
+         "intrinsic_local_source_does_not_default_unresolved_numbers_or_follow_effects",
+-        "unchanged_overlapping_match_function_preserves_first_assertion_and_local_numeric_frontier_all_editions",
+-        "opaque_guard_runs_once_only_after_pattern_and_discards_each_boolean_temporary"
++        "unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions",
++        "opaque_guard_runs_once_only_after_pattern_and_discards_each_boolean_temporary",
++        "unchanged_overlapping_or_match_functions_execute_all_original_assertions_all_editions",
++        "opaque_or_guard_retries_matching_alternatives_without_replaying_scrutinee"
+       ],
+       "acceptance_contract": "failed arms preserve scrutinee ownership; true arms move once; conflicting moves fault before commit; or-pattern names/modes and binding order validate; overlapping alternatives can rerun false guards without replaying scrutinee evaluation.",
+       "commands": [],
+@@ -5667,7 +5687,9 @@
+         "T050-LOCAL-LITERAL-MAIN",
+         "T050-LOCAL-LITERAL-SOURCE",
+         "T050-OPAQUE-GUARD-STOCK",
+-        "T050-OPAQUE-GUARD-ONCE"
++        "T050-OPAQUE-GUARD-ONCE",
++        "T050-OPAQUE-OR-STOCK",
++        "T050-OPAQUE-OR-GUARD-RETRY"
+       ],
+       "artifact_paths": [
+         "artifacts/macos-first/root-match-integration-v1/validation-v6/terminal.json",
+@@ -5700,12 +5722,12 @@
+       "opaque_match_guard_result_candidate": {
+         "status": "source_only_uncompiled_unexecuted",
+         "upstream_case": "tests/ui/match/overeager-sub-match-pruning-13027.rs",
+-        "scope": "original lit_shadow_range first-assertion partial witness then exact required local-numeric frontier; separate guard/source controls; zero full-main/upstream passes",
++        "scope": "positive-local and opaque-or successor pending: three-assertion/static frontier plus four unchanged or-pattern function components; complete original main remains mandatory and unpassed",
+         "pending_controls": [
+-          "unchanged_overlapping_match_function_preserves_first_assertion_and_local_numeric_frontier_all_editions",
++          "unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions",
+           "opaque_guard_runs_once_only_after_pattern_and_discards_each_boolean_temporary"
+         ],
+-        "required_runtime_gap": "complete unchanged main still requires deferred local context in match x+1, later statics and aggregate/pattern support; unsupported cannot make these inapplicable"
++        "required_runtime_gap": "complete original main, later static and aggregate/binding behavior, general cross-use numeric inference; unsupported does not make tests inapplicable"
+       },
+       "acceptance_selector_history": [
+         {
+@@ -5713,8 +5735,28 @@
+           "current_selector": "unchanged_overlapping_match_function_preserves_first_assertion_and_local_numeric_frontier_all_editions",
+           "reason": "V120 proves only the first assertion completes before deferred-local TYPE-CONTEXT; explicit partial witness, complete upstream runtime contract remains required and failed",
+           "scope": "name alignment only; old selector never counts as executed; new execution evidence remains separately source-bound"
++        },
++        {
++          "old_selector": "unchanged_overlapping_match_function_preserves_first_assertion_and_local_numeric_frontier_all_editions",
++          "current_selector": "unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions",
++          "reason": "Positive-local source successor makes a stronger three-assertion prefix the pending acceptance target; V121 first-assertion pass and V119/V120 failures stay historical, new target unexecuted",
++          "scope": "pending successor oracle only; complete unchanged main remains mandatory and failed"
+         }
+-      ]
++      ],
++      "positive_local_or_successor": {
++        "status": "source_only_uncompiled_unexecuted",
++        "source_candidates": [
++          "worktracks/candidates/root-positive-local-fallback-v1/README.md",
++          "worktracks/candidates/root-opaque-or-patterns-v1/README.md"
++        ],
++        "new_pending_controls": [
++          "unchanged_overlapping_or_match_functions_execute_all_original_assertions_all_editions",
++          "opaque_or_guard_retries_matching_alternatives_without_replaying_scrutinee"
++        ],
++        "new_upstream_passes": 0,
++        "full_milestone_passed": false,
++        "canonical_promotion": false
++      }
+     },
+     {
+       "id": "T051",

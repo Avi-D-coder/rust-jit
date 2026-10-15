@@ -1,0 +1,245 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T19:03:00.719817+00:00",
+  "reviewed_head": "2f18f68d75",
+  "claim": "LOCAL-024",
+  "user_instruction": "No macro-specific execution logic; macro output shares the ordinary expression and pattern engine",
+  "findings": [
+    {
+      "id": "MA001",
+      "severity": "architecture_blocker",
+      "title": "Independent assertion expression evaluator",
+      "scope": "committed_source",
+      "evidence": [
+        {
+          "path": "crates/lrr/src/syntax/runtime_macro_scalars.rs",
+          "line": 74,
+          "sha256": "ffae63a8e322b79740e7d7749b67d51b1480686fd68d5dfe2caa023e2125cc8c"
+        },
+        {
+          "path": "crates/lrr/src/syntax/runtime_macro_controls.rs",
+          "line": 427,
+          "sha256": "15fc2a7edb6b047af0a18595b211c9a4a6bf977fef32ce8ca43f35649dc1e43c"
+        },
+        {
+          "path": "crates/lrr/src/frontend/runtime_macro_plan.rs",
+          "line": 640,
+          "sha256": "9e7112be22e9d5af7e7e39df3ad2fae1bcab621f7db28fa27348f07358326b30"
+        }
+      ],
+      "consequence": "Assertion arguments are reparsed into a synthetic wrapper and interpreted by a separate AST work stack. Arithmetic, calls, borrowing, match and if are duplicated rather than using ordinary indexed expressions.",
+      "required_repair": "Expand selected macro definitions and attach their output to the common entered source/body graph; execute generated expressions with ordinary thunks and runtime operations.",
+      "status": "confirmed_by_source_review_not_fixed"
+    },
+    {
+      "id": "MA002",
+      "severity": "architecture_blocker",
+      "title": "Pattern semantics split across three contexts",
+      "scope": "committed_source",
+      "evidence": [
+        {
+          "path": "crates/lrr/src/syntax/literal_match.rs",
+          "line": 678,
+          "sha256": "b5e085f23831cccba07172a99ec81df93bd12190f3bb79f93494b07bed78e566"
+        },
+        {
+          "path": "crates/lrr/src/syntax/condition_ranges.rs",
+          "line": 46,
+          "sha256": "4c1386a90c1369ac1c2a103af0f606b8946b0617c50471ba610e0311265282c1"
+        },
+        {
+          "path": "crates/lrr/src/syntax/thunks.rs",
+          "line": 2356,
+          "sha256": "f69441aa2f0bc6ee8927a80832ae5589bf54390af3f2bbd433d9ff7415cc87ba"
+        },
+        {
+          "path": "crates/lrr/src/syntax/runtime_macro_controls.rs",
+          "line": 683,
+          "sha256": "15fc2a7edb6b047af0a18595b211c9a4a6bf977fef32ce8ca43f35649dc1e43c"
+        },
+        {
+          "path": "crates/lrr/src/vm/pattern.rs",
+          "line": 1,
+          "sha256": "e1a4e9f8d1219e852f28e0efbc4891d05ddd8b8f05cf041f7435ca7cb41e97a3"
+        }
+      ],
+      "consequence": "Ordinary match, scalar let conditions, and assertion-nested patterns use separate lowerers. vm/pattern.rs implements binding-mode rules but is not a complete shared traversal/transaction/guard engine.",
+      "required_repair": "Implement one source-selected pattern plan and transactional runtime path shared by match, if-let/while-let, let-else and generated Rust; retain source editions and alternative retry/cleanup.",
+      "status": "confirmed_by_source_review_not_fixed"
+    },
+    {
+      "id": "MA003",
+      "severity": "architecture_blocker",
+      "title": "Numeric inference depends on assertion macro identity",
+      "scope": "committed_source",
+      "evidence": [
+        {
+          "path": "crates/lrr/src/syntax/runtime_macro_numeric_context.rs",
+          "line": 48,
+          "sha256": "b2981f64f20f7ec623113bcf3342999e554884d45e7a29d2884c18a6620d5f8c"
+        },
+        {
+          "path": "crates/lrr/src/frontend/runtime_macro_numeric.rs",
+          "line": 119,
+          "sha256": "c7c4846ba8a5f058045158ff8275ef15ce9855540245933ad00717e29d71ae8f"
+        }
+      ],
+      "consequence": "A local-to-parameter numeric relation is inferred only through recognized assert_eq/assert_ne operands, rather than from common lowered source constraints.",
+      "required_repair": "Derive numeric relationships from ordinary expanded expressions and selected source member signatures; macro identity cannot select inference rules.",
+      "status": "confirmed_by_source_review_not_fixed"
+    },
+    {
+      "id": "MA004",
+      "severity": "architecture_blocker",
+      "title": "Generated expression output only executes as a literal",
+      "scope": "committed_source",
+      "evidence": [
+        {
+          "path": "crates/lrr/src/syntax/generated_expression.rs",
+          "line": 79,
+          "sha256": "d2af3c639f76f27ab0f2ad2a5e2dc6ccaba7777f48979094560d2a9faa837c80"
+        },
+        {
+          "path": "crates/lrr/src/engine/runtime_macros.rs",
+          "line": 688,
+          "sha256": "d0ca01f00493bbd46655f31541b20336dd4882bf1300c618d14cfacdf0feceda"
+        }
+      ],
+      "consequence": "After a real macro expansion is decoded, only a literal or parentheses are accepted and a bespoke literal recipe is installed. Nonliteral output bypasses no generic body lowering and is refused.",
+      "required_repair": "Publish all generated expression syntax/origins into the ordinary entered-body representation and lower its actual nodes; preserve captured caller bindings, hygiene and continuation.",
+      "status": "confirmed_by_source_review_not_fixed"
+    },
+    {
+      "id": "MA005",
+      "severity": "architecture_blocker",
+      "title": "Generated statements have a special break executor",
+      "scope": "committed_source",
+      "evidence": [
+        {
+          "path": "crates/lrr/src/syntax/generated_control.rs",
+          "line": 169,
+          "sha256": "f5b8a0b93bc4a8fc44b085f9f42d53657f1b39db0bb59b2124348931f5916881"
+        },
+        {
+          "path": "crates/lrr/src/frontend/runtime_macro_generated_break.rs",
+          "line": 1,
+          "sha256": "3344589692e0484b5253b3300a81690652420527d955dc8d6000bb8883c26236"
+        },
+        {
+          "path": "crates/lrr/src/engine/runtime_macros.rs",
+          "line": 647,
+          "sha256": "d0ca01f00493bbd46655f31541b20336dd4882bf1300c618d14cfacdf0feceda"
+        }
+      ],
+      "consequence": "Statement output receives a direct-break/scalar-payload decoder and special caller-target admission; other statement forms remain a separate pending route.",
+      "required_repair": "Resolve generated labels and bindings through the common source/hygiene graph, then use ordinary control-flow and cleanup; retain the actual origin/currentness checks during migration.",
+      "status": "confirmed_by_source_review_not_fixed"
+    },
+    {
+      "id": "MA006",
+      "severity": "architecture_blocker",
+      "title": "Methods are whitelisted inside the assertion evaluator",
+      "scope": "committed_source",
+      "evidence": [
+        {
+          "path": "crates/lrr/src/syntax/runtime_macro_scalars.rs",
+          "line": 659,
+          "sha256": "ffae63a8e322b79740e7d7749b67d51b1480686fd68d5dfe2caa023e2125cc8c"
+        },
+        {
+          "path": "crates/lrr/src/frontend/primitive_float_methods.rs",
+          "line": 67,
+          "sha256": "c73c2eb23a12299fe85828f673ed41448d3625dd8edee73ae370e56872059716"
+        }
+      ],
+      "consequence": "Committed source handles is_nan in the assertion evaluator. The held cumulative candidate adds len/as_bytes/is_empty/contains there. Ordinary method syntax is not routed through a common reached member service by these paths. Source/type checks exist, but the macro-only entry point is still wrong.",
+      "required_repair": "Select methods through ordinary source member resolution and execute the selected body or audited runtime operation identically in every expression context.",
+      "status": "confirmed_by_source_review_not_fixed"
+    },
+    {
+      "id": "MA007",
+      "severity": "architecture_blocker",
+      "title": "Known macro catalogue selects execution semantics instead of source expansion",
+      "scope": "committed_source",
+      "evidence": [
+        {
+          "path": "crates/lrr/src/facade/macros.rs",
+          "line": 1,
+          "sha256": "0290ed2058d7454b3ce1486faef68fa35ca496a7a6c87f5748afd89c9fe3327a"
+        },
+        {
+          "path": "crates/lrr/src/frontend/runtime_macro_plan.rs",
+          "line": 942,
+          "sha256": "9e7112be22e9d5af7e7e39df3ad2fae1bcab621f7db28fa27348f07358326b30"
+        },
+        {
+          "path": "crates/lrr/src/engine/runtime_macros.rs",
+          "line": 246,
+          "sha256": "d0ca01f00493bbd46655f31541b20336dd4882bf1300c618d14cfacdf0feceda"
+        },
+        {
+          "path": "crates/lrr/src/syntax/runtime_vec_arguments.rs",
+          "line": 25,
+          "sha256": "295e8e87055988fe28d4e774429d074ef1563c4e5946251698d4439cc710d810"
+        }
+      ],
+      "consequence": "Macro identities select special assertion/panic routes and custom vec argument grammar; vec/println then reach explicit unsupported dispatch branches. Identity checking avoids same-name confusion but does not make this a common expansion/execution design.",
+      "required_repair": "Resolve and expand actual macro definitions through the common macro pipeline. Compiler expansion hooks remain in the pinned adapter; generated runtime code uses the common engine and selected library calls.",
+      "status": "confirmed_by_source_review_not_fixed"
+    },
+    {
+      "id": "MA008",
+      "severity": "architecture_blocker",
+      "title": "Body index and verifier have assertion-only execution tracks",
+      "scope": "committed_source",
+      "evidence": [
+        {
+          "path": "crates/lrr/src/syntax/body_index.rs",
+          "line": 1084,
+          "sha256": "c1a7d77ce92e4fd2745b3671f75e5e7a338091f912dc2c36e5afe4f7e1c49a40"
+        },
+        {
+          "path": "crates/lrr/src/ir/validate.rs",
+          "line": 190,
+          "sha256": "7ce7a4306494d3a111e91a90f3f4dcfb9d32590cfa553decb4a4f926ff2d720f"
+        },
+        {
+          "path": "crates/lrr/src/ir/validate.rs",
+          "line": 208,
+          "sha256": "7ce7a4306494d3a111e91a90f3f4dcfb9d32590cfa553decb4a4f926ff2d720f"
+        },
+        {
+          "path": "crates/lrr/src/ir/validate.rs",
+          "line": 218,
+          "sha256": "7ce7a4306494d3a111e91a90f3f4dcfb9d32590cfa553decb4a4f926ff2d720f"
+        }
+      ],
+      "consequence": "Opaque macro nodes reserve a token-derived parallel slot/phase namespace and require separate scalar-call/borrow/exhaustion verifier entry points. This entrenches the secondary evaluator. This review does not establish an authority bypass.",
+      "required_repair": "Index generated ordinary nodes and verify their normal operation/source roles. Remove obsolete exceptions only after their source identity, lifetime, fuel and capability guarantees are covered by common-path regressions.",
+      "status": "confirmed_by_source_review_not_fixed"
+    }
+  ],
+  "finding_count": 8,
+  "review_scope": [
+    "committed interpreter source",
+    "frozen V122/V123 cumulative source where explicitly identified",
+    "root positive-local/or proposals"
+  ],
+  "scope_limits": [
+    "source review, not a new runtime reproduction",
+    "not an exhaustive proof that no further special cases exist",
+    "test-only fixture helpers were checked against cfg(test) module boundaries and are not reported as production fixture hard-coding",
+    "separate pure constant evaluation is explicitly required by spec18.3; its existence alone is not classified as a defect"
+  ],
+  "minimal_witness": {
+    "source": "macro_rules! expression { () => { 1_i32 + 2_i32 }; } fn main() { let _value = expression!(); }",
+    "observation": "committed expression-expansion route admits only Literal/ParenExpr and rejects the generated BinExpr",
+    "runtime_reproduction": "unexecuted; source-verified branch witness only"
+  },
+  "architecture_acceptance": "failed_by_source_review",
+  "existing_execution_receipts_preserved": true,
+  "existing_stock_counts_are_not_common_engine_acceptance": true,
+  "pending_cumulative_promotion": "held_even_if_V123_tests_pass",
+  "production_repair_status": "not_started_in_this_audit",
+  "guest_jit_allowed": false
+}

@@ -849,5 +849,12 @@
   "full_milestone_passed": false,
   "canonical_promotion": false,
   "source_snapshots_and_build_products_included": false,
-  "explicit_runtime_backlog": "Original overlapping-match main remains failed: local x+1 inference in opaque match, later statics/aggregate/pattern support; expected-failure output assertions also remain required"
+  "explicit_runtime_backlog": "Original overlapping-match main remains failed: local x+1 inference in opaque match, later statics/aggregate/pattern support; expected-failure output assertions also remain required",
+  "architecture_hold": {
+    "erratum": "E-R5-005",
+    "at": "2026-10-15T19:03:00.719817+00:00",
+    "status": "do_not_apply_or_promote",
+    "reason": "Requires migration to common macro/expression/pattern engine; old execution evidence is preserved",
+    "production_repair_passed": false
+  }
 }

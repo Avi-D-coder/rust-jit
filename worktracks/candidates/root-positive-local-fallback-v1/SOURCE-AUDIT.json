@@ -44,5 +44,12 @@
   "new_upstream_passes": 0,
   "canonical_promotion": false,
   "full_milestone_passed": false,
-  "runtime_gap": "Full overlapping-match main, general cross-use local inference and later static/aggregate/pattern semantics remain required"
+  "runtime_gap": "Full overlapping-match main, general cross-use local inference and later static/aggregate/pattern semantics remain required",
+  "architecture_hold": {
+    "erratum": "E-R5-005",
+    "at": "2026-10-15T19:03:00.719817+00:00",
+    "status": "do_not_apply_or_promote",
+    "reason": "Requires migration to common macro/expression/pattern engine; old execution evidence is preserved",
+    "production_repair_passed": false
+  }
 }
