@@ -1,0 +1,587 @@
+--- a/crates/lrr/src/runtime/cell.rs
++++ b/crates/lrr/src/runtime/cell.rs
+@@ -6,6 +6,8 @@
+ pub(crate) use test_owners::OwnerInventory;
+ #[path = "cell_aggregate_copy.rs"]
+ pub(crate) mod aggregate_copy;
++#[path = "cell_byte_comparison.rs"]
++pub(crate) mod byte_comparison;
+ #[path = "cell_byte_literals.rs"]
+ pub(crate) mod byte_literals;
+ #[path = "cell_constant_instantiation.rs"]
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_byte_comparison.rs
+@@ -0,0 +1,209 @@
++//! Bounded read-only equality of genuine immutable byte-literal roots.
++//!
++//! This is a physical operation, not trait resolution. Its caller must retain
++//! the source PartialEq/member admission and bind the cursor to the reached
++//! operation, operands and destination. Runtime descriptors cannot supply that
++//! source authority. Ordinary mutable arrays require their own stable read view.
++use super::*;
++use crate::vm::fuel::RunFuel;
++
++const PAIRS_PER_DISPATCH: u32 = 256;
++
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++struct ByteView {
++    operand: CellStamp,
++    value: ValueRepr,
++    root: CellStamp,
++    object: ObjectId,
++    allocation: StaticLiteralId,
++    len: u32,
++}
++
++/// Run-local continuation. It owns no guest value, lease or transfer ticket.
++/// Do not persist it in a query/recipe cache or clone it to replay partial work.
++pub(crate) struct StaticByteComparison {
++    session: StoreSession,
++    epoch: u32,
++    left: ByteView,
++    right: ByteView,
++    next: u32,
++    terminal: bool,
++}
++
++#[derive(Debug, Eq, PartialEq)]
++pub(crate) enum StaticByteComparisonPoll {
++    Dispatch { pairs: u32 },
++    Complete { equal: bool, pairs: u32 },
++}
++
++impl StaticByteComparison {
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        std::mem::size_of::<Self>()
++    }
++}
++
++impl GuestStore {
++    fn static_comparison_view(&self, operand: CellId) -> Result<ByteView, Diagnostic> {
++        let stamp = self.place_stamp(operand)?;
++        let value = self.admit_move(operand)?;
++        if value.kind != 9 {
++            return Err(ownership());
++        }
++        let reference_id = self.reference_from_cell(operand)?;
++        let reference = self.references.get(reference_id)?;
++        if reference.access != Access::Shared
++            || reference.final_cell != reference.root
++            || !reference.enclosing.is_empty()
++            || !matches!(
++                self.types.descriptor(TypeId(value.type_id))?.key.as_ref(),
++                TypeKey::Ref { mutable: false, target } if *target == reference.target
++            )
++        {
++            return Err(ownership());
++        }
++        let CellOwner::StaticLiteral(allocation) = self.cells.get(reference.root.cell)?.owner
++        else {
++            return Err(ownership());
++        };
++        self.require_static_root(allocation, reference.root.cell)?;
++        let root_type = self.place_type(reference.root.cell)?;
++        let TypeKey::Array { element, len } = self.types.descriptor(root_type)?.key.as_ref() else {
++            return Err(ownership());
++        };
++        if *element != TypeId(9) {
++            return Err(ownership());
++        }
++        let len = *len;
++        match self.types.descriptor(reference.target)?.key.as_ref() {
++            TypeKey::Array {
++                element,
++                len: view_len,
++            } if *element == TypeId(9) && *view_len == len && reference.static_slice.is_none() => {}
++            TypeKey::Slice { element }
++                if *element == TypeId(9) && reference.static_slice == Some(allocation) => {}
++            _ => return Err(ownership()),
++        }
++        let (object, storage) = self.place_object(reference.root.cell)?;
++        if storage.fields.len() != len as usize || !storage.initialized.complete_value() {
++            return Err(ownership());
++        }
++        Ok(ByteView {
++            operand: stamp,
++            value,
++            root: reference.root,
++            object,
++            allocation,
++            len,
++        })
++    }
++
++    /// Captures only private immutable store membership. The caller accounts
++    /// for metadata_bytes in its retained activation budget before retaining it.
++    pub(crate) fn prepare_static_byte_comparison(
++        &self,
++        left: CellId,
++        right: CellId,
++    ) -> Result<StaticByteComparison, Diagnostic> {
++        let left = self.static_comparison_view(left)?;
++        let right = self.static_comparison_view(right)?;
++        Ok(StaticByteComparison {
++            session: self.pattern_binding_session,
++            epoch: self.budget.epoch(),
++            left,
++            right,
++            next: 0,
++            terminal: false,
++        })
++    }
++
++    fn comparison_byte(&self, view: ByteView, offset: u32) -> Result<u8, Diagnostic> {
++        let (object, storage) = self.place_object(view.root.cell)?;
++        if object != view.object || offset >= view.len {
++            return Err(lease_fault());
++        }
++        let field = *storage
++            .fields
++            .get(offset as usize)
++            .ok_or_else(lease_fault)?;
++        if self.cells.get(field)?.owner
++            != (CellOwner::Field {
++                object,
++                index: offset,
++            })
++            || self.cells.get(field)?.writable
++        {
++            return Err(lease_fault());
++        }
++        let value = self.read_scalar(field)?;
++        if value.kind != 5 || value.type_id != 9 {
++            return Err(ownership());
++        }
++        u8::try_from(value.payload).map_err(|_| ownership())
++    }
++
++    /// At most 256 pairs, one fuel charge per pair, no allocation or guest write.
++    /// A length difference needs no element reads. Even empty/equal handles are
++    /// revalidated and cancellation-polled; pointer equality is not a bypass.
++    pub(crate) fn advance_static_byte_comparison(
++        &self,
++        cursor: &mut StaticByteComparison,
++        fuel: &mut RunFuel,
++    ) -> Result<StaticByteComparisonPoll, Diagnostic> {
++        // Mark failure terminal as well as completion. A partially compared
++        // prefix may never be resumed after failed currentness/fuel validation.
++        if cursor.terminal {
++            return Err(lease_fault());
++        }
++        let outcome = self.static_byte_comparison_chunk(cursor, fuel);
++        if !matches!(outcome, Ok(StaticByteComparisonPoll::Dispatch { .. })) {
++            cursor.terminal = true;
++        }
++        outcome
++    }
++
++    fn static_byte_comparison_chunk(
++        &self,
++        cursor: &mut StaticByteComparison,
++        fuel: &mut RunFuel,
++    ) -> Result<StaticByteComparisonPoll, Diagnostic> {
++        if cursor.session != self.pattern_binding_session
++            || cursor.epoch != self.budget.epoch()
++            || self.static_comparison_view(cursor.left.operand.cell)? != cursor.left
++            || self.static_comparison_view(cursor.right.operand.cell)? != cursor.right
++            || cursor.next > cursor.left.len.min(cursor.right.len)
++        {
++            return Err(lease_fault());
++        }
++        fuel.poll()?;
++        if cursor.left.len != cursor.right.len {
++            return Ok(StaticByteComparisonPoll::Complete {
++                equal: false,
++                pairs: 0,
++            });
++        }
++        let mut pairs = 0;
++        while cursor.next < cursor.left.len && pairs < PAIRS_PER_DISPATCH {
++            // Charge before reading, including the first differing element.
++            fuel.charge()?;
++            let left = self.comparison_byte(cursor.left, cursor.next)?;
++            let right = self.comparison_byte(cursor.right, cursor.next)?;
++            cursor.next = cursor.next.checked_add(1).ok_or_else(resource)?;
++            pairs += 1;
++            if left != right {
++                return Ok(StaticByteComparisonPoll::Complete {
++                    equal: false,
++                    pairs,
++                });
++            }
++        }
++        if cursor.next == cursor.left.len {
++            Ok(StaticByteComparisonPoll::Complete { equal: true, pairs })
++        } else {
++            Ok(StaticByteComparisonPoll::Dispatch { pairs })
++        }
++    }
++}
++
++#[cfg(test)]
++#[path = "cell_byte_comparison_tests.rs"]
++mod tests;
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_byte_comparison_tests.rs
+@@ -0,0 +1,248 @@
++//! Store invariants supplement the unchanged rustc token-pair witness in syntax.
++use super::*;
++use crate::runtime::{cell::byte_literals::StaticByteChunkPoll, shape::ByteLiteralTarget};
++
++fn operand(store: &mut GuestStore, site: &[u8], bytes: &[u8], view: ByteLiteralTarget) -> CellId {
++    let frame = store.new_frame_anchor().unwrap();
++    let plan = store
++        .prepare_static_bytes(
++            crate::core::digest::Digest::of_bytes(site),
++            bytes,
++            view,
++            None,
++            true,
++        )
++        .unwrap();
++    let ty = plan.reference_type();
++    let ticket = if bytes.len() <= 256 {
++        store.instantiate_static_bytes(plan).unwrap()
++    } else {
++        let mut cursor = store.prepare_static_byte_chunks(plan).unwrap();
++        let mut fuel = RunFuel::new(100_000).unwrap();
++        loop {
++            match store.advance_static_byte_chunks(&mut cursor, &mut fuel) {
++                StaticByteChunkPoll::Dispatch { .. } => {}
++                StaticByteChunkPoll::Ready => {
++                    break store.commit_static_byte_chunks(&mut cursor).unwrap();
++                }
++                StaticByteChunkPoll::Failed(error) => panic!("{error:?}"),
++            }
++        }
++    };
++    let cell = store
++        .new_cell(
++            StorageContract::Exact(ty),
++            true,
++            CellOwner::FrameSlot { frame, slot: 0 },
++        )
++        .unwrap();
++    store.initialize(cell, ticket).unwrap();
++    cell
++}
++
++fn store() -> GuestStore {
++    GuestStore::new(1, 20_000, 8 << 20).unwrap()
++}
++
++#[test]
++fn byte_comparison_bounds_work_and_fuel_without_allocating_or_mutating_owners() {
++    for view in [ByteLiteralTarget::Array, ByteLiteralTarget::Slice] {
++        let mut store = store();
++        let left = operand(&mut store, b"left", &[7; 600], view);
++        let right = operand(&mut store, b"right", &[7; 600], view);
++        let before = (
++            store.budget.handles(),
++            store.budget.bytes(),
++            store.state(left).unwrap(),
++        );
++        let mut cursor = store.prepare_static_byte_comparison(left, right).unwrap();
++        assert!(cursor.metadata_bytes() < 1024);
++        let mut fuel = RunFuel::new(600).unwrap();
++        for pairs in [256, 256] {
++            assert_eq!(
++                store
++                    .advance_static_byte_comparison(&mut cursor, &mut fuel)
++                    .unwrap(),
++                StaticByteComparisonPoll::Dispatch { pairs }
++            );
++        }
++        assert_eq!(
++            store
++                .advance_static_byte_comparison(&mut cursor, &mut fuel)
++                .unwrap(),
++            StaticByteComparisonPoll::Complete {
++                equal: true,
++                pairs: 88
++            }
++        );
++        assert_eq!(fuel.snapshot().used, 600);
++        assert!(
++            store
++                .advance_static_byte_comparison(&mut cursor, &mut fuel)
++                .is_err()
++        );
++        assert_eq!(
++            before,
++            (
++                store.budget.handles(),
++                store.budget.bytes(),
++                store.state(left).unwrap()
++            )
++        );
++    }
++}
++
++#[test]
++fn byte_comparison_short_circuits_but_cannot_skip_cancelled_empty_or_identical_operands() {
++    let mut store = store();
++    let left = operand(&mut store, b"left", &[7; 600], ByteLiteralTarget::Array);
++    let mut other = [7; 600];
++    other[511] = 8;
++    let right = operand(&mut store, b"right", &other, ByteLiteralTarget::Slice);
++    let mut cursor = store.prepare_static_byte_comparison(left, right).unwrap();
++    let mut fuel = RunFuel::new(600).unwrap();
++    assert_eq!(
++        store
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .unwrap(),
++        StaticByteComparisonPoll::Dispatch { pairs: 256 }
++    );
++    assert_eq!(
++        store
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .unwrap(),
++        StaticByteComparisonPoll::Complete {
++            equal: false,
++            pairs: 256
++        }
++    );
++    assert_eq!(fuel.snapshot().used, 512);
++    let empty = operand(&mut store, b"empty", b"", ByteLiteralTarget::Array);
++    for (a, b) in [(empty, empty), (left, left), (left, empty)] {
++        let mut cursor = store.prepare_static_byte_comparison(a, b).unwrap();
++        let mut fuel = RunFuel::new(1000).unwrap();
++        fuel.cancellation().cancel();
++        assert!(
++            store
++                .advance_static_byte_comparison(&mut cursor, &mut fuel)
++                .is_err()
++        );
++        assert_eq!(fuel.snapshot().used, 0);
++        assert!(cursor.terminal);
++    }
++    let mut cursor = store.prepare_static_byte_comparison(left, empty).unwrap();
++    let mut fuel = RunFuel::new(1).unwrap();
++    assert_eq!(
++        store
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .unwrap(),
++        StaticByteComparisonPoll::Complete {
++            equal: false,
++            pairs: 0
++        }
++    );
++    assert_eq!(fuel.snapshot().used, 0);
++}
++
++#[test]
++fn byte_comparison_refuses_cross_store_reset_replaced_operand_and_fuel_replay() {
++    let mut first = store();
++    let left = operand(&mut first, b"left", &[7; 600], ByteLiteralTarget::Array);
++    let right = operand(&mut first, b"right", &[7; 600], ByteLiteralTarget::Array);
++    let mut second = store();
++    let other_left = operand(&mut second, b"left", &[7; 600], ByteLiteralTarget::Array);
++    let other_right = operand(&mut second, b"right", &[7; 600], ByteLiteralTarget::Array);
++    assert_eq!(
++        (left.bits(), right.bits()),
++        (other_left.bits(), other_right.bits())
++    );
++    let mut cursor = first.prepare_static_byte_comparison(left, right).unwrap();
++    let mut fuel = RunFuel::new(1000).unwrap();
++    assert!(
++        second
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .is_err()
++    );
++    assert_eq!(fuel.snapshot().used, 0);
++    assert!(
++        first
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .is_err()
++    );
++
++    let mut cursor = first.prepare_static_byte_comparison(left, right).unwrap();
++    let mut short = RunFuel::new(256).unwrap();
++    assert_eq!(
++        first
++            .advance_static_byte_comparison(&mut cursor, &mut short)
++            .unwrap(),
++        StaticByteComparisonPoll::Dispatch { pairs: 256 }
++    );
++    assert!(
++        first
++            .advance_static_byte_comparison(&mut cursor, &mut short)
++            .is_err()
++    );
++    assert_eq!(short.snapshot().used, 256);
++    assert!(
++        first
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .is_err()
++    );
++
++    let mut cursor = first.prepare_static_byte_comparison(left, right).unwrap();
++    let reference = first.reference_from_cell(right).unwrap();
++    let ticket = first.reference_ticket(reference).unwrap();
++    let replaced = first.replace(left, ticket).unwrap();
++    first.discard(replaced).unwrap();
++    assert!(
++        first
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .is_err()
++    );
++    assert_eq!(fuel.snapshot().used, 0);
++
++    let mut cursor = first.prepare_static_byte_comparison(left, right).unwrap();
++    first.reset(2).unwrap();
++    assert!(
++        first
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .is_err()
++    );
++    assert_eq!(fuel.snapshot().used, 0);
++}
++
++#[test]
++fn byte_comparison_rejects_unowned_roots_mutable_leases_and_damaged_field_edges() {
++    let mut store = store();
++    let left = operand(&mut store, b"left", &[7; 600], ByteLiteralTarget::Array);
++    let right = operand(&mut store, b"right", &[7; 600], ByteLiteralTarget::Array);
++    let reference = store.reference_from_cell(left).unwrap();
++    let root = store.references.get(reference).unwrap().root.cell;
++    let owner = store.cells.get(root).unwrap().owner;
++    let frame = store.new_frame_anchor().unwrap();
++    store.cells.get_mut(root).unwrap().owner = CellOwner::FrameSlot { frame, slot: 0 };
++    assert!(store.prepare_static_byte_comparison(left, right).is_err());
++    store.cells.get_mut(root).unwrap().owner = owner;
++    store.references.get_mut(reference).unwrap().access = Access::Mutable;
++    assert!(store.prepare_static_byte_comparison(left, right).is_err());
++    store.references.get_mut(reference).unwrap().access = Access::Shared;
++    let mut cursor = store.prepare_static_byte_comparison(left, right).unwrap();
++    let mut fuel = RunFuel::new(1000).unwrap();
++    assert_eq!(
++        store
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .unwrap(),
++        StaticByteComparisonPoll::Dispatch { pairs: 256 }
++    );
++    let (_, storage) = store.place_object(root).unwrap();
++    let field = storage.fields[256];
++    store.cells.get_mut(field).unwrap().owner = CellOwner::FrameSlot { frame, slot: 0 };
++    assert!(
++        store
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .is_err()
++    );
++    assert_eq!(fuel.snapshot().used, 257);
++    assert!(cursor.terminal);
++}
+--- a/crates/lrr/src/syntax/byte_string_literal_tests.rs
++++ b/crates/lrr/src/syntax/byte_string_literal_tests.rs
+@@ -7,6 +7,110 @@
+ const ORIGINAL: &str = include_str!(
+     "../../../../fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/byte-literals.rs"
+ );
++#[test]
++fn unchanged_crlf_byte_assertion_tokens_compare_through_checked_immutable_roots_all_editions() {
++    // Component evidence: the exact four original tokens and their pair order.
++    // Complete-main acceptance still needs source PartialEq admission/dispatch.
++    use crate::runtime::{
++        cell::{CellOwner, GuestStore, StorageContract, byte_comparison::StaticByteComparisonPoll},
++        shape::ByteLiteralTarget,
++    };
++    use crate::vm::fuel::RunFuel;
++    const CRLF: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/crlf-in-byte-string-literal.rs"
++    );
++    assert!(CRLF.contains("\r\n"));
++    for edition in [2015, 2018, 2021, 2024] {
++        let blob = SourceBlob::new(CRLF.as_bytes().to_vec()).unwrap();
++        let parsed = ParsedFile::parse(
++            &blob,
++            ProfileIdentity {
++                edition,
++                ..ProfileIdentity::current()
++            },
++        )
++        .unwrap();
++        let outline = parsed
++            .outline(
++                Digest::of_bytes(b"unchanged CRLF equality"),
++                vec![],
++                &CfgSet::guest_default(),
++            )
++            .unwrap();
++        let body = outline
++            .items
++            .iter()
++            .find(|item| item.def_key.declared_name == "main")
++            .unwrap()
++            .body
++            .as_ref()
++            .unwrap();
++        let tokens = parsed
++            .entered_body_root(body)
++            .unwrap()
++            .descendants_with_tokens()
++            .filter_map(|item| item.into_token())
++            .filter_map(ast::ByteString::cast)
++            .collect::<Vec<_>>();
++        assert_eq!(tokens.len(), 4);
++        let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++        let frame = store.new_frame_anchor().unwrap();
++        let mut operands = Vec::new();
++        for (ordinal, token) in tokens.iter().enumerate() {
++            let range = token.syntax().text_range();
++            let span = BodySpan {
++                body_key: body.key(),
++                relative_start: u32::from(range.start()) - body.range.start,
++                relative_end: u32::from(range.end()) - body.range.start,
++            };
++            let spelling =
++                &CRLF[u32::from(range.start()) as usize..u32::from(range.end()) as usize];
++            assert_eq!(spelling, token.text());
++            let decoded = decode_token(token, &span).unwrap();
++            decoded.require(spelling, &span).unwrap();
++            let plan = store
++                .prepare_static_bytes(
++                    Digest::of_bytes(format!("original {ordinal}").as_bytes()),
++                    decoded.bytes(),
++                    ByteLiteralTarget::Array,
++                    None,
++                    true,
++                )
++                .unwrap();
++            let ty = plan.reference_type();
++            let ticket = store.instantiate_static_bytes(plan).unwrap();
++            let cell = store
++                .new_cell(
++                    StorageContract::Exact(ty),
++                    false,
++                    CellOwner::FrameSlot {
++                        frame,
++                        slot: ordinal as u32,
++                    },
++                )
++                .unwrap();
++            store.initialize(cell, ticket).unwrap();
++            operands.push(cell);
++        }
++        let mut fuel = RunFuel::new(10).unwrap();
++        for (pair, expected_pairs) in operands.chunks_exact(2).zip([0, 1]) {
++            let mut cursor = store
++                .prepare_static_byte_comparison(pair[0], pair[1])
++                .unwrap();
++            assert_eq!(
++                store
++                    .advance_static_byte_comparison(&mut cursor, &mut fuel)
++                    .unwrap(),
++                StaticByteComparisonPoll::Complete {
++                    equal: true,
++                    pairs: expected_pairs
++                }
++            );
++        }
++        assert_eq!(fuel.snapshot().used, 1);
++        assert_eq!(blob.bytes(), CRLF.as_bytes());
++    }
++}
+ #[test]
+ fn unchanged_original_byte_string_tokens_keep_pinned_decoded_bytes_and_exact_spans_all_editions() {
+     for edition in [2015, 2018, 2021, 2024] {

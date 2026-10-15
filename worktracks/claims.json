@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V65 seven exact string-newline leaves integrated after31 distinct scoped passes (six new bodies,24 real runtime cases in one); full milestone failed on an obsolete constant-local negative; exact positive/source-identity repair integrated after actual689aff/0 across4editions; final combined gate outstanding. V63/V64 failures preserved. Canonical312 cases/496 originals; zero new full rustc fixture passes. Vec/ordinary-literal CRLF and named11/Byte12/context13/large-byte follow-ups remain source-only. Frozen scalar assertion CRLF and exact-capture upstream runner are queued source-only follow-ups; no new execution pass.",
+      "scope": "Float and CRLF prerequisite source pushed at f8f4922539; full V72 milestone runs separately. Named-range/Byte12/context13/byte-CRLF/large-byte stages are now one 48-file source-only candidate. New T041/T062 immutable byte comparison cursor is a four-file uncompiled successor; source PartialEq/VM consumer remains outstanding. No new stock pass, task or JIT completion.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -474,11 +474,14 @@
         "artifacts/macos-first/root-scalar-crlf-v1/",
         "artifacts/macos-first/root-upstream-runtime-runner-v1/",
         "artifacts/macos-first/root-constant-local-negative-repair-v1/",
-        "artifacts/macos-first/root-byte-float-rebase-v1/"
+        "artifacts/macos-first/root-byte-float-rebase-v1/",
+        "artifacts/macos-first/root-byte-comparison-v1/",
+        "worktracks/candidates/root-interpreter-bytes-v1/",
+        "worktracks/candidates/root-byte-comparison-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T09:10:06.201375+00:00",
+      "updated_at": "2026-10-15T10:02:05.915083+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

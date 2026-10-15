@@ -1,0 +1,84 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "task_cards": [
+    "T041",
+    "T062"
+  ],
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "files": [
+    {
+      "path": "crates/lrr/src/runtime/cell.rs",
+      "before_sha256": "bf5a18ac7b0feed5753097abd777c16071f48088840bd136ffb08c4cff792f90",
+      "after_sha256": "f8117d361836ffef16a3217173b6d4c28ef82fe38374e721ef5530927ba0a7a5"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_comparison.rs",
+      "before_sha256": null,
+      "after_sha256": "f20babe26127404f77879d6d88fe8496713d2bc12c1c32ac958bee405a714a70"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_comparison_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "761cf970c88161091b359099ff52cbd41e598870b5f83c2b54f0fb899b4ca1a1"
+    },
+    {
+      "path": "crates/lrr/src/syntax/byte_string_literal_tests.rs",
+      "before_sha256": "6f36d2042c2930264dc572859a6ebe99eb150626cd4fcc058e061ab7188959f3",
+      "after_sha256": "65746b6735db63462f493e65c478e1317ff3a3e65b89fbb41375b6889a355fc0"
+    }
+  ],
+  "patch_sha256": "2ab4c7e715b5acad1267c39b4b05807db9c2ceb31ca4c90a007a56eda95801e5",
+  "prerequisites": [
+    {
+      "stage": "root-named-range-integrated-candidate-v2",
+      "manifest_sha256": "a350ef290459efdef7fe6b42c8222adf2ae9be5c15829c1ebc6928fff7603f87"
+    },
+    {
+      "stage": "root-byte-v12-integration-v2",
+      "manifest_sha256": "fc9bd4c42fb736ab44edff617128ec5cd2152e3f216ce333bb293674af87e6d7"
+    },
+    {
+      "stage": "root-named-match-context-integration-v3",
+      "manifest_sha256": "d77ffd343a179a6dfdc00e43b58518d89f192915f7e9ff4b3c0a4686bd57c8e7"
+    },
+    {
+      "stage": "root-byte-crlf-v1",
+      "manifest_sha256": "eeea2f98ed1e16dbc48d7ed081375007603a5dc1dca202026b9a7e1aa1cec587"
+    },
+    {
+      "stage": "root-large-byte-runtime-v1",
+      "manifest_sha256": "0757b32e0cb225bca40525a26bc81d59ce1726dc3794f36e8873f9b109020692"
+    }
+  ],
+  "upstream_sources": [
+    {
+      "path": "tests/ui/lexer/crlf-in-byte-string-literal.rs",
+      "sha256": "01787de25f8660b8356312cf7e7deb21641130588697b9b5f99c8a21fa7a3eb0",
+      "bytes": 277
+    },
+    {
+      "path": "library/core/src/array/equality.rs",
+      "sha256": "8765b16c3149dcfcf531e2f5724bfc1d2e518a05742d1333d53ed7eee4f0ae78",
+      "bytes": 4594
+    },
+    {
+      "path": "library/core/src/slice/cmp.rs",
+      "sha256": "cb6b2b958db2b20bbc4b75819fef22fb64a8f0365830c29647c37d1b75376f05",
+      "bytes": 16539
+    },
+    {
+      "path": "library/core/src/cmp.rs",
+      "sha256": "437c8518b75c076da2437f913d95a07ff8c2bbfe8ae1dcce2571db1dcb9e7980",
+      "bytes": 85845
+    }
+  ],
+  "new_test_bodies": 5,
+  "stock_runtime_passes_added": 0,
+  "missing_integration": [
+    "current source PartialEq/member admission",
+    "VM activation binding and result publication",
+    "strict build and runtime validation",
+    "required milestone"
+  ],
+  "created_at": "2026-10-15T09:59:42.229532+00:00"
+}
