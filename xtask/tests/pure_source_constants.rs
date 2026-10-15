@@ -266,15 +266,20 @@ fn pure_raw_names_and_disabled_imports_keep_source_identity() {
         scalar(evaluate(&plan, ConstLimits::default()).unwrap().value()),
         ValueRepr::unsigned(TypeId(11), 5).unwrap()
     );
-    let src = source("const A:i64={let n=1;n};", 2024);
-    let plan = src.constant(declaration(&src, "A")).unwrap();
-    assert_eq!(
-        evaluate(&plan, ConstLimits::default())
-            .unwrap_err()
-            .diagnostic()
-            .code,
-        "LRR-E-CONST-UNSUPPORTED"
-    );
+    // Constant locals are implemented; retain the former unsupported witness
+    // as an exact value/source check rather than requiring its old frontier.
+    let text = "const A:i64={let n=1;n};";
+    for edition in [2015, 2018, 2021, 2024] {
+        let src = source(text, edition);
+        let plan = src.constant(declaration(&src, "A")).unwrap();
+        let result = evaluate(&plan, ConstLimits::default()).unwrap();
+        assert_eq!(
+            scalar(result.value()),
+            ValueRepr::signed(TypeId(7), 1).unwrap()
+        );
+        assert_eq!(result.source(), Digest::of_bytes(text.as_bytes()));
+        assert_eq!(plan.profile().edition, edition);
+    }
 }
 
 #[test]

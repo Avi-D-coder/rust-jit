@@ -28,11 +28,25 @@
     "independent_review": "Source and API review only; source_view clone removed."
   },
   "validation": {
-    "rust_compilation": "unexecuted",
+    "rust_compilation": "V66 production dependency compiled; strict lib/tests failed on two dead-code helpers",
     "whole_original_execution": "unexecuted",
     "interpreter_correctness_controls": "unexecuted",
     "milestone": "unexecuted",
-    "full_fixture_pass_delta": 0
+    "full_fixture_pass_delta": 0,
+    "strict_actual_terminal": "7ff416/1",
+    "strict_source_unchanged": true,
+    "repair_candidate": "artifacts/macos-first/root-primitive-float-lint-repair-v1/manifest.json",
+    "repair_manifest_sha256": "e9a6ff1d5fffc442dfddbccd36e6cef3e08d7852e2c833db7a3c96907e78a01b",
+    "next": "V68 background strict and planned runtime scopes; no float runtime pass yet",
+    "v67": {
+      "actual_terminal": "4e6f80/1",
+      "status": "strict test compilation failed",
+      "source_unchanged": true,
+      "failure": "Box<[Op]> test helper used unstable as_slice API; replace with stable as_ref.",
+      "executed_bodies": 0,
+      "repair_manifest": "artifacts/macos-first/root-primitive-float-test-slice-repair-v1/manifest.json",
+      "repair_manifest_sha256": "11814c39097b812ea95689f548039fc6c39b8b0b64061c0d4e804154321be648"
+    }
   },
   "remaining_scope": [
     "ordinary method-call expressions",
@@ -40,5 +54,6 @@
     "other float inherent methods",
     "general trait method dispatch"
   ],
-  "integration": "Queued behind actual V65 collection and ordinary/scalar CRLF prerequisites; sole target owner, frozen source required."
+  "integration": "Queued behind actual V65 collection and ordinary/scalar CRLF prerequisites; sole target owner, frozen source required.",
+  "updated_at": "2026-10-15T09:11:42.293972+00:00"
 }

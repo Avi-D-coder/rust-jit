@@ -1033,7 +1033,7 @@
     "actual_terminal": "f8b87b/0",
     "baseline_commit": "e24f77f586"
   },
-  "updated_at": "2026-10-15T09:04:42.874030+00:00",
+  "updated_at": "2026-10-15T09:10:06.201375+00:00",
   "full_milestone": {
     "status": "failed",
     "actual_terminal": "3315ab/1",
@@ -1071,7 +1071,7 @@
     "failure": "xtask/tests/pure_source_constants.rs:273 expected LRR-E-CONST-UNSUPPORTED for const A:i64={let n=1;n}; actual implemented evaluation returns I64(1).",
     "repair_candidate": "artifacts/macos-first/root-constant-local-negative-repair-v1/manifest.json",
     "repair_manifest_sha256": "6a88a64c0ce9a772d15d23832dc532d202e28a5d22d13dd152b80ab1fdb36f4c",
-    "repair_status": "source_only_unexecuted",
+    "repair_status": "exact tested leaf integrated; final combined milestone outstanding",
     "fresh_gate_reports": [
       {
         "name": "00.json",
@@ -1099,6 +1099,38 @@
       }
     ],
     "collector_sha256": "f5aa7c27714e2cf6637f0d62ced0d79d95bd5f8cf9517965cbf00759cb7b4f2c",
-    "runtime_fixture_pass_delta": 0
+    "runtime_fixture_pass_delta": 0,
+    "repair_actual_terminal": "689aff/0",
+    "repair_scoped_terminal": {
+      "scope": "constant-local-regression-exact",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "xtask",
+        "--test",
+        "pure_source_constants",
+        "--locked",
+        "--offline",
+        "--",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1",
+        "pure_raw_names_and_disabled_imports_keep_source_identity"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 1,
+      "nonempty_test_scope": true,
+      "source_member": "fbb6b7bb5582f30c9380c5cb26f126ba71acd2abbbab854c6bdfc18e743944aa",
+      "elapsed_seconds": 20.468921166000655,
+      "started_at": "2026-10-15T09:07:10.423074+00:00",
+      "finished_at": "2026-10-15T09:07:30.892201+00:00",
+      "stdout_sha256": "6a862d225ca50b1c829ae40f97edea725a5cce3a63091eafee66246c08a6f1f7",
+      "stderr_sha256": "b46b1126b87adfdbf450498361c43fe1a2e7c169ec77c174ff2b3a90c25be702",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "repair_integrated_sha256": "67e5353beaf22d2f66296799981085b5899c6a3ae3558f8f91293fa32e470955"
   }
 }
