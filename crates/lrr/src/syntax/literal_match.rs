@@ -87,6 +87,7 @@ fn pattern_type(pat: &ast::Pat) -> Option<PrimitiveType> {
             Some(PrimitiveType::Bool)
         }
         SyntaxKind::CHAR if pat.minus_token().is_none() => Some(PrimitiveType::Char),
+        SyntaxKind::BYTE if pat.minus_token().is_none() => Some(PrimitiveType::U8),
         SyntaxKind::INT_NUMBER => ast::IntNumber::cast(literal.token())?
             .suffix()
             .and_then(primitive),
@@ -176,6 +177,7 @@ fn context(
         ast::Expr::Literal(x) => match x.token().kind() {
             SyntaxKind::TRUE_KW | SyntaxKind::FALSE_KW => Some(PrimitiveType::Bool),
             SyntaxKind::CHAR => Some(PrimitiveType::Char),
+            SyntaxKind::BYTE => Some(PrimitiveType::U8),
             SyntaxKind::FLOAT_NUMBER => ranges::floating_context(x, expected),
             SyntaxKind::INT_NUMBER => {
                 if let Some(ty) = ranges::floating_context(x, expected) {
@@ -913,7 +915,11 @@ fn prepare_inner(
         };
         if !matches!(
             literal.token().kind(),
-            SyntaxKind::TRUE_KW | SyntaxKind::FALSE_KW | SyntaxKind::INT_NUMBER | SyntaxKind::CHAR
+            SyntaxKind::TRUE_KW
+                | SyntaxKind::FALSE_KW
+                | SyntaxKind::INT_NUMBER
+                | SyntaxKind::CHAR
+                | SyntaxKind::BYTE
         ) || (literal.token().kind() != SyntaxKind::INT_NUMBER
             && pattern.minus_token().is_some())
             || (literal.token().kind() == SyntaxKind::INT_NUMBER
@@ -1037,6 +1043,7 @@ fn prepare_inner(
                 }) => HintRecipe::Primitive(*ty),
                 _ if recipe.kind == LiteralKind::Bool => HintRecipe::Primitive(PrimitiveType::Bool),
                 Some(DecodedLiteral::Char(_)) => HintRecipe::Primitive(PrimitiveType::Char),
+                Some(DecodedLiteral::Byte(_)) => HintRecipe::Primitive(PrimitiveType::U8),
                 _ => plan.ty.clone(),
             };
             draft(
@@ -1307,3 +1314,7 @@ mod binding_route_tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "byte_scalar_pattern_tests.rs"]
+mod byte_scalar_pattern_tests;

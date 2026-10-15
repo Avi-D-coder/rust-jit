@@ -283,9 +283,9 @@ fn commit_literal(
         Ok(ticket)
     }
 }
-/// Ordinary Bool/Char literals and explicitly suffixed numeric literals carry
-/// their written primitive identity. Generated literals keep their separate
-/// validated expansion route; numeric defaults, bytes, variables and arbitrary
+/// Ordinary Bool/Char/Byte literals and explicitly suffixed numeric literals
+/// carry their written primitive identity. Generated literals keep their
+/// separate validated expansion route; numeric defaults, variables and arbitrary
 /// descriptors cannot mint this source view.
 fn intrinsic_literal_preflight(
     frame: &Frame,
@@ -301,6 +301,7 @@ fn intrinsic_literal_preflight(
     let primitive = match literal.kind {
         LiteralKind::Bool => PrimitiveType::Bool,
         LiteralKind::Char => PrimitiveType::Char,
+        LiteralKind::Byte => PrimitiveType::U8,
         LiteralKind::Integer | LiteralKind::NegativeInteger | LiteralKind::Float => {
             match &literal.decoded {
                 Some(DecodedLiteral::Integer {
@@ -356,7 +357,7 @@ fn intrinsic_literal_preflight(
     frame.preflight_source_view(destination, Some(&source))?;
     match prepared {
         PreparedLiteral::Scalar(value) => {
-            // Bool/Char keep their existing single ticket/cell admission.
+            // Closed intrinsic scalars admit one ticket/cell before either effect.
             store.preflight_owning_read_result(true, false)?;
             Ok(PreparedLiteral::IntrinsicScalar { value, primitive })
         }

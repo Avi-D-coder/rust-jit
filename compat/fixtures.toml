@@ -11303,7 +11303,7 @@ test = "literal_whole_ticket_cell_quota_refuses_without_an_unowned_ticket"
 [[fixture]]
 id = "T041-INTRINSIC-LITERAL-SOURCE-8"
 path = "crates/lrr/src/vm/intrinsic_literal_source_tests.rs"
-test = "byte_and_unsuffixed_integer_do_not_gain_primitive_source_metadata"
+test = "byte_source_is_intrinsic_but_unsuffixed_integer_does_not_invent_source_metadata"
 
 [[fixture]]
 id = "T031-ALIAS-TRANSITIVE-WORLD"
@@ -12114,3 +12114,68 @@ test = "unchanged_negative_range_original_whole_main_requires_real_completion_al
 id = "T031-NEGATIVE-RANGE-CONTROL-22"
 path = "crates/lrr/src/syntax/condition_ranges_tests.rs"
 test = "upper_source_frontier_is_deferred_and_parameter_source_is_checked_before_owning_read"
+
+[[fixture]]
+id = "T025-BYTE-SCALAR-02"
+path = "crates/lrr/src/vm/intrinsic_literal_source_tests.rs"
+test = "byte_literal_guards_source_descriptor_origin_and_stale_body_before_entry_all_editions"
+
+[[fixture]]
+id = "T025-BYTE-SCALAR-03"
+path = "crates/lrr/src/vm/intrinsic_literal_source_tests.rs"
+test = "byte_literal_fuel_and_combined_ticket_cell_quota_refuse_without_source_invention_all_editions"
+
+[[fixture]]
+id = "T032-BYTE-SCALAR-04"
+path = "crates/lrr/src/engine/run_assertion_call_tests.rs"
+test = "byte_local_reference_call_keeps_intrinsic_source_all_editions"
+
+[[fixture]]
+id = "T050-BYTE-SCALAR-05"
+path = "crates/lrr/src/syntax/byte_scalar_pattern_tests.rs"
+test = "unchanged_original_byte_equality_and_range_have_exact_u8_thunks_all_editions"
+
+[[fixture]]
+id = "T050-BYTE-SCALAR-06"
+path = "crates/lrr/src/syntax/byte_scalar_pattern_tests.rs"
+test = "unchanged_original_byte_matches_execute_only_their_actual_scoped_components_all_editions"
+
+[[fixture]]
+id = "T050-BYTE-SCALAR-07"
+path = "crates/lrr/src/syntax/byte_scalar_pattern_tests.rs"
+test = "byte_range_unknown_or_wrong_family_upper_is_cold_until_lower_matches"
+
+[[fixture]]
+id = "T032-GENERATED-SOURCE-AUTHORITY-01"
+path = "crates/lrr/src/frontend/generated_result_cross_source_tests.rs"
+test = "actual_renamed_dependency_root_template_has_both_current_type_namespaces"
+
+[[fixture]]
+id = "T032-GENERATED-SOURCE-AUTHORITY-02"
+path = "crates/lrr/src/frontend/generated_result_cross_source_tests.rs"
+test = "either_actual_scope_shadow_is_required_blocker_not_primitive_permission"
+
+[[fixture]]
+id = "T032-GENERATED-SOURCE-AUTHORITY-03"
+path = "crates/lrr/src/frontend/generated_result_cross_source_tests.rs"
+test = "expired_original_source_lease_does_not_become_namespace_authority"
+
+[[fixture]]
+id = "T032-GENERATED-SOURCE-AUTHORITY-04"
+path = "crates/lrr/src/frontend/generated_result_cross_source_tests.rs"
+test = "genuine_foreign_origin_still_requires_actual_published_epoch"
+
+[[fixture]]
+id = "T032-GENERATED-SOURCE-AUTHORITY-05"
+path = "crates/lrr/src/frontend/generated_result_cross_source_tests.rs"
+test = "genuine_source_universe_replacement_removes_old_generated_authority"
+
+[[fixture]]
+id = "M017-GENERATED-SOURCE-AUTHORITY-06"
+path = "crates/lrr/src/frontend/generated_return_parent_profile_tests.rs"
+test = "actual_mixed_edition_nested_dependency_retains_each_observed_scope_profile"
+
+[[fixture]]
+id = "M017-GENERATED-SOURCE-AUTHORITY-07"
+path = "crates/lrr/src/frontend/generated_return_parent_profile_tests.rs"
+test = "genuine_generated_export_retains_actual_parent_record_and_original_tokens"

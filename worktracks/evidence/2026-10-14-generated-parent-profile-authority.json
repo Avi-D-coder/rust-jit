@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    "T032",
+    "M016",
+    "M017"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "source_paths": [
+    {
+      "path": "crates/lrr/src/frontend/generated_result_namespace.rs",
+      "before": "33141ebbeafd62b9199b681c819b32fa44739ffd13d63150e80e651c0b4cfbc4",
+      "sha256": "b9417750a0ab789f78816a86105a2ee2962e03a77316cc1108bb2aafa61f384d"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_result_cross_source_tests.rs",
+      "before": null,
+      "sha256": "1d711cd654ab1e5cce585e19c064ea9cd2c360bc0e150a0c26edc20afbc38ee3"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/type_scope_receipts.rs",
+      "before": "a2cfe294214ca07534b3aa9092b86223c9d3dc5ffc1c9ab7920a015d6c675f76",
+      "sha256": "3b3d2f935faa7edb468c64fc74ad65a2c9aa9750178d623f7ab1a623886a6750"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_return_parent.rs",
+      "before": null,
+      "sha256": "f6758596301bcaf8f55970024226073d7c7fe07ceff9619f9fb33269b064b9f2"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_return_parent_profile_tests.rs",
+      "before": null,
+      "sha256": "38e830a13ce8f6b6dcf60c1af7d0dc7ee32a2761f285aa133cfae0f41ed07471"
+    },
+    {
+      "path": "xtask/tests/captured_dependency_discovery.rs",
+      "before": "0764e760257d6b2db128b60e00e893cf2cad0cf74c750a2012683641fb32b24c",
+      "sha256": "72902ce726846dba5caee7f1aa3db9f848fb765598e3f24f88dad7ca48ba1c20"
+    }
+  ],
+  "source_member": "6d3becab7e263a4030d0f31fab165ef5596fdac063213604c94591b5ccb85c63",
+  "actual_validation": {
+    "strict": {
+      "scope": "strict-lrr-tests",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "-p",
+        "lrr",
+        "--lib",
+        "--tests",
+        "--locked",
+        "--offline",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "6d3becab7e263a4030d0f31fab165ef5596fdac063213604c94591b5ccb85c63",
+      "elapsed_seconds": 17.619395374989836,
+      "started_at": "2026-10-15T04:46:23.585036+00:00",
+      "finished_at": "2026-10-15T04:46:41.204622+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "9764b0ae7c14bb42597000056d5f36af6e0a2e14cb8a32bfee14f67245fba077",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "namespace14": {
+      "scope": "generated-result-namespace",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--lib",
+        "frontend::call_contracts::generated_result_namespace",
+        "--locked",
+        "--offline",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 14,
+      "nonempty_test_scope": true,
+      "source_member": "6d3becab7e263a4030d0f31fab165ef5596fdac063213604c94591b5ccb85c63",
+      "elapsed_seconds": 22.939446167001734,
+      "started_at": "2026-10-15T04:46:43.872274+00:00",
+      "finished_at": "2026-10-15T04:47:06.811844+00:00",
+      "stdout_sha256": "a282561116c710d23ebaa7bd723e93c4510a9673655bbced7bab10dcfe39ead0",
+      "stderr_sha256": "e9281697a5012e5e18343c726fc108eba486749c8b12c89d49e6b69ec086822e",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "dependency79": {
+      "scope": "captured-dependency-bank",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "xtask",
+        "--test",
+        "captured_dependency_discovery",
+        "--locked",
+        "--offline",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 79,
+      "nonempty_test_scope": true,
+      "source_member": "6d3becab7e263a4030d0f31fab165ef5596fdac063213604c94591b5ccb85c63",
+      "elapsed_seconds": 38.639425958012,
+      "started_at": "2026-10-15T04:47:17.194025+00:00",
+      "finished_at": "2026-10-15T04:47:55.833563+00:00",
+      "stdout_sha256": "698d00e56ba600df84d6564815f37685d6bfaf2c13f1beb848bff53f9a17796e",
+      "stderr_sha256": "be4d88d6fc638c1708cba7bdaa5dde88e86a8d3bfa7db0236a1c2ad592deb324",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    }
+  },
+  "failure_closure": "Required V36 milestone had49 captured_dependency_discovery failures. V44 source candidate improved bank30pass49fail\u219272pass7fail. V46 epoch2 helper fixed provider-edit; V49 source profile/parent producer plus helper yields79pass0fail0ignore0filter, closing exact prior names. Predecessor failures retained.",
+  "invariants": [
+    "Foreign generated tokens require actual current captured original source lease, real macro definition/header/context and exact declaration range; original DefKey and cold scan identity domains are joined through actual source, not equated.",
+    "Generated macro definers require actual current parent GeneratedSyntax/MacroRules header/source/context/record/epoch/cfg and exact origin/context parent links; recursion depth16 and memory bounds apply.",
+    "Type receipts preserve each actually observed (scope,profile) pair, including APP2024/LIB2015/LEAF2024 output; editions are never normalized and no receipt is fabricated for an unobserved profile.",
+    "Independent actual current insertion/definer Type receipts and genuine absence still required for primitive admission. Shadowed source-member/alias mixed-site selection remains required separate work.",
+    "Test adapter starts actual epoch/run and finishes run; source replacement invalidates old seal then begins coordinator epoch2 and seals new input before executing changed result659."
+  ],
+  "scope_limit": "LRR namespace/currentness/regression bank; existing test compiler/native-oracle outputs remain separately labeled. This adds zero complete upstream fixtures and does not prove runtime/full-suite acceptance. Required full combined milestone next.",
+  "new_upstream_whole_program_passes": 0,
+  "configured_compiletest_full_fixture_passes": 0,
+  "upstream_runtime_acceptance": "incomplete",
+  "diagnostic_compatibility": "incomplete; separate gate",
+  "compiler_tooling_compatibility": "incomplete; separate gate",
+  "full_suite_compatibility": "incomplete",
+  "guest_jit_gate": "closed",
+  "release_complete": false,
+  "linux_acceptance": "unexecuted",
+  "local_receipts": [
+    {
+      "version": 44,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v44/VALIDATION-HANDOFF.json",
+      "sha256": "3a88e2b6c4cc0bc30dbc0d5a5782de30b275adf57f7d577dad5a50dcb364ba39"
+    },
+    {
+      "version": 46,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v46/VALIDATION-HANDOFF.json",
+      "sha256": "87961c9d435e32b69a0d12b3014a14bafade2fc595f4098b05f24b828902c780"
+    },
+    {
+      "version": 49,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v49/COLLECTED-SCOPES.json",
+      "sha256": "70b1ed95b7afa17122973b06049632fb8deede150af940ae040e783296873515"
+    }
+  ]
+}

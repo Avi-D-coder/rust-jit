@@ -351,16 +351,17 @@ impl SourceDiscovery {
             }
         }
         let compiler_world: std::sync::Arc<[(Digest, Digest)]> = compiler_world.into();
-        let mut owners = BTreeMap::<ScopeKey, Option<ProfileIdentity>>::new();
+        let mut owners = BTreeMap::<ScopeKey, BTreeSet<ProfileIdentity>>::new();
+        let mut owner_count = 0usize;
         let mut owner_bytes = 0usize;
         let mut insert = |scope: &ScopeKey, profile: &ProfileIdentity| -> Result<(), Diagnostic> {
             if scope.owner.is_some() {
                 return Ok(());
             }
-            if let Some(previous) = owners.get_mut(scope) {
-                if previous.as_ref() != Some(profile) {
-                    *previous = None;
-                }
+            if owners
+                .get(scope)
+                .is_some_and(|profiles| profiles.contains(profile))
+            {
                 return Ok(());
             }
             owner_bytes = owner_bytes
@@ -369,10 +370,14 @@ impl SourceDiscovery {
                 .and_then(|n| n.checked_add(profile.semantics.capacity()))
                 .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(unavailable)?;
-            if owners.len() >= 4096 {
+            if owner_count >= 4096 {
                 return Err(unavailable());
             }
-            owners.insert(scope.clone(), Some(profile.clone()));
+            owners
+                .entry(scope.clone())
+                .or_default()
+                .insert(profile.clone());
+            owner_count += 1;
             Ok(())
         };
         for source in self.sources.iter().chain(
@@ -397,36 +402,37 @@ impl SourceDiscovery {
         let mut bytes = 0usize;
         // One exact immutable seal is the parent of every receipt in this batch.
         let parent = seal.fingerprint();
-        for (scope, profile) in owners {
-            let Some(profile) = profile else {
-                continue;
-            };
-            let certified =
-                match self
-                    .graph
-                    .certified_scope(&scope, Namespace::Type, profile.edition)
-                {
-                    Ok(scope) => scope,
-                    // This is an explicit unavailable prerequisite, never absence.
-                    Err(error) if error.code == "LRR-E-CATALOG-INCOMPLETE" => continue,
-                    Err(error) => return Err(error),
+        // Each observed profile is a separate lookup identity. Different
+        // owning editions in one lexical module never erase one another.
+        for (scope, profiles) in owners {
+            for profile in profiles {
+                let certified =
+                    match self
+                        .graph
+                        .certified_scope(&scope, Namespace::Type, profile.edition)
+                    {
+                        Ok(scope) => scope,
+                        // This is an explicit unavailable prerequisite, never absence.
+                        Err(error) if error.code == "LRR-E-CATALOG-INCOMPLETE" => continue,
+                        Err(error) => return Err(error),
+                    };
+                let proof = TypeScopeReceipt {
+                    parent,
+                    universe,
+                    profile,
+                    compiler_world: compiler_world.clone(),
+                    scope: certified,
                 };
-            let proof = TypeScopeReceipt {
-                parent,
-                universe,
-                profile,
-                compiler_world: compiler_world.clone(),
-                scope: certified,
-            };
-            bytes = bytes
-                .checked_add(proof.metadata_bytes()?)
-                .and_then(|n| n.checked_add(128))
-                .filter(|n| *n <= 32 * 1024 * 1024)
-                .ok_or_else(unavailable)?;
-            receipts
-                .try_reserve(1)
-                .map_err(|_| crate::runtime::arena::resource())?;
-            receipts.push(proof);
+                bytes = bytes
+                    .checked_add(proof.metadata_bytes()?)
+                    .and_then(|n| n.checked_add(128))
+                    .filter(|n| *n <= 32 * 1024 * 1024)
+                    .ok_or_else(unavailable)?;
+                receipts
+                    .try_reserve(1)
+                    .map_err(|_| crate::runtime::arena::resource())?;
+                receipts.push(proof);
+            }
         }
         Ok(receipts)
     }

@@ -378,3 +378,18 @@ fn negative_suffixed_local_reference_call_keeps_written_source_all_editions() {
         }
     }
 }
+
+#[test]
+fn byte_local_reference_call_keeps_intrinsic_source_all_editions() {
+    // LRR source/certificate regression; real upstream byte matches are covered
+    // separately without pretending the earlier byte-string setup executes.
+    const SOURCE: &str = "fn chosen(x:&u8){} fn main(){let n=b'a';chosen(&n);}";
+    for edition in EDITIONS {
+        let (mut db, mut run) = start(SOURCE, edition);
+        let chosen = body(&run, "chosen");
+        completed(&mut db, &mut run, 0, 1);
+        assert!(db.trace.events.iter().any(|event| matches!(&event.key,
+            QueryKey::BodyStructure(body) if body == &chosen)));
+        db.finish_run().unwrap();
+    }
+}

@@ -1460,7 +1460,9 @@
         "unchanged_float2_main_edition_2015",
         "unchanged_float2_main_edition_2018",
         "unchanged_float2_main_edition_2021",
-        "unchanged_float2_main_edition_2024"
+        "unchanged_float2_main_edition_2024",
+        "byte_literal_guards_source_descriptor_origin_and_stale_body_before_entry_all_editions",
+        "byte_literal_fuel_and_combined_ticket_cell_quota_refuse_without_source_invention_all_editions"
       ],
       "acceptance_contract": "exhaustive i8/u8 arithmetic boundary loops; random wider arithmetic/cast comparisons; works/fails context examples; signed-min literal; distinct usize/u64 contracts. Gate checks Rust constraint-aware numeric fallback and preserves known source widths; nonnumeric unknowns never default.",
       "commands": [],
@@ -1558,7 +1560,9 @@
         "T025-STOCK-FLOAT2-ED2015",
         "T025-STOCK-FLOAT2-ED2018",
         "T025-STOCK-FLOAT2-ED2021",
-        "T025-STOCK-FLOAT2-ED2024"
+        "T025-STOCK-FLOAT2-ED2024",
+        "T025-BYTE-SCALAR-02",
+        "T025-BYTE-SCALAR-03"
       ],
       "artifact_paths": [
         "docs/numeric-kernel.md",
@@ -1664,7 +1668,8 @@
         "worktracks/evidence/2026-10-14-labelled-interpreter-runtime.json",
         "worktracks/evidence/2026-10-14-namespace-startup-scalability.json",
         "worktracks/evidence/2026-10-14-negative-suffix-and-milestone.json",
-        "worktracks/evidence/2026-10-14-stock-numeric-whole-mains.json"
+        "worktracks/evidence/2026-10-14-stock-numeric-whole-mains.json",
+        "worktracks/evidence/2026-10-14-byte-scalar-components.json"
       ],
       "release_complete": false,
       "validation_scope": "Original primitive numeric component complete under E-57-001. Gate02 passes 645 macOS host/doc tests and 28 numeric controls; strict audits pass. Full symbolic/generated/trait/control/call/assignment/aggregate/coercion/cleanup/JIT and release integrations remain pending through named dependencies; Linux acceptance is deferred. User-authorized E-NUM-001 reopens numeric compatibility: old strict-profile evidence remains historical; Rust constraint-aware fallback/future-use inference is not fully implemented or accepted. Integrated scoped shift V3:fmt/strictworkspaceClippy/architecture/manifest passed;495 library,67 source_run,12 numeric,6 numeric_boundary bodies passed without failures/ignored/filtered. Two selected original shift.rs functions execute their original assertions and retain written count types. Source/log/terminal reviewed independently. Source-proven closed counts defaulti32; named counts retain source width or remain unresolved. Full original main/static/lint/compiletest and future numeric constraints remain incomplete; fresh MAIN milestone pending. Current integrated shift source ad04fa4b macOS milestone independently accepted: all17 requirements across retained5-check prefix and12-check continuation; actual continuation47049/0, original prefix outer exit unobserved. 2395 project bodies/179 executables/495 library, all166 T042-T045 controls plus2 original shift controls,8 H002 aliases and2k-frame event once; seven original CLI probes/29 arithmetic assertions. Root collector1580/0 verified34 logs and unchanged source, then released hold. Full fixture/Drop/doublepanic/worker/release/Linux remain pending. V5 discarded-expression fallback integrated after ten distinct scoped commands passed across two segments: format/strict Clippy,497 unfiltered library bodies plus27 bodies across4 relevant unfiltered binaries, architecture/manifest audits and3 importer controls. Both stock-derived value controls passed once; exact sourceb181a24b and all raw/terminal receipts were reviewed. Prefix82354/runner1 is retained: Cargo library exited0, but the wrapper incorrectly required497 complete library names equal2 selected names. Root verified membership and authorized only seven untouched suffix commands; suffix92326/0. No completed test was rerun and no single all-green ten-command runner is claimed. Original doc-comment main whole-body and aux9906 foo arithmetic are component observations, not full compiletest/edition/lint/parent-linking passes. General numeric future-use/trait/container inference remains incomplete. The required integrated MAIN milestone is pending; T025/release/Linux remain incomplete. Integrated numeric MAIN milestone accepted on exact8068a263 after preparation/source ownership repair: actualroot22217/0,2421unfiltered bodies/181summaries,fresh gates00\u201303,both numeric-discard controls once,independent+root terminal/source checks. Stalecandidate failed attempt remains preserved. General source inference and fullstock/release/Linux remain incomplete. October13 interpreter follow-ups: reviewed private cfg/numeric/source-contract/captured-declaration candidates integrated with originals/controls; each scoped receipt retained. Prior MAIN Cargo command2478/189 passed but enclosing frozen-source receipt failed external docs additions, so not accepted. Required fresh combined MAIN gate remains pending. Full rustc compiletest/task/release/Linux acceptance incomplete.",
@@ -1732,6 +1737,11 @@
         "status": "component_integrated_full_milestone_pending",
         "evidence_path": "worktracks/evidence/2026-10-14-stock-numeric-whole-mains.json",
         "scope": "V40float4 +V42compound4/source2/strict; two distinct unchanged whole original mains all4editions; configured compiletest/full-suite prerequisite incomplete."
+      },
+      "current_byte_scalar_components": {
+        "status": "component_integrated_full_milestone_pending",
+        "evidence_path": "worktracks/evidence/2026-10-14-byte-scalar-components.json",
+        "scope": "V48actualrebuilt8controls+strict; actual2unchangedMatchcomponents only,0whole-byte-main/fullfixture passes. Stale artifact/assembly attempts retained."
       }
     },
     {
@@ -2239,7 +2249,13 @@
         "selected_aliased_assertion_executes_predicate_and_keeps_message_and_unselected_body_cold_all_editions",
         "test_catalog_type_shadow_cannot_be_erased_by_unrelated_supplied_graph",
         "actual_test_catalog_epoch_change_refuses_retained_primitive_return_certificate",
-        "negative_suffixed_local_reference_call_keeps_written_source_all_editions"
+        "negative_suffixed_local_reference_call_keeps_written_source_all_editions",
+        "byte_local_reference_call_keeps_intrinsic_source_all_editions",
+        "actual_renamed_dependency_root_template_has_both_current_type_namespaces",
+        "either_actual_scope_shadow_is_required_blocker_not_primitive_permission",
+        "expired_original_source_lease_does_not_become_namespace_authority",
+        "genuine_foreign_origin_still_requires_actual_published_epoch",
+        "genuine_source_universe_replacement_removes_old_generated_authority"
       ],
       "acceptance_contract": "uncalled invalid function signature/body does not fail another call; an unused generic bound is ignored; incompatible actual parameter/return descriptors fault only at reached boundaries; effectful arguments execute once.",
       "commands": [
@@ -2370,7 +2386,13 @@
         "T032-REFERENCE-MISSING-LOCAL-SOURCE",
         "T032-REFERENCE-UNCERTIFIED-ENTRY",
         "T032-REFERENCE-SCALAR-GUARD",
-        "T032-NEGATIVE-SUFFIX-REFERENCE"
+        "T032-NEGATIVE-SUFFIX-REFERENCE",
+        "T032-BYTE-SCALAR-04",
+        "T032-GENERATED-SOURCE-AUTHORITY-01",
+        "T032-GENERATED-SOURCE-AUTHORITY-02",
+        "T032-GENERATED-SOURCE-AUTHORITY-03",
+        "T032-GENERATED-SOURCE-AUTHORITY-04",
+        "T032-GENERATED-SOURCE-AUTHORITY-05"
       ],
       "artifact_paths": [
         "artifacts/macos-first/t032-signature-capture-build.log",
@@ -2635,7 +2657,9 @@
         "artifacts/macos-first/t032-component-manifest.log",
         "artifacts/macos-first/root-alias-transitive-trace-v1/combined-component-acceptance-v2.json",
         "worktracks/evidence/2026-10-14-reference-parameter-runtime.json",
-        "worktracks/evidence/2026-10-14-negative-suffix-and-milestone.json"
+        "worktracks/evidence/2026-10-14-negative-suffix-and-milestone.json",
+        "worktracks/evidence/2026-10-14-byte-scalar-components.json",
+        "worktracks/evidence/2026-10-14-generated-parent-profile-authority.json"
       ],
       "release_complete": false,
       "validation_scope": "Original-source call component accepted under E-57-001: 763 actual macOS Rust1.99 host/doc tests and all 81 selected controls, Gate00/01/02 and strict audits pass. Each task-card acceptance clause has observed test evidence. Lexical/generated catalogs, full source/context/dictionary IDs, traits/member/composite/coercion semantics and native/JIT/service integration remain mandatory and unverified; release_complete is false.",
@@ -2703,6 +2727,16 @@
         "failed": 49,
         "unexecuted": 1440,
         "evidence_path": "worktracks/evidence/2026-10-14-negative-suffix-and-milestone.json"
+      },
+      "current_byte_scalar_components": {
+        "status": "component_integrated_full_milestone_pending",
+        "evidence_path": "worktracks/evidence/2026-10-14-byte-scalar-components.json",
+        "scope": "V48actualrebuilt8controls+strict; actual2unchangedMatchcomponents only,0whole-byte-main/fullfixture passes. Stale artifact/assembly attempts retained."
+      },
+      "current_generated_parent_profile_authority": {
+        "status": "component_integrated_full_milestone_pending",
+        "evidence_path": "worktracks/evidence/2026-10-14-generated-parent-profile-authority.json",
+        "scope": "V49strict+namespace14+unfiltereddependency79; all49oldcohortfailuresclosed; currentfullcombinedmilestone required; shadowed mixed-site alias lanes stillrequired."
       }
     },
     {
@@ -4341,7 +4375,7 @@
         "forged_literal_source_span_and_stale_body_recipe_refuse_before_entry",
         "literal_fuel_refusal_keeps_exact_prefix_and_single_write_no_replay",
         "literal_whole_ticket_cell_quota_refuses_without_an_unowned_ticket",
-        "byte_and_unsuffixed_integer_do_not_gain_primitive_source_metadata",
+        "byte_source_is_intrinsic_but_unsuffixed_integer_does_not_invent_source_metadata",
         "stock_floating_path_adapter_rejects_reversed_outside_and_nonexact_ranges",
         "floating_adapter_keeps_unknown_members_distinct_from_dispatch_admission",
         "floating_adapter_rejects_generic_and_absolute_paths_without_erasing_source",
@@ -4611,6 +4645,11 @@
         "scope": "1040-moduleCLI completed2939;15 earlier equivalence controls; strict/audit/fmt green",
         "fresh_integrated_milestone": "pending",
         "release_complete": false
+      },
+      "current_byte_scalar_components": {
+        "status": "component_integrated_full_milestone_pending",
+        "evidence_path": "worktracks/evidence/2026-10-14-byte-scalar-components.json",
+        "scope": "V48actualrebuilt8controls+strict; actual2unchangedMatchcomponents only,0whole-byte-main/fullfixture passes. Stale artifact/assembly attempts retained."
       }
     },
     {
@@ -5443,7 +5482,10 @@
         "opaque_match_exhaustion_needs_actual_source_proof_and_public_match_exit_stays_indexed",
         "unknown_upper_guard_and_future_result_remain_source_positioned_fault_steps",
         "genuine_control_refuses_modified_condition_target_and_span_without_remint",
-        "match_exhaustion_cannot_be_reminted_by_copying_a_phase_slot_or_source_range"
+        "match_exhaustion_cannot_be_reminted_by_copying_a_phase_slot_or_source_range",
+        "unchanged_original_byte_equality_and_range_have_exact_u8_thunks_all_editions",
+        "unchanged_original_byte_matches_execute_only_their_actual_scoped_components_all_editions",
+        "byte_range_unknown_or_wrong_family_upper_is_cold_until_lower_matches"
       ],
       "acceptance_contract": "failed arms preserve scrutinee ownership; true arms move once; conflicting moves fault before commit; or-pattern names/modes and binding order validate; overlapping alternatives can rerun false guards without replaying scrutinee evaluation.",
       "commands": [],
@@ -5470,14 +5512,18 @@
         "T050-NEGATIVE-RANGE-CONTROL-13",
         "T050-NEGATIVE-RANGE-CONTROL-14",
         "T050-NEGATIVE-RANGE-CONTROL-15",
-        "T050-NEGATIVE-RANGE-CONTROL-16"
+        "T050-NEGATIVE-RANGE-CONTROL-16",
+        "T050-BYTE-SCALAR-05",
+        "T050-BYTE-SCALAR-06",
+        "T050-BYTE-SCALAR-07"
       ],
       "artifact_paths": [
         "artifacts/macos-first/root-match-integration-v1/validation-v6/terminal.json",
         "artifacts/macos-first/root-vec-facet-integration-v1/independent-component-collection-v1.json",
         "artifacts/macos-first/root-vec-facet-integration-v1/MAIN-integration-v1.json",
         "worktracks/evidence/2026-10-14-scalar-range-runtime.json",
-        "worktracks/evidence/2026-10-14-negative-range-whole-main.json"
+        "worktracks/evidence/2026-10-14-negative-range-whole-main.json",
+        "worktracks/evidence/2026-10-14-byte-scalar-components.json"
       ],
       "release_complete": false,
       "validation_scope": "Integrated bounded scalar/or/single-alternative guard and typed no-arm components;586 same-production library bodies and30 component bodies passed, strict Clippy/architecture/fmt collected. Integrated milestone pending; general transactional patterns, overlapping guard retry, full if-let/while-let/question-mark and uniform Section15.5 bound-op phase acceptance incomplete. No card or full-fixture acceptance.",
@@ -5485,6 +5531,11 @@
         "status": "component_integrated_full_milestone_pending",
         "evidence_path": "worktracks/evidence/2026-10-14-negative-range-whole-main.json",
         "scope": "V46all22controls+strict,one complete unchanged original main all4editions; no configured/fullfixture/task/JIT completion."
+      },
+      "current_byte_scalar_components": {
+        "status": "component_integrated_full_milestone_pending",
+        "evidence_path": "worktracks/evidence/2026-10-14-byte-scalar-components.json",
+        "scope": "V48actualrebuilt8controls+strict; actual2unchangedMatchcomponents only,0whole-byte-main/fullfixture passes. Stale artifact/assembly attempts retained."
       }
     },
     {
@@ -19150,6 +19201,11 @@
         "status": "component_integrated_full_milestone_pending",
         "evidence_path": "worktracks/evidence/2026-10-14-negative-range-whole-main.json",
         "scope": "V46all22controls+strict,one complete unchanged original main all4editions; no configured/fullfixture/task/JIT completion."
+      },
+      "current_generated_parent_profile_authority": {
+        "status": "component_integrated_full_milestone_pending",
+        "evidence_path": "worktracks/evidence/2026-10-14-generated-parent-profile-authority.json",
+        "scope": "V49strict+namespace14+unfiltereddependency79; all49oldcohortfailuresclosed; currentfullcombinedmilestone required; shadowed mixed-site alias lanes stillrequired."
       }
     },
     {
@@ -19240,7 +19296,9 @@
         "normalized_return_refuses_missing_variable_identity_instead_of_descriptor_recovery",
         "copied_normalized_return_proof_refuses_changed_transitive_alias_at_equal_database_epochs",
         "alias_dependency_trace_limits_do_not_partially_commit",
-        "primitive_alias_return_refuses_stale_supplied_namespace_catalogue_before_mint"
+        "primitive_alias_return_refuses_stale_supplied_namespace_catalogue_before_mint",
+        "actual_mixed_edition_nested_dependency_retains_each_observed_scope_profile",
+        "genuine_generated_export_retains_actual_parent_record_and_original_tokens"
       ],
       "commands": [
         "cargo +1.99.0 test -p xtask --test symbolic_binders --offline --locked",
@@ -19333,7 +19391,9 @@
         "T031-ALIAS-RETURN-7",
         "T031-ALIAS-TRANSITIVE-WORLD",
         "T031-ALIAS-TRACE-BUDGET",
-        "T031-ALIAS-CATALOGUE-WORLD"
+        "T031-ALIAS-CATALOGUE-WORLD",
+        "M017-GENERATED-SOURCE-AUTHORITY-06",
+        "M017-GENERATED-SOURCE-AUTHORITY-07"
       ],
       "artifact_paths": [
         "docs/m017-symbolic-binder-foundation.md",
@@ -19376,12 +19436,18 @@
         "artifacts/macos-first/root-cli-numeric-policy-v1/integration.json",
         "artifacts/macos-first/root-floating-vm-v1/validation-v3/independent-collection-v1.json",
         "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-isolated-milestone-v4/independent-collection-v1.json",
-        "artifacts/macos-first/root-alias-transitive-trace-v1/combined-component-acceptance-v2.json"
+        "artifacts/macos-first/root-alias-transitive-trace-v1/combined-component-acceptance-v2.json",
+        "worktracks/evidence/2026-10-14-generated-parent-profile-authority.json"
       ],
       "title": "Symbolic type/binder terms",
       "acceptance_contract": "TR001/TR002; type/lifetime/const arg namespaces distinct. Depends: T045,M016.",
       "release_complete": false,
-      "validation_scope": "Partial symbolic foundation integrated after six scoped checks passed on frozen25a9f56c: format/strict workspace Clippy, architecture, manifest, importer integrity and nine unfiltered binder controls. Seventeen existing consumer controls passed on V4; their tested files and symbolic engines are unchanged. Grammar capture moved to the pinned syntax adapter, with owned bounded typed admission in frontend. Typed binders, capture-avoiding substitution, transaction placeholders, implicit-root admission, universe leak rollback and retained unforced assumptions have local component evidence. Full SourceView propagation, canonical goal identities, general symbolic headers, actual higher-ranked trait/member selection and TR001/TR002/M017 acceptance remain pending. Integrated MAIN milestone independently passed: actual96103/0, gates00\u201303,2407 bodies/180 executable summaries/495 library, all nine binder controls once, zero failed/ignored/measured/filtered, unchanged8a073dff source; zero full stock fixture passes. V1-V3 compile failures and earlier MAIN macro-deadline failure remain preserved. V8 combined successor integrated after11 scoped checks passed:33 unfiltered bodies in five binaries, plus2 scoped signature controls with493 other library tests explicitly filtered. V7 separately passed8 checks/25 bodies on unchanged engines. Original higher-ranked generic function alias capture retains rigid source parameters separately from bound regions. Root-universe placeholder rejection and incremental aggregate substitution accounting retain typed rollback. V8 integrated milestone independently passed: actual7223/0, fresh gates00\u201303,2410 unfiltered bodies/180 summaries/495 library, all eleven binder controls and the new alias once, exact83103d4b source. Projection/frame successor integration and its later milestone are recorded below; full M017/TR001/TR002, projection/outlives, stock/release/Linux remain pending. V13 projection/frame-guard successor integrated after nine scoped commands passed:30 unfiltered bodies in four binaries, strict Clippy/format/architecture/manifest/importer. Associated-item projections retain separate trait/item arguments; bounded substitution and universal instantiation traverse all positions. Legacy unification refuses until ordered normalization. Transaction inference/placeholders in declared parameter/result templates, resolved templates and source substitutions refuse before owning frame capture; rigid source parameters remain valid. Three unchanged official cases imported, four original-derived projection controls and frame safety control exercised; original revisions/program/error semantics remain unexecuted. V10 preparation failure occurred before commands and is preserved; its test scope was superseded. V11 strict Clippy failed before any target test on an owned string comparison; V12 repaired only that comparison and then had1/4 projection bodies pass,3 fail in the common anchor adapter. V13 uses the pinned separated trait_ref slot in both original-derived adapters; production stays exact to V11. V13 integrated MAIN milestone independently passed: actual outer17050/0, runner/command0,2,191,906ms, fresh gates00\u201303,2,415 unfiltered bodies/181 executable summaries and all17 M017 controls once, zero failed/ignored/measured/filtered, unchangedee60af19 source. Direct terminal/raw-log/source evidence and preserved prior failures were checked before root release. Reader-only schema corrections did not rerun tests. M017/TR001/TR002/source/world/normalization/stock/release/Linux acceptance remains incomplete. Combined M017 owned-term/header/frame candidate is frozen for exact scoped validation; all new Rust controls and original fixture semantics remain unexecuted. No full M017/stock/release/Linux acceptance is established. Candidate component lineage is retained in its external merge receipt. V3 frozen-candidate successor repairs fixed256-byte frame binding accounting by retaining separate sorted boxed symbolic/runtime tables. Checked table element sizes replace unaccounted tree nodes; nested source capacity accounting stays conservative. Three original-derived LRR retention controls were added before production. All16dyn/opaque/retention bodies and60combined M017 bodies remain unexecuted; no new fullstock, M017, release or Linux pass. Candidate V4 changes only docs/ledger from frozenV3fe919: preserves accepted MAIN2421-body milestone and M013 component repair while keeping all M017 production/60controls byte-identical and semantically unexecuted. Actual scope validation remains required before integration. Root V5 corrects only the original frame test adapter after actual V4 scoped binary10pass6fail, preserving all production/originals and prior failure evidence. Exact source signature capture with cold bodies replaces an unfulfilled whole-file callable-discovery prerequisite. All60 controls remain pending V5 scoped validation and integrated MAIN milestone. V5 actually passed16 dyn/opaque/frame controls, then array binary SIGABRT before completing8. V6 preserves failures, extends the original-derived120-layer binder acceptance before production, and mechanically splits large native stack frames without changing quotas/parser/host stack policy. Exact scoped and MAIN milestone validation remain pending. V6 branch split proved insufficient: actual c3f846/1, preserved normal-stack array SIGABRT. V7 direct Result dispatch removes extra large recursive temporaries; source-derived admitted120/rejected130 assertions unchanged from acceptance before edit. All60 controls and MAIN milestone remain pending. V7 actual f07c66/1 passed37 complete unfiltered array/dyn/elision controls and exact inventories; five Unicode controls failed LIVE-EDITION setup. V8 repairs only that harness via existing recorded2021 declaration provider with2024 infrastructure consumer, preserves bare live refusal and all production/upstream bytes. Remaining scoped validation and unchanged-prefix root collection pending; required MAIN milestone pending. Root accepted V8 repaired suffix actual direct terminal0 plus the unchanged37-body V7 prefix retained with its explicit outer1 failure; independent source/log/inventory/provenance review confirms all60 M017 controls once in complete unfiltered binaries. Tested production/tests/originals integrated with fresh mtimes. The required integrated MAIN milestone remains pending; M017/TR001/TR002, full rustc compiletest fixtures and release/Linux remain incomplete. V4/V5 failed runs and diagnostic-only stack experiment are retained. Integrated MAIN adf2da4 mandatory macOS milestone accepted: actual29168/outer0, gate/runner0,2464 unfiltered project bodies/185 summaries, all60 M017 once, fresh gates00\u201303. Independent collector484771/0 and root terminal/source/raw review released source hold. Prior candidate failures preserved; fullM17/TR001/TR002/source-view/trait/original fixture/release/Linux acceptance remains incomplete. Root stock-derived deep binder acceptance extended before production; identity substitution baseline actual13902/outer1 childSIGABRT, six partialOK only, exact baseline8e2135d archived. Mechanical direct-Result helper extraction repairs native stack use while preserving quotas/binder/namespace/budget ordering. Repaired semantic scope and integration/MAIN milestone pending. Same canonical development target reuse across sequential immutable validation revisions; no cross-checkout cache. Scoped repair accepted actual53514/345392 outer0,576 Rust bodies/10 unfiltered bins/3 Python, all60 M017 once; independent2e8b51/0. Exact failed baseline8e2135d archived before production. Root integrated tested code/assertions after wildcard MAIN2465 milestone terminal and hold release, preserving other task metadata. Required fresh MAIN milestone pending; full M017/TR001/TR002/stock/release/Linux remain incomplete. Alpha-identity successor extends two existing unchanged official array/reference controls: compare type/const/lifetime renaming with fixed owning crate/definition identity, and free versus bound region identities. No production change. Exact scoped validation pending; original body/compiletest and full TR001/TR002 remain incomplete. Return identity successor adds unchanged official generic-fn-infer.rs and a header-only2015 dependency-world packet regression. A repeated generic return must preserve its already-bound source identity independently of the runtime descriptor. Baseline semantics pending before production; all originals/body/compiletest/full M017 pending. Return identity baseline actually failed0pass/1fail at wrong source identity acceptance,66547/1d2c1b outer1 child101; exact3571f26f archived before production. Known-result branch now compares retained source binding after descriptor validation; shared bind rejects differing source identity before map writes, with a second deferred-result-state assertion added before that edit. Repaired scoped validation and subsequent MAIN milestone pending; full M017/stock/release/Linux remain incomplete. Root accepted repaired return identity scope88548/13b75b outer0,550 bodies/7 unfiltered binaries/3 Python controls,38 selected M017 controls once, independentcbe1a1/0. Confirmed failed baseline3571f26f retained. Prior alpha8-body scope also accepted. Exact production/assertions/originals integrated with fresh mtimes after prior MAIN ENOSPC failure and verified child absence; no passing milestone fabricated. Required corrected fresh MAIN milestone pending; full M017/TR001/TR002/stock/release/Linux remain incomplete. Stock generic runtime successor adds an unexecuted original2015 program-body acceptance entered through a recorded dependency alias from an explicit2024 adapter. Original main/id thunks and assertion/call counters must execute; no fixture pass until actual terminal/evidence. No production change; current MAIN milestone held separately. October13 user amendment requires all four official editions for roots/dependencies/macro origins. Edition/source/CLI/Cargo acceptance successor is pending; former root refusal controls updated explicitly. Current MAIN raw Cargo command passed2466/186 but enclosing gate failed two split vendor result lines; no accepted milestone. Full task/edition/stock/release/Linux acceptance remains incomplete. Official-edition scopeV1 stopped at a new adapter BTreeSet indexing compile error; V2/V3 exposed missing runtime macro contexts in the new harness, not a lowering defect. V4/V5 root pairs passed but mixed adapter compiler-facet worlds differed; failures retained. Confirmed mixed witnessV6 passes four root pairs but2015 dependency under2024 compiler facet fails actual no-item proof revalidation, exact153bb898 source archived before repair. Standard proof revalidation now preserves definition edition separately from invocation syntax; repaired scope and integrated gate pending. No full stock/edition/task acceptance. Root accepted exact frozen51204156 scope:694 Rust bodies/12 complete unfiltered bins plus format/strictClippy/architecture/manifest/importer; actual80867 prefix1 preserves24 passing commands and incorrect xtask-library target, actual25061 corrected unchanged-source suffix0, independent6d4b8d/0. Four root/five dependency stock program pairs execute original generic callee/assertion. Tested code/assertions/spec integrated with fresh mtimes; mandatory MAIN gate pending. Whole rustc compiletest/full edition/task/release/Linux remain incomplete. October13 concrete source-identity successor: equal descriptors do not prove concrete source identity for argument/result contracts; outgoing generic return restores only the admitted caller substitution. Baseline two real failures retained; corrected scope32 bodies (23 in5 complete binaries,9 selected return controls with491 other library tests filtered) passed with strict affected Clippy/fmt; only adapter changed between repaired passing-prefix and corrected suffix. Nine unchanged generic-fn-twice owning-edition program pairs executed. Named mk return remains TYPE-CONTEXT; original generic-temporary fn-pointer program remains unexecuted. Tested4files integrated, mandatory combined MAIN gate pending; full M017/TR001/TR002/stock/release/Linux incomplete. October13 interpreter follow-ups: reviewed private cfg/numeric/source-contract/captured-declaration candidates integrated with originals/controls; each scoped receipt retained. Prior MAIN Cargo command2478/189 passed but enclosing frozen-source receipt failed external docs additions, so not accepted. Required fresh combined MAIN gate remains pending. Full rustc compiletest/task/release/Linux acceptance incomplete."
+      "validation_scope": "Partial symbolic foundation integrated after six scoped checks passed on frozen25a9f56c: format/strict workspace Clippy, architecture, manifest, importer integrity and nine unfiltered binder controls. Seventeen existing consumer controls passed on V4; their tested files and symbolic engines are unchanged. Grammar capture moved to the pinned syntax adapter, with owned bounded typed admission in frontend. Typed binders, capture-avoiding substitution, transaction placeholders, implicit-root admission, universe leak rollback and retained unforced assumptions have local component evidence. Full SourceView propagation, canonical goal identities, general symbolic headers, actual higher-ranked trait/member selection and TR001/TR002/M017 acceptance remain pending. Integrated MAIN milestone independently passed: actual96103/0, gates00\u201303,2407 bodies/180 executable summaries/495 library, all nine binder controls once, zero failed/ignored/measured/filtered, unchanged8a073dff source; zero full stock fixture passes. V1-V3 compile failures and earlier MAIN macro-deadline failure remain preserved. V8 combined successor integrated after11 scoped checks passed:33 unfiltered bodies in five binaries, plus2 scoped signature controls with493 other library tests explicitly filtered. V7 separately passed8 checks/25 bodies on unchanged engines. Original higher-ranked generic function alias capture retains rigid source parameters separately from bound regions. Root-universe placeholder rejection and incremental aggregate substitution accounting retain typed rollback. V8 integrated milestone independently passed: actual7223/0, fresh gates00\u201303,2410 unfiltered bodies/180 summaries/495 library, all eleven binder controls and the new alias once, exact83103d4b source. Projection/frame successor integration and its later milestone are recorded below; full M017/TR001/TR002, projection/outlives, stock/release/Linux remain pending. V13 projection/frame-guard successor integrated after nine scoped commands passed:30 unfiltered bodies in four binaries, strict Clippy/format/architecture/manifest/importer. Associated-item projections retain separate trait/item arguments; bounded substitution and universal instantiation traverse all positions. Legacy unification refuses until ordered normalization. Transaction inference/placeholders in declared parameter/result templates, resolved templates and source substitutions refuse before owning frame capture; rigid source parameters remain valid. Three unchanged official cases imported, four original-derived projection controls and frame safety control exercised; original revisions/program/error semantics remain unexecuted. V10 preparation failure occurred before commands and is preserved; its test scope was superseded. V11 strict Clippy failed before any target test on an owned string comparison; V12 repaired only that comparison and then had1/4 projection bodies pass,3 fail in the common anchor adapter. V13 uses the pinned separated trait_ref slot in both original-derived adapters; production stays exact to V11. V13 integrated MAIN milestone independently passed: actual outer17050/0, runner/command0,2,191,906ms, fresh gates00\u201303,2,415 unfiltered bodies/181 executable summaries and all17 M017 controls once, zero failed/ignored/measured/filtered, unchangedee60af19 source. Direct terminal/raw-log/source evidence and preserved prior failures were checked before root release. Reader-only schema corrections did not rerun tests. M017/TR001/TR002/source/world/normalization/stock/release/Linux acceptance remains incomplete. Combined M017 owned-term/header/frame candidate is frozen for exact scoped validation; all new Rust controls and original fixture semantics remain unexecuted. No full M017/stock/release/Linux acceptance is established. Candidate component lineage is retained in its external merge receipt. V3 frozen-candidate successor repairs fixed256-byte frame binding accounting by retaining separate sorted boxed symbolic/runtime tables. Checked table element sizes replace unaccounted tree nodes; nested source capacity accounting stays conservative. Three original-derived LRR retention controls were added before production. All16dyn/opaque/retention bodies and60combined M017 bodies remain unexecuted; no new fullstock, M017, release or Linux pass. Candidate V4 changes only docs/ledger from frozenV3fe919: preserves accepted MAIN2421-body milestone and M013 component repair while keeping all M017 production/60controls byte-identical and semantically unexecuted. Actual scope validation remains required before integration. Root V5 corrects only the original frame test adapter after actual V4 scoped binary10pass6fail, preserving all production/originals and prior failure evidence. Exact source signature capture with cold bodies replaces an unfulfilled whole-file callable-discovery prerequisite. All60 controls remain pending V5 scoped validation and integrated MAIN milestone. V5 actually passed16 dyn/opaque/frame controls, then array binary SIGABRT before completing8. V6 preserves failures, extends the original-derived120-layer binder acceptance before production, and mechanically splits large native stack frames without changing quotas/parser/host stack policy. Exact scoped and MAIN milestone validation remain pending. V6 branch split proved insufficient: actual c3f846/1, preserved normal-stack array SIGABRT. V7 direct Result dispatch removes extra large recursive temporaries; source-derived admitted120/rejected130 assertions unchanged from acceptance before edit. All60 controls and MAIN milestone remain pending. V7 actual f07c66/1 passed37 complete unfiltered array/dyn/elision controls and exact inventories; five Unicode controls failed LIVE-EDITION setup. V8 repairs only that harness via existing recorded2021 declaration provider with2024 infrastructure consumer, preserves bare live refusal and all production/upstream bytes. Remaining scoped validation and unchanged-prefix root collection pending; required MAIN milestone pending. Root accepted V8 repaired suffix actual direct terminal0 plus the unchanged37-body V7 prefix retained with its explicit outer1 failure; independent source/log/inventory/provenance review confirms all60 M017 controls once in complete unfiltered binaries. Tested production/tests/originals integrated with fresh mtimes. The required integrated MAIN milestone remains pending; M017/TR001/TR002, full rustc compiletest fixtures and release/Linux remain incomplete. V4/V5 failed runs and diagnostic-only stack experiment are retained. Integrated MAIN adf2da4 mandatory macOS milestone accepted: actual29168/outer0, gate/runner0,2464 unfiltered project bodies/185 summaries, all60 M017 once, fresh gates00\u201303. Independent collector484771/0 and root terminal/source/raw review released source hold. Prior candidate failures preserved; fullM17/TR001/TR002/source-view/trait/original fixture/release/Linux acceptance remains incomplete. Root stock-derived deep binder acceptance extended before production; identity substitution baseline actual13902/outer1 childSIGABRT, six partialOK only, exact baseline8e2135d archived. Mechanical direct-Result helper extraction repairs native stack use while preserving quotas/binder/namespace/budget ordering. Repaired semantic scope and integration/MAIN milestone pending. Same canonical development target reuse across sequential immutable validation revisions; no cross-checkout cache. Scoped repair accepted actual53514/345392 outer0,576 Rust bodies/10 unfiltered bins/3 Python, all60 M017 once; independent2e8b51/0. Exact failed baseline8e2135d archived before production. Root integrated tested code/assertions after wildcard MAIN2465 milestone terminal and hold release, preserving other task metadata. Required fresh MAIN milestone pending; full M017/TR001/TR002/stock/release/Linux remain incomplete. Alpha-identity successor extends two existing unchanged official array/reference controls: compare type/const/lifetime renaming with fixed owning crate/definition identity, and free versus bound region identities. No production change. Exact scoped validation pending; original body/compiletest and full TR001/TR002 remain incomplete. Return identity successor adds unchanged official generic-fn-infer.rs and a header-only2015 dependency-world packet regression. A repeated generic return must preserve its already-bound source identity independently of the runtime descriptor. Baseline semantics pending before production; all originals/body/compiletest/full M017 pending. Return identity baseline actually failed0pass/1fail at wrong source identity acceptance,66547/1d2c1b outer1 child101; exact3571f26f archived before production. Known-result branch now compares retained source binding after descriptor validation; shared bind rejects differing source identity before map writes, with a second deferred-result-state assertion added before that edit. Repaired scoped validation and subsequent MAIN milestone pending; full M017/stock/release/Linux remain incomplete. Root accepted repaired return identity scope88548/13b75b outer0,550 bodies/7 unfiltered binaries/3 Python controls,38 selected M017 controls once, independentcbe1a1/0. Confirmed failed baseline3571f26f retained. Prior alpha8-body scope also accepted. Exact production/assertions/originals integrated with fresh mtimes after prior MAIN ENOSPC failure and verified child absence; no passing milestone fabricated. Required corrected fresh MAIN milestone pending; full M017/TR001/TR002/stock/release/Linux remain incomplete. Stock generic runtime successor adds an unexecuted original2015 program-body acceptance entered through a recorded dependency alias from an explicit2024 adapter. Original main/id thunks and assertion/call counters must execute; no fixture pass until actual terminal/evidence. No production change; current MAIN milestone held separately. October13 user amendment requires all four official editions for roots/dependencies/macro origins. Edition/source/CLI/Cargo acceptance successor is pending; former root refusal controls updated explicitly. Current MAIN raw Cargo command passed2466/186 but enclosing gate failed two split vendor result lines; no accepted milestone. Full task/edition/stock/release/Linux acceptance remains incomplete. Official-edition scopeV1 stopped at a new adapter BTreeSet indexing compile error; V2/V3 exposed missing runtime macro contexts in the new harness, not a lowering defect. V4/V5 root pairs passed but mixed adapter compiler-facet worlds differed; failures retained. Confirmed mixed witnessV6 passes four root pairs but2015 dependency under2024 compiler facet fails actual no-item proof revalidation, exact153bb898 source archived before repair. Standard proof revalidation now preserves definition edition separately from invocation syntax; repaired scope and integrated gate pending. No full stock/edition/task acceptance. Root accepted exact frozen51204156 scope:694 Rust bodies/12 complete unfiltered bins plus format/strictClippy/architecture/manifest/importer; actual80867 prefix1 preserves24 passing commands and incorrect xtask-library target, actual25061 corrected unchanged-source suffix0, independent6d4b8d/0. Four root/five dependency stock program pairs execute original generic callee/assertion. Tested code/assertions/spec integrated with fresh mtimes; mandatory MAIN gate pending. Whole rustc compiletest/full edition/task/release/Linux remain incomplete. October13 concrete source-identity successor: equal descriptors do not prove concrete source identity for argument/result contracts; outgoing generic return restores only the admitted caller substitution. Baseline two real failures retained; corrected scope32 bodies (23 in5 complete binaries,9 selected return controls with491 other library tests filtered) passed with strict affected Clippy/fmt; only adapter changed between repaired passing-prefix and corrected suffix. Nine unchanged generic-fn-twice owning-edition program pairs executed. Named mk return remains TYPE-CONTEXT; original generic-temporary fn-pointer program remains unexecuted. Tested4files integrated, mandatory combined MAIN gate pending; full M017/TR001/TR002/stock/release/Linux incomplete. October13 interpreter follow-ups: reviewed private cfg/numeric/source-contract/captured-declaration candidates integrated with originals/controls; each scoped receipt retained. Prior MAIN Cargo command2478/189 passed but enclosing frozen-source receipt failed external docs additions, so not accepted. Required fresh combined MAIN gate remains pending. Full rustc compiletest/task/release/Linux acceptance incomplete.",
+      "current_generated_parent_profile_authority": {
+        "status": "component_integrated_full_milestone_pending",
+        "evidence_path": "worktracks/evidence/2026-10-14-generated-parent-profile-authority.json",
+        "scope": "V49strict+namespace14+unfiltereddependency79; all49oldcohortfailuresclosed; currentfullcombinedmilestone required; shadowed mixed-site alias lanes stillrequired."
+      }
     },
     {
       "id": "M018",

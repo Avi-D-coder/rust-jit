@@ -65,6 +65,7 @@ fn endpoint_family(pattern: &ast::LiteralPat) -> Option<Family> {
             }
         }
         SyntaxKind::CHAR if pattern.minus_token().is_none() => Some(Family::Char),
+        SyntaxKind::BYTE if pattern.minus_token().is_none() => Some(Family::Integer),
         _ => None,
     }
 }
@@ -90,6 +91,9 @@ pub(super) fn source_type(pattern: &ast::RangePat) -> Option<PrimitiveType> {
         match literal.token().kind() {
             SyntaxKind::CHAR if endpoint.minus_token().is_none() => {
                 return Some(PrimitiveType::Char);
+            }
+            SyntaxKind::BYTE if endpoint.minus_token().is_none() => {
+                return Some(PrimitiveType::U8);
             }
             SyntaxKind::INT_NUMBER => {
                 if let Some(ty) = ast::IntNumber::cast(literal.token())?
@@ -177,7 +181,7 @@ impl ScalarRange {
 fn reached_endpoint(pattern: Option<&ast::Pat>) -> Result<&ast::LiteralPat, Diagnostic> {
     let Some(ast::Pat::LiteralPat(endpoint)) = pattern else {
         return Err(unsupported(
-            "reached range endpoint requires an original integer, floating or char literal",
+            "reached range endpoint requires an original integer, floating, char or byte literal",
         ));
     };
     if endpoint
@@ -254,6 +258,7 @@ pub(super) fn hint(literal: &LiteralRecipe, context: &HintRecipe) -> HintRecipe 
             suffix: Some(ty), ..
         }) => HintRecipe::Primitive(*ty),
         Some(DecodedLiteral::Char(_)) => HintRecipe::Primitive(PrimitiveType::Char),
+        Some(DecodedLiteral::Byte(_)) => HintRecipe::Primitive(PrimitiveType::U8),
         _ => context.clone(),
     }
 }

@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    "T025",
+    "T032",
+    "T041",
+    "T050"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "source_paths": [
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "before_sha256": "5aae3e4d17a9b86e676700958a148e2ad8da2e8d027e6bd750822923d62fc957",
+      "sha256": "d02971a3ad383b15803cd29aaa50951818b95a1ad632bdf4e7b326f5dfe61cbc",
+      "before_bytes": 57716,
+      "bytes": 57771
+    },
+    {
+      "path": "crates/lrr/src/vm/intrinsic_literal_source_tests.rs",
+      "before_sha256": "3f02496dff6b53ae4da025f2223700d4ebd9f64d46f24bc6a3f632534e0a3c2c",
+      "sha256": "18230594e8cac3506ce575be14a9d4c485b2188ea0b025469e518d3a2941a28e",
+      "before_bytes": 26214,
+      "bytes": 32680
+    },
+    {
+      "path": "crates/lrr/src/engine/run_assertion_call_tests.rs",
+      "before_sha256": "f5b5b7330b2872ee78717a7003503f0860fce68b545047eae46c7feaff305be5",
+      "sha256": "64e310d0cda685f38358ecb312db8d18039b96d0352268eb2c1869138b9c83d8",
+      "before_bytes": 16032,
+      "bytes": 16701
+    },
+    {
+      "path": "crates/lrr/src/syntax/literal_match.rs",
+      "before_sha256": "e11d2f860bc641afb5b93fbb1f3bbfc420ace9bef7362716b3e965d512bb49e8",
+      "sha256": "b5e085f23831cccba07172a99ec81df93bd12190f3bb79f93494b07bed78e566",
+      "before_bytes": 48105,
+      "bytes": 48506
+    },
+    {
+      "path": "crates/lrr/src/syntax/scalar_match_ranges.rs",
+      "before_sha256": "dfc280e7b02b11f22af8c075084aea43813782b1b340caa9707450496eaf597d",
+      "sha256": "0520c345df517c0a50c9a020d7fc62ac0c377b4f1ace1e6c5b3cc89e14e479a0",
+      "before_bytes": 8929,
+      "bytes": 9236
+    },
+    {
+      "path": "crates/lrr/src/syntax/byte_scalar_pattern_tests.rs",
+      "before_sha256": null,
+      "sha256": "4aaeb9006d2e5a4cd0350f9ab2acfb48086ce721003ef81abda1065e16d392ed",
+      "before_bytes": 0,
+      "bytes": 14345
+    }
+  ],
+  "source_member": "2791553349cd19eacc24b581dda63c383b1654bd1f3e1975767e31dae47ed4c7",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "original": {
+    "path": "tests/ui/array-slice-vec/byte-literals.rs",
+    "git_blob": "950c118c07f612031de4b3af969e977b693c75e8",
+    "sha256": "fe8d3ce4bb7a95f7ef8bb5eaf3a75fb64b4ea377ab2da47d32c13980da1993e6",
+    "bytes": 1696
+  },
+  "actual_validation": {
+    "strict": {
+      "scope": "strict-lrr-tests-byte-rebuild",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "-p",
+        "lrr",
+        "--lib",
+        "--tests",
+        "--locked",
+        "--offline",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "2791553349cd19eacc24b581dda63c383b1654bd1f3e1975767e31dae47ed4c7",
+      "elapsed_seconds": 17.54481950000627,
+      "started_at": "2026-10-15T04:44:52.422772+00:00",
+      "finished_at": "2026-10-15T04:45:09.967701+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "f9d1b58295a66012fd28102688a7e28959c01af04971890d960900913360fe03",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "byte_eight": {
+      "scope": "byte-eight-rebuilt",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--lib",
+        "--locked",
+        "--offline",
+        "--",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1",
+        "syntax::thunks::literal_match::byte_scalar_pattern_tests::unchanged_original_byte_equality_and_range_have_exact_u8_thunks_all_editions",
+        "syntax::thunks::literal_match::byte_scalar_pattern_tests::unchanged_original_byte_matches_execute_only_their_actual_scoped_components_all_editions",
+        "syntax::thunks::literal_match::byte_scalar_pattern_tests::byte_range_unknown_or_wrong_family_upper_is_cold_until_lower_matches",
+        "vm::frame::intrinsic_literal_source_tests::byte_source_is_intrinsic_but_unsuffixed_integer_does_not_invent_source_metadata",
+        "vm::frame::intrinsic_literal_source_tests::byte_literal_guards_source_descriptor_origin_and_stale_body_before_entry_all_editions",
+        "vm::frame::intrinsic_literal_source_tests::byte_literal_fuel_and_combined_ticket_cell_quota_refuse_without_source_invention_all_editions",
+        "engine::run::assertion_call_tests::byte_local_reference_call_keeps_intrinsic_source_all_editions",
+        "vm::frame::intrinsic_literal_source_tests::ordinary_literals_reject_rigid_nominal_or_wrong_primitive_source_before_entry"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 8,
+      "nonempty_test_scope": true,
+      "source_member": "2791553349cd19eacc24b581dda63c383b1654bd1f3e1975767e31dae47ed4c7",
+      "elapsed_seconds": 21.1401135000051,
+      "started_at": "2026-10-15T04:45:14.709322+00:00",
+      "finished_at": "2026-10-15T04:45:35.849535+00:00",
+      "stdout_sha256": "99b6becb0280c5d4b20dd4815d7492808ef4f9a358bc4e4974e64e97ad0ff0ed",
+      "stderr_sha256": "70d8de208c3a87f2f26622882d8ab6ce1aa1f34ad1a3803c3da935e41534eb49",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "passed_bodies": 8,
+    "requested_names_equal_actual": true
+  },
+  "preserved_failures": [
+    "V47 git nested path filtering skipped all6 paths despite exit0; exact final hash guard stopped before Cargo.",
+    "Initial V48 strict and1existing matched body reused stale Cargo artifacts and provide no changed-byte acceptance. Exact6leaf mtime refresh retained identical source bytes and forced actual17.54s strict/19.70s test rebuild."
+  ],
+  "scope": "Actual original byte-literals.rs two scalar MatchExpr components and exact original source thunks across4editions, ordinary ByteU8 source/reference call, rigid/descriptor/span/currentness/fuel/combined quota guards. Earlier byte-string declarations and all other original statements/assertions remain required unexecuted.",
+  "new_demonstrated_whole_main_programs": 0,
+  "whole_original_pass": false,
+  "configured_compiletest_full_fixture_passes": 0,
+  "invariants": [
+    "Only actual Byte token/decoded payload supplies U8 source; unsuffixed integer retains absent source, no descriptor reverse inference.",
+    "Existing ordinary current body/Entry/span/destination/preflight/reservation/ownership guards retained; no opcode/schema change.",
+    "Pattern BYTE context emits U8 equality/Ge/Le using existing exact cleanup/branch phases; unselected unknown/wrong-family upper stays cold."
+  ],
+  "test_migration": "all baseline bodies retained except explicit feature-required replacement: byte_and_unsuffixed_integer_do_not_gain_primitive_source_metadata -> byte_source_is_intrinsic_but_unsuffixed_integer_does_not_invent_source_metadata; Byte expected source becomes Primitive(U8), unsuffixed Integer remains None; existing rigid/nominal table additionally covers Byte",
+  "inventory": {
+    "cases": 308,
+    "unchanged_original_files": 490
+  },
+  "upstream_runtime_acceptance": "incomplete",
+  "diagnostic_compatibility": "incomplete; separate gate",
+  "compiler_tooling_compatibility": "incomplete; separate gate",
+  "full_suite_compatibility": "incomplete",
+  "guest_jit_gate": "closed",
+  "release_complete": false,
+  "linux_acceptance": "unexecuted",
+  "local_receipts": [
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v48/COLLECTED-SCOPES.json",
+      "sha256": "5bb8a38abd733b214d3c69596b3534e2f67e4743aaa738dc2d41671eb8c82e3e"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v48/HANDOFF.md",
+      "sha256": "8c6536f8bb786f29257538881e90e1d2e4c13ff63e0a77ff8614655d088f4c64"
+    }
+  ]
+}

@@ -71,15 +71,6 @@ pub(super) fn require(
     if origins.is_empty() {
         return Err(missing());
     }
-    let hygiene = unit.items.hygiene_facts();
-    for origin in origins {
-        let item = hygiene.context(hygiene.item(origin.context)?)?;
-        // Ordinary item lookup must actually normalize to this owning source
-        // root. Opaque/foreign definition-site lookup needs its own producer.
-        if item.parent.is_some() || item.defining_unit.0 != signature.scope.crate_key.0 {
-            return Err(missing());
-        }
-    }
     // Reuse exact retained token syntax and the normal pinned signature capture.
     // No body-structure query, preparation, macro execution or source reparse.
     let transient = unit
@@ -144,6 +135,10 @@ pub(super) fn require(
     let receipt = selected.ok_or_else(missing)?;
     receipt.require_owner(&signature.scope, &signature.header.profile)?;
     receipt.require_current(db, publication)?;
+    // Source-authority roots are not name-comparison classes. A foreign root
+    // needs its own current original declaration and independently sealed Type
+    // lookup; absence in the insertion scope alone cannot authorize it.
+    require_original_origins(db, signature, unit, publication, &origins)?;
     let name = crate::expand::scopes::MacroName::parse(
         &signature.result[0].text,
         signature.header.profile.edition,
@@ -155,6 +150,166 @@ pub(super) fn require(
     }
     Ok(())
 }
+
+fn edition_year(edition: crate::syntax::token_wire::Edition) -> u16 {
+    use crate::syntax::token_wire::Edition;
+    match edition {
+        Edition::E2015 => 2015,
+        Edition::E2018 => 2018,
+        Edition::E2021 => 2021,
+        Edition::E2024 => 2024,
+    }
+}
+
+/// Conservative intersection of the actual insertion and original definer Type
+/// namespaces. This does not implement general mixed-site/opaque Type lookup.
+fn require_original_origins(
+    db: &Database,
+    signature: &FunctionSignature,
+    unit: &crate::expand::generated_syntax::GeneratedSyntaxInput,
+    publication: &crate::db::seals::DiscoveryInput,
+    origins: &[&crate::syntax::token_wire::SpanRecord],
+) -> Result<(), Diagnostic> {
+    use crate::{expand::identity::MacroIdentity, syntax::declaration_scan::DeclarationScanLimits};
+    let missing = || {
+        fault(
+            "LRR-E-CALL-CONTEXT",
+            "primitive result requires its exact current generated Type namespace",
+        )
+    };
+    if generated_parent::is_generated_definition(db, unit.items.record()) {
+        return generated_parent::require(
+            db,
+            unit,
+            publication,
+            origins,
+            &signature.result[0].text,
+        );
+    }
+    let hygiene = unit.items.hygiene_facts();
+    // Bounded by project_source_spans' 64-row limit. Retain only borrowed source
+    // selections and the exact replayed macro body range, never caller proofs.
+    let mut checked: Vec<(
+        &crate::source::changes::SourceSelection,
+        crate::syntax::spans::SourceRange,
+    )> = Vec::new();
+    checked
+        .try_reserve_exact(origins.len())
+        .map_err(|_| crate::runtime::arena::resource())?;
+    let mut work = 0usize;
+    for origin in origins {
+        let item = hygiene.context(hygiene.item(origin.context)?)?;
+        if item.parent.is_some() {
+            return Err(missing());
+        }
+        if item.defining_unit.0 == signature.scope.crate_key.0 {
+            continue;
+        }
+        // Only actual original-root macro_rules template tokens are supported.
+        // Generated/opaque sources and captured tokens of a different owner
+        // require an exact hygiene lookup producer, not a spelling exception.
+        if item.defining_unit != origin.source.unit {
+            return Err(missing());
+        }
+        let mut sources = publication.sources.iter().filter(|source| {
+            source.outline.crate_key.0 == origin.source.unit.0
+                && source.outline.parse.content.0 == origin.source.content.0
+                && source.path.as_str() == origin.source.path
+        });
+        let source = sources.next().ok_or_else(missing)?;
+        if sources.next().is_some()
+            || edition_year(item.edition) != source.outline.parse.profile.edition
+            || edition_year(origin.edition) != source.outline.parse.profile.edition
+            || unit.items.record().key().definition_edition != source.outline.parse.profile.edition
+        {
+            return Err(missing());
+        }
+        let range = if let Some((_, range)) =
+            checked.iter().find(|(selection, _)| *selection == source)
+        {
+            *range
+        } else {
+            let MacroIdentity::Declaration { definition } =
+                &unit.items.record().key().macro_identity
+            else {
+                return Err(missing());
+            };
+            let view = db.prepared_source(source)?.ok_or_else(missing)?;
+            if view.selection() != source {
+                return Err(missing());
+            }
+            let scope = &view.outline().root_scope;
+            let scan = view.declaration_inventory(DeclarationScanLimits::default())?;
+            work = work
+                .checked_add(scan.retained_bytes())
+                .filter(|n| *n <= 32 * 1024 * 1024)
+                .ok_or_else(crate::runtime::arena::resource)?;
+            // Ordinary source item discovery selects its published DefKey;
+            // cold declaration discovery selects the scan identity. These
+            // are distinct domains joined only by the actual owning source
+            // declaration, never by a printed name.
+            let original = view.outline().items.iter().find(|item| {
+                item.def_key.fingerprint() == *definition
+                    && item.def_key.item_kind == crate::source::manifest::ItemKind::Macro
+                    && item.scope == *scope
+            });
+            if let Some(item) = original
+                && (!matches!(db.published_input(&InputKey::DefinitionSource(*definition)), Some((InputValue::DefinitionSource(parse), _)) if parse == &source.outline.parse)
+                    || !matches!(db.published_input(&InputKey::DefinitionHeader(*definition)), Some((InputValue::DefinitionHeader(header), _)) if header == &item.header)
+                    || !matches!(db.published_input(&InputKey::DeclarationContext(*definition)), Some((InputValue::DeclarationContext(context), _)) if context.scope == item.scope && context.range == item.declaration_span))
+            {
+                return Err(missing());
+            }
+            let mut declarations = scan.macro_definitions().iter().filter(|header| {
+                header.identity == *definition
+                    || original.is_some_and(|item| item.declaration_span == header.range)
+            });
+            let header = declarations.next().ok_or_else(missing)?;
+            if declarations.next().is_some()
+                || !scan.lexical_scopes().iter().any(|lexical| {
+                    lexical.parent.is_none() && lexical.identity == header.lexical_scope
+                })
+            {
+                return Err(missing());
+            }
+            let mut receipts = publication.type_scopes.iter().filter(|proof| {
+                proof.scope().scope == *scope
+                    && proof.scope().edition == source.outline.parse.profile.edition
+            });
+            let proof = receipts.next().ok_or_else(missing)?;
+            if receipts.next().is_some() {
+                return Err(missing());
+            }
+            proof.require_owner(scope, &source.outline.parse.profile)?;
+            proof.require_current(db, publication)?;
+            let name = crate::expand::scopes::MacroName::parse(
+                &signature.result[0].text,
+                source.outline.parse.profile.edition,
+            )?;
+            if proof.scope().namespace != Namespace::Type
+                || proof.scope().names.contains_key(name.as_str())
+            {
+                return Err(missing());
+            }
+            checked.push((source, header.body));
+            header.body
+        };
+        if origin.start < range.start || origin.end > range.end || origin.start > origin.end {
+            return Err(missing());
+        }
+    }
+    Ok(())
+}
+
+#[path = "generated_return_parent.rs"]
+mod generated_parent;
+#[cfg(test)]
+#[path = "generated_return_parent_profile_tests.rs"]
+mod parent_profile_tests;
+
+#[cfg(test)]
+#[path = "generated_result_cross_source_tests.rs"]
+mod cross_source_tests;
 
 #[cfg(test)]
 mod tests {

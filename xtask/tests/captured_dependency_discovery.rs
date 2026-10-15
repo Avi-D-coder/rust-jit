@@ -89,6 +89,9 @@ fn capture_using(
     Ok((views, inputs))
 }
 fn discovery(views: &[PreparedSourceView]) -> SourceDiscovery {
+    discovery_at_epoch(views, 1)
+}
+fn discovery_at_epoch(views: &[PreparedSourceView], epoch: u64) -> SourceDiscovery {
     let compiler = std::sync::Arc::new(
         lrr::frontend::compile_input_catalog::CompileInputCatalog::standalone(
             &views[0].selection().outline.parse.profile,
@@ -100,7 +103,7 @@ fn discovery(views: &[PreparedSourceView]) -> SourceDiscovery {
         views[0].outline().root_scope.clone(),
         Namespace::Value,
         Digest([221; 32]),
-        1,
+        epoch,
     )
     .unwrap()
     .with_declarative_compiler(Digest([222; 32]), Digest([223; 32]), compiler)
@@ -152,13 +155,32 @@ fn run_captured(views: Vec<PreparedSourceView>, inputs: PreparedSourceInputs) ->
     finish(&mut work);
     let mut db = Database::default();
     inputs.publish(&mut db).unwrap();
-    let QueryPoll::Ready(Ok(mut run)) =
-        RunMachine::start_with_discovery(&mut db, body, 10_000, work)
-    else {
-        panic!("dependency entry absent")
+    db.begin_expansion_epoch(1).unwrap();
+    db.begin_run().unwrap();
+    let mut run = match RunMachine::start_with_discovery(&mut db, body, 10_000, work) {
+        QueryPoll::Ready(Ok(run)) => run,
+        QueryPoll::Ready(Err(error)) => {
+            db.finish_run().unwrap();
+            panic!("dependency entry failed: {error:?}");
+        }
+        QueryPoll::NeedInput(request) => {
+            db.finish_run().unwrap();
+            panic!("dependency entry requires input: {request:?}");
+        }
     };
-    let RunPoll::Completed(report) = run.poll(&mut db) else {
-        panic!("dependency runtime did not complete")
+    let outcome = run.poll(&mut db);
+    db.finish_run().unwrap();
+    let report = match outcome {
+        RunPoll::Completed(report) => report,
+        RunPoll::Fault(error) => {
+            panic!("dependency runtime did not complete: runtime fault {error:?}")
+        }
+        RunPoll::NeedInput(request) => {
+            panic!("dependency runtime did not complete: required input {request:?}")
+        }
+        RunPoll::Panicked(report) => {
+            panic!("dependency runtime did not complete: guest panic {report:?}")
+        }
     };
     let ValueSummary::Signed(value) = report.value else {
         panic!("noninteger dependency result")
@@ -1527,6 +1549,7 @@ fn macro_use_provider_edit_invalidates_old_seal_and_executes_new_body() {
     finish(&mut work);
     let mut db = Database::default();
     inputs.publish(&mut db).unwrap();
+    db.begin_expansion_epoch(1).unwrap();
     work.publish(&mut db).unwrap();
     let key = QueryKey::SealedName(Box::new(SealedNameKey {
         seal: work.key().clone(),
@@ -1558,7 +1581,11 @@ fn macro_use_provider_edit_invalidates_old_seal_and_executes_new_body() {
         "LRR-E-INTERNAL-SNAPSHOT"
     );
     assert_eq!(db.revision(), revision);
-    let mut changed = discovery(&next_views);
+    // Replacing the captured source universe invalidates derived inputs,
+    // including the old epoch. The coordinator explicitly starts the next
+    // epoch before sealing the new source; a stale seal cannot supply it.
+    db.begin_expansion_epoch(2).unwrap();
+    let mut changed = discovery_at_epoch(&next_views, 2);
     finish(&mut changed);
     let body = next_views[0]
         .outline()
@@ -1570,13 +1597,31 @@ fn macro_use_provider_edit_invalidates_old_seal_and_executes_new_body() {
         .as_ref()
         .unwrap()
         .key();
-    let QueryPoll::Ready(Ok(mut run)) =
-        RunMachine::start_with_discovery(&mut db, body, 10_000, changed)
-    else {
-        panic!("updated macro-use entry absent")
+    db.begin_run().unwrap();
+    let mut run = match RunMachine::start_with_discovery(&mut db, body, 10_000, changed) {
+        QueryPoll::Ready(Ok(run)) => run,
+        QueryPoll::Ready(Err(error)) => {
+            db.finish_run().unwrap();
+            panic!("updated macro-use entry failed: {error:?}");
+        }
+        QueryPoll::NeedInput(request) => {
+            db.finish_run().unwrap();
+            panic!("updated macro-use entry requires input: {request:?}");
+        }
     };
-    let RunPoll::Completed(report) = run.poll(&mut db) else {
-        panic!("updated macro-use entry incomplete")
+    let outcome = run.poll(&mut db);
+    db.finish_run().unwrap();
+    let report = match outcome {
+        RunPoll::Completed(report) => report,
+        RunPoll::Fault(error) => {
+            panic!("updated macro-use entry incomplete: runtime fault {error:?}")
+        }
+        RunPoll::NeedInput(request) => {
+            panic!("updated macro-use entry incomplete: required input {request:?}")
+        }
+        RunPoll::Panicked(report) => {
+            panic!("updated macro-use entry incomplete: guest panic {report:?}")
+        }
     };
     assert!(matches!(report.value,ValueSummary::Signed(ref n) if n=="659"));
 }

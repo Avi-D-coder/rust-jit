@@ -390,6 +390,11 @@ fn ordinary_literals_reject_rigid_nominal_or_wrong_primitive_source_before_entry
             PrimitiveType::U8,
         ),
         (
+            "fn main(){let value=b'a';}",
+            LiteralKind::Byte,
+            PrimitiveType::U8,
+        ),
+        (
             "fn main(){let value=1.5f32;}",
             LiteralKind::Float,
             PrimitiveType::F32,
@@ -575,14 +580,20 @@ fn literal_whole_ticket_cell_quota_refuses_without_an_unowned_ticket() {
     assert_untouched(&c, before, None);
 }
 #[test]
-fn byte_and_unsuffixed_integer_do_not_gain_primitive_source_metadata() {
-    for (text, kind) in [
-        ("fn main(){let value=b'a';}", LiteralKind::Byte),
-        ("fn main(){let value=1;}", LiteralKind::Integer),
-    ] {
-        let mut c = literal_context(text, 2024, kind, 100, 1000, 1_000_000);
-        assert!(matches!(run(&mut c).unwrap(), StepOutcome::Next(_)));
-        assert!(c.frame.source_view(c.destination).unwrap().is_none());
+fn byte_source_is_intrinsic_but_unsuffixed_integer_does_not_invent_source_metadata() {
+    for edition in [2015, 2018, 2021, 2024] {
+        for (text, kind, expected) in [
+            (
+                "fn main(){let value=b'a';}",
+                LiteralKind::Byte,
+                Some(TyTerm::Primitive(PrimitiveType::U8)),
+            ),
+            ("fn main(){let value=1;}", LiteralKind::Integer, None),
+        ] {
+            let mut c = literal_context(text, edition, kind, 100, 1000, 1_000_000);
+            assert!(matches!(run(&mut c).unwrap(), StepOutcome::Next(_)));
+            assert_eq!(c.frame.source_view(c.destination).unwrap(), expected);
+        }
     }
 }
 
@@ -720,5 +731,152 @@ fn suffixed_numeric_source_attachment_preserves_exact_fuel_prefix_and_no_replay(
             assert_eq!(footprint(&c), stopped);
             assert_eq!(c.frame.counters.operations_started, started);
         }
+    }
+}
+
+#[test]
+fn byte_literal_guards_source_descriptor_origin_and_stale_body_before_entry_all_editions() {
+    const TEXT: &str = "fn main(){let value=b'a';}";
+    for edition in [2015, 2018, 2021, 2024] {
+        for bad in [
+            TyTerm::Nominal(Digest::of_bytes(b"byte source rigid nominal"), vec![]),
+            TyTerm::Primitive(PrimitiveType::Char),
+        ] {
+            let mut c = literal_context(TEXT, edition, LiteralKind::Byte, 100, 1000, 1_000_000);
+            c.frame
+                .set_source_view(c.destination, Some(bad.clone()))
+                .unwrap();
+            let u8_type = crate::runtime::shape::PrimitiveIdentity::from_recipe(PrimitiveType::U8)
+                .unwrap()
+                .id();
+            c.frame.declared_hint(c.destination, Some(u8_type)).unwrap();
+            let before = footprint(&c);
+            assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-TYPE-CONTEXT");
+            assert_untouched(&c, before, Some(bad));
+        }
+        let mut c = literal_context(TEXT, edition, LiteralKind::Byte, 100, 1000, 1_000_000);
+        let param = TyTerm::Param(ParamKey {
+            definition: c.frame.body.body().definition,
+            ordinal: 0,
+        });
+        c.frame
+            .set_source_view(c.destination, Some(param.clone()))
+            .unwrap();
+        let before = footprint(&c);
+        assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-TYPE-CONTEXT");
+        assert_untouched(&c, before, Some(param));
+
+        let mut c = literal_context(TEXT, edition, LiteralKind::Byte, 100, 1000, 1_000_000);
+        c.frame.set_hint(c.destination, Some(TypeId(7))).unwrap();
+        let before = footprint(&c);
+        let error = run(&mut c).unwrap_err();
+        assert_eq!(error.code, "LRR-E-OWNERSHIP");
+        assert_eq!(
+            error.message,
+            "literal violates declared destination descriptor"
+        );
+        assert_untouched(&c, before, None);
+
+        let mut c = literal_context(TEXT, edition, LiteralKind::Byte, 100, 1000, 1_000_000);
+        let r = c.recipe.recipe();
+        let mut draft = RecipeDraft {
+            key: r.key.clone(),
+            origin: r.origin.clone(),
+            operations: r.operations.to_vec(),
+            exits: vec![r.exit.clone()],
+            dependencies: r.dependencies.to_vec(),
+        };
+        let Op::Literal { literal, .. } = draft
+            .operations
+            .iter_mut()
+            .find(|op| matches!(op, Op::Literal { .. }))
+            .unwrap()
+        else {
+            panic!()
+        };
+        literal.source.relative_start += 1;
+        c.recipe = verify(draft, &c.frame.body).unwrap();
+        let before = footprint(&c);
+        assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-INTERNAL-IR");
+        assert_untouched(&c, before, None);
+
+        let mut fresh = literal_context(
+            "fn main(){let value=b'b';}",
+            edition,
+            LiteralKind::Byte,
+            100,
+            1000,
+            1_000_000,
+        );
+        fresh.recipe =
+            literal_context(TEXT, edition, LiteralKind::Byte, 100, 1000, 1_000_000).recipe;
+        let before = footprint(&fresh);
+        assert_eq!(run(&mut fresh).unwrap_err().code, "LRR-E-INTERNAL-IR");
+        assert_untouched(&fresh, before, None);
+    }
+}
+#[test]
+fn byte_literal_fuel_and_combined_ticket_cell_quota_refuse_without_source_invention_all_editions() {
+    const TEXT: &str = "fn main(){let value=b'a';}";
+    for edition in [2015, 2018, 2021, 2024] {
+        let probe = literal_context(TEXT, edition, LiteralKind::Byte, 100, 1000, 1_000_000);
+        assert_eq!(prefix(&probe), 0);
+        for limit in [0, 1] {
+            let mut c = literal_context(TEXT, edition, LiteralKind::Byte, limit, 1000, 1_000_000);
+            let before = footprint(&c);
+            let error = run(&mut c).unwrap_err();
+            assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
+            assert_eq!(error.message, "guest opcode fuel exhausted");
+            assert_eq!(c.frame.fuel_snapshot().used, limit);
+            assert_eq!(c.frame.counters.operations_started, limit);
+            assert_eq!(c.frame.counters.operations_completed, limit);
+            if limit == 0 {
+                assert_untouched(&c, before, None)
+            } else {
+                assert_eq!(
+                    c.frame.source_view(c.destination).unwrap(),
+                    Some(TyTerm::Primitive(PrimitiveType::U8))
+                );
+                let cell = c.frame.cell(c.destination).unwrap();
+                let value = c.store.read_scalar(cell).unwrap();
+                let u8_type =
+                    crate::runtime::shape::PrimitiveIdentity::from_recipe(PrimitiveType::U8)
+                        .unwrap()
+                        .id();
+                assert_eq!(value, ValueRepr::unsigned(u8_type, 97).unwrap());
+            }
+            let stopped = footprint(&c);
+            let fuel = c.frame.fuel_snapshot();
+            let counters = serde_json::to_value(c.frame.counters()).unwrap();
+            assert!(run(&mut c).is_err());
+            assert_eq!(footprint(&c), stopped);
+            assert_eq!(c.frame.fuel_snapshot(), fuel);
+            assert_eq!(serde_json::to_value(c.frame.counters()).unwrap(), counters);
+        }
+        let handles = probe.store.budget().handles();
+        for free in [0, 1] {
+            let mut c = literal_context(
+                TEXT,
+                edition,
+                LiteralKind::Byte,
+                100,
+                handles + free,
+                1_000_000,
+            );
+            let before = footprint(&c);
+            assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
+            assert_untouched(&c, before, None);
+        }
+        let mut c = literal_context(
+            TEXT,
+            edition,
+            LiteralKind::Byte,
+            100,
+            1000,
+            probe.store.budget().bytes(),
+        );
+        let before = footprint(&c);
+        assert_eq!(run(&mut c).unwrap_err().code, "LRR-E-RUNTIME-RESOURCE");
+        assert_untouched(&c, before, None);
     }
 }
