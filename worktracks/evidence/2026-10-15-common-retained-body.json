@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "at": "2026-10-15T20:05:52.269753+00:00",
+  "at": "2026-10-15T20:21:01.315376+00:00",
   "claim": "LOCAL-024",
   "tasks": [
     "M014",
@@ -762,7 +762,13 @@
     "artifacts/macos-first/sol-common-retained-body-validation-v4/PROVENANCE-CHECK.json": "f0473ffb5f8b2a2040cd6737c96536ac3610b29a26ca6c95b0c0eea88dc26ae0",
     "artifacts/macos-first/sol-common-retained-body-validation-v4/gate03/command.json": "45ba8c71772cadc83f7c514aec413cf2798bc32d43ea1063f3b2366b747f6d92",
     "artifacts/macos-first/sol-common-retained-body-validation-v4/GATE-PREFLIGHT.json": "0cff38a9af076f55f9ddcfa4ff341f47d06710e8a844605e4a1598c6e718eeca",
-    "artifacts/macos-first/sol-common-retained-body-validation-v4/TARGET-INACTIVE-BEFORE-GATE.json": "85fa24f706f127537b4bc95fc4466724cf9f5e661b2b14a0713c52f70e4ed90d"
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/TARGET-INACTIVE-BEFORE-GATE.json": "85fa24f706f127537b4bc95fc4466724cf9f5e661b2b14a0713c52f70e4ed90d",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/RELEASE.json": "b660f2d6bc7a9c39096f83b07a5d69cbe9f1aa26decb8a1c749279f1729d0d45",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/HANDOFF.md": "0eac9128069d8ee6da812f5a377fff966da9e4a96848e19f002519c57ee99a74",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/EVIDENCE-HASHES.json": "f39863140c308ce84f2443681bc620ec67414323efa4ee83b3df59bdc067ab72",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/VENDOR-INVENTORY-MISMATCH.json": "2c1532dd4ebc48ae24ea78bc394cb872fad82310270c39ef494653f5994d9dfd",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/gate03/terminal.json": "9eb7f012b965309e88da1d0a943ac0c58fc3eed342abbd2b128b1b4c65732f4e",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/gate03/child-terminal.json": "b48e1c7f4bab4d71668d7522d440127e70c9fe5bdabbcacc622fccae1720a64e"
   },
   "required_next": [
     "Admit composite retained source via existing immutable query/input/publication framework, binding genuine caller/body, issued request, exact expansion record, current epoch/seal and full origin closure",
@@ -782,7 +788,7 @@
     "release": false
   },
   "milestone": {
-    "status": "running_async_unaccepted",
+    "status": "failed_vendor_inventory",
     "argv": [
       "cargo",
       "+1.99.0",
@@ -902,8 +908,90 @@
       "documentation": "lrr_rust2024_macros_traits_implementation_spec.md:2131; xtask/src/main.rs gate dispatch",
       "architectural_hold": "E-R5-005 remains regardless of gate result"
     },
-    "terminal_result": null,
-    "note": "No complete gate terminal or totals collected at this source checkpoint. Historical reports are not substituted; E-R5-005 is independently blocking."
+    "terminal_result": {
+      "outer_terminal": "436fdc/1",
+      "exit_code": 1,
+      "elapsed_seconds": 503.55362183300895,
+      "listed": 3253,
+      "passed": 1662,
+      "failed": 2,
+      "unstarted": 1589,
+      "interrupted": 0,
+      "ignored": 0
+    },
+    "note": "Actual failed milestone, not interpreter/common-engine acceptance. Three pinned vendor editor files are required by the exact recorded inventory but absent from the Git archive; a source-retention repair is pending separate validation. No prior reports substituted.",
+    "named_failures": [
+      "macro_audit::tests::cardinality_patch_reconstructs_pinned_source_and_rejects_tampering",
+      "macro_audit::tests::pinned_macro_vendor_hashes_validate"
+    ],
+    "scope_limits": {
+      "all132_scoped_bodies_repeated_inside_gate": true,
+      "counts_not_added_as_distinct": true,
+      "fresh_reports": 7,
+      "m002_m003_unproduced": true,
+      "unmatched_ledger_rows": [
+        {
+          "task": "T025",
+          "test": "source_shift_counts_use_u32_context_without_reinterpreting_explicit_counts",
+          "selector_display_mapping": null,
+          "listed_exact_suffix_matches": [],
+          "completed_exact_suffix_matches": [],
+          "unambiguous_listed": false,
+          "passed_exact_body": false
+        },
+        {
+          "task": "T040",
+          "test": "rustc_structural_dispatch_refuses_missing_or_wrong_context_before_effects",
+          "selector_display_mapping": null,
+          "listed_exact_suffix_matches": [],
+          "completed_exact_suffix_matches": [],
+          "unambiguous_listed": false,
+          "passed_exact_body": false
+        },
+        {
+          "task": "M003",
+          "test": "MX003: real identity!(3_i64) and attribute echo token/span roundtrips",
+          "selector_display_mapping": null,
+          "listed_exact_suffix_matches": [],
+          "completed_exact_suffix_matches": [],
+          "unambiguous_listed": false,
+          "passed_exact_body": false
+        },
+        {
+          "task": "M003",
+          "test": "MX004: server hash, artifact hash, compiler tuple, and protocol mismatches rejected before loading",
+          "selector_display_mapping": null,
+          "listed_exact_suffix_matches": [],
+          "completed_exact_suffix_matches": [],
+          "unambiguous_listed": false,
+          "passed_exact_body": false
+        }
+      ]
+    },
+    "vendor_inventory_mismatch": {
+      "scope": "read-only inventory comparison, no vendor mutation or re-execution",
+      "expected": 2345,
+      "actual": 2342,
+      "missing": [
+        {
+          "path": ".vscode/extensions.json",
+          "bytes": 447,
+          "sha256": "6a40bde293a6393644293b2942bb63e514226044f0fd0175639e380a58fc483c"
+        },
+        {
+          "path": ".vscode/launch.json",
+          "bytes": 4511,
+          "sha256": "48665430105843866a8a9f02bdb7396f17692d1af928bef44ccd2cbab60e3e8e"
+        },
+        {
+          "path": ".vscode/tasks.json",
+          "bytes": 1754,
+          "sha256": "bb08165bf676e342552cf1545f72108808ff4f6c89a21097cfa45f42ffadcef9"
+        }
+      ],
+      "extra": [],
+      "different": []
+    }
   },
   "current_scoped_terminal_refs": {
     "retained-new": "95363f/0",

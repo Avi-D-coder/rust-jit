@@ -461,10 +461,9 @@ fn macro_grammar(node: &SyntaxNode, root_grammar: Option<GrammarSlot>) -> Gramma
         return GrammarSlot::Statements;
     }
     if ast::MacroExpr::can_cast(parent.kind()) {
-        if parent
-            .parent()
-            .is_some_and(|n| ast::ExprStmt::can_cast(n.kind()))
-        {
+        if parent.parent().is_some_and(|n| {
+            ast::ExprStmt::can_cast(n.kind()) || n.kind() == ra_ap_syntax::SyntaxKind::MACRO_STMTS
+        }) {
             return GrammarSlot::Statements;
         }
         return GrammarSlot::Expression;

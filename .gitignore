@@ -34,6 +34,12 @@ htmlcov/
 ._*
 .idea/
 .vscode/
+# These original files are part of the exact pinned vendor inventory.
+!/vendor/rust-analyzer-macros/.vscode/
+/vendor/rust-analyzer-macros/.vscode/*
+!/vendor/rust-analyzer-macros/.vscode/extensions.json
+!/vendor/rust-analyzer-macros/.vscode/launch.json
+!/vendor/rust-analyzer-macros/.vscode/tasks.json
 *.swp
 *.swo
 *~

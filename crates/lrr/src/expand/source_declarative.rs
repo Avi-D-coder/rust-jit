@@ -22,6 +22,7 @@ use lrr_expand_adapter::{
 use std::collections::BTreeMap;
 type DependencyRoutes = BTreeMap<crate::expand::scopes::MacroName, Digest>;
 type RouteDependencySets = (DependencyRoutes, DependencyRoutes);
+pub mod assembly;
 #[path = "source_declarative/scalar_pattern_replay.rs"]
 mod scalar_pattern_replay;
 pub struct SourceDeclarative {

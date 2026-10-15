@@ -1,0 +1,374 @@
+//! Request/record/occurrence controls. Stock originals are not guest passes.
+use super::*;
+use crate::{
+    core::profile::ProfileIdentity,
+    db::key::OutlineKey,
+    expand::source_declarative::SourceDeclarativeDemand,
+    frontend::impl_index::{DeclarationMacroParent, GeneratedDeclarationMacroIndex},
+    source::{
+        changes::{PreparedSourceInputs, SourceSelectionOutcome, SourceUnitInput},
+        snapshot::{CfgSet, SourceBlob, SourcePath},
+    },
+    syntax::{
+        body_index::BodyIndexLimits,
+        declaration_scan::DeclarationScanLimits,
+        parse::{ParseKey, ParsedFile},
+    },
+};
+
+fn provider(text: &str, edition: u16) -> (SourceDeclarative, Arc<DeclarationMacroIndex>) {
+    let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
+    let mut profile = ProfileIdentity::current();
+    profile.edition = edition;
+    let cfg = CfgSet::guest_default();
+    let path = SourcePath::new("assembly.rs").unwrap();
+    let unit = Digest([241; 32]);
+    let selection = SourceSelection {
+        path: path.clone(),
+        outline: OutlineKey {
+            parse: ParseKey {
+                content: blob.content(),
+                profile: profile.clone(),
+            },
+            crate_key: unit,
+            module_path: vec![],
+            cfg: cfg.fingerprint(),
+        },
+    };
+    let inputs = PreparedSourceInputs::refresh(
+        None,
+        vec![SourceUnitInput {
+            path,
+            crate_key: unit,
+            module_path: vec![],
+            profile,
+            cfg,
+            blob,
+        }],
+        Default::default(),
+    )
+    .unwrap();
+    let SourceSelectionOutcome::Selected(view) = inputs.select(&selection).unwrap() else {
+        panic!("source absent")
+    };
+    let scan = view
+        .declaration_inventory(DeclarationScanLimits::default())
+        .unwrap();
+    let mut provider = SourceDeclarative::new(view).unwrap();
+    let compiler = Arc::new(
+        crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(provider.profile())
+            .unwrap(),
+    );
+    provider.compiler = Some(compiler.clone());
+    let mut index = DeclarationMacroIndex::new(scan.clone()).unwrap();
+    // Preserve stock crate attributes. Resolve their actual Attribute facet and
+    // retain the same inert proof used by ordinary source discovery, rather
+    // than removing annotations or treating every attribute as completed.
+    for identity in
+        crate::syntax::original_inert::capture(&provider.source, &scan, 32 * 1024 * 1024).unwrap()
+    {
+        let proof = crate::expand::nested_inert::NestedInertProof::select(scan.clone(), identity)
+            .unwrap()
+            .expect("stock original inert prefix");
+        let lookup =
+            crate::service::source_attribute_requests::SourceAttributeSelection::cold_lookup(
+                &provider.source,
+                &scan,
+                identity,
+                &crate::frontend::macro_names::MacroNamespaces::default(),
+            )
+            .unwrap();
+        let binding = crate::expand::builtin_attributes::certify_inert_binding(
+            proof.name().unwrap(),
+            &lookup,
+            None,
+            compiler.attribute_catalog(),
+        )
+        .unwrap()
+        .expect("matched compiler inert Attribute facet");
+        let proof = proof.with_attribute_facet(binding);
+        proof
+            .revalidate(
+                provider.source.captured_macro_blob().unwrap(),
+                provider.source.captured_macro_cfg().unwrap(),
+            )
+            .unwrap();
+        index
+            .accept_inert_attribute(identity, proof.name().unwrap())
+            .unwrap();
+    }
+    (provider, Arc::new(index))
+}
+fn request(
+    provider: &SourceDeclarative,
+    index: &DeclarationMacroIndex,
+) -> Box<SourceDeclarativeRequest> {
+    let invocation = index
+        .scan()
+        .producers()
+        .iter()
+        .find(|p| p.kind == DeclarationProducerKind::Macro)
+        .unwrap()
+        .identity;
+    let SourceDeclarativeDemand::Ready(request) = provider
+        .declaration_demand(
+            index,
+            invocation,
+            Digest([17; 32]),
+            super::super::engine_version(),
+        )
+        .unwrap()
+    else {
+        panic!("demand incomplete")
+    };
+    request
+}
+fn output(
+    provider: &SourceDeclarative,
+    parent: &DeclarationScan,
+    request: &SourceDeclarativeRequest,
+    epoch: u64,
+) -> Arc<GeneratedDeclarations> {
+    Arc::new(
+        GeneratedDeclarations::admit(
+            request.key(),
+            Arc::new(request.expand().unwrap()),
+            epoch,
+            parent,
+            provider.source.captured_macro_cfg().unwrap(),
+            DeclarationScanLimits::default(),
+        )
+        .unwrap(),
+    )
+}
+const NESTED: &str = include_str!(
+    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-nested_stmt_macros.rs"
+);
+const EXPRESSION: &str = include_str!(
+    "../../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-stmt_macro_in_expr_macro.rs"
+);
+const FORWARDED: &str =
+    include_str!("../../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-stmt-2.rs");
+
+#[test]
+fn upstream_nested_statement_and_expression_requests_attach_to_ordinary_bodies() {
+    for edition in [2015, 2018, 2021, 2024] {
+        for (stock, remaining) in [(NESTED, 0), (EXPRESSION, 1)] {
+            let (provider, index) = provider(stock, edition);
+            let outer = request(&provider, &index);
+            let generated = output(&provider, index.scan(), &outer, 1);
+            let assembly = SourceSyntaxAssembly::new(&provider, &index, 1)
+                .unwrap()
+                .attach(&outer, generated.clone())
+                .unwrap();
+            let nested = GeneratedDeclarationMacroIndex::new(
+                generated.clone(),
+                DeclarationMacroParent::Source(index),
+            )
+            .unwrap();
+            let invocation = generated
+                .scan()
+                .producers()
+                .iter()
+                .find(|p| p.kind == DeclarationProducerKind::Macro)
+                .unwrap()
+                .identity;
+            let SourceDeclarativeDemand::Ready(inner) = provider
+                .generated_declaration_demand(&nested, invocation)
+                .unwrap()
+            else {
+                panic!("nested demand incomplete")
+            };
+            let child = output(&provider, generated.scan(), &inner, 1);
+            let prepared = assembly.attach(&inner, child).unwrap().finish().unwrap();
+            assert_eq!(prepared.source(), provider.source.selection());
+            assert_eq!(prepared.epoch(), 1);
+            assert_eq!(prepared.outputs().len(), 2);
+            assert_eq!(prepared.pending_calls().len(), remaining);
+            let parsed = ParsedFile::from_syntax_snapshot(
+                prepared.syntax().clone(),
+                provider.profile().clone(),
+            )
+            .unwrap();
+            let outline = parsed
+                .outline(
+                    prepared.source().outline.crate_key,
+                    vec![],
+                    &CfgSet::guest_default(),
+                )
+                .unwrap();
+            let body = outline
+                .items
+                .iter()
+                .find(|item| item.def_key.declared_name == "main")
+                .unwrap()
+                .body
+                .as_ref()
+                .unwrap();
+            parsed.index_body(body, BodyIndexLimits::default()).unwrap();
+            let facts = parsed
+                .entered_macro_facts(body, &CfgSet::guest_default(), &outline.root_scope)
+                .unwrap();
+            assert_eq!(
+                facts
+                    .items
+                    .iter()
+                    .map(|i| i.item.def_key.declared_name.as_str())
+                    .collect::<Vec<_>>(),
+                ["Bar", "Baz", "Xyzzy"]
+            );
+        }
+    }
+}
+
+#[test]
+fn upstream_forwarded_statement_keeps_the_issued_call_and_generated_let() {
+    let (provider, index) = provider(FORWARDED, 2024);
+    let outer = request(&provider, &index);
+    let generated = output(&provider, index.scan(), &outer, 3);
+    let assembly = SourceSyntaxAssembly::new(&provider, &index, 3)
+        .unwrap()
+        .attach(&outer, generated.clone())
+        .unwrap();
+    let nested = GeneratedDeclarationMacroIndex::new(
+        generated.clone(),
+        DeclarationMacroParent::Source(index),
+    )
+    .unwrap();
+    let invocation = generated
+        .scan()
+        .producers()
+        .iter()
+        .find(|p| p.kind == DeclarationProducerKind::Macro)
+        .unwrap()
+        .identity;
+    let SourceDeclarativeDemand::Ready(inner) = provider
+        .generated_declaration_demand(&nested, invocation)
+        .unwrap()
+    else {
+        panic!("nested statement demand incomplete")
+    };
+    let child = output(&provider, generated.scan(), &inner, 3);
+    let prepared = assembly.attach(&inner, child).unwrap().finish().unwrap();
+    assert!(prepared.pending_calls().is_empty());
+    let parsed =
+        ParsedFile::from_syntax_snapshot(prepared.syntax().clone(), provider.profile().clone())
+            .unwrap();
+    let outline = parsed
+        .outline(
+            prepared.source().outline.crate_key,
+            vec![],
+            &CfgSet::guest_default(),
+        )
+        .unwrap();
+    let body = outline
+        .items
+        .iter()
+        .find(|i| i.def_key.declared_name == "main")
+        .unwrap()
+        .body
+        .as_ref()
+        .unwrap();
+    parsed.index_body(body, BodyIndexLimits::default()).unwrap();
+    assert!(prepared.syntax().syntax().text.contains("_x"));
+}
+
+#[test]
+fn rejects_another_issued_record_without_disguising_it_as_source() {
+    let (provider, index) = provider(NESTED, 2024);
+    let first = request(&provider, &index);
+    let mut other = request(&provider, &index);
+    other.key.consumer_compile_env = Digest([29; 32]);
+    let generated = output(&provider, index.scan(), &other, 1);
+    let error = SourceSyntaxAssembly::new(&provider, &index, 1)
+        .unwrap()
+        .attach(&first, generated)
+        .err()
+        .unwrap();
+    assert!(error.message.contains("request/record/epoch"));
+    assert_eq!(
+        provider.source.selection().outline.parse.content,
+        provider.source.captured_macro_blob().unwrap().content()
+    );
+}
+
+#[test]
+fn rejects_wrong_source_scan_zero_epoch_and_wrong_output_epoch() {
+    let (provider, index) = provider(NESTED, 2024);
+    let (_, foreign) = self::provider(EXPRESSION, 2024);
+    assert!(SourceSyntaxAssembly::new(&provider, &foreign, 1).is_err());
+    assert!(SourceSyntaxAssembly::new(&provider, &index, 0).is_err());
+    let issued = request(&provider, &index);
+    let generated = output(&provider, index.scan(), &issued, 2);
+    assert!(
+        SourceSyntaxAssembly::new(&provider, &index, 1)
+            .unwrap()
+            .attach(&issued, generated)
+            .is_err()
+    );
+}
+
+#[test]
+fn already_attached_request_cannot_be_applied_twice() {
+    let (provider, index) = provider(NESTED, 2024);
+    let issued = request(&provider, &index);
+    let generated = output(&provider, index.scan(), &issued, 1);
+    let assembly = SourceSyntaxAssembly::new(&provider, &index, 1)
+        .unwrap()
+        .attach(&issued, generated.clone())
+        .unwrap();
+    let error = assembly.attach(&issued, generated).err().unwrap();
+    assert!(error.message.contains("not pending"));
+}
+
+#[test]
+fn repeated_origin_keys_keep_distinct_generated_invocation_occurrences() {
+    // LRR identity regression: both copies have identical argument-origin keys,
+    // but must consume different genuine generated-scan invocation identities.
+    let text = "macro_rules! duplicate{($call:stmt)=>{$call $call}} macro_rules! leaf{()=>{}} fn main(){duplicate!(leaf!());}";
+    let (provider, index) = provider(text, 2024);
+    let issued = request(&provider, &index);
+    let generated = output(&provider, index.scan(), &issued, 1);
+    let mut assembly = SourceSyntaxAssembly::new(&provider, &index, 1)
+        .unwrap()
+        .attach(&issued, generated.clone())
+        .unwrap();
+    let ids = generated
+        .scan()
+        .producers()
+        .iter()
+        .filter(|p| p.kind == DeclarationProducerKind::Macro)
+        .map(|p| p.identity)
+        .collect::<Vec<_>>();
+    assert_eq!(ids.len(), 2);
+    assert_ne!(ids[0], ids[1]);
+    let mut nested = GeneratedDeclarationMacroIndex::new(
+        generated.clone(),
+        DeclarationMacroParent::Source(index),
+    )
+    .unwrap();
+    let mut sites = Vec::new();
+    for invocation in ids {
+        let SourceDeclarativeDemand::Ready(issued) = provider
+            .generated_declaration_demand(&nested, invocation)
+            .unwrap()
+        else {
+            panic!("repeated demand incomplete")
+        };
+        sites.push(issued.site);
+        let child = output(&provider, generated.scan(), &issued, 1);
+        let child_index = GeneratedDeclarationMacroIndex::new(
+            child.clone(),
+            DeclarationMacroParent::Generated(Arc::new(nested.clone())),
+        )
+        .unwrap();
+        assembly = assembly.attach(&issued, child).unwrap();
+        nested
+            .adopt_completed_child(issued.key(), &child_index)
+            .unwrap();
+    }
+    assert_eq!(sites[0], sites[1]);
+    let prepared = assembly.finish().unwrap();
+    assert!(prepared.pending_calls().is_empty());
+    assert_eq!(prepared.outputs().len(), 3);
+}

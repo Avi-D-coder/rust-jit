@@ -7,7 +7,7 @@ import json
 from pathlib import PurePosixPath
 
 
-def local_output(path):
+def local_output(path, recorded_editor_input=False):
     parts = path.split(b"/")
     directories = parts[:-1]
     if parts[0] in (b"artifacts", b"rustc", b"coverage", b"logs"):
@@ -15,8 +15,10 @@ def local_output(path):
     if any(part in (
         b"target", b".lrr", b"__pycache__", b".pytest_cache", b".mypy_cache",
         b".ruff_cache", b".tox", b".nox", b".venv", b"venv", b"htmlcov",
-        b".idea", b".vscode", b".AppleDouble",
+        b".AppleDouble",
     ) for part in directories):
+        return True
+    if not recorded_editor_input and any(part in (b".idea", b".vscode") for part in directories):
         return True
     # Do not apply extension rules to pinned inputs, which may be test witnesses.
     pinned = path.startswith((b"vendor/", b"fixtures/upstream/rustc-checkout/")) or b"/fixtures/upstream/rustc-checkout/" in path
@@ -38,6 +40,43 @@ def local_output(path):
 
 def git(*args, input=None):
     return subprocess.check_output(["git", *args], input=input)
+
+
+def recorded_vendor_editor_inputs(index):
+    """Allow only exact original editor files required by the staged inventory.
+
+    This does not relax build/cache exclusions or replace the full vendor audit.
+    Unrecorded files, changed bytes, and local project editor state stay blocked.
+    """
+    manifest = index.get(b"vendor/rust-analyzer-macros.files.json")
+    if manifest is None or manifest[0] not in ("100644", "100755"):
+        return set()
+    if int(git("cat-file", "-s", manifest[1])) > 5 * 1024 * 1024:
+        return set()
+    try:
+        metadata = json.loads(git("cat-file", "blob", manifest[1]))
+        if metadata["schema"] != 1:
+            return set()
+        recorded = set()
+        for entry in metadata["files"]:
+            name = entry["path"]
+            if not name.startswith((".vscode/", ".idea/")):
+                continue
+            if any(part in ("", ".", "..") for part in name.split("/")):
+                continue
+            path = b"vendor/rust-analyzer-macros/" + name.encode("utf-8")
+            staged = index.get(path)
+            if staged is None or staged[0] not in ("100644", "100755"):
+                continue
+            size = int(git("cat-file", "-s", staged[1]))
+            if size != entry["bytes"] or size > 5 * 1024 * 1024:
+                continue
+            raw = git("cat-file", "blob", staged[1])
+            if hashlib.sha256(raw).hexdigest() == entry["sha256"]:
+                recorded.add(path)
+        return recorded
+    except (KeyError, TypeError, ValueError, UnicodeError):
+        return set()
 
 
 def fixture_root(path):
@@ -125,12 +164,13 @@ def main():
     changed = set(git("diff", "--cached", "--no-renames", "--name-only", "--diff-filter=ACMRD", "-z").split(b"\0"))
     changed.discard(b"")
     errors = fixture_manifest_errors(changed, index)
+    editor_inputs = recorded_vendor_editor_inputs(index)
     total = 0
     for path, (mode, blob) in sorted(entries.items()):
         name = path.decode("utf-8", errors="backslashreplace")
         size = int(git("cat-file", "-s", blob))
         total += size
-        if local_output(path):
+        if local_output(path, path in editor_inputs):
             errors.append(f"local build/validation input staged: {name}")
         if size > 5 * 1024 * 1024:
             errors.append(f"blob exceeds 5 MiB: {name} ({size} bytes)")

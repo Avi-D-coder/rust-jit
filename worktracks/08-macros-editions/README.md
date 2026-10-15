@@ -26,6 +26,8 @@ Exercise 2015/2018/2021/2024 definition/invocation/dependency combinations, frag
 
 Finish M014 nested impl producers and fixed-point discovery of generated imports/macros/traits/tests while leaving cold ordinary bodies unprepared.
 
+The [common macro engine integration handoff](common-engine-integration.md) records the current E-R5-005 source/query/VM interfaces and outstanding shortcut removals. Syntax attachment or request/record preparation alone is not runtime integration.
+
 ### WT08-03 — All procedural forms
 
 Integrate function-like, attribute and derive outputs through matched external servers, grammar/origin checks, helpers and generated test catalogs.

@@ -1397,8 +1397,22 @@
           "strict_all_targets_clippy": true,
           "source_and_body_publication": false,
           "ordinary_runtime_route": false,
-          "full_project_gate": "running_async_unaccepted",
+          "full_project_gate": "failed_vendor_inventory_1662_passed_2_failed_1589_unstarted",
           "card_complete": false
+        },
+        "source_assembly_component": {
+          "evidence": "worktracks/evidence/2026-10-15-common-source-assembly.json",
+          "assembly_controls": 6,
+          "existing_declaration_scan_controls": 8,
+          "existing_vendor_controls": 2,
+          "strict_lrr_all_targets": true,
+          "current_source_and_seal_admission": false,
+          "source_publication": false,
+          "ordinary_vm_route": false,
+          "eight_shortcuts_removed": false,
+          "full_project_gate": "running_async_unaccepted",
+          "card_complete": false,
+          "next_interfaces": "worktracks/08-macros-editions/common-engine-integration.md"
         }
       }
     },
@@ -6575,8 +6589,22 @@
           "strict_all_targets_clippy": true,
           "source_and_body_publication": false,
           "ordinary_runtime_route": false,
-          "full_project_gate": "running_async_unaccepted",
+          "full_project_gate": "failed_vendor_inventory_1662_passed_2_failed_1589_unstarted",
           "card_complete": false
+        },
+        "source_assembly_component": {
+          "evidence": "worktracks/evidence/2026-10-15-common-source-assembly.json",
+          "assembly_controls": 6,
+          "existing_declaration_scan_controls": 8,
+          "existing_vendor_controls": 2,
+          "strict_lrr_all_targets": true,
+          "current_source_and_seal_admission": false,
+          "source_publication": false,
+          "ordinary_vm_route": false,
+          "eight_shortcuts_removed": false,
+          "full_project_gate": "running_async_unaccepted",
+          "card_complete": false,
+          "next_interfaces": "worktracks/08-macros-editions/common-engine-integration.md"
         }
       }
     },
@@ -19026,8 +19054,22 @@
           "strict_all_targets_clippy": true,
           "source_and_body_publication": false,
           "ordinary_runtime_route": false,
-          "full_project_gate": "running_async_unaccepted",
+          "full_project_gate": "failed_vendor_inventory_1662_passed_2_failed_1589_unstarted",
           "card_complete": false
+        },
+        "source_assembly_component": {
+          "evidence": "worktracks/evidence/2026-10-15-common-source-assembly.json",
+          "assembly_controls": 6,
+          "existing_declaration_scan_controls": 8,
+          "existing_vendor_controls": 2,
+          "strict_lrr_all_targets": true,
+          "current_source_and_seal_admission": false,
+          "source_publication": false,
+          "ordinary_vm_route": false,
+          "eight_shortcuts_removed": false,
+          "full_project_gate": "running_async_unaccepted",
+          "card_complete": false,
+          "next_interfaces": "worktracks/08-macros-editions/common-engine-integration.md"
         }
       }
     },

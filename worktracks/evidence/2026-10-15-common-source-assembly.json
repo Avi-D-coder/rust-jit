@@ -1,0 +1,810 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T20:29:24.695448+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "M014",
+    "T024",
+    "T063"
+  ],
+  "erratum": "E-R5-005",
+  "source_baseline": "112d9d5f1ea239b4cc23fa2cda7ee0db0ce88891",
+  "scope": "Checked original/generated call occurrence assembly with genuine issued requests, records, parent scans and epochs. Preparation only; no source/namespace publication, currentness/seal admission or VM execution.",
+  "implemented": [
+    "SourceSyntaxAssembly retains genuine selected source and declaration scan plus the pinned caller AST",
+    "Each attachment checks exact issued request/record, input roots/site, owning grammar/edition, parent inventory and epoch",
+    "AST-preorder call bindings retain distinct generated invocation identities even for repeated identical token/origin keys; no name- or text-selected semantics",
+    "Consume-on-failure candidate, bounded call/output retention, canonical record ordering and immutable snapshot/pending-call result",
+    "Fix generic macro grammar classification for MacroExpr directly under pinned MACRO_STMTS; ordinary source block tails remain expression grammar",
+    "Retain3 exact original vendor editor inputs required by unchanged pinned inventory; checkpoint guard allows only exact staged-inventory/hash-matched vendor editor files, retaining build/cache/project-editor exclusions"
+  ],
+  "source_files": [
+    {
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "sha256": "483d8998747c1677569fdcbf276f652860d319c3d1bcafcdab45fa3f2b950d92"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "8660cc0a8e9804453eb75d4026e9731d380166824e9d212a922d53472fbafaed"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly_tests.rs",
+      "sha256": "d10869e73ce8ea6f14d3ce523a21dd0d92b7b234261632e46ca40c8db1cabf5a"
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "42aa18480cdb621c9a6b5b6592f04ab087171873319f6c32173f5972566daf44"
+    },
+    {
+      "path": "tools/check_source_checkpoint.py",
+      "sha256": "2762f9ef3c96e23424c2b6f04d3f322aaa71c811d6036e3e6f739b6ba9635771"
+    },
+    {
+      "path": "vendor/rust-analyzer-macros/.vscode/extensions.json",
+      "sha256": "6a40bde293a6393644293b2942bb63e514226044f0fd0175639e380a58fc483c"
+    },
+    {
+      "path": "vendor/rust-analyzer-macros/.vscode/launch.json",
+      "sha256": "48665430105843866a8a9f02bdb7396f17692d1af928bef44ccd2cbab60e3e8e"
+    },
+    {
+      "path": "vendor/rust-analyzer-macros/.vscode/tasks.json",
+      "sha256": "bb08165bf676e342552cf1545f72108808ff4f6c89a21097cfa45f42ffadcef9"
+    },
+    {
+      "path": "crates/lrr/src/syntax/declaration_scan.rs",
+      "sha256": "023a30a30d272a9c4a5fcfcaaf8fa4c58543ac076a2e3bcee069c7930131f68c"
+    }
+  ],
+  "source_packet_sha256": "5f755797acd47e56f24a68faab75d882bcf78b8b4c31f15421b2f3c30938b19f",
+  "source_member": "be46fdbe2bfee309ea1bb366f2394ae2de3aecab7b48839f4e50f378f60eaedd",
+  "frozen_files": 4892,
+  "frozen_symlinks": 3,
+  "validation": [
+    {
+      "version": 1,
+      "scope": "assembly-new",
+      "raw_root": "artifacts/macos-first/sol-common-source-assembly-validation-v1/assembly-new",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "expand::source_declarative::assembly::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 101,
+      "elapsed_seconds": 24.693041624996113,
+      "test_bodies": 6,
+      "passed": 3,
+      "failed": 3,
+      "compile_only": false,
+      "source_unchanged": true
+    },
+    {
+      "version": 2,
+      "scope": "assembly-new",
+      "raw_root": "artifacts/macos-first/sol-common-source-assembly-validation-v2/assembly-new",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "expand::source_declarative::assembly::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 20.70820854199701,
+      "test_bodies": 6,
+      "passed": 6,
+      "failed": 0,
+      "compile_only": false,
+      "source_unchanged": true
+    },
+    {
+      "version": 2,
+      "scope": "declaration-scan",
+      "raw_root": "artifacts/macos-first/sol-common-source-assembly-validation-v2/declaration-scan",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "syntax::declaration_scan",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 0.10929804100305773,
+      "test_bodies": 8,
+      "passed": 8,
+      "failed": 0,
+      "compile_only": false,
+      "source_unchanged": true
+    },
+    {
+      "version": 2,
+      "scope": "strict-lrr",
+      "raw_root": "artifacts/macos-first/sol-common-source-assembly-validation-v2/strict-lrr",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "child_exit_code": 101,
+      "elapsed_seconds": 11.488682291994337,
+      "test_bodies": 0,
+      "passed": 0,
+      "failed": 0,
+      "compile_only": true,
+      "source_unchanged": true
+    },
+    {
+      "version": 3,
+      "scope": "assembly-new",
+      "raw_root": "artifacts/macos-first/sol-common-source-assembly-validation-v3/assembly-new",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "expand::source_declarative::assembly::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 20.17309645799105,
+      "test_bodies": 6,
+      "passed": 6,
+      "failed": 0,
+      "compile_only": false,
+      "source_unchanged": true
+    },
+    {
+      "version": 3,
+      "scope": "declaration-scan",
+      "raw_root": "artifacts/macos-first/sol-common-source-assembly-validation-v3/declaration-scan",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "syntax::declaration_scan",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 0.10906149999937043,
+      "test_bodies": 8,
+      "passed": 8,
+      "failed": 0,
+      "compile_only": false,
+      "source_unchanged": true
+    },
+    {
+      "version": 3,
+      "scope": "strict-lrr",
+      "raw_root": "artifacts/macos-first/sol-common-source-assembly-validation-v3/strict-lrr",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 18.069934334023856,
+      "test_bodies": 0,
+      "passed": 0,
+      "failed": 0,
+      "compile_only": true,
+      "source_unchanged": true
+    },
+    {
+      "version": 3,
+      "scope": "vendor-hashes-corrected",
+      "raw_root": "artifacts/macos-first/sol-common-source-assembly-validation-v3/vendor-hashes-corrected",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "xtask",
+        "--bin",
+        "xtask",
+        "macro_audit::tests::pinned_macro_vendor_hashes_validate",
+        "--",
+        "--exact",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 0.4112479999894276,
+      "test_bodies": 1,
+      "passed": 1,
+      "failed": 0,
+      "compile_only": false,
+      "source_unchanged": true
+    },
+    {
+      "version": 3,
+      "scope": "vendor-patch",
+      "raw_root": "artifacts/macos-first/sol-common-source-assembly-validation-v3/vendor-patch",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "xtask",
+        "--lib",
+        "macro_audit::tests::cardinality_patch_reconstructs_pinned_source_and_rejects_tampering",
+        "--",
+        "--exact",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 101,
+      "elapsed_seconds": 0.10044224999728613,
+      "test_bodies": 0,
+      "passed": 0,
+      "failed": 0,
+      "compile_only": false,
+      "source_unchanged": true
+    },
+    {
+      "version": 3,
+      "scope": "vendor-patch-corrected",
+      "raw_root": "artifacts/macos-first/sol-common-source-assembly-validation-v3/vendor-patch-corrected",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "xtask",
+        "--bin",
+        "xtask",
+        "macro_audit::tests::cardinality_patch_reconstructs_pinned_source_and_rejects_tampering",
+        "--",
+        "--exact",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 18.504432875022758,
+      "test_bodies": 1,
+      "passed": 1,
+      "failed": 0,
+      "compile_only": false,
+      "source_unchanged": true
+    }
+  ],
+  "current_rust_controls": {
+    "assembly": 6,
+    "existing_declaration_scan": 8,
+    "existing_vendor_audit": 2,
+    "strict_lrr_all_targets": true,
+    "distinct_passes": 16,
+    "counts_not_added_to_full_milestone": true
+  },
+  "metadata_controls": {
+    "v1_guard_fixture": {
+      "at": "2026-10-15T20:20:34.742226+00:00",
+      "fixture_root": "/private/tmp/lrr-editor-source-guard-4fzlxxtu",
+      "guard_source_sha256": "2762f9ef3c96e23424c2b6f04d3f322aaa71c811d6036e3e6f739b6ba9635771",
+      "gitignore_sha256": "b5974d1861bc271ead28733de93e713b9367c3a838537473ebb424b0ca748c39",
+      "cases": [
+        {
+          "case": "matched",
+          "cwd": "/private/tmp/lrr-editor-source-guard-4fzlxxtu/matched",
+          "exit": 0,
+          "expected": 0,
+          "actual_rejection_path": null,
+          "stdout": "Source checkpoint: 5 staged files, 443490 bytes, 0 violations.\n",
+          "stderr": "",
+          "commands": [
+            {
+              "argv": [
+                "git",
+                "init",
+                "-q"
+              ],
+              "exit": 0
+            },
+            {
+              "argv": [
+                "git",
+                "add",
+                "-f",
+                "."
+              ],
+              "exit": 0
+            },
+            {
+              "argv": [
+                "git",
+                "check-ignore",
+                "--no-index",
+                "vendor/rust-analyzer-macros/.vscode/extensions.json"
+              ],
+              "exit": 1
+            },
+            {
+              "argv": [
+                "git",
+                "check-ignore",
+                "--no-index",
+                "vendor/rust-analyzer-macros/.vscode/launch.json"
+              ],
+              "exit": 1
+            },
+            {
+              "argv": [
+                "git",
+                "check-ignore",
+                "--no-index",
+                "vendor/rust-analyzer-macros/.vscode/tasks.json"
+              ],
+              "exit": 1
+            }
+          ],
+          "stdout_sha256": "e41eebb2c01a219cad9248aa8846cc018aa7cbd5048484ec5c263cc2f0bf9dfd",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "case": "unrecorded",
+          "cwd": "/private/tmp/lrr-editor-source-guard-4fzlxxtu/unrecorded",
+          "exit": 1,
+          "expected": 1,
+          "actual_rejection_path": "vendor/rust-analyzer-macros/.vscode/unrecorded.json",
+          "stdout": "Source checkpoint: 6 staged files, 443493 bytes, 1 violations.\n",
+          "stderr": "local build/validation input staged: vendor/rust-analyzer-macros/.vscode/unrecorded.json\n",
+          "commands": [
+            {
+              "argv": [
+                "git",
+                "init",
+                "-q"
+              ],
+              "exit": 0
+            },
+            {
+              "argv": [
+                "git",
+                "add",
+                "-f",
+                "."
+              ],
+              "exit": 0
+            }
+          ],
+          "stdout_sha256": "51e15fd131cfae964c2f7d4b14e9fbc2dcf5bf45a61527c13dd7bf74f1d0d070",
+          "stderr_sha256": "5ce4b9e37fcafe764730a220094fabb026c1a4f11eb2807391192352867ace7b"
+        },
+        {
+          "case": "altered",
+          "cwd": "/private/tmp/lrr-editor-source-guard-4fzlxxtu/altered",
+          "exit": 1,
+          "expected": 1,
+          "actual_rejection_path": "vendor/rust-analyzer-macros/.vscode/extensions.json",
+          "stdout": "Source checkpoint: 5 staged files, 443492 bytes, 1 violations.\n",
+          "stderr": "local build/validation input staged: vendor/rust-analyzer-macros/.vscode/extensions.json\n",
+          "commands": [
+            {
+              "argv": [
+                "git",
+                "init",
+                "-q"
+              ],
+              "exit": 0
+            },
+            {
+              "argv": [
+                "git",
+                "add",
+                "-f",
+                "."
+              ],
+              "exit": 0
+            }
+          ],
+          "stdout_sha256": "b135851b7e23b3a9f60e21263fb1eb96a453a654f2b3d6f32ce4819fd46286ce",
+          "stderr_sha256": "c89d92a8bc87612cfa3d7ea773a1244f20fb716a3b0fa938ef854a28fefc3f3d"
+        },
+        {
+          "case": "missing-inventory",
+          "cwd": "/private/tmp/lrr-editor-source-guard-4fzlxxtu/missing-inventory",
+          "exit": 1,
+          "expected": 1,
+          "actual_rejection_path": "vendor/rust-analyzer-macros/.vscode/extensions.json",
+          "stdout": "Source checkpoint: 4 staged files, 7986 bytes, 3 violations.\n",
+          "stderr": "local build/validation input staged: vendor/rust-analyzer-macros/.vscode/extensions.json\nlocal build/validation input staged: vendor/rust-analyzer-macros/.vscode/launch.json\nlocal build/validation input staged: vendor/rust-analyzer-macros/.vscode/tasks.json\n",
+          "commands": [
+            {
+              "argv": [
+                "git",
+                "init",
+                "-q"
+              ],
+              "exit": 0
+            },
+            {
+              "argv": [
+                "git",
+                "add",
+                "-f",
+                "."
+              ],
+              "exit": 0
+            }
+          ],
+          "stdout_sha256": "1ca4a232b35b3725caea2d8da3baaa825fe8f2783a8cf65438e5abbeb149d506",
+          "stderr_sha256": "3574db5453f2ae432cef25d20ac1e7ad53a513beb33e3f948917425d256aa8e0"
+        },
+        {
+          "case": "project-editor",
+          "cwd": "/private/tmp/lrr-editor-source-guard-4fzlxxtu/project-editor",
+          "exit": 1,
+          "expected": 1,
+          "actual_rejection_path": ".vscode/settings.json",
+          "stdout": "Source checkpoint: 6 staged files, 443493 bytes, 1 violations.\n",
+          "stderr": "local build/validation input staged: .vscode/settings.json\n",
+          "commands": [
+            {
+              "argv": [
+                "git",
+                "init",
+                "-q"
+              ],
+              "exit": 0
+            },
+            {
+              "argv": [
+                "git",
+                "add",
+                "-f",
+                "."
+              ],
+              "exit": 0
+            }
+          ],
+          "stdout_sha256": "51e15fd131cfae964c2f7d4b14e9fbc2dcf5bf45a61527c13dd7bf74f1d0d070",
+          "stderr_sha256": "77654fa6bac4e29371691ae446e0d2423601c3cdb8b7c6528aa31a729dda266b"
+        },
+        {
+          "case": "recorded-build-dir",
+          "cwd": "/private/tmp/lrr-editor-source-guard-4fzlxxtu/recorded-build-dir",
+          "exit": 1,
+          "expected": 1,
+          "actual_rejection_path": "vendor/rust-analyzer-macros/.vscode/target/forbidden.rlib",
+          "stdout": "Source checkpoint: 6 staged files, 443692 bytes, 1 violations.\n",
+          "stderr": "local build/validation input staged: vendor/rust-analyzer-macros/.vscode/target/forbidden.rlib\n",
+          "commands": [
+            {
+              "argv": [
+                "git",
+                "init",
+                "-q"
+              ],
+              "exit": 0
+            },
+            {
+              "argv": [
+                "git",
+                "add",
+                "-f",
+                "."
+              ],
+              "exit": 0
+            }
+          ],
+          "stdout_sha256": "120a48f6835ea1ff657a84defe560a106cfdded94a55aee98c340c0e766a23f4",
+          "stderr_sha256": "e9ed0bb471937e772eebdac07d6adc3ce84bc65e32764cc106b978915ca60c7c"
+        },
+        {
+          "case": "recorded-nested-lrr",
+          "cwd": "/private/tmp/lrr-editor-source-guard-4fzlxxtu/recorded-nested-lrr",
+          "exit": 1,
+          "expected": 1,
+          "actual_rejection_path": "vendor/rust-analyzer-macros/.vscode/.lrr/state.json",
+          "stdout": "Source checkpoint: 6 staged files, 443686 bytes, 1 violations.\n",
+          "stderr": "local build/validation input staged: vendor/rust-analyzer-macros/.vscode/.lrr/state.json\n",
+          "commands": [
+            {
+              "argv": [
+                "git",
+                "init",
+                "-q"
+              ],
+              "exit": 0
+            },
+            {
+              "argv": [
+                "git",
+                "add",
+                "-f",
+                "."
+              ],
+              "exit": 0
+            }
+          ],
+          "stdout_sha256": "cb1dab2f17eb1855ad0c29dc5ee6a9df2e8c7922a719c0b7a0f978bba0cc787d",
+          "stderr_sha256": "277cb258eb2076cd1431459c7707db1d7c8115a00de8bdadd88672cd71ff323d"
+        },
+        {
+          "case": "wrong-inventory-schema",
+          "cwd": "/private/tmp/lrr-editor-source-guard-4fzlxxtu/wrong-inventory-schema",
+          "exit": 1,
+          "expected": 1,
+          "actual_rejection_path": "vendor/rust-analyzer-macros/.vscode/extensions.json",
+          "stdout": "Source checkpoint: 5 staged files, 443492 bytes, 3 violations.\n",
+          "stderr": "local build/validation input staged: vendor/rust-analyzer-macros/.vscode/extensions.json\nlocal build/validation input staged: vendor/rust-analyzer-macros/.vscode/launch.json\nlocal build/validation input staged: vendor/rust-analyzer-macros/.vscode/tasks.json\n",
+          "commands": [
+            {
+              "argv": [
+                "git",
+                "init",
+                "-q"
+              ],
+              "exit": 0
+            },
+            {
+              "argv": [
+                "git",
+                "add",
+                "-f",
+                "."
+              ],
+              "exit": 0
+            }
+          ],
+          "stdout_sha256": "314b9e1fcb5cdc98750bc20c0c0c2b9ab5b9e49ca62dab3c555c83a20c6119e6",
+          "stderr_sha256": "3574db5453f2ae432cef25d20ac1e7ad53a513beb33e3f948917425d256aa8e0"
+        }
+      ],
+      "actual_index_and_frozen_source_not_modified": true,
+      "all_git_mutations_have_fixture_cwd": true,
+      "controls_passed": 8,
+      "no_cargo_or_guest_execution": true
+    },
+    "v3_gitignore": {
+      "fixture": "/private/tmp/lrr-vendor-editor-ignore-6ht_1y69",
+      "gitignore_sha256": "42aa18480cdb621c9a6b5b6592f04ab087171873319f6c32173f5972566daf44",
+      "cases": [
+        {
+          "path": "vendor/rust-analyzer-macros/.vscode/extensions.json",
+          "expected_ignored": false,
+          "actual_exit": 1,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "path": "vendor/rust-analyzer-macros/.vscode/launch.json",
+          "expected_ignored": false,
+          "actual_exit": 1,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "path": "vendor/rust-analyzer-macros/.vscode/tasks.json",
+          "expected_ignored": false,
+          "actual_exit": 1,
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "path": "vendor/rust-analyzer-macros/.vscode/settings.json",
+          "expected_ignored": true,
+          "actual_exit": 0,
+          "stdout": "vendor/rust-analyzer-macros/.vscode/settings.json\n",
+          "stderr": ""
+        },
+        {
+          "path": "vendor/rust-analyzer-macros/.vscode/extra.json",
+          "expected_ignored": true,
+          "actual_exit": 0,
+          "stdout": "vendor/rust-analyzer-macros/.vscode/extra.json\n",
+          "stderr": ""
+        },
+        {
+          "path": ".vscode/settings.json",
+          "expected_ignored": true,
+          "actual_exit": 0,
+          "stdout": ".vscode/settings.json\n",
+          "stderr": ""
+        },
+        {
+          "path": "nested/.vscode/settings.json",
+          "expected_ignored": true,
+          "actual_exit": 0,
+          "stdout": "nested/.vscode/settings.json\n",
+          "stderr": ""
+        },
+        {
+          "path": "vendor/rust-analyzer-macros/.vscode/target/cache.rlib",
+          "expected_ignored": true,
+          "actual_exit": 0,
+          "stdout": "vendor/rust-analyzer-macros/.vscode/target/cache.rlib\n",
+          "stderr": ""
+        }
+      ],
+      "controls_passed": 8,
+      "real_index_and_frozen_source_untouched": true,
+      "no_python_guard_reexecution": true
+    },
+    "scope": "Host source-checkpoint policy only; never guest or rustc runtime passes"
+  },
+  "failure_history": [
+    {
+      "version": 1,
+      "passed": 3,
+      "failed": 3,
+      "causes": [
+        "Pinned MACRO_STMTS tail MacroExpr wrongly classified as Expression, refusing valid forwarded let/empty statement output",
+        "Stock expression fixture crate-level allow attribute remained an unresolved preparation frontier"
+      ],
+      "repair": "Generic AST-context classification plus genuine compiler Attribute-facet/inert-proof preparation in test factory; unchanged original fixtures and all oracles preserved."
+    },
+    {
+      "version": 2,
+      "passed": 14,
+      "failed": 0,
+      "strict": "failed two collapsible_if lints",
+      "repair": "Two mechanical let-chain rewrites; same condition evaluation and errors."
+    },
+    {
+      "version": 3,
+      "scope": "first xtask vendor command",
+      "result": "Cargo101, zero tests executed",
+      "cause": "Validation harness selected --lib for bin-only xtask",
+      "repair": "Actual --bin xtask exact selectors in new receipt directories on same unchanged source; rejected command preserved."
+    }
+  ],
+  "upstream": {
+    "originals": [
+      "tests/ui/macros/macro-nested_stmt_macros.rs",
+      "tests/ui/macros/macro-stmt_macro_in_expr_macro.rs",
+      "tests/ui/macros/macro-stmt-2.rs"
+    ],
+    "scope": "Unchanged originals used for request/record/grammar attachment and ordinary body indexing. Nested statement/expression witness loops own all4 editions. No guest-main execution or complete compiletest assertions.",
+    "new_imports": 0,
+    "imported_cases": 323,
+    "original_files": 509,
+    "new_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0
+  },
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "owning_editions": [
+    2015,
+    2018,
+    2021,
+    2024
+  ],
+  "milestone": {
+    "status": "running_async_unaccepted",
+    "argv": [
+      "cargo",
+      "+1.99.0",
+      "run",
+      "--offline",
+      "--locked",
+      "-p",
+      "xtask",
+      "--",
+      "gate",
+      "03"
+    ],
+    "raw_root": "artifacts/macos-first/sol-common-source-assembly-validation-v3/gate03",
+    "started_at": "2026-10-15T20:28:12.577997+00:00",
+    "source_member": "be46fdbe2bfee309ea1bb366f2394ae2de3aecab7b48839f4e50f378f60eaedd",
+    "terminal_result": null,
+    "note": "Fresh gate after source inventory repair; old V4 failure preserved separately and no reports reused. Scoped Rust controls will overlap this gate; do not add totals."
+  },
+  "previous_milestone_failure_evidence": "worktracks/evidence/2026-10-15-common-retained-body.json",
+  "private_receipt_sha256": {
+    "artifacts/macos-first/sol-common-source-assembly-validation-v1/assembly-new/command.json": "8ba98cbd524910b6bade92c72d8cab4bd6dedfe338244ab278b56558ffa7dc88",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v1/assembly-new/terminal.json": "f4d1c283fa34482a9425a596a4d594015eb4ba1264535ee3f4df3967903cd802",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v1/assembly-new/child-terminal.json": "65d1f4f1945ede00d673584cf44b6cea7bcf6e172eebdd34f2b83bcd759f4a3c",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v1/SOURCE-FROZEN.json": "01d816aa3aa801985ad490dfbf3149d9f66793fff32a62d7830d5b601235672a",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v1/HANDOFF.md": "938d664f0600c087cff096828ab8cdbc81c5af2814314ac88039772527a22297",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v1/RELEASE.json": "3accdf29837910bae8b21f6f34c59ff8cd6025a3eaa800b9f35259659a228be7",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v1/EVIDENCE-HASHES.json": "d69ba443cb34d95346ab345f9c5deaf38e53b563994da3b0974f3943c7a919b2",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v1/CHECKPOINT-GUARD-FIXTURE-RESULTS.json": "d96abd8a27b8e21a6ee56ae8238a873765314bebe5178a3547f9ec8b90a88778",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v2/assembly-new/command.json": "cd595f13d3460df90dac38c4f699c8b37cce7fe6f2d2db0bbd92b893e522d867",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v2/assembly-new/terminal.json": "3ba980acb9211dd44821641a5a22570cebb024b61bca422f94bc378c1087a92d",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v2/assembly-new/child-terminal.json": "bd9fb0066195cec5c42b252ca2df6da6517b4e1fecced12c1092eb3a6a8a47ee",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v2/declaration-scan/command.json": "6d510be5fa20b6dd4cff9565d4298598fc555c8a8fcbc1b94303c82d5b4e00ff",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v2/declaration-scan/terminal.json": "cb705b8364edc7f3eb9ddd20b20e81774678b47b11e2ac675d83c9ce88468228",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v2/declaration-scan/child-terminal.json": "3d891c0d0576056bc3c6021026cebe423e7ed1ad5179b5ba056114fdbd3357c4",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v2/strict-lrr/command.json": "3bbc4d440f7335e17649b09844839732decef8372a19eca71b07b7f8153c2ab6",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v2/strict-lrr/terminal.json": "830e05278e652c3d8f252f517fe56e7fb80dc66972daa7ce6aa1557273a0f7e6",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v2/strict-lrr/child-terminal.json": "df9939465ac5b1ec3e1d70de7cfc0e4c3c053dfbdbbf3a5fcd4ac08f66e01227",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v2/SOURCE-FROZEN.json": "a017b86f4c2e65f378d1695222d6f59c2e27fe0d1a8d714eceb93d755f1ad01d",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v2/HANDOFF.md": "c46b64a45f93f7432d99c7bd4a74fa5f4929d7d87d0fa4e6ff6b5b07927700a0",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v2/RELEASE.json": "275dd47ba56df69a057e837afab29c5ad081228e708ab713a4358973c410460e",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v2/EVIDENCE-HASHES.json": "284c8f5c63e97d820899166081b41e7349ccdbdaaead0696ac8f30df237d07fd",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v2/PRIOR-METADATA-GUARD-EVIDENCE.json": "ff5cfff13c5f1822f6c5c18ef7164dfa2c3b55d304e99227492b0a1023bdfb28",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/assembly-new/command.json": "20f2dfbae8575cf6cf0a3c64dbe7d2227ec4b86978cf30a128e68b0a5aea6655",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/assembly-new/terminal.json": "bea6d9318a2ff2241f32041da9d74b829d9bca9e4d4ea9573f28e7fa043563e0",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/assembly-new/child-terminal.json": "5a6be98fcbdd0e6a3b01d4988f9e1fca48973e57a6846598b8725aa481bb4057",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/declaration-scan/command.json": "a72d9cf76afa6c99faa55deb1a56d3a2869a757f1271ea20a775945778d6071b",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/declaration-scan/terminal.json": "e8709737174b65cf9ee7a3f3fb3f378774366fb81be7b5674f059722777046ab",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/declaration-scan/child-terminal.json": "a96aa21f0e090db0b67caac0d97fe87904fb73b9b71fd3023000b423a98019f2",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/strict-lrr/command.json": "aba56c709248f0d94a495dcfab565ab2064f897c4a1bd402ec336ab710638d94",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/strict-lrr/terminal.json": "453edb1dc122401fb4b47bdbaea45c1fecc0eae3407c7dce0af214f4adb775d1",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/strict-lrr/child-terminal.json": "01f272ccd6e67acaec4bb9a2961d0974c98a593cce021d9fc683a188e577d0be",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/vendor-hashes-corrected/command.json": "b14cef43f6d2fc35ba379e8876c3cb1b0ea6af033950b69d0ff35ae13d0079df",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/vendor-hashes-corrected/terminal.json": "9be8a7d036dd655046142da47b08f586aeb2bef133139518f0a0aa44cfd32ff3",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/vendor-hashes-corrected/child-terminal.json": "7f42b9fa5fb43074f087e61570090423e8ac8e4ad012c85edd6a61d1fb8552ca",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/vendor-patch/command.json": "39fff1c1d7ee49e21af8247137292b9eb466bbaba477ed4ab66bc7707f959c41",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/vendor-patch/terminal.json": "ce1ec3ea7b5d8c18d223df0b7004778aa1a6b4d9137d055441ef921ff3d6e1e9",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/vendor-patch/child-terminal.json": "af29d4f3af445fdf2284c1e17944dc0e8ac891f49d7bd27e9ec7e782f22f63d7",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/vendor-patch-corrected/command.json": "c49e319a8155a161d34015db4566d0e99cb0afa94c82012ac2f1db6510b041ab",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/vendor-patch-corrected/terminal.json": "1dbd4353915f670f966d7cb7236d48187d1ddd98e12dd90ccb957a007cbd67f8",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/vendor-patch-corrected/child-terminal.json": "4da21102e74713a8a8fd78f3fa9a97070f7e1f1e5a25649a9333d8421e48a895",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/SOURCE-FROZEN.json": "daf23d9967347e1c9a122c1b1edee5443c31f5dc1178433fbb0dee38c6d67677",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/GITIGNORE-CONTROLS.json": "99f22f77878c9227e5a85dbbe759cbac175c346c4e9e76ff43c5dabe67e2c6f2",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/PRIOR-METADATA-GUARD-EVIDENCE.json": "ad34de7188a7620c8d7dc0eb8933ed86f78f8d685d6a8211aa82269a41e3368c",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/GATE-PREFLIGHT.json": "6d188e3c16742494bafef626d93a41384f1afc4b4d0feb0a733ee0513fb8b02d",
+    "artifacts/macos-first/sol-common-source-assembly-validation-v3/gate03/command.json": "2a0b6c48680aac18950d84d62ac29f3700e09f22646687da3e0fbca37264626f"
+  },
+  "required_next": [
+    "Bind prepared syntax to current captured caller/dependency leases, expansion epoch and completed discovery seal through existing coordinator publication",
+    "Typed retained-syntax query/source-map input; never forge a SourceBlob byte identity",
+    "Preserve actual original/generated member identities and lexical/current hygiene dependencies",
+    "Enter ordinary VM body and migrate all8 audited macro-specific semantic paths into shared lowering/pattern execution",
+    "Complete fresh interpreter milestone and upstream runtime contracts"
+  ],
+  "integration_handoff": "worktracks/08-macros-editions/common-engine-integration.md",
+  "acceptance": {
+    "component_only": true,
+    "current_source_and_seal_admission": false,
+    "source_publication": false,
+    "ordinary_vm_route": false,
+    "common_macro_engine": false,
+    "eight_shortcuts_removed": false,
+    "task_complete": false,
+    "guest_jit_prerequisite": false,
+    "full_suite_compatibility": false,
+    "release": false
+  }
+}
