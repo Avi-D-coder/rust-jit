@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V65 seven exact string-newline leaves integrated after31 distinct scoped passes (six new bodies,24 real runtime cases in one); full milestone pending. V63/V64 failures preserved. Canonical312 cases/496 originals; zero new full rustc fixture passes. Vec/ordinary-literal CRLF and named11/Byte12/context13/large-byte follow-ups remain source-only.",
+      "scope": "V65 seven exact string-newline leaves integrated after31 distinct scoped passes (six new bodies,24 real runtime cases in one); full milestone failed on an obsolete constant-local negative; exact positive/source-identity repair queued. V63/V64 failures preserved. Canonical312 cases/496 originals; zero new full rustc fixture passes. Vec/ordinary-literal CRLF and named11/Byte12/context13/large-byte follow-ups remain source-only. Frozen scalar assertion CRLF and exact-capture upstream runner are queued source-only follow-ups; no new execution pass.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -470,12 +470,15 @@
         "artifacts/macos-first/root-string-token-newlines-v4/",
         "artifacts/macos-first/root-string-token-newlines-v5/",
         "artifacts/macos-first/root-vec-token-newlines-v1/",
-        "artifacts/macos-first/root-literal-crlf-diagnostics-v1/"
+        "artifacts/macos-first/root-literal-crlf-diagnostics-v1/",
+        "artifacts/macos-first/root-scalar-crlf-v1/",
+        "artifacts/macos-first/root-upstream-runtime-runner-v1/",
+        "artifacts/macos-first/root-constant-local-negative-repair-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T08:08:47.507407+00:00",
-      "review_after": "2026-10-15T07:16:22.506011+00:00"
+      "updated_at": "2026-10-15T09:04:42.874030+00:00",
+      "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {
       "id": "LOCAL-025",
@@ -699,6 +702,38 @@
       "pull_request": null,
       "updated_at": "2026-10-14T18:04:14.998620+00:00",
       "review_after": "2026-10-15T17:31:36.487444+00:00"
+    },
+    {
+      "id": "LOCAL-035",
+      "track": "WT07",
+      "item": "WT07-01",
+      "owner": "/root",
+      "kind": "local_agent",
+      "status": "active",
+      "scope": "T062/T034/T025/M018/M019 source-only is_nan member and interpreter integration, driven by unchanged float-nan.rs. Root owns source-plan/receiver admission/cached dispatch; generic_call_logic handed off disjoint canonical facet and standalone publication. Exact16-leaf packet queued with sole validator after V65 collection and CRLF prerequisites. No Rust compilation, runtime pass, full fixture pass or task completion yet.",
+      "paths": [
+        "crates/lrr/src/engine/run.rs",
+        "crates/lrr/src/engine/run_floating_constant_tests.rs",
+        "crates/lrr/src/engine/run_primitive_float_methods.rs",
+        "crates/lrr/src/engine/runtime_macros.rs",
+        "crates/lrr/src/engine/standalone_macros.rs",
+        "crates/lrr/src/facade/mod.rs",
+        "crates/lrr/src/facade/primitive_float_methods.rs",
+        "crates/lrr/src/frontend/compile_input_catalog.rs",
+        "crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs",
+        "crates/lrr/src/frontend/primitive_float_methods.rs",
+        "crates/lrr/src/frontend/runtime_macro_catalog.rs",
+        "crates/lrr/src/frontend/runtime_macro_plan.rs",
+        "crates/lrr/src/frontend/runtime_primitive_float_catalog_tests.rs",
+        "crates/lrr/src/syntax/runtime_macro_calls.rs",
+        "crates/lrr/src/syntax/runtime_macro_primitive_methods.rs",
+        "crates/lrr/src/syntax/runtime_macro_scalars.rs",
+        "artifacts/macos-first/root-primitive-float-integrated-v1/"
+      ],
+      "issue": null,
+      "pull_request": null,
+      "updated_at": "2026-10-15T09:02:33.119445+00:00",
+      "review_after": "2026-10-16T09:02:33.119445+00:00"
     }
   ]
 }

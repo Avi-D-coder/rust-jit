@@ -8,7 +8,7 @@
   ],
   "platform": "aarch64-apple-darwin",
   "toolchain": "1.99.0",
-  "status": "seven scoped-tested leaves integrated; full milestone pending",
+  "status": "seven scoped-tested leaves integrated; full milestone collected failed on obsolete constant-local negative",
   "upstream": {
     "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
     "imported_cases": 312,
@@ -1033,5 +1033,72 @@
     "actual_terminal": "f8b87b/0",
     "baseline_commit": "e24f77f586"
   },
-  "updated_at": "2026-10-15T08:08:47.507407+00:00"
+  "updated_at": "2026-10-15T09:04:42.874030+00:00",
+  "full_milestone": {
+    "status": "failed",
+    "actual_terminal": "3315ab/1",
+    "terminal": {
+      "scope": "gate03",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "run",
+        "--offline",
+        "--locked",
+        "-p",
+        "xtask",
+        "--",
+        "gate",
+        "03"
+      ],
+      "exit_code": 1,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+      "elapsed_seconds": 3060.6226679999963,
+      "started_at": "2026-10-15T08:10:46.819804+00:00",
+      "finished_at": "2026-10-15T09:01:47.470002+00:00",
+      "stdout_sha256": "412bd25ede8044f1c5d0afe49f14a3b22959dd6b6f870f72f7aa4291ca5c049c",
+      "stderr_sha256": "5843b239b545326304144d500ae4eee46502b8f3b1f57a1fd9c97592de8b07ae",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "host_exit_code": 101,
+    "listed_bodies": 3213,
+    "passed_bodies": 2757,
+    "failed_bodies": 1,
+    "unexecuted_bodies": 455,
+    "failure": "xtask/tests/pure_source_constants.rs:273 expected LRR-E-CONST-UNSUPPORTED for const A:i64={let n=1;n}; actual implemented evaluation returns I64(1).",
+    "repair_candidate": "artifacts/macos-first/root-constant-local-negative-repair-v1/manifest.json",
+    "repair_manifest_sha256": "6a88a64c0ce9a772d15d23832dc532d202e28a5d22d13dd152b80ab1fdb36f4c",
+    "repair_status": "source_only_unexecuted",
+    "fresh_gate_reports": [
+      {
+        "name": "00.json",
+        "sha256": "5e48952c78732827d4ff81044fece6661154c00ba44ee2c072e69f036bbe19d1",
+        "bytes": 699537,
+        "passed": false
+      },
+      {
+        "name": "01.json",
+        "sha256": "6537e63360548fd21b34923e56f75de202aaaebcabd8642c195f1fad86d80e3d",
+        "bytes": 62693,
+        "passed": false
+      },
+      {
+        "name": "02.json",
+        "sha256": "dfee6d843181a6e0f95d1ecbc5c6a5e4bbd3b13db2f227e2a43be3e00f4a092e",
+        "bytes": 1356,
+        "passed": false
+      },
+      {
+        "name": "03.json",
+        "sha256": "a631734981c0a8cd3eee5439ee670c00653241ab3f400f6a4335a830da96cc79",
+        "bytes": 1367,
+        "passed": false
+      }
+    ],
+    "collector_sha256": "f5aa7c27714e2cf6637f0d62ced0d79d95bd5f8cf9517965cbf00759cb7b4f2c",
+    "runtime_fixture_pass_delta": 0
+  }
 }

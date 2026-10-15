@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T09:02:33.119445+00:00",
+  "status": "source_only_unexecuted",
+  "claim": "LOCAL-035",
+  "tasks": [
+    "T062",
+    "T034",
+    "T025",
+    "M018",
+    "M019"
+  ],
+  "source_baseline": "7c4a19987c45d5d056ff033d88fbd5ba7a542c1e",
+  "candidate": "artifacts/macos-first/root-primitive-float-integrated-v1/HANDOFF.md",
+  "candidate_manifest_sha256": "c93336bf10b664278a19dfd6226ce5b2b8154af1b51e092438e8e6cddd659bcc",
+  "patch_sha256": "54dea21c9eb4258c1b9fe197cc27821b3f5cba8d783859c190cea79c886e48ff",
+  "source_leaves": 16,
+  "upstream": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "path": "tests/ui/numbers-arithmetic/float-nan.rs",
+    "sha256": "50a2c50502c1b60a42f38b6ac7778f06039ab591573ef406f004d9512e011a00",
+    "unchanged": true,
+    "owning_edition": 2015
+  },
+  "static_evidence": {
+    "root_replay_format": "89a24a/0",
+    "combined_before_hash_replay_format_original_check": "bba1d1/0",
+    "independent_review": "Source and API review only; source_view clone removed."
+  },
+  "validation": {
+    "rust_compilation": "unexecuted",
+    "whole_original_execution": "unexecuted",
+    "interpreter_correctness_controls": "unexecuted",
+    "milestone": "unexecuted",
+    "full_fixture_pass_delta": 0
+  },
+  "remaining_scope": [
+    "ordinary method-call expressions",
+    "autoderef and borrowed receiver lookup",
+    "other float inherent methods",
+    "general trait method dispatch"
+  ],
+  "integration": "Queued behind actual V65 collection and ordinary/scalar CRLF prerequisites; sole target owner, frozen source required."
+}

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-14T16:46:37.723226+00:00",
-  "repository_url": null,
+  "updated_at": "2026-10-15T09:02:33.119445+00:00",
+  "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
     "specification": "lrr_rust2024_macros_traits_implementation_spec.md",
@@ -379,7 +379,9 @@
         {
           "id": "WT07-01",
           "title": "Option Result and scalar APIs",
-          "status": "planned"
+          "status": "in_progress",
+          "candidate": "artifacts/macos-first/root-primitive-float-integrated-v1/HANDOFF.md",
+          "acceptance_scope": "Source-only canonical f32/f64 is_nan plus entered assertion receiver admission/currentness; unchanged float-nan whole-main and authority regressions drafted. Compilation and runtime unexecuted; broad scalar API/library task incomplete."
         },
         {
           "id": "WT07-02",
