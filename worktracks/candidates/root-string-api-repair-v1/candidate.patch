@@ -1,0 +1,90 @@
+--- a/crates/lrr/src/engine/run_capture.rs
++++ b/crates/lrr/src/engine/run_capture.rs
+@@ -76,7 +76,9 @@
+         )?;
+         for op in operations {
+             match op {
+-                Op::SourceConstant { .. }
++                Op::StrByteLen { .. }
++                | Op::StrAsBytes { .. }
++                | Op::SourceConstant { .. }
+                 | Op::PrimitiveFloatingConstant { .. }
+                 | Op::ProjectField { .. }
+                 | Op::ProjectTuple { .. }
+@@ -256,6 +258,56 @@
+         assert!(!capture.facts.complete());
+     }
+     #[test]
++    fn string_operation_observation_still_requires_dispatch_outcome_and_cleanup() {
++        // Capture-state control only. No guest execution or fixture acceptance
++        // is inferred from this private observer's synthetic observations.
++        for operation in [
++            Op::StrByteLen {
++                source: SlotId(0),
++                destination: SlotId(1),
++            },
++            Op::StrAsBytes {
++                source: SlotId(0),
++                destination: SlotId(1),
++            },
++        ] {
++            let mut capture = RunCapture::default();
++            capture
++                .observe_recipe(&[operation], &RecipeExit::Next(pc()))
++                .unwrap();
++            assert_eq!(capture.facts.classified_operation_candidates, 1);
++            assert_eq!(capture.facts.effect_recipe_dispatch_attempts, 0);
++            assert_eq!(capture.facts.unsupported_operation_candidates, 0);
++            assert_eq!(capture.facts.vm_outcomes, 0);
++            assert!(!capture.facts.complete());
++            let retained = TerminalFacts {
++                outcome: TerminalExecution::Completed { unit: true },
++                cleanup_ran: Some(true),
++            };
++            let mut missing_outcome = RunCapture {
++                facts: capture.facts.clone(),
++            };
++            missing_outcome
++                .observe_poll(&completed(), Some(&retained))
++                .unwrap();
++            assert!(!missing_outcome.facts.complete());
++            capture.after_vm_dispatch(&StepOutcome::Next(pc())).unwrap();
++            let mut missing_cleanup = RunCapture {
++                facts: capture.facts.clone(),
++            };
++            let incomplete = TerminalFacts {
++                outcome: TerminalExecution::Completed { unit: true },
++                cleanup_ran: Some(false),
++            };
++            missing_cleanup
++                .observe_poll(&completed(), Some(&incomplete))
++                .unwrap();
++            assert!(!missing_cleanup.facts.complete());
++            capture.observe_poll(&completed(), Some(&retained)).unwrap();
++            assert!(capture.facts.complete());
++        }
++    }
++    #[test]
+     fn overflow_refuses_without_partial_observation() {
+         let mut capture = RunCapture::default();
+         capture.facts.vm_dispatches = u64::MAX;
+--- a/crates/lrr/src/vm/step.rs
++++ b/crates/lrr/src/vm/step.rs
+@@ -585,7 +585,7 @@
+     }
+     let len = store.static_string_byte_len(frame.cell(source)?)?;
+     let ty = crate::runtime::shape::PrimitiveIdentity::from_recipe(PrimitiveType::Usize)?.id();
+-    ValueRepr::unsigned(ty, u128::from(len))?;
++    ValueRepr::unsigned(ty, len)?;
+     frame.preflight_primitive_operator_result(
+         destination,
+         ty,
+@@ -1177,7 +1177,7 @@
+         } => {
+             let (len, ty) = string_byte_len(frame, store, *source, *destination)?;
+             frame.reserve_primitive_operator_result(*destination, store)?;
+-            let value = ValueRepr::unsigned(ty, u128::from(len))?;
++            let value = ValueRepr::unsigned(ty, len)?;
+             let ticket = store.ticket(value)?;
+             frame.write(*destination, ticket, store)?;
+             frame.set_source_view(

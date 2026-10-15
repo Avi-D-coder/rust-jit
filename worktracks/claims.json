@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V87 full milestone failed on an obsolete scalar-or range-refusal expectation (2866 passed, 1 failed, 421 unexecuted); V88 strict affected Clippy and all 7 scalar_or_patterns tests passed with frozen source/owner unchanged. Fresh full milestone remains pending before canonical byte promotion. Coherent string literals/calls/patterns, length, ordering and shared as_bytes views are source-only uncompiled/unexecuted candidates; no new stock runtime/full-fixture acceptance or JIT. Validation remains stopped below the free-space guard; exact historical-cache retirement awaits direct human approval after automatic review rejected deletion.",
+      "scope": "V87 full milestone failed on an obsolete scalar-or range-refusal expectation (2866 passed, 1 failed, 421 unexecuted); V88 strict affected Clippy and all 7 scalar_or_patterns tests passed with frozen source/owner unchanged. Fresh full milestone remains pending before canonical byte promotion. Coherent string literals/calls/patterns, length, ordering and shared as_bytes views are source-only uncompiled/unexecuted candidates; no new stock runtime/full-fixture acceptance or JIT. Validation remains stopped below the free-space guard; exact historical-cache retirement awaits direct human approval after automatic review rejected deletion. Read-only review repaired two u64 constructor call mismatches and missing explicit string opcode capture arms in a two-leaf source-only follow-on. Separate one-leaf descriptor batch candidate validates/reserves all literal and annotation keys before logical publication; three new LRR controls remain unexecuted.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -539,11 +539,15 @@
         "artifacts/macos-first/root-or-range-frontier-contract-v1/",
         "worktracks/candidates/root-or-range-frontier-contract-v1/",
         "artifacts/macos-first/root-string-byte-view-v1/",
-        "worktracks/candidates/root-string-byte-view-v1/"
+        "worktracks/candidates/root-string-byte-view-v1/",
+        "artifacts/macos-first/root-string-api-repair-v1/",
+        "worktracks/candidates/root-string-api-repair-v1/",
+        "artifacts/macos-first/root-byte-type-batch-atomicity-v1/",
+        "worktracks/candidates/root-byte-type-batch-atomicity-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T13:17:34.287064+00:00",
+      "updated_at": "2026-10-15T13:23:58.774568+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

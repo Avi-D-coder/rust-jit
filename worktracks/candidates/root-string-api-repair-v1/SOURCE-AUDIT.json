@@ -1,0 +1,45 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T024",
+    "T061"
+  ],
+  "prerequisites": [
+    "root-string-byte-view-v1",
+    "root-or-range-frontier-contract-v1"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_capture.rs",
+      "before_sha256": "11d26e6f35d37ba3e22a9c7729dff51791e730975898ab9eb93623a654f26ed6",
+      "after_sha256": "fd6727065830b4df148c86cc91f0c49d694780056e6564444e09707157f28e4a"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "before_sha256": "60f6b0bede69319760ecbff80159981caa17abe4ebb6d08edf6e8d42716fb317",
+      "after_sha256": "dfd6945ef010524a664c1b981f2f41430560d307ba0dab3501d79a2268e39294"
+    }
+  ],
+  "patch_sha256": "47ddba5d777e77afc89e9c9068d74f0153b20069412cfdd8556435035ab4e6f1",
+  "patch_bytes": 3806,
+  "created_at": "2026-10-15T13:23:40.391930+00:00",
+  "static_checks": [
+    "Rust 1.99 formatting",
+    "exact no-fuzz/no-offset leaf patch replay",
+    "pinned scalar constructor and exhaustive capture source review"
+  ],
+  "stock_runtime_passes_added": 0,
+  "new_test_bodies": 1,
+  "pinned_api": {
+    "path": "crates/lrr/src/runtime/value.rs",
+    "line": 91,
+    "signature": "pub fn unsigned(ty: TypeId, value: u64) -> Result<Self, Diagnostic>"
+  },
+  "acceptance_pending": [
+    "strict compilation and Clippy",
+    "capture observer control",
+    "unchanged NUL and CRLF source operand execution in all editions",
+    "fresh integrated milestone"
+  ]
+}
