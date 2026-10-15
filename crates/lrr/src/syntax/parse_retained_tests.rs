@@ -35,7 +35,7 @@ fn source(text: &str, edition: WireEdition) -> wire::TokenForest {
     )
     .unwrap()
 }
-fn captured(text: &str, rules: &str, edition: WireEdition) -> Arc<SyntaxSnapshot> {
+pub(super) fn captured(text: &str, rules: &str, edition: WireEdition) -> Arc<SyntaxSnapshot> {
     let mut syntax =
         SyntaxAttachment::parse(&source(text, WireEdition::E2024), DeclarationGrammar::Items)
             .unwrap();

@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T20:55:35.992864+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "M014",
+    "T024",
+    "T063"
+  ],
+  "erratum": "E-R5-005",
+  "source_baseline": "44ce3ec4232a208c0a4be5334e78930ea7def863",
+  "scope": "M014/T024/T063 common diagnostic range-origin projection shared by existing GeneratedItems and retained ParsedFile snapshots. Seven new source-origin controls (four retained +three bounded projector), one unchanged stock original across all four editions; existing generated-item diagnostics regression preserved. Pure source locations, not source/member/VM publication. Baseline includes retained syntax admission candidate still awaiting its own validation.",
+  "source_packet_sha256": "469f9595f274651b5311dc94761b5fab0415531bd60c3731afb26ded769be081",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/syntax/spans.rs",
+      "sha256": "74629f6f6747a8851d55ac49788fb804715f3b93c23b7309c233f6fd9aafb9ea"
+    },
+    {
+      "path": "crates/lrr/src/syntax/origin_projection.rs",
+      "sha256": "d07a33e1edffe0676067d086aee39181c4cc8c481e90299b974bfa487650e7cd"
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse_retained.rs",
+      "sha256": "c021bf36890c17c6bf40ed8e8c5dca21c3596959be956f7d874ea25ecdb727d4"
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse_retained_tests.rs",
+      "sha256": "42cefc8168374443fc17c02a1c5330a0a8d30d0d1aad038fcda53225c1d501fc"
+    },
+    {
+      "path": "crates/lrr/src/syntax/retained_origin_tests.rs",
+      "sha256": "68a68e5dd9a1761f863d601daaffe8c28002cd7016e68460e6d51e3c7c1f8618"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_items.rs",
+      "sha256": "263be096d1af3f14dc75bf4aabc3c576745a8856a36b9acf52729256c133d0bb"
+    }
+  ],
+  "implemented_candidate": [
+    "One bounded UTF8 range/origin interval selector used by existing GeneratedItems diagnostics and new retained ParsedFile origin projection",
+    "Retained spans preserve exact source/context/edition/origin keys and are copied under a64KiB budget; no unrelated source ranges are combined",
+    "Four retained-origin controls include unchanged stock nested-statement source in all four editions and mixed caller/definition origins",
+    "Three shared projector controls exercise empty ranges, distinct-origin budget, missing spans and invalid UTF8/extent refusals"
+  ],
+  "validation": {
+    "state": "awaiting_async_owner_after_current_milestone_and_retained_admission_candidate",
+    "agent": "/root/edition_macro_logic",
+    "source_packet": "artifacts/macos-first/common-retained-origins-v1/SOURCE.json",
+    "tests_executed_for_this_candidate": 0,
+    "root_rustfmt_exit": 0,
+    "source_unchanged_since_freeze": true
+  },
+  "required_next": [
+    "Collect actual compile/scoped/strict terminals before acceptance",
+    "Bind source mapping to admitted definition/body leases and reconcile original/generated member and scope identities",
+    "Install expanded ordinary bodies before frame entry and remove all eight audited shortcuts",
+    "Complete actual upstream interpreter runtime prerequisites before JIT"
+  ],
+  "acceptance": {
+    "candidate_compiles": false,
+    "candidate_tests_pass": false,
+    "source_lease_publication": false,
+    "ordinary_vm_route": false,
+    "common_macro_engine": false,
+    "new_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "task_complete": false
+  }
+}

@@ -83,6 +83,93 @@ fn snapshot_bytes(snapshot: &SyntaxSnapshot) -> Result<usize, Diagnostic> {
 }
 
 impl ParsedFile {
+    /// Project diagnostic offsets through the exact retained token origins.
+    /// Distinct locations are returned separately, with their complete context,
+    /// owning edition and origin keys. This pure projection grants no source,
+    /// name-resolution or execution authority. Original text uses SourceLease.
+    pub fn retained_source_spans(
+        &self,
+        range: SourceRange,
+    ) -> Result<Option<Vec<super::super::token_wire::SpanRecord>>, Diagnostic> {
+        use super::super::token_wire::{self as owned, SpanRecord};
+        let Some(retained) = &self.retained_syntax else {
+            return Ok(None);
+        };
+        let snapshot = &retained.0;
+        let syntax = snapshot.syntax();
+        let spans = snapshot.origin_records().spans();
+        let selected = super::super::spans::project_origin_spans(
+            &syntax.text,
+            &syntax.origins,
+            range,
+            |origin| (origin.start, origin.end),
+            |origin| {
+                spans
+                    .binary_search_by_key(&origin.span, |span| span.key())
+                    .map(|index| &spans[index])
+                    .map_err(|_| {
+                        Diagnostic::new(
+                            "LRR-E-INTERNAL-SOURCE-MAP",
+                            "retained diagnostic span absent".into(),
+                        )
+                    })
+            },
+        )?;
+        let limit = || {
+            Diagnostic::new(
+                "LRR-E-METADATA-LIMIT",
+                "retained diagnostic span budget".into(),
+            )
+        };
+        let mut output = Vec::new();
+        output
+            .try_reserve_exact(selected.len())
+            .map_err(|_| limit())?;
+        let mut bytes = output
+            .capacity()
+            .checked_mul(std::mem::size_of::<SpanRecord>())
+            .ok_or_else(limit)?;
+        for span in selected {
+            bytes
+                .checked_add(span.source.path.len())
+                .filter(|n| *n <= 64 * 1024)
+                .ok_or_else(limit)?;
+            let mut path = String::new();
+            path.try_reserve_exact(span.source.path.len())
+                .map_err(|_| limit())?;
+            path.push_str(&span.source.path);
+            bytes = bytes
+                .checked_add(path.capacity())
+                .filter(|n| *n <= 64 * 1024)
+                .ok_or_else(limit)?;
+            let projected = SpanRecord {
+                source: owned::SourceIdentity {
+                    unit: owned::Key(span.source.unit.0),
+                    content: owned::Key(span.source.content.0),
+                    path,
+                },
+                start: span.start,
+                end: span.end,
+                context: owned::Key(span.context.0),
+                edition: match span.edition {
+                    lrr_expand_adapter::token_wire::Edition::E2015 => owned::Edition::E2015,
+                    lrr_expand_adapter::token_wire::Edition::E2018 => owned::Edition::E2018,
+                    lrr_expand_adapter::token_wire::Edition::E2021 => owned::Edition::E2021,
+                    lrr_expand_adapter::token_wire::Edition::E2024 => owned::Edition::E2024,
+                },
+                origin: owned::Key(span.origin.0),
+            };
+            if projected.key().0 != span.key().0 {
+                return Err(Diagnostic::new(
+                    "LRR-E-INTERNAL-SOURCE-MAP",
+                    "retained diagnostic span schema differs".into(),
+                ));
+            }
+            output.push(projected);
+        }
+        Ok(Some(output))
+    }
+
     pub(crate) fn snapshot_metadata_bytes(snapshot: &SyntaxSnapshot) -> Result<usize, Diagnostic> {
         snapshot_bytes(snapshot)
     }
@@ -275,3 +362,7 @@ impl ParsedFile {
 #[cfg(test)]
 #[path = "parse_retained_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "retained_origin_tests.rs"]
+mod origin_tests;

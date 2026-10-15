@@ -441,57 +441,26 @@ impl GeneratedItems {
         &self,
         range: crate::syntax::spans::SourceRange,
     ) -> Result<Vec<&crate::syntax::token_wire::SpanRecord>, Diagnostic> {
-        use crate::syntax::spans::SourceRange;
-        SourceRange::checked(range.start, range.end)?;
-        if self
-            .text
-            .get(range.start as usize..range.end as usize)
-            .is_none()
-        {
-            return Err(fault(
-                "LRR-E-INTERNAL-SOURCE-MAP",
-                "generated origin range is outside its UTF8 arena",
-            ));
-        }
-        let mut selected = Vec::new();
-        selected.try_reserve_exact(64).map_err(|_| {
-            fault(
-                "LRR-E-METADATA-LIMIT",
-                "generated diagnostic span allocation",
-            )
-        })?;
-        let spans = self.tokens.spans();
-        let first = self
-            .origins
-            .partition_point(|origin| origin.end <= range.start);
-        for origin in self.origins[first..].iter().take_while(|origin| {
-            if range.is_empty() {
-                origin.start <= range.start
-            } else {
-                origin.start < range.end
-            }
-        }) {
-            let index = spans
-                .binary_search_by_key(&origin.span, |span| span.key())
-                .map_err(|_| {
-                    fault(
-                        "LRR-E-INTERNAL-SOURCE-MAP",
-                        "generated diagnostic token span is absent",
-                    )
-                })?;
-            let span = &spans[index];
-            if !selected.contains(&span) {
-                if selected.len() == 64 {
-                    return Err(fault(
-                        "LRR-E-METADATA-LIMIT",
-                        "generated diagnostic origin count limit",
-                    ));
-                }
-                selected.push(span);
-            }
-        }
-        Ok(selected)
+        crate::syntax::spans::project_origin_spans(
+            &self.text,
+            &self.origins,
+            range,
+            |origin| (origin.start, origin.end),
+            |origin| {
+                let spans = self.tokens.spans();
+                spans
+                    .binary_search_by_key(&origin.span, |span| span.key())
+                    .map(|index| &spans[index])
+                    .map_err(|_| {
+                        fault(
+                            "LRR-E-INTERNAL-SOURCE-MAP",
+                            "diagnostic token span is absent",
+                        )
+                    })
+            },
+        )
     }
+
     /// Attach a reusable body-relative span only through the current generated
     /// declaration and exact body bytes. No parsing or body query is performed.
     pub fn project_body_source_spans(

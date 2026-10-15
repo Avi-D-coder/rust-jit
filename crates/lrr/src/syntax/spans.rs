@@ -12,6 +12,10 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+#[path = "origin_projection.rs"]
+mod projection;
+pub(crate) use projection::project as project_origin_spans;
+
 /// Owned diagnostic offsets mapped to the original expansion token span key.
 /// Adapter types remain confined to the expansion boundary.
 #[derive(Debug, Clone, Eq, PartialEq)]
