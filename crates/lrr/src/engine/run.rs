@@ -68,6 +68,8 @@ mod replacement_tests;
 mod return_tests;
 #[path = "run_return.rs"]
 mod returning;
+#[path = "run_runtime_calls.rs"]
+mod runtime_calls;
 #[cfg(test)]
 #[path = "run_shift_fallback_tests.rs"]
 mod shift_fallback_tests;
@@ -177,7 +179,7 @@ struct SuspendedCall {
     resume: PcKey,
     result: SlotId,
     call: PreparedSourceCall,
-    pending: BTreeMap<u32, SelectedArgumentCall>,
+    pending: BTreeMap<crate::vm::call::CallIdentity, SelectedArgumentCall>,
 }
 fn call_fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-UNSUPPORTED", message.into())
@@ -261,6 +263,9 @@ pub struct RunMachine {
     runtime_no_item_proofs:
         BTreeMap<(BodyKey, u32, u32), crate::frontend::runtime_macro_plan::RuntimeNoItemProof>,
     runtime_no_item_bytes: usize,
+    runtime_calls:
+        BTreeMap<PcKey, std::sync::Arc<crate::syntax::runtime_macro_scalars::RuntimeMacroCall>>,
+    runtime_call_bytes: usize,
     floating_plans: BTreeMap<PcKey, crate::frontend::primitive_constants::FloatingConstantRecipe>,
     floating_plan_bytes: usize,
     constant_plans: BTreeMap<PcKey, source_constants::SourceConstantPlan>,
@@ -269,7 +274,7 @@ pub struct RunMachine {
     prepared_call: Option<PreparedSourceCall>,
     returning: Option<returning::ReturnContinuation>,
     unwinding: Option<unwinding::PanicContinuation>,
-    pending: BTreeMap<u32, SelectedArgumentCall>,
+    pending: BTreeMap<crate::vm::call::CallIdentity, SelectedArgumentCall>,
     pending_bytes: usize,
     calls: Vec<SuspendedCall>,
     collected: OpcodeCounters,
@@ -326,6 +331,8 @@ impl RunMachine {
                 static_panic_plan_bytes: 0,
                 runtime_no_item_proofs: BTreeMap::new(),
                 runtime_no_item_bytes: 0,
+                runtime_calls: BTreeMap::new(),
+                runtime_call_bytes: 0,
                 floating_plans: BTreeMap::new(),
                 floating_plan_bytes: 0,
                 constant_plans: BTreeMap::new(),
@@ -497,6 +504,13 @@ impl RunMachine {
     ) -> QueryPoll<SelectedArgumentCall> {
         if self.frame.pc().node != site.0 {
             return QueryPoll::Ready(Err(call_fault("reached lexical call site differs")));
+        }
+        if self.frame.runtime_call.is_some() {
+            match self.require_runtime_call_start(db) {
+                QueryPoll::Ready(Ok(())) => {}
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
         }
         let Some(graph) = &self.graph else {
             return QueryPoll::Ready(Err(call_fault(
@@ -697,7 +711,13 @@ impl RunMachine {
                 QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
             }
         };
-        let result_hint = match self.frame.body.nodes()[self.frame.pc().node as usize].value {
+        let result_slot = self
+            .frame
+            .runtime_call
+            .as_ref()
+            .map(|call| call.result())
+            .or(self.frame.body.nodes()[self.frame.pc().node as usize].value);
+        let result_hint = match result_slot {
             Some(slot) => match self.frame.hint(slot) {
                 Ok(Some(descriptor)) => match primitive_argument_type(descriptor) {
                     Ok(mut h) => {
@@ -991,7 +1011,18 @@ impl RunMachine {
     ) -> Result<(), Diagnostic> {
         call.callee.revalidate(db)?;
         if call.contracts.result_descriptor.is_some() {
-            return call.contracts.check_return_descriptor(actual);
+            call.contracts.check_return_descriptor(actual)?;
+            if let (Some(expected @ crate::traits::term::TyTerm::Primitive(_)), Some(found)) = (
+                call.contracts.source_result.as_ref(),
+                self.frame.return_source.as_ref(),
+            ) && expected != found
+            {
+                return Err(Diagnostic::new(
+                    "LRR-E-GENERIC-BINDING",
+                    "returned source identity differs from admitted primitive result".into(),
+                ));
+            }
+            return Ok(());
         }
         let graph = self
             .graph
@@ -1687,6 +1718,12 @@ impl RunMachine {
                         self.runtime_no_item_proofs.values(),
                     ) {
                         Ok(Some(found)) => {
+                            if let Some(call) = found.call
+                                && let Err(error) = self.retain_runtime_call(&pc, call)
+                            {
+                                self.terminal = true;
+                                return RunPoll::Fault(error);
+                            }
                             if let Some(proof) = found.no_item
                                 && let Err(error) = self.retain_no_item_proof(proof)
                             {
@@ -1822,6 +1859,7 @@ impl RunMachine {
                     QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
                 }
             }
+            self.frame.runtime_call = self.runtime_calls.get(self.frame.pc()).cloned();
             let (call_ops, call_result, call_result_hint, call_next) = match self.installed.get(id)
             {
                 Ok(recipe) => {
@@ -1871,6 +1909,10 @@ impl RunMachine {
                 }
             };
             for op in call_ops {
+                if let Err(error) = self.require_runtime_call_operation(&op) {
+                    self.terminal = true;
+                    return RunPoll::Fault(error);
+                }
                 match op {
                     Op::CallPrepare {
                         site,
@@ -1878,7 +1920,7 @@ impl RunMachine {
                         explicit,
                         arguments,
                     } => {
-                        if !self.pending.contains_key(&site.0) {
+                        if !self.pending.contains_key(&self.frame.call_identity(site.0)) {
                             match self.select_reached_argument_call(
                                 db, contexts, site, &name, &explicit, &arguments,
                             ) {
@@ -1893,7 +1935,7 @@ impl RunMachine {
                                                 ));
                                             }
                                         };
-                                    self.pending.insert(site.0, call);
+                                    self.pending.insert(self.frame.call_identity(site.0), call);
                                 }
                                 QueryPoll::Ready(Err(e)) => {
                                     self.terminal = true;
@@ -1904,7 +1946,7 @@ impl RunMachine {
                         }
                         let selected = self
                             .pending
-                            .get(&site.0)
+                            .get(&self.frame.call_identity(site.0))
                             .expect("inserted checked selected context");
                         let ordinary = match selected.callee.ordinary_call_witness(
                             db,
@@ -1961,7 +2003,7 @@ impl RunMachine {
                         // Zero-argument calls have no CallPrepare opcode. They
                         // must still select lexical identity at this reached
                         // entry, never fall back to a same-named module item.
-                        if !self.pending.contains_key(&site.0) {
+                        if !self.pending.contains_key(&self.frame.call_identity(site.0)) {
                             match self.select_reached_argument_call(
                                 db, contexts, site, &name, &explicit, &arguments,
                             ) {
@@ -1976,7 +2018,7 @@ impl RunMachine {
                                                 ));
                                             }
                                         };
-                                    self.pending.insert(site.0, call);
+                                    self.pending.insert(self.frame.call_identity(site.0), call);
                                 }
                                 QueryPoll::Ready(Err(error)) => {
                                     self.terminal = true;
@@ -1985,7 +2027,7 @@ impl RunMachine {
                                 QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
                             }
                         }
-                        if let Some(selected) = self.pending.get(&site.0)
+                        if let Some(selected) = self.pending.get(&self.frame.call_identity(site.0))
                             && selected.callee.signature().parameters.len() != arguments.len()
                         {
                             self.terminal = true;
@@ -2025,15 +2067,23 @@ impl RunMachine {
                                 }
                             }
                         }
-                        let selected = self.pending.get(&site.0).cloned();
+                        let selected = self.pending.get(&self.frame.call_identity(site.0)).cloned();
                         // A selected packet may belong to a surrounding macro,
                         // whose expression value is not the predicate call result.
                         // Retain its source hint only for that exact result slot;
                         // otherwise resolve the verified call slot/recipe context.
-                        let result_hint = if let Some(selected) =
-                            self.pending.get(&site.0).filter(|selected| {
+                        let result_hint = if let Some(selected) = self
+                            .pending
+                            .get(&self.frame.call_identity(site.0))
+                            .filter(|selected| {
                                 selected.result_hint.is_some()
-                                    && self.frame.body.nodes()[self.frame.pc().node as usize].value
+                                    && self
+                                        .frame
+                                        .runtime_call
+                                        .as_ref()
+                                        .map(|call| call.result())
+                                        .or(self.frame.body.nodes()[self.frame.pc().node as usize]
+                                            .value)
                                         == call_result
                             }) {
                             selected.result_hint.clone()
@@ -2221,7 +2271,9 @@ impl RunMachine {
                         callee
                             .install_parameter_sources(call.contracts.source_parameters.clone())?;
                         callee.initialize_parameters(&args, &contracts, &mut self.store)?;
-                        if let Some(selected) = self.pending.remove(&site.0) {
+                        if let Some(selected) =
+                            self.pending.remove(&self.frame.call_identity(site.0))
+                        {
                             self.pending_bytes =
                                 self.pending_bytes.checked_sub(selected.bytes).ok_or_else(
                                     || call_fault("pending context retirement underflow"),
@@ -2305,3 +2357,7 @@ mod lexical_numeric_callees_tests;
 #[cfg(test)]
 #[path = "lexical_numeric_admission_tests.rs"]
 mod lexical_numeric_admission_tests;
+
+#[cfg(test)]
+#[path = "run_assertion_call_tests.rs"]
+mod assertion_call_tests;

@@ -396,6 +396,11 @@ impl ConstantSourceAdmission {
         // name map, including forward references. This inspects no callee body
         // semantics and never prepares a thunk or guesses a missing name.
         for declaration in captured.declarations() {
+            // Anonymous constants retain source/header/body identities in the
+            // captured declaration inventory, but declare no Value name bucket.
+            if declaration.is_anonymous() {
+                continue;
+            }
             let bucket = BucketKey {
                 scope: item.scope.clone(),
                 namespace: Namespace::Value,

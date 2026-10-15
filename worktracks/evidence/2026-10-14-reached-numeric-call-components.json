@@ -1,0 +1,343 @@
+{
+  "schema_version": 1,
+  "task_scope": [
+    "T025 reached numeric contexts and scalar parameter source admission",
+    "T034 assertion operand call protocol",
+    "T054 constant local/loop/labelled-block and actual array length contexts"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "source_member": "c02b89de65a647ec0a469cb6653e83ca76bd43462c69bddce77e4e8cf25d028d",
+  "source_paths_promoted": 55,
+  "changed_paths": [
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "before_sha256": "553d54715234bdee338f897b0b924059b19a7bbcdd78dc9c890bb862ff4d3b74",
+      "after_sha256": "826bcab9ecf59468047c0e32c86ebfcda949aed4e1551d6549267de1aaa02e18"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_argument_hints.rs",
+      "before_sha256": "afe6f735de5baefc079e19a3036232620cc272096dd2b4905fd2494e2eb84d2e",
+      "after_sha256": "ad363c991ff5a08051568ebb9fd17f8e6d506491aa815cee19b466383c626129"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_assertion_call_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "259d79fc423882a9d3d9d9e10fb2e66b25ac28db425e51950117a1877503f0d7"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_floating_constant_tests.rs",
+      "before_sha256": "d75a585626120abbfef6315f37290c6c77297bcca732d7ffa7fed02927f67ef3",
+      "after_sha256": "5020f931e8dcfc8f31171f221b32d3b9de803577df13535fbe33e844dfbc63e0"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_panic_tests.rs",
+      "before_sha256": "ab18fe722cc70bdc1168211e24ee18a481cb0483860b24c28679fa53c71a0c60",
+      "after_sha256": "e0db79bbfebc2e4d054770a409cea5abd0bdb30d881527619737b5f963ae822a"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_return_tests.rs",
+      "before_sha256": "b2d94bd54b9f0d4180f1f682164703421de384f16257e5dc83bcfd2f92e63484",
+      "after_sha256": "eb81b17fc0d18a4dc36c3c4dd887cd4834739d561beb01279ae53bd41f4b5a46"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_runtime_calls.rs",
+      "before_sha256": null,
+      "after_sha256": "daf70518e92822efa0ca1dce7924074556df44f192098bcc11adf3889cf7bf5c"
+    },
+    {
+      "path": "crates/lrr/src/engine/runtime_macros.rs",
+      "before_sha256": "0406de99695c656d72e8f6666697fc9bffb26cad20a536ec7d10763376d38bb7",
+      "after_sha256": "6b8e0cd620cf310f561f42ee4772903beef4da9e36f957e8c454f99bfc5b29c6"
+    },
+    {
+      "path": "crates/lrr/src/frontend/call_contracts.rs",
+      "before_sha256": "f0ee3446490d9d549490c35d949e90d09d11c866fb0ee1e1e7549baba25a3ecc",
+      "after_sha256": "e73df006a60990f51dc407f45eadfcbcf355845a3bd9b1bd10624143597c9c31"
+    },
+    {
+      "path": "crates/lrr/src/frontend/constant_literal_family_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "e4946e9e38400f116102fc55d171bf91ef1c5d6ff1100603ba312d2336a28429"
+    },
+    {
+      "path": "crates/lrr/src/frontend/constant_locals.rs",
+      "before_sha256": null,
+      "after_sha256": "db20d4f3f912a2a5cb885871f5c0c7ca1fd034082cce8f88a29d572d268053dd"
+    },
+    {
+      "path": "crates/lrr/src/frontend/constant_loop_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "ebac031a246fae2c5cb648ea8dcd5783188d61525f2e89d523b4e0f53944f0f5"
+    },
+    {
+      "path": "crates/lrr/src/frontend/constant_source_admission.rs",
+      "before_sha256": "824a3997ff876ff4dc9ce1bcb29ebedfd9f83ff25b1d751748e3e317a747c1dd",
+      "after_sha256": "c455df073c44ca7720b2005535b745b48ded963775912269b3bd2c443dba8c74"
+    },
+    {
+      "path": "crates/lrr/src/frontend/constants.rs",
+      "before_sha256": "598c0487e31cf96ab3eec24629d56041d08896d2a566dd97f0363723e149a1d4",
+      "after_sha256": "7112e10a8ae04b9719f42c3dd4fab2f4d356d57677646b3265feef2801ff97dc"
+    },
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_call_recipe_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "a5634687f24dbd4f02594643cb1dc718053525735ceabdc230c15774184dcdee"
+    },
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_plan.rs",
+      "before_sha256": "46d5ff0903ad4e458de9e3795ca78226d92ab6fb12f3c652f2e698c5f18e9dbc",
+      "after_sha256": "751dac1b5bb87c4055b73a7485d36c6e70aece40de3c147f699b851b23d0e5f6"
+    },
+    {
+      "path": "crates/lrr/src/ir/definition_numeric_wire_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "fde2a971527be9b6a8c6583e35c5376af2785635c785c3bd2c779aaee4d8bb59"
+    },
+    {
+      "path": "crates/lrr/src/ir/op.rs",
+      "before_sha256": "21f62914ebf9cb4b2ba6f03b4b18af5b974030931af174c0d3da4104bd7f71b4",
+      "after_sha256": "31d267c4bb98679ed9a0095b48ad1bd8b565bf22afc04eb0aff52374384ce163"
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "before_sha256": "28400fdb1b2fd59ce11b06e55d9f680f2bb89b5d4424a5be905509f61a45f4af",
+      "after_sha256": "66643bc208cb93118f20a6b8cfe97f64e080b552c4449e47bd5be467452fede4"
+    },
+    {
+      "path": "crates/lrr/src/ir/validate.rs",
+      "before_sha256": "1389a0fcf5f4f6dd3437f5369b296c81889fb3c804cfd72e352a718c42684a6d",
+      "after_sha256": "a6ac22fa4e2feb4c90b4513c9421778fef2902ff7323d162c733b31ebb0efbc8"
+    },
+    {
+      "path": "crates/lrr/src/source/changes.rs",
+      "before_sha256": "65c1ec8487f8f49537cdcd7f17a69b7ec726147639dbf96ddb019f2014910cb2",
+      "after_sha256": "ee1c64133b87a6a6af6184ba7ee7cfe1237b856895e0fab3385304db02b67ab5"
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_constraint_work.rs",
+      "before_sha256": null,
+      "after_sha256": "003cb446a6d762aa2445f60619ac0a568600cb5c5b05fcafddd1a81412fc4960"
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_labelled_block_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "92a1251bcb9f9955271343dd0c8f42336c3e05bf280f7ec92f46057a3abcdc77"
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_length_context_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "9775f0aba77a3d63b4c962c276e42bef288236a18a448d61140d8d14dca3280b"
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_local_constraints.rs",
+      "before_sha256": null,
+      "after_sha256": "27b817ecb4230301efacdc5d90a3b7a78594061bb42edc41a4fb13d08bb4eef1"
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_loops.rs",
+      "before_sha256": null,
+      "after_sha256": "989431d5a051da59f58fd590f713d0acb78ec193ed1e5ecc8e2d69d04f0f9fc1"
+    },
+    {
+      "path": "crates/lrr/src/syntax/literal_match.rs",
+      "before_sha256": "ac5643ded707808659fbcf413a3a2691b0d111813c517271460382002f11341f",
+      "after_sha256": "3622464478f7f007f1f8afb8911af78e9d94ef8b9282b950f3b869ce8197d425"
+    },
+    {
+      "path": "crates/lrr/src/syntax/local_numeric_constraints.rs",
+      "before_sha256": "e4f25bbf89bf34325ac7446bdf11b8bf3ccc000f0802b62712d544df65085c65",
+      "after_sha256": "9d2e09c0285a53584727bd7a9350d236253e1c364166eb14db9e9e6be1567723"
+    },
+    {
+      "path": "crates/lrr/src/syntax/outline.rs",
+      "before_sha256": "a054004a73d919ce42bf8da82c8cbdfa8c49480b36deb0638a87071f5c36b948",
+      "after_sha256": "ac86c362526176e75ec8e72b7615b3870be99fd6fa00664c18c5768fbf68973a"
+    },
+    {
+      "path": "crates/lrr/src/syntax/pure_constants.rs",
+      "before_sha256": "798458213afe83fb5778cdb3281f7b833f3d18e5b5e9ace5f9105409f623ad64",
+      "after_sha256": "1e560fcfd3f45b03f0a7cc2fff18015ad71c1f89031b26c6771af4cfa3389f9f"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_local_numeric_context.rs",
+      "before_sha256": null,
+      "after_sha256": "715376c008042aa08f2079a941a5946543df9f4bd1474f93f19f12e8e64afa5e"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_local_numeric_context_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "9f4ea5400079b85e8558a6b13fd2213ae29d0dbc089ce1fb3932e0f45a2acfcd"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_call_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "96d6d77a26193cd83335bd829f6b77505c8226ec24972b2a89323f157ddc0455"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_calls.rs",
+      "before_sha256": null,
+      "after_sha256": "6820f6d16c878ebb7f31250b0d132b68bce823d7693b7d563c29dbda862ef9cc"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_scalars.rs",
+      "before_sha256": "cadbb531833912eb88c32302fee45b3ee32bd08ad9574f0923928c78e2868c09",
+      "after_sha256": "dc1edeb0671e804fd17ce9372fcdbc959ef207933d1ac9d4b7a2d550e24b3f41"
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "before_sha256": "65064b37a7b966efcde80af9acee4d95e806c5ad8049372a40d7026cfb0f93bd",
+      "after_sha256": "5b1ccf25f1d805dd935f88327a04a38b794914145200853b22103509f3372fa1"
+    },
+    {
+      "path": "crates/lrr/src/vm/call.rs",
+      "before_sha256": "5602806a99a459713ab80557e4a5d365e7e4713e2a3d40427c927806364eaacb",
+      "after_sha256": "531546f3c7d8ffb850ca9d6450eeee2f6b8d8936244efa3f3ff82dfe8c75202c"
+    },
+    {
+      "path": "crates/lrr/src/vm/context_return_tests.rs",
+      "before_sha256": "5709b87427c667460382cdc3546f6c36d16157669f7f22273a67a19f8e6ce91a",
+      "after_sha256": "3d052f8c57627ea29b3f1de2b62fc8eaaebeb40de646ac7b5141431904b6d8ef"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "before_sha256": "2803bce35a458da370be76ebe5743fae8b2ebee8648352ea44c6e657cd362dc9",
+      "after_sha256": "1ae98dc5adb9bf40d227c86b96a27e9f9380691210f55cb75f70877411aa6b46"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "before_sha256": "221d7e8421f0d5a66d27b762d6e507347d7e2b83c15a7fb294976f26b8ae983d",
+      "after_sha256": "00b7a66cf86756626eb6e1e84cf1490e566bb1a8ccccb73059c259127f1674ef"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/manifest.json",
+      "before_sha256": "307d8a3109f619a965a14a00d73d4cf6c337749373ccd175f309bee593682c31",
+      "after_sha256": "5206d9fa00fadab445176923fc43d21635b583c121f09cb38e36c4362b53c0a7"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const-block-non-item-statement-3.rs",
+      "before_sha256": null,
+      "after_sha256": "18e646b302b163217b37d10b66223e4eb9d885ac96317ba0903e7db10554a030"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const-block-non-item-statement.rs",
+      "before_sha256": null,
+      "after_sha256": "98f1d402de3ff92a7ef26adc86c31c655746f0c13184001e893510fa273cc634"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.allow.stderr",
+      "before_sha256": null,
+      "after_sha256": "4aa305eac6a01a82ce82b2e65e59cf52b60be18e9eb3a9c637f637a31372d4be"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.rs",
+      "before_sha256": null,
+      "after_sha256": "5591b3fa000aff9105d382b71d3edc5d5154aaad2af6b463b7cf4b14f182e4a3"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.warn.stderr",
+      "before_sha256": null,
+      "after_sha256": "bf55748e03ed9154e362d3cfa7158ec8ea3a680fcb6924ffe68f839a669b3f31"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const-labeled-break.rs",
+      "before_sha256": null,
+      "after_sha256": "07d3e298d10795e40866115b9b521cd8fce96a9f08bf0b709ca4e4edd8c7347f"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/control-flow/loop.rs",
+      "before_sha256": null,
+      "after_sha256": "2253f87458478482a2c038c94e6ed45d15430c434f71a8eb44d80bcba6b2cb4a"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/for-loop-while/label_break_value.rs",
+      "before_sha256": null,
+      "after_sha256": "d669bf983f16e4a4b0034919c0ae427cf23337111b081ebee52fdae73cb1cca9"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/label/label_break_value_continue.rs",
+      "before_sha256": null,
+      "after_sha256": "522c687b43315ca209d68ce88391b61aa2ab50d70a9eff2cc9556bcd8416b573"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/label/label_break_value_continue.stderr",
+      "before_sha256": null,
+      "after_sha256": "2761e225ec15b71fa606e88678d9c96414da1f6fb78cb6e3102fb3cca36d49a4"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/label/label_break_value_unlabeled_break.rs",
+      "before_sha256": null,
+      "after_sha256": "3d5f0a6b944a6970a436657b1b49d7e98dc611d84fd8dabc1d9cab4d9db97a0e"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/label/label_break_value_unlabeled_break.stderr",
+      "before_sha256": null,
+      "after_sha256": "2d4a24fb0810770b79ca06fefdcef192cad65489e8ec7fe16f0974281800e8f9"
+    },
+    {
+      "path": "xtask/tests/match_no_arm_exit.rs",
+      "before_sha256": "165ff9f23c5db9fb2daf5ff6cdd950e6c440a902bec7774e8a1ba6542b665257",
+      "after_sha256": "38c59cb69bd3b607e5721045728363355f07629aa1ca499d76012053bb00251f"
+    },
+    {
+      "path": "xtask/tests/stock_labelled_block_runtime.rs",
+      "before_sha256": null,
+      "after_sha256": "c396512c3e0415f7adcbe6ae0041ccc7e8dda24b100c8bed5bcce8a4741d7f50"
+    }
+  ],
+  "validation": {
+    "v7_unfiltered_library": {
+      "passed": 937,
+      "failed": 1,
+      "source_member": "7a877b74908efd503929d08080b0e9e05ec493634295baecdee78f9c910b5d1d",
+      "failure": "new reference argument control expected match-body guard but caller refused argument before entering callee; immutable failure retained"
+    },
+    "v8_direct_ownership_control": {
+      "actual_terminal": "bfebdb/exit0",
+      "passed": 1,
+      "filtered": 938,
+      "test": "rustc_original_reference_parameter_scalar_guard_refuses_before_owning_read",
+      "scope": "unchanged upstream reference witness, disclosed component contract and real guard method; no whole fixture claim"
+    },
+    "v9_reference_caller_control": {
+      "actual_terminal": "3d7fab/exit0",
+      "passed": 1,
+      "filtered": 938,
+      "test": "reference_argument_admission_keeps_scalar_match_callee_cold_all_editions",
+      "scope": "all four editions; signature queries allowed, no executable callee body demand"
+    },
+    "v10_static_suffix": {
+      "strict_library": "efef76/exit0",
+      "strict_stock": "f2cf2f/exit0",
+      "architecture": "967f17/exit0",
+      "format": "b50e97/exit0",
+      "handoff_sha256": "cde3141e907daed8a144b07d3bcbba0178a21c641c54da0055bd13eaef47ab55"
+    },
+    "fresh_unfiltered_bank_on_v10": "not run; prior and changed-body evidence reported separately",
+    "fresh_integrated_main_milestone": "pending"
+  },
+  "unchanged_stock_frontier": {
+    "path": "tests/ui/for-loop-while/label_break_value.rs",
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "full_fixture_passed": 0,
+    "failed": 4,
+    "completed_prefix": "13 top-level assertions before match calls and first label_break_match(0,0,0) call",
+    "first_remaining_failure": "guarded plain binding v; next label_break_match(1,1,-1), range2111..2177",
+    "actual_v7_terminal": "a14ade/exit1 (Cargo101)",
+    "partial_execution_is_not_fixture_acceptance": true
+  },
+  "upstream_original_files": 482,
+  "imported_cases": 300,
+  "new_full_stock_cases": 0,
+  "original_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "release_complete": false,
+  "guest_jit_gate": "closed",
+  "linux_acceptance": "unexecuted",
+  "raw_evidence_local": "artifacts/macos-first/root-stock-local-numeric-validation-v1/",
+  "reproduce_milestone": "CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0 cargo +1.99.0 run -p xtask --locked --offline -- gate 03"
+}

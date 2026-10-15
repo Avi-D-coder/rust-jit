@@ -50,3 +50,7 @@ pub(crate) struct CallStartFacts {
         Option<crate::traits::term::TyTerm>,
     )>,
 }
+
+/// Indexed ordinary call or an exact source-owned call inside a runtime macro.
+/// The ordinal is derived from the pinned parsed operand, never an AST node ID.
+pub(crate) type CallIdentity = (u32, Option<u32>);

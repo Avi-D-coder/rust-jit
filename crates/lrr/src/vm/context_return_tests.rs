@@ -221,11 +221,16 @@ fn copied_same_header_proof_refuses_changed_alias_source_and_derived_revision() 
     assert!(GenericEnv::capture_current(&mut db, &callee, &accepted).is_err());
 }
 #[test]
-fn official_shadowed_nominal_and_named_primitive_controls_are_not_normalized_aliases() {
+fn official_shadowed_nominal_and_named_primitive_controls_keep_owning_source_kind() {
     for edition in [2015, 2018, 2021, 2024] {
         let (mut db, view, graph) = source(ORIGINAL_USIZE, edition);
         let (callee, prepared) = contracts(&mut db, &view, &graph, "return_val");
-        assert!(prepared.normalized_deferred_return.is_none());
+        assert_eq!(
+            prepared.source_result,
+            Some(TyTerm::Primitive(PrimitiveType::Usize))
+        );
+        assert_eq!(prepared.result_descriptor, Some(TypeId(13)));
+        assert!(prepared.normalized_deferred_return.is_some());
         assert!(GenericEnv::capture_current(&mut db, &callee, &prepared).is_ok());
         let (_, view, _) = source(ORIGINAL_SHADOW, edition);
         // The original struct has an allow attribute. Complete its actual

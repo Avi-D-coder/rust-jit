@@ -191,6 +191,8 @@ pub struct Frame {
     /// Exact verified Call exit retained until its one successful resumption.
     pub(crate) call_continuation: Option<(PcKey, SlotId)>,
     pub(crate) call_start: Option<super::call::CallStartFacts>,
+    pub(crate) runtime_call:
+        Option<std::sync::Arc<crate::syntax::runtime_macro_scalars::RuntimeMacroCall>>,
     constructor_start: Option<PreparedConstructor>,
     source_field: Option<PreparedSourceField>,
     constructor_mapping_bytes: usize,
@@ -198,7 +200,7 @@ pub struct Frame {
     constant_activation: Option<source_constant_frame::BoundSourceConstant>,
     copy_activation: Option<aggregate_copy_frame::OpActivation>,
     cleanup_activation: Option<scope_cleanup_frame::Activation>,
-    call_progress: std::collections::BTreeMap<u32, (u32, u32)>,
+    call_progress: Vec<(super::call::CallIdentity, (u32, u32))>,
     ordinary_calls: Box<[Option<crate::core::digest::Digest>]>,
     pub(crate) call_cells: Vec<CellId>,
     pub(crate) call_types: Vec<TypeId>,
@@ -265,6 +267,7 @@ impl Frame {
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<(PcKey, SlotId)>>()))
             .and_then(|bytes| bytes.checked_add(source_heap))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<super::call::CallStartFacts>>()))
+            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<std::sync::Arc<crate::syntax::runtime_macro_scalars::RuntimeMacroCall>>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<source_constant_frame::BoundSourceConstant>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<aggregate_copy_frame::OpActivation>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<scope_cleanup_frame::Activation>>()))
@@ -396,6 +399,7 @@ impl Frame {
             call_ready: false,
             call_continuation: None,
             call_start: None,
+            runtime_call: None,
             constructor_start: None,
             source_field: None,
             constructor_mapping_bytes: 0,
@@ -665,6 +669,9 @@ impl Frame {
             self.parameter_sources.get(ordinal as usize).cloned(),
         )
     }
+    pub(crate) fn call_identity(&self, site: u32) -> super::call::CallIdentity {
+        (site, self.runtime_call.as_ref().map(|call| call.ordinal()))
+    }
     pub(crate) fn preflight_call_start(
         &self,
         site: u32,
@@ -680,19 +687,34 @@ impl Frame {
         };
         if *ready != site
             || self.pc.node != site
-            || self.pc.phase != crate::ir::pc::Phase::Entry.code()?
             || hints.len() != arguments.len()
-            || self.call_progress.contains_key(&site)
+            || self
+                .call_progress
+                .iter()
+                .any(|(key, _)| *key == self.call_identity(site))
         {
             return Err(invalid("call start context mismatch"));
         }
         ordinary.require(self.body.body(), NodeId(site))?;
-        if self.body.nodes().get(site as usize).is_none_or(|node| {
-            node.role
-                != crate::syntax::body_index::NodeRole::Expression(
-                    crate::syntax::body_index::ExpressionKind::Call,
-                )
-        }) {
+        if let Some(call) = &self.runtime_call {
+            call.require(
+                self.body.body(),
+                &self.pc,
+                crate::syntax::runtime_macro_scalars::RuntimeMacroCallPhase::Prepare,
+            )?;
+            if call.arguments() != arguments {
+                return Err(invalid(
+                    "macro call argument slots differ from source witness",
+                ));
+            }
+        } else if self.pc.phase != crate::ir::pc::Phase::Entry.code()?
+            || self.body.nodes().get(site as usize).is_none_or(|node| {
+                node.role
+                    != crate::syntax::body_index::NodeRole::Expression(
+                        crate::syntax::body_index::ExpressionKind::Call,
+                    )
+            })
+        {
             return Err(invalid(
                 "ordinary call scope witness requires an indexed call",
             ));
@@ -715,6 +737,32 @@ impl Frame {
     }
     pub(crate) fn start_call(&mut self, site: u32, arguments: &[SlotId]) -> Result<(), Diagnostic> {
         self.preflight_call_start(site, arguments)?;
+        let identity = self.call_identity(site);
+        self.call_progress
+            .len()
+            .checked_add(1)
+            .and_then(|count| {
+                count.checked_mul(std::mem::size_of::<(super::call::CallIdentity, (u32, u32))>())
+            })
+            .and_then(|bytes| {
+                Self::metadata_bytes(&self.body, self.parameters.len())?.checked_add(bytes)
+            })
+            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+            .ok_or_else(crate::runtime::arena::resource)?;
+        self.call_progress
+            .try_reserve_exact(1)
+            .map_err(|_| crate::runtime::arena::resource())?;
+        if self
+            .call_progress
+            .capacity()
+            .checked_mul(std::mem::size_of::<(super::call::CallIdentity, (u32, u32))>())
+            .and_then(|bytes| {
+                Self::metadata_bytes(&self.body, self.parameters.len())?.checked_add(bytes)
+            })
+            .is_none_or(|bytes| bytes > 32 * 1024 * 1024)
+        {
+            return Err(crate::runtime::arena::resource());
+        }
         let super::call::CallStartFacts {
             hints, ordinary, ..
         } = self
@@ -722,19 +770,23 @@ impl Frame {
             .take()
             .ok_or_else(|| invalid("call start consumed"))?;
         let definition = ordinary.require(self.body.body(), NodeId(site))?;
-        self.ordinary_calls[site as usize] = Some(definition);
+        // Opaque macro operand calls do not certify an indexed temporary-scope
+        // barrier. Only ordinary AST calls may populate ordinary_calls.
+        if self.runtime_call.is_none() {
+            self.ordinary_calls[site as usize] = Some(definition);
+        }
         for (slot, hint, source) in hints {
             self.set_source_view(slot, source)?;
             self.set_hint(slot, hint)?;
             self.slots[slot.0 as usize].strict_hint = false;
         }
-        self.call_progress.insert(
-            site,
+        self.call_progress.push((
+            identity,
             (
                 0,
                 u32::try_from(arguments.len()).map_err(|_| invalid("argument count overflow"))?,
             ),
-        );
+        ));
         Ok(())
     }
     pub(crate) fn preflight_call_advance(
@@ -742,7 +794,18 @@ impl Frame {
         site: u32,
         argument: u32,
     ) -> Result<(), Diagnostic> {
-        let Some((next, total)) = self.call_progress.get(&site) else {
+        if let Some(call) = &self.runtime_call {
+            call.require(
+                self.body.body(),
+                &self.pc,
+                crate::syntax::runtime_macro_scalars::RuntimeMacroCallPhase::Advance(argument),
+            )?;
+        }
+        let Some((_, (next, total))) = self
+            .call_progress
+            .iter()
+            .find(|(key, _)| *key == self.call_identity(site))
+        else {
             return Err(invalid("call progress absent"));
         };
         if *next != argument || argument >= *total {
@@ -752,17 +815,36 @@ impl Frame {
     }
     pub(crate) fn advance_call(&mut self, site: u32, argument: u32) -> Result<(), Diagnostic> {
         self.preflight_call_advance(site, argument)?;
+        let identity = self.call_identity(site);
         self.call_progress
-            .get_mut(&site)
+            .iter_mut()
+            .find(|(key, _)| *key == identity)
             .ok_or_else(|| invalid("call progress absent"))?
+            .1
             .0 += 1;
         Ok(())
     }
     pub(crate) fn finish_call_progress(&mut self, site: u32) -> Result<(), Diagnostic> {
-        if let Some((next, total)) = self.call_progress.remove(&site)
-            && next != total
+        if let Some(call) = &self.runtime_call {
+            call.require(
+                self.body.body(),
+                &self.pc,
+                crate::syntax::runtime_macro_scalars::RuntimeMacroCallPhase::Seal,
+            )?;
+        }
+        let identity = self.call_identity(site);
+        if let Some(index) = self
+            .call_progress
+            .iter()
+            .position(|(key, _)| *key == identity)
         {
-            return Err(invalid("call sealed before all arguments completed"));
+            let (_, (next, total)) = self.call_progress[index];
+            if next != total {
+                return Err(invalid("call sealed before all arguments completed"));
+            }
+            self.call_progress.remove(index);
+        } else if self.runtime_call.is_some() {
+            return Err(invalid("macro call sealed without its source preparation"));
         }
         Ok(())
     }
@@ -981,6 +1063,158 @@ impl Frame {
                 if matches!(element.as_ref(), TyTerm::Primitive(_)) && u32::try_from(*len).is_ok())
             || matches!(source, TyTerm::Nominal(_, args) if args.is_empty())
     }
+    /// Scalar-match admission precedes the owning parameter read. A genuine
+    /// source primitive supplies its descriptor; layout never supplies identity.
+    pub(crate) fn definition_parameter_primitive(
+        &self,
+        ordinal: u32,
+    ) -> Result<crate::ir::op::PrimitiveType, Diagnostic> {
+        let env = self
+            .context
+            .as_ref()
+            .ok_or_else(|| invalid("scalar parameter context absent"))?;
+        if env.definition().definition != self.body.body().definition
+            || ordinal >= 100_000
+            || !self.parameters_initialized
+        {
+            return Err(invalid("scalar parameter context owner or ordinal differs"));
+        }
+        let source = self
+            .parameter_sources
+            .get(ordinal as usize)
+            .ok_or_else(|| invalid("scalar parameter source absent"))?;
+        let crate::traits::term::TyTerm::Primitive(primitive) = source else {
+            return Err(Diagnostic::new(
+                "LRR-E-UNSUPPORTED",
+                "scalar parameter context requires an admitted primitive source".into(),
+            ));
+        };
+        Ok(*primitive)
+    }
+    /// This is a source-contract projection, not descriptor-based dispatch.
+    /// GenericEnv and parameter_sources were installed only after accepting the
+    /// exact current callable/header/body and its once-delivered arguments.
+    pub(crate) fn definition_numeric_context(
+        &self,
+        context: crate::ir::op::DefinitionNumericContext,
+    ) -> Result<crate::ir::op::PrimitiveType, Diagnostic> {
+        use crate::{ir::op::DefinitionNumericContext, traits::term::TyTerm};
+        let missing = || {
+            Diagnostic::new(
+                "LRR-E-TYPE-CONTEXT",
+                "numeric local requires its admitted definition source contract".into(),
+            )
+        };
+        let env = self.context.as_ref().ok_or_else(missing)?;
+        if env.definition().definition != self.body.body().definition {
+            return Err(invalid("numeric context belongs to another definition"));
+        }
+        let fallback = match context {
+            DefinitionNumericContext::ResultOrDefault { floating } => Some(if floating {
+                crate::ir::op::PrimitiveType::F64
+            } else {
+                crate::ir::op::PrimitiveType::I32
+            }),
+            _ => None,
+        };
+        let normalized = env
+            .normalized_result()
+            .map(|(primitive, _)| TyTerm::Primitive(primitive));
+        let mut source = match context {
+            DefinitionNumericContext::Parameter(ordinal) => {
+                if ordinal >= 100_000 || !self.parameters_initialized {
+                    return Err(missing());
+                }
+                Some(
+                    self.parameter_sources
+                        .get(ordinal as usize)
+                        .ok_or_else(missing)?,
+                )
+            }
+            DefinitionNumericContext::Result | DefinitionNumericContext::ResultOrDefault { .. } => {
+                env.definition()
+                    .result_symbolic
+                    .as_ref()
+                    .or(normalized.as_ref())
+            }
+        };
+        for _ in 0..64 {
+            match source {
+                Some(TyTerm::Primitive(primitive)) => {
+                    if let Some(default) = fallback {
+                        return Ok(
+                            if Self::primitive_numeric_family(*primitive)
+                                == Self::primitive_numeric_family(default)
+                            {
+                                *primitive
+                            } else {
+                                default
+                            },
+                        );
+                    }
+                    return Self::require_numeric_primitive(*primitive);
+                }
+                Some(TyTerm::Param(parameter)) => {
+                    source = Some(env.symbolic_binding(*parameter).ok_or_else(missing)?);
+                }
+                None => return Err(missing()),
+                Some(_) => {
+                    // No compatible result source is a constraint on this bare
+                    // literal. Its source-proven family supplies the ordinary
+                    // Rust default; this never relabels the function result.
+                    return fallback.ok_or_else(missing);
+                }
+            }
+        }
+        Err(missing())
+    }
+    fn primitive_numeric_family(primitive: crate::ir::op::PrimitiveType) -> Option<bool> {
+        use crate::ir::op::PrimitiveType;
+        match primitive {
+            PrimitiveType::I8
+            | PrimitiveType::I16
+            | PrimitiveType::I32
+            | PrimitiveType::I64
+            | PrimitiveType::I128
+            | PrimitiveType::Isize
+            | PrimitiveType::U8
+            | PrimitiveType::U16
+            | PrimitiveType::U32
+            | PrimitiveType::U64
+            | PrimitiveType::U128
+            | PrimitiveType::Usize => Some(false),
+            PrimitiveType::F32 | PrimitiveType::F64 => Some(true),
+            _ => None,
+        }
+    }
+    fn require_numeric_primitive(
+        primitive: crate::ir::op::PrimitiveType,
+    ) -> Result<crate::ir::op::PrimitiveType, Diagnostic> {
+        Self::primitive_numeric_family(primitive)
+            .map(|_| primitive)
+            .ok_or_else(|| {
+                Diagnostic::new(
+                    "LRR-E-TYPE-CONTEXT",
+                    "definition source is not a numeric primitive".into(),
+                )
+            })
+    }
+    pub(crate) fn resolved_annotation_source(
+        &self,
+        hint: &crate::ir::op::HintRecipe,
+    ) -> Result<Option<crate::traits::term::TyTerm>, Diagnostic> {
+        if let crate::ir::op::HintRecipe::DefinitionParameter(ordinal) = hint {
+            return Ok(Some(crate::traits::term::TyTerm::Primitive(
+                self.definition_parameter_primitive(*ordinal)?,
+            )));
+        }
+        if let crate::ir::op::HintRecipe::DefinitionNumeric(context) = hint {
+            return Ok(Some(crate::traits::term::TyTerm::Primitive(
+                self.definition_numeric_context(*context)?,
+            )));
+        }
+        Ok(Self::annotation_source(hint))
+    }
     pub(crate) fn annotation_source(
         hint: &crate::ir::op::HintRecipe,
     ) -> Option<crate::traits::term::TyTerm> {
@@ -988,7 +1222,9 @@ impl Frame {
         match hint {
             // Dynamic pointee hints are resolved from the reached result slot;
             // they never manufacture an annotation without that frame context.
-            HintRecipe::BorrowTarget { .. } => None,
+            HintRecipe::BorrowTarget { .. }
+            | HintRecipe::DefinitionNumeric(_)
+            | HintRecipe::DefinitionParameter(_) => None,
             HintRecipe::ArrayPrimitive { element, len } => Some(TyTerm::Array(
                 Box::new(TyTerm::Primitive(*element)),
                 crate::traits::term::ConstTerm::Value(u64::from(*len)),
@@ -1038,7 +1274,7 @@ impl Frame {
         binding: NodeId,
         hint: &crate::ir::op::HintRecipe,
     ) -> Result<(), Diagnostic> {
-        let written = Self::annotation_source(hint);
+        let written = self.resolved_annotation_source(hint)?;
         if let Some(written) = written {
             if !Self::supported_source(&written) {
                 return Err(invalid(
@@ -3030,6 +3266,38 @@ impl Frame {
         hint: &crate::ir::op::HintRecipe,
     ) -> Result<(), Diagnostic> {
         let expected = match hint {
+            crate::ir::op::HintRecipe::DefinitionParameter(ordinal) => {
+                let expected = crate::traits::term::TyTerm::Primitive(
+                    self.definition_parameter_primitive(*ordinal)?,
+                );
+                if self
+                    .source_view(source)?
+                    .as_ref()
+                    .is_some_and(|actual| actual != &expected)
+                {
+                    return Err(Diagnostic::new(
+                        "LRR-E-GENERIC-BINDING",
+                        "local initializer differs from primitive parameter source".into(),
+                    ));
+                }
+                Some(expected)
+            }
+            crate::ir::op::HintRecipe::DefinitionNumeric(context) => {
+                let expected = crate::traits::term::TyTerm::Primitive(
+                    self.definition_numeric_context(*context)?,
+                );
+                if self
+                    .source_view(source)?
+                    .as_ref()
+                    .is_some_and(|actual| actual != &expected)
+                {
+                    return Err(Diagnostic::new(
+                        "LRR-E-GENERIC-BINDING",
+                        "local initializer source differs from admitted numeric context".into(),
+                    ));
+                }
+                Some(expected)
+            }
             crate::ir::op::HintRecipe::Parameter(key) => {
                 Some(crate::traits::term::TyTerm::Param(*key))
             }
@@ -3048,6 +3316,48 @@ impl Frame {
         let value = store.admit_move(self.cell(source)?)?;
         store.admit_new_contract(hint, value)
     }
+    /// A reached use may resolve an unresolved literal from its admitted source
+    /// context. This retains that source while materializing the shared literal;
+    /// a concrete cell or a missing context never invents a primitive identity.
+    fn local_read_source(
+        &self,
+        binding: NodeId,
+        destination: SlotId,
+        store: &GuestStore,
+    ) -> Result<Option<crate::traits::term::TyTerm>, Diagnostic> {
+        use crate::traits::term::TyTerm;
+        let source = self.binding_sources[binding.0 as usize].as_ref();
+        if source.is_some() {
+            return Ok(source.cloned());
+        }
+        let cell = self.binding(binding)?;
+        let value = store.admit_move(cell)?;
+        if !matches!(value.kind, 11 | 12) {
+            return Ok(None);
+        }
+        let Some(TyTerm::Primitive(primitive)) = self.source_view_ref(destination)? else {
+            return Ok(None);
+        };
+        let descriptor = crate::runtime::shape::PrimitiveIdentity::from_recipe(*primitive)?.id();
+        if self.hint(destination)? != Some(descriptor) {
+            return Err(invalid("local literal source and reached context differ"));
+        }
+        // Copies share their unresolved literal record. A prior reached use
+        // may already have bound it even when this local has no retained source.
+        if store
+            .effective_type(value)?
+            .is_some_and(|bound| bound != descriptor)
+        {
+            return Err(Diagnostic::new(
+                "LRR-E-TYPE-CONTEXT",
+                "local literal was already resolved to a different source type".into(),
+            ));
+        }
+        // Preview is pure: validate the literal family and range before fuel,
+        // an owning read, or source publication occurs.
+        store.preview_scalar(cell, Some(descriptor))?;
+        Ok(Some(TyTerm::Primitive(*primitive)))
+    }
     pub(crate) fn preflight_read_local(
         &self,
         binding: NodeId,
@@ -3056,6 +3366,8 @@ impl Frame {
     ) -> Result<(), Diagnostic> {
         let cell = self.binding(binding)?;
         store.admit_owning_read(cell)?;
+        let source = self.local_read_source(binding, destination, store)?;
+        self.preflight_source_view(destination, source.as_ref())?;
         let mut value = store.admit_move(cell)?;
         if matches!(value.kind, 11 | 12)
             && let Some(hint) = store.effective_type(value)?.or(self.hint(destination)?)
@@ -3250,6 +3562,18 @@ impl Frame {
         };
         Ok(hint)
     }
+    fn definition_assign_kind(
+        &self,
+        kind: crate::ir::op::AssignKind,
+    ) -> Result<(crate::ir::op::PrimitiveType, crate::ir::op::PrimitiveType), Diagnostic> {
+        match kind {
+            crate::ir::op::AssignKind::Primitive { left, right } => Ok((left, right)),
+            crate::ir::op::AssignKind::DefinitionNumeric { context, right } => {
+                let left = self.definition_numeric_context(context)?;
+                Ok((left, right.unwrap_or(left)))
+            }
+        }
+    }
     pub(crate) fn preflight_compound_hint(
         &self,
         binding: NodeId,
@@ -3257,13 +3581,18 @@ impl Frame {
         kind: crate::ir::op::AssignKind,
         _store: &GuestStore,
     ) -> Result<(), Diagnostic> {
-        let crate::ir::op::AssignKind::Primitive { left, .. } = kind;
+        let (left, _) = self.definition_assign_kind(kind)?;
         self.preflight_hint(child)?;
         self.binding(binding)?;
-        if self.binding_sources[binding.0 as usize]
-            .as_ref()
-            .is_some_and(|source| source != &crate::traits::term::TyTerm::Primitive(left))
-        {
+        let expected = crate::traits::term::TyTerm::Primitive(left);
+        let actual = self.binding_sources[binding.0 as usize].as_ref();
+        let conflicts = match kind {
+            crate::ir::op::AssignKind::DefinitionNumeric { .. } => actual != Some(&expected),
+            crate::ir::op::AssignKind::Primitive { .. } => {
+                actual.is_some_and(|source| source != &expected)
+            }
+        };
+        if conflicts {
             return Err(Diagnostic::new(
                 "LRR-E-GENERIC-BINDING",
                 "primitive compound assignment conflicts with definition-source local view".into(),
@@ -3279,7 +3608,7 @@ impl Frame {
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
         self.preflight_compound_hint(binding, child, kind, store)?;
-        let crate::ir::op::AssignKind::Primitive { right, .. } = kind;
+        let (_, right) = self.definition_assign_kind(kind)?;
         self.declared_hint(
             child,
             Some(crate::runtime::shape::PrimitiveIdentity::from_recipe(right)?.id()),
@@ -3351,6 +3680,7 @@ impl Frame {
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
         self.preflight_read_local(binding, destination, store)?;
+        let source = self.local_read_source(binding, destination, store)?;
         let cell = self
             .bindings
             .get(binding.0 as usize)
@@ -3381,10 +3711,10 @@ impl Frame {
             ticket
         };
         self.write(destination, ticket, store)?;
-        self.set_source_view(
-            destination,
-            self.binding_sources[binding.0 as usize].clone(),
-        )
+        if self.binding_sources[binding.0 as usize].is_none() {
+            self.binding_sources[binding.0 as usize] = source.clone();
+        }
+        self.set_source_view(destination, source)
     }
     pub(crate) fn discard(
         &mut self,
@@ -4083,6 +4413,142 @@ mod tests {
         (frame, store, recipe, pattern, destination, text)
     }
     #[test]
+    fn reached_literal_local_retains_source_and_refuses_shared_binding_conflict() {
+        use crate::{ir::op::PrimitiveType, traits::term::TyTerm};
+        let original = include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/for-loop-while/label_break_value.rs"
+        );
+        for prior in [None, Some(TypeId(11))] {
+            let parsed = ParsedFile::parse(
+                &SourceBlob::new(original.as_bytes().to_vec()).unwrap(),
+                ProfileIdentity::current(),
+            )
+            .unwrap();
+            let outline = parsed
+                .outline(
+                    Digest::of_bytes(b"literal local source guard"),
+                    vec![],
+                    &CfgSet::guest_default(),
+                )
+                .unwrap();
+            let handle = outline
+                .items
+                .iter()
+                .find(|item| item.def_key.declared_name == "break_value")
+                .unwrap()
+                .body
+                .as_ref()
+                .unwrap();
+            let body = parsed.index_body(handle, Default::default()).unwrap();
+            let read = body
+                .nodes()
+                .iter()
+                .find(|node| {
+                    node.role == NodeRole::Expression(ExpressionKind::Path)
+                        && &original[(handle.range.start + node.range.start) as usize
+                            ..(handle.range.start + node.range.end) as usize]
+                            == "result"
+                })
+                .unwrap()
+                .clone();
+            let entry = body.pc(read.id, crate::ir::pc::Phase::Entry).unwrap();
+            let recipe = parsed.initial_thunk(handle, &body, &entry).unwrap();
+            let [
+                crate::ir::op::Op::ReadLocal {
+                    binding,
+                    destination,
+                },
+            ] = recipe.recipe().operations.as_ref()
+            else {
+                panic!("original return-local read recipe absent")
+            };
+            let (binding, destination) = (*binding, *destination);
+            let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+            let mut frame = Frame::new(body, entry, &mut store).unwrap();
+            frame.set_fuel_limit(100).unwrap();
+            let mut scopes = Vec::new();
+            let mut scope = Some(read.scope);
+            while let Some(id) = scope {
+                scopes.push(id);
+                scope = frame.body.scopes()[id.0 as usize].parent;
+            }
+            for scope in scopes.into_iter().rev() {
+                frame.enter(scope).unwrap();
+            }
+            // Disclosed VM seam: supply the unresolved result of the original
+            // labelled block and an admitted destination source. This is an
+            // LRR source/ownership guard, not complete original-main execution.
+            let literal = store.integer_literal(false, 1, "1".into()).unwrap();
+            let cell = store
+                .new_cell(
+                    StorageContract::Unbound,
+                    false,
+                    CellOwner::FrameSlot {
+                        frame: frame.anchor,
+                        slot: frame.body.slot_count().checked_add(binding.0).unwrap(),
+                    },
+                )
+                .unwrap();
+            store.initialize(cell, literal).unwrap();
+            frame.bindings[binding.0 as usize] = Some(cell);
+            if let Some(bound) = prior {
+                let copy = store.read_owning(cell).unwrap();
+                let concrete = store.materialize_ticket(copy, bound).unwrap();
+                store.discard(copy).unwrap();
+                store.discard(concrete).unwrap();
+            }
+            let (primitive, descriptor) = if prior.is_some() {
+                (PrimitiveType::U64, TypeId(12))
+            } else {
+                (PrimitiveType::U32, TypeId(11))
+            };
+            let source = TyTerm::Primitive(primitive);
+            frame.declared_hint(destination, Some(descriptor)).unwrap();
+            frame
+                .set_source_view(destination, Some(source.clone()))
+                .unwrap();
+            let before = (
+                frame.fuel_snapshot(),
+                store.budget().handles(),
+                store.state(cell).unwrap(),
+            );
+            let outcome = crate::vm::step::step(&mut frame, &mut store, &recipe);
+            if prior.is_some() {
+                assert_eq!(outcome.unwrap_err().code, "LRR-E-TYPE-CONTEXT");
+                assert_eq!(
+                    (
+                        frame.fuel_snapshot(),
+                        store.budget().handles(),
+                        store.state(cell).unwrap()
+                    ),
+                    before
+                );
+                assert!(frame.binding_sources[binding.0 as usize].is_none());
+                assert!(frame.slots[destination.0 as usize].cell.is_none());
+                assert_eq!(frame.counters.operations_started, 0);
+            } else {
+                assert!(matches!(
+                    outcome.unwrap(),
+                    crate::vm::step::StepOutcome::Next(_)
+                ));
+                assert_eq!(
+                    frame.binding_sources[binding.0 as usize],
+                    Some(source.clone())
+                );
+                assert_eq!(
+                    store
+                        .read_scalar(frame.cell(destination).unwrap())
+                        .unwrap()
+                        .type_id,
+                    descriptor.0
+                );
+                assert_eq!(frame.counters.started_by_opcode[8], 1);
+                assert_eq!(frame.counters.operations_completed, 1);
+            }
+            assert_eq!(frame.source_view(destination).unwrap(), Some(source));
+        }
+    }
+    #[test]
     fn rustc_original_string_local_read_executes_checked_move_once() {
         let (mut frame, mut store, recipe, binding, destination, text) =
             original_string_read_frame(1000);
@@ -4358,6 +4824,108 @@ mod tests {
             frame.enter(id).unwrap();
         }
         (frame, store, recipe, target, shared, destination)
+    }
+    #[test]
+    fn rustc_original_reference_parameter_scalar_guard_refuses_before_owning_read() {
+        // Component admission setup uses the unchanged upstream reference
+        // parameter witness. It does not claim full upstream/main execution or
+        // integration of reference argument preparation in RunMachine.
+        let PendingMutableParameter {
+            mut frame,
+            mut store,
+            packet,
+            ty,
+            target,
+            ..
+        } = original_mutable_parameter_arguments();
+        let original = include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/borrowck/borrowck-move-mut-base-ptr.rs"
+        );
+        let parsed = ParsedFile::parse(
+            &SourceBlob::new(original.as_bytes().to_vec()).unwrap(),
+            ProfileIdentity::current(),
+        )
+        .unwrap();
+        let outline = parsed
+            .outline(
+                Digest::of_bytes(b"rustc-mutable-parameter-move"),
+                vec![],
+                &CfgSet::guest_default(),
+            )
+            .unwrap();
+        let owner = outline
+            .items
+            .iter()
+            .find(|item| item.def_key.declared_name == "foo")
+            .unwrap();
+        let signature = parsed
+            .function_signature(
+                owner.def_key.fingerprint(),
+                &owner.header,
+                &crate::syntax::outline::DeclarationContext {
+                    scope: owner.scope.clone(),
+                    range: owner.declaration_span,
+                },
+                owner.body.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(signature.definition, frame.body.body().definition);
+        let source_result = signature.result_symbolic.clone();
+        let result_descriptor = match &source_result {
+            Some(crate::traits::term::TyTerm::Primitive(p)) => {
+                Some(crate::frontend::call_contracts::primitive_runtime_id(*p).unwrap())
+            }
+            _ => None,
+        };
+        // Disclosed component contract construction: the actual parameter
+        // batch, written reference source and concrete descriptor come from the
+        // existing original-source ownership helper; no callable is fabricated.
+        let contracts = crate::frontend::call_contracts::PreparedCallContracts {
+            definition: signature.definition,
+            source_parameters: frame.parameter_sources.clone(),
+            parameter_descriptors: vec![ty],
+            source_substitution: Default::default(),
+            runtime_substitution: Default::default(),
+            source_result,
+            result_descriptor,
+            normalized_deferred_return: None,
+        };
+        frame
+            .install_context(
+                super::super::context::GenericEnv::capture(&signature, &contracts).unwrap(),
+            )
+            .unwrap();
+        frame
+            .initialize_parameters(&packet, &[(ty, false)], &mut store)
+            .unwrap();
+        let parameter = frame.parameters[0].unwrap();
+        let before = (
+            store.state(parameter).unwrap(),
+            store.location_epoch(parameter).unwrap(),
+            store.location_epoch(target).unwrap(),
+            store.budget().handles(),
+            frame.fuel_snapshot().used,
+            frame.counters.operations_started,
+        );
+        let error = frame.definition_parameter_primitive(0).unwrap_err();
+        assert_eq!(error.code, "LRR-E-UNSUPPORTED");
+        assert_eq!(
+            error.message,
+            "scalar parameter context requires an admitted primitive source"
+        );
+        assert_eq!(
+            before,
+            (
+                store.state(parameter).unwrap(),
+                store.location_epoch(parameter).unwrap(),
+                store.location_epoch(target).unwrap(),
+                store.budget().handles(),
+                frame.fuel_snapshot().used,
+                frame.counters.operations_started,
+            )
+        );
+        assert_eq!(frame.counters.started_by_opcode[21], 0);
+        assert!(frame.active_scopes.is_empty());
     }
     #[test]
     fn rustc_original_mutable_parameter_read_moves_lease_without_invalidating_referent() {

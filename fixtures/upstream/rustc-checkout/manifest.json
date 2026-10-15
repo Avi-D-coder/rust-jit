@@ -552,6 +552,18 @@
       "bytes": 349
     },
     {
+      "path": "tests/ui/consts/const-block-non-item-statement-3.rs",
+      "git_blob": "ba77e721c7f774d53549c3b48a809fafa2dd8f75",
+      "sha256": "18e646b302b163217b37d10b66223e4eb9d885ac96317ba0903e7db10554a030",
+      "bytes": 128
+    },
+    {
+      "path": "tests/ui/consts/const-block-non-item-statement.rs",
+      "git_blob": "4cb55e3bde6c5a228063ae03c48804bad6f61b88",
+      "sha256": "98f1d402de3ff92a7ef26adc86c31c655746f0c13184001e893510fa273cc634",
+      "bytes": 327
+    },
+    {
       "path": "tests/ui/consts/const-contents.rs",
       "git_blob": "d486325796fa370cb1f34dd80012a17de072ca17",
       "sha256": "85b3d454ed95d4e848ac5c91decf254b53182e0b06658b12538f4ef246b4804c",
@@ -588,6 +600,24 @@
       "bytes": 622
     },
     {
+      "path": "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.allow.stderr",
+      "git_blob": "dddd79a43838f625a56747bc711080a5e005d561",
+      "sha256": "4aa305eac6a01a82ce82b2e65e59cf52b60be18e9eb3a9c637f637a31372d4be",
+      "bytes": 381
+    },
+    {
+      "path": "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.rs",
+      "git_blob": "7fa338f025a7bf1f770901bf76ab70dcb9bd5170",
+      "sha256": "5591b3fa000aff9105d382b71d3edc5d5154aaad2af6b463b7cf4b14f182e4a3",
+      "bytes": 546
+    },
+    {
+      "path": "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.warn.stderr",
+      "git_blob": "44abf8be6bdfaf7e5fd160f562eb68a5f6a69abb",
+      "sha256": "bf55748e03ed9154e362d3cfa7158ec8ea3a680fcb6924ffe68f839a669b3f31",
+      "bytes": 1527
+    },
+    {
       "path": "tests/ui/consts/const-fn-const-eval.rs",
       "git_blob": "25abca0fb43d23c23747df8e63b81879c17c71b2",
       "sha256": "5971a5a80d4f5b5400ed88bba500fed8e77867cc879ed4fc8c5f013d0ba05337",
@@ -604,6 +634,12 @@
       "git_blob": "34aaeac6462d551189784cf98c7efe49466d0af9",
       "sha256": "56e696e691a0c83b4a881b486d1aacb4cced8eca689e069a76280ca1e8c97cca",
       "bytes": 700
+    },
+    {
+      "path": "tests/ui/consts/const-labeled-break.rs",
+      "git_blob": "16444dfefe2b0c9370bffda39afa2295a30bc88b",
+      "sha256": "07d3e298d10795e40866115b9b521cd8fce96a9f08bf0b709ca4e4edd8c7347f",
+      "bytes": 283
     },
     {
       "path": "tests/ui/consts/const-struct.rs",
@@ -628,6 +664,12 @@
       "git_blob": "374349732f9ef6bc0286139e61b65706967fb12d",
       "sha256": "219115a0ce3a49aa5c7d1ce5b05c8569bbdd081aafa988fb797d5c6b3455e13e",
       "bytes": 866
+    },
+    {
+      "path": "tests/ui/consts/control-flow/loop.rs",
+      "git_blob": "7da88dfd2ac89c657e71a5872fa1abfbf4ee6367",
+      "sha256": "2253f87458478482a2c038c94e6ed45d15430c434f71a8eb44d80bcba6b2cb4a",
+      "bytes": 1102
     },
     {
       "path": "tests/ui/consts/issue-17718.rs",
@@ -942,6 +984,12 @@
       "bytes": 729
     },
     {
+      "path": "tests/ui/for-loop-while/label_break_value.rs",
+      "git_blob": "92242c50f45a655d564a74a22b3aaa693861a823",
+      "sha256": "d669bf983f16e4a4b0034919c0ae427cf23337111b081ebee52fdae73cb1cca9",
+      "bytes": 3636
+    },
+    {
       "path": "tests/ui/generic-associated-types/construct_with_other_type.rs",
       "git_blob": "74ac8313cadfdcb6be0922a8d1551c726f53e9f1",
       "sha256": "6b42cd92a814354862aeed77b4810fadd714d29371dfd9728297922254ec017a",
@@ -1186,6 +1234,30 @@
       "git_blob": "b4497f8d8bc49f34699670b53d5ab5a8cabb6eb1",
       "sha256": "77688ff434f8c35cf638b7f368a3639f45c093d8e008f506667dd69bc23808e2",
       "bytes": 352
+    },
+    {
+      "path": "tests/ui/label/label_break_value_continue.rs",
+      "git_blob": "22172f4fd2e88e4edfe1bdb3db164c93b9bdf2ee",
+      "sha256": "522c687b43315ca209d68ce88391b61aa2ab50d70a9eff2cc9556bcd8416b573",
+      "bytes": 649
+    },
+    {
+      "path": "tests/ui/label/label_break_value_continue.stderr",
+      "git_blob": "284d213d65eaab32f007c46539055d63511f8c63",
+      "sha256": "2761e225ec15b71fa606e88678d9c96414da1f6fb78cb6e3102fb3cca36d49a4",
+      "bytes": 950
+    },
+    {
+      "path": "tests/ui/label/label_break_value_unlabeled_break.rs",
+      "git_blob": "2a4f5d57493e1887587278cd12c0f1f3e38adc9c",
+      "sha256": "3d5f0a6b944a6970a436657b1b49d7e98dc611d84fd8dabc1d9cab4d9db97a0e",
+      "bytes": 438
+    },
+    {
+      "path": "tests/ui/label/label_break_value_unlabeled_break.stderr",
+      "git_blob": "a2ccd27b83663a8e63432e6137812fd38765739e",
+      "sha256": "2d4a24fb0810770b79ca06fefdcef192cad65489e8ec7fe16f0974281800e8f9",
+      "bytes": 608
     },
     {
       "path": "tests/ui/let-else/let-else-irrefutable.rs",
@@ -3237,6 +3309,22 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/consts/const-block-non-item-statement-3.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/const-block-non-item-statement.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/consts/const-contents.rs",
       "directives": [
         "//@ run-pass"
@@ -3281,6 +3369,16 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/consts/const-eval/stable-metric/ctfe-simple-loop.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ revisions: warn allow",
+        "//@ compile-flags: -Z tiny-const-eval-limit"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/consts/const-fn-const-eval.rs",
       "directives": [
         "//@ run-pass"
@@ -3298,6 +3396,14 @@
     },
     {
       "path": "tests/ui/consts/const-fn.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/const-labeled-break.rs",
       "directives": [
         "//@ run-pass"
       ],
@@ -3332,6 +3438,14 @@
       "path": "tests/ui/consts/control-flow/dead_branches_dont_eval.rs",
       "directives": [
         "//@ build-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/control-flow/loop.rs",
+      "directives": [
+        "//@ check-pass"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"
@@ -3621,6 +3735,14 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/for-loop-while/label_break_value.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/generic-associated-types/construct_with_other_type.rs",
       "directives": [
         "//@ check-pass"
@@ -3809,6 +3931,18 @@
       "directives": [
         "//@ check-pass"
       ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/label/label_break_value_continue.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/label/label_break_value_unlabeled_break.rs",
+      "directives": [],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"
     },

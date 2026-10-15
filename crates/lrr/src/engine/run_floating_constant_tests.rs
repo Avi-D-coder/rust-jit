@@ -363,7 +363,7 @@ fn unchanged_float_nan_main_commits_first_binding_then_reaches_natural_method_fr
         assert_eq!(run.frame.fuel_snapshot().stop, None);
 
         // The natural current PC is the original assertion containing is_nan;
-        // the pure scalar-operand planner rejects its MethodCallExpr before the
+        // the reached operand phase rejects its MethodCallExpr before the
         // assertion opcode or later INFINITY initializer can execute.
         let written = "assert!(nan.is_nan())";
         let source = &run.sources[0];
@@ -383,11 +383,13 @@ fn unchanged_float_nan_main_commits_first_binding_then_reaches_natural_method_fr
             relative_end: absolute - handle.range.start + u32::try_from(written.len()).unwrap(),
         };
         let pc = run.frame.pc();
-        assert_eq!(pc.phase, Phase::Entry.code().unwrap());
+        assert_eq!(pc.phase, Phase::Operand(0).code().unwrap());
         let node = &run.frame.body.nodes()[pc.node as usize];
         assert_eq!(node.role, NodeRole::Expression(ExpressionKind::Macro));
         assert_eq!(run.frame.body.span(node.id).unwrap(), expected);
-        let probe = node.runtime_temporaries[0].unwrap();
+        // The condition already has its real Bool hint from Entry. Inspect
+        // an unused reserved scalar slot rather than overwrite that contract.
+        let probe = *node.runtime_scalar_slots.first().unwrap();
         let stack = error
             .guest_stack
             .as_ref()

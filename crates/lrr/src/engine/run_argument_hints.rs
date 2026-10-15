@@ -51,23 +51,31 @@ impl RunMachine {
             .ok_or_else(|| call_fault("argument hint ordinal overflow"))?;
         let selected = self
             .pending
-            .get(&site)
+            .get(&self.frame.call_identity(site))
             .ok_or_else(|| call_fault("argument hint lacks selected call identity"))?;
         let slot = *selected
             .argument_slots
             .get(next)
             .ok_or_else(|| call_fault("next argument is outside the written call"))?;
-        if self.frame.pc().node != site
-            || !matches!(Phase::from_code(self.frame.pc().phase), Phase::Operand(_))
-            || target.body != self.frame.pc().body
-            || target.phase != Phase::Entry.code()?
-            || self
-                .frame
-                .body
-                .nodes()
-                .get(target.node as usize)
-                .is_none_or(|node| node.value != Some(slot))
-        {
+        let continuation_matches = if let Some(call) = &self.frame.runtime_call {
+            self.frame.pc().node == site
+                && call.arguments().get(next) == Some(&slot)
+                && call.argument_key(
+                    u32::try_from(next).map_err(|_| call_fault("argument ordinal overflow"))?,
+                )? == target
+        } else {
+            self.frame.pc().node == site
+                && matches!(Phase::from_code(self.frame.pc().phase), Phase::Operand(_))
+                && target.body == self.frame.pc().body
+                && target.phase == Phase::Entry.code()?
+                && self
+                    .frame
+                    .body
+                    .nodes()
+                    .get(target.node as usize)
+                    .is_some_and(|node| node.value == Some(slot))
+        };
+        if !continuation_matches {
             return Err(call_fault(
                 "argument hint continuation differs from its written slot",
             ));
@@ -138,9 +146,10 @@ impl RunMachine {
         // reserved and charged at identity selection; this adds only its heap.
         self.frame.set_source_view(slot, source)?;
         self.frame.set_hint(slot, hint.descriptor)?;
+        let identity = self.frame.call_identity(site);
         let selected = self
             .pending
-            .get_mut(&site)
+            .get_mut(&identity)
             .ok_or_else(|| call_fault("selected call disappeared during argument admission"))?;
         selected.hints.push(hint);
         selected.bytes = retained;

@@ -554,20 +554,35 @@ impl PreparedSourceView {
         file.parsed
             .runtime_macro_binding_read(body, index, key, name, destination)
     }
-    pub(crate) fn runtime_macro_scalar_operations(
+    pub(crate) fn runtime_macro_scalar_plan(
         &self,
         body: &crate::syntax::outline::BodyHandle,
         index: &crate::syntax::body_index::BodyIndex,
         key: &crate::ir::pc::PcKey,
         arguments: &crate::syntax::runtime_macro_arguments::RuntimeMacroArguments,
-    ) -> Result<Vec<crate::ir::op::Op>, Diagnostic> {
+    ) -> Result<crate::syntax::runtime_macro_scalars::RuntimeScalarPlan, Diagnostic> {
         let file = self
             .state
             .files
             .get(&self.location)
             .ok_or_else(|| publication_fault("selected scalar assertion source missing"))?;
         file.parsed
-            .runtime_macro_scalar_operations(body, index, key, arguments)
+            .runtime_macro_scalar_plan(body, index, key, arguments)
+    }
+    pub(crate) fn require_runtime_macro_call(
+        &self,
+        body: &crate::syntax::outline::BodyHandle,
+        index: &crate::syntax::body_index::BodyIndex,
+        key: &crate::ir::pc::PcKey,
+        call: &crate::syntax::runtime_macro_scalars::RuntimeMacroCall,
+    ) -> Result<(), Diagnostic> {
+        let file = self
+            .state
+            .files
+            .get(&self.location)
+            .ok_or_else(|| publication_fault("selected assertion call source missing"))?;
+        file.parsed
+            .require_runtime_macro_call(body, index, key, call)
     }
     pub(crate) fn runtime_assertion_predicate_text(
         &self,

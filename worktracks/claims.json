@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Root promoted exact accepted v69 source206paths after2952/0 complete configured macOS gate; fresh MAIN milestone pending. Constant successor library899/0; private T034 assertion-call integration scoped sixenginecontrols passed, actualstockmain and remaining13-control coverage pending. Zero new complete stock cases; no task/JIT/Linux/release acceptance.",
+      "scope": "Root integrated S4v10 reached numeric/source/call/constant components. Prior937 library positives, separate corrected caller-cold and direct upstream-reference guard controls, and strict/static suffix collected; fresh integrated MAIN milestone pending. Unchanged label_break_value passes13 pre-match assertions and first match call in four editions, next guarded binding fails. Zero new full stock cases; no task/JIT/Linux/release acceptance.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -423,11 +423,14 @@
         "artifacts/macos-first/root-assertion-call-dispatch-v1/",
         "artifacts/macos-first/root-assertion-call-validation-v1/",
         "artifacts/macos-first/root-assertion-call-compile-repair-v1/",
-        "artifacts/macos-first/root-assertion-call-legacy-regression-repair-v1/"
+        "artifacts/macos-first/root-assertion-call-legacy-regression-repair-v1/",
+        "artifacts/macos-first/root-stock-local-numeric-validation-v1/",
+        "artifacts/macos-first/root-scalar-pattern-copy-v1/",
+        "artifacts/macos-first/root-scalar-guard-coverage-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-14T23:04:24.070803+00:00",
+      "updated_at": "2026-10-15T00:26:52.640839+00:00",
       "review_after": "2026-10-15T05:55:00.598518+00:00"
     },
     {

@@ -24,12 +24,37 @@ use crate::{
 };
 use ra_ap_syntax::{
     AstNode, AstToken,
-    ast::{self, HasArgList, HasAttrs, HasGenericArgs, HasGenericParams, HasModuleItem, HasName},
+    ast::{
+        self, HasArgList, HasAttrs, HasGenericArgs, HasGenericParams, HasLoopBody, HasModuleItem,
+        HasName,
+    },
 };
 use std::{collections::BTreeMap, rc::Rc};
 #[path = "constant_parameter_lengths.rs"]
 mod parameter_lengths;
 use parameter_lengths::ParameterIndependentLength;
+#[path = "constant_loops.rs"]
+mod loops;
+pub(crate) use loops::ControlTarget;
+#[path = "constant_local_constraints.rs"]
+mod local_constraints;
+#[derive(Debug)]
+pub(crate) struct LocalNumericContext {
+    primitive: PrimitiveType,
+    work: usize,
+    metadata: usize,
+}
+impl LocalNumericContext {
+    pub(crate) fn primitive(&self) -> PrimitiveType {
+        self.primitive
+    }
+    pub(crate) fn work(&self) -> usize {
+        self.work
+    }
+    pub(crate) fn metadata_bytes(&self) -> usize {
+        self.metadata
+    }
+}
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CONST-SOURCE", message.into())
 }
@@ -49,6 +74,9 @@ pub struct ConstantDeclaration {
 impl ConstantDeclaration {
     pub fn name(&self) -> &str {
         &self.name
+    }
+    pub fn is_anonymous(&self) -> bool {
+        self.name.is_empty()
     }
     pub fn range(&self) -> SourceRange {
         self.range
@@ -116,7 +144,7 @@ pub(crate) enum ConstType {
 #[derive(Debug, Clone)]
 pub(crate) struct Function {
     pub(crate) declaration: ConstantDeclaration,
-    pub(crate) params: Vec<(String, PrimitiveType)>,
+    pub(crate) params: Vec<(String, PrimitiveType, bool)>,
     pub(crate) result: ConstType,
     pub(crate) body: ExprRef,
 }
@@ -135,8 +163,9 @@ impl StatementRef {
 }
 #[derive(Debug, Clone)]
 pub(crate) enum Statement {
-    Let(String, Option<PrimitiveType>, ExprRef),
+    Let(String, bool, Option<PrimitiveType>, ExprRef),
     Expression(ExprRef),
+    Declaration,
     Unsupported(SourceRange),
 }
 /// Source-owned syntax data for an actually reached macro, never authority.
@@ -169,11 +198,15 @@ pub(crate) enum Node {
     Parentheses(ExprRef),
     Unary(NumericUnary, ExprRef),
     Binary(NumericBinary, ExprRef, ExprRef),
+    Assign(String, Option<NumericBinary>, ExprRef),
     Logic(bool, ExprRef, ExprRef),
     Cast(ExprRef, PrimitiveType),
     If(ExprRef, ExprRef, Option<ExprRef>),
-    Block(Vec<StatementRef>, Option<ExprRef>),
+    Block(Vec<StatementRef>, Option<ExprRef>, Option<ControlTarget>),
     Return(Option<ExprRef>),
+    Loop(ControlTarget, Option<ExprRef>, ExprRef),
+    Break(ControlTarget, Option<ExprRef>),
+    Continue(ControlTarget),
     Call(String, Vec<ExprRef>),
     Array(Vec<ExprRef>),
     Repeat(ExprRef, ExprRef),
@@ -183,6 +216,14 @@ pub(crate) enum Node {
     Unsupported,
 }
 impl ConstantSource {
+    pub(crate) fn numeric_local_context(
+        &self,
+        statement: &StatementRef,
+        work_limit: usize,
+        byte_limit: usize,
+    ) -> Result<LocalNumericContext, Diagnostic> {
+        local_constraints::select(self, statement, work_limit, byte_limit)
+    }
     /// Captures source bytes/profile/cfg privately. Never accepts caller-built outline/body proofs.
     pub fn parse(
         blob: &SourceBlob,
@@ -301,12 +342,12 @@ impl ConstantSource {
             else {
                 continue;
             };
-            let name = match &item {
-                ast::Item::Const(c) => c.name(),
-                ast::Item::Fn(f) => f.name(),
-                _ => None,
+            let name = match item {
+                ast::Item::Const(c) if c.underscore_token().is_some() => String::new(),
+                ast::Item::Const(c) => semantic(required(c.name())?.text())?,
+                ast::Item::Fn(f) => semantic(required(f.name())?.text())?,
+                _ => continue,
             };
-            let Some(name) = name else { continue };
             let Some(body) = header.body.as_ref() else {
                 continue;
             };
@@ -317,7 +358,7 @@ impl ConstantSource {
                 .try_reserve(1)
                 .map_err(|_| fault("constant declaration allocation"))?;
             declarations.push(ConstantDeclaration {
-                name: semantic(name.text())?,
+                name: name.clone(),
                 range: at,
                 definition: header.def_key.fingerprint(),
                 body: body.key(),
@@ -328,10 +369,9 @@ impl ConstantSource {
                 },
                 handle: body.clone(),
             });
-            items
-                .entry(semantic(name.text())?)
-                .or_default()
-                .push(item.clone());
+            if !name.is_empty() {
+                items.entry(name).or_default().push(item.clone());
+            }
         }
         Ok(Self(Rc::new(Captured {
             parsed,
@@ -479,9 +519,9 @@ impl ConstantSource {
             ));
         }
         self.0
-            .items
-            .get(&d.name)
-            .and_then(|items| items.iter().find(|i| range(i.syntax().text_range()) == at))
+            .module_items
+            .iter()
+            .find(|i| range(i.syntax().text_range()) == at)
             .cloned()
             .ok_or_else(|| fault("captured declaration absent"))
     }
@@ -504,7 +544,7 @@ impl ConstantSource {
         if header.params.len() != args.len() {
             return Err(fault("pure const argument cardinality differs"));
         }
-        for ((_, ty), arg) in header.params.iter().zip(&args) {
+        for ((_, ty, _), arg) in header.params.iter().zip(&args) {
             if !arg.matches_scalar(*ty)? {
                 return Err(fault("pure const argument type differs"));
             }
@@ -855,12 +895,12 @@ impl ConstantSource {
             if params.len() >= 256 {
                 return Err(fault("constant parameter limit"));
             }
-            let name = local_name(required(p.pat())?)?;
+            let (name, mutable) = local_binding(required(p.pat())?)?;
             let ty = self.primitive(required(p.ty())?)?;
-            if params.iter().any(|(n, _)| n == &name) {
+            if params.iter().any(|(n, _, _)| n == &name) {
                 return Err(fault("duplicate constant parameter"));
             }
-            params.push((name, ty));
+            params.push((name, ty, mutable));
         }
         let result = match f.ret_type() {
             Some(r) => self.ty(required(r.ty())?)?,
@@ -888,6 +928,9 @@ impl ConstantSource {
         self.function_header(&f)
     }
     fn named(&self, name: &str) -> Result<ast::Item, Diagnostic> {
+        if name.is_empty() {
+            return Err(fault("anonymous constants have no named lookup identity"));
+        }
         // Generated declarations/import routing is a separate provider integration.
         for item in &self.0.module_items {
             let metas = item
@@ -916,14 +959,24 @@ impl ConstantSource {
                 if l.let_else().is_some() {
                     Statement::Unsupported(s.range())
                 } else {
+                    let (name, mutable) = local_binding(required(l.pat())?)?;
                     Statement::Let(
-                        local_name(required(l.pat())?)?,
+                        name,
+                        mutable,
                         l.ty().map(|t| self.primitive(t)).transpose()?,
                         ExprRef(required(l.initializer())?),
                     )
                 }
             }
             ast::Stmt::ExprStmt(s) => Statement::Expression(ExprRef(required(s.expr())?)),
+            ast::Stmt::Item(item)
+                if !matches!(item, ast::Item::MacroCall(_) | ast::Item::Use(_)) =>
+            {
+                self.attributes_clear(item.syntax())?;
+                // Declarations perform no block-time evaluation. A later
+                // lookup still requires the actual local source member.
+                Statement::Declaration
+            }
             _ => Statement::Unsupported(s.range()),
         })
     }
@@ -1036,7 +1089,27 @@ impl ConstantSource {
                 let right = ExprRef(required(b.rhs())?);
                 match required(b.op_kind())? {
                     ast::BinaryOp::LogicOp(op) => Node::Logic(op == ast::LogicOp::And, left, right),
-                    ast::BinaryOp::Assignment { .. } => Node::Unsupported,
+                    ast::BinaryOp::Assignment { op } => {
+                        let ast::Expr::PathExpr(path) = &left.0 else {
+                            return Ok(Node::Unsupported);
+                        };
+                        self.attributes_clear(path.syntax())?;
+                        let name = bare(required(path.path())?)?;
+                        self.lexical_value_clear(path.syntax(), &name)?;
+                        let op = op.map(|op| match op {
+                            ast::ArithOp::Add => NumericBinary::Add,
+                            ast::ArithOp::Sub => NumericBinary::Sub,
+                            ast::ArithOp::Mul => NumericBinary::Mul,
+                            ast::ArithOp::Div => NumericBinary::Div,
+                            ast::ArithOp::Rem => NumericBinary::Rem,
+                            ast::ArithOp::Shl => NumericBinary::Shl,
+                            ast::ArithOp::Shr => NumericBinary::Shr,
+                            ast::ArithOp::BitAnd => NumericBinary::BitAnd,
+                            ast::ArithOp::BitOr => NumericBinary::BitOr,
+                            ast::ArithOp::BitXor => NumericBinary::BitXor,
+                        });
+                        Node::Assign(name, op, right)
+                    }
                     op => {
                         use NumericBinary as B;
                         let op = match op.to_string().as_str() {
@@ -1082,7 +1155,6 @@ impl ConstantSource {
                     || b.const_token().is_some()
                     || b.gen_token().is_some()
                     || b.try_block_modifier().is_some()
-                    || b.label().is_some()
                 {
                     return Ok(Node::Unsupported);
                 }
@@ -1094,8 +1166,30 @@ impl ConstantSource {
                     }
                     stmts.push(StatementRef(s));
                 }
-                Node::Block(stmts, list.tail_expr().map(ExprRef))
+                Node::Block(
+                    stmts,
+                    list.tail_expr().map(ExprRef),
+                    b.label().map(|_| ControlTarget::block_expression(b)),
+                )
             }
+            E::LoopExpr(loop_expression) => Node::Loop(
+                ControlTarget::loop_expression(e),
+                None,
+                ExprRef(E::BlockExpr(required(loop_expression.loop_body())?)),
+            ),
+            E::WhileExpr(loop_expression) => Node::Loop(
+                ControlTarget::loop_expression(e),
+                Some(ExprRef(required(loop_expression.condition())?)),
+                ExprRef(E::BlockExpr(required(loop_expression.loop_body())?)),
+            ),
+            E::BreakExpr(exit) => Node::Break(
+                loops::reached_target(exit.syntax(), exit.lifetime())?,
+                exit.expr().map(ExprRef),
+            ),
+            E::ContinueExpr(exit) => Node::Continue(loops::reached_continue_target(
+                exit.syntax(),
+                exit.lifetime(),
+            )?),
             E::ReturnExpr(r) => Node::Return(r.expr().map(ExprRef)),
             E::CallExpr(c) => {
                 let E::PathExpr(p) = required(c.expr())? else {
@@ -1161,14 +1255,17 @@ impl ConstantSource {
         })
     }
 }
-fn local_name(pat: ast::Pat) -> Result<String, Diagnostic> {
+fn local_binding(pat: ast::Pat) -> Result<(String, bool), Diagnostic> {
     let ast::Pat::IdentPat(p) = pat else {
         return Err(fault("constant local requires a scalar identifier"));
     };
     if p.ref_token().is_some() || p.pat().is_some() {
         return Err(fault("constant local binding mode unsupported"));
     }
-    semantic(required(p.name())?.text())
+    Ok((
+        semantic(required(p.name())?.text())?,
+        p.mut_token().is_some(),
+    ))
 }
 fn bare(path: ast::Path) -> Result<String, Diagnostic> {
     let segment = required(path.segment())?;
@@ -1230,9 +1327,9 @@ impl ConstantPlan {
 impl Node {
     pub(crate) fn owned_bytes(&self) -> Option<usize> {
         let extra = match self {
-            Self::Path(s) | Self::Float(s, _) => s.capacity(),
+            Self::Path(s) | Self::Float(s, _) | Self::Assign(s, _, _) => s.capacity(),
             Self::RequiredMacro(_) => std::mem::size_of::<RequiredConstantMacro>(),
-            Self::Block(s, _) => s
+            Self::Block(s, _, _) => s
                 .capacity()
                 .checked_mul(std::mem::size_of::<StatementRef>())?,
             Self::Array(es) => es.capacity().checked_mul(std::mem::size_of::<ExprRef>())?,
@@ -1257,3 +1354,7 @@ fn semantic(text: &str) -> Result<String, Diagnostic> {
 mod length_fixture;
 #[cfg(test)]
 pub(crate) use length_fixture::length_sites as fixture_length_sites;
+
+#[cfg(test)]
+#[path = "constant_labelled_block_tests.rs"]
+mod labelled_block_tests;

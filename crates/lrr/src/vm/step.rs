@@ -56,7 +56,15 @@ fn frame_hint(
     required: bool,
     store: &GuestStore,
 ) -> Result<Option<TypeId>, Diagnostic> {
-    if let HintRecipe::BorrowTarget { reference } = hint {
+    if let HintRecipe::DefinitionParameter(ordinal) = hint {
+        concrete(&HintRecipe::Primitive(
+            frame.definition_parameter_primitive(*ordinal)?,
+        ))
+    } else if let HintRecipe::DefinitionNumeric(context) = hint {
+        concrete(&HintRecipe::Primitive(
+            frame.definition_numeric_context(*context)?,
+        ))
+    } else if let HintRecipe::BorrowTarget { reference } = hint {
         frame.borrow_target_descriptor(*reference, store)
     } else if let HintRecipe::Parameter(key) = hint {
         let descriptor = frame.parameter_hint(*key)?;
@@ -965,10 +973,12 @@ fn execute(
             } else if matches!(
                 hint,
                 HintRecipe::Parameter(_)
+                    | HintRecipe::DefinitionNumeric(_)
+                    | HintRecipe::DefinitionParameter(_)
                     | HintRecipe::Reference { .. }
                     | HintRecipe::ArrayPrimitive { .. }
             ) {
-                frame.set_source_view(*child, Frame::annotation_source(hint))?;
+                frame.set_source_view(*child, frame.resolved_annotation_source(hint)?)?;
             }
             Ok(())
         }

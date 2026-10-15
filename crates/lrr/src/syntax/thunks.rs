@@ -10,8 +10,8 @@ use crate::{
     frontend::thunks,
     ir::{
         op::{
-            DecodedLiteral, HintRecipe, LiteralKind, LiteralRecipe, NumericBinary, NumericUnary,
-            Op, PrimitiveType,
+            DecodedLiteral, DefinitionNumericContext, HintRecipe, LiteralKind, LiteralRecipe,
+            NumericBinary, NumericUnary, Op, PrimitiveType,
         },
         pc::{NodeId, PcKey, Phase},
         recipe::{ControlRecipe, Origin, RecipeDraft, RecipeExit, VerifiedRecipe},
@@ -28,6 +28,8 @@ mod literal_match;
 mod local_numeric_constraints;
 #[path = "primitive_cast_target.rs"]
 mod primitive_cast_target;
+#[path = "runtime_local_numeric_context.rs"]
+mod runtime_local_numeric_context;
 
 fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTERNAL-SNAPSHOT", message.into())
@@ -273,6 +275,18 @@ fn compound_local_primitive(
         return Ok(None);
     };
     Ok(Some((binding, ty)))
+}
+fn compound_local_definition_context(
+    parsed: &ParsedFile,
+    index: &BodyIndex,
+    body: &BodyHandle,
+    path: &ast::PathExpr,
+) -> Result<Option<(NodeId, DefinitionNumericContext)>, Diagnostic> {
+    let Some(binding) = local_binding(parsed, index, body, path)? else {
+        return Ok(None);
+    };
+    runtime_local_numeric_context::binding_context(parsed, index, body, binding)
+        .map(|context| context.map(|context| (binding, context)))
 }
 fn compound_rhs_primitive(
     parsed: &ParsedFile,
@@ -1003,6 +1017,110 @@ impl ParsedFile {
             })
         {
             return Err(unsupported());
+        }
+        Ok(())
+    }
+    pub(crate) fn require_runtime_macro_call(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        call: &super::runtime_macro_scalars::RuntimeMacroCall,
+    ) -> Result<(), Diagnostic> {
+        use super::runtime_macro_scalars::RuntimeMacroCallPhase;
+        call.require(&body.key(), key, RuntimeMacroCallPhase::Prepare)?;
+        if self.key() != *call.source()
+            || body.key() != *index.body()
+            || index.pc(NodeId(key.node), Phase::from_code(key.phase))? != *key
+        {
+            return Err(error("assertion call current source/body/PC differs"));
+        }
+        if self.generated_origin.is_some() {
+            return Err(Diagnostic::new(
+                "LRR-E-UNSUPPORTED",
+                "generated assertion call requires origin namespace integration".into(),
+            ));
+        }
+        let node = index
+            .nodes()
+            .get(key.node as usize)
+            .ok_or_else(|| error("assertion call macro node absent"))?;
+        let invocation = call.invocation();
+        let span = call.span();
+        let start = body
+            .range
+            .start
+            .checked_add(span.relative_start)
+            .ok_or_else(|| error("assertion call source start overflow"))?;
+        let end = body
+            .range
+            .start
+            .checked_add(span.relative_end)
+            .ok_or_else(|| error("assertion call source end overflow"))?;
+        if node.role != NodeRole::Expression(ExpressionKind::Macro)
+            || body.range.start.checked_add(node.range.start) != Some(invocation.start)
+            || body.range.start.checked_add(node.range.end) != Some(invocation.end)
+            || span.body_key != body.key()
+            || start < invocation.start
+            || end > invocation.end
+            || start >= end
+        {
+            return Err(error("assertion call original source range differs"));
+        }
+        // The compiler-owned plan certifies the exact inner CallExpr. Lookup
+        // still uses the real outer source scope and never synthetic ancestors.
+        // Qualified/local type owners await the same entered namespace producer,
+        // rather than selecting a module member from a printed name.
+        if call.name().contains("::") {
+            return Err(Diagnostic::new(
+                "LRR-E-UNSUPPORTED",
+                "qualified assertion call requires source namespace integration".into(),
+            ));
+        }
+        self.require_module_predicate_call(body, index, key, call.name())?;
+        let original = self.parsed.tree();
+        let macro_expression = original
+            .syntax()
+            .covering_element(ra_ap_syntax::TextRange::new(
+                invocation.start.into(),
+                invocation.end.into(),
+            ))
+            .ancestors()
+            .filter_map(ast::MacroExpr::cast)
+            .find(|expression| {
+                super::ast_adapter::range(expression.syntax().text_range()) == invocation
+            })
+            .ok_or_else(|| error("assertion call owning macro absent"))?;
+        let mut work = 0usize;
+        for list in macro_expression
+            .syntax()
+            .ancestors()
+            .filter_map(ast::StmtList::cast)
+        {
+            for statement in list.statements() {
+                work = work
+                    .checked_add(1)
+                    .filter(|n| *n <= 100_000)
+                    .ok_or_else(|| error("assertion call lexical work limit"))?;
+                let declared = match statement {
+                    ast::Stmt::Item(ast::Item::TypeAlias(item)) => item.name(),
+                    ast::Stmt::Item(ast::Item::Struct(item)) => item.name(),
+                    ast::Stmt::Item(ast::Item::Enum(item)) => item.name(),
+                    ast::Stmt::Item(ast::Item::Union(item)) => item.name(),
+                    _ => None,
+                };
+                if declared.is_some_and(|name| {
+                    call.explicit().iter().any(|argument| {
+                        MacroName::parse(argument, self.edition)
+                            .ok()
+                            .is_some_and(|argument| {
+                                MacroName::parse(name.text(), self.edition).ok() == Some(argument)
+                            })
+                    })
+                }) {
+                    return Err(Diagnostic::new("LRR-E-UNSUPPORTED", "assertion body-local explicit type requires lexical type namespace integration".into()));
+                }
+            }
         }
         Ok(())
     }
@@ -1782,9 +1900,19 @@ impl ParsedFile {
                     )?;
                     return draft(index, key, ops, RecipeExit::Next(next));
                 };
-                // A bare local literal remains unresolved for later written
-                // uses. Only an operator initializer needs a closed numeric
-                // result before executing its operands. A written type wins.
+                // An exact owning parameter/result source relation may constrain
+                // a bare numeric local before its first read. The hint carries
+                // the definition relation, never a guessed primitive descriptor.
+                if hint == HintRecipe::None
+                    && !by_reference
+                    && let Some(context) = runtime_local_numeric_context::inferred_context(
+                        self, index, body, &statement, &pattern,
+                    )?
+                {
+                    hint = HintRecipe::DefinitionNumeric(context);
+                }
+                // Otherwise preserve the existing closed-operator fallback.
+                // A written type always wins.
                 if hint == HintRecipe::None
                     && let Some(primitive) =
                         super::numeric_fallback::operator_initializer(&initializer)?
@@ -3027,30 +3155,47 @@ impl ParsedFile {
                         "compound projected place requires source-view integration before operands",
                     );
                 };
-                let Some((binding, left_type)) =
-                    compound_local_primitive(self, index, body, &left)?
-                else {
-                    return Err(Diagnostic::new("LRR-E-TYPE-CONTEXT", "compound assignment requires a primitive source annotation or exact trait member before operands".into()));
-                };
                 let right = expression
                     .rhs()
                     .ok_or_else(|| error("compound RHS absent"))?;
-                let context = if matches!(operator, NumericBinary::Shl | NumericBinary::Shr) {
-                    PrimitiveType::I32
+                let shift = matches!(operator, NumericBinary::Shl | NumericBinary::Shr);
+                let (binding, kind, computed_hint) = if let Some((binding, left_type)) =
+                    compound_local_primitive(self, index, body, &left)?
+                {
+                    let context = if shift { PrimitiveType::I32 } else { left_type };
+                    let Some(right_type) =
+                        compound_rhs_primitive(self, index, body, right.clone(), context)?
+                    else {
+                        return Err(Diagnostic::new(
+                            "LRR-E-TYPE-CONTEXT",
+                            "compound RHS requires a symbolic source view before operands".into(),
+                        ));
+                    };
+                    (
+                        binding,
+                        crate::ir::op::AssignKind::Primitive {
+                            left: left_type,
+                            right: right_type,
+                        },
+                        HintRecipe::Primitive(left_type),
+                    )
+                } else if let Some((binding, context)) =
+                    compound_local_definition_context(self, index, body, &left)?
+                {
+                    let Some(right) = runtime_local_numeric_context::compound_right(&right, shift)?
+                    else {
+                        return Err(Diagnostic::new(
+                                "LRR-E-TYPE-CONTEXT",
+                                "compound RHS requires an exact definition numeric source before operands".into(),
+                            ));
+                    };
+                    (
+                        binding,
+                        crate::ir::op::AssignKind::DefinitionNumeric { context, right },
+                        HintRecipe::DefinitionNumeric(context),
+                    )
                 } else {
-                    left_type
-                };
-                let Some(right_type) =
-                    compound_rhs_primitive(self, index, body, right.clone(), context)?
-                else {
-                    return Err(Diagnostic::new(
-                        "LRR-E-TYPE-CONTEXT",
-                        "compound RHS requires a symbolic source view before operands".into(),
-                    ));
-                };
-                let kind = crate::ir::op::AssignKind::Primitive {
-                    left: left_type,
-                    right: right_type,
+                    return Err(Diagnostic::new("LRR-E-TYPE-CONTEXT", "compound assignment requires a primitive source annotation or exact definition source before operands".into()));
                 };
                 let left = id_for(index, body, left.syntax())?;
                 let right = id_for(index, body, right.syntax())?;
@@ -3077,7 +3222,7 @@ impl ParsedFile {
                             },
                             Op::SetHint {
                                 child: computed,
-                                hint: HintRecipe::Primitive(left_type),
+                                hint: computed_hint,
                             },
                         ],
                         RecipeExit::Next(index.pc(right, Phase::Entry)?),

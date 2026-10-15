@@ -570,6 +570,60 @@ pub(crate) fn attributes_from_meta(
     Ok((enabled, result))
 }
 
+/// Pinned parser recovery can retain a malformed declaration as ERROR rather
+/// than an ast::Item. Such a declaration container cannot certify completeness.
+/// Inspect direct children only: executable bodies and macro tokens stay opaque.
+fn retain_declaration_parse_boundary(
+    container: &SyntaxNode,
+    scope: &ScopeKey,
+    source: Digest,
+    outline: &mut Outline,
+) -> Result<(), Diagnostic> {
+    let mut work = 0usize;
+    for child in container.children() {
+        work = work
+            .checked_add(1)
+            .filter(|count| *count <= 100_000)
+            .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "declaration recovery work limit"))?;
+        if child.kind() != ra_ap_syntax::SyntaxKind::ERROR {
+            continue;
+        }
+        let error_range = range(child.text_range());
+        let mut identity = StableEncoder::new("lrr/v2/declaration-parse-boundary");
+        identity.digest(source);
+        identity.record(scope);
+        identity.u32(error_range.start);
+        identity.u32(error_range.end);
+        let members = outline.scopes.get_mut(scope).ok_or_else(|| {
+            fault(
+                "LRR-E-PARSE-BLOCKS-ENTRY",
+                "declaration recovery scope absent",
+            )
+        })?;
+        members
+            .blockers
+            .len()
+            .checked_add(1)
+            .filter(|count| *count <= 100_000)
+            .and_then(|count| count.checked_mul(std::mem::size_of::<ScopeBlocker>()))
+            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+            .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "declaration recovery metadata limit"))?;
+        members.blockers.try_reserve(1).map_err(|_| {
+            fault(
+                "LRR-E-SOURCE-LIMIT",
+                "declaration recovery allocation failed",
+            )
+        })?;
+        members.blockers.push(ScopeBlocker {
+            kind: BlockerKind::ParseBoundary,
+            syntax: identity.finish(),
+        });
+        // One exact observed parse boundary is sufficient to prevent a seal.
+        return Ok(());
+    }
+    Ok(())
+}
+
 impl ParsedFile {
     /// Pure header traversal. Function bodies and macro token trees are opaque.
     pub fn outline(
@@ -606,6 +660,7 @@ impl ParsedFile {
         if !super::attributes::source_root_enabled(&root, cfg)? {
             return Ok(outline);
         }
+        retain_declaration_parse_boundary(root.syntax(), &initial, self.content, &mut outline)?;
         let mut stack: Vec<_> = root
             .syntax()
             .children()
@@ -661,7 +716,10 @@ impl ParsedFile {
                         ItemKind::Constant,
                         Namespace::Value,
                         i.name().map(|n| n.text().to_string()),
-                        true,
+                        // `const _` is an actual unnamed item, not a missing
+                        // identifier or a member callable as `_`. Retain its
+                        // header/body/ordinal without publishing a name.
+                        i.underscore_token().is_none(),
                     )
                 }
                 ast::Item::Static(i) => {
@@ -1103,6 +1161,12 @@ impl ParsedFile {
                         });
                     }
                     outline.scopes.entry(child_scope.clone()).or_default();
+                    retain_declaration_parse_boundary(
+                        &container,
+                        &child_scope,
+                        self.content,
+                        &mut outline,
+                    )?;
                     let mut children: Vec<_> = container
                         .children()
                         .filter_map(ast::Item::cast)
@@ -1352,5 +1416,152 @@ mod tests {
     fn unmatched_body_delimiter_blocks_only_entry() {
         let o = outline("fn cold() { let x=1_i64;");
         assert!(o.items[0].body.as_ref().unwrap().require_entry().is_err());
+    }
+    #[test]
+    fn unchanged_anonymous_const_headers_are_distinct_unnamed_items_all_editions() {
+        const SOURCE: &str = include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/control-flow/loop.rs"
+        );
+        for edition in [2015, 2018, 2021, 2024] {
+            let parsed = ParsedFile::parse(
+                &crate::source::snapshot::SourceBlob::new(SOURCE.as_bytes().to_vec()).unwrap(),
+                ProfileIdentity {
+                    edition,
+                    ..ProfileIdentity::current()
+                },
+            )
+            .unwrap();
+            let outline = parsed
+                .outline(Digest([225; 32]), Vec::new(), &CfgSet::guest_default())
+                .unwrap();
+            let anonymous = outline
+                .items
+                .iter()
+                .filter(|item| {
+                    item.def_key.item_kind == ItemKind::Constant
+                        && item.def_key.declared_name.is_empty()
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(anonymous.len(), 5);
+            let definitions = anonymous
+                .iter()
+                .map(|item| item.def_key.fingerprint())
+                .collect::<std::collections::BTreeSet<_>>();
+            assert_eq!(definitions.len(), 5);
+            let members = outline.scopes.get(&outline.root_scope).unwrap();
+            assert!(members.blockers.is_empty());
+            assert!(
+                !members
+                    .candidates
+                    .contains_key(&(Namespace::Value, String::new()))
+            );
+            assert!(
+                !members
+                    .candidates
+                    .contains_key(&(Namespace::Value, "_".into()))
+            );
+            for item in anonymous {
+                assert!(item.body.as_ref().is_some_and(|body| !body.entry_blocked));
+                assert!(
+                    SOURCE
+                        [item.declaration_span.start as usize..item.declaration_span.end as usize]
+                        .starts_with("const _:")
+                );
+            }
+        }
+    }
+    #[test]
+    fn anonymous_body_edits_keep_headers_without_hiding_missing_identifiers() {
+        let before = outline("const _:i32=1; const _:i32=2; fn f(){}");
+        let after = outline("const _:i32=9; const _:i32=8; fn f(){}");
+        for (before, after) in before.items.iter().zip(&after.items) {
+            assert_eq!(before.def_key, after.def_key);
+            assert_eq!(before.header, after.header);
+        }
+        assert_ne!(
+            before.items[0].body.as_ref().unwrap().key(),
+            after.items[0].body.as_ref().unwrap().key()
+        );
+        let malformed = outline("const :i32=1; fn f(){}");
+        assert!(malformed.scopes.values().any(|scope| {
+            scope
+                .blockers
+                .iter()
+                .any(|blocker| blocker.kind == BlockerKind::ParseBoundary)
+        }));
+    }
+    #[test]
+    fn malformed_const_recovery_cannot_silently_complete_a_declaration_scope() {
+        for edition in [2015, 2018, 2021, 2024] {
+            let parsed = ParsedFile::parse(
+                &SourceBlob::new(b"const :i32=1; fn f(){}".to_vec()).unwrap(),
+                ProfileIdentity {
+                    edition,
+                    ..ProfileIdentity::current()
+                },
+            )
+            .unwrap();
+            assert!(!parsed.errors.is_empty());
+            let captured = parsed
+                .outline(Digest([226; 32]), vec![], &CfgSet::guest_default())
+                .unwrap();
+            let root = &captured.scopes[&captured.root_scope];
+            assert!(
+                root.blockers
+                    .iter()
+                    .any(|blocker| blocker.kind == BlockerKind::ParseBoundary)
+            );
+            assert_eq!(captured.items.len(), 1);
+            assert_eq!(captured.items[0].def_key.declared_name, "f");
+            assert!(
+                root.candidates
+                    .contains_key(&(Namespace::Value, "f".into()))
+            );
+            assert!(
+                !root
+                    .candidates
+                    .contains_key(&(Namespace::Value, String::new()))
+            );
+            assert!(
+                !root
+                    .candidates
+                    .contains_key(&(Namespace::Value, "_".into()))
+            );
+        }
+    }
+    #[test]
+    fn nested_declaration_recovery_does_not_inspect_cold_bodies_or_macro_tokens() {
+        let captured = outline(
+            "mod broken {const :i32=1;} mod clean {fn f(){}} fn cold(){let = ;} macro_rules! m {()=>{const :i32=1;}}",
+        );
+        assert!(captured.scopes[&captured.root_scope].blockers.is_empty());
+        let broken = ScopeKey {
+            module_path: vec!["broken".into()],
+            ..captured.root_scope.clone()
+        };
+        assert!(
+            captured.scopes[&broken]
+                .blockers
+                .iter()
+                .any(|blocker| blocker.kind == BlockerKind::ParseBoundary)
+        );
+        let clean = ScopeKey {
+            module_path: vec!["clean".into()],
+            ..captured.root_scope.clone()
+        };
+        assert!(captured.scopes[&clean].blockers.is_empty());
+        let cold = captured
+            .items
+            .iter()
+            .find(|item| item.def_key.declared_name == "cold")
+            .unwrap();
+        assert!(cold.body.as_ref().unwrap().require_entry().is_ok());
+        assert!(
+            captured
+                .items
+                .iter()
+                .any(|item| item.def_key.declared_name == "m")
+        );
+        assert_eq!(captured.items.len(), 5);
     }
 }

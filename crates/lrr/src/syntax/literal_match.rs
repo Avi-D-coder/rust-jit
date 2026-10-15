@@ -84,6 +84,54 @@ fn pattern_type(pat: &ast::Pat) -> Option<PrimitiveType> {
         _ => None,
     }
 }
+/// The ordinal is an exact source relation, not a printed primitive proof.
+/// Its scalar class is checked against the admitted parameter source by VM.
+fn parameter_context(
+    parsed: &ParsedFile,
+    index: &BodyIndex,
+    body: &BodyHandle,
+    expression: &ast::Expr,
+) -> Result<Option<HintRecipe>, Diagnostic> {
+    if parsed.generated_origin.is_some() {
+        return Ok(None);
+    }
+    let mut expression = expression.clone();
+    for _ in 0..256 {
+        match expression {
+            ast::Expr::ParenExpr(group) => {
+                let Some(inner) = group.expr() else {
+                    return Ok(None);
+                };
+                expression = inner;
+            }
+            ast::Expr::PathExpr(path) => {
+                let Some(segment) = path
+                    .path()
+                    .filter(|p| p.qualifier().is_none())
+                    .and_then(|p| p.segment())
+                else {
+                    return Ok(None);
+                };
+                if segment.coloncolon_token().is_some()
+                    || segment.generic_arg_list().is_some()
+                    || segment.parenthesized_arg_list().is_some()
+                    || segment.type_anchor().is_some()
+                    || local_binding(parsed, index, body, &path)?.is_some()
+                {
+                    return Ok(None);
+                }
+                let Some(name) = segment.name_ref() else {
+                    return Ok(None);
+                };
+                let name = MacroName::parse(name.text(), parsed.edition)?;
+                return Ok(parameter_at(parsed, path.syntax(), &name)?
+                    .map(HintRecipe::DefinitionParameter));
+            }
+            _ => return Ok(None),
+        }
+    }
+    Err(limit())
+}
 fn context(
     parsed: &ParsedFile,
     index: &BodyIndex,
@@ -268,7 +316,7 @@ struct Plan {
     expression: ast::MatchExpr,
     id: NodeId,
     source: NodeId,
-    ty: PrimitiveType,
+    ty: HintRecipe,
     arms: Vec<Arm>,
 }
 type IndexRows = Vec<((u32, u32, u8), NodeId)>;
@@ -494,7 +542,14 @@ fn plan(
         arms.try_reserve(1).map_err(|_| limit())?;
         arms.push(arm);
     }
-    let Some(ty) = context(parsed, index, body, &source, expected, 0, &mut work)? else {
+    let ty = if let Some(primitive) = context(parsed, index, body, &source, expected, 0, &mut work)?
+    {
+        HintRecipe::Primitive(primitive)
+    } else if let Some(parameter) = parameter_context(parsed, index, body, &source)? {
+        // A current primitive source is required before ReadParameter. This
+        // never imposes a later pattern's type or moves a non-scalar scrutinee.
+        parameter
+    } else {
         return Ok(None);
     };
     Ok(Some(Plan {
@@ -560,7 +615,7 @@ pub(super) fn prepare(
                 key,
                 vec![Op::SetHint {
                     child: source,
-                    hint: HintRecipe::Primitive(plan.ty),
+                    hint: plan.ty.clone(),
                 }],
                 RecipeExit::Next(index.pc(plan.source, Phase::Entry)?),
             );
@@ -764,17 +819,12 @@ pub(super) fn prepare(
             } else {
                 super::literal_recipe(&literal, span)?
             };
-            let ty = match &recipe.decoded {
+            let hint = match &recipe.decoded {
                 Some(DecodedLiteral::Integer {
                     suffix: Some(ty), ..
-                }) => *ty,
-                _ => {
-                    if recipe.kind == LiteralKind::Bool {
-                        PrimitiveType::Bool
-                    } else {
-                        plan.ty
-                    }
-                }
+                }) => HintRecipe::Primitive(*ty),
+                _ if recipe.kind == LiteralKind::Bool => HintRecipe::Primitive(PrimitiveType::Bool),
+                _ => plan.ty.clone(),
             };
             draft(
                 index,
@@ -782,7 +832,7 @@ pub(super) fn prepare(
                 vec![
                     Op::Literal {
                         literal: recipe,
-                        hint: HintRecipe::Primitive(ty),
+                        hint,
                         destination: expected,
                     },
                     Op::NumericBinary {

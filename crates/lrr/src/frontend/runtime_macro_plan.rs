@@ -464,6 +464,90 @@ impl RuntimeIntrinsicPlan {
         )?;
         Ok(StaticPanicRecipeLowering::Recipe(Box::new(recipe)))
     }
+    /// Original-body agreement is replayed before every scalar plan/phase.
+    fn scalar_assertion_body<'a>(
+        &self,
+        source: &'a crate::source::changes::PreparedSourceView,
+        body: &crate::syntax::body_index::BodyIndex,
+        key: &crate::ir::pc::PcKey,
+    ) -> Result<&'a crate::syntax::outline::BodyHandle, Diagnostic> {
+        let invalid = |message: &str| Diagnostic::new("LRR-E-RUNTIME-MACRO", message.into());
+        self.arguments
+            .require_source(&source.selection().outline.parse)?;
+        let handle = source
+            .outline()
+            .items
+            .iter()
+            .filter_map(|item| item.body.as_ref())
+            .find(|handle| handle.key() == key.body)
+            .ok_or_else(|| invalid("scalar assertion body absent"))?;
+        handle.require_entry()?;
+        let node = body
+            .nodes()
+            .get(key.node as usize)
+            .ok_or_else(|| invalid("scalar assertion node absent"))?;
+        if key.body != *body.body()
+            || node.role
+                != crate::syntax::body_index::NodeRole::Expression(
+                    crate::syntax::body_index::ExpressionKind::Macro,
+                )
+            || handle.range.start.checked_add(node.range.start)
+                != Some(self.invocation.range().start)
+            || handle.range.start.checked_add(node.range.end) != Some(self.invocation.range().end)
+        {
+            return Err(invalid("scalar assertion source invocation differs"));
+        }
+        body.pc(
+            crate::ir::pc::NodeId(key.node),
+            crate::ir::pc::Phase::from_code(key.phase),
+        )?;
+        Ok(handle)
+    }
+
+    /// Replayed from the same selected intrinsic/source plan, never reconstructed
+    /// from a cached opcode or a caller-supplied completeness claim.
+    pub(crate) fn scalar_call_witness(
+        &self,
+        source: &crate::source::changes::PreparedSourceView,
+        body: &crate::syntax::body_index::BodyIndex,
+        key: &crate::ir::pc::PcKey,
+    ) -> Result<
+        Option<std::sync::Arc<crate::syntax::runtime_macro_scalars::RuntimeMacroCall>>,
+        Diagnostic,
+    > {
+        use crate::{
+            ir::pc::Phase,
+            syntax::runtime_macro_scalars::{RuntimeMacroCallPhase, RuntimeScalarStep},
+        };
+        let handle = self.scalar_assertion_body(source, body, key)?;
+        let ordinal = match Phase::from_code(key.phase) {
+            Phase::Entry => 0,
+            Phase::Operand(n) => usize::from(n) + 1,
+            Phase::Commit | Phase::Exit => return Ok(None),
+        };
+        let plan = source.runtime_macro_scalar_plan(handle, body, key, &self.arguments)?;
+        let (call, phase) = match plan.steps().get(ordinal) {
+            Some(RuntimeScalarStep::CallPrepare(call)) => (*call, RuntimeMacroCallPhase::Prepare),
+            Some(RuntimeScalarStep::CallAdvance(call, arg)) => {
+                (*call, RuntimeMacroCallPhase::Advance(*arg))
+            }
+            Some(RuntimeScalarStep::CallSeal(call)) => (*call, RuntimeMacroCallPhase::Seal),
+            Some(RuntimeScalarStep::Operation(_) | RuntimeScalarStep::Fault(_)) => return Ok(None),
+            None => {
+                return Err(Diagnostic::new(
+                    "LRR-E-RUNTIME-MACRO",
+                    "scalar call phase outside source plan".into(),
+                ));
+            }
+        };
+        let call = plan.call(call)?;
+        call.require(&key.body, key, phase)?;
+        if matches!(phase, RuntimeMacroCallPhase::Prepare) {
+            source.require_runtime_macro_call(handle, body, key, call)?;
+        }
+        Ok(Some(std::sync::Arc::clone(call)))
+    }
+
     /// Reached scalar operands execute as ordinary bounded source-PC phases.
     /// Success records the Assert opcode; failure alone demands message syntax.
     pub(crate) fn lower_scalar_assertion_recipe(
@@ -480,63 +564,141 @@ impl RuntimeIntrinsicPlan {
             validate::verify,
         };
         let invalid = |message: &str| Diagnostic::new("LRR-E-RUNTIME-MACRO", message.into());
-        self.arguments
-            .require_source(&source.selection().outline.parse)?;
-        let handle = source
-            .outline()
-            .items
-            .iter()
-            .filter_map(|item| item.body.as_ref())
-            .find(|handle| handle.key() == key.body)
-            .ok_or_else(|| invalid("scalar assertion body absent"))?;
-        handle.require_entry()?;
-        let node = body
-            .nodes()
-            .get(key.node as usize)
-            .ok_or_else(|| invalid("scalar assertion node absent"))?;
+        let handle = self.scalar_assertion_body(source, body, key)?;
+        let node = &body.nodes()[key.node as usize];
         let condition = node.runtime_temporaries[0]
             .ok_or_else(|| invalid("scalar assertion condition absent"))?;
         let destination = node
             .value
             .ok_or_else(|| invalid("scalar assertion result absent"))?;
-        // Revalidate source identity for every phase, including success/failure.
-        if key.body != *body.body()
-            || node.role
-                != crate::syntax::body_index::NodeRole::Expression(
-                    crate::syntax::body_index::ExpressionKind::Macro,
-                )
-            || handle.range.start.checked_add(node.range.start)
-                != Some(self.invocation.range().start)
-            || handle.range.start.checked_add(node.range.end) != Some(self.invocation.range().end)
-        {
-            return Err(invalid("scalar assertion source invocation differs"));
-        }
+        let call_witness = self.scalar_call_witness(source, body, key)?;
         let id = NodeId(key.node);
         let (operations, exit) = match Phase::from_code(key.phase) {
             Phase::Entry | Phase::Operand(_) => {
-                let operations =
-                    source.runtime_macro_scalar_operations(handle, body, key, &self.arguments)?;
+                use crate::syntax::runtime_macro_scalars::{
+                    RuntimeMacroCallPhase, RuntimeScalarStep,
+                };
+                let plan = source.runtime_macro_scalar_plan(handle, body, key, &self.arguments)?;
                 let ordinal = match Phase::from_code(key.phase) {
                     Phase::Entry => 0,
                     Phase::Operand(ordinal) => usize::from(ordinal) + 1,
                     _ => unreachable!(),
                 };
-                let operation = operations
+                let step = plan
+                    .steps()
                     .get(ordinal)
-                    .ok_or_else(|| invalid("scalar assertion phase outside operand plan"))?
-                    .clone();
-                let exit = if ordinal + 1 == operations.len() {
-                    RecipeExit::Branch {
-                        condition,
-                        yes: body.pc(id, Phase::Exit)?,
-                        no: body.pc(id, Phase::Commit)?,
+                    .ok_or_else(|| invalid("scalar assertion phase outside operand plan"))?;
+                let following = || -> Result<_, Diagnostic> {
+                    if ordinal + 1 == plan.steps().len() {
+                        Ok(RecipeExit::Branch {
+                            condition,
+                            yes: body.pc(id, Phase::Exit)?,
+                            no: body.pc(id, Phase::Commit)?,
+                        })
+                    } else {
+                        let next = u16::try_from(ordinal)
+                            .map_err(|_| invalid("scalar assertion phase overflow"))?;
+                        Ok(RecipeExit::Next(body.pc(id, Phase::Operand(next))?))
                     }
-                } else {
-                    let following = u16::try_from(ordinal)
-                        .map_err(|_| invalid("scalar assertion phase overflow"))?;
-                    RecipeExit::Next(body.pc(id, Phase::Operand(following))?)
                 };
-                (vec![operation], exit)
+                match step {
+                    RuntimeScalarStep::Operation(operation) => {
+                        (vec![operation.clone()], following()?)
+                    }
+                    RuntimeScalarStep::Fault(diagnostic) => {
+                        // Existing LRIR has a typed reached-unsupported template.
+                        // Do not erase another authority/currentness/source error.
+                        if !matches!(
+                            diagnostic,
+                            Diagnostic {
+                                code: "LRR-E-UNSUPPORTED",
+                                message: _,
+                                macro_origin: None,
+                                rendered_macro_origin: None,
+                                generated_origin: None,
+                                rendered_generated_origin: None,
+                                guest_stack: None,
+                                rendered_guest_stack: None,
+                                origin_attachment_failure: None,
+                                failure_context: None,
+                            }
+                        ) {
+                            return Err(diagnostic.clone());
+                        }
+                        (
+                            vec![Op::Unsupported(crate::ir::op::DiagnosticTemplate {
+                                message: diagnostic.message.clone(),
+                            })],
+                            following()?,
+                        )
+                    }
+                    RuntimeScalarStep::CallPrepare(ordinal) => {
+                        let call = plan.call(*ordinal)?;
+                        call.require(&key.body, key, RuntimeMacroCallPhase::Prepare)?;
+                        let next = if call.arguments().is_empty() {
+                            call.seal_key()
+                        } else {
+                            call.argument_key(0)?
+                        };
+                        (
+                            vec![scalar_call_operation(call, true)?],
+                            RecipeExit::Next(next.clone()),
+                        )
+                    }
+                    RuntimeScalarStep::CallAdvance(call_ordinal, argument) => {
+                        let call = plan.call(*call_ordinal)?;
+                        call.require(&key.body, key, RuntimeMacroCallPhase::Advance(*argument))?;
+                        let advance = Op::CallAdvance {
+                            site: crate::ir::recipe::CallSiteId(key.node),
+                            argument: *argument,
+                        };
+                        let count = u32::try_from(call.arguments().len())
+                            .map_err(|_| invalid("scalar call argument count overflow"))?;
+                        if argument.checked_add(1) == Some(count) {
+                            call.require(&key.body, key, RuntimeMacroCallPhase::Seal)?;
+                            if !matches!(plan.steps().get(ordinal + 1),
+                                Some(RuntimeScalarStep::CallSeal(seal)) if seal == call_ordinal)
+                            {
+                                return Err(invalid(
+                                    "final scalar advance lacks its following seal",
+                                ));
+                            }
+                            (
+                                vec![advance, scalar_call_operation(call, false)?],
+                                RecipeExit::Call {
+                                    site: crate::ir::recipe::CallSiteId(key.node),
+                                    result: call.result(),
+                                    resume: call.resume_key().clone(),
+                                },
+                            )
+                        } else {
+                            let next = argument
+                                .checked_add(1)
+                                .ok_or_else(|| invalid("scalar call argument ordinal overflow"))?;
+                            (
+                                vec![advance],
+                                RecipeExit::Next(call.argument_key(next)?.clone()),
+                            )
+                        }
+                    }
+                    RuntimeScalarStep::CallSeal(ordinal) => {
+                        let call = plan.call(*ordinal)?;
+                        call.require(&key.body, key, RuntimeMacroCallPhase::Seal)?;
+                        if !call.arguments().is_empty() {
+                            return Err(invalid(
+                                "nonempty scalar seal must follow its final advance",
+                            ));
+                        }
+                        (
+                            vec![scalar_call_operation(call, false)?],
+                            RecipeExit::Call {
+                                site: crate::ir::recipe::CallSiteId(key.node),
+                                result: call.result(),
+                                resume: call.resume_key().clone(),
+                            },
+                        )
+                    }
+                }
             }
             Phase::Exit => (
                 vec![Op::Assert {
@@ -575,28 +737,77 @@ impl RuntimeIntrinsicPlan {
                 )
             }
         };
-        let recipe = verify(
-            crate::frontend::thunks::with_temporary_scope_entry(
-                body,
-                RecipeDraft {
-                    key: key.clone(),
-                    origin: Origin {
-                        span: body.span(id)?,
-                        expansion_ancestry: vec![],
-                    },
-                    operations,
-                    exits: vec![exit],
-                    dependencies: vec![],
-                },
-            )?,
+        let origin_span = if let Some(call) = &call_witness {
+            call.span().clone()
+        } else {
+            body.span(id)?
+        };
+        let draft = crate::frontend::thunks::with_temporary_scope_entry(
             body,
+            RecipeDraft {
+                key: key.clone(),
+                origin: Origin {
+                    span: origin_span,
+                    expansion_ancestry: vec![],
+                },
+                operations,
+                exits: vec![exit],
+                dependencies: vec![],
+            },
         )?;
+        let recipe = if let Some(call) = &call_witness {
+            crate::ir::validate::verify_runtime_scalar_call(draft, body, call)?
+        } else {
+            verify(draft, body)?
+        };
         Ok(StaticPanicRecipeLowering::Recipe(Box::new(recipe)))
     }
     pub fn message_timing(&self) -> MessageTiming {
         self.message_timing
     }
 }
+fn scalar_call_operation(
+    call: &crate::syntax::runtime_macro_scalars::RuntimeMacroCall,
+    prepare: bool,
+) -> Result<crate::ir::op::Op, Diagnostic> {
+    fn text(value: &str) -> Result<String, Diagnostic> {
+        let mut out = String::new();
+        out.try_reserve_exact(value.len())
+            .map_err(|_| crate::runtime::arena::resource())?;
+        out.push_str(value);
+        Ok(out)
+    }
+    let name = text(call.name())?;
+    let mut explicit = Vec::new();
+    explicit
+        .try_reserve_exact(call.explicit().len())
+        .map_err(|_| crate::runtime::arena::resource())?;
+    for ty in call.explicit() {
+        explicit.push(text(ty)?);
+    }
+    let mut arguments = Vec::new();
+    arguments
+        .try_reserve_exact(call.arguments().len())
+        .map_err(|_| crate::runtime::arena::resource())?;
+    arguments.extend_from_slice(call.arguments());
+    let site = crate::ir::recipe::CallSiteId(call.prepare_key().node);
+    Ok(if prepare {
+        crate::ir::op::Op::CallPrepare {
+            site,
+            name,
+            explicit,
+            arguments,
+        }
+    } else {
+        crate::ir::op::Op::CallSeal {
+            site,
+            name,
+            explicit,
+            arguments,
+        }
+    })
+}
+
 #[derive(Debug)]
 pub enum RuntimeMacroPreparation {
     Intrinsic(Box<RuntimeIntrinsicPlan>),
@@ -691,3 +902,7 @@ impl PreparedDeclarativeExpression {
         &self.origins
     }
 }
+
+#[cfg(test)]
+#[path = "runtime_macro_call_recipe_tests.rs"]
+mod call_recipe_tests;

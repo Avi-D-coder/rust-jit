@@ -12,6 +12,40 @@ use std::collections::BTreeSet;
 fn invalid(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTERNAL-IR", message.into())
 }
+fn definition_numeric_context(
+    context: super::op::DefinitionNumericContext,
+) -> Result<(), Diagnostic> {
+    match context {
+        super::op::DefinitionNumericContext::Parameter(ordinal) if ordinal >= 100_000 => Err(
+            invalid("definition numeric parameter ordinal exceeds structural limit"),
+        ),
+        super::op::DefinitionNumericContext::Parameter(_)
+        | super::op::DefinitionNumericContext::Result
+        | super::op::DefinitionNumericContext::ResultOrDefault { .. } => Ok(()),
+    }
+}
+fn numeric_primitive(primitive: super::op::PrimitiveType) -> Result<(), Diagnostic> {
+    use super::op::PrimitiveType;
+    match primitive {
+        PrimitiveType::I8
+        | PrimitiveType::I16
+        | PrimitiveType::I32
+        | PrimitiveType::I64
+        | PrimitiveType::I128
+        | PrimitiveType::Isize
+        | PrimitiveType::U8
+        | PrimitiveType::U16
+        | PrimitiveType::U32
+        | PrimitiveType::U64
+        | PrimitiveType::U128
+        | PrimitiveType::Usize
+        | PrimitiveType::F32
+        | PrimitiveType::F64 => Ok(()),
+        PrimitiveType::Unit | PrimitiveType::Bool | PrimitiveType::Char => Err(invalid(
+            "definition numeric compound RHS is not a numeric primitive",
+        )),
+    }
+}
 fn pc(body: &BodyIndex, key: &PcKey) -> Result<(), Diagnostic> {
     if &key.body != body.body() {
         return Err(invalid("recipe PC belongs to another body"));
@@ -84,7 +118,161 @@ fn macro_scalar_place(
             .checked_sub(1)
             .is_some_and(|value| macro_scalar_value(node, SlotId(value)))
 }
-pub fn verify(mut draft: RecipeDraft, body: &BodyIndex) -> Result<VerifiedRecipe, Diagnostic> {
+pub fn verify(draft: RecipeDraft, body: &BodyIndex) -> Result<VerifiedRecipe, Diagnostic> {
+    verify_inner(draft, body, None)
+}
+/// General macro call admission consumes a genuine privately minted source
+/// witness. The ordinary public verifier never acquires this authority.
+pub(crate) fn verify_runtime_scalar_call(
+    draft: RecipeDraft,
+    body: &BodyIndex,
+    call: &crate::syntax::runtime_macro_scalars::RuntimeMacroCall,
+) -> Result<VerifiedRecipe, Diagnostic> {
+    require_runtime_scalar_call(&draft, body, call)?;
+    verify_inner(draft, body, Some(call))
+}
+fn require_runtime_scalar_call(
+    draft: &RecipeDraft,
+    body: &BodyIndex,
+    call: &crate::syntax::runtime_macro_scalars::RuntimeMacroCall,
+) -> Result<(), Diagnostic> {
+    use crate::syntax::{
+        body_index::{ExpressionKind, NodeRole},
+        runtime_macro_scalars::RuntimeMacroCallPhase,
+    };
+    pc(body, &draft.key)?;
+    let node = &body.nodes()[draft.key.node as usize];
+    if node.role != NodeRole::Expression(ExpressionKind::Macro)
+        || &call.source().profile != body.profile()
+        || call.span().body_key != *body.body()
+        || draft.origin.span != *call.span()
+        || call.span().relative_start < node.range.start
+        || call.span().relative_end > node.range.end
+        || call.span().relative_start >= call.span().relative_end
+        || call.prepare_key().node != draft.key.node
+        || draft.exits.len() != 1
+        || !matches!(
+            Phase::from_code(draft.key.phase),
+            Phase::Entry | Phase::Operand(_)
+        )
+    {
+        return Err(invalid("scalar call source/body/phase agreement differs"));
+    }
+    // Scope entry belongs to the indexed original macro boundary, not a newly
+    // invented call scope. Accept only the exact normal entry prefix.
+    let ops = if draft.key.phase == Phase::Entry.code()?
+        && let Some(scope) = node.boolean_scope.or(node.statement_scope)
+        && matches!(draft.operations.first(), Some(Op::ScopeEnter { scope: actual }) if *actual == scope)
+    {
+        &draft.operations[1..]
+    } else {
+        draft.operations.as_slice()
+    };
+    let fields = |site: &super::recipe::CallSiteId,
+                  name: &str,
+                  explicit: &[String],
+                  arguments: &[SlotId]| {
+        site.0 == draft.key.node
+            && name == call.name()
+            && explicit == call.explicit()
+            && arguments == call.arguments()
+    };
+    let next =
+        |key: &PcKey| matches!(draft.exits.as_slice(), [RecipeExit::Next(target)] if target == key);
+    let seal_exit = || {
+        matches!(draft.exits.as_slice(), [RecipeExit::Call { site, resume, result }]
+            if site.0 == draft.key.node && *result == call.result() && resume == call.resume_key())
+    };
+    let count = u32::try_from(call.arguments().len())
+        .map_err(|_| invalid("scalar call argument count overflow"))?;
+    let matches = match ops {
+        [
+            Op::CallPrepare {
+                site,
+                name,
+                explicit,
+                arguments,
+            },
+        ] if fields(site, name, explicit, arguments) => {
+            call.require(&draft.key.body, &draft.key, RuntimeMacroCallPhase::Prepare)?;
+            let target = if count == 0 {
+                call.seal_key()
+            } else {
+                call.argument_key(0)?
+            };
+            next(target)
+        }
+        [Op::CallAdvance { site, argument }]
+            if site.0 == draft.key.node && argument.checked_add(1).is_some_and(|n| n < count) =>
+        {
+            call.require(
+                &draft.key.body,
+                &draft.key,
+                RuntimeMacroCallPhase::Advance(*argument),
+            )?;
+            next(call.argument_key(*argument + 1)?)
+        }
+        [
+            Op::CallAdvance { site, argument },
+            Op::CallSeal {
+                site: sealed,
+                name,
+                explicit,
+                arguments,
+            },
+        ] if site.0 == draft.key.node
+            && argument.checked_add(1) == Some(count)
+            && fields(sealed, name, explicit, arguments) =>
+        {
+            call.require(
+                &draft.key.body,
+                &draft.key,
+                RuntimeMacroCallPhase::Advance(*argument),
+            )?;
+            call.require(&draft.key.body, &draft.key, RuntimeMacroCallPhase::Seal)?;
+            seal_exit()
+        }
+        [
+            Op::CallSeal {
+                site,
+                name,
+                explicit,
+                arguments,
+            },
+        ] if count == 0 && fields(site, name, explicit, arguments) => {
+            call.require(&draft.key.body, &draft.key, RuntimeMacroCallPhase::Seal)?;
+            seal_exit()
+        }
+        _ => false,
+    };
+    if !matches {
+        return Err(invalid(
+            "scalar call operations/exit differ from exact source phase",
+        ));
+    }
+    let mut slots = BTreeSet::new();
+    for argument in call.arguments() {
+        slot(body, *argument, SlotKind::Value)?;
+        if !macro_scalar_value(node, *argument)
+            || *argument == call.result()
+            || !slots.insert(*argument)
+        {
+            return Err(invalid(
+                "scalar call argument slots are not fresh reserved values",
+            ));
+        }
+    }
+    slot(body, call.result(), SlotKind::Value)?;
+    if !macro_scalar_value(node, call.result()) {
+        return Err(invalid("scalar call result is not a reserved value"));
+    }
+    Ok(())
+}
+fn verify_inner(
+    mut draft: RecipeDraft,
+    body: &BodyIndex,
+    macro_call: Option<&crate::syntax::runtime_macro_scalars::RuntimeMacroCall>,
+) -> Result<VerifiedRecipe, Diagnostic> {
     pc(body, &draft.key)?;
     span(body, &draft.origin.span)?;
     let node = &body.nodes()[draft.key.node as usize];
@@ -151,6 +339,18 @@ pub fn verify(mut draft: RecipeDraft, body: &BodyIndex) -> Result<VerifiedRecipe
             | Op::Literal { hint, .. } => Some(hint),
             _ => None,
         };
+        if let Some(super::op::HintRecipe::DefinitionParameter(ordinal)) = annotation
+            && *ordinal >= 100_000
+        {
+            return Err(invalid(
+                "definition parameter ordinal exceeds structural limit",
+            ));
+        }
+        if let Some(super::op::HintRecipe::DefinitionNumeric(context)) = annotation {
+            // Structural bound only. The reached VM must still replay the actual
+            // current definition/source relation and admitted primitive contract.
+            definition_numeric_context(*context)?;
+        }
         if let Some(super::op::HintRecipe::BorrowTarget { reference }) = annotation {
             use crate::syntax::body_index::{ExpressionKind, NodeRole};
             let child = match op {
@@ -702,9 +902,18 @@ pub fn verify(mut draft: RecipeDraft, body: &BodyIndex) -> Result<VerifiedRecipe
                 }
                 match op {
                     Op::CompoundHint { child, kind, .. } => {
-                        let super::op::AssignKind::Primitive { left, right } = kind;
-                        crate::runtime::shape::PrimitiveIdentity::from_recipe(*left)?;
-                        crate::runtime::shape::PrimitiveIdentity::from_recipe(*right)?;
+                        match kind {
+                            super::op::AssignKind::Primitive { left, right } => {
+                                crate::runtime::shape::PrimitiveIdentity::from_recipe(*left)?;
+                                crate::runtime::shape::PrimitiveIdentity::from_recipe(*right)?;
+                            }
+                            super::op::AssignKind::DefinitionNumeric { context, right } => {
+                                definition_numeric_context(*context)?;
+                                if let Some(right) = right {
+                                    numeric_primitive(*right)?;
+                                }
+                            }
+                        }
                         slot(body, *child, SlotKind::Value)?;
                         if draft.key.phase != Phase::Entry.code()?
                             || node.runtime_temporaries[0].is_none()
@@ -812,7 +1021,14 @@ pub fn verify(mut draft: RecipeDraft, body: &BodyIndex) -> Result<VerifiedRecipe
                 None
             }
             Op::CallAdvance { site, argument } => {
-                if site.0 != draft.key.node || *argument >= 100_000 {
+                if site.0 != draft.key.node
+                    || *argument >= 100_000
+                    || (node.role
+                        == crate::syntax::body_index::NodeRole::Expression(
+                            crate::syntax::body_index::ExpressionKind::Macro,
+                        )
+                        && macro_call.is_none())
+                {
                     return Err(invalid("call argument progress identity invalid"));
                 }
                 None
@@ -866,6 +1082,7 @@ pub fn verify(mut draft: RecipeDraft, body: &BodyIndex) -> Result<VerifiedRecipe
                     || name.is_empty()
                     || name.len() > 4096
                     || (!macro_predicate
+                        && macro_call.is_none()
                         && node.role
                             != crate::syntax::body_index::NodeRole::Expression(
                                 crate::syntax::body_index::ExpressionKind::Call,

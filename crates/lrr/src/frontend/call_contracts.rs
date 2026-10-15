@@ -12,7 +12,7 @@ use crate::{
         digest::{Digest, StableEncode, StableEncoder},
     },
     db::{
-        dependency::{DependencyStamp, InputKey},
+        dependency::{DependencyStamp, InputKey, InputValue},
         key::QueryKey,
         memo::Database,
         poll::QueryPoll,
@@ -57,6 +57,7 @@ pub struct NormalizedDeferredReturn {
 }
 #[derive(Debug, Clone)]
 enum DeferredReturnOrigin {
+    PrimitiveNamespace,
     Alias {
         resolution: Digest,
         alias: Digest,
@@ -180,6 +181,284 @@ impl NormalizedDeferredReturn {
             written_hint,
             dependencies: dependencies.into_boxed_slice(),
         })
+    }
+    /// Retain the same owning primitive namespace decision used by ordinary
+    /// call admission, so the VM never reconstructs source type from a layout.
+    fn mint_primitive(
+        db: &mut Database,
+        callee: &SourceCallable,
+        graph: &NameNamespaces,
+        sources: &[&PreparedSourceView],
+        source: PrimitiveType,
+    ) -> Result<Self, Diagnostic> {
+        callee.revalidate(db)?;
+        let signature = callee.signature();
+        if signature.result_symbolic.is_some()
+            || signature.result.len() != 1
+            || SignatureNames::from_database(db, graph, signature)?
+                .unqualified(&signature.result[0].text, None)?
+                != SignatureName::Primitive(source)
+        {
+            return Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "primitive result namespace certificate differs",
+            ));
+        }
+        let stamps = db.source_view_namespace_stamps()?;
+        if stamps.is_empty() || stamps.len() > 4096 {
+            return Err(fault(
+                "LRR-E-METADATA-LIMIT",
+                "primitive result namespace dependency count",
+            ));
+        }
+        Self::require_primitive_namespace(db, signature, sources, &stamps)?;
+        let mut dependencies = Vec::new();
+        dependencies
+            .try_reserve_exact(stamps.len())
+            .map_err(|_| crate::runtime::arena::resource())?;
+        for (key, fingerprint) in stamps {
+            dependencies.push(DependencyStamp::Input { key, fingerprint });
+        }
+        dependencies.sort_unstable();
+        let proof = Self {
+            definition: signature.definition,
+            signature: signature.fingerprint(),
+            origin: DeferredReturnOrigin::PrimitiveNamespace,
+            source_revision: db.source_revision(),
+            query_revision: db.revision(),
+            source,
+            descriptor: primitive_runtime_id(source)?,
+            written_hint: printed_primitive_hint(&signature.result[0].text),
+            dependencies: dependencies.into_boxed_slice(),
+        };
+        if proof
+            .metadata_bytes()
+            .is_none_or(|bytes| bytes > 32 * 1024 * 1024)
+        {
+            return Err(fault(
+                "LRR-E-METADATA-LIMIT",
+                "primitive result namespace dependency bytes",
+            ));
+        }
+        Ok(proof)
+    }
+    /// Join the supplied graph's primitive-name absence to current owning
+    /// namespace evidence. Input fingerprints alone cannot certify an unrelated
+    /// graph; a published scope or exact original-source rebuild must agree.
+    fn require_primitive_namespace(
+        db: &Database,
+        signature: &crate::syntax::signatures::FunctionSignature,
+        sources: &[&PreparedSourceView],
+        stamps: &BTreeMap<InputKey, Digest>,
+    ) -> Result<(), Diagnostic> {
+        use crate::{db::seals::SealDomain, source::manifest::Namespace};
+        let missing = || {
+            fault(
+                "LRR-E-CALL-CONTEXT",
+                "primitive result requires its current owning Type namespace",
+            )
+        };
+        let Some((InputValue::DefinitionSource(parse), _)) =
+            db.published_input(&InputKey::DefinitionSource(signature.definition))
+        else {
+            return Err(missing());
+        };
+        let mut source = None;
+        let mut captured_count = 0usize;
+        for key in stamps.keys() {
+            let InputKey::CapturedSource(location) = key else {
+                continue;
+            };
+            captured_count = captured_count
+                .checked_add(1)
+                .filter(|n| *n <= 4096)
+                .ok_or_else(|| {
+                    fault(
+                        "LRR-E-METADATA-LIMIT",
+                        "primitive result source universe count",
+                    )
+                })?;
+            let Some((InputValue::CapturedSource(selection), _)) = db.published_input(key) else {
+                return Err(missing());
+            };
+            if selection.location_identity() != *location {
+                return Err(missing());
+            }
+            if selection.outline.parse == *parse
+                && selection.outline.crate_key == signature.scope.crate_key
+                && signature
+                    .scope
+                    .module_path
+                    .starts_with(&selection.outline.module_path)
+            {
+                if source.is_some() {
+                    return Err(missing());
+                }
+                source = Some(selection);
+            }
+        }
+        let Some(source) = source else {
+            return Err(missing());
+        };
+        let Some(owner) = sources.iter().find(|view| view.selection() == source) else {
+            return Err(missing());
+        };
+        owner.require_original_hygiene()?;
+        if !owner.outline().items.iter().any(|item| {
+            item.def_key.fingerprint() == signature.definition
+                && item.scope == signature.scope
+                && item.header == signature.header
+        }) {
+            return Err(missing());
+        }
+        let name = crate::expand::scopes::MacroName::parse(
+            &signature.result[0].text,
+            signature.header.profile.edition,
+        )?;
+        // Prefer actual current Type discovery. Select no arbitrary world when
+        // more than one current immutable scope certificate is published.
+        let epoch = match db.published_input(&InputKey::ExpansionEpoch) {
+            Some((InputValue::ExpansionEpoch(epoch), _)) => Some(*epoch),
+            _ => None,
+        };
+        let mut selected = None;
+        for key in stamps.keys() {
+            let InputKey::DiscoverySeal(key) = key else {
+                continue;
+            };
+            if Some(key.epoch) != epoch
+                || !matches!(&key.domain,
+                SealDomain::Scope {id, namespace: Namespace::Type} if *id == signature.scope.fingerprint())
+            {
+                continue;
+            }
+            let Some((InputValue::DiscoverySeal(input), _)) =
+                db.published_input(&InputKey::DiscoverySeal(key.clone()))
+            else {
+                return Err(missing());
+            };
+            if selected.is_some() {
+                return Err(missing());
+            }
+            selected = Some((key, input));
+        }
+        if let Some((key, input)) = selected {
+            key.validate()?;
+            let Some(scope) = input.scope.as_ref() else {
+                return Err(missing());
+            };
+            if input.seal.key() != *key
+                || input.seal.unresolved_frontiers() != 0
+                || scope.scope != signature.scope
+                || scope.namespace != Namespace::Type
+                || scope.edition != signature.header.profile.edition
+                || source.outline.parse.profile != signature.header.profile
+                || !input.sources.contains(source)
+                || input.sources.len() != captured_count
+                || input.sources.len() > 4096
+                || input.compiler_inputs.len() > 4096
+                || input.records.len() > 4096
+                || !matches!(db.published_input(&InputKey::SourceDependencies), Some((InputValue::SourceDependencies(graph), _)) if graph.fingerprint() == input.source_dependencies)
+            {
+                return Err(missing());
+            }
+            let mut locations = std::collections::BTreeSet::new();
+            for selected in &input.sources {
+                if !locations.insert(selected.location_identity()) {
+                    return Err(missing());
+                }
+                if !matches!(db.published_input(&InputKey::CapturedSource(selected.location_identity())), Some((InputValue::CapturedSource(current), _)) if current == selected)
+                    || !matches!(db.published_input(&InputKey::CrateCfg(selected.outline.crate_key)), Some((InputValue::CrateCfg(cfg), _)) if cfg.fingerprint() == selected.outline.cfg)
+                {
+                    return Err(missing());
+                }
+            }
+            for (key, expected) in &input.compiler_inputs {
+                if db
+                    .published_input(key)
+                    .is_none_or(|(_, current)| current != *expected)
+                {
+                    return Err(missing());
+                }
+            }
+            for descriptor in &input.records {
+                if !matches!(db.published_input(&InputKey::ExpansionRecord(descriptor.key.fingerprint())), Some((InputValue::ExpansionRecord(record), _)) if record.descriptor().fingerprint() == descriptor.fingerprint())
+                {
+                    return Err(missing());
+                }
+            }
+            // Borrow this one canonical bucket instead of cloning the scope.
+            if scope.names.contains_key(name.as_str()) {
+                return Err(missing());
+            }
+            return Ok(());
+        }
+        // Plain start_with_sources has no discovery certificates. Reconstruct
+        // only from the complete actual current retained original source set;
+        // unknown producers/imports still cannot establish namespace absence.
+        if sources.is_empty() || sources.len() != captured_count || sources.len() > 4096 {
+            return Err(missing());
+        }
+        let mut bytes = 0usize;
+        let mut rows = 0usize;
+        let mut outlines = Vec::new();
+        outlines
+            .try_reserve_exact(sources.len())
+            .map_err(|_| crate::runtime::arena::resource())?;
+        let mut locations = std::collections::BTreeSet::new();
+        for view in sources {
+            view.require_original_hygiene()?;
+            let selection = view.selection();
+            if !locations.insert(selection.location_identity())
+                || !matches!(db.published_input(&InputKey::CapturedSource(selection.location_identity())), Some((InputValue::CapturedSource(current), _)) if current == selection)
+            {
+                return Err(missing());
+            }
+            bytes = bytes
+                .checked_add(view.prepared_metadata_bytes()?)
+                .filter(|n| *n <= 32 * 1024 * 1024)
+                .ok_or_else(|| {
+                    fault(
+                        "LRR-E-METADATA-LIMIT",
+                        "primitive result original namespace bytes",
+                    )
+                })?;
+            for (key, expected) in view.prepared_inputs() {
+                rows = rows
+                    .checked_add(1)
+                    .filter(|n| *n <= 100_000)
+                    .ok_or_else(|| {
+                        fault(
+                            "LRR-E-METADATA-LIMIT",
+                            "primitive result original namespace input count",
+                        )
+                    })?;
+                if db
+                    .published_input(key)
+                    .is_none_or(|(_, current)| current != expected.fingerprint())
+                {
+                    return Err(missing());
+                }
+            }
+            outlines.push(view.outline());
+        }
+        let mut current = NameNamespaces::from_outlines(&outlines)?;
+        let resolved = current.resolve_imports()?;
+        if !resolved.pending.is_empty()
+            || !resolved.missing.is_empty()
+            || !resolved.inaccessible.is_empty()
+            || !resolved.ambiguous.is_empty()
+            || current.lookup_unqualified(
+                Namespace::Type,
+                name.as_str(),
+                &signature.scope,
+                signature.header.profile.edition,
+                None,
+            )? != super::names::NameLookup::Absent
+        {
+            return Err(missing());
+        }
+        Ok(())
     }
     fn mint_lexical(db: &mut Database, callee: &SourceCallable) -> Result<Self, Diagnostic> {
         callee.revalidate(db)?;
@@ -397,7 +676,7 @@ impl NormalizedDeferredReturn {
     }
     pub(crate) fn metadata_bytes(&self) -> Option<usize> {
         let extra = match &self.origin {
-            DeferredReturnOrigin::Alias { .. } => 0,
+            DeferredReturnOrigin::PrimitiveNamespace | DeferredReturnOrigin::Alias { .. } => 0,
             DeferredReturnOrigin::Lexical { parameters, .. } => parameters
                 .len()
                 .checked_mul(std::mem::size_of::<PrimitiveType>())?,
@@ -413,11 +692,12 @@ impl NormalizedDeferredReturn {
     }
 }
 impl StableEncode for NormalizedDeferredReturn {
-    const DOMAIN: &'static str = "lrr/v5/normalized-deferred-return-certificate-v3";
+    const DOMAIN: &'static str = "lrr/v5/normalized-deferred-return-certificate-v4";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.definition);
         e.digest(self.signature);
         match &self.origin {
+            DeferredReturnOrigin::PrimitiveNamespace => e.u32(2),
             DeferredReturnOrigin::Alias { resolution, alias } => {
                 e.u32(0);
                 e.digest(*resolution);
@@ -847,7 +1127,13 @@ fn prepare(
         normalized_deferred_return = Some(Box::new(proof));
     } else if instantiated.result_symbolic.is_none() && signature.result.len() == 1 {
         let names = SignatureNames::from_database(db, graph, signature)?;
-        if let SignatureName::Source(found) = names.unqualified(&signature.result[0].text, None)? {
+        let resolved = names.unqualified(&signature.result[0].text, None)?;
+        if let SignatureName::Primitive(primitive) = resolved {
+            normalized_deferred_return = Some(Box::new(NormalizedDeferredReturn::mint_primitive(
+                db, callee, graph, sources, primitive,
+            )?));
+            instantiated.result_symbolic = Some(TyTerm::Primitive(primitive));
+        } else if let SignatureName::Source(found) = resolved {
             let normalizer = AliasNormalizer::new(graph, sources)?;
             match normalizer.normalize_with_dependencies(db, found.identity) {
                 QueryPoll::Ready(Ok((AliasTarget::Type(TyTerm::Primitive(primitive)), trace))) => {
@@ -1032,4 +1318,215 @@ fn transaction_argument(arg: &crate::traits::term::GenericArg) -> bool {
                 _
             ))
     )
+}
+
+#[cfg(test)]
+mod primitive_namespace_authority_tests {
+    use super::*;
+    use crate::{
+        core::profile::ProfileIdentity,
+        db::key::OutlineKey,
+        expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
+        frontend::{
+            callables::{CallResolver, CallSelection},
+            compile_input_catalog::CompileInputCatalog,
+        },
+        source::{
+            changes::{
+                PreparedSourceInputs, SourceSelection, SourceSelectionOutcome, SourceUnitInput,
+            },
+            manifest::Namespace,
+            snapshot::{CfgSet, SourceBlob, SourcePath},
+        },
+        syntax::parse::ParseKey,
+        vm::context::GenericEnv,
+    };
+    use std::sync::Arc;
+
+    fn world(
+        text: &str,
+        edition: u16,
+        sealed: bool,
+    ) -> (
+        Database,
+        PreparedSourceView,
+        NameNamespaces,
+        Box<SourceCallable>,
+    ) {
+        let unit = Digest::of_bytes(b"LRR primitive result source authority");
+        let profile = ProfileIdentity {
+            edition,
+            ..ProfileIdentity::current()
+        };
+        let cfg = CfgSet::guest_default();
+        let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
+        let path = SourcePath::new("primitive-result-authority.rs").unwrap();
+        let selection = SourceSelection {
+            path: path.clone(),
+            outline: OutlineKey {
+                parse: ParseKey {
+                    content: blob.content(),
+                    profile: profile.clone(),
+                },
+                crate_key: unit,
+                module_path: vec![],
+                cfg: cfg.fingerprint(),
+            },
+        };
+        let inputs = PreparedSourceInputs::refresh(
+            None,
+            vec![SourceUnitInput {
+                path,
+                crate_key: unit,
+                module_path: vec![],
+                profile: profile.clone(),
+                cfg,
+                blob,
+            }],
+            Default::default(),
+        )
+        .unwrap();
+        let SourceSelectionOutcome::Selected(view) = inputs.select(&selection).unwrap() else {
+            panic!("source absent")
+        };
+        let graph = NameNamespaces::from_outlines(&[view.outline()]).unwrap();
+        let mut db = Database::default();
+        inputs.publish(&mut db).unwrap();
+        let caller = view
+            .outline()
+            .items
+            .iter()
+            .find(|i| i.def_key.declared_name == "main")
+            .unwrap();
+        if sealed {
+            db.begin_expansion_epoch(1).unwrap();
+            for namespace in [Namespace::Value, Namespace::Type] {
+                let mut discovery = SourceDiscovery::new(
+                    vec![view.share()],
+                    caller.scope.clone(),
+                    namespace,
+                    Digest::of_bytes(b"LRR primitive result current world"),
+                    1,
+                )
+                .unwrap()
+                .with_declarative_compiler(
+                    Digest::of_bytes(b"LRR declaration producer"),
+                    Digest::of_bytes(b"LRR compiler producer"),
+                    Arc::new(CompileInputCatalog::standalone(&profile).unwrap()),
+                )
+                .unwrap();
+                assert!(matches!(
+                    discovery.poll().unwrap(),
+                    SourceDiscoveryStep::Sealed(_)
+                ));
+                discovery.publish(&mut db).unwrap();
+            }
+        }
+        let sources = [&view];
+        let resolver = CallResolver::new(&graph, &sources).unwrap();
+        let QueryPoll::Ready(Ok(CallSelection::Source(callee))) =
+            resolver.module_function(&mut db, caller.def_key.fingerprint(), "chosen")
+        else {
+            panic!("genuine chosen definition absent")
+        };
+        (db, view, graph, callee)
+    }
+
+    #[test]
+    fn genuine_plain_and_sealed_primitive_results_keep_source_authority_all_editions() {
+        for edition in [2015, 2018, 2021, 2024] {
+            for sealed in [false, true] {
+                let (mut db, view, graph, callee) = world(
+                    "fn main(){chosen();}fn chosen()->u32{42u32}",
+                    edition,
+                    sealed,
+                );
+                let QueryPoll::Ready(Ok(ContractPreparation::Ready(packet))) =
+                    prepare_contracts(&mut db, &callee, &graph, &[&view], &[], None, &[])
+                else {
+                    panic!("actual primitive source preparation refused")
+                };
+                assert_eq!(
+                    packet.source_result,
+                    Some(TyTerm::Primitive(PrimitiveType::U32))
+                );
+                assert!(packet.normalized_deferred_return.is_some());
+                assert!(GenericEnv::capture_current(&mut db, &callee, &packet).is_ok());
+            }
+        }
+    }
+
+    #[test]
+    fn unrelated_graph_or_empty_source_list_cannot_erase_current_primitive_shadow() {
+        for sealed in [false, true] {
+            let (mut db, view, _, callee) = world(
+                "type u32=bool;fn main(){chosen();}fn chosen()->u32{true}",
+                2024,
+                sealed,
+            );
+            let wrong = NameNamespaces::default();
+            assert!(matches!(
+                prepare_contracts(&mut db, &callee, &wrong, &[], &[], None, &[]),
+                QueryPoll::Ready(Err(Diagnostic {
+                    code: "LRR-E-CALL-CONTEXT",
+                    ..
+                }))
+            ));
+            assert!(
+                NormalizedDeferredReturn::mint_primitive(
+                    &mut db,
+                    &callee,
+                    &wrong,
+                    &[&view],
+                    PrimitiveType::U32
+                )
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn foreign_retained_sources_cannot_supply_primitive_namespace_authority() {
+        let (mut db, view, _, callee) =
+            world("fn main(){chosen();}fn chosen()->u32{42u32}", 2024, false);
+        let (mut foreign_db, foreign_view, _, _) = world(
+            "type u32=bool;fn main(){chosen();}fn chosen()->u32{true}",
+            2024,
+            false,
+        );
+        let wrong = NameNamespaces::default();
+        assert!(
+            NormalizedDeferredReturn::mint_primitive(
+                &mut db,
+                &callee,
+                &wrong,
+                &[&foreign_view],
+                PrimitiveType::U32
+            )
+            .is_err()
+        );
+        assert!(
+            NormalizedDeferredReturn::mint_primitive(
+                &mut foreign_db,
+                &callee,
+                &wrong,
+                &[&view],
+                PrimitiveType::U32
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn published_epoch_change_invalidates_the_primitive_namespace_certificate() {
+        let (mut db, view, graph, callee) =
+            world("fn main(){chosen();}fn chosen()->u32{42u32}", 2024, true);
+        let QueryPoll::Ready(Ok(ContractPreparation::Ready(packet))) =
+            prepare_contracts(&mut db, &callee, &graph, &[&view], &[], None, &[])
+        else {
+            panic!("genuine primitive proof absent")
+        };
+        db.begin_expansion_epoch(2).unwrap();
+        assert!(GenericEnv::capture_current(&mut db, &callee, &packet).is_err());
+    }
 }

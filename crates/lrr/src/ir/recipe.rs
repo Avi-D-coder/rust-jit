@@ -95,8 +95,43 @@ fn span(e: &mut StableEncoder, s: &BodySpan) {
     e.u32(s.relative_start);
     e.u32(s.relative_end);
 }
+fn definition_numeric_context(e: &mut StableEncoder, context: super::op::DefinitionNumericContext) {
+    match context {
+        super::op::DefinitionNumericContext::Parameter(ordinal) => {
+            e.u32(0);
+            e.u32(ordinal);
+        }
+        super::op::DefinitionNumericContext::Result => e.u32(1),
+        super::op::DefinitionNumericContext::ResultOrDefault { floating } => {
+            e.u32(2);
+            e.bool(floating);
+        }
+    }
+}
+fn assign_kind(e: &mut StableEncoder, kind: &super::op::AssignKind) {
+    match kind {
+        super::op::AssignKind::Primitive { left, right } => {
+            e.u32(0);
+            e.u32(left.tag());
+            e.u32(right.tag());
+        }
+        super::op::AssignKind::DefinitionNumeric { context, right } => {
+            e.u32(1);
+            definition_numeric_context(e, *context);
+            e.option(right, |e, primitive| e.u32(primitive.tag()));
+        }
+    }
+}
 fn hint(e: &mut StableEncoder, h: &HintRecipe) {
     match h {
+        HintRecipe::DefinitionParameter(ordinal) => {
+            e.u32(7);
+            e.u32(*ordinal);
+        }
+        HintRecipe::DefinitionNumeric(context) => {
+            e.u32(6);
+            definition_numeric_context(e, *context);
+        }
         HintRecipe::BorrowTarget { reference } => {
             e.u32(5);
             e.u32(reference.0);
@@ -129,7 +164,7 @@ fn hint(e: &mut StableEncoder, h: &HintRecipe) {
     }
 }
 impl StableEncode for Recipe {
-    const DOMAIN: &'static str = "lrr/v6/lrir-recipe";
+    const DOMAIN: &'static str = "lrr/v9/lrir-recipe";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         span(e, &self.origin.span);
@@ -426,13 +461,7 @@ impl StableEncode for Recipe {
                 e.u32(40);
                 e.u32(binding.0);
                 e.u32(child.0);
-                match kind {
-                    super::op::AssignKind::Primitive { left, right } => {
-                        e.u32(0);
-                        e.u32(left.tag());
-                        e.u32(right.tag());
-                    }
-                }
+                assign_kind(e, kind);
             }
             Op::LocalHint { binding, child } => {
                 e.u32(15);
@@ -592,3 +621,7 @@ impl StableEncode for Recipe {
         e.sequence(&self.dependencies, |e, d| e.record(d));
     }
 }
+
+#[cfg(test)]
+#[path = "definition_numeric_wire_tests.rs"]
+mod definition_numeric_wire_tests;

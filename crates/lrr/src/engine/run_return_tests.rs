@@ -745,8 +745,12 @@ fn original_named_primitive_result_context_preserves_rigid_source_identity() {
             .unwrap()
             .unwrap();
         assert_eq!(selected.callee.signature().header.profile.edition, edition);
-        assert_eq!(selected.contracts.source_result, None);
-        assert_eq!(selected.contracts.result_descriptor, None);
+        assert_eq!(
+            selected.contracts.source_result,
+            Some(TyTerm::Primitive(crate::ir::op::PrimitiveType::Isize))
+        );
+        assert_eq!(selected.contracts.result_descriptor, Some(TypeId(8)));
+        assert!(selected.contracts.normalized_deferred_return.is_some());
         db.finish_run().unwrap();
     }
 }
@@ -761,7 +765,12 @@ fn original_named_primitive_return_refuses_rigid_view_before_selected_source_adm
             .into_ready()
             .unwrap()
             .unwrap();
-        assert_eq!(selected.contracts.result_descriptor, None);
+        assert_eq!(selected.contracts.result_descriptor, Some(TypeId(8)));
+        assert_eq!(
+            selected.contracts.source_result,
+            Some(TyTerm::Primitive(crate::ir::op::PrimitiveType::Isize))
+        );
+        assert!(selected.contracts.normalized_deferred_return.is_some());
         let before = (
             run.frame.pc().clone(),
             run.frame.fuel_snapshot().used,

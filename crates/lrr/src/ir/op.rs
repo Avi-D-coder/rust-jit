@@ -47,8 +47,24 @@ impl PrimitiveType {
         }
     }
 }
+/// A source relation to the currently admitted function contract. The ordinal
+/// identifies a written value parameter, never a runtime descriptor or generic.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum DefinitionNumericContext {
+    Parameter(u32),
+    Result,
+    /// A bare numeric local relates to the owning result. Use that admitted
+    /// source only in the literal's family; otherwise use Rust's literal default.
+    ResultOrDefault {
+        floating: bool,
+    },
+}
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum HintRecipe {
+    /// Exact admitted primitive value-parameter source; refuses references and
+    /// nominal/rigid sources before an owning scalar scrutinee read.
+    DefinitionParameter(u32),
+    DefinitionNumeric(DefinitionNumericContext),
     /// The reached borrow result supplies its existing pointee context. Only a
     /// SetHint at that borrow's Entry may use this source-indexed value slot.
     BorrowTarget {
@@ -71,6 +87,10 @@ pub enum HintRecipe {
 /// Generic/overloaded assignment requires an exact trait-member recipe instead.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum AssignKind {
+    DefinitionNumeric {
+        context: DefinitionNumericContext,
+        right: Option<PrimitiveType>,
+    },
     Primitive {
         left: PrimitiveType,
         right: PrimitiveType,
@@ -102,7 +122,7 @@ impl LiteralKind {
     }
 }
 /// Explicit recipe/cache compatibility, independent of host enum layout.
-pub const LRIR_RECIPE_SCHEMA: u32 = 6;
+pub const LRIR_RECIPE_SCHEMA: u32 = 9;
 pub const DECODED_INTEGER_SCHEMA: u32 = 1;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum IntegerLexicalError {

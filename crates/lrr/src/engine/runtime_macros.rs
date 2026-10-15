@@ -36,6 +36,7 @@ pub struct RuntimeMacroContext<'a> {
 pub(crate) struct PreparedRuntimeMacro {
     pub recipe: Box<VerifiedRecipe>,
     pub no_item: Option<crate::frontend::runtime_macro_plan::RuntimeNoItemProof>,
+    pub call: Option<std::sync::Arc<crate::syntax::runtime_macro_scalars::RuntimeMacroCall>>,
 }
 impl<'a> RuntimeMacroContext<'a> {
     pub fn new(
@@ -195,6 +196,20 @@ impl<'a> RuntimeMacroContext<'a> {
                     self.source
                         .require_module_predicate_call(handle, body, pc, name)?;
                 }
+                let scalar_assertion = matches!(
+                    plan.arguments().kind(),
+                    RuntimeMacroKind::Assert
+                        | RuntimeMacroKind::AssertEq
+                        | RuntimeMacroKind::AssertNe
+                ) && !(plan.arguments().kind() == RuntimeMacroKind::Assert
+                    && (plan.arguments().literal_predicate().is_some()
+                        || plan.arguments().zero_arg_predicate_call().is_some()
+                        || plan.arguments().binding_predicate().is_some()));
+                let call = if scalar_assertion {
+                    plan.scalar_call_witness(self.source, body, pc)?
+                } else {
+                    None
+                };
                 let lowering = match plan.arguments().kind() {
                     RuntimeMacroKind::Vec => {
                         return Err(fault(
@@ -241,6 +256,7 @@ impl<'a> RuntimeMacroContext<'a> {
                     StaticPanicRecipeLowering::Recipe(recipe) => Ok(Some(PreparedRuntimeMacro {
                         recipe,
                         no_item: plan.no_item_proof(&pc.body),
+                        call,
                     })),
                     StaticPanicRecipeLowering::NeedsFormatting => Err(fault(
                         "LRR-E-UNSUPPORTED",

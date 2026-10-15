@@ -100,6 +100,16 @@ fn family(primitive: PrimitiveType) -> Option<bool> {
     }
 }
 /// Reject unresolved symbolic annotations before interpreting a printed primitive.
+// The same strict source/namespace proof used by existing direct-use inference.
+// Exposed only to the entered local-context collector; unresolved source syntax
+// remains a prerequisite, never a primitive spelling fallback.
+pub(super) fn source_primitive_annotation(
+    parsed: &ParsedFile,
+    index: &BodyIndex,
+    ty: ast::Type,
+) -> Result<PrimitiveType, Diagnostic> {
+    annotation(parsed, index, ty, &mut Budget::default())
+}
 fn annotation(
     parsed: &ParsedFile,
     index: &BodyIndex,

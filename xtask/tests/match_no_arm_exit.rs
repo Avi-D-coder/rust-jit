@@ -199,9 +199,12 @@ fn match_no_arm_is_stable_typed_encoding_distinct_from_unsupported() {
     expected.u32(7); // fixed wire discriminant, not Rust enum layout
     expected.u64(0); // dependencies
     assert_eq!(recipe.fingerprint(), expected.finish());
-    const { assert!(LRIR_RECIPE_SCHEMA == 6) };
+    const { assert!(LRIR_RECIPE_SCHEMA == 9) };
     assert_ne!(Recipe::DOMAIN, "lrr/v4/lrir-recipe");
     assert_ne!(Recipe::DOMAIN, "lrr/v5/lrir-recipe");
+    assert_ne!(Recipe::DOMAIN, "lrr/v6/lrir-recipe");
+    assert_ne!(Recipe::DOMAIN, "lrr/v7/lrir-recipe");
+    assert_ne!(Recipe::DOMAIN, "lrr/v8/lrir-recipe");
     draft.exits = vec![RecipeExit::Fault(DiagnosticTemplate {
         message: "not a match exhaustion diagnostic".into(),
     })];

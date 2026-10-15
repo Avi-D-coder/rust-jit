@@ -106,7 +106,7 @@ fn rustc_panic_metadata_admission_counts_pending_source_calls_before_cleanup() {
         .unwrap()
         .id
         .0;
-    run.pending.insert(call, selected);
+    run.pending.insert((call, None), selected);
     run.pending_bytes = bytes;
     let limits = run.call_limits;
     run.call_limits.max_metadata_bytes = bytes;
