@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V86 scoped candidate green:48 distinct test bodies including unchanged CRLF byte main all4, both strict targets and architecture/fmt/fixture/manifest checks pass. Combined milestone running asynchronously on frozen3f018ccc; no canonical promotion yet. String macro operand4 and source-selected equality5 drafts plus unchanged Unicode-underscore original are prepared, uncompiled/unexecuted and held behind coherent string20. Three new byte/range upstream runtime witnesses overall, no new string/full-fixture acceptance or JIT work.",
+      "scope": "V86 full combined milestone failed:1150 library passes,1 nested-tuple initialization failure,2136 listed bodies unexecuted. Root traced failure to new static-mutation ancestry guard hard limit256 versus existing512-depth witness, not demonstrated memory exhaustion. Two-leaf production repair preserves test depth/budget and adds cycle guard; strict/runtime/milestone pending. Three-leaf source-selected shared-str argument draft plus unchanged match-borrowed-str import prepared independently, uncompiled/unexecuted; held string chain and canonical promotion remain pending.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -517,11 +517,15 @@
         "artifacts/macos-first/root-string-macro-operands-v1/",
         "worktracks/candidates/root-string-macro-operands-v1/",
         "artifacts/macos-first/root-string-equality-v1/",
-        "worktracks/candidates/root-string-equality-v1/"
+        "worktracks/candidates/root-string-equality-v1/",
+        "artifacts/macos-first/root-string-reference-arguments-v1/",
+        "worktracks/candidates/root-string-reference-arguments-v1/",
+        "artifacts/macos-first/root-static-owner-depth-repair-v1/",
+        "worktracks/candidates/root-static-owner-depth-repair-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T11:24:25.120732+00:00",
+      "updated_at": "2026-10-15T11:36:31.408234+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

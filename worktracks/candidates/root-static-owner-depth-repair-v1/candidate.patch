@@ -1,0 +1,98 @@
+--- a/crates/lrr/src/runtime/cell_byte_literal_tests.rs
++++ b/crates/lrr/src/runtime/cell_byte_literal_tests.rs
+@@ -1,4 +1,39 @@
+ use super::*;
++
++#[test]
++fn static_mutation_guard_rejects_owner_cycles_without_changing_guest_state() {
++    let original =
++        include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/tuple/index-float.rs");
++    let depth = crate::syntax::place_fixture_facts::nested_unit_tuple_depth(original);
++    let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
++    let (root, _) = super::super::tests::nested_unit_cells(&mut store, depth, true);
++    let (object, _) = store.place_object(root).unwrap();
++    let owner = store.cells.get(root).unwrap().owner;
++    // LRR corruption control: a self-owning aggregate is never a valid root.
++    store.cells.get_mut(root).unwrap().owner = CellOwner::Field { object, index: 0 };
++    let before = (
++        store.budget.handles(),
++        store.budget.bytes(),
++        store.state(root).unwrap(),
++        store.location_epoch(root).unwrap(),
++    );
++    assert_eq!(
++        store.reject_static_mutation(root).unwrap_err().code,
++        "LRR-E-OWNERSHIP"
++    );
++    assert_eq!(
++        (
++            store.budget.handles(),
++            store.budget.bytes(),
++            store.state(root).unwrap(),
++            store.location_epoch(root).unwrap()
++        ),
++        before
++    );
++    store.cells.get_mut(root).unwrap().owner = owner;
++    store.reject_static_mutation(root).unwrap();
++}
++
+ fn occupied<T>(store: &GuestStore, arena: &GuestArena<T>) -> usize {
+     (1..=store.budget.handles())
+         .filter(|index| {
+--- a/crates/lrr/src/runtime/cell_byte_literals.rs
++++ b/crates/lrr/src/runtime/cell_byte_literals.rs
+@@ -451,18 +451,42 @@
+         }
+     }
+     pub(super) fn reject_static_mutation(&self, mut cell: CellId) -> Result<(), Diagnostic> {
++        // Every distinct cell consumes a store handle. A valid owning chain
++        // cannot exceed this bound, even when it is deeper than 256 fields.
++        // Detect cycles without allocating or changing guest ownership state.
++        let mut slow = Some(cell);
++        let mut fast = Some(cell);
++        for _ in 0..self.budget.handles() {
++            let Some(parent) = self.static_mutation_parent(cell)? else {
++                return Ok(());
++            };
++            cell = parent;
++            slow = match slow {
++                Some(cell) => self.static_mutation_parent(cell)?,
++                None => None,
++            };
++            for _ in 0..2 {
++                fast = match fast {
++                    Some(cell) => self.static_mutation_parent(cell)?,
++                    None => None,
++                };
++            }
++            if slow.is_some() && slow == fast {
++                return Err(ownership());
++            }
++        }
++        Err(ownership())
++    }
++    fn static_mutation_parent(&self, cell: CellId) -> Result<Option<CellId>, Diagnostic> {
+         // Only actual owning edges, never names or reference descriptor shape.
+-        for _ in 0..256 {
+-            match self.cells.get(cell)?.owner {
+-                CellOwner::StaticLiteral(_) => return Err(access_fault()),
+-                CellOwner::Field { object, .. } => match self.objects.get(object)?.owner {
+-                    Some(ValueOwner::Cell(parent)) => cell = parent,
+-                    _ => return Ok(()),
+-                },
+-                _ => return Ok(()),
+-            }
+-        }
+-        Err(resource())
++        match self.cells.get(cell)?.owner {
++            CellOwner::StaticLiteral(_) => Err(access_fault()),
++            CellOwner::Field { object, .. } => match self.objects.get(object)?.owner {
++                Some(ValueOwner::Cell(parent)) => Ok(Some(parent)),
++                _ => Ok(None),
++            },
++            _ => Ok(None),
++        }
+     }
+ }
+ #[cfg(test)]

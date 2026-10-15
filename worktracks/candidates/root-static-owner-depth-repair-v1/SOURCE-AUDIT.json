@@ -1,0 +1,42 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T041",
+    "T062"
+  ],
+  "prerequisites": [
+    "V86 frozen byte source 3f018ccc"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_literal_tests.rs",
+      "before_sha256": "b846c52d2d7f608b7055e655144e477e7908ef6b557f3760fcae3a63fd362e21",
+      "after_sha256": "ba70b6878b0b13da6c2037697ec54bb93901a7a60b5a810a00aca3b6dc79f0ae"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_literals.rs",
+      "before_sha256": "15ed5cdc7271bad3dadad1bfa80646cde9363dbadb1a54ad15ad6d92caecfa73",
+      "after_sha256": "73a26a7fd2962d962f65f57c14a2bc08e99e940178744612a195e396d740de9d"
+    }
+  ],
+  "patch_sha256": "d264681cb5ec1861cf4980e71c14f4f2842dca3e17903716d6cedef946156140",
+  "patch_bytes": 3891,
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "upstream_witness": {
+    "path": "tests/ui/tuple/index-float.rs",
+    "sha256": "6bec83c42c7b4d0036ef7f1bd979029d03d0c58c29b2d6c7ee2a01d429756e0a"
+  },
+  "static_checks": [
+    "Rust 1.99 formatting",
+    "exact patch replay"
+  ],
+  "new_test_bodies": 1,
+  "stock_runtime_passes_added": 0,
+  "acceptance_pending": [
+    "strict build",
+    "scoped regression tests",
+    "integrated milestone"
+  ],
+  "created_at": "2026-10-15T11:36:01.342407+00:00"
+}

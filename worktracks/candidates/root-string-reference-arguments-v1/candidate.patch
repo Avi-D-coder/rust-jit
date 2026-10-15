@@ -1,0 +1,439 @@
+--- a/crates/lrr/src/engine/run_argument_hints.rs
++++ b/crates/lrr/src/engine/run_argument_hints.rs
+@@ -141,7 +141,7 @@
+                 end,
+             },
+             proof.mutable(),
+-            Box::new(TyTerm::Primitive(proof.pointee())),
++            Box::new(proof.pointee().clone()),
+         )
+     });
+     // Materialize only the checked descriptor, after source admission.
+--- a/crates/lrr/src/frontend/closed_reference_calls.rs
++++ b/crates/lrr/src/frontend/closed_reference_calls.rs
+@@ -29,7 +29,7 @@
+     Parameter(ParamKey),
+     Elided { definition: Digest, ordinal: u32 },
+ }
+-/// Source-created parameter syntax plus current owning primitive lookup.
++/// Source-created parameter syntax plus current owning intrinsic type lookup.
+ #[derive(Debug, Clone)]
+ pub struct ClosedReferenceParameter {
+     syntax: ClosedReferenceSyntax,
+@@ -37,7 +37,7 @@
+     signature: Digest,
+     region: DeclaredRegion,
+     source: TyTerm,
+-    primitive: PrimitiveType,
++    pointee: TyTerm,
+     revision: u64,
+     source_revision: u64,
+     inputs: BTreeMap<InputKey, Digest>,
+@@ -80,13 +80,14 @@
+         if syntax.parse() != &parsed.key() {
+             return Err(invalid("reference syntax parser differs"));
+         }
+-        let primitive = match SignatureNames::from_database(db, graph, signature)?
++        let pointee = match SignatureNames::from_database(db, graph, signature)?
+             .unqualified(syntax.target(), None)?
+         {
+-            SignatureName::Primitive(primitive) => primitive,
++            SignatureName::Primitive(primitive) => TyTerm::Primitive(primitive),
++            SignatureName::Str if !syntax.mutable() => TyTerm::Str,
+             _ => return Ok(None), // Existing typed NeedType/NeedName frontier remains.
+         };
+-        primitive_runtime_id(primitive)?;
++        reference_target_id(&pointee)?;
+         let inputs = db.lexical_namespace_stamps()?;
+         if inputs.len() > 4096 {
+             return Err(limit());
+@@ -128,18 +129,14 @@
+                 index: ordinal,
+             },
+         };
+-        let source = TyTerm::Ref(
+-            source_region,
+-            syntax.mutable(),
+-            Box::new(TyTerm::Primitive(primitive)),
+-        );
++        let source = TyTerm::Ref(source_region, syntax.mutable(), Box::new(pointee.clone()));
+         let proof = Self {
+             syntax,
+             definition: signature.definition,
+             signature: signature.fingerprint(),
+             region,
+             source,
+-            primitive,
++            pointee,
+             revision: db.revision(),
+             source_revision: db.source_revision(),
+             inputs,
+@@ -149,8 +146,8 @@
+         }
+         Ok(Some(Arc::new(proof)))
+     }
+-    pub fn pointee(&self) -> PrimitiveType {
+-        self.primitive
++    pub fn pointee(&self) -> &TyTerm {
++        &self.pointee
+     }
+     pub fn ordinal(&self) -> u32 {
+         self.syntax.ordinal()
+@@ -196,7 +193,7 @@
+     pub fn materialize_hint(&self, store: &mut GuestStore) -> Result<TypeId, Diagnostic> {
+         store.intern_type(TypeKey::Ref {
+             mutable: self.syntax.mutable(),
+-            target: primitive_runtime_id(self.primitive)?,
++            target: reference_target_id(&self.pointee)?,
+         })
+     }
+     pub fn allocated_bytes(&self) -> Result<usize, Diagnostic> {
+@@ -236,7 +233,7 @@
+                 "reference argument source is not an admitted reference",
+             ));
+         };
+-        if !matches!(target.as_ref(), TyTerm::Primitive(_))
++        if !matches!(target.as_ref(), TyTerm::Primitive(_) | TyTerm::Str)
+             || matches!(
+                 region,
+                 RegionTerm::Placeholder(_) | RegionTerm::Bound { .. }
+@@ -282,13 +279,21 @@
+     let TyTerm::Ref(_, mutable, target) = source else {
+         return Err(invalid("reference source shape differs"));
+     };
+-    let TyTerm::Primitive(primitive) = target.as_ref() else {
+-        return Err(invalid("reference source pointee is not primitive"));
+-    };
++    let target_id = reference_target_id(target)?;
++    if target.as_ref() == &TyTerm::Str {
++        if *mutable {
++            return Err(invalid(
++                "immutable UTF-8 argument cannot supply mutable access",
++            ));
++        }
++        // A matching descriptor alone cannot manufacture a UTF-8 view.
++        // Require the committed literal root and its private string lease.
++        store.require_static_string_value(cell)?;
++    }
+     store.reference_from_cell(cell)?; // actual lease/owner/access/target validation
+     let descriptor = store.type_descriptor(TypeId(value.type_id))?;
+     if value.kind != 9
+-        || !matches!(descriptor.key.as_ref(),TypeKey::Ref{mutable:actual,target} if actual==mutable && *target==primitive_runtime_id(*primitive)?)
++        || !matches!(descriptor.key.as_ref(),TypeKey::Ref{mutable:actual,target} if actual==mutable && *target==target_id)
+     {
+         return Err(invalid(
+             "reference source/access/pointee and actual descriptor disagree",
+@@ -296,6 +301,18 @@
+     }
+     Ok(())
+ }
++/// Only the source-selected intrinsic cases admitted above have physical targets.
++/// `str` is unsized; this ID is used solely as a reference pointee.
++fn reference_target_id(target: &TyTerm) -> Result<TypeId, Diagnostic> {
++    match target {
++        TyTerm::Primitive(primitive) => primitive_runtime_id(*primitive),
++        TyTerm::Str => Ok(TypeId(16)),
++        _ => Err(invalid(
++            "reference pointee requires further source integration",
++        )),
++    }
++}
++
+ #[derive(Debug, Clone)]
+ struct ReferenceBinding {
+     ordinal: usize,
+@@ -370,7 +387,7 @@
+                 || signature.parameters[ordinal].receiver
+                 || signature.parameters[ordinal].variadic
+                 || !matches!(source,TyTerm::Ref(_,mutable,target)
+-                    if *mutable==parameter.mutable() && target.as_ref()==&TyTerm::Primitive(parameter.primitive))
++                    if *mutable==parameter.mutable() && target.as_ref()==&parameter.pointee)
+                 || source != &binding.argument.source
+                 || packet.parameter_descriptors[ordinal] != TypeId(binding.argument.value.type_id)
+             {
+@@ -486,12 +503,10 @@
+         let TyTerm::Ref(region, mutable, target) = &argument.source else {
+             return Err(invalid("reference actual source absent"));
+         };
+-        if *mutable != parameter.syntax.mutable()
+-            || target.as_ref() != &TyTerm::Primitive(parameter.primitive)
+-        {
++        if *mutable != parameter.syntax.mutable() || target.as_ref() != &parameter.pointee {
+             return Err(fault(
+                 "LRR-E-CALL-ARG-TYPE",
+-                "reference argument source differs from selected primitive pointee/access",
++                "reference argument source differs from selected source pointee/access",
+             ));
+         }
+         for previous in &bindings {
+@@ -559,7 +574,10 @@
+     const ORIGINAL: &str = include_str!(
+         "../../../../fixtures/upstream/rustc-checkout/tests/ui/regions/regions-infer-call.rs"
+     );
+-    fn source(text: &str, edition: u16) -> (Database, PreparedSourceView, NameNamespaces) {
++    pub(super) fn source(
++        text: &str,
++        edition: u16,
++    ) -> (Database, PreparedSourceView, NameNamespaces) {
+         let profile = ProfileIdentity {
+             edition,
+             ..ProfileIdentity::current()
+@@ -601,7 +619,7 @@
+         assert!(imports.pending.is_empty() && imports.missing.is_empty());
+         (db, source, graph)
+     }
+-    fn callable(
++    pub(super) fn callable(
+         db: &mut Database,
+         source: &PreparedSourceView,
+         graph: &NameNamespaces,
+@@ -906,3 +924,7 @@
+         assert!(certificate.validate_packet(&different, &packet).is_err());
+     }
+ }
++
++#[cfg(test)]
++#[path = "closed_string_reference_tests.rs"]
++mod string_reference_tests;
+--- /dev/null
++++ b/crates/lrr/src/frontend/closed_string_reference_tests.rs
+@@ -0,0 +1,239 @@
++//! Source-call component controls using unchanged upstream headers and literal
++//! execution. Joining these two witnesses is not execution of either full main.
++use super::{
++    tests::{callable, source},
++    *,
++};
++use crate::{
++    db::{key::QueryKey, provider::SyntaxProvider, value::QueryValue},
++    ir::{
++        op::{LiteralKind, Op},
++        pc::{NodeId, Phase},
++    },
++    vm::step::{StepOutcome, step},
++};
++const BORROWED: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/match/match-borrowed-str.rs"
++);
++const NULS: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/str/nul-char-equivalence.rs"
++);
++
++/// Execute the real first initializer, including its actual preceding recipes.
++/// A source view or reference value is never manufactured for this producer.
++fn literal_argument(edition: u16) -> (Frame, GuestStore, SlotId) {
++    let (mut db, view, _) = source(NULS, edition);
++    let body = view
++        .outline()
++        .items
++        .iter()
++        .find(|item| item.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap()
++        .key();
++    let fetched = db
++        .fetch(&SyntaxProvider, QueryKey::BodyStructure(body))
++        .into_ready()
++        .unwrap()
++        .unwrap();
++    let QueryValue::BodyStructure(index) = fetched.value.as_ref() else {
++        panic!()
++    };
++    let mut store = GuestStore::new(1, 10_000, 4_000_000).unwrap();
++    let mut frame = Frame::new(
++        index.as_ref().clone(),
++        index.pc(NodeId(0), Phase::Entry).unwrap(),
++        &mut store,
++    )
++    .unwrap();
++    frame.set_fuel_limit(1000).unwrap();
++    for _ in 0..128 {
++        let fetched = db
++            .fetch(&SyntaxProvider, QueryKey::Thunk(frame.pc().clone()))
++            .into_ready()
++            .unwrap()
++            .unwrap();
++        let QueryValue::Thunk(recipe) = fetched.value.as_ref() else {
++            panic!()
++        };
++        let destination = recipe.recipe().operations.iter().find_map(|op| match op {
++            Op::Literal {
++                literal,
++                destination,
++                ..
++            } if literal.kind == LiteralKind::String => Some(*destination),
++            _ => None,
++        });
++        assert!(matches!(
++            step(&mut frame, &mut store, recipe).unwrap(),
++            StepOutcome::Next(_)
++        ));
++        if let Some(destination) = destination {
++            return (frame, store, destination);
++        }
++    }
++    panic!("unchanged NUL initializer did not execute");
++}
++
++#[test]
++fn unchanged_borrowed_str_headers_and_actual_utf8_arguments_join_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, view, graph) = source(BORROWED, edition);
++        let callee = callable(&mut db, &view, &graph, "compare");
++        let (frame, mut store, slot) = literal_argument(edition);
++        let reference = ClosedReferenceArgument::capture(&frame, slot, &store).unwrap();
++        assert_eq!(
++            reference.source,
++            TyTerm::Ref(RegionTerm::Static, false, Box::new(TyTerm::Str))
++        );
++        for ordinal in 0..2 {
++            let QueryPoll::Ready(Ok(ArgumentHintPreparation::Ready(hints))) =
++                prepare_argument_hint(&mut db, &callee, &graph, &[&view], ordinal)
++            else {
++                panic!("upstream str parameter not admitted")
++            };
++            let [hint] = hints.as_slice() else { panic!() };
++            let proof = hint.closed_reference.as_ref().unwrap();
++            proof.validate_hint(hint).unwrap();
++            proof.require_current(&mut db, &callee).unwrap();
++            assert_eq!(proof.pointee(), &TyTerm::Str);
++            assert_eq!(
++                hint.source,
++                TyTerm::Ref(
++                    RegionTerm::Bound {
++                        depth: 0,
++                        index: ordinal as u32,
++                    },
++                    false,
++                    Box::new(TyTerm::Str)
++                )
++            );
++            assert_eq!(
++                proof.materialize_hint(&mut store).unwrap(),
++                TypeId(reference.value.type_id)
++            );
++        }
++        let actual = ArgumentType {
++            source: reference.source.clone(),
++            descriptor: TypeId(reference.value.type_id),
++        };
++        let actuals = [actual.clone(), actual];
++        let references = [Some(reference.clone()), Some(reference)];
++        let QueryPoll::Ready(Ok(ContractPreparation::Ready(mut packet))) =
++            prepare_contracts_with_references(
++                &mut db,
++                &callee,
++                &graph,
++                &[&view],
++                &[],
++                None,
++                ReferenceCallArguments {
++                    store: &store,
++                    arguments: &actuals,
++                    references: &references,
++                },
++            )
++        else {
++            panic!("actual immutable str source/cell join failed")
++        };
++        let proof = packet.closed_references.as_ref().unwrap().clone();
++        proof.validate_packet(callee.signature(), &packet).unwrap();
++        proof
++            .require_argument_cells(&store, &[frame.cell(slot).unwrap(); 2], &actuals)
++            .unwrap();
++        assert_eq!(packet.source_parameters, vec![actuals[0].source.clone(); 2]);
++        packet.source_parameters[0] = TyTerm::Ref(
++            RegionTerm::Static,
++            false,
++            Box::new(TyTerm::Slice(Box::new(TyTerm::Primitive(
++                PrimitiveType::U8,
++            )))),
++        );
++        assert_eq!(
++            proof
++                .validate_packet(callee.signature(), &packet)
++                .unwrap_err()
++                .code,
++            "LRR-E-CALL-CONTEXT"
++        );
++    }
++}
++
++#[test]
++fn str_parameter_spelling_does_not_override_shadow_or_grant_mutable_view() {
++    for text in [
++        "type str=bool;fn take(x:&str){}fn main(){}",
++        "fn take(x:&mut str){}fn main(){}",
++    ] {
++        let (mut db, view, graph) = source(text, 2024);
++        let callee = callable(&mut db, &view, &graph, "take");
++        assert!(
++            ClosedReferenceParameter::capture(&mut db, &callee, &graph, &[&view], 0)
++                .unwrap()
++                .is_none()
++        );
++    }
++}
++
++#[test]
++fn utf8_argument_capture_rejects_changed_source_access_and_store_before_effects() {
++    let (mut frame, store, slot) = literal_argument(2024);
++    let captured = ClosedReferenceArgument::capture(&frame, slot, &store).unwrap();
++    let effects = (
++        store.budget().handles(),
++        store.budget().bytes(),
++        store.type_metadata_bytes(),
++        frame.fuel_snapshot(),
++    );
++    for source in [
++        TyTerm::Ref(RegionTerm::Static, true, Box::new(TyTerm::Str)),
++        TyTerm::Ref(
++            RegionTerm::Static,
++            false,
++            Box::new(TyTerm::Primitive(PrimitiveType::U8)),
++        ),
++    ] {
++        frame.set_source_view(slot, Some(source)).unwrap();
++        assert!(ClosedReferenceArgument::capture(&frame, slot, &store).is_err());
++    }
++    let other = GuestStore::new(1, 10_000, 4_000_000).unwrap();
++    let actual = ArgumentType {
++        source: captured.source.clone(),
++        descriptor: TypeId(captured.value.type_id),
++    };
++    assert!(captured.require(&other, &actual).is_err());
++    assert_eq!(
++        (
++            store.budget().handles(),
++            store.budget().bytes(),
++            store.type_metadata_bytes(),
++            frame.fuel_snapshot()
++        ),
++        effects
++    );
++}
++
++#[test]
++fn str_header_receipt_rejects_changed_hint_and_expansion_epoch() {
++    let (mut db, view, graph) = source(BORROWED, 2024);
++    let callee = callable(&mut db, &view, &graph, "compare");
++    let QueryPoll::Ready(Ok(ArgumentHintPreparation::Ready(hints))) =
++        prepare_argument_hint(&mut db, &callee, &graph, &[&view], 0)
++    else {
++        panic!()
++    };
++    let proof = hints[0].closed_reference.as_ref().unwrap();
++    let mut wrong = hints[0].clone();
++    wrong.source = TyTerm::Ref(RegionTerm::Static, false, Box::new(TyTerm::Str));
++    assert_eq!(
++        proof.validate_hint(&wrong).unwrap_err().code,
++        "LRR-E-CALL-CONTEXT"
++    );
++    db.begin_expansion_epoch(1).unwrap();
++    assert_eq!(
++        proof.require_current(&mut db, &callee).unwrap_err().code,
++        "LRR-E-CALL-CONTEXT"
++    );
++}

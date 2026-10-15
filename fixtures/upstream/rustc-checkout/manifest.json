@@ -1734,6 +1734,12 @@
       "bytes": 260
     },
     {
+      "path": "tests/ui/match/match-borrowed-str.rs",
+      "git_blob": "48597ed2c18f12ad3d72d5460101644a2e280178",
+      "sha256": "b4eac0329eed1a049e713e374d30a7a0a4999b512db6c700b5f8aaf2e49a86b5",
+      "bytes": 306
+    },
+    {
       "path": "tests/ui/match/match-on-negative-integer-ranges.rs",
       "git_blob": "855686f55c326103f181b2764700d0aed84c6d3f",
       "sha256": "d55223d431c9d0840087bcbfe2f04c369654919e262a3d5b3cb9ca9132f1b7b3",
@@ -4443,6 +4449,14 @@
     },
     {
       "path": "tests/ui/match/issue-26251.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/match/match-borrowed-str.rs",
       "directives": [
         "//@ run-pass"
       ],

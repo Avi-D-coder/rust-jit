@@ -1,0 +1,49 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T041",
+    "T062"
+  ],
+  "prerequisites": [
+    "root-string-coherent-v1",
+    "root-string-macro-operands-v1",
+    "root-string-equality-v1"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_argument_hints.rs",
+      "before_sha256": "1ca8b81f415d2c3dcd8e80921af8fecce3b068c639e27582f5d58843bb75a1b1",
+      "after_sha256": "8940a7790106a1891495c6766aa680fcdd76f4dcb838fc5f821d8b2058dd5f8b"
+    },
+    {
+      "path": "crates/lrr/src/frontend/closed_reference_calls.rs",
+      "before_sha256": "7312539d3fe2a4641cacd5d4d6fa9233ef41e4fd183fa5402fbfb267422ab658",
+      "after_sha256": "352e65cca36eb551c39b39fa7feb4ec116a70596b254f9ad809184d7c1646ef1"
+    },
+    {
+      "path": "crates/lrr/src/frontend/closed_string_reference_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "0b7c075131a9ea2eb787407e5ebd9a5e5e3ccb6f9e20e766ca3fe2aff82e0e75"
+    }
+  ],
+  "patch_sha256": "4d9e6df55ede2ee856ff8c797baf63fd5cc3c03492af93a7f8b424298451cb9c",
+  "patch_bytes": 16606,
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "upstream_witness": {
+    "path": "tests/ui/match/match-borrowed-str.rs",
+    "sha256": "b4eac0329eed1a049e713e374d30a7a0a4999b512db6c700b5f8aaf2e49a86b5"
+  },
+  "static_checks": [
+    "Rust 1.99 formatting",
+    "exact patch replay"
+  ],
+  "new_test_bodies": 4,
+  "stock_runtime_passes_added": 0,
+  "acceptance_pending": [
+    "strict build",
+    "scoped regression tests",
+    "integrated milestone"
+  ],
+  "created_at": "2026-10-15T11:36:01.412285+00:00"
+}
