@@ -635,13 +635,59 @@ fn exit_preflight(frame: &Frame, store: &GuestStore, exit: &RecipeExit) -> Resul
         )),
     }
 }
-fn numeric_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Diagnostic> {
+/// Immutable result/source admission, retained across this opcode's fuel charge.
+struct PreparedNumericResult {
+    destination: crate::ir::pc::SlotId,
+    ty: TypeId,
+    source: Option<PrimitiveType>,
+}
+fn operator_operand_source(
+    frame: &Frame,
+    slot: crate::ir::pc::SlotId,
+    ty: TypeId,
+    forwarded: bool,
+) -> Result<Option<PrimitiveType>, Diagnostic> {
+    use crate::traits::term::TyTerm;
+    let source = match frame.source_view_ref(slot)? {
+        None => return Ok(None),
+        Some(TyTerm::Primitive(primitive)) => *primitive,
+        Some(TyTerm::Ref(_, false, target)) if forwarded => {
+            let TyTerm::Primitive(primitive) = target.as_ref() else {
+                return Err(Diagnostic::new(
+                    "LRR-E-GENERIC-BINDING",
+                    "builtin operator forwarding requires an admitted primitive source target"
+                        .into(),
+                ));
+            };
+            *primitive
+        }
+        Some(_) => {
+            return Err(Diagnostic::new(
+                "LRR-E-GENERIC-BINDING",
+                "builtin operator cannot replace a rigid or nonprimitive operand source".into(),
+            ));
+        }
+    };
+    // Projection is source -> descriptor only; equal layout cannot mint source.
+    if crate::runtime::shape::PrimitiveIdentity::from_recipe(source)?.id() != ty {
+        return Err(Diagnostic::new(
+            "LRR-E-GENERIC-BINDING",
+            "builtin operator operand descriptor differs from its admitted primitive source".into(),
+        ));
+    }
+    Ok(Some(source))
+}
+fn numeric_preflight(
+    frame: &Frame,
+    store: &GuestStore,
+    op: &Op,
+) -> Result<Option<PreparedNumericResult>, Diagnostic> {
     use super::numeric::{self, NumericFailure};
     let runtime = |error| match error {
         NumericFailure::RuntimeFault(error) => error,
         NumericFailure::GuestPanic(_) => invalid("type validation attempted arithmetic"),
     };
-    let (destination, ty) = match op {
+    let (destination, ty, source) = match op {
         Op::NumericBinary {
             operator,
             left,
@@ -649,7 +695,8 @@ fn numeric_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), D
             destination,
         } => {
             use crate::ir::op::NumericBinary as B;
-            let left_cell = frame.cell(*left)?;
+            let left_slot = *left;
+            let left_cell = frame.cell(left_slot)?;
             let right_cell = frame.cell(*right)?;
             let crate::runtime::cell::CellState::Live(left_raw) = store.state(left_cell)? else {
                 return Err(invalid("left operand not live"));
@@ -705,6 +752,24 @@ fn numeric_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), D
                 .type_id,
             );
             numeric::binary_types(*operator, TypeId(left.type_id), right_ty).map_err(runtime)?;
+            let left_source = operator_operand_source(
+                frame,
+                left_slot,
+                TypeId(left.type_id),
+                left_borrowed.is_some(),
+            )?;
+            let right_source =
+                operator_operand_source(frame, *right, right_ty, right_borrowed.is_some())?;
+            // Closed builtin comparisons return Bool by their operator contract,
+            // even if a suffixed literal has no retained numeric source tree.
+            // Arithmetic may only forward actual admitted operand evidence.
+            let source = if comparison {
+                Some(PrimitiveType::Bool)
+            } else if shift {
+                left_source
+            } else {
+                left_source.or(right_source)
+            };
             (
                 *destination,
                 if comparison {
@@ -712,6 +777,7 @@ fn numeric_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), D
                 } else {
                     TypeId(left.type_id)
                 },
+                source,
             )
         }
         Op::NumericUnary {
@@ -719,14 +785,16 @@ fn numeric_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), D
             source,
             destination,
         } => {
-            let value = if let Some(value) = numeric::borrowed_operand(store, frame.cell(*source)?)?
-            {
+            let borrowed = numeric::borrowed_operand(store, frame.cell(*source)?)?;
+            let value = if let Some(value) = borrowed {
                 value
             } else {
                 store.preview_scalar(frame.cell(*source)?, frame.hint(*destination)?)?
             };
             numeric::unary_type(*operator, TypeId(value.type_id)).map_err(runtime)?;
-            (*destination, TypeId(value.type_id))
+            let source =
+                operator_operand_source(frame, *source, TypeId(value.type_id), borrowed.is_some())?;
+            (*destination, TypeId(value.type_id), source)
         }
         Op::PrimitiveCast {
             source,
@@ -737,16 +805,43 @@ fn numeric_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), D
             let target = concrete(&HintRecipe::Primitive(*target))?
                 .ok_or_else(|| invalid("cast target absent"))?;
             numeric::cast_types(TypeId(value.type_id), target).map_err(runtime)?;
-            (*destination, target)
+            (*destination, target, None)
         }
-        _ => return Ok(()),
+        _ => return Ok(None),
     };
-    frame.preflight_write_type(destination, ty, store)
+    if matches!(op, Op::PrimitiveCast { .. }) {
+        // Cast source propagation remains its existing separate prerequisite.
+        frame.preflight_write_type(destination, ty, store)?;
+    } else {
+        frame.preflight_primitive_operator_result(destination, ty, source, store)?;
+    }
+    if matches!(
+        op,
+        Op::NumericBinary {
+            operator: crate::ir::op::NumericBinary::Eq
+                | crate::ir::op::NumericBinary::Ne
+                | crate::ir::op::NumericBinary::Lt
+                | crate::ir::op::NumericBinary::Le
+                | crate::ir::op::NumericBinary::Gt
+                | crate::ir::op::NumericBinary::Ge,
+            ..
+        }
+    ) {
+        // These closed primitive comparisons cannot guest-panic after type
+        // admission. Keep arithmetic/cast panic and quota ordering unchanged.
+        frame.preflight_primitive_operator_capacity(destination, store)?;
+    }
+    Ok(Some(PreparedNumericResult {
+        destination,
+        ty,
+        source,
+    }))
 }
 fn numeric_operation(
     frame: &mut Frame,
     store: &mut GuestStore,
     op: &Op,
+    prepared: Option<PreparedNumericResult>,
 ) -> Result<bool, super::numeric::NumericFailure> {
     use super::numeric::{self, NumericFailure};
     let (destination, result) = match op {
@@ -809,6 +904,9 @@ fn numeric_operation(
                     store,
                 )?
             };
+            if comparison {
+                frame.reserve_primitive_operator_result(*destination, store)?;
+            }
             frame.prepare_write(*destination, store)?;
             (*destination, numeric::binary(*operator, left, right)?)
         }
@@ -839,10 +937,19 @@ fn numeric_operation(
         }
         _ => return Ok(false),
     };
+    let prepared =
+        prepared.ok_or_else(|| invalid("numeric operation bypassed immutable result admission"))?;
+    if prepared.destination != destination || prepared.ty.0 != result.type_id {
+        return Err(invalid("numeric result differs from immutable admission").into());
+    }
     let ticket = store.ticket(result).map_err(NumericFailure::RuntimeFault)?;
     frame
         .write(destination, ticket, store)
         .map_err(NumericFailure::RuntimeFault)?;
+    frame.set_source_view(
+        destination,
+        prepared.source.map(crate::traits::term::TyTerm::Primitive),
+    )?;
     Ok(true)
 }
 fn execute(
@@ -1172,7 +1279,7 @@ pub(crate) fn step_with_constant(
             let prepared = literal_preflight(frame, store, op)?;
             let assertion = assertion_preflight(frame, store, op)?;
             state_preflight(frame, store, op)?;
-            numeric_preflight(frame, store, op)?;
+            let numeric_result = numeric_preflight(frame, store, op)?;
             let (projection, projection_panic) = match frame.prepare_projection(op, store) {
                 Ok(prepared) => (prepared, None),
                 Err(crate::runtime::place::PlaceFailure::RuntimeFault(error)) => return Err(error),
@@ -1218,7 +1325,7 @@ pub(crate) fn step_with_constant(
             if let Some(prepared) = projection {
                 frame.commit_projection(prepared)?;
             } else {
-                match numeric_operation(frame, store, op) {
+                match numeric_operation(frame, store, op, numeric_result) {
                     Ok(true) => {}
                     Ok(false) => match place_operation(frame, store, op) {
                         Ok(true) => {}
@@ -1338,3 +1445,7 @@ pub(crate) fn step_with_constant(
     }
     result
 }
+
+#[cfg(test)]
+#[path = "primitive_operator_result_source_tests.rs"]
+mod primitive_operator_result_source_tests;

@@ -60,7 +60,7 @@ fn numeric_family(primitive: PrimitiveType) -> Option<bool> {
         _ => None,
     }
 }
-fn unsuffixed_family(mut expression: ast::Expr) -> Result<Option<bool>, Diagnostic> {
+pub(super) fn unsuffixed_family(mut expression: ast::Expr) -> Result<Option<bool>, Diagnostic> {
     for _ in 0..256 {
         match expression {
             ast::Expr::ParenExpr(group) => {

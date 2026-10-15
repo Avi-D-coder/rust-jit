@@ -13,6 +13,10 @@ pub const MAX_QUERY_DEPTH: usize = 256;
 #[path = "lexical_inputs.rs"]
 mod lexical_inputs;
 
+#[path = "namespace_witness.rs"]
+mod namespace_witness;
+pub(crate) use namespace_witness::NamespaceWitness;
+
 #[path = "constant_inputs.rs"]
 mod constant_inputs;
 
@@ -204,6 +208,34 @@ impl Database {
             self.prepared_sources.push(weak);
         }
         Ok(())
+    }
+    /// Query-safe exact immutable lease; current input must select this source.
+    pub(crate) fn prepared_source(
+        &self,
+        selection: &crate::source::changes::SourceSelection,
+    ) -> Result<Option<crate::source::changes::PreparedSourceView>, Diagnostic> {
+        use crate::source::changes::PreparedSourceView;
+        if !matches!(self.published_input(&InputKey::CapturedSource(selection.location_identity())), Some((InputValue::CapturedSource(actual), _)) if actual == selection)
+        {
+            return Ok(None);
+        }
+        if self.prepared_sources.len() > 100_000 {
+            return Err(fault(
+                "LRR-E-METADATA-LIMIT",
+                "retained source selection count limit",
+            ));
+        }
+        for state in self
+            .prepared_sources
+            .iter()
+            .rev()
+            .filter_map(std::sync::Weak::upgrade)
+        {
+            if let Some(view) = PreparedSourceView::from_retained_state(state, selection)? {
+                return Ok(Some(view));
+            }
+        }
+        Ok(None)
     }
     pub(crate) fn prepared_parse(
         &self,

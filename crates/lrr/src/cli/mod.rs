@@ -314,6 +314,7 @@ fn standalone_captured(
         compile_inputs::PreparedCompileInputs::prepare(path, prepared, view, sources)?;
     let mut db = Database::default();
     prepared.publish(&mut db)?;
+    db.begin_expansion_epoch(1)?;
     let mut discovery = crate::expand::source_discovery::SourceDiscovery::new(
         sources,
         view.outline().root_scope.clone(),
@@ -486,6 +487,7 @@ fn test_source_captured(
         compile_inputs::PreparedCompileInputs::prepare(source, prepared, view, sources)?;
     let mut db = Database::default();
     prepared.publish(&mut db)?;
+    db.begin_expansion_epoch(1)?;
     let mut discovery = crate::expand::source_discovery::SourceDiscovery::for_tests(
         sources,
         view.outline().root_scope.clone(),

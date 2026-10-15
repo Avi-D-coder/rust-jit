@@ -3,14 +3,14 @@ use super::{draft, error, local_binding, parameter_at, primitive_cast_target, re
 use crate::{
     core::diagnostic::Diagnostic,
     expand::scopes::MacroName,
-    frontend::thunks,
+    frontend::{scalar_pattern_binding::ScalarPatternBindingAdmission, thunks},
     ir::{
         op::{
             DecodedLiteral, HintRecipe, LiteralKind, LiteralRecipe, NumericBinary, Op,
             PrimitiveType,
         },
         pc::{NodeId, PcKey, Phase, SlotId},
-        recipe::{RecipeExit, VerifiedRecipe},
+        recipe::{Origin, RecipeDraft, RecipeExit, VerifiedRecipe},
     },
     syntax::{
         body_index::{BodyIndex, ExpressionKind, NodeRole},
@@ -21,7 +21,7 @@ use crate::{
 };
 use ra_ap_syntax::{
     AstNode, AstToken, SyntaxKind, SyntaxNode,
-    ast::{self, HasGenericArgs},
+    ast::{self, HasGenericArgs, HasName},
 };
 
 fn limit() -> Diagnostic {
@@ -571,6 +571,71 @@ fn empty_binding_header(arm: &Arm) -> bool {
         )
     })
 }
+/// Shape only. A name becomes a binding only after reached namespace admission.
+/// Do not flatten an or/parenthesized binding into this deliberately narrow lane.
+fn plain_binding_header(arm: &Arm) -> Option<NodeId> {
+    let ast::Pat::IdentPat(pattern) = arm.syntax.pat()? else {
+        return None;
+    };
+    if arm.attributed
+        || arm.alternatives.len() != 1
+        || pattern.ref_token().is_some()
+        || pattern.mut_token().is_some()
+        || pattern.at_token().is_some()
+        || pattern.name().is_none()
+        || pattern
+            .syntax()
+            .children()
+            .any(|node| ast::Attr::can_cast(node.kind()))
+        || arm.alternatives[0].pattern.syntax() != pattern.syntax()
+    {
+        return None;
+    }
+    Some(arm.alternatives[0].id)
+}
+fn binding_draft(
+    index: &BodyIndex,
+    key: &PcKey,
+    operations: Vec<Op>,
+    exit: RecipeExit,
+    admission: &ScalarPatternBindingAdmission,
+) -> Result<VerifiedRecipe, Diagnostic> {
+    let required = admission.dependencies();
+    if required.len() > 4096 {
+        return Err(limit());
+    }
+    let mut bytes = required
+        .len()
+        .checked_mul(std::mem::size_of::<crate::db::dependency::DependencyStamp>())
+        .ok_or_else(limit)?;
+    for stamp in required {
+        bytes = bytes
+            .checked_add(stamp.heap_bytes())
+            .filter(|n| *n <= 32 * 1024 * 1024)
+            .ok_or_else(limit)?;
+    }
+    let mut dependencies = Vec::new();
+    dependencies
+        .try_reserve_exact(required.len())
+        .map_err(|_| limit())?;
+    dependencies.extend_from_slice(required);
+    crate::ir::validate::verify(
+        thunks::with_temporary_scope_entry(
+            index,
+            RecipeDraft {
+                key: key.clone(),
+                origin: Origin {
+                    span: index.span(NodeId(key.node))?,
+                    expansion_ancestry: vec![],
+                },
+                operations,
+                exits: vec![exit],
+                dependencies,
+            },
+        )?,
+        index,
+    )
+}
 fn value(index: &BodyIndex, id: NodeId) -> Result<SlotId, Diagnostic> {
     index
         .nodes()
@@ -592,6 +657,33 @@ pub(super) fn prepare(
     index: &BodyIndex,
     key: &PcKey,
     syntax: SyntaxNode,
+) -> Result<VerifiedRecipe, Diagnostic> {
+    prepare_inner(parsed, body, index, key, syntax, None)
+}
+pub(super) fn prepare_binding(
+    parsed: &ParsedFile,
+    body: &BodyHandle,
+    index: &BodyIndex,
+    key: &PcKey,
+    syntax: SyntaxNode,
+    admission: &ScalarPatternBindingAdmission,
+) -> Result<VerifiedRecipe, Diagnostic> {
+    if syntax.kind() != SyntaxKind::IDENT_PAT
+        || !matches!(Phase::from_code(key.phase), Phase::Entry | Phase::Commit)
+    {
+        return Err(error(
+            "binding admission requires its identifier pattern entry/commit",
+        ));
+    }
+    prepare_inner(parsed, body, index, key, syntax, Some(admission))
+}
+fn prepare_inner(
+    parsed: &ParsedFile,
+    body: &BodyHandle,
+    index: &BodyIndex,
+    key: &PcKey,
+    syntax: SyntaxNode,
+    admission: Option<&ScalarPatternBindingAdmission>,
 ) -> Result<VerifiedRecipe, Diagnostic> {
     let fallback = index.pc(NodeId(key.node), Phase::Exit)?;
     let unsupported =
@@ -685,9 +777,10 @@ pub(super) fn prepare(
         if arm.attributed {
             return unsupported("reached match arm attributes require macro integration");
         }
-        // This slice proves the empty binding header. Range/constant leaves
-        // expose no bindings; their unsupported semantics stay alternative-local.
-        if !empty_binding_header(arm) {
+        // Empty headers and one plain identifier may route structurally. Only
+        // the reached pattern proof can establish that identifier is a binding;
+        // range/constant semantics remain alternative-local.
+        if !empty_binding_header(arm) && plain_binding_header(arm).is_none() {
             return unsupported(
                 "reached alternative binding header requires transactional pattern integration",
             );
@@ -750,11 +843,26 @@ pub(super) fn prepare(
         return unsupported("match alternative is disabled or outside selected source");
     };
     let arm = &plan.arms[arm_ordinal];
-    if arm.attributed || !empty_binding_header(arm) {
+    let binding = plain_binding_header(arm);
+    if arm.attributed || (!empty_binding_header(arm) && binding.is_none()) {
         return unsupported("reached alternative header requires macro/binding integration");
     }
     let alternative = &arm.alternatives[alternative_ordinal];
     let wildcard = matches!(alternative.pattern, ast::Pat::WildcardPat(_));
+    let binding_admission = if let Some(binding) = binding {
+        if binding != alternative.id || !matches!(phase, Phase::Entry | Phase::Commit) {
+            return unsupported("plain binding pattern requires its exact entry/commit phase");
+        }
+        let Some(admission) = admission else {
+            return unsupported(
+                "reached plain binding pattern requires current namespace admission",
+            );
+        };
+        admission.require(parsed, body, index, key, binding)?;
+        Some(admission)
+    } else {
+        None
+    };
     if alternative
         .pattern
         .syntax()
@@ -763,7 +871,7 @@ pub(super) fn prepare(
     {
         return unsupported("reached alternative attributes require macro integration");
     }
-    if !wildcard {
+    if !wildcard && binding.is_none() {
         let ast::Pat::LiteralPat(pattern) = &alternative.pattern else {
             return unsupported("reached alternative requires scalar literal or wildcard");
         };
@@ -784,6 +892,13 @@ pub(super) fn prepare(
         }
     }
     match phase {
+        Phase::Entry if binding.is_some() => binding_draft(
+            index,
+            key,
+            vec![],
+            RecipeExit::Next(index.pc(alternative.id, Phase::Commit)?),
+            binding_admission.ok_or_else(|| error("binding admission disappeared"))?,
+        ),
         Phase::Entry if wildcard => draft(
             index,
             key,
@@ -860,12 +975,34 @@ pub(super) fn prepare(
                 );
             }
             let mut ops = Vec::new();
-            if !wildcard {
+            if !wildcard && binding.is_none() {
                 ops.push(Op::Discard { source: test })
             }
             ops.push(Op::ScopeEnter {
                 scope: index.nodes()[arm.id.0 as usize].scope,
             });
+            if let Some(binding) = binding {
+                let place = SlotId(expected.0.checked_add(1).ok_or_else(limit)?);
+                if index.slot_kind(place)? != crate::ir::pc::SlotKind::Place {
+                    return Err(error("match binding scratch place is not paired storage"));
+                }
+                ops.extend([
+                    Op::ValuePlace {
+                        source,
+                        destination: place,
+                    },
+                    Op::ReadPlace {
+                        place,
+                        destination: expected,
+                    },
+                    Op::BindLocal {
+                        binding,
+                        source: expected,
+                        hint: HintRecipe::None,
+                        writable: false,
+                    },
+                ]);
+            }
             let next = if let Some(guard) = arm.guard {
                 ops.push(Op::SetHint {
                     child: value(index, guard)?,
@@ -881,9 +1018,13 @@ pub(super) fn prepare(
                 });
                 index.pc(arm.result, Phase::Entry)?
             };
-            draft(index, key, ops, RecipeExit::Next(next))
+            if let Some(admission) = binding_admission {
+                binding_draft(index, key, ops, RecipeExit::Next(next), admission)
+            } else {
+                draft(index, key, ops, RecipeExit::Next(next))
+            }
         }
-        Phase::Exit if !wildcard => {
+        Phase::Exit if !wildcard && binding.is_none() => {
             let next = if let Some(next) = arm.alternatives.get(alternative_ordinal + 1) {
                 index.pc(next.id, Phase::Entry)?
             } else if let Some(next) = plan.arms.get(arm_ordinal + 1) {
@@ -899,5 +1040,168 @@ pub(super) fn prepare(
             )
         }
         _ => unsupported("invalid closed scalar alternative phase"),
+    }
+}
+
+#[cfg(test)]
+mod binding_route_tests {
+    use super::*;
+    use crate::{
+        core::{digest::Digest, profile::ProfileIdentity},
+        source::snapshot::{CfgSet, SourceBlob},
+    };
+    const ORIGINAL: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/for-loop-while/label_break_value.rs"
+    );
+    fn entered(source: &str, edition: u16, function: &str) -> (ParsedFile, BodyHandle, BodyIndex) {
+        let parsed = ParsedFile::parse(
+            &SourceBlob::new(source.as_bytes().to_vec()).unwrap(),
+            ProfileIdentity {
+                edition,
+                ..ProfileIdentity::current()
+            },
+        )
+        .unwrap();
+        let outline = parsed
+            .outline(Digest([229; 32]), vec![], &CfgSet::guest_default())
+            .unwrap();
+        let body = outline
+            .items
+            .iter()
+            .find(|item| item.def_key.declared_name == function)
+            .unwrap()
+            .body
+            .clone()
+            .unwrap();
+        let index = parsed.index_body(&body, Default::default()).unwrap();
+        (parsed, body, index)
+    }
+    fn arm_id(index: &BodyIndex, body: &BodyHandle, arm: &ast::MatchArm) -> NodeId {
+        let mut rows: IndexRows = index
+            .nodes()
+            .iter()
+            .map(|node| ((node.range.start, node.range.end, tag(node.role)), node.id))
+            .collect();
+        rows.sort_by_key(|row| row.0);
+        identity(&rows, body, arm.syntax(), 1).unwrap()
+    }
+    #[test]
+    fn original_guarded_identifier_routes_to_reached_pattern_without_binding_effects() {
+        for edition in [2015, 2018, 2021, 2024] {
+            let (parsed, body, index) = entered(ORIGINAL, edition, "label_break_match");
+            let root = parsed.entered_body_root(&body).unwrap();
+            let matched = root.descendants().find_map(ast::MatchExpr::cast).unwrap();
+            let arm = matched.match_arm_list().unwrap().arms().nth(1).unwrap();
+            let arm_id = arm_id(&index, &body, &arm);
+            let pattern = arm.pat().unwrap();
+            assert!(matches!(pattern, ast::Pat::IdentPat(_)));
+            let pattern_id = super::super::id_for(&index, &body, pattern.syntax()).unwrap();
+            let recipe = prepare(
+                &parsed,
+                &body,
+                &index,
+                &index.pc(arm_id, Phase::Entry).unwrap(),
+                arm.syntax().clone(),
+            )
+            .unwrap();
+            assert_eq!(
+                recipe.recipe().exit,
+                RecipeExit::Next(index.pc(pattern_id, Phase::Entry).unwrap())
+            );
+            assert!(!recipe.recipe().operations.iter().any(|op| matches!(
+                op,
+                Op::ValuePlace { .. } | Op::ReadPlace { .. } | Op::BindLocal { .. }
+            )));
+            for phase in [Phase::Entry, Phase::Commit] {
+                let refused = prepare(
+                    &parsed,
+                    &body,
+                    &index,
+                    &index.pc(pattern_id, phase).unwrap(),
+                    pattern.syntax().clone(),
+                )
+                .unwrap();
+                assert!(
+                    refused
+                        .recipe()
+                        .operations
+                        .iter()
+                        .any(|op| matches!(op, Op::Unsupported(_)))
+                );
+                assert!(!refused.recipe().operations.iter().any(|op| matches!(
+                    op,
+                    Op::ValuePlace { .. } | Op::ReadPlace { .. } | Op::BindLocal { .. }
+                )));
+            }
+            let first = matched
+                .match_arm_list()
+                .unwrap()
+                .arms()
+                .next()
+                .unwrap()
+                .pat()
+                .unwrap();
+            let first_id = super::super::id_for(&index, &body, first.syntax()).unwrap();
+            let literal = prepare(
+                &parsed,
+                &body,
+                &index,
+                &index.pc(first_id, Phase::Entry).unwrap(),
+                first.syntax().clone(),
+            )
+            .unwrap();
+            assert!(
+                literal
+                    .recipe()
+                    .operations
+                    .iter()
+                    .any(|op| matches!(op, Op::Literal { .. }))
+            );
+            assert!(literal.recipe().operations.iter().any(|op| matches!(
+                op,
+                Op::NumericBinary {
+                    operator: NumericBinary::Eq,
+                    ..
+                }
+            )));
+        }
+    }
+    #[test]
+    fn modifiers_and_alternative_bindings_stay_outside_plain_binding_route() {
+        for pattern in ["mut v", "ref v", "v @ _", "(v)", "v | v"] {
+            let source = format!("fn chosen(c:u8){{match c{{{pattern}=>{{}},_=>{{}}}}}}");
+            let (parsed, body, index) = entered(&source, 2024, "chosen");
+            let matched = parsed
+                .entered_body_root(&body)
+                .unwrap()
+                .descendants()
+                .find_map(ast::MatchExpr::cast)
+                .unwrap();
+            let arm = matched.match_arm_list().unwrap().arms().next().unwrap();
+            let id = arm_id(&index, &body, &arm);
+            let refused = prepare(
+                &parsed,
+                &body,
+                &index,
+                &index.pc(id, Phase::Entry).unwrap(),
+                arm.syntax().clone(),
+            )
+            .unwrap();
+            assert!(
+                refused
+                    .recipe()
+                    .operations
+                    .iter()
+                    .any(|op| matches!(op, Op::Unsupported(_))),
+                "{pattern}"
+            );
+            assert!(
+                !refused.recipe().operations.iter().any(|op| matches!(
+                    op,
+                    Op::ValuePlace { .. } | Op::ReadPlace { .. } | Op::BindLocal { .. }
+                )),
+                "{pattern}"
+            );
+        }
     }
 }

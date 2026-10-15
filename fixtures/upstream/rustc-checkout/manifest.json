@@ -1668,6 +1668,12 @@
       "bytes": 231
     },
     {
+      "path": "tests/ui/match/guards.rs",
+      "git_blob": "13efdf4ef5bd2fc165e3d4ae382f85d75bdbe393",
+      "sha256": "18e0a0a41f068cac7c8da548ce31848c396339c364673125a6c7cc34fae25d50",
+      "bytes": 491
+    },
+    {
       "path": "tests/ui/match/issue-26251.rs",
       "git_blob": "b1a81fcf20920131d4f336d3ac5831374178b278",
       "sha256": "a0993bf1d51fa8bcc9028b10f76a89f62c675097104ed2fce379967e7e8b98be",
@@ -2050,6 +2056,12 @@
       "git_blob": "fd0a4c7522a09a5c54cadc1dd1e929f777515330",
       "sha256": "ea07c8b14ab1e180d83fe9cd408b2604b32714d635b8e85f41cc6afeeb3f1a7d",
       "bytes": 3716
+    },
+    {
+      "path": "tests/ui/pattern/match-constant-and-byte-literal.rs",
+      "git_blob": "7a793478016dfdc82c2adf4221a1ac630bf9a65b",
+      "sha256": "f6027de4bd970afc8394582a9aef83c6229d8d1d21d3a3ab76976a6a31aaa97c",
+      "bytes": 254
     },
     {
       "path": "tests/ui/proc-macro/add-impl.rs",
@@ -4251,6 +4263,14 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/match/guards.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/match/issue-26251.rs",
       "directives": [
         "//@ run-pass"
@@ -4654,6 +4674,14 @@
         "//@[e2018] edition:2018",
         "//@[e2021] edition:2021",
         "//@[e2024] edition:2024"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/pattern/match-constant-and-byte-literal.rs",
+      "directives": [
+        "//@ run-pass"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"

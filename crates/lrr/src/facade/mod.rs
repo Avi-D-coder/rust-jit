@@ -1,6 +1,7 @@
 pub mod macros;
 
 pub mod prelude;
+pub(crate) mod value_binding_prelude;
 
 /// Preserve the existing standalone facet domain while sharing one core/std
 /// unit identity across macro and ordinary facade namespaces.

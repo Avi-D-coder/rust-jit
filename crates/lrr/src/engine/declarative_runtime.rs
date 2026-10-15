@@ -50,11 +50,13 @@ impl DeclarativeRuntimePlans {
     ) -> Result<Self, Diagnostic> {
         let mut wanted = BTreeMap::new();
         for record in records.iter().filter(|record| {
-            record.key().grammar == GrammarSlot::Expression
-                && matches!(
-                    record.key().macro_identity,
-                    MacroIdentity::Declaration { .. }
-                )
+            matches!(
+                record.key().grammar,
+                GrammarSlot::Expression | GrammarSlot::Statements
+            ) && matches!(
+                record.key().macro_identity,
+                MacroIdentity::Declaration { .. }
+            )
         }) {
             if wanted.len() >= 4096 {
                 return Err(limit());
@@ -82,7 +84,7 @@ impl DeclarativeRuntimePlans {
                 let Some(descriptor) = wanted.get(&producer.identity) else {
                     continue;
                 };
-                if producer.grammar != GrammarSlot::Expression {
+                if producer.grammar != descriptor.key.grammar {
                     return Err(invalid());
                 }
                 let site = (

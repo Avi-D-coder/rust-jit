@@ -122,6 +122,9 @@ impl StableEncode for CertifiedScope {
 }
 #[derive(Debug, Clone)]
 pub struct DiscoveryInput {
+    pub(crate) type_scopes: Vec<crate::expand::source_discovery::TypeScopeReceipt>,
+    pub(crate) value_binding_preludes:
+        Vec<crate::facade::value_binding_prelude::ValueBindingPrelude>,
     pub(crate) seal: Seal,
     // Scope-local declaration facts; these do not grant global impl completeness.
     pub(crate) declaration_inventory: std::sync::Arc<crate::frontend::impl_index::ImplHeaderIndex>,
@@ -348,6 +351,27 @@ impl DiscoveryInput {
                 .checked_add(fragment.metadata_bytes())
                 .ok_or_else(fail)?;
         }
+        bytes = bytes
+            .checked_add(
+                self.type_scopes
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<
+                        crate::expand::source_discovery::TypeScopeReceipt,
+                    >())
+                    .ok_or_else(fail)?,
+            )
+            .ok_or_else(fail)?;
+        for proof in &self.type_scopes {
+            bytes = bytes
+                .checked_add(proof.metadata_bytes()?)
+                .ok_or_else(fail)?;
+        }
+        for proof in &self.value_binding_preludes {
+            bytes = bytes
+                .checked_add(proof.metadata_bytes()?)
+                .and_then(|n| n.checked_add(128))
+                .ok_or_else(fail)?;
+        }
         if let Some(scope) = &self.scope {
             bytes = bytes
                 .checked_add(scope.metadata_bytes()?)
@@ -357,9 +381,11 @@ impl DiscoveryInput {
     }
 }
 impl StableEncode for DiscoveryInput {
-    const DOMAIN: &'static str = "lrr/v2/discovery-input/procedural-catalogs-v1";
+    const DOMAIN: &'static str = "lrr/v4/discovery-input/type-scope-receipts-v1";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.seal);
+        e.sequence(&self.type_scopes, |e, proof| e.record(proof));
+        e.sequence(&self.value_binding_preludes, |e, proof| e.record(proof));
         e.digest(self.source_dependencies);
         e.u64(u64::try_from(self.compiler_inputs.len()).expect("bounded compiler input count"));
         for (key, fingerprint) in &self.compiler_inputs {

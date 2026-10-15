@@ -49,6 +49,21 @@ impl Database {
         source: &crate::source::changes::SourceSelection,
         scope: &crate::syntax::outline::ScopeKey,
     ) -> Result<Arc<InputValue>, Diagnostic> {
+        self.optional_lexical_scope_certificate(source, scope)?
+            .ok_or_else(|| {
+                fault(
+                    "LRR-E-CALL-CONTEXT",
+                    "lexical source Value namespace is not currently sealed",
+                )
+            })
+    }
+    /// Optional inference may preserve unresolved syntax if no owning seal
+    /// exists. Ambiguous, invalid and stale publication errors remain errors.
+    pub(crate) fn optional_lexical_scope_certificate(
+        &self,
+        source: &crate::source::changes::SourceSelection,
+        scope: &crate::syntax::outline::ScopeKey,
+    ) -> Result<Option<Arc<InputValue>>, Diagnostic> {
         let mut selected = None;
         for row in self.inputs.values() {
             let InputValue::DiscoverySeal(input) = row.value.as_ref() else {
@@ -82,12 +97,7 @@ impl Database {
             }
             selected = Some(row.value.clone());
         }
-        selected.ok_or_else(|| {
-            fault(
-                "LRR-E-CALL-CONTEXT",
-                "lexical source Value namespace is not currently sealed",
-            )
-        })
+        Ok(selected)
     }
     /// The only accepted argument is a privately minted exact source proof.
     /// No run reset, base-source publication or provider mutation is possible.

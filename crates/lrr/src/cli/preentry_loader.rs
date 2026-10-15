@@ -181,6 +181,7 @@ impl Packet {
         let mut db = Database::default();
         db.trace.detailed = true;
         prepared.publish(&mut db)?;
+        db.begin_expansion_epoch(1)?;
         let mut discovery = SourceDiscovery::new(
             sources,
             view.outline().root_scope.clone(),

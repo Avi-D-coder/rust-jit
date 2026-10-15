@@ -1441,7 +1441,17 @@
         "supplemental_cast_family_precision_and_char_source_type_execute_actual_values",
         "cast_type_namespace_cfg_and_value_names_remain_distinct_all_editions",
         "unchanged_unsigned_cast_original_refuses_its_first_prefix_instead_of_later_initializer",
-        "exact_original_unsigned_cast_statements_refuse_in_disclosed_isolated_main_adapters"
+        "exact_original_unsigned_cast_statements_refuse_in_disclosed_isolated_main_adapters",
+        "unchanged_compound_sites_retain_exact_comparison_parameter_relation_all_editions",
+        "unchanged_comparison_request_has_no_literal_site_or_foreign_phase_authority",
+        "unchanged_compound_relations_require_real_standard_comparison_and_type_scope_all_editions",
+        "original_comparison_relation_cannot_survive_missing_type_receipt_or_changed_epoch",
+        "arithmetic_panic_retains_existing_output_cell_allocation_order_without_publishing_source",
+        "arithmetic_unary_forward_only_actual_written_source_and_source_less_arithmetic_stays_absent",
+        "result_capacity_refusal_leaves_no_allocated_result_or_source_after_pure_preflight",
+        "rigid_or_wrong_operand_source_and_rigid_result_refuse_before_fuel_or_owning_change",
+        "unchanged_char_comparison_component_and_closed_comparisons_retain_intrinsic_bool_all_editions",
+        "unchanged_runtime_comparison_main_executes_three_original_assertions_all_explicit_editions"
       ],
       "acceptance_contract": "exhaustive i8/u8 arithmetic boundary loops; random wider arithmetic/cast comparisons; works/fails context examples; signed-min literal; distinct usize/u64 contracts. Gate checks Rust constraint-aware numeric fallback and preserves known source widths; nonnumeric unknowns never default.",
       "commands": [],
@@ -1522,7 +1532,17 @@
         "T025-CAST-NUMERIC-CONTEXT-6",
         "T025-CAST-NUMERIC-CONTEXT-7",
         "T025-FOLDED-UNSIGNED-CAST-1",
-        "T025-FOLDED-UNSIGNED-CAST-2"
+        "T025-FOLDED-UNSIGNED-CAST-2",
+        "T025-COMPILER-COMPARISON-1",
+        "T025-COMPILER-COMPARISON-2",
+        "T025-COMPILER-COMPARISON-3",
+        "T025-COMPILER-COMPARISON-4",
+        "T025-OPERATOR-SOURCE-1",
+        "T025-OPERATOR-SOURCE-2",
+        "T025-OPERATOR-SOURCE-3",
+        "T025-OPERATOR-SOURCE-4",
+        "T025-OPERATOR-SOURCE-5",
+        "T025-OPERATOR-SOURCE-6"
       ],
       "artifact_paths": [
         "docs/numeric-kernel.md",
@@ -1624,7 +1644,8 @@
         "artifacts/macos-first/root-cast-numeric-context-v1/component-collection-v1.json",
         "artifacts/macos-first/root-stock-fixture-reference-repair-v1/private-validation-v2/terminal.json",
         "worktracks/evidence/2026-10-14-reached-numeric-call-components.json",
-        "worktracks/evidence/2026-10-14-integrated-milestone-failure.json"
+        "worktracks/evidence/2026-10-14-integrated-milestone-failure.json",
+        "worktracks/evidence/2026-10-14-labelled-interpreter-runtime.json"
       ],
       "release_complete": false,
       "validation_scope": "Original primitive numeric component complete under E-57-001. Gate02 passes 645 macOS host/doc tests and 28 numeric controls; strict audits pass. Full symbolic/generated/trait/control/call/assignment/aggregate/coercion/cleanup/JIT and release integrations remain pending through named dependencies; Linux acceptance is deferred. User-authorized E-NUM-001 reopens numeric compatibility: old strict-profile evidence remains historical; Rust constraint-aware fallback/future-use inference is not fully implemented or accepted. Integrated scoped shift V3:fmt/strictworkspaceClippy/architecture/manifest passed;495 library,67 source_run,12 numeric,6 numeric_boundary bodies passed without failures/ignored/filtered. Two selected original shift.rs functions execute their original assertions and retain written count types. Source/log/terminal reviewed independently. Source-proven closed counts defaulti32; named counts retain source width or remain unresolved. Full original main/static/lint/compiletest and future numeric constraints remain incomplete; fresh MAIN milestone pending. Current integrated shift source ad04fa4b macOS milestone independently accepted: all17 requirements across retained5-check prefix and12-check continuation; actual continuation47049/0, original prefix outer exit unobserved. 2395 project bodies/179 executables/495 library, all166 T042-T045 controls plus2 original shift controls,8 H002 aliases and2k-frame event once; seven original CLI probes/29 arithmetic assertions. Root collector1580/0 verified34 logs and unchanged source, then released hold. Full fixture/Drop/doublepanic/worker/release/Linux remain pending. V5 discarded-expression fallback integrated after ten distinct scoped commands passed across two segments: format/strict Clippy,497 unfiltered library bodies plus27 bodies across4 relevant unfiltered binaries, architecture/manifest audits and3 importer controls. Both stock-derived value controls passed once; exact sourceb181a24b and all raw/terminal receipts were reviewed. Prefix82354/runner1 is retained: Cargo library exited0, but the wrapper incorrectly required497 complete library names equal2 selected names. Root verified membership and authorized only seven untouched suffix commands; suffix92326/0. No completed test was rerun and no single all-green ten-command runner is claimed. Original doc-comment main whole-body and aux9906 foo arithmetic are component observations, not full compiletest/edition/lint/parent-linking passes. General numeric future-use/trait/container inference remains incomplete. The required integrated MAIN milestone is pending; T025/release/Linux remain incomplete. Integrated numeric MAIN milestone accepted on exact8068a263 after preparation/source ownership repair: actualroot22217/0,2421unfiltered bodies/181summaries,fresh gates00\u201303,both numeric-discard controls once,independent+root terminal/source checks. Stalecandidate failed attempt remains preserved. General source inference and fullstock/release/Linux remain incomplete. October13 interpreter follow-ups: reviewed private cfg/numeric/source-contract/captured-declaration candidates integrated with originals/controls; each scoped receipt retained. Prior MAIN Cargo command2478/189 passed but enclosing frozen-source receipt failed external docs additions, so not accepted. Required fresh combined MAIN gate remains pending. Full rustc compiletest/task/release/Linux acceptance incomplete.",
@@ -1665,6 +1686,12 @@
         "CA027_complete": false,
         "CA037_complete": false,
         "full_rustc_compiletest_passes": 0
+      },
+      "current_interpreter_source_checkpoint": {
+        "source_member": "40aa4bd7e1dffeca15b0585b89a5e612273900f8a13a6267e28d5637da224214",
+        "runtime_contract": "label_break_value whole main/35 assertions in all4 editions",
+        "fresh_integrated_milestone": "pending",
+        "release_complete": false
       }
     },
     {
@@ -2738,7 +2765,18 @@
         "component_empty_main_does_not_supply_compiler_private_mir_graphviz_contract",
         "rustc_original_test_listing_retains_sorted_names_and_ignore_metadata",
         "owning_runtime_worlds_select_exact_foreign_facets_without_exporting_them_locally",
-        "unrepresented_runtime_worlds_and_missing_owners_never_gain_intrinsic_identity"
+        "unrepresented_runtime_worlds_and_missing_owners_never_gain_intrinsic_identity",
+        "unchanged_label_break_value_main_edition_2015",
+        "unchanged_label_break_value_main_edition_2018",
+        "unchanged_label_break_value_main_edition_2021",
+        "unchanged_label_break_value_main_edition_2024",
+        "a_new_publication_epoch_does_not_reuse_old_generated_break_authority",
+        "definition_site_label_spelling_cannot_target_the_original_caller_label",
+        "genuine_private_break_verifier_rejects_control_dependency_and_hint_tampering",
+        "unchanged_mac1_captured_break_targets_keep_real_source_hygiene_all_editions",
+        "single_break_payload_lane_is_closed_and_callers_are_exact",
+        "target_continuation_reuses_original_block_commit_and_refuses_foreign_inputs",
+        "unchanged_mac1_transcriber_and_arguments_decode_real_lifetime_expansion"
       ],
       "acceptance_contract": "one selected test passes despite another broken body; exact/substr/no-match behavior works; should_panic cannot accept an unsupported-feature fault. Add the fixture manifest/harness format from Section 28. CA037 additionally tracks the complete upstream inventory, per-contract classification and runtime-semantics prerequisite; subset/component success does not open the JIT gate.",
       "commands": [
@@ -2815,7 +2853,18 @@
         "T034-CA037-PROFILE-CONFLICT-1",
         "T034-CA037-PROFILE-CONFLICT-2",
         "T034-CA037-PROFILE-CONFLICT-3",
-        "T034-CA037-PROFILE-CONFLICT-4"
+        "T034-CA037-PROFILE-CONFLICT-4",
+        "T034-STOCK-LABELLED-2015",
+        "T034-STOCK-LABELLED-2018",
+        "T034-STOCK-LABELLED-2021",
+        "T034-STOCK-LABELLED-2024",
+        "T034-GENERATED-CONTROL-1",
+        "T034-GENERATED-CONTROL-2",
+        "T034-GENERATED-CONTROL-3",
+        "T034-GENERATED-CONTROL-4",
+        "T034-GENERATED-CONTROL-5",
+        "T034-GENERATED-CONTROL-6",
+        "T034-GENERATED-CONTROL-7"
       ],
       "artifact_paths": [
         "artifacts/macos-first/t034-catalog-query-tests.log",
@@ -3153,7 +3202,8 @@
         "worktracks/candidates/root-runtime-macro-owning-worlds-v1/README.md",
         "artifacts/macos-first/sol-canonical-validation-agent-v8/SCOPED-HANDOFF.json",
         "worktracks/evidence/2026-10-14-reached-numeric-call-components.json",
-        "worktracks/evidence/2026-10-14-integrated-milestone-failure.json"
+        "worktracks/evidence/2026-10-14-integrated-milestone-failure.json",
+        "worktracks/evidence/2026-10-14-labelled-interpreter-runtime.json"
       ],
       "release_complete": false,
       "validation_scope": "T034 original-source minimal test/assertion component accepted under Section57/E-57-001 with 863 actual macOS host/doc tests and all 93 registered controls. Gate00/01/02 and provisional Gate03 component, strict code audits pass. Final manifest audit passes. Full Gate03, general/comparison/generated operands, formatting, output/drop/native fixture observations and complete revision4 integration remain mandatory through named later tasks and pending acceptance. release_complete=false. Collected scalar assertion integration v3: four unchanged whole arithmetic programs execute 29 original assertions under disclosed edition2024 adaptation; a fifth isize program retains specified unresolved-source-width refusal and is not a stock pass. V2 affected suites477 passed; production-identical v3 passed format, strictClippy, fresharchitecture and27 standaloneCLI tests including both new exact-once acceptance controls. Production integrated; fresh MAIN milestone pending. No full compiletest, complete T034 release, guest JIT or Linux acceptance follows. Fresh integrated MAIN milestone actual64776/0 and independent collection verify all10 checks,2228 project host/doc passes,95 registered T034 controls and the direct four-stock CLI control/29 assertions, with3680 source/include inputs unchanged. Six later imports require a new combined milestone; release/full fixtures remain pending. E-NUM-001 changes T034-STOCK-CAST-SOURCE-WIDTH from a strict refusal to complete unchanged isize-base.rs execution and all original assertions. The actual first integrated milestone failed only its old refusal expectation; corrected V15 milestone passed all17 checks,2393 project bodies/179 executables,493 library tests and the unchanged isize control once. Component acceptance is restored; historical source-width refusal is superseded by E-NUM-001. No full fixture pass is claimed. October14 v69 configured macOS milestone accepted: exact e06102b7, actual21897/cc6067/0, all2952 listed/named/summary bodies passed, nofail/ignore/filter/unexecuted, gates00-03 passed,470 raw originals exact. Root promoted206 exact source/test/fixture paths to MAIN after release (a65c91/0), preserving current spec/docs/plans. Fresh MAIN milestone pending. Inventory292 cases remains pending; zero new full-stock runtime cases. Private successor899 library controls passed; later assertion-call source remains separately under scoped validation. Full task/runtime/JIT/Linux/release acceptance incomplete.",
@@ -3727,6 +3777,12 @@
           "MAIN_integrated": false,
           "task_complete": false
         }
+      },
+      "current_interpreter_source_checkpoint": {
+        "source_member": "40aa4bd7e1dffeca15b0585b89a5e612273900f8a13a6267e28d5637da224214",
+        "runtime_contract": "label_break_value whole main/35 assertions in all4 editions",
+        "fresh_integrated_milestone": "pending",
+        "release_complete": false
       }
     },
     {
@@ -4125,7 +4181,12 @@
         "byte_and_unsuffixed_integer_do_not_gain_primitive_source_metadata",
         "stock_floating_path_adapter_rejects_reversed_outside_and_nonexact_ranges",
         "floating_adapter_keeps_unknown_members_distinct_from_dispatch_admission",
-        "floating_adapter_rejects_generic_and_absolute_paths_without_erasing_source"
+        "floating_adapter_rejects_generic_and_absolute_paths_without_erasing_source",
+        "actual_nonzero_cleanup_resume_allows_genuine_lexical_rows_and_matches_unchanged_control",
+        "actual_nonzero_cleanup_resume_refuses_namespace_addition_without_repeating_prior_effects",
+        "genuine_original_lexical_definition_publication_does_not_false_stale_namespace",
+        "genuine_same_epoch_namespace_addition_refuses_cached_normal_dispatch_before_guest_work",
+        "physical_sidecar_retains_accounted_shared_ownership_without_changing_stable_recipe"
       ],
       "acceptance_contract": "executed out-of-bounds indexing raises GuestPanic with cleanup; index-type mismatch is a runtime contract fault; same-location scalar assignment remains visible through a ref; whole move invalidates inline refs; shared writes fail; two mutable guest aliases serialize without a host RefCell panic.",
       "commands": [
@@ -4217,7 +4278,12 @@
         "T041-INTRINSIC-LITERAL-SOURCE-8",
         "T025-FLOAT-SYNTAX-BOUNDARY-1",
         "T025-FLOAT-SYNTAX-BOUNDARY-2",
-        "T025-FLOAT-SYNTAX-BOUNDARY-3"
+        "T025-FLOAT-SYNTAX-BOUNDARY-3",
+        "T041-INSTALLED-NAMESPACE-1",
+        "T041-INSTALLED-NAMESPACE-2",
+        "T041-INSTALLED-NAMESPACE-3",
+        "T041-INSTALLED-NAMESPACE-4",
+        "T041-INSTALLED-NAMESPACE-5"
       ],
       "artifact_paths": [
         "artifacts/macos-first/t041-place-reference-unvalidated-v2/manifest.json",
@@ -4259,7 +4325,8 @@
         "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-isolated-milestone-v4/independent-collection-v1.json",
         "artifacts/macos-first/root-alias-transitive-trace-v1/combined-component-acceptance-v2.json",
         "artifacts/macos-first/root-floating-syntax-boundary-v2/MAIN-integration-v1/integration.json",
-        "worktracks/evidence/2026-10-14-integrated-milestone-failure.json"
+        "worktracks/evidence/2026-10-14-integrated-milestone-failure.json",
+        "worktracks/evidence/2026-10-14-labelled-interpreter-runtime.json"
       ],
       "release_complete": false,
       "validation_scope": "Component acceptance under Section57/E-57-001: actual MAIN45274 exit0, independent collector exit0, all10 checks and fresh gates00-03; 2235 project host/doc bodies and all62 T041 registered controls passed with unchanged3689 inputs/75 include edges. Full T041/stock/JIT/release/Linux acceptance remains false; 13 full-integration fixtures and 23 later task dependencies are explicitly pending.",
@@ -4356,7 +4423,13 @@
           "status": "pending",
           "evidence_paths": []
         }
-      ]
+      ],
+      "current_interpreter_source_checkpoint": {
+        "source_member": "40aa4bd7e1dffeca15b0585b89a5e612273900f8a13a6267e28d5637da224214",
+        "runtime_contract": "label_break_value whole main/35 assertions in all4 editions",
+        "fresh_integrated_milestone": "pending",
+        "release_complete": false
+      }
     },
     {
       "id": "T042",

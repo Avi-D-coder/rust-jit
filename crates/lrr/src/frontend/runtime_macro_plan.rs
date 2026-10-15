@@ -906,3 +906,9 @@ impl PreparedDeclarativeExpression {
 #[cfg(test)]
 #[path = "runtime_macro_call_recipe_tests.rs"]
 mod call_recipe_tests;
+
+#[path = "runtime_macro_generated_break.rs"]
+mod generated_break;
+pub(crate) use generated_break::{
+    DeclarativeControlInput, GeneratedBreakAdmission, prepare_declarative_break,
+};

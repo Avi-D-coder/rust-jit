@@ -59,6 +59,23 @@ impl InstalledRecipes {
             .map(AsRef::as_ref)
             .ok_or_else(|| fault("LRR-E-INTERNAL-IR", "installed recipe ID absent"))
     }
+    /// Normal interpreter execution must use this accessor, including resume.
+    /// `get` remains a data inspection API, not a currentness authorization.
+    pub(crate) fn get_current(
+        &self,
+        db: &Database,
+        id: RecipeId,
+    ) -> Result<&VerifiedRecipe, Diagnostic> {
+        if db.source_revision() != self.source_revision {
+            return Err(fault(
+                "LRR-E-INTERNAL-SNAPSHOT",
+                "installed PC table belongs to another source publication",
+            ));
+        }
+        let recipe = self.get(id)?;
+        recipe.revalidate_namespace(db)?;
+        Ok(recipe)
+    }
     pub(crate) fn contains_pc(&self, key: &PcKey) -> bool {
         self.by_pc.contains_key(key)
     }
@@ -70,7 +87,7 @@ impl InstalledRecipes {
             )));
         }
         if let Some(id) = self.by_pc.get(&key) {
-            return QueryPoll::Ready(Ok(*id));
+            return QueryPoll::Ready(self.get_current(db, *id).map(|_| *id));
         }
         let outcome = match db.fetch(&SyntaxProvider, QueryKey::Thunk(key.clone())) {
             QueryPoll::Ready(Ok(outcome)) => outcome,
@@ -98,6 +115,7 @@ impl InstalledRecipes {
                 "prepared installation source publication is stale",
             ));
         }
+        recipe.revalidate_namespace(db)?;
         if self.by_pc.contains_key(&key) {
             return Err(fault(
                 "LRR-E-INTERNAL-IR",

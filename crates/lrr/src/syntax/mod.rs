@@ -28,6 +28,7 @@ pub mod attributes;
 pub mod body_index;
 
 mod thunks;
+pub(crate) use thunks::runtime_macro_numeric_context::MacroNumericSite;
 
 pub mod signatures;
 
@@ -62,6 +63,8 @@ pub(crate) mod discarded_numeric_fixture_facts;
 
 pub(crate) mod generated_expression;
 
+pub(crate) mod generated_control;
+
 pub(crate) mod floating_paths;
 
 #[cfg(test)]
@@ -76,3 +79,5 @@ pub mod pure_constants;
 pub(crate) mod constant_paths;
 
 pub(crate) mod original_inert;
+
+pub(crate) mod scalar_pattern_binding;

@@ -1812,7 +1812,7 @@ impl RunMachine {
                 self.terminal = true;
                 return RunPoll::Fault(error);
             }
-            let constructor = match self.installed.get(id) {
+            let constructor = match self.installed.get_current(db, id) {
                 Ok(recipe) => recipe
                     .recipe()
                     .operations
@@ -1834,7 +1834,7 @@ impl RunMachine {
                     QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
                 }
             }
-            let field = match self.installed.get(id) {
+            let field = match self.installed.get_current(db, id) {
                 Ok(recipe) => recipe
                     .recipe()
                     .operations
@@ -1860,54 +1860,54 @@ impl RunMachine {
                 }
             }
             self.frame.runtime_call = self.runtime_calls.get(self.frame.pc()).cloned();
-            let (call_ops, call_result, call_result_hint, call_next) = match self.installed.get(id)
-            {
-                Ok(recipe) => {
-                    let result = match &recipe.recipe().exit {
-                        crate::ir::recipe::RecipeExit::Call { result, .. } => Some(*result),
-                        _ => None,
-                    };
-                    let hint = recipe
-                        .recipe()
-                        .operations
-                        .iter()
-                        .skip(self.frame.resume_operation_index())
-                        .find_map(|op| match op {
-                            Op::SetHint {
-                                child,
-                                hint: crate::ir::op::HintRecipe::Primitive(p),
-                            } if Some(*child) == result => Some(*p),
+            let (call_ops, call_result, call_result_hint, call_next) =
+                match self.installed.get_current(db, id) {
+                    Ok(recipe) => {
+                        let result = match &recipe.recipe().exit {
+                            crate::ir::recipe::RecipeExit::Call { result, .. } => Some(*result),
                             _ => None,
-                        });
-                    (
-                        recipe
+                        };
+                        let hint = recipe
                             .recipe()
                             .operations
                             .iter()
                             .skip(self.frame.resume_operation_index())
-                            .filter(|op| {
-                                matches!(
-                                    op,
-                                    Op::CallPrepare { .. }
-                                        | Op::CallSeal { .. }
-                                        | Op::CallAdvance { .. }
-                                )
-                            })
-                            .cloned()
-                            .collect::<Vec<_>>(),
-                        result,
-                        hint,
-                        match &recipe.recipe().exit {
-                            crate::ir::recipe::RecipeExit::Next(next) => Some(next.clone()),
-                            _ => None,
-                        },
-                    )
-                }
-                Err(error) => {
-                    self.terminal = true;
-                    return RunPoll::Fault(error);
-                }
-            };
+                            .find_map(|op| match op {
+                                Op::SetHint {
+                                    child,
+                                    hint: crate::ir::op::HintRecipe::Primitive(p),
+                                } if Some(*child) == result => Some(*p),
+                                _ => None,
+                            });
+                        (
+                            recipe
+                                .recipe()
+                                .operations
+                                .iter()
+                                .skip(self.frame.resume_operation_index())
+                                .filter(|op| {
+                                    matches!(
+                                        op,
+                                        Op::CallPrepare { .. }
+                                            | Op::CallSeal { .. }
+                                            | Op::CallAdvance { .. }
+                                    )
+                                })
+                                .cloned()
+                                .collect::<Vec<_>>(),
+                            result,
+                            hint,
+                            match &recipe.recipe().exit {
+                                crate::ir::recipe::RecipeExit::Next(next) => Some(next.clone()),
+                                _ => None,
+                            },
+                        )
+                    }
+                    Err(error) => {
+                        self.terminal = true;
+                        return RunPoll::Fault(error);
+                    }
+                };
             for op in call_ops {
                 if let Err(error) = self.require_runtime_call_operation(&op) {
                     self.terminal = true;
@@ -2168,7 +2168,7 @@ impl RunMachine {
                 }
                 QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
             }
-            let outcome = match self.installed.get(id).and_then(|recipe| {
+            let outcome = match self.installed.get_current(db, id).and_then(|recipe| {
                 if let Some(capture) = &mut self.runtime_capture {
                     capture.before_vm_dispatch(recipe)?;
                 }
@@ -2361,3 +2361,7 @@ mod lexical_numeric_admission_tests;
 #[cfg(test)]
 #[path = "run_assertion_call_tests.rs"]
 mod assertion_call_tests;
+
+#[cfg(test)]
+#[path = "run_namespace_tests.rs"]
+mod namespace_tests;

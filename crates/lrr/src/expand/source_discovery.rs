@@ -18,6 +18,9 @@ use std::collections::{BTreeMap, BTreeSet};
 mod compiler_profiles;
 #[path = "source_discovery/original_inert.rs"]
 mod original_inert;
+#[path = "source_discovery/type_scope_receipts.rs"]
+mod type_scope_receipts;
+pub(crate) use type_scope_receipts::TypeScopeReceipt;
 pub enum SourceDiscoveryStep {
     NeedSourceDeriveSelection {
         selection: std::sync::Arc<crate::service::source_derive_requests::SourceDeriveSelection>,
@@ -7681,9 +7684,60 @@ impl SourceDiscovery {
                 }
             }
         }
+        let type_scopes = self.type_scope_receipts(db, &sources, &descriptors, &derived)?;
         let catalogs = self.procedural_catalogs()?;
+        let mut value_binding_preludes = Vec::new();
+        if self.namespace == Namespace::Value
+            && let Some((_, _, providers)) = &self.declarative
+        {
+            let mut bytes = 0usize;
+            for provider in providers {
+                let source = provider.module_source();
+                if !source.selection().outline.module_path.is_empty()
+                    || source.selection().outline.crate_key != self.scope.crate_key
+                    || !self
+                        .scope
+                        .module_path
+                        .starts_with(&source.selection().outline.module_path)
+                {
+                    continue;
+                }
+                let Some(catalog) = provider.compiler.as_ref() else {
+                    continue;
+                };
+                if catalog
+                    .canonical_standalone_member(&source.selection().outline.parse.profile)?
+                    .is_none()
+                {
+                    continue;
+                }
+                let Some(proof) =
+                    crate::facade::value_binding_prelude::ValueBindingPrelude::prepare(
+                        source,
+                        catalog,
+                        &self.scope,
+                    )?
+                else {
+                    continue;
+                };
+                bytes = bytes
+                    .checked_add(proof.metadata_bytes()?)
+                    .and_then(|n| n.checked_add(128))
+                    .filter(|n| *n <= 32 * 1024 * 1024)
+                    .ok_or_else(|| fault("Value binding prelude publication metadata limit"))?;
+                if value_binding_preludes.len() >= 100_000 {
+                    return Err(fault("Value binding prelude publication count limit"));
+                }
+                value_binding_preludes
+                    .try_reserve(1)
+                    .map_err(|_| fault("Value binding prelude publication allocation"))?;
+                value_binding_preludes.push(proof);
+            }
+        }
         db.publish_discovery(
             crate::db::seals::DiscoveryInput {
+                type_scopes,
+                value_binding_preludes,
                 seal: seal.clone(),
                 declaration_inventory: std::sync::Arc::new(self.impl_header_inventory()?),
                 source_dependencies: self.dependencies.fingerprint(),

@@ -1824,7 +1824,33 @@ impl Frame {
         destination: SlotId,
         store: &GuestStore,
     ) -> Result<(), crate::runtime::place::PlaceFailure> {
-        let (_, value, _) = store.admit_owning_place_read(self.executed_place(place)?)?;
+        // The scalar pattern lane must preserve the scrutinee for the next
+        // arm when a guard fails. A descriptor alone cannot supply a source
+        // identity or authorize copying an aggregate or a reference.
+        let pattern = self
+            .body
+            .nodes()
+            .get(self.pc.node as usize)
+            .is_some_and(|node| node.role == crate::syntax::body_index::NodeRole::Pattern);
+        let retained = self.place_slot(place)?.source.as_ref();
+        if pattern && !matches!(retained, Some(crate::traits::term::TyTerm::Primitive(_))) {
+            return Err(Diagnostic::new(
+                "LRR-E-UNSUPPORTED",
+                "scalar pattern binding requires an admitted primitive source".into(),
+            )
+            .into());
+        }
+        let (_, value, mode) = store.admit_owning_place_read(self.executed_place(place)?)?;
+        if pattern {
+            if mode != crate::runtime::cell::IntrinsicRead::CopyScalar {
+                return Err(Diagnostic::new(
+                    "LRR-E-UNSUPPORTED",
+                    "scalar pattern binding requires an intrinsic scalar copy".into(),
+                )
+                .into());
+            }
+            Self::require_borrow_source_target(retained, TypeId(value.type_id), store)?;
+        }
         self.preflight_write_value(destination, value, store)?;
         Ok(())
     }
@@ -3134,6 +3160,49 @@ impl Frame {
             ));
         }
         Ok(())
+    }
+    /// A primitive operator may retain only its independently admitted result
+    /// source. Expected rigid/nominal context cannot be overwritten at equal layout.
+    pub(crate) fn preflight_primitive_operator_result(
+        &self,
+        destination: SlotId,
+        ty: TypeId,
+        primitive: Option<crate::ir::op::PrimitiveType>,
+        store: &GuestStore,
+    ) -> Result<(), Diagnostic> {
+        use crate::traits::term::TyTerm;
+        self.preflight_write_type(destination, ty, store)?;
+        if let Some(expected) = self.source_view_ref(destination)? {
+            match expected {
+                TyTerm::Primitive(expected)
+                    if primitive.is_none_or(|actual| actual == *expected) => {}
+                _ => {
+                    return Err(Diagnostic::new(
+                        "LRR-E-GENERIC-BINDING",
+                        "builtin operator result conflicts with retained source context".into(),
+                    ));
+                }
+            }
+        }
+        let source = primitive.map(TyTerm::Primitive);
+        self.preflight_source_view(destination, source.as_ref())?;
+        // Primitive source trees have no owned heap; slot metadata was admitted
+        // at Frame creation. Source publication needs no new allocation.
+        Ok(())
+    }
+    pub(crate) fn preflight_primitive_operator_capacity(
+        &self,
+        destination: SlotId,
+        store: &GuestStore,
+    ) -> Result<(), Diagnostic> {
+        store.preflight_owning_read_result(self.slot(destination)?.cell.is_none(), false)
+    }
+    pub(crate) fn reserve_primitive_operator_result(
+        &self,
+        destination: SlotId,
+        store: &mut GuestStore,
+    ) -> Result<(), Diagnostic> {
+        store.reserve_owning_read_result(self.slot(destination)?.cell.is_none(), false)
     }
     pub(crate) fn prepare_write(
         &mut self,

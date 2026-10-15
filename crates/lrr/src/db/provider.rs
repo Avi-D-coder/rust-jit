@@ -35,6 +35,160 @@ pub trait Provider {
 }
 pub struct SyntaxProvider;
 impl SyntaxProvider {
+    /// Pure preparation of this reached pattern's exact owning namespace.
+    /// No macro, source discovery, file capture or callable body executes here.
+    fn original_scope_inputs(
+        db: &mut Database,
+        pc: &crate::ir::pc::PcKey,
+    ) -> Result<Option<(crate::source::changes::PreparedSourceView, Arc<InputValue>)>, Diagnostic>
+    {
+        let fail = |message: &str| Diagnostic::new("LRR-E-PATTERN-BINDING", message.into());
+        let parse = db
+            .input(&InputKey::DefinitionSource(pc.body.definition))
+            .ok_or_else(|| fail("pattern owning source input absent"))?;
+        let InputValue::DefinitionSource(parse) = parse.as_ref() else {
+            return Err(fail("pattern owning source input variant differs"));
+        };
+        let context = db
+            .input(&InputKey::DeclarationContext(pc.body.definition))
+            .ok_or_else(|| fail("pattern owning declaration context absent"))?;
+        let InputValue::DeclarationContext(context) = context.as_ref() else {
+            return Err(fail("pattern owning declaration context variant differs"));
+        };
+        let membership = db.lexical_namespace_stamps()?;
+        let mut selected = None;
+        for key in membership.keys() {
+            let InputKey::CapturedSource(_) = key else {
+                continue;
+            };
+            let current = db
+                .input(key)
+                .ok_or_else(|| fail("pattern captured source disappeared"))?;
+            let InputValue::CapturedSource(selection) = current.as_ref() else {
+                return Err(fail("pattern captured source variant differs"));
+            };
+            if selection.outline.parse != *parse
+                || selection.outline.crate_key != context.scope.crate_key
+                || !context
+                    .scope
+                    .module_path
+                    .starts_with(&selection.outline.module_path)
+            {
+                continue;
+            }
+            let view = db
+                .prepared_source(selection)?
+                .ok_or_else(|| fail("pattern owning original source lease absent"))?;
+            if !view.outline().items.iter().any(|item| {
+                item.scope == context.scope
+                    && item.declaration_span == context.range
+                    && item
+                        .body
+                        .as_ref()
+                        .is_some_and(|handle| handle.key() == pc.body)
+            }) {
+                continue;
+            }
+            if selected.replace(view).is_some() {
+                return Err(fail("pattern owning captured source is ambiguous"));
+            }
+        }
+        let source = selected.ok_or_else(|| fail("pattern owning original source absent"))?;
+        let Some(certificate) =
+            db.optional_lexical_scope_certificate(source.selection(), &context.scope)?
+        else {
+            return Ok(None);
+        };
+        let InputValue::DiscoverySeal(sealed) = certificate.as_ref() else {
+            return Err(fail(
+                "pattern owning Value namespace certificate variant differs",
+            ));
+        };
+        let current = db
+            .input(&InputKey::DiscoverySeal(sealed.seal.key().clone()))
+            .ok_or_else(|| fail("pattern owning Value namespace certificate missing"))?;
+        if current.fingerprint() != certificate.fingerprint() {
+            return Err(fail("pattern owning Value namespace certificate changed"));
+        }
+        Ok(Some((source, certificate)))
+    }
+    fn scalar_binding_admission(
+        db: &mut Database,
+        index: &crate::syntax::body_index::BodyIndex,
+        pc: &crate::ir::pc::PcKey,
+    ) -> Result<crate::frontend::scalar_pattern_binding::ScalarPatternBindingAdmission, Diagnostic>
+    {
+        let (source, certificate) = Self::original_scope_inputs(db, pc)?.ok_or_else(|| {
+            Diagnostic::new(
+                "LRR-E-PATTERN-BINDING",
+                "pattern owning Value namespace is not currently sealed".into(),
+            )
+        })?;
+        let InputValue::DiscoverySeal(sealed) = certificate.as_ref() else {
+            return Err(Diagnostic::new(
+                "LRR-E-PATTERN-BINDING",
+                "original scope certificate variant differs".into(),
+            ));
+        };
+        let published = source.replay_published_macro_index(sealed)?;
+        let proof = crate::frontend::scalar_pattern_binding::ScalarPatternBindingAdmission::capture_query_current(
+            db, &source, &published, index, pc, 64 * 1024 * 1024,
+        )?;
+        if proof.allocated_bytes() > 64 * 1024 * 1024 {
+            return Err(Diagnostic::new(
+                "LRR-E-METADATA-LIMIT",
+                "pattern namespace admission exceeds its preparation budget".into(),
+            ));
+        }
+        proof.revalidate(db)?;
+        Ok(proof)
+    }
+    fn runtime_numeric_thunk(
+        db: &mut Database,
+        parsed: &ParsedFile,
+        handle: &crate::syntax::outline::BodyHandle,
+        index: &crate::syntax::body_index::BodyIndex,
+        pc: &crate::ir::pc::PcKey,
+        site: crate::syntax::MacroNumericSite,
+    ) -> QueryPoll<Provided> {
+        let optional = site.is_initializer();
+        let prepared = match Self::original_scope_inputs(db, pc) {
+            Ok(Some((source, certificate))) => {
+                let InputValue::DiscoverySeal(sealed) = certificate.as_ref() else {
+                    return QueryPoll::Ready(Ok(Provided {
+                        value: QueryValue::Error(Diagnostic::new(
+                            "LRR-E-TYPE-CONTEXT",
+                            "numeric scope certificate variant differs".into(),
+                        )),
+                        cacheable: false,
+                    }));
+                };
+                match crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission::capture(
+                    db, &source, sealed, handle, index, pc, site,
+                ) {
+                    QueryPoll::Ready(Ok(Some(proof))) => parsed
+                        .initial_thunk_with_runtime_macro_numeric(handle, index, pc, &proof)
+                        .and_then(|recipe| recipe.with_namespace_witness(db)),
+                    QueryPoll::Ready(Ok(None)) => parsed.initial_thunk(handle, index, pc),
+                    QueryPoll::Ready(Err(error)) => Err(error),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            }
+            Ok(None) if optional => parsed.initial_thunk(handle, index, pc),
+            Ok(None) => Err(Diagnostic::new(
+                "LRR-E-TYPE-CONTEXT",
+                "numeric relation owning Value namespace is not currently sealed".into(),
+            )),
+            Err(error) => Err(error),
+        };
+        QueryPoll::Ready(Ok(Provided {
+            value: match prepared {
+                Ok(recipe) => QueryValue::Thunk(Box::new(recipe)),
+                Err(error) => QueryValue::Error(error),
+            },
+            cacheable: false,
+        }))
+    }
     /// Pure lookup of adopted candidate evidence; never probes or captures a file.
     pub fn module_capture(
         db: &mut Database,
@@ -797,9 +951,50 @@ impl Provider for SyntaxProvider {
                         Err(error) => QueryValue::Error(error),
                     }
                 } else {
-                    match parsed.initial_thunk(handle, index, pc) {
-                        Ok(recipe) => QueryValue::Thunk(Box::new(recipe)),
-                        Err(error) => QueryValue::Error(error),
+                    match parsed.scalar_match_binding_site(handle, index, pc) {
+                        Ok(Some(_)) => {
+                            let prepared =
+                                Self::scalar_binding_admission(db, index, pc).and_then(|proof| {
+                                    parsed
+                                        .initial_thunk_with_scalar_binding(
+                                            handle, index, pc, &proof,
+                                        )
+                                        .and_then(|recipe| recipe.with_namespace_witness(db))
+                                });
+                            // Namespace absence is replayed by the installed
+                            // physical witness, including new source/seal rows.
+                            // The query itself remints this reached admission.
+                            return QueryPoll::Ready(Ok(Provided {
+                                value: match prepared {
+                                    Ok(recipe) => QueryValue::Thunk(Box::new(recipe)),
+                                    Err(error) => QueryValue::Error(error),
+                                },
+                                cacheable: false,
+                            }));
+                        }
+                        Ok(None) => match parsed.runtime_macro_numeric_request(handle, index, pc) {
+                            Ok(Some(site)) => {
+                                return Self::runtime_numeric_thunk(
+                                    db, parsed, handle, index, pc, site,
+                                );
+                            }
+                            Ok(None) => match parsed.initial_thunk(handle, index, pc) {
+                                Ok(recipe) => QueryValue::Thunk(Box::new(recipe)),
+                                Err(error) => QueryValue::Error(error),
+                            },
+                            Err(error) => {
+                                return QueryPoll::Ready(Ok(Provided {
+                                    value: QueryValue::Error(error),
+                                    cacheable: false,
+                                }));
+                            }
+                        },
+                        Err(error) => {
+                            return QueryPoll::Ready(Ok(Provided {
+                                value: QueryValue::Error(error),
+                                cacheable: false,
+                            }));
+                        }
                     }
                 }
             }

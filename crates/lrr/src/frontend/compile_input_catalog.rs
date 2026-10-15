@@ -19,6 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 mod ordinary_modules;
 #[path = "compile_input_catalog/owning_profiles.rs"]
 mod owning_profiles;
+mod value_binding;
 pub(crate) use ordinary_modules::CompilerInjectedImport;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-COMPILE-INPUT", message.into())
@@ -30,6 +31,7 @@ pub struct CompileInputCatalog {
     allocation: Option<Digest>,
     definitions: BTreeMap<Digest, (MacroDefinition, CompileInputDescriptor)>,
     attributes: Option<super::builtin_attributes::BuiltinAttributeCatalog>,
+    value_binding: Option<value_binding::CompilerValueBindingFacet>,
 }
 impl CompileInputCatalog {
     /// Caller supplies a compiler-owned facet. User macros cannot construct descriptors.
@@ -69,6 +71,7 @@ impl CompileInputCatalog {
             allocation: None,
             definitions,
             attributes: None,
+            value_binding: None,
         })
     }
     /// Construct the pinned compiler facets for a captured standalone profile.
@@ -120,6 +123,9 @@ impl CompileInputCatalog {
             self.unit,
             self.edition,
             descriptors,
+        )?);
+        self.value_binding = Some(value_binding::CompilerValueBindingFacet::for_profile(
+            profile,
         )?);
         Ok(self)
     }

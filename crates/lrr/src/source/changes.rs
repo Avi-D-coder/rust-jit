@@ -160,6 +160,40 @@ pub struct PreparedSourceView {
     selection: SourceSelection,
 }
 impl PreparedSourceView {
+    pub(crate) fn from_retained_state(
+        state: std::sync::Arc<PreparedSourceState>,
+        expected: &SourceSelection,
+    ) -> Result<Option<Self>, Diagnostic> {
+        if expected.canonical()? != *expected {
+            return Err(publication_fault("selected source is noncanonical"));
+        }
+        let location = UnitLocation {
+            path: expected.path.clone(),
+            crate_key: expected.outline.crate_key,
+            module_path: expected.outline.module_path.clone(),
+        };
+        let Some(file) = state.files.get(&location) else {
+            return Ok(None);
+        };
+        if file.key != expected.outline {
+            return Ok(None);
+        }
+        Ok(Some(Self {
+            state,
+            location,
+            selection: expected.clone(),
+        }))
+    }
+    /// Replay only exact current original declaration facts from a genuine
+    /// published scope certificate. Expansion/provider execution is forbidden.
+    pub(crate) fn replay_published_macro_index(
+        &self,
+        input: &crate::db::seals::DiscoveryInput,
+    ) -> Result<crate::frontend::source_macros::PublishedMacroIndex, Diagnostic> {
+        crate::expand::source_declarative::SourceDeclarative::replay_scalar_pattern_source(
+            self, input,
+        )
+    }
     pub(crate) fn from_module(
         origin: &std::sync::Arc<super::module_view::CapturedModuleSourceView>,
     ) -> Result<Self, Diagnostic> {

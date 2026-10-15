@@ -81,6 +81,7 @@ pub struct RecipeDraft {
 pub struct VerifiedRecipe {
     pub(super) recipe: Recipe,
     pub(super) metadata_bytes: usize,
+    pub(super) namespace_witness: Option<std::sync::Arc<crate::db::memo::NamespaceWitness>>,
 }
 impl VerifiedRecipe {
     pub fn recipe(&self) -> &Recipe {
@@ -88,6 +89,41 @@ impl VerifiedRecipe {
     }
     pub fn metadata_bytes(&self) -> usize {
         self.metadata_bytes
+    }
+    /// Attach only after genuine source admission. Recording currentness does
+    /// not authorize a pattern, macro, name lookup or any guest operation.
+    /// A stale recipe can never be refreshed by simply recapturing its world.
+    pub(crate) fn with_namespace_witness(
+        mut self,
+        db: &crate::db::memo::Database,
+    ) -> Result<Self, crate::core::diagnostic::Diagnostic> {
+        if self.namespace_witness.is_some() {
+            self.revalidate_namespace(db)?;
+            return Ok(self);
+        }
+        let witness = db.capture_namespace_witness()?;
+        let bytes = self
+            .metadata_bytes
+            .checked_add(witness.metadata_bytes())
+            .filter(|bytes| *bytes <= 64 * 1024 * 1024)
+            .ok_or_else(|| {
+                crate::core::diagnostic::Diagnostic::new(
+                    "LRR-E-METADATA-LIMIT",
+                    "recipe namespace witness exceeds metadata limit".into(),
+                )
+            })?;
+        self.namespace_witness = Some(std::sync::Arc::new(witness));
+        self.metadata_bytes = bytes;
+        Ok(self)
+    }
+    pub(crate) fn revalidate_namespace(
+        &self,
+        db: &crate::db::memo::Database,
+    ) -> Result<(), crate::core::diagnostic::Diagnostic> {
+        if let Some(witness) = &self.namespace_witness {
+            witness.require_current(db)?;
+        }
+        Ok(())
     }
 }
 fn span(e: &mut StableEncoder, s: &BodySpan) {

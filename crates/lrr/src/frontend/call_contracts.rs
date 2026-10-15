@@ -25,6 +25,8 @@ use crate::{
     traits::term::{ParamKey, TyTerm},
 };
 use std::collections::BTreeMap;
+#[path = "generated_result_namespace.rs"]
+mod generated_result_namespace;
 #[derive(Debug, Clone)]
 pub struct ArgumentType {
     pub source: TyTerm,
@@ -263,6 +265,12 @@ impl NormalizedDeferredReturn {
         else {
             return Err(missing());
         };
+        if db
+            .published_input(&InputKey::GeneratedSyntax(parse.content))
+            .is_some()
+        {
+            return generated_result_namespace::require(db, signature, parse);
+        }
         let mut source = None;
         let mut captured_count = 0usize;
         for key in stamps.keys() {
@@ -389,6 +397,58 @@ impl NormalizedDeferredReturn {
             }
             // Borrow this one canonical bucket instead of cloning the scope.
             if scope.names.contains_key(name.as_str()) {
+                return Err(missing());
+            }
+            return Ok(());
+        }
+        // A genuine completed Value publication may retain independently
+        // certified Type facts. This is source-created Type evidence, not an
+        // inference that Value completion implies Type completion.
+        let mut nested = None;
+        for key in stamps.keys() {
+            let InputKey::DiscoverySeal(key) = key else {
+                continue;
+            };
+            if Some(key.epoch) != epoch
+                || !matches!(
+                    &key.domain,
+                    SealDomain::Scope {
+                        namespace: Namespace::Value,
+                        ..
+                    }
+                )
+            {
+                continue;
+            }
+            let Some((InputValue::DiscoverySeal(input), _)) =
+                db.published_input(&InputKey::DiscoverySeal(key.clone()))
+            else {
+                return Err(missing());
+            };
+            if !input.sources.contains(source) {
+                continue;
+            }
+            for receipt in &input.type_scopes {
+                if receipt.scope().scope != signature.scope
+                    || receipt.scope().edition != signature.header.profile.edition
+                {
+                    continue;
+                }
+                if nested.is_some() {
+                    return Err(fault(
+                        "LRR-E-CALL-CONTEXT",
+                        "original primitive result has ambiguous current nested Type publications",
+                    ));
+                }
+                nested = Some((input, receipt));
+            }
+        }
+        if let Some((input, receipt)) = nested {
+            receipt.require_owner(&signature.scope, &signature.header.profile)?;
+            receipt.require_current(db, input)?;
+            if receipt.scope().namespace != Namespace::Type
+                || receipt.scope().names.contains_key(name.as_str())
+            {
                 return Err(missing());
             }
             return Ok(());

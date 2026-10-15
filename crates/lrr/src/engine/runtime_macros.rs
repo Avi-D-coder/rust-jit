@@ -385,7 +385,10 @@ pub fn prepare_declarative_expression(
                 expected.key.macro_identity,
                 MacroIdentity::Declaration { .. }
             )
-            || expected.key.grammar != GrammarSlot::Expression
+            || !matches!(
+                expected.key.grammar,
+                GrammarSlot::Expression | GrammarSlot::Statements
+            )
             || expected.key.call_edition != source.selection().outline.parse.profile.edition
             || expected.key.engine_version != crate::expand::source_declarative::engine_version()
             || body.body() != &pc.body
@@ -434,7 +437,7 @@ pub fn prepare_declarative_expression(
         let producer = scan
             .producers()
             .iter()
-            .find(|producer| producer.range == range && producer.grammar == GrammarSlot::Expression)
+            .find(|producer| producer.range == range && producer.grammar == expected.key.grammar)
             .ok_or_else(|| {
                 fault(
                     "LRR-E-EXPANSION-INPUT",
@@ -525,6 +528,36 @@ pub fn prepare_declarative_expression(
             key,
             fingerprint: value.fingerprint(),
         });
+        if expected.key.grammar == GrammarSlot::Statements {
+            let epoch_key = InputKey::ExpansionEpoch;
+            let Some(epoch) = db.input(&epoch_key) else {
+                return Err(fault(
+                    "LRR-E-EXPANSION-INPUT",
+                    "generated control requires its published expansion epoch",
+                ));
+            };
+            if !matches!(epoch.as_ref(), InputValue::ExpansionEpoch(_)) {
+                return Err(fault(
+                    "LRR-E-EXPANSION-INPUT",
+                    "generated control expansion epoch input differs",
+                ));
+            }
+            dependencies.push(DependencyStamp::Input {
+                key: epoch_key,
+                fingerprint: epoch.fingerprint(),
+            });
+            return crate::frontend::runtime_macro_plan::prepare_declarative_break(
+                crate::frontend::runtime_macro_plan::DeclarativeControlInput {
+                    db,
+                    source,
+                    handle,
+                    body,
+                    pc,
+                    input: value.as_ref(),
+                    dependencies,
+                },
+            );
+        }
         let span = body.span(NodeId(pc.node))?;
         let output =
             crate::syntax::generated_expression::literal(value.as_ref(), span.clone(), pc)?;

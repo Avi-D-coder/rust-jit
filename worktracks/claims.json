@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Root implements compound numeric inference and explicit CLI epoch preparation while generated Type receipts and installed namespace witnesses proceed on disjoint agent slices. MAIN160fb8a failed984/8/2060; library939 passed. Private stock main advances through guarded bindings to x+=1, zero new full stock passes. No task/JIT/Linux/release acceptance.",
+      "scope": "Integrated exact interpreter source: label_break_value whole main/35 assertions in all4 editions; CLI8 and operator6 scoped repairs pass. Syntax-boundary v22 green. Fresh integrated milestone pending; reference arguments and scalar ranges are separate source-only successors. No task/full-fixture/JIT/Linux/release completion.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -428,11 +428,15 @@
         "artifacts/macos-first/root-scalar-pattern-copy-v1/",
         "artifacts/macos-first/root-scalar-guard-coverage-v1/",
         "artifacts/macos-first/root-runtime-macro-numeric-context-v1/",
-        "artifacts/macos-first/root-cli-discovery-epoch-v1/"
+        "artifacts/macos-first/root-cli-discovery-epoch-v1/",
+        "artifacts/macos-first/root-runtime-macro-numeric-initializer-v3/",
+        "artifacts/macos-first/root-generated-control-source-boundary-v6/",
+        "artifacts/macos-first/root-interpreter-v22-promotion-v1/",
+        "artifacts/macos-first/root-scalar-reference-verifier-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T01:04:10.310567+00:00",
+      "updated_at": "2026-10-15T01:46:01.174954+00:00",
       "review_after": "2026-10-15T05:55:00.598518+00:00"
     },
     {

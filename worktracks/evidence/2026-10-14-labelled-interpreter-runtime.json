@@ -1,0 +1,322 @@
+{
+  "schema_version": 1,
+  "task_scope": "T025/T034/T041/M013 interpreter source/numeric/control integration",
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "validated_source_member": "40aa4bd7e1dffeca15b0585b89a5e612273900f8a13a6267e28d5637da224214",
+  "canonical_integration": "45 exact source/fixture paths, fresh integrated milestone pending",
+  "upstream_runtime_acceptance": {
+    "complete": false,
+    "newly_demonstrated_runtime_contracts": 1,
+    "case": "tests/ui/for-loop-while/label_break_value.rs",
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "whole_main_completed": true,
+    "assert_operations_each": 35,
+    "reached_original_functions": 6,
+    "full_compiletest_fixture_pass": false
+  },
+  "diagnostic_compatibility": "incomplete; separate gate",
+  "compiler_tooling_compatibility": "incomplete; separate gate",
+  "full_suite_compatibility": "incomplete",
+  "scoped_evidence": [
+    {
+      "version": "agent-validation-v19-library",
+      "scope": "library",
+      "source_member": "2ed0d8aace13cc3aa09b377ef6f5d7c060fd227a1dca73331ec55b783973651a",
+      "exit_code": 0,
+      "source_unchanged": true,
+      "summaries": [
+        {
+          "outcome": "ok",
+          "passed": 973,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered": 0
+        }
+      ],
+      "command": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--lib",
+        "--locked",
+        "--offline",
+        "--",
+        "--test-threads=1"
+      ],
+      "actual_terminal": {
+        "session_id": 44795,
+        "chunk_id": "12fd6f",
+        "wrapper_exit": 0
+      }
+    },
+    {
+      "version": "agent-validation-v20",
+      "scope": "generated-cli-eight",
+      "source_member": "bd777326f4cae93063b9034b95c921878c6d23bee4bb420a275dcdaffd4d3c61",
+      "exit_code": 0,
+      "source_unchanged": true,
+      "summaries": [
+        {
+          "outcome": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered": 13
+        }
+      ],
+      "command": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--test",
+        "discovery_cli",
+        "--locked",
+        "--offline",
+        "--",
+        "--exact",
+        "--test-threads=1",
+        "cli_captured_external_generated_import_uses_actual_parent_body",
+        "cli_captured_macro_use_generated_export_preserves_completed_index",
+        "cli_generated_import_and_macro_reach_the_actual_fixed_point",
+        "cli_generated_output_leaves_cold_body_errors_unprepared",
+        "cli_inline_path_directory_does_not_become_a_logical_module_name",
+        "cli_recursive_generated_entry_uses_actual_generated_callee_records",
+        "cli_runtime_assertion_uses_the_completed_macro_scope",
+        "native_oracle_agrees_with_cli_generated_import_and_macro_fixture"
+      ],
+      "actual_terminal": {
+        "session_id": 75373,
+        "chunk_id": "703bb4",
+        "wrapper_exit": 0
+      }
+    },
+    {
+      "version": "agent-validation-v21",
+      "scope": "operator-source-six",
+      "source_member": "e51caa93588b4e68d60dcfba83d6a6aded6bbb08ff65fdbbaae1432c1535fcd1",
+      "exit_code": 0,
+      "source_unchanged": true,
+      "summaries": [
+        {
+          "outcome": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered": 973
+        }
+      ],
+      "command": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--lib",
+        "--locked",
+        "--offline",
+        "--",
+        "--exact",
+        "--test-threads=1",
+        "vm::step::primitive_operator_result_source_tests::unchanged_char_comparison_component_and_closed_comparisons_retain_intrinsic_bool_all_editions",
+        "vm::step::primitive_operator_result_source_tests::arithmetic_unary_forward_only_actual_written_source_and_source_less_arithmetic_stays_absent",
+        "vm::step::primitive_operator_result_source_tests::rigid_or_wrong_operand_source_and_rigid_result_refuse_before_fuel_or_owning_change",
+        "vm::step::primitive_operator_result_source_tests::result_capacity_refusal_leaves_no_allocated_result_or_source_after_pure_preflight",
+        "vm::step::primitive_operator_result_source_tests::unchanged_runtime_comparison_main_executes_three_original_assertions_all_explicit_editions",
+        "vm::step::primitive_operator_result_source_tests::arithmetic_panic_retains_existing_output_cell_allocation_order_without_publishing_source"
+      ],
+      "actual_terminal": {
+        "session_id": 73754,
+        "chunk_id": "ff6766",
+        "wrapper_exit": 0
+      }
+    },
+    {
+      "version": "agent-validation-v22",
+      "scope": "architecture",
+      "source_member": "40aa4bd7e1dffeca15b0585b89a5e612273900f8a13a6267e28d5637da224214",
+      "exit_code": 0,
+      "source_unchanged": true,
+      "summaries": [],
+      "command": [
+        "cargo",
+        "+1.99.0",
+        "run",
+        "-p",
+        "xtask",
+        "--locked",
+        "--offline",
+        "--",
+        "architecture-audit"
+      ],
+      "actual_terminal": {
+        "session_id": 99948,
+        "chunk_id": "84985a",
+        "wrapper_exit": 0
+      }
+    },
+    {
+      "version": "agent-validation-v22",
+      "scope": "generated-control-seven",
+      "source_member": "40aa4bd7e1dffeca15b0585b89a5e612273900f8a13a6267e28d5637da224214",
+      "exit_code": 0,
+      "source_unchanged": true,
+      "summaries": [
+        {
+          "outcome": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered": 972
+        }
+      ],
+      "command": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--lib",
+        "--locked",
+        "--offline",
+        "--",
+        "--exact",
+        "--test-threads=1",
+        "syntax::generated_control::tests::unchanged_mac1_transcriber_and_arguments_decode_real_lifetime_expansion",
+        "syntax::generated_control::tests::single_break_payload_lane_is_closed_and_callers_are_exact",
+        "syntax::generated_control::tests::target_continuation_reuses_original_block_commit_and_refuses_foreign_inputs",
+        "frontend::runtime_macro_plan::generated_break::tests::unchanged_mac1_captured_break_targets_keep_real_source_hygiene_all_editions",
+        "frontend::runtime_macro_plan::generated_break::tests::genuine_private_break_verifier_rejects_control_dependency_and_hint_tampering",
+        "frontend::runtime_macro_plan::generated_break::tests::definition_site_label_spelling_cannot_target_the_original_caller_label",
+        "frontend::runtime_macro_plan::generated_break::tests::a_new_publication_epoch_does_not_reuse_old_generated_break_authority"
+      ],
+      "actual_terminal": {
+        "session_id": 38302,
+        "chunk_id": "aeb668",
+        "wrapper_exit": 0
+      }
+    },
+    {
+      "version": "agent-validation-v22",
+      "scope": "stock-labelled",
+      "source_member": "40aa4bd7e1dffeca15b0585b89a5e612273900f8a13a6267e28d5637da224214",
+      "exit_code": 0,
+      "source_unchanged": true,
+      "summaries": [
+        {
+          "outcome": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "measured": 0,
+          "filtered": 0
+        }
+      ],
+      "command": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "xtask",
+        "--test",
+        "stock_labelled_block_runtime",
+        "--locked",
+        "--offline",
+        "--",
+        "--test-threads=1"
+      ],
+      "actual_terminal": {
+        "session_id": 52046,
+        "chunk_id": "186533",
+        "wrapper_exit": 0
+      }
+    },
+    {
+      "version": "agent-validation-v22",
+      "scope": "strict-library",
+      "source_member": "40aa4bd7e1dffeca15b0585b89a5e612273900f8a13a6267e28d5637da224214",
+      "exit_code": 0,
+      "source_unchanged": true,
+      "summaries": [],
+      "command": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "-p",
+        "lrr",
+        "--lib",
+        "--locked",
+        "--offline",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "actual_terminal": {
+        "session_id": 3749,
+        "chunk_id": "3f932e",
+        "wrapper_exit": 0
+      }
+    },
+    {
+      "version": "agent-validation-v22",
+      "scope": "format",
+      "source_member": "40aa4bd7e1dffeca15b0585b89a5e612273900f8a13a6267e28d5637da224214",
+      "exit_code": 0,
+      "source_unchanged": true,
+      "summaries": [],
+      "command": [
+        "cargo",
+        "+1.99.0",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "actual_terminal": {
+        "session_id": 19226,
+        "chunk_id": "de2edf",
+        "wrapper_exit": 0
+      }
+    }
+  ],
+  "integrated_milestone": "pending; preceding 984/8/2060 failure remains retained",
+  "imported_cases": 302,
+  "unchanged_original_files": 484,
+  "new_imported_cases_not_full_main_accepted": [
+    "tests/ui/match/guards.rs",
+    "tests/ui/pattern/match-constant-and-byte-literal.rs"
+  ],
+  "guest_jit_gate": "closed",
+  "linux_acceptance": "unexecuted",
+  "release_complete": false,
+  "local_receipts": [
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v19-library/VALIDATION-HANDOFF.json",
+      "sha256": "89be314869e4149ab5006feedb988aed06af34e980851b3abe1b347ca5e0b2a7"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v20/VALIDATION-HANDOFF.json",
+      "sha256": "2529e9ab4f86138fcb601d40e7d61414e5bf5edaf072efe20e7071bbfc6848f4"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v21/VALIDATION-HANDOFF.json",
+      "sha256": "7d87b775882f43357b90daae0eda7ede414a60fe88ada88ff6b7ae443b42f5fe"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v22/VALIDATION-HANDOFF.json",
+      "sha256": "8c2a4783e46a7ca8b8b549e0e5311af5f979965b7c18d2a9cf667ff5782233f9"
+    }
+  ]
+}

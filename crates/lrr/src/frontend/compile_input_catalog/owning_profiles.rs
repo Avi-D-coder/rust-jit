@@ -3,7 +3,7 @@ use super::*;
 use crate::core::profile::ProfileIdentity;
 impl CompileInputCatalog {
     pub(crate) fn owning_profile_identity(&self) -> Result<Digest, Diagnostic> {
-        let mut e = StableEncoder::new("lrr/v1/prepared-compiler-facet-membership");
+        let mut e = StableEncoder::new("lrr/v2/prepared-compiler-facet-membership");
         e.digest(self.unit);
         e.u16(self.edition);
         e.map(&self.facades, |e, name, unit| {
@@ -41,6 +41,7 @@ impl CompileInputCatalog {
         } else {
             e.bool(false)
         }
+        e.option(&self.value_binding, |e, facet| e.digest(facet.identity()));
         Ok(e.finish())
     }
     pub(crate) fn canonical_standalone_member(
@@ -89,6 +90,11 @@ impl CompileInputCatalog {
                         .ok_or_else(|| fault("compiler Attribute metadata overflow"))?,
                 )
                 .ok_or_else(|| fault("compiler Attribute metadata overflow"))?;
+        }
+        if let Some(facet) = &self.value_binding {
+            bytes = bytes
+                .checked_add(facet.metadata_bytes()?)
+                .ok_or_else(|| fault("Value declaration facet metadata overflow"))?;
         }
         if bytes > 64 * 1024 {
             return Err(fault("compiler facet retained metadata limit"));

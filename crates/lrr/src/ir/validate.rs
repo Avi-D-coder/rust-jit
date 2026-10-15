@@ -99,6 +99,70 @@ fn charge(bytes: &mut usize, n: usize) -> Result<(), Diagnostic> {
         .ok_or_else(|| invalid("recipe metadata limit"))?;
     Ok(())
 }
+/// Structural permission for the scalar binding lane only. Name resolution is
+/// supplied separately by the private source admission before this recipe is
+/// constructed; these exact slots never authorize an aggregate or reference copy.
+fn scalar_binding_copy(body: &BodyIndex, draft: &RecipeDraft) -> Option<(SlotId, SlotId, SlotId)> {
+    use crate::syntax::body_index::{ExpressionKind, NodeRole};
+    let pattern = body.nodes().get(draft.key.node as usize)?;
+    if pattern.role != NodeRole::Pattern || draft.key.phase != Phase::Commit.code().ok()? {
+        return None;
+    }
+    let arm = body.nodes().get(pattern.parent?.0 as usize)?;
+    if arm.role != NodeRole::MatchArm {
+        return None;
+    }
+    let mut parent = arm.parent;
+    let mut owner = None;
+    for _ in 0..body.nodes().len() {
+        let node = body.nodes().get(parent?.0 as usize)?;
+        if node.role == NodeRole::Expression(ExpressionKind::Match) {
+            owner = Some(node);
+            break;
+        }
+        if node.role != NodeRole::Syntax {
+            return None;
+        }
+        parent = node.parent;
+    }
+    let owner = owner?;
+    let source = body
+        .nodes()
+        .get(owner.operands.first()?.0 as usize)?
+        .value?;
+    let destination = owner.runtime_temporaries[0]?;
+    let place = SlotId(destination.0.checked_add(1)?);
+    match draft.operations.as_slice() {
+        [
+            Op::ScopeEnter { scope },
+            Op::ValuePlace {
+                source: actual_source,
+                destination: actual_place,
+            },
+            Op::ReadPlace {
+                place: read_place,
+                destination: read_destination,
+            },
+            Op::BindLocal {
+                binding,
+                source: bound_source,
+                hint: super::op::HintRecipe::None,
+                writable: false,
+            },
+            ..,
+        ] if *scope == arm.scope
+            && *actual_source == source
+            && *actual_place == place
+            && *read_place == place
+            && *read_destination == destination
+            && *binding == pattern.id
+            && *bound_source == destination =>
+        {
+            Some((source, place, destination))
+        }
+        _ => None,
+    }
+}
 fn macro_scalar_value(node: &crate::syntax::body_index::StructuralNode, value: SlotId) -> bool {
     node.role
         == crate::syntax::body_index::NodeRole::Expression(
@@ -466,7 +530,14 @@ fn verify_inner(
                             .0
                             .checked_add(1)
                             .ok_or_else(|| invalid("macro place slot overflow"))?;
-                if !scalar_macro && (node.place != Some(*place) || node.value != Some(*destination))
+                let scalar_binding = scalar_binding_copy(body, &draft).is_some_and(
+                    |(_, actual_place, actual_destination)| {
+                        actual_place == *place && actual_destination == *destination
+                    },
+                );
+                if !scalar_macro
+                    && !scalar_binding
+                    && (node.place != Some(*place) || node.value != Some(*destination))
                 {
                     return Err(invalid(
                         "place read requires its own place and result slots",
@@ -509,37 +580,45 @@ fn verify_inner(
             } => {
                 slot(body, *source, SlotKind::Value)?;
                 slot(body, *destination, SlotKind::Place)?;
-                let own_path = node.role
-                    == crate::syntax::body_index::NodeRole::Expression(
-                        crate::syntax::body_index::ExpressionKind::Path,
-                    )
-                    && draft.key.phase == Phase::Exit.code()?;
-                let operand = if own_path {
-                    if !matches!(draft.operations.as_slice(), [Op::ValuePlace { .. }]) {
+                if scalar_binding_copy(body, &draft).is_some_and(
+                    |(actual_source, actual_place, _)| {
+                        actual_source == *source && actual_place == *destination
+                    },
+                ) {
+                    Some(*destination)
+                } else {
+                    let own_path = node.role
+                        == crate::syntax::body_index::NodeRole::Expression(
+                            crate::syntax::body_index::ExpressionKind::Path,
+                        )
+                        && draft.key.phase == Phase::Exit.code()?;
+                    let operand = if own_path {
+                        if !matches!(draft.operations.as_slice(), [Op::ValuePlace { .. }]) {
+                            return Err(invalid(
+                                "path result place must be its separate indexed exit",
+                            ));
+                        }
+                        Some(node)
+                    } else {
+                        reference_initializer.or_else(|| {
+                            node.operands
+                                .first()
+                                .and_then(|id| body.nodes().get(id.0 as usize))
+                        })
+                    }
+                    .ok_or_else(|| invalid("temporary place receiver absent"))?;
+                    if operand.value != Some(*source)
+                        || operand.place != Some(*destination)
+                        || (!own_path
+                            && reference_initializer.is_none()
+                            && draft.key.phase != Phase::Operand(0).code()?)
+                    {
                         return Err(invalid(
-                            "path result place must be its separate indexed exit",
+                            "temporary place requires its executed base operand",
                         ));
                     }
-                    Some(node)
-                } else {
-                    reference_initializer.or_else(|| {
-                        node.operands
-                            .first()
-                            .and_then(|id| body.nodes().get(id.0 as usize))
-                    })
+                    Some(*destination)
                 }
-                .ok_or_else(|| invalid("temporary place receiver absent"))?;
-                if operand.value != Some(*source)
-                    || operand.place != Some(*destination)
-                    || (!own_path
-                        && reference_initializer.is_none()
-                        && draft.key.phase != Phase::Operand(0).code()?)
-                {
-                    return Err(invalid(
-                        "temporary place requires its executed base operand",
-                    ));
-                }
-                Some(*destination)
             }
             Op::PlaceTransfer {
                 source,
@@ -1264,6 +1343,7 @@ fn verify_inner(
             dependencies: draft.dependencies.into_boxed_slice(),
         },
         metadata_bytes: bytes,
+        namespace_witness: None,
     })
 }
 /// Exact reached declarative literal admission. The private witness is created
@@ -1318,6 +1398,104 @@ pub(crate) fn verify_declarative_literal(
         .capacity()
         .checked_mul(32)
         .ok_or_else(|| invalid("declarative ancestry size overflow"))?;
+    let mut verified = verify(draft, body)?;
+    charge(&mut verified.metadata_bytes, ancestry_bytes)?;
+    verified.recipe.origin.expansion_ancestry = ancestry;
+    Ok(verified)
+}
+/// Closed generated break admission. The syntax witness grants no label
+/// authority: the frontend certificate must bind the actual current caller,
+/// local hygiene, source target/continuation, and all preparation dependencies.
+pub(crate) fn verify_generated_break(
+    mut draft: RecipeDraft,
+    body: &BodyIndex,
+    output: &crate::syntax::generated_control::GeneratedBreak,
+    admission: &crate::frontend::runtime_macro_plan::GeneratedBreakAdmission,
+) -> Result<VerifiedRecipe, Diagnostic> {
+    admission.require(body, output)?;
+    pc(body, &draft.key)?;
+    let node = &body.nodes()[draft.key.node as usize];
+    if draft.key.phase != Phase::Entry.code()?
+        || node.role
+            != crate::syntax::body_index::NodeRole::Expression(
+                crate::syntax::body_index::ExpressionKind::Macro,
+            )
+        || output.caller() != &draft.key
+        || admission.caller() != &draft.key
+        || output.span() != &draft.origin.span
+        || draft.origin.span != body.span(node.id)?
+        || output.expansion() != admission.expansion()
+        || draft.origin.expansion_ancestry.as_slice() != [output.expansion()]
+        || node.value != Some(admission.destination())
+        || body
+            .labels()
+            .get(admission.target().0 as usize)
+            .is_none_or(|label| label.node != admission.target_node())
+        || body
+            .nodes()
+            .get(admission.target_node().0 as usize)
+            .is_none_or(|target| target.value != Some(admission.target_result()))
+    {
+        return Err(invalid(
+            "generated break caller/source/target certificate differs",
+        ));
+    }
+    for required in admission
+        .required_dependencies()
+        .iter()
+        .chain([output.dependency()])
+    {
+        if draft
+            .dependencies
+            .iter()
+            .filter(|actual| actual.same_key(required))
+            .count()
+            != 1
+            || !draft.dependencies.contains(required)
+        {
+            return Err(invalid(
+                "generated break required dependency absent or conflicting",
+            ));
+        }
+    }
+    if output.dependency() != admission.dependency() {
+        return Err(invalid("generated break expansion dependency differs"));
+    }
+    let operations = match draft.operations.as_slice() {
+        [Op::ScopeEnter { scope }, rest @ ..]
+            if Some(*scope) == node.boolean_scope.or(node.statement_scope) =>
+        {
+            rest
+        }
+        operations => operations,
+    };
+    let matches = if let Some(payload) = output.payload() {
+        payload.source == draft.origin.span
+            && matches!(operations, [
+                Op::NumericHint { parent, child, left: None, operator: None },
+                Op::Literal { literal, hint: super::op::HintRecipe::None, destination },
+            ] if *parent == admission.target_result()
+                && *child == admission.destination()
+                && *destination == admission.destination()
+                && literal == payload)
+    } else {
+        matches!(operations, [Op::Unit { destination }] if *destination == admission.destination())
+    };
+    if !matches
+        || !matches!(draft.exits.as_slice(), [RecipeExit::Control(ControlRecipe::Break { target, value: Some(value), resume })]
+        if *target == admission.target() && *value == admission.destination() && resume == admission.resume())
+    {
+        return Err(invalid(
+            "generated break operations/exit differ from source certificate",
+        ));
+    }
+    // Ordinary verify still rejects expanded recipes. Remove only the privately
+    // bound ancestry, then restore it with the same checked retained-byte charge.
+    let ancestry = std::mem::take(&mut draft.origin.expansion_ancestry);
+    let ancestry_bytes = ancestry
+        .capacity()
+        .checked_mul(32)
+        .ok_or_else(|| invalid("generated break ancestry size overflow"))?;
     let mut verified = verify(draft, body)?;
     charge(&mut verified.metadata_bytes, ancestry_bytes)?;
     verified.recipe.origin.expansion_ancestry = ancestry;

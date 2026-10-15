@@ -11489,3 +11489,133 @@ test = "component_cold_parameter_reference_error_does_not_supply_upstream_e0515_
 id = "T034-CA037-PROFILE-CONFLICT-4"
 path = "xtask/tests/ca037_profile_conflict_components.rs"
 test = "component_empty_main_does_not_supply_compiler_private_mir_graphviz_contract"
+
+[[fixture]]
+id = "T025-COMPILER-COMPARISON-1"
+path = "crates/lrr/src/syntax/runtime_macro_numeric_context.rs"
+test = "unchanged_compound_sites_retain_exact_comparison_parameter_relation_all_editions"
+
+[[fixture]]
+id = "T025-COMPILER-COMPARISON-2"
+path = "crates/lrr/src/syntax/runtime_macro_numeric_context.rs"
+test = "unchanged_comparison_request_has_no_literal_site_or_foreign_phase_authority"
+
+[[fixture]]
+id = "T025-COMPILER-COMPARISON-3"
+path = "crates/lrr/src/frontend/runtime_macro_numeric.rs"
+test = "unchanged_compound_relations_require_real_standard_comparison_and_type_scope_all_editions"
+
+[[fixture]]
+id = "T025-COMPILER-COMPARISON-4"
+path = "crates/lrr/src/frontend/runtime_macro_numeric.rs"
+test = "original_comparison_relation_cannot_survive_missing_type_receipt_or_changed_epoch"
+
+[[fixture]]
+id = "T041-INSTALLED-NAMESPACE-1"
+path = "crates/lrr/src/engine/run_namespace_tests.rs"
+test = "actual_nonzero_cleanup_resume_allows_genuine_lexical_rows_and_matches_unchanged_control"
+
+[[fixture]]
+id = "T041-INSTALLED-NAMESPACE-2"
+path = "crates/lrr/src/engine/run_namespace_tests.rs"
+test = "actual_nonzero_cleanup_resume_refuses_namespace_addition_without_repeating_prior_effects"
+
+[[fixture]]
+id = "T041-INSTALLED-NAMESPACE-3"
+path = "crates/lrr/src/engine/run_namespace_tests.rs"
+test = "genuine_original_lexical_definition_publication_does_not_false_stale_namespace"
+
+[[fixture]]
+id = "T041-INSTALLED-NAMESPACE-4"
+path = "crates/lrr/src/engine/run_namespace_tests.rs"
+test = "genuine_same_epoch_namespace_addition_refuses_cached_normal_dispatch_before_guest_work"
+
+[[fixture]]
+id = "T041-INSTALLED-NAMESPACE-5"
+path = "crates/lrr/src/engine/run_namespace_tests.rs"
+test = "physical_sidecar_retains_accounted_shared_ownership_without_changing_stable_recipe"
+
+[[fixture]]
+id = "T034-STOCK-LABELLED-2015"
+path = "xtask/tests/stock_labelled_block_runtime.rs"
+test = "unchanged_label_break_value_main_edition_2015"
+
+[[fixture]]
+id = "T034-STOCK-LABELLED-2018"
+path = "xtask/tests/stock_labelled_block_runtime.rs"
+test = "unchanged_label_break_value_main_edition_2018"
+
+[[fixture]]
+id = "T034-STOCK-LABELLED-2021"
+path = "xtask/tests/stock_labelled_block_runtime.rs"
+test = "unchanged_label_break_value_main_edition_2021"
+
+[[fixture]]
+id = "T034-STOCK-LABELLED-2024"
+path = "xtask/tests/stock_labelled_block_runtime.rs"
+test = "unchanged_label_break_value_main_edition_2024"
+
+[[fixture]]
+id = "T034-GENERATED-CONTROL-1"
+path = "crates/lrr/src/frontend/runtime_macro_generated_break.rs"
+test = "a_new_publication_epoch_does_not_reuse_old_generated_break_authority"
+
+[[fixture]]
+id = "T034-GENERATED-CONTROL-2"
+path = "crates/lrr/src/frontend/runtime_macro_generated_break.rs"
+test = "definition_site_label_spelling_cannot_target_the_original_caller_label"
+
+[[fixture]]
+id = "T034-GENERATED-CONTROL-3"
+path = "crates/lrr/src/frontend/runtime_macro_generated_break.rs"
+test = "genuine_private_break_verifier_rejects_control_dependency_and_hint_tampering"
+
+[[fixture]]
+id = "T034-GENERATED-CONTROL-4"
+path = "crates/lrr/src/frontend/runtime_macro_generated_break.rs"
+test = "unchanged_mac1_captured_break_targets_keep_real_source_hygiene_all_editions"
+
+[[fixture]]
+id = "T034-GENERATED-CONTROL-5"
+path = "crates/lrr/src/syntax/generated_control.rs"
+test = "single_break_payload_lane_is_closed_and_callers_are_exact"
+
+[[fixture]]
+id = "T034-GENERATED-CONTROL-6"
+path = "crates/lrr/src/syntax/generated_control.rs"
+test = "target_continuation_reuses_original_block_commit_and_refuses_foreign_inputs"
+
+[[fixture]]
+id = "T034-GENERATED-CONTROL-7"
+path = "crates/lrr/src/syntax/generated_control.rs"
+test = "unchanged_mac1_transcriber_and_arguments_decode_real_lifetime_expansion"
+
+[[fixture]]
+id = "T025-OPERATOR-SOURCE-1"
+path = "crates/lrr/src/vm/primitive_operator_result_source_tests.rs"
+test = "arithmetic_panic_retains_existing_output_cell_allocation_order_without_publishing_source"
+
+[[fixture]]
+id = "T025-OPERATOR-SOURCE-2"
+path = "crates/lrr/src/vm/primitive_operator_result_source_tests.rs"
+test = "arithmetic_unary_forward_only_actual_written_source_and_source_less_arithmetic_stays_absent"
+
+[[fixture]]
+id = "T025-OPERATOR-SOURCE-3"
+path = "crates/lrr/src/vm/primitive_operator_result_source_tests.rs"
+test = "result_capacity_refusal_leaves_no_allocated_result_or_source_after_pure_preflight"
+
+[[fixture]]
+id = "T025-OPERATOR-SOURCE-4"
+path = "crates/lrr/src/vm/primitive_operator_result_source_tests.rs"
+test = "rigid_or_wrong_operand_source_and_rigid_result_refuse_before_fuel_or_owning_change"
+
+[[fixture]]
+id = "T025-OPERATOR-SOURCE-5"
+path = "crates/lrr/src/vm/primitive_operator_result_source_tests.rs"
+test = "unchanged_char_comparison_component_and_closed_comparisons_retain_intrinsic_bool_all_editions"
+
+[[fixture]]
+id = "T025-OPERATOR-SOURCE-6"
+path = "crates/lrr/src/vm/primitive_operator_result_source_tests.rs"
+test = "unchanged_runtime_comparison_main_executes_three_original_assertions_all_explicit_editions"

@@ -30,6 +30,8 @@ mod local_numeric_constraints;
 mod primitive_cast_target;
 #[path = "runtime_local_numeric_context.rs"]
 mod runtime_local_numeric_context;
+#[path = "runtime_macro_numeric_context.rs"]
+pub(crate) mod runtime_macro_numeric_context;
 
 fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTERNAL-SNAPSHOT", message.into())
@@ -423,7 +425,7 @@ fn initializer_result(
         .ok_or_else(|| error("initializer result slot absent"))
 }
 
-fn return_pc(
+pub(super) fn return_pc(
     index: &BodyIndex,
     body: &BodyHandle,
     syntax: &SyntaxNode,
@@ -579,6 +581,13 @@ fn local_binding_at(
     name: &MacroName,
 ) -> Result<Option<NodeId>, Diagnostic> {
     for ancestor in syntax.ancestors() {
+        let range = ancestor.text_range();
+        if u32::from(range.start()) < body.range.start
+            || u32::from(range.end()) > body.range.end
+            || ast::Fn::can_cast(ancestor.kind())
+        {
+            break;
+        }
         if let Some(list) = ast::StmtList::cast(ancestor.clone()) {
             let mut binding = None;
             for statement in list.statements() {
@@ -600,6 +609,35 @@ fn local_binding_at(
             }
             if binding.is_some() {
                 return Ok(binding);
+            }
+        }
+        if let Some(arm) = ast::MatchArm::cast(ancestor.clone()) {
+            let here = syntax.text_range();
+            let in_guard = arm
+                .guard()
+                .and_then(|g| g.condition())
+                .is_some_and(|guard| guard.syntax().text_range().contains_range(here));
+            let in_result = arm
+                .expr()
+                .is_some_and(|result| result.syntax().text_range().contains_range(here));
+            if (in_guard || in_result)
+                && let Some(ast::Pat::IdentPat(pattern)) = arm.pat()
+                && pattern.ref_token().is_none()
+                && pattern.mut_token().is_none()
+                && pattern.at_token().is_none()
+                && !pattern
+                    .syntax()
+                    .children()
+                    .any(|node| ast::Attr::can_cast(node.kind()))
+                && let Some(candidate) = pattern.name()
+                && MacroName::parse(candidate.text(), parsed.edition)
+                    .is_ok_and(|candidate| &candidate == name)
+            {
+                // This is the exact lexical binding location, not a proof that
+                // the pattern name denotes a binding. The reached pattern must
+                // obtain that private namespace admission before entering either
+                // continuation; ReadLocal still requires its actual live cell.
+                return Ok(Some(id_for(index, body, pattern.syntax())?));
             }
         }
         let (condition, consequent) = if let Some(expression) = ast::IfExpr::cast(ancestor.clone())
@@ -1453,6 +1491,47 @@ impl ParsedFile {
         index: &BodyIndex,
         key: &PcKey,
     ) -> Result<VerifiedRecipe, Diagnostic> {
+        self.initial_thunk_admission(body, index, key, None, None)
+    }
+    pub(crate) fn initial_thunk_with_scalar_binding(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        admission: &crate::frontend::scalar_pattern_binding::ScalarPatternBindingAdmission,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        admission.require(self, body, index, key, NodeId(key.node))?;
+        self.initial_thunk_admission(body, index, key, Some(admission), None)
+    }
+    pub(crate) fn runtime_macro_numeric_request(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+    ) -> Result<Option<runtime_macro_numeric_context::MacroNumericSite>, Diagnostic> {
+        runtime_macro_numeric_context::request(self, body, index, key)
+    }
+    pub(crate) fn initial_thunk_with_runtime_macro_numeric(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        proof: &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        proof.context(self, body, index, key)?;
+        let recipe = self.initial_thunk_admission(body, index, key, None, Some(proof))?;
+        proof.attach(recipe, index)
+    }
+    fn initial_thunk_admission(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        admission: Option<&crate::frontend::scalar_pattern_binding::ScalarPatternBindingAdmission>,
+        numeric_admission: Option<
+            &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
+        >,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
         if body.key() != *index.body() || key.body != body.key() {
             return Err(error("selected thunk body identity changed"));
         }
@@ -1507,7 +1586,7 @@ impl ParsedFile {
                 } else if node.role == NodeRole::Pattern {
                     matches!(
                         syntax.kind(),
-                        SyntaxKind::LITERAL_PAT | SyntaxKind::WILDCARD_PAT
+                        SyntaxKind::LITERAL_PAT | SyntaxKind::WILDCARD_PAT | SyntaxKind::IDENT_PAT
                     ) && syntax
                         .ancestors()
                         .any(|parent| ast::MatchArm::can_cast(parent.kind()))
@@ -1586,15 +1665,23 @@ impl ParsedFile {
             | SyntaxKind::CONST
             | SyntaxKind::STATIC
             | SyntaxKind::IMPL
-            | SyntaxKind::TRAIT => self.initial_declaration_thunk(body, index, key, syntax),
+            | SyntaxKind::TRAIT
+            | SyntaxKind::MACRO_RULES
+            | SyntaxKind::MACRO_DEF => self.initial_declaration_thunk(body, index, key, syntax),
             SyntaxKind::BLOCK_EXPR | SyntaxKind::LET_STMT | SyntaxKind::EXPR_STMT => {
-                self.initial_scope_thunk(body, index, key, syntax)
+                self.initial_scope_thunk(body, index, key, syntax, numeric_admission)
             }
             SyntaxKind::LET_EXPR => self.initial_let_condition_thunk(body, index, key, syntax),
             SyntaxKind::MATCH_EXPR
             | SyntaxKind::MATCH_ARM
             | SyntaxKind::LITERAL_PAT
-            | SyntaxKind::WILDCARD_PAT => literal_match::prepare(self, body, index, key, syntax),
+            | SyntaxKind::WILDCARD_PAT
+            | SyntaxKind::IDENT_PAT => match admission {
+                Some(proof) => {
+                    literal_match::prepare_binding(self, body, index, key, syntax, proof)
+                }
+                None => literal_match::prepare(self, body, index, key, syntax),
+            },
             SyntaxKind::CALL_EXPR => self.initial_call_thunk(body, index, key, syntax),
             SyntaxKind::RETURN_EXPR
             | SyntaxKind::LOOP_EXPR
@@ -1603,7 +1690,9 @@ impl ParsedFile {
             SyntaxKind::WHILE_EXPR | SyntaxKind::IF_EXPR => {
                 self.initial_condition_thunk(body, index, key, syntax)
             }
-            SyntaxKind::BIN_EXPR => self.initial_binary_thunk(body, index, key, syntax),
+            SyntaxKind::BIN_EXPR => {
+                self.initial_binary_thunk(body, index, key, syntax, numeric_admission)
+            }
             SyntaxKind::CAST_EXPR | SyntaxKind::LITERAL => {
                 self.initial_scalar_thunk(body, index, key, syntax)
             }
@@ -1638,7 +1727,9 @@ impl ParsedFile {
                 | SyntaxKind::CONST
                 | SyntaxKind::STATIC
                 | SyntaxKind::IMPL
-                | SyntaxKind::TRAIT,
+                | SyntaxKind::TRAIT
+                | SyntaxKind::MACRO_RULES
+                | SyntaxKind::MACRO_DEF,
                 Phase::Entry,
             ) => {
                 if node.role != NodeRole::OpaqueItem {
@@ -1663,6 +1754,9 @@ impl ParsedFile {
         index: &BodyIndex,
         key: &PcKey,
         syntax: SyntaxNode,
+        numeric_admission: Option<
+            &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
+        >,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let id = NodeId(key.node);
         let node = &index.nodes()[key.node as usize];
@@ -1909,6 +2003,16 @@ impl ParsedFile {
                         self, index, body, &statement, &pattern,
                     )?
                 {
+                    hint = HintRecipe::DefinitionNumeric(context);
+                }
+                if hint == HintRecipe::None
+                    && !by_reference
+                    && let Some(proof) = numeric_admission
+                {
+                    let (binding, context) = proof.context(self, body, index, key)?;
+                    if binding != id_for(index, body, pattern.syntax())? {
+                        return Err(error("numeric initializer proof names another binding"));
+                    }
                     hint = HintRecipe::DefinitionNumeric(context);
                 }
                 // Otherwise preserve the existing closed-operator fallback.
@@ -2953,6 +3057,9 @@ impl ParsedFile {
         index: &BodyIndex,
         key: &PcKey,
         syntax: SyntaxNode,
+        numeric_admission: Option<
+            &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
+        >,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let id = NodeId(key.node);
         let node = &index.nodes()[key.node as usize];
@@ -3179,8 +3286,12 @@ impl ParsedFile {
                         },
                         HintRecipe::Primitive(left_type),
                     )
-                } else if let Some((binding, context)) =
-                    compound_local_definition_context(self, index, body, &left)?
+                } else if let Some((binding, context)) = compound_local_definition_context(
+                    self, index, body, &left,
+                )?
+                .or(numeric_admission
+                    .map(|proof| proof.context(self, body, index, key))
+                    .transpose()?)
                 {
                     let Some(right) = runtime_local_numeric_context::compound_right(&right, shift)?
                     else {
@@ -4196,3 +4307,7 @@ impl ParsedFile {
         Ok(false)
     }
 }
+
+#[cfg(test)]
+#[path = "scalar_pattern_owner_scope_tests.rs"]
+mod scalar_pattern_owner_scope_tests;
