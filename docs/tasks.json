@@ -1455,7 +1455,8 @@
         "actual_published_type_receipt_and_distinct_immutable_copy_replay_identically_all_editions",
         "actual_same_publication_row_still_refuses_after_current_epoch_changes",
         "official_suffixed_numeric_initializers_retain_written_source_through_binding_all_editions",
-        "suffixed_numeric_source_attachment_preserves_exact_fuel_prefix_and_no_replay"
+        "suffixed_numeric_source_attachment_preserves_exact_fuel_prefix_and_no_replay",
+        "official_signed_radix_prefix_marker_is_exact_structural_and_encoded_all_editions"
       ],
       "acceptance_contract": "exhaustive i8/u8 arithmetic boundary loops; random wider arithmetic/cast comparisons; works/fails context examples; signed-min literal; distinct usize/u64 contracts. Gate checks Rust constraint-aware numeric fallback and preserves known source widths; nonnumeric unknowns never default.",
       "commands": [],
@@ -1548,7 +1549,8 @@
         "T025-OPERATOR-SOURCE-5",
         "T025-OPERATOR-SOURCE-6",
         "T025-NAMESPACE-SCALABILITY-7",
-        "T025-NAMESPACE-SCALABILITY-8"
+        "T025-NAMESPACE-SCALABILITY-8",
+        "T025-NEGATIVE-SUFFIX-STRUCTURE"
       ],
       "artifact_paths": [
         "docs/numeric-kernel.md",
@@ -1652,7 +1654,8 @@
         "worktracks/evidence/2026-10-14-reached-numeric-call-components.json",
         "worktracks/evidence/2026-10-14-integrated-milestone-failure.json",
         "worktracks/evidence/2026-10-14-labelled-interpreter-runtime.json",
-        "worktracks/evidence/2026-10-14-namespace-startup-scalability.json"
+        "worktracks/evidence/2026-10-14-namespace-startup-scalability.json",
+        "worktracks/evidence/2026-10-14-negative-suffix-and-milestone.json"
       ],
       "release_complete": false,
       "validation_scope": "Original primitive numeric component complete under E-57-001. Gate02 passes 645 macOS host/doc tests and 28 numeric controls; strict audits pass. Full symbolic/generated/trait/control/call/assignment/aggregate/coercion/cleanup/JIT and release integrations remain pending through named dependencies; Linux acceptance is deferred. User-authorized E-NUM-001 reopens numeric compatibility: old strict-profile evidence remains historical; Rust constraint-aware fallback/future-use inference is not fully implemented or accepted. Integrated scoped shift V3:fmt/strictworkspaceClippy/architecture/manifest passed;495 library,67 source_run,12 numeric,6 numeric_boundary bodies passed without failures/ignored/filtered. Two selected original shift.rs functions execute their original assertions and retain written count types. Source/log/terminal reviewed independently. Source-proven closed counts defaulti32; named counts retain source width or remain unresolved. Full original main/static/lint/compiletest and future numeric constraints remain incomplete; fresh MAIN milestone pending. Current integrated shift source ad04fa4b macOS milestone independently accepted: all17 requirements across retained5-check prefix and12-check continuation; actual continuation47049/0, original prefix outer exit unobserved. 2395 project bodies/179 executables/495 library, all166 T042-T045 controls plus2 original shift controls,8 H002 aliases and2k-frame event once; seven original CLI probes/29 arithmetic assertions. Root collector1580/0 verified34 logs and unchanged source, then released hold. Full fixture/Drop/doublepanic/worker/release/Linux remain pending. V5 discarded-expression fallback integrated after ten distinct scoped commands passed across two segments: format/strict Clippy,497 unfiltered library bodies plus27 bodies across4 relevant unfiltered binaries, architecture/manifest audits and3 importer controls. Both stock-derived value controls passed once; exact sourceb181a24b and all raw/terminal receipts were reviewed. Prefix82354/runner1 is retained: Cargo library exited0, but the wrapper incorrectly required497 complete library names equal2 selected names. Root verified membership and authorized only seven untouched suffix commands; suffix92326/0. No completed test was rerun and no single all-green ten-command runner is claimed. Original doc-comment main whole-body and aux9906 foo arithmetic are component observations, not full compiletest/edition/lint/parent-linking passes. General numeric future-use/trait/container inference remains incomplete. The required integrated MAIN milestone is pending; T025/release/Linux remain incomplete. Integrated numeric MAIN milestone accepted on exact8068a263 after preparation/source ownership repair: actualroot22217/0,2421unfiltered bodies/181summaries,fresh gates00\u201303,both numeric-discard controls once,independent+root terminal/source checks. Stalecandidate failed attempt remains preserved. General source inference and fullstock/release/Linux remain incomplete. October13 interpreter follow-ups: reviewed private cfg/numeric/source-contract/captured-declaration candidates integrated with originals/controls; each scoped receipt retained. Prior MAIN Cargo command2478/189 passed but enclosing frozen-source receipt failed external docs additions, so not accepted. Required fresh combined MAIN gate remains pending. Full rustc compiletest/task/release/Linux acceptance incomplete.",
@@ -1710,6 +1713,11 @@
         "status": "component_integrated_full_milestone_pending",
         "evidence_path": "worktracks/evidence/2026-10-14-numeric-suffix-source.json",
         "scope": "V32 unaffected26 and V33 corrected initializer1, strict lrrlibtests; actual source-backed mutable reference succeeds; no new whole-stock/full-fixture acceptance"
+      },
+      "current_negative_suffix_source": {
+        "status": "component_integrated_full_milestone_failed",
+        "evidence_path": "worktracks/evidence/2026-10-14-negative-suffix-and-milestone.json",
+        "scope": "V37 three exact library bodies pass, each exercises all four released editions; strict library/test Clippy passed. BodyIndex structural encoding domain advances from original-body-structure-v3 to v4. No whole upstream fixture pass from these components."
       }
     },
     {
@@ -2193,7 +2201,8 @@
         "genuine_test_catalog_primitive_result_certificate_keeps_owning_type_authority_all_editions",
         "selected_aliased_assertion_executes_predicate_and_keeps_message_and_unselected_body_cold_all_editions",
         "test_catalog_type_shadow_cannot_be_erased_by_unrelated_supplied_graph",
-        "actual_test_catalog_epoch_change_refuses_retained_primitive_return_certificate"
+        "actual_test_catalog_epoch_change_refuses_retained_primitive_return_certificate",
+        "negative_suffixed_local_reference_call_keeps_written_source_all_editions"
       ],
       "acceptance_contract": "uncalled invalid function signature/body does not fail another call; an unused generic bound is ignored; incompatible actual parameter/return descriptors fault only at reached boundaries; effectful arguments execute once.",
       "commands": [
@@ -2323,7 +2332,8 @@
         "T032-STOCK-REFERENCE-ED2024",
         "T032-REFERENCE-MISSING-LOCAL-SOURCE",
         "T032-REFERENCE-UNCERTIFIED-ENTRY",
-        "T032-REFERENCE-SCALAR-GUARD"
+        "T032-REFERENCE-SCALAR-GUARD",
+        "T032-NEGATIVE-SUFFIX-REFERENCE"
       ],
       "artifact_paths": [
         "artifacts/macos-first/t032-signature-capture-build.log",
@@ -2587,7 +2597,8 @@
         "artifacts/macos-first/t032-component-acceptance.json",
         "artifacts/macos-first/t032-component-manifest.log",
         "artifacts/macos-first/root-alias-transitive-trace-v1/combined-component-acceptance-v2.json",
-        "worktracks/evidence/2026-10-14-reference-parameter-runtime.json"
+        "worktracks/evidence/2026-10-14-reference-parameter-runtime.json",
+        "worktracks/evidence/2026-10-14-negative-suffix-and-milestone.json"
       ],
       "release_complete": false,
       "validation_scope": "Original-source call component accepted under E-57-001: 763 actual macOS Rust1.99 host/doc tests and all 81 selected controls, Gate00/01/02 and strict audits pass. Each task-card acceptance clause has observed test evidence. Lexical/generated catalogs, full source/context/dictionary IDs, traits/member/composite/coercion semantics and native/JIT/service integration remain mandatory and unverified; release_complete is false.",
@@ -2639,9 +2650,22 @@
         "scope": "V32 unaffected26 and V33 corrected initializer1, strict lrrlibtests; actual source-backed mutable reference succeeds; no new whole-stock/full-fixture acceptance"
       },
       "current_test_catalog_type_authority": {
-        "status": "component_integrated_full_milestone_running",
+        "status": "component_integrated_full_milestone_failed",
         "evidence_path": "worktracks/evidence/2026-10-14-test-catalog-type-authority.json",
         "scope": "V34CLI1/authority3; V36positiveall4/strict/audit/fmt. Earlier test-only failures retained; no sourceauthority weakening."
+      },
+      "current_negative_suffix_source": {
+        "status": "component_integrated_full_milestone_failed",
+        "evidence_path": "worktracks/evidence/2026-10-14-negative-suffix-and-milestone.json",
+        "scope": "V37 three exact library bodies pass, each exercises all four released editions; strict library/test Clippy passed. BodyIndex structural encoding domain advances from original-body-structure-v3 to v4. No whole upstream fixture pass from these components."
+      },
+      "latest_required_milestone": {
+        "version": 36,
+        "source_member": "d8b8ddc450beb7d8fbb9f47abe04a22ee8608efa1ce23c1eacca01235197bc0e",
+        "passed": 1667,
+        "failed": 49,
+        "unexecuted": 1440,
+        "evidence_path": "worktracks/evidence/2026-10-14-negative-suffix-and-milestone.json"
       }
     },
     {
@@ -19020,7 +19044,15 @@
         "M042",
         "M043"
       ],
-      "reopened_reason": "Fresh integrated MAINv7 fails selected pending generated-statement invocation/definition diagnostic provenance. Prior completed evidence retained; typed routing repair and fresh integrated gate required."
+      "reopened_reason": "Fresh integrated MAINv7 fails selected pending generated-statement invocation/definition diagnostic provenance. Prior completed evidence retained; typed routing repair and fresh integrated gate required.",
+      "latest_required_milestone": {
+        "version": 36,
+        "source_member": "d8b8ddc450beb7d8fbb9f47abe04a22ee8608efa1ce23c1eacca01235197bc0e",
+        "passed": 1667,
+        "failed": 49,
+        "unexecuted": 1440,
+        "evidence_path": "worktracks/evidence/2026-10-14-negative-suffix-and-milestone.json"
+      }
     },
     {
       "id": "M017",

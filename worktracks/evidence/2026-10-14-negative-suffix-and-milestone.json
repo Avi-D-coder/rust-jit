@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    "T025",
+    "T032",
+    "M016"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "source_paths": [
+    {
+      "path": "crates/lrr/src/syntax/body_index.rs",
+      "before": "5e1c355a457206fff78b73973e46c2bd3fde9373b8a7aa6a5440274bb4121aa6",
+      "sha256": "c1a7d77ce92e4fd2745b3671f75e5e7a338091f912dc2c36e5afe4f7e1c49a40"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "before": "fbed836355dcb0f55273f0e8a3c5e92dd78ea3ca6a8eda49b6b9005c620634f2",
+      "sha256": "5aae3e4d17a9b86e676700958a148e2ad8da2e8d027e6bd750822923d62fc957"
+    },
+    {
+      "path": "crates/lrr/src/vm/intrinsic_literal_source_tests.rs",
+      "before": "0b3cea2d89181cce3af1969cee65c2f23e25f3e5314bdaff443daf811bdc9a75",
+      "sha256": "3f02496dff6b53ae4da025f2223700d4ebd9f64d46f24bc6a3f632534e0a3c2c"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_assertion_call_tests.rs",
+      "before": "2eb52675a762c368d938277eada11ace08f99b00a40d01f9433e3a101c81a348",
+      "sha256": "f5b5b7330b2872ee78717a7003503f0860fce68b545047eae46c7feaff305be5"
+    }
+  ],
+  "invariant": "Retain written signed suffix identity for exact structurally indexed unary-minus integer literal (including grouping), without admitting arbitrary Other nodes, descriptor inference, numeric decode during body indexing, eager value execution or a different materialization path. Structural source marker encoded in BodyIndex domainv4 and charged by existing sizeof node budget.",
+  "negative_suffix_source_member": "bbcb990b59d65503ae03a95e359411fd7db447f0015ef4d3e6ae661b8858d353",
+  "scope": "V37 three exact library bodies pass, each exercises all four released editions; strict library/test Clippy passed. BodyIndex structural encoding domain advances from original-body-structure-v3 to v4. No whole upstream fixture pass from these components.",
+  "new_runtime_fixture_passes": 0,
+  "latest_required_milestone": {
+    "version": 36,
+    "source_member": "d8b8ddc450beb7d8fbb9f47abe04a22ee8608efa1ce23c1eacca01235197bc0e",
+    "listed": 3156,
+    "passed": 1667,
+    "failed": 49,
+    "unexecuted": 1440,
+    "library_passed": 1031,
+    "cli_bank_passed": 29,
+    "captured_dependency_bank": "30 passed49 failed/79",
+    "actual_terminal": {
+      "session": 12759,
+      "chunk": "cbdddd",
+      "exit": 1
+    },
+    "diagnosis": "V38 one exact alias case fails LRR-E-CALL-CONTEXT: primitive result requires its exact current generated Type namespace. This precedes the separate published-epoch guard.",
+    "repair_status": "Production cross-crate source/hygiene proof and adapter lifecycle prerequisites are private/unvalidated.",
+    "scope_limit": "V36 predates V37 negative-suffix source; fresh combined milestone required after repair."
+  },
+  "upstream_runtime_acceptance": "incomplete",
+  "diagnostic_compatibility": "incomplete; separate gate",
+  "compiler_tooling_compatibility": "incomplete; separate gate",
+  "full_suite_compatibility": "incomplete",
+  "guest_jit_gate": "closed",
+  "release_complete": false,
+  "linux_acceptance": "unexecuted",
+  "local_receipts": [
+    {
+      "version": 36,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v36/VALIDATION-HANDOFF.json",
+      "sha256": "373eef64c4a54338df303dd189001674fca5b1450736e22b59d3f9e0d33fbf45"
+    },
+    {
+      "version": 37,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v37/VALIDATION-HANDOFF.json",
+      "sha256": "c5f508279bb7e94f0fcd534573592cbb9346a26481a116be8abf79d7ee0199fa"
+    },
+    {
+      "version": 38,
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v38/VALIDATION-HANDOFF.json",
+      "sha256": "a6d98b484f7cc13f58e1dbc2118957eff12f417504925a4dac460a9a5ddad306"
+    }
+  ]
+}

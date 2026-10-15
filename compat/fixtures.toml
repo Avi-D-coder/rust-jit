@@ -11944,3 +11944,13 @@ test = "test_catalog_type_shadow_cannot_be_erased_by_unrelated_supplied_graph"
 id = "T032-TEST-CATALOG-TYPE-04"
 path = "crates/lrr/src/frontend/test_catalog_primitive_namespace_tests.rs"
 test = "actual_test_catalog_epoch_change_refuses_retained_primitive_return_certificate"
+
+[[fixture]]
+id = "T025-NEGATIVE-SUFFIX-STRUCTURE"
+path = "crates/lrr/src/syntax/body_index.rs"
+test = "official_signed_radix_prefix_marker_is_exact_structural_and_encoded_all_editions"
+
+[[fixture]]
+id = "T032-NEGATIVE-SUFFIX-REFERENCE"
+path = "crates/lrr/src/engine/run_assertion_call_tests.rs"
+test = "negative_suffixed_local_reference_call_keeps_written_source_all_editions"

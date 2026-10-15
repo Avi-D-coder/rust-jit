@@ -138,6 +138,9 @@ pub struct StructuralNode {
     pub runtime_scalar_phases: u16,
     /// Structural range-pattern continuation only; indexing never prepares bounds.
     pub scalar_range_phase: bool,
+    /// Exact syntactic unary minus over a (possibly grouped) integer token.
+    /// No magnitude, suffix type, name or value is prepared while indexing.
+    pub negative_integer_literal: bool,
     /// A constructor's ownership guard is separate from its result cell.
     /// Reserving this slot never binds a type or allocates guest storage.
     pub constructor_guard: Option<SlotId>,
@@ -289,7 +292,7 @@ impl BodyIndex {
     }
 }
 impl StableEncode for BodyIndex {
-    const DOMAIN: &'static str = "lrr/v3/original-body-structure";
+    const DOMAIN: &'static str = "lrr/v4/original-body-structure";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.body);
         e.record(&self.profile);
@@ -333,6 +336,7 @@ impl StableEncode for BodyIndex {
             e.sequence(&n.runtime_scalar_slots, |e, slot| e.u32(slot.0));
             e.u32(u32::from(n.runtime_scalar_phases));
             e.bool(n.scalar_range_phase);
+            e.bool(n.negative_integer_literal);
             e.option(&n.constructor_guard, |e, slot| e.u32(slot.0));
             e.option(&n.tail_scope, |e, scope| e.u32(scope.0));
             e.option(&n.condition_scope, |e, scope| e.u32(scope.0));
@@ -391,6 +395,26 @@ fn charge(bytes: &mut usize, amount: usize, budget: usize) -> Result<(), Diagnos
         .ok_or_else(|| limit("called body metadata budget"))?;
     Ok(())
 }
+fn negative_integer_literal(expr: &ast::Expr) -> bool {
+    let ast::Expr::PrefixExpr(prefix) = expr else {
+        return false;
+    };
+    if !prefix.op_token().is_some_and(|token| token.text() == "-") {
+        return false;
+    }
+    let Some(mut operand) = prefix.expr() else {
+        return false;
+    };
+    while let ast::Expr::ParenExpr(group) = operand {
+        let Some(inner) = group.expr() else {
+            return false;
+        };
+        operand = inner;
+    }
+    matches!(operand, ast::Expr::Literal(literal)
+        if literal.token().kind() == ra_ap_syntax::SyntaxKind::INT_NUMBER)
+}
+
 fn expression_kind(expr: &ast::Expr) -> ExpressionKind {
     match expr {
         ast::Expr::BlockExpr(b) => {
@@ -1145,6 +1169,7 @@ impl ParsedFile {
                 runtime_scalar_phases,
                 scalar_range_phase: role == NodeRole::Pattern
                     && ast::RangePat::can_cast(frame.syntax.kind()),
+                negative_integer_literal: expr.as_ref().is_some_and(negative_integer_literal),
                 constructor_guard,
                 tail_scope,
                 condition_scope,
@@ -1266,6 +1291,7 @@ impl ParsedFile {
                 runtime_scalar_slots: Vec::new(),
                 runtime_scalar_phases: 0,
                 scalar_range_phase: false,
+                negative_integer_literal: false,
                 constructor_guard: None,
                 tail_scope: None,
                 condition_scope: None,
@@ -1387,7 +1413,7 @@ mod tests {
             let index = parsed.index_body(body, Default::default()).unwrap();
             assert_eq!(
                 <BodyIndex as StableEncode>::DOMAIN,
-                "lrr/v3/original-body-structure"
+                "lrr/v4/original-body-structure"
             );
             let ranges: Vec<_> = index
                 .nodes()
@@ -1429,6 +1455,68 @@ mod tests {
                 .find(|node| node.role == NodeRole::InitializerReturn)
                 .unwrap();
             assert!(constant.pc(return_node.id, Phase::Operand(0)).is_err());
+        }
+    }
+    #[test]
+    fn official_signed_radix_prefix_marker_is_exact_structural_and_encoded_all_editions() {
+        use crate::source::snapshot::{CfgSet, SourceBlob};
+        const SOURCE: &str = include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-radix.rs"
+        );
+        for edition in [2015, 2018, 2021, 2024] {
+            let parsed = ParsedFile::parse(
+                &SourceBlob::new(SOURCE.as_bytes().to_vec()).unwrap(),
+                ProfileIdentity {
+                    edition,
+                    ..ProfileIdentity::current()
+                },
+            )
+            .unwrap();
+            let outline = parsed
+                .outline(Digest([238; 32]), vec![], &CfgSet::guest_default())
+                .unwrap();
+            let handle = outline
+                .items
+                .iter()
+                .find(|item| item.def_key.declared_name == "main")
+                .unwrap()
+                .body
+                .as_ref()
+                .unwrap();
+            let index = parsed.index_body(handle, Default::default()).unwrap();
+            let marked: Vec<_> = index
+                .nodes()
+                .iter()
+                .filter(|node| node.negative_integer_literal)
+                .collect();
+            assert_eq!(marked.len(), 3);
+            for (node, expected) in
+                marked
+                    .iter()
+                    .zip(["-0xBEEF_isize", "-0o755_isize", "-0b10101_isize"])
+            {
+                assert_eq!(node.role, NodeRole::Expression(ExpressionKind::Other));
+                assert_eq!(
+                    &SOURCE[(handle.range.start + node.range.start) as usize
+                        ..(handle.range.start + node.range.end) as usize],
+                    expected
+                );
+                assert!(node.value.is_some());
+                assert_eq!(index.pc(node.id, Phase::Entry).unwrap().phase, 0);
+            }
+            assert!(
+                index
+                    .nodes()
+                    .iter()
+                    .filter(|node| node.role != NodeRole::Expression(ExpressionKind::Other))
+                    .all(|node| !node.negative_integer_literal)
+            );
+            let mut without_marker = index.clone();
+            without_marker.nodes[marked[0].id.0 as usize].negative_integer_literal = false;
+            assert_ne!(index.fingerprint(), without_marker.fingerprint());
+            let mut old = StableEncoder::new("lrr/v3/original-body-structure");
+            index.encode_fields(&mut old);
+            assert_ne!(index.fingerprint(), old.finish());
         }
     }
 }

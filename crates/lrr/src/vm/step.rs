@@ -321,7 +321,11 @@ fn intrinsic_literal_preflight(
         .nodes()
         .get(frame.pc().node as usize)
         .ok_or_else(|| invalid("intrinsic literal indexed node absent"))?;
-    if node.role != NodeRole::Expression(ExpressionKind::Literal) {
+    let original_literal = node.role == NodeRole::Expression(ExpressionKind::Literal);
+    let original_negative = literal.kind == LiteralKind::NegativeInteger
+        && node.role == NodeRole::Expression(ExpressionKind::Other)
+        && node.negative_integer_literal;
+    if !original_literal && !original_negative {
         return Ok(prepared);
     }
     if frame.pc().phase != 0

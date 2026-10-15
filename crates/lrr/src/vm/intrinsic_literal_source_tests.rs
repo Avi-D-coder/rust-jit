@@ -151,6 +151,7 @@ fn literal_context(
             == crate::syntax::body_index::NodeRole::Expression(
                 crate::syntax::body_index::ExpressionKind::Literal,
             )
+            || node.negative_integer_literal
     }) {
         let pc = index.pc(node.id, Phase::Entry).unwrap();
         let outcome = db
@@ -602,6 +603,12 @@ fn official_suffixed_numeric_initializers_retain_written_source_through_binding_
                 LiteralKind::Integer,
                 PrimitiveType::Isize,
                 ValueRepr::signed(TypeId(8), 48879).unwrap(),
+            ),
+            (
+                RADIX,
+                LiteralKind::NegativeInteger,
+                PrimitiveType::Isize,
+                ValueRepr::signed(TypeId(8), -48879).unwrap(),
             ),
             (
                 FLOAT,

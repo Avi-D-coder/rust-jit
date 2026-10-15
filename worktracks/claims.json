@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Integrated labelled/namespace/reference/range, ordinary numeric-suffix source retention and TestCatalog nested Type-receipt consumption after exact collected scoped evidence. V31 milestone failed1433/1/1715; repaired untouched CLI passed and fresh V36 gate runs on immutable d8b8ddc4. Folded negative suffix, named range constants, ordinary/generated condition controls and new whole-stock adapters remain private/unaccepted. No full fixture/task/JIT/Linux/release claim.",
+      "scope": "Integrated validated negative-suffix structural/source retention after V37 three controls/all4 editions and strict lint. Required V36 milestone failed1667/49/1440; all1031library/29CLI green. Root owns captured-dependency lifecycle, byte source/patterns and integration; stock worker owns cross-crate generated Type proof, generic worker owns joined ordinary/generated negative-range controls. New whole-stock numeric adapter validates separately; no fixture/task/JIT/Linux/release claim.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -438,12 +438,15 @@
         "artifacts/macos-first/root-primitive-result-input-bound-v2/",
         "artifacts/macos-first/root-parameter-place-source-v1/",
         "artifacts/macos-first/root-reference-promotion-plan-v1/",
-        "artifacts/macos-first/root-stock-range-successor-v3/"
+        "artifacts/macos-first/root-stock-range-successor-v3/",
+        "artifacts/macos-first/root-negative-suffix-source-v1/",
+        "artifacts/macos-first/root-captured-dependency-lifecycle-v1/",
+        "artifacts/macos-first/root-byte-scalar-source-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T03:01:06.313407+00:00",
-      "review_after": "2026-10-15T05:55:00.598518+00:00"
+      "updated_at": "2026-10-15T04:16:22.484505+00:00",
+      "review_after": "2026-10-15T07:16:22.506011+00:00"
     },
     {
       "id": "LOCAL-025",

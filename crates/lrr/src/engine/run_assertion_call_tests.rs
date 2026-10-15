@@ -361,3 +361,20 @@ fn suffixed_local_reference_call_retains_source_without_invented_descriptor_iden
         db.finish_run().unwrap();
     }
 }
+
+#[test]
+fn negative_suffixed_local_reference_call_keeps_written_source_all_editions() {
+    // LRR source/certificate regression; the unchanged signed radix initializer
+    // and binding are separately exercised as upstream component evidence.
+    for literal in ["-1isize", "-(1isize)", "-(((1isize)))"] {
+        let source = format!("fn chosen(x:&isize){{}} fn main(){{let n={literal};chosen(&n);}}");
+        for edition in EDITIONS {
+            let (mut db, mut run) = start(&source, edition);
+            let chosen = body(&run, "chosen");
+            completed(&mut db, &mut run, 0, 1);
+            assert!(db.trace.events.iter().any(|event| matches!(&event.key,
+                QueryKey::BodyStructure(body) if body == &chosen)));
+            db.finish_run().unwrap();
+        }
+    }
+}
