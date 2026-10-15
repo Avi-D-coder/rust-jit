@@ -1,27 +1,29 @@
 {
   "status": "source_only_final_ledger_unvalidated",
-  "at": "2026-10-15T18:19:49.467209+00:00",
+  "at": "2026-10-15T18:35:30.728720+00:00",
   "claim": "LOCAL-024",
   "task_cards": [
     "T025",
     "T040",
+    "T050",
     "T051"
   ],
   "requires_candidate_patch_sha256": "b45e0333a5c86e383e91afaa7c872d37823bf6dfa369c119217e23eb0e64c538",
+  "requires_partial_runtime_witness": "3766e56ad88a83ea46969342db6ef375034ebb40f87ee6f62a34e93a7e8eba4f",
   "requires_cast_test_follow_on": "05f067ffdde1c1d9f94059f8b8a7b2d991a777c019ac2721b9fb2512d81ece63",
-  "patch_sha256": "8514ed0353706a436ba43b701fcf90b75638725376bdc99f194966d2e3fa1c54",
+  "patch_sha256": "8205838c54df3fb7c554b1db365ca1703f5b466fbdb5dabaca79d8848c9e5e36",
   "files": [
     {
       "path": "compat/fixtures.toml",
       "before_sha256": "530474018c048e9f68ea7fc688e69b29c177235c37be513c856e8badf6296981",
-      "after_sha256": "7082663542d258a9602d5639877a91eb33e4891f5c663073f137386463ff825f",
-      "bytes": 416959
+      "after_sha256": "e1833b34575b6f7b42ef4ee46680f098084ee5c7907f8e337ebd11163e41588b",
+      "bytes": 416967
     },
     {
       "path": "docs/tasks.json",
       "before_sha256": "813d3fe09662a3585d86b69558a2765d779b4fc113a76c7fbf2709d7acc12bef",
-      "after_sha256": "5a45b142088674514a7771564ccd11a63e753490ba945f1307a1425449e5695a",
-      "bytes": 1437114
+      "after_sha256": "a56126fa14bcb9abf3ac50bb228af3ef2b7f26e0760047c6d39f7902d615252c",
+      "bytes": 1438189
     }
   ],
   "selector_migrations": [
@@ -42,6 +44,12 @@
       "old": "unchanged_cast_main_executes_seven_assertions_before_its_raw_pointer_frontier_all_editions",
       "new": "unchanged_cast_main_executes_seven_assertions_before_its_nested_string_borrow_frontier_all_editions",
       "reason": "V112 observed a source-aware borrowed-string frontier preceding the raw pointer; renamed source oracle requires actual V113 validation"
+    },
+    {
+      "task": "T050",
+      "old": "unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions",
+      "new": "unchanged_overlapping_match_function_preserves_first_assertion_and_local_numeric_frontier_all_editions",
+      "reason": "V120 proves only the first assertion completes before deferred-local TYPE-CONTEXT; explicit partial witness, complete upstream runtime contract remains required and failed"
     }
   ],
   "remaining_prose_contract_references": [

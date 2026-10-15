@@ -1,0 +1,48 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "at": "2026-10-15T18:43:10.697736+00:00",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T024",
+    "T025",
+    "T050"
+  ],
+  "requires_cumulative_patch_sha256": "83d11bbb29c21ab26e6b16051262ee9aeabfb3795730aabdbf98b75109bbf79e",
+  "validation_source_unchanged": "f8f33fe025284209a31a39f4a6afdf419c435679c77f3d3d231014db058d033d",
+  "patch_sha256": "bd83371330fa8d815e9b992e993a85cd7992bce4a4482553de1bf18683e91453",
+  "files": [
+    {
+      "path": "crates/lrr/src/syntax/numeric_fallback.rs",
+      "before_sha256": "07013b28bed79b1addd52e74b94d5cd9662333c8ab3a01ff971b3ca3b1771982",
+      "after_sha256": "0f92c4a12edcd66cad90c613f59c29e76833c506e1220296bd84345ed12739a3",
+      "bytes": 23768
+    },
+    {
+      "path": "crates/lrr/src/ir/definition_numeric_wire_tests.rs",
+      "before_sha256": "c3850e87c44280636cb37ef930564fd5dce2f50f33ca6a3d50e53ed47c44c8fd",
+      "after_sha256": "1c28338779944ba804a0fae0bbda00a7b0033797d7457e6e002a11b480a4bf87",
+      "bytes": 20768
+    },
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "before_sha256": "9f8ba7eeba91ebf8f3142ad2de9882e8f30be90efb0da84e63de7fe520511bd4",
+      "after_sha256": "5a9c66aff8ab65f2545ab01eea051eeaa0ab12b25096ee2d69521b789904cec7",
+      "bytes": 18582
+    }
+  ],
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "zero_offset_zero_fuzz_replay": true
+  },
+  "selector_migration_pending": {
+    "from": "unchanged_overlapping_match_function_preserves_first_assertion_and_local_numeric_frontier_all_editions",
+    "to": "unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions",
+    "reason": "positive source literal now eligible for existing private soft fallback; three-assert prefix is an unexecuted acceptance expectation"
+  },
+  "new_host_bodies": 2,
+  "original_inputs_changed": 0,
+  "new_upstream_passes": 0,
+  "canonical_promotion": false,
+  "full_milestone_passed": false,
+  "runtime_gap": "Full overlapping-match main, general cross-use local inference and later static/aggregate/pattern semantics remain required"
+}

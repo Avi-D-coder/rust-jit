@@ -1,0 +1,22 @@
+--- a/crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs
++++ b/crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs
+@@ -346,7 +346,18 @@
+         let RunPoll::Fault(error) = outcome else {
+             panic!("unchanged static frontier was skipped");
+         };
+-        assert_eq!(error.code, "LRR-E-UNSUPPORTED");
++        let stopped = machine.diagnostic_current_span().unwrap();
++        let origin = machine
++            .diagnostic_source_origin(&stopped, 4096)
++            .unwrap()
++            .unwrap();
++        let written = &TEXT[origin.range.start as usize..origin.range.end as usize];
++        let observed = machine.opcode_counters().unwrap();
++        assert_eq!(
++            error.code, "LRR-E-UNSUPPORTED",
++            "actual error: {error}; original source: {written}; completed assertion/call prefix: {}/{}",
++            observed.started_by_opcode[26], observed.started_by_opcode[19]
++        );
+         assert_eq!(
+             error.message,
+             "assertion constant path requires current source query preparation"

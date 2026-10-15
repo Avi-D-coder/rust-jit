@@ -1,0 +1,33 @@
+{
+  "status": "source_only_uncompiled_partial_runtime_witness",
+  "at": "2026-10-15T18:33:54.488235+00:00",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T025",
+    "T050"
+  ],
+  "requires_candidate_patch_sha256": "3f4e4ac7c7844bdfd865cd9dd914d7e39d18081d18b1c03aa82f17e8414c9e78",
+  "patch_sha256": "3766e56ad88a83ea46969342db6ef375034ebb40f87ee6f62a34e93a7e8eba4f",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "before_sha256": "1d161bf8cbda91886b700594708d203a50279db9c0e1e92286351868abf491c4",
+      "after_sha256": "9f8ba7eeba91ebf8f3142ad2de9882e8f30be90efb0da84e63de7fe520511bd4",
+      "bytes": 17068
+    }
+  ],
+  "actual_prior_terminal": "b58675/1",
+  "old_selector": "unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions",
+  "current_selector": "unchanged_overlapping_match_function_preserves_first_assertion_and_local_numeric_frontier_all_editions",
+  "supported_scope": "first original assertion only, then exact original second assertion TYPE-CONTEXT, no calls/panics",
+  "still_required_runtime_contract": "complete unchanged original main; deferred local x+1 context plus later statics and aggregate/pattern behavior remain blockers",
+  "production_leaves_changed": 0,
+  "newly_accepted_upstream_contracts": 0,
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "exact_replay_zero_fuzz_zero_offset": true
+  },
+  "all_edition_partial_witness": "pending_execution",
+  "canonical_promotion": false,
+  "full_fixture_passes_added": 0
+}

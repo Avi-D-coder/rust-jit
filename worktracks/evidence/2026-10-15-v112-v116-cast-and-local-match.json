@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T18:24:55.528952+00:00",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "scoped_versions_not_additive": [
+    {
+      "version": "V113",
+      "source_member": "e0134087c18fdf4be1be7a70d20db6b7b8458ac8cb8a8952cf67eca6df8407f7",
+      "passed_distinct": 9,
+      "duplicates": 0,
+      "scope_limits": "Renamed unchanged cast.rs prefix now actually verifies all4editions exact &\"hello\" borrow PC/message,7Assert/13PrimitiveCast andcompletecounter equality; actualrequired nestedreference frontier remainsunsupported,neverwholemainpass.8existingcast/sourcecontextcontrols pass. V112U8wholemainall4pass isseparate unchangedproductionevidence andnotrepeated. Remaininglibrary/integration/fullmilestone unexecuted. Sharedledger oldselector intentionallyawaitsroot finalfollow-on beforefixtureaudit.",
+      "scopes": [
+        {
+          "scope": "macro-cast-prefix-one",
+          "passed": 1,
+          "actual_terminal": "706fa6/0",
+          "terminal_sha256": "5be4a040feabd9559ec79372327991665d058d5878ba0e07aab820422e2f8bda",
+          "stdout_sha256": "2d2d56a227913e5562f2c60ddb4e76b8662488e58f0ae77f38b035d001269fef"
+        },
+        {
+          "scope": "numeric-cast-context",
+          "passed": 8,
+          "actual_terminal": "976821/0",
+          "terminal_sha256": "c16db61a9ade0c6b6e8a15d2e83696f2220b1cc3ccca067687cfe70b61c27205",
+          "stdout_sha256": "d4662d5f7ec05cf3b4fa2b65bd1cef3be74c83bc157fa6330a110597e0b27a82"
+        }
+      ],
+      "results_sha256": "65740d5c6bde54bbb1b4c66471f8ef106dc4006c1735528b1f82a34fb620ca34",
+      "handoff_sha256": "5e1e874e6e59a67e6ab891ecdfb317c7cb202b52fe7fc83e31125d15530bc12e",
+      "release_sha256": "9cfe7d44f976ed75012d7e8e5e77d4e9f72da13165c36d19eedaa79cb86139a7"
+    },
+    {
+      "version": "V116",
+      "source_member": "34886588114604f675e13eff4bb534fe611f5c9bcf74399d8cabafea162da562",
+      "passed_distinct": 39,
+      "duplicates": 0,
+      "scope_limits": "Actualunchangedissue26251wholemain passesall4owningeditions withCompletedUnit/Assert1/Compare4/Panic0/balancedops/emptyactiveScopes andexact2registeredstatic\"two\"roots whoseobjectIDs equalterminalinventory;no transientguards/tickets. Registeredstaticobjects correctlysurviverunframecleanup.V114incorrectemptyinventoryfailureandV115E0616compilefailurepreserved. V114pureintrinsickindcontrolpassseparate/notrepeated.12existinglibrarymatchcontrols+4completeintegrationbanks26pass. Currentlibrarylists1209;only13librarybodiesexecutedinV116. No fullmilestone/canonicalpromotion/observer/guardpacket. Ledgerselectorrepairandfinalauditsstillheldforrootfinalcombinedsource.",
+      "scopes": [
+        {
+          "scope": "local-match-whole-main",
+          "passed": 1,
+          "actual_terminal": "744999/0",
+          "terminal_sha256": "15ecb005a49817e5a14be458b76db950f73ee9c2a29f4ff1f9f68fcb7140a077",
+          "stdout_sha256": "4f83a9347a006316e967edc87526428ae4ace75d47e9c69986c94276388813c5"
+        },
+        {
+          "scope": "scalar-match-source-guards",
+          "passed": 12,
+          "actual_terminal": "85845b/0",
+          "terminal_sha256": "b9a7acc51a74c01de94d1254e8117cd562ca0481187c463c6bff946aa43205e5",
+          "stdout_sha256": "90a75801da737af117aa5483bf716a5c0d6404a9cf924cce113ef82172cc8351"
+        },
+        {
+          "scope": "scalar-match-guards-full-bank",
+          "passed": 6,
+          "actual_terminal": "44bc17/0",
+          "terminal_sha256": "838d2ca1da3fdbfd45b39a1d71449f9c1447e8664dcb1a930890dd4901eb01d7",
+          "stdout_sha256": "192e53b45cba335f0bf548e0f18ff46409624d6dfbf55ddb9eb3dac482f1d36a"
+        },
+        {
+          "scope": "scalar-match-phases-full-bank",
+          "passed": 5,
+          "actual_terminal": "43e53a/0",
+          "terminal_sha256": "034578d623a866aedcdc56c4d33c0e07657465b16baa92b51c336edfb687699e",
+          "stdout_sha256": "35ce3caec81e04c7e5e6d2d1d6759329674370ab8ee761f488f36f330a613195"
+        },
+        {
+          "scope": "scalar-or-patterns-full-bank",
+          "passed": 7,
+          "actual_terminal": "5298cb/0",
+          "terminal_sha256": "8a4247bff41e034e45ae32641dc8e891bc70e510f73753ba5cd3e733e6841726",
+          "stdout_sha256": "92cab52198c3da3021f423eece71ef176f3ef3f336acb783567bdbafe277aea8"
+        },
+        {
+          "scope": "stock-scalar-range-runtime-full-bank",
+          "passed": 8,
+          "actual_terminal": "f265b8/0",
+          "terminal_sha256": "22ca0f9e8a7be04a20a2508ab745ddc6df4149369a739a4f0c2d696ca229f7ce",
+          "stdout_sha256": "ab0792f3df3e99ef63915688562815ebc9664c4aae225afc5b166736e302bb5f"
+        }
+      ],
+      "results_sha256": "bbfde16b86f46ff11cb71a2aa9aec0d797976b778a4668d9b3dc86997aa5f2d8",
+      "handoff_sha256": "2f82ee6a0ed4f56484eeef834befe9c69c355af197ec0ab8e043661b70408126",
+      "release_sha256": "af91cf6f05824480eca11b939b63add684dda1547e89a1bc2e5274e55fb104e0"
+    }
+  ],
+  "prior_failures_preserved": [
+    {
+      "version": "V112",
+      "source_member": "fdc489b8f2b654f88c5b543916ea0c5d79511363047041ffb401801b303c2f34",
+      "actual_terminal": "b1034a/1",
+      "failure_summary_sha256": "c015541486732adf0827cb1746c3b1864267ca527b2f7cf62e83d0ade7c22c1d",
+      "receipt_sha256": "115f795ea50e39355518a7f0ea69d1ebffca678d8289c4df00cc23c54c9b69bb",
+      "stdout_sha256": "9578243acac0281aa962e334cbfaae792a7b16ba7e95c0d567f825826ae93c13",
+      "stderr_sha256": "1c099e4a86b1d3895ad0b799c95ab6573731ff9fde3d49c7aca4c34c9e4a1d10",
+      "scope": "cast target requires symbolic type resolution"
+    },
+    {
+      "version": "V114",
+      "source_member": "3304ed26615e02b8bd20fecb08d1a7e2d265b0c073d037e7e233e0b129f557b3",
+      "actual_terminal": "339d6b/1",
+      "failure_summary_sha256": "bbb9a35b69f4136b58d16509424b42990c5248abbd3c778a9b9f2340e78dff49",
+      "receipt_sha256": "385f2cb6800d4ef379ec91c7524abec379ee077d8e1d1b8e351ac20803678bcc",
+      "stdout_sha256": "4b5e33ec481648dc9ec57ac1fa5ff7367bec7c49094856c7b143a32ff847388c",
+      "stderr_sha256": "a72acf262b196afc1ce0dc7c7a41d494385af56df253f054a3a9b525b812ffda",
+      "scope": "inventory.objects.is_empty() && inventory.guards.is_empty() && inventory.tickets.is_empty()"
+    },
+    {
+      "version": "V115",
+      "source_member": "8064efa8a25c50c1e9dc78966b322b88d0cfefd7aff7a946df4b7cddfa2e6e4b",
+      "actual_terminal": "f71c67/1",
+      "failure_summary_sha256": "ba278cb17957491ebecc233c1a5e6175e5f2c49d44984851e0d52ef58bceb290",
+      "receipt_sha256": "0b5624c02c6460ae3d5363f70c425779453d14831b051d365c02190b18312f3d",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "a0cbcfb42a76eb8716b8bd86035d3130409879819227fe343073cba9a15db044",
+      "scope": "strict_compile_failed"
+    }
+  ],
+  "unchanged_whole_main_component": "issue-26251.rs completes all4 editions with exact2 registered immutable two roots, no other objects or transient guards/tickets; original input unchanged",
+  "cast_scope": "cast.rs exact7 assertion/13cast prefix completesall4, stops at actual nested stringborrow; complete cast main still unsupported",
+  "separate_v112_pass": "unchanged u8-to-char-cast-9918.rs wholemainall4; not repeated inV113/addedtoV113count",
+  "root_rechecked_actual_scope_results_and_receipts": true,
+  "current_cli_stock_counts_remain_v108_only": {
+    "runtime_contract_pass": 46,
+    "interpreter_failure": 69
+  },
+  "full_milestone_passed": false,
+  "canonical_promotion": false,
+  "full_fixture_passes_added": 0,
+  "guest_jit_allowed": false
+}

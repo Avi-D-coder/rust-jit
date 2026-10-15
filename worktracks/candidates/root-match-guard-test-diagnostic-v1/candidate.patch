@@ -1,0 +1,16 @@
+--- a/crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs
++++ b/crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs
+@@ -380,8 +380,11 @@
+             "fn guard()->bool{true}fn cold()->bool{loop{}}fn main(){assert_eq!(2.0,match 1{1 if guard()=>2.0,_ if cold()=>0.0,_=>1.0});}",
+         ] {
+             let (db, machine, outcome) = run(text, edition);
+-            let RunPoll::Completed(report) = outcome else {
+-                panic!("guard route failed: {outcome:?}")
++            let report = match outcome {
++                RunPoll::Completed(report) => report,
++                RunPoll::Fault(error) => panic!("guard route fault: {error}"),
++                RunPoll::NeedInput(input) => panic!("guard route needs input: {input:?}"),
++                RunPoll::Panicked(report) => panic!("guard route panicked: {report:?}"),
+             };
+             assert!(matches!(report.value, ValueSummary::Unit));
+             assert_eq!(report.opcode_counters.started_by_opcode[19], 1);

@@ -1,0 +1,139 @@
+--- a/crates/lrr/src/syntax/numeric_fallback.rs
++++ b/crates/lrr/src/syntax/numeric_fallback.rs
+@@ -250,8 +250,8 @@
+     }
+ }
+ 
+-/// Match precisely the unsuffixed integer prefix that ordinary lowering folds
+-/// into a deferred literal, including its bounded parentheses. This is syntax
++/// Match an unsuffixed integer literal, including the negative prefix that
++/// ordinary lowering folds and bounded parentheses. This is syntax
+ /// evidence only; it supplies neither a call identity nor a concrete parameter.
+ pub(super) fn deferred_integer_initializer(expression: &ast::Expr) -> Result<bool, Diagnostic> {
+     let mut root = expression.clone();
+@@ -277,6 +277,11 @@
+             return Ok(false);
+         };
+         root = inner;
++    }
++    if let ast::Expr::Literal(literal) = &root {
++        return Ok(literal.token().kind() == SyntaxKind::INT_NUMBER
++            && ast::IntNumber::cast(literal.token())
++                .is_some_and(|number| number.suffix().is_none()));
+     }
+     let ast::Expr::PrefixExpr(prefix) = root else {
+         return Ok(false);
+--- a/crates/lrr/src/ir/definition_numeric_wire_tests.rs
++++ b/crates/lrr/src/ir/definition_numeric_wire_tests.rs
+@@ -506,6 +506,17 @@
+ 
+ #[test]
+ fn original_negative_local_fallback_wire_requires_exact_source_read_phase_and_destination() {
++    original_local_fallback_wire("id_i8");
++}
++
++#[test]
++fn original_positive_local_fallback_wire_requires_exact_source_read_phase_and_destination() {
++    for callee in ["id_uint", "id_u8", "id_u16", "id_u32", "id_u64"] {
++        original_local_fallback_wire(callee);
++    }
++}
++
++fn original_local_fallback_wire(callee: &str) {
+     use crate::core::digest::StableEncode;
+     const ORIGINAL: &str = include_str!(
+         "../../../../fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs"
+@@ -527,7 +538,8 @@
+         .as_ref()
+         .unwrap();
+     let body = parsed.index_body(handle, Default::default()).unwrap();
+-    let start = u32::try_from(ORIGINAL.find("id_i8(j)").unwrap() + "id_i8(".len()).unwrap()
++    let invocation = format!("{callee}(j)");
++    let start = u32::try_from(ORIGINAL.find(&invocation).unwrap() + callee.len() + 1).unwrap()
+         - handle.range.start;
+     let node = body
+         .nodes()
+--- a/crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs
++++ b/crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs
+@@ -328,11 +328,11 @@
+ }
+ 
+ // Run an original function without rewriting its source or calling it a main /
+-// full-fixture pass. Its second assertion still needs deferred local context,
+-// and its later static and aggregate requirements remain outstanding.
+-#[test]
+-fn unchanged_overlapping_match_function_preserves_first_assertion_and_local_numeric_frontier_all_editions()
+- {
++// full-fixture pass. Its later static and aggregate requirements remain
++// outstanding; the original x+1 expression must execute before that frontier.
++#[test]
++fn unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions()
++{
+     const TEXT: &str = include_str!(
+         "../../../../fixtures/upstream/rustc-checkout/tests/ui/match/overeager-sub-match-pruning-13027.rs"
+     );
+@@ -353,20 +353,17 @@
+             .unwrap()
+             .unwrap();
+         let written = &TEXT[origin.range.start as usize..origin.range.end as usize];
+-        assert_eq!(error.code, "LRR-E-TYPE-CONTEXT");
+-        assert_eq!(
+-            error.message,
+-            "numeric literal requires reached concrete context"
+-        );
+-        let second = TEXT.find("assert_eq!(2, match x+1").unwrap();
+-        let end = second + TEXT[second..].find("});").unwrap() + 2;
+-        assert_eq!(written, &TEXT[second..end]);
++        assert_eq!(error.code, "LRR-E-CONST-PATH-SOURCE", "{error}");
++        assert!(error.message.ends_with("is not a constant"), "{error}");
++        let fourth = TEXT.find("assert_eq!(2, match CONST").unwrap();
++        let end = fourth + TEXT[fourth..].find("});").unwrap() + 2;
++        assert_eq!(written, &TEXT[fourth..end]);
+         let counters = machine.opcode_counters().unwrap();
+-        assert_eq!(counters.started_by_opcode[26], 1);
++        assert_eq!(counters.started_by_opcode[26], 3);
+         assert_eq!(counters.started_by_opcode[25], 0);
+-        assert_eq!(counters.started_by_opcode[19], 0);
+-        assert_eq!(machine.action_snapshot().published, 0);
+-        assert_eq!(machine.action_snapshot().consumed, 0);
++        assert_eq!(counters.started_by_opcode[19], 1);
++        assert_eq!(machine.action_snapshot().published, 1);
++        assert_eq!(machine.action_snapshot().consumed, 1);
+         assert_eq!(machine.action_snapshot().pending, None);
+     }
+ }
+@@ -426,3 +423,34 @@
+         }
+     }
+ }
++
++#[test]
++fn positive_local_fallback_keeps_reached_argument_and_rigid_source_contexts() {
++    // LRR-specific context precedence. The unchanged suffix-inference main
++    // separately covers every original positive/negative callee and shadow.
++    for edition in [2015, 2018, 2021, 2024] {
++        for text in [
++            "fn keep(x:u64)->u64{x}fn main(){let x=18446744073709551615;assert_eq!(18446744073709551615_u64,keep(x));}",
++            "fn main(){let x=0_u8;assert_eq!(2.0,match x+1{1=>2.0,_=>0.0});}",
++            "fn main(){let x=0;assert_eq!(2.0,match x+1{1=>2.0,_=>0.0});}",
++        ] {
++            let (_, machine, outcome) = run(text, edition);
++            let report = match outcome {
++                RunPoll::Completed(report) => report,
++                RunPoll::Fault(error) => panic!("positive local context fault: {error}"),
++                RunPoll::NeedInput(input) => {
++                    panic!("positive local context needs input: {input:?}")
++                }
++                RunPoll::Panicked(report) => panic!("positive local context panicked: {report:?}"),
++            };
++            assert!(matches!(report.value, ValueSummary::Unit));
++            assert_eq!(report.opcode_counters.started_by_opcode[26], 1);
++            assert_eq!(report.opcode_counters.started_by_opcode[25], 0);
++            assert_eq!(
++                report.opcode_counters.operations_started,
++                report.opcode_counters.operations_completed
++            );
++            assert_eq!(machine.action_snapshot().pending, None);
++        }
++    }
++}

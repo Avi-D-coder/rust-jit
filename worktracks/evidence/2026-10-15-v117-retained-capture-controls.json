@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T18:37:28.559028+00:00",
+  "platform": "aarch64-apple-darwin",
+  "scope": "pure-data reclassification of retained V108 interpreter captures through observer successor; no new execution",
+  "source_member": "310db366a91fb1de49a9662aae478dcfe92003cb6ae2b3c0878c073e14e03856",
+  "retained_case_counts": {
+    "total": 115,
+    "runtime_contract_pass": 46,
+    "interpreter_failure": 69
+  },
+  "refusal_controls": [
+    {
+      "scope": "capture-refusals-1",
+      "actual_terminal": "ae2c1a/0",
+      "controls": 380,
+      "stdout_sha256": "971094d3901fc865bc647e2be2139d969a22d845276723d9174a8ae678aafe24",
+      "receipt_sha256": "4fb54edcffb574487fe7ad95237430f7e021e979ab1969b44388eff82f310d78"
+    },
+    {
+      "scope": "capture-refusals-2",
+      "actual_terminal": "4a05c4/0",
+      "controls": 540,
+      "stdout_sha256": "05f1f5ebc2bfd52a3bbba129458ed902162174c18b261a88155035977838df37",
+      "receipt_sha256": "8fdefa7b409c3fa229a06c091cc1841c0f5e6f771186d515021fc6aabce208af"
+    }
+  ],
+  "retained_binary_provenance": [
+    {
+      "batch": "stock-cli-batch-1",
+      "report_sha256": "e163a35ef7fb78d2951f89b5c0c7405f9c5120f588c1f3fdedfa88b0aa735989",
+      "digester_transport_sha256": "1cae7bc82abacb4759eac854818a09008080be4ab8bfa614c37cd5d5d074ce99",
+      "counts": {
+        "interpreter_failure": 45,
+        "runtime_contract_pass": 19
+      },
+      "originals_binary_provenance": "retained V108 report; not current V117 execution"
+    },
+    {
+      "batch": "stock-cli-batch-2",
+      "report_sha256": "2abbeedcac1d76faf7d4b1c058ac4fad5a5c4fd60bb3aa2ae5eb23c442e7648e",
+      "digester_transport_sha256": "1cae7bc82abacb4759eac854818a09008080be4ab8bfa614c37cd5d5d074ce99",
+      "counts": {
+        "runtime_contract_pass": 27,
+        "interpreter_failure": 24
+      },
+      "originals_binary_provenance": "retained V108 report; not current V117 execution"
+    }
+  ],
+  "eligible_runfail_programs": 14,
+  "blocked_test_harness_configurations": 2,
+  "runfail_guest_executions": 0,
+  "new_guest_or_build_executions": 0,
+  "new_upstream_passes": 0,
+  "source_raw_extra_owner_guards": true,
+  "results_sha256": "af10ec7c738344a07bc17ed7f2c353e4a59c8f9b375c36aaae506dddf63d59a9",
+  "release_sha256": "bbed6259a704919572646dbd9f7e7419e44981e6f7c3d121eeac91e7f5864ae4",
+  "handoff_sha256": "c8b2de0c4e55b02d9fd88ceee88f4a2c697da5654eb0534867cb6b6e40beb43b",
+  "runtime_assertions_omitted": false,
+  "output_contracts": "All literal/regex output assertions remain explicit required unresolved obligations. Panic observation alone cannot count as a runtime or full-fixture pass.",
+  "full_milestone_passed": false,
+  "canonical_promotion": false,
+  "full_fixture_passes_added": 0,
+  "guest_jit_allowed": false
+}

@@ -1,0 +1,29 @@
+{
+  "status": "source_only_uncompiled_diagnostic_probe",
+  "at": "2026-10-15T18:29:42.970975+00:00",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T025",
+    "T050"
+  ],
+  "requires_candidate_patch_sha256": "06ceb56ff414840a4c9cb8b2c4716dfc664d099a0b5484a33837a0be1d396075",
+  "patch_sha256": "3f4e4ac7c7844bdfd865cd9dd914d7e39d18081d18b1c03aa82f17e8414c9e78",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "before_sha256": "a40185499fb6b2911aeb8af1053821c2485290d0d3e0087628cc7ab78036fa5d",
+      "after_sha256": "1d161bf8cbda91886b700594708d203a50279db9c0e1e92286351868abf491c4",
+      "bytes": 17480
+    }
+  ],
+  "actual_prior_terminal": "9a8ec1/1",
+  "reason": "Retain actual numeric-context diagnostic/original source position/completed assertion prefix before unchanged expected-frontier assertion",
+  "production_leaves_changed": 0,
+  "test_oracles_changed": false,
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "exact_replay_zero_fuzz_zero_offset": true
+  },
+  "test_bodies_executed": 0,
+  "canonical_promotion": false
+}

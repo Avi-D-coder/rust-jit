@@ -1,0 +1,72 @@
+--- a/crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs
++++ b/crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs
+@@ -328,10 +328,11 @@
+ }
+ 
+ // Run an original function without rewriting its source or calling it a main /
+-// full-fixture pass. Its fourth assertion still requires static storage support.
+-#[test]
+-fn unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions()
+-{
++// full-fixture pass. Its second assertion still needs deferred local context,
++// and its later static and aggregate requirements remain outstanding.
++#[test]
++fn unchanged_overlapping_match_function_preserves_first_assertion_and_local_numeric_frontier_all_editions()
++ {
+     const TEXT: &str = include_str!(
+         "../../../../fixtures/upstream/rustc-checkout/tests/ui/match/overeager-sub-match-pruning-13027.rs"
+     );
+@@ -346,38 +347,27 @@
+         let RunPoll::Fault(error) = outcome else {
+             panic!("unchanged static frontier was skipped");
+         };
+-        let stopped = machine.diagnostic_current_span().unwrap();
+-        let origin = machine
+-            .diagnostic_source_origin(&stopped, 4096)
+-            .unwrap()
+-            .unwrap();
+-        let written = &TEXT[origin.range.start as usize..origin.range.end as usize];
+-        let observed = machine.opcode_counters().unwrap();
+-        assert_eq!(
+-            error.code, "LRR-E-UNSUPPORTED",
+-            "actual error: {error}; original source: {written}; completed assertion/call prefix: {}/{}",
+-            observed.started_by_opcode[26], observed.started_by_opcode[19]
+-        );
+-        assert_eq!(
+-            error.message,
+-            "assertion constant path requires current source query preparation"
+-        );
+-        let counters = machine.opcode_counters().unwrap();
+-        assert_eq!(counters.started_by_opcode[26], 3);
+-        assert_eq!(counters.started_by_opcode[25], 0);
+-        assert_eq!(counters.started_by_opcode[19], 1);
+-        assert_eq!(machine.action_snapshot().published, 1);
+-        assert_eq!(machine.action_snapshot().consumed, 1);
+-        assert_eq!(machine.action_snapshot().pending, None);
+         let span = machine.diagnostic_current_span().unwrap();
+-        // The exact error remains attached to the original fourth assertion.
+         let origin = machine
+             .diagnostic_source_origin(&span, 4096)
+             .unwrap()
+             .unwrap();
+-        assert!(
+-            TEXT[origin.range.start as usize..origin.range.end as usize].contains("match CONST")
++        let written = &TEXT[origin.range.start as usize..origin.range.end as usize];
++        assert_eq!(error.code, "LRR-E-TYPE-CONTEXT");
++        assert_eq!(
++            error.message,
++            "numeric literal requires reached concrete context"
+         );
++        let second = TEXT.find("assert_eq!(2, match x+1").unwrap();
++        let end = second + TEXT[second..].find("});").unwrap() + 2;
++        assert_eq!(written, &TEXT[second..end]);
++        let counters = machine.opcode_counters().unwrap();
++        assert_eq!(counters.started_by_opcode[26], 1);
++        assert_eq!(counters.started_by_opcode[25], 0);
++        assert_eq!(counters.started_by_opcode[19], 0);
++        assert_eq!(machine.action_snapshot().published, 0);
++        assert_eq!(machine.action_snapshot().consumed, 0);
++        assert_eq!(machine.action_snapshot().pending, None);
+     }
+ }
+ 

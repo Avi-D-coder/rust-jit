@@ -9,6 +9,15 @@
  
  [[fixture]]
  id = "T051-MACRO-CHAR-MAIN"
+@@ -12270,7 +12270,7 @@
+ [[fixture]]
+ id = "T050-OPAQUE-GUARD-STOCK"
+ path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
+-test = "unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions"
++test = "unchanged_overlapping_match_function_preserves_first_assertion_and_local_numeric_frontier_all_editions"
+ 
+ [[fixture]]
+ id = "T050-OPAQUE-GUARD-ONCE"
 --- a/docs/tasks.json
 +++ b/docs/tasks.json
 @@ -1413,7 +1413,7 @@
@@ -20,11 +29,18 @@
          "source_arithmetic_panic_keeps_its_span_cleans_once_and_does_not_query_later_code",
          "standalone_cli_reports_source_arithmetic_guest_panic_with_cleanup_and_nonzero_status",
          "source_float_literals_contexts_casts_and_each_f32_operation_keep_actual_precision",
-@@ -1801,7 +1801,15 @@
+@@ -1797,11 +1797,20 @@
+       "opaque_match_guard_result_candidate": {
+         "status": "source_only_uncompiled_unexecuted",
+         "upstream_case": "tests/ui/match/overeager-sub-match-pruning-13027.rs",
+-        "scope": "original lit_shadow_range function prefix through three assertions, then required static frontier; separate LRR exact-once/cold controls; no main/full-fixture pass",
++        "scope": "original lit_shadow_range first-assertion partial witness then exact required local-numeric frontier; separate guard/source controls; zero full-main/upstream passes",
          "pending_controls": [
            "result_numeric_island_excludes_scrutinee_guard_and_rigid_arm_constraints"
-         ]
+-        ]
 -      }
++        ],
++        "required_runtime_gap": "complete unchanged main still requires deferred local context in match x+1, later statics and aggregate/pattern support; unsupported cannot make these inapplicable"
 +      },
 +      "acceptance_selector_history": [
 +        {
@@ -37,7 +53,7 @@
      },
      {
        "id": "T030",
-@@ -4135,7 +4143,7 @@
+@@ -4135,7 +4144,7 @@
          "rustc_unary_tuple_dispatch_uses_bound_descriptor_and_preserves_original_field",
          "rustc_array_dispatch_uses_bound_isize_and_original_written_order",
          "rustc_unit_tuple_dispatch_requires_no_invented_element_context",
@@ -46,7 +62,7 @@
          "rustc_empty_array_dispatch_requires_element_context_even_without_fields",
          "rustc_nested_tuple_dispatch_propagates_bound_child_context_before_each_guard",
          "rustc_structural_dispatch_rejects_stale_caller_metadata_before_effects",
-@@ -4381,6 +4389,14 @@
+@@ -4381,6 +4390,14 @@
            "fixture_id": "T040-NOMINAL-RESULT-SOURCE-CONTEXT",
            "status": "pending",
            "evidence_paths": []
@@ -61,7 +77,42 @@
          }
        ]
      },
-@@ -5704,7 +5720,7 @@
+@@ -5615,7 +5632,7 @@
+         "byte_range_unknown_or_wrong_family_upper_is_cold_until_lower_matches",
+         "unchanged_guarded_char_local_entire_main_takes_second_arm_all_editions",
+         "intrinsic_local_source_does_not_default_unresolved_numbers_or_follow_effects",
+-        "unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions",
++        "unchanged_overlapping_match_function_preserves_first_assertion_and_local_numeric_frontier_all_editions",
+         "opaque_guard_runs_once_only_after_pattern_and_discards_each_boolean_temporary"
+       ],
+       "acceptance_contract": "failed arms preserve scrutinee ownership; true arms move once; conflicting moves fault before commit; or-pattern names/modes and binding order validate; overlapping alternatives can rerun false guards without replaying scrutinee evaluation.",
+@@ -5683,12 +5700,21 @@
+       "opaque_match_guard_result_candidate": {
+         "status": "source_only_uncompiled_unexecuted",
+         "upstream_case": "tests/ui/match/overeager-sub-match-pruning-13027.rs",
+-        "scope": "original lit_shadow_range function prefix through three assertions, then required static frontier; separate LRR exact-once/cold controls; no main/full-fixture pass",
++        "scope": "original lit_shadow_range first-assertion partial witness then exact required local-numeric frontier; separate guard/source controls; zero full-main/upstream passes",
+         "pending_controls": [
+-          "unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions",
++          "unchanged_overlapping_match_function_preserves_first_assertion_and_local_numeric_frontier_all_editions",
+           "opaque_guard_runs_once_only_after_pattern_and_discards_each_boolean_temporary"
+-        ]
+-      }
++        ],
++        "required_runtime_gap": "complete unchanged main still requires deferred local context in match x+1, later statics and aggregate/pattern support; unsupported cannot make these inapplicable"
++      },
++      "acceptance_selector_history": [
++        {
++          "old_selector": "unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions",
++          "current_selector": "unchanged_overlapping_match_function_preserves_first_assertion_and_local_numeric_frontier_all_editions",
++          "reason": "V120 proves only the first assertion completes before deferred-local TYPE-CONTEXT; explicit partial witness, complete upstream runtime contract remains required and failed",
++          "scope": "name alignment only; old selector never counts as executed; new execution evidence remains separately source-bound"
++        }
++      ]
+     },
+     {
+       "id": "T051",
+@@ -5704,7 +5730,7 @@
          "unchanged_match_range_main_edition_2018",
          "unchanged_match_range_main_edition_2021",
          "unchanged_match_range_main_edition_2024",
@@ -70,7 +121,7 @@
          "unchanged_u8_character_cast_entire_main_completes_once_all_editions"
        ],
        "acceptance_contract": "untaken arms remain unprepared; no-match and let-else fallthrough diagnostics are precise; successful ? does not force conversion; failing ? calls From once and validates the enclosing return contract.",
-@@ -5736,7 +5752,15 @@
+@@ -5736,7 +5762,15 @@
          "full_milestone_passed": false,
          "canonical_promotion": false,
          "full_fixture_passes_added": 0

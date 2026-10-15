@@ -1,0 +1,7 @@
+# Preserve the actual incomplete upstream local-numeric contract
+
+V119's two new guard/island controls passed; its proposed three-assertion upstream component did not. V120's exact diagnostic probe shows one assertion completes, then the second original `match x+1` assertion faults with `numeric literal requires reached concrete context`, before any call. The source-derived guard/result-context implementation does not yet provide deferred-local inference for that scrutinee. This remains a required runtime gap, alongside the later static and aggregate/pattern behavior.
+
+This test-only follow-on replaces the unestablished three-assertion assumption with an explicitly named partial-runtime witness. It requires the exact TYPE-CONTEXT message, exact original second assertion bytes, one completed Assert, zero calls/panics and no published/consumed/pending actions, in all four editions. The original file is unchanged. The whole main and upstream runtime contract remain failed/incomplete; a passing host witness adds zero upstream passes and closes no language task. The earlier failed assumptions and diagnostic terminals are retained.
+
+Apply after the two diagnostic follow-ons, before the final shared-ledger alignment, which must record this selector/scope migration and the outstanding runtime requirement. Formatting and replay are checked; the all-edition partial witness and affected bank execution remain pending. Future implementation must advance this frontier rather than declaring the required feature inapplicable.

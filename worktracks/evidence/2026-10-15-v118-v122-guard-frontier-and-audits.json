@@ -1,0 +1,444 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T18:46:14.744127+00:00",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "versions_not_additive": [
+    {
+      "summary": {
+        "version": "V118",
+        "status": "strict_compile_failed",
+        "source_member": "d853d2e58ec0fc2d90fe0e70b64a9c6147aab07c1683c291552177c39979d4b3",
+        "default_files": 4366,
+        "extras": 435,
+        "raw_files": 509,
+        "cases": 324,
+        "assembly_terminal": "2bbbbc/0",
+        "strict_terminal": "fda0a3/1",
+        "cargo_exit": 101,
+        "test_bodies_executed": 0,
+        "errors": [
+          {
+            "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+            "line": 384,
+            "code": "E0277",
+            "detail": "RunPoll does not implement Debug for outcome:? panic formatting"
+          }
+        ],
+        "stderr_sha256": "d71710a4a76d8335252183c3c7088e9e11f58f5f86f77573178ac09e76186fdb",
+        "unexecuted": [
+          "librarytestcompilation",
+          "3newprioritybodies",
+          "boundedcontrolnumericregressions",
+          "finalledger",
+          "audits",
+          "hostCLIbuild",
+          "115+14runtimebatches",
+          "fullmilestone"
+        ],
+        "source_raw_extras_owner_unchanged": true,
+        "V109_type_setup_preserved": true,
+        "no_later_candidate_applied": true,
+        "target_inactive": true,
+        "free_bytes": 60349214720
+      },
+      "summary_sha256": "90f853fb24264b2b5542b2c796d54bf03f2333d7f0b228a2dd6545338ee4ff1e",
+      "handoff_sha256": "a30e506393c32f90d04e40df22ad29a12284d9c67bcd1ffa46eea1e404d1e42e",
+      "release_sha256": "c0e209bc596273ab02021ba69bfad100c8ad3a9fd2c1fe7c418f4104f57fe0fe",
+      "verified_receipts": [
+        {
+          "scope": "strict-library",
+          "exit_code": 101,
+          "receipt_sha256": "dcbc340c54a0f8292948d65c0a3de1deccae664f5fceb342c376497a6240e489",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "d71710a4a76d8335252183c3c7088e9e11f58f5f86f77573178ac09e76186fdb",
+          "executed_test_rows": 0
+        }
+      ]
+    },
+    {
+      "summary": {
+        "version": "V119",
+        "source_member": "d22a3d86271532c2c5f11b8e9fac87a1c4ec71264616e0c3fc2db80227dedc7c",
+        "default_files": 4366,
+        "extras": 435,
+        "raw_files": 509,
+        "pending_cases": 324,
+        "assembly_terminal": "13f2f5/0",
+        "strict_terminal": "031dff/0",
+        "compile_terminal": "9ca8f8/0",
+        "priority_terminal": "9a8ec1/1",
+        "named_passes": 2,
+        "named_failures": 1,
+        "ignored_interrupted": 0,
+        "test_results": [
+          {
+            "name": "frontend::runtime_macro_plan::control_recipe_tests::opaque_guard_runs_once_only_after_pattern_and_discards_each_boolean_temporary",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::runtime_macro_plan::control_recipe_tests::unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions",
+            "result": "FAILED"
+          },
+          {
+            "name": "syntax::runtime_macro_scalars::control_tests::result_numeric_island_excludes_scrutinee_guard_and_rigid_arm_constraints",
+            "result": "ok"
+          }
+        ],
+        "failure_path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+        "failure_line": 349,
+        "expected_error_code": "LRR-E-UNSUPPORTED",
+        "actual_error_code": "LRR-E-TYPE-CONTEXT",
+        "actual_message_or_PC_printed": false,
+        "failure_does_not_establish_prefix_counters_static_frontier_or_later_editions": true,
+        "stderr_sha256": "f73f9b2646de48a99fb31de9f609f87055c764b34d42c5956ef8da792c9ba9a4",
+        "unexecuted": [
+          "17existingguardcontrolnumericregressions",
+          "finalselectorledger",
+          "audits",
+          "hostCLIbuild",
+          "115+14runtimebatches",
+          "fullmilestone"
+        ],
+        "source_raw_extras_owner_unchanged": true,
+        "target_inactive": true,
+        "free_bytes": 59434954752
+      },
+      "summary_sha256": "f2095bd2237786cb1111d6bfc22010174b699934d30cfd75549adbf991c04c18",
+      "handoff_sha256": "55d99afb7bfc238be9ed0742b857e349de0d3efed3c80d2a75707b2e8482f989",
+      "release_sha256": "55cdf979e35f9c2d0a9eac6d9e755690d11c3d831f917a57e1db2f86034cb904",
+      "verified_receipts": [
+        {
+          "scope": "compile-library-tests",
+          "exit_code": 0,
+          "receipt_sha256": "1276b76e0b35f25ac6339e2d6aea8f76148676dc3607acb31509352a61f40075",
+          "stdout_sha256": "c46d2bf0315fc9e01ac09890d5b2d1740b4095b65312cee24d69cfd5185621d5",
+          "stderr_sha256": "a41f0b251b7f01579844167f17afeb5653d4e62a02dfe7aa013630d1b278b4af",
+          "executed_test_rows": 0
+        },
+        {
+          "scope": "guard-result-priority-three",
+          "exit_code": 101,
+          "receipt_sha256": "6f6aedec9057c0c2fefc82d0b1a19b90cd2b09fdabe02bddd7c63703e714de9b",
+          "stdout_sha256": "dfaf9f69c1987340830539f8b199b545b6d7e5d9110f3a57cadd645181d74fcd",
+          "stderr_sha256": "f73f9b2646de48a99fb31de9f609f87055c764b34d42c5956ef8da792c9ba9a4",
+          "executed_test_rows": 3
+        },
+        {
+          "scope": "strict-library",
+          "exit_code": 0,
+          "receipt_sha256": "a796a2637ce002b787cfef46ac73f3729297205958789798c03557a3621866be",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "3b1381a05113199c9e549df829e41f75bd5df23b0357aa64bf8970e16798203c",
+          "executed_test_rows": 0
+        }
+      ]
+    },
+    {
+      "summary": {
+        "version": "V120",
+        "source_member": "168cc65393ef015bc06f96132942596286b637c9cb14b82f20b7f9edca5defdc",
+        "default_files": 4366,
+        "extras": 435,
+        "raw_files": 509,
+        "pending_cases": 324,
+        "assembly_terminal": "f780b3/0",
+        "strict_not_repeated_diagnostic_only": true,
+        "compile_terminal": "3d66ae/0",
+        "priority_terminal": "b58675/1",
+        "named_passes": 0,
+        "named_failures": 1,
+        "ignored_interrupted": 0,
+        "test_results": [
+          {
+            "name": "frontend::runtime_macro_plan::control_recipe_tests::unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions",
+            "result": "FAILED"
+          }
+        ],
+        "failure_path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+        "failure_line": 356,
+        "expected_error_code": "LRR-E-UNSUPPORTED",
+        "actual_error_code": "LRR-E-TYPE-CONTEXT",
+        "actual_message": "numeric literal requires reached concrete context",
+        "original_source_excerpt": "assert_eq!(2, match x+1 {0=>0,1 if false=>1,1..=2=>2,_=>3});",
+        "actual_assertion_call_prefix": [
+          1,
+          0
+        ],
+        "actual_inner_numeric_PC_not_printed": true,
+        "expected_failing_diagnostic_only": true,
+        "failure_does_not_establish_prefix_counters_static_frontier_or_later_editions": true,
+        "stderr_sha256": "b7b3dc0d23b59b47707d3a1ae6cb4d9d5d5ac65d00dfb0f6ce0b96455e87dcaf",
+        "unexecuted": [
+          "17existingguardcontrolnumericregressions",
+          "finalselectorledger",
+          "audits",
+          "hostCLIbuild",
+          "115+14runtimebatches",
+          "fullmilestone"
+        ],
+        "source_raw_extras_owner_unchanged": true,
+        "target_inactive": true,
+        "free_bytes": 59423899648
+      },
+      "summary_sha256": "9445d10407c3fa62784c9232b43205841ade9cddaf47dd2ae21371d86d841d85",
+      "handoff_sha256": "a07c798873172b923202c68c280ec997bb7eb6e5e9287b152a0317879b99c31d",
+      "release_sha256": "e93e572cb0ac09a3251f161bbc82146d394687bf7b9c9512ee07959d16f16278",
+      "verified_receipts": [
+        {
+          "scope": "compile-library-tests",
+          "exit_code": 0,
+          "receipt_sha256": "ed1eb2f27e433bf91aacb37c5d07d1c8ca8a20450dbc796f96fb9b28cb56c583",
+          "stdout_sha256": "62e540d46b1efe6d0b9d871e825dd62d96cda972a98129bc21b6259bdc573e25",
+          "stderr_sha256": "77e5a26c2a7611165d06e4a719e3d16af771fbb4647e0dca0d22acd951830289",
+          "executed_test_rows": 0
+        },
+        {
+          "scope": "guard-result-diagnostic-only",
+          "exit_code": 101,
+          "receipt_sha256": "0da3bc595e2c1a78bae9e661d10fba28d6129e7b192d4292a90ffde6c2bb42bb",
+          "stdout_sha256": "3fa61a867493e57fea3e51d1cfdc20228368dfa5d6962e9b1f9fab0b4858a248",
+          "stderr_sha256": "b7b3dc0d23b59b47707d3a1ae6cb4d9d5d5ac65d00dfb0f6ce0b96455e87dcaf",
+          "executed_test_rows": 1
+        }
+      ]
+    },
+    {
+      "summary": {
+        "version": "V121",
+        "source_member": "53bc7901d12882c0a824a3b103e20722f27c0d5168e146cb6a3e82b3affad884",
+        "default_files": 4366,
+        "extras": 435,
+        "raw_files": 509,
+        "pending_cases": 324,
+        "actual_terminals": {
+          "compile-library-tests": "2ae762/0",
+          "partial-numeric-frontier-one": "71e663/0",
+          "guard-result-context-regressions": "944187/0"
+        },
+        "distinct_passed_bodies": 18,
+        "completed_executions": 18,
+        "duplicate_executions": 0,
+        "failed_ignored_interrupted": 0,
+        "test_counts": {
+          "partial-numeric-frontier-one": 1,
+          "guard-result-context-regressions": 17
+        },
+        "library_listed": 1212,
+        "scope_limits": "ExplicitPARTIALONLYoriginalfunctionwitness:all4editionsfirstassertioncompletes;exactoriginalsecondassertmatchx+1 refusesTYPE-CONTEXTnumericliteralrequiresreachedconcretecontext;Assert1/Call0/Panic0/actions0. Completeunchangedoriginal remainsfailed mandatoryruntimebacklog,deferredlocalnumericcontext/statics/aggregatepatterns unresolved. Retired3assertionproposal andV119/V120failures preserved;0newupstream/mainpasses.17existingguard/control/numericregressions passwithoutpriorityduplicates. Other2V119newpositivebodypasses carriedseparately/notrepeated. Strictnotrepeatedontest-onlypartialedit;V119productionstrictpass historical. Finalledger/audits/CLI/fullmilestone stillpending.",
+        "source_raw_extras_owner_license_unchanged": true,
+        "target_inactive": true,
+        "full_milestone_not_run": true,
+        "no_canonical_promotion": true,
+        "free_bytes": 59397468160
+      },
+      "summary_sha256": "7fe8bffc37d1e2c68d0431c8b1168a5ae8cd3877e359862f878c33e99d11c03b",
+      "handoff_sha256": "f78d74d9d52409a2ecdb85943538477031ede9d7b4700ba68f749fb2aeac9550",
+      "release_sha256": "babbd981db757a104d0266de422dde5b6ddd9d9252a413f690d65a02c5f2ad2e",
+      "verified_receipts": [
+        {
+          "scope": "compile-library-tests",
+          "exit_code": 0,
+          "receipt_sha256": "3d45d20d3fdd73c9929a10d6ecd0cc22f75824c6b8d932aaa136e632c9e2abfe",
+          "stdout_sha256": "cf8bcd529c36730c90479c00c5d2dafe17f11617a69c5b2948506bcdd3b422da",
+          "stderr_sha256": "84defb428db873721471696507db99c4de0677961c5b2dd7bdf35012a36989c4",
+          "executed_test_rows": 0
+        },
+        {
+          "scope": "guard-result-context-regressions",
+          "exit_code": 0,
+          "receipt_sha256": "0679f7202a1dfac53059d90b50d146c18d77abb58b27eca21cccb7ece728cd3d",
+          "stdout_sha256": "77cabd654da1d927b50fe4a3340dfc6096071f0f7c744d1d9c2ceb87e5e462ae",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "executed_test_rows": 17
+        },
+        {
+          "scope": "partial-numeric-frontier-one",
+          "exit_code": 0,
+          "receipt_sha256": "7e0e1a940c82da440a4d7591870545d1080833c9fd61a7608e458b0e0539f81d",
+          "stdout_sha256": "ade879b3d8a4b47599138fb367c456f2573e18853302b5be811e8fa869088154",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "executed_test_rows": 1
+        }
+      ]
+    },
+    {
+      "summary": {
+        "version": "V122",
+        "source_member": "f8f33fe025284209a31a39f4a6afdf419c435679c77f3d3d231014db058d033d",
+        "default_files": 4366,
+        "immutable_extras": 435,
+        "raw_files": 509,
+        "pending_cases": 324,
+        "original_manifest_sha256": "ef111f30109c6067b4b362de4df2feb26f0b7337a6ca136f60b573224705863c",
+        "owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c",
+        "assembly_terminal": "8312cf/0",
+        "actual_audit_terminals": {
+          "format": "124137/0",
+          "architecture": "2d4b59/0",
+          "fixture-reference": "9417b7/0",
+          "manifest-audit": "d1823a/0"
+        },
+        "reference_listing_terminal": "182c30/0",
+        "fixture_references_exactly_mapped": 2449,
+        "ledger_reference_rows": 2733,
+        "unresolved_prose_contract_rows": [
+          {
+            "task": "M003",
+            "reference": "MX003: real identity!(3_i64) and attribute echo token/span roundtrips",
+            "source_display_mapping": null,
+            "exact_matches": [],
+            "unambiguous": false
+          },
+          {
+            "task": "M003",
+            "reference": "MX004: server hash, artifact hash, compiler tuple, and protocol mismatches rejected before loading",
+            "source_display_mapping": null,
+            "exact_matches": [],
+            "unambiguous": false
+          }
+        ],
+        "assembled_retained_current_listing_count": 3348,
+        "fresh_workspace_inventory_not_claimed": true,
+        "new_host_test_bodies_executed": 0,
+        "new_guest_executions": 0,
+        "linked_scope_evidence": [
+          {
+            "version": "V109",
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v109/SCOPED-RESULTS.json",
+            "sha256": "6979ff6484660f30cae4d9e452f02e360b22a3f62d501312c267048dc2467463"
+          },
+          {
+            "version": "V111",
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v111/SCOPED-RESULTS.json",
+            "sha256": "ae7d32aaad5fd4409f0597d8717ace3c8680adf9b5919c2171a09f878a2bd261"
+          },
+          {
+            "version": "V112",
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v112/FAILURE.json",
+            "sha256": "c015541486732adf0827cb1746c3b1864267ca527b2f7cf62e83d0ade7c22c1d"
+          },
+          {
+            "version": "V113",
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v113/SCOPED-RESULTS.json",
+            "sha256": "65740d5c6bde54bbb1b4c66471f8ef106dc4006c1735528b1f82a34fb620ca34"
+          },
+          {
+            "version": "V114",
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v114/FAILURE.json",
+            "sha256": "bbb9a35b69f4136b58d16509424b42990c5248abbd3c778a9b9f2340e78dff49"
+          },
+          {
+            "version": "V115",
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v115/FAILURE.json",
+            "sha256": "ba278cb17957491ebecc233c1a5e6175e5f2c49d44984851e0d52ef58bceb290"
+          },
+          {
+            "version": "V116",
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v116/SCOPED-RESULTS.json",
+            "sha256": "bbfde16b86f46ff11cb71a2aa9aec0d797976b778a4668d9b3dc86997aa5f2d8"
+          },
+          {
+            "version": "V117",
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v117/SCOPED-RESULTS.json",
+            "sha256": "af10ec7c738344a07bc17ed7f2c353e4a59c8f9b375c36aaae506dddf63d59a9"
+          },
+          {
+            "version": "V118",
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v118/FAILURE.json",
+            "sha256": "90f853fb24264b2b5542b2c796d54bf03f2333d7f0b228a2dd6545338ee4ff1e"
+          },
+          {
+            "version": "V119",
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v119/FAILURE.json",
+            "sha256": "f2095bd2237786cb1111d6bfc22010174b699934d30cfd75549adbf991c04c18"
+          },
+          {
+            "version": "V120",
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v120/FAILURE.json",
+            "sha256": "9445d10407c3fa62784c9232b43205841ade9cddaf47dd2ae21371d86d841d85"
+          },
+          {
+            "version": "V121",
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v121/SCOPED-RESULTS.json",
+            "sha256": "7fe8bffc37d1e2c68d0431c8b1168a5ae8cd3877e359862f878c33e99d11c03b"
+          }
+        ],
+        "linked_scopes_have_cross_generation_duplicates_not_added_as_distinct": true,
+        "all_Rust_unchanged_from_scopedV121": true,
+        "all_source_raw_extra_license_owner_guards": true,
+        "target_inactive": true,
+        "retained_binaries": [
+          {
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/lrr",
+            "sha256": "c6bf19d1acb7ff38332f2bbc42128de7a5a3b16af2ca6000f5b1aa7092a9aad8",
+            "bytes": 63922784,
+            "provenance": "retainedV108hostbinary;notrebuiltforfinalsourceyet"
+          },
+          {
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/examples/lrr_source_digests",
+            "sha256": "1db91214bc5555684a35136d7f5569963a9cda1f71916ffdbef554445a4ad49c",
+            "bytes": 16573344,
+            "provenance": "retainedV108hostbinary;notrebuiltforfinalsourceyet"
+          }
+        ],
+        "unexecuted": [
+          "onefinalhostCLI+digesterrebuild",
+          "115finalsourceplainrunpasscharacterization",
+          "14plainrunfailobservationswithoutputobligations",
+          "freshfullmilestone"
+        ],
+        "required_upstream_gap": "overeager-sub-match-pruning-13027 wholeoriginal remainsfailedmandatory;partialfirstassertionwitnessdoesnotcloseT025/T050",
+        "no_canonical_promotion": true,
+        "free_bytes": 59372490752
+      },
+      "summary_sha256": "9e5e9d03554a459a65728c2225a58afda7c44b437569ea1852d1a386bd581ce3",
+      "handoff_sha256": "08a57c818b0dc9dcf18f1ec0e9613b565e5c5acae4d3928b410f294b9d8169c0",
+      "release_sha256": "6aa475c1ba8e0e8db4c6b5b73ddec3f65bed444fa96ad3eadaad576c08c807a4",
+      "verified_receipts": [
+        {
+          "scope": "architecture",
+          "exit_code": 0,
+          "receipt_sha256": "5fc7131955aaddba3c32889a926a6e6ef61fb1fa66378cb6be9e83268e6859bb",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "0886e63a7336564b0d2fc41f9e3ca1225b84fdfac0228d65fbd5ebfeb59be524",
+          "executed_test_rows": 0
+        },
+        {
+          "scope": "fixture-reference",
+          "exit_code": 0,
+          "receipt_sha256": "e15ad1ddaacddd219289ac073d354809716504fa6e368a8268d749f4a22c8702",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "bdeee2f9fc4916071c3027fdf4e949106bb50d48e92bd2cd28fb66b2e5a0be95",
+          "executed_test_rows": 0
+        },
+        {
+          "scope": "format",
+          "exit_code": 0,
+          "receipt_sha256": "93d653a8d36c93cba93ff7419f03e72c37e17c06fc89232f65488fdd4a85718d",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "executed_test_rows": 0
+        },
+        {
+          "scope": "manifest-audit",
+          "exit_code": 0,
+          "receipt_sha256": "1608d56ae370dcfe9fa21cdf091aaa74b9db41f89f2c1ae75cf15f5a8c52e4fe",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "ead2d17ad345b66651fa4cb70668e370c26eceff47c19ebd7070ee1e2c020fe1",
+          "executed_test_rows": 0
+        }
+      ]
+    }
+  ],
+  "combined_source_patch_sha256": "83d11bbb29c21ab26e6b16051262ee9aeabfb3795730aabdbf98b75109bbf79e",
+  "combined_source_leaves_verified": 129,
+  "final_source_member": "f8f33fe025284209a31a39f4a6afdf419c435679c77f3d3d231014db058d033d",
+  "new_whole_upstream_passes_from_these_scopes": 0,
+  "full_fixture_passes_added": 0,
+  "full_milestone_passed": false,
+  "canonical_promotion": false,
+  "final_stock_characterization_and_milestone": "running separately in V123; no unsealed outcome claimed here",
+  "required_runtime_gap": "complete overlapping-match original remains failed; one-assertion component witness is not acceptance",
+  "separate_positive_local_source_successor": "uncompiled/unexecuted; does not alter V122/V123 source"
+}

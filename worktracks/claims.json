@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Interpreter-first WT02. Canonical cumulative promotion held by failed V108 milestone3337=3126pass+4fail+207unstarted. V109 actual Type setup passes32existing bodies. V111 macro-constant source/query/publication passes200distinct scoped bodies. V113 cast successor passes9 after exact borrowed-string frontier correction; V112failure and its U8 wholemain pass retained separately. V114 unchanged local-char main completed firstedition but failed blanket objectempty oracle; V115 test-inspector privacy error retained, V116 scoped revalidation nowlive with cfg(test)-only owner inspector in owningmodule. Root heldguard/result packet b45e0333 separates scrutinee/default result context;11source/repair/ledger packets replay30uniqueleaves with11newbodies. Observer/finalledger/fullmilestone stillpending; stockCLI46/69 remains V108only. No canonical/task/JIT/Linux/fullfixture completion.",
+      "scope": "Interpreter-first T024/T025/T050/T054. V11639 scoped passes includes unchanged issue26251 whole main all4 editions with exact registered static roots; V118 compile error and V119/V120 failed three-assert assumption retained. V12118 host controls preserve explicit first-assertion partial witness; whole overlapping-match main remains failed. V122 final audits green and129 cumulative-v2 source leaves independently matched. V123 rebuilt CLI reports48/67 across115 unchanged run-pass programs,13 output-incomplete run-fail panic observations+1fault,2test-harness cases blocked; fresh full milestone preparing/running separately. Canonical cumulative promotion remains held. Root positive-local fallback successor uses existing private admission,3 source/test leaves formatted/exact-replayed but uncompiled/unexecuted. No task/JIT/Linux/fullfixture completion.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -605,11 +605,18 @@
         "worktracks/candidates/root-static-owner-helper-scope-v1/",
         "worktracks/candidates/root-held-selector-ledger-v1/",
         "crates/lrr/src/runtime/cell_test_owners.rs",
-        "crates/lrr/src/runtime/cell_byte_literals.rs"
+        "crates/lrr/src/runtime/cell_byte_literals.rs",
+        "worktracks/candidates/root-interpreter-cumulative-v2/",
+        "worktracks/candidates/root-match-guard-test-diagnostic-v1/",
+        "worktracks/candidates/root-match-guard-witness-diagnostic-v1/",
+        "worktracks/candidates/root-match-local-numeric-frontier-v1/",
+        "worktracks/candidates/root-positive-local-fallback-v1/",
+        "artifacts/macos-first/root-positive-local-fallback-v1/",
+        "crates/lrr/src/ir/definition_numeric_wire_tests.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T18:21:56.118370+00:00",
+      "updated_at": "2026-10-15T18:46:37.062084+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

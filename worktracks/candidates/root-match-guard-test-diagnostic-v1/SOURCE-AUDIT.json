@@ -1,0 +1,29 @@
+{
+  "status": "source_only_uncompiled",
+  "at": "2026-10-15T18:27:29.743627+00:00",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T025",
+    "T050"
+  ],
+  "requires_candidate_patch_sha256": "b45e0333a5c86e383e91afaa7c872d37823bf6dfa369c119217e23eb0e64c538",
+  "patch_sha256": "06ceb56ff414840a4c9cb8b2c4716dfc664d099a0b5484a33837a0be1d396075",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+      "before_sha256": "5d215cfd89cc003a4cc5888d9bcb74dc58aa957c0bf7917afc8ca5ab2e219ccd",
+      "after_sha256": "a40185499fb6b2911aeb8af1053821c2485290d0d3e0087628cc7ab78036fa5d",
+      "bytes": 16939
+    }
+  ],
+  "actual_prior_terminal": "fda0a3/1",
+  "reason": "E0277: RunPoll intentionally does not implement Debug; format concrete typed failure variants",
+  "production_leaves_changed": 0,
+  "test_oracles_changed": false,
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "exact_replay_zero_fuzz_zero_offset": true
+  },
+  "test_bodies_executed": 0,
+  "canonical_promotion": false
+}
