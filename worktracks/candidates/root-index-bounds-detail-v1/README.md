@@ -1,0 +1,9 @@
+# Evaluated array bounds in guest panic payloads
+
+T041 invariant: out-of-bounds indexing preserves the declared length and the full evaluated usize before narrowing to a place ordinal. Its guest panic retains the original PC/span and consumes the operation once. A malformed physical array is a typed runtime fault rather than a fabricated guest bounds panic.
+
+The pinned core `panic_bounds_check` formats `index out of bounds: the len is {len} but the index is {index}`. The official `str-overrun.rs` run-fail contract requires that detail. This four-leaf follow-on carries length/index through `PlacePanic`, admits a fixed maximum formatting capacity before opcode fuel/state entry, and publishes the message through the existing guest panic and cleanup path. It changes no LRIR schema or operation identity. Array place resolution uses descriptor length for bounds and rejects an absent in-range physical field as `LRR-E-PLACE-FIELD`.
+
+Three existing upstream-derived controls are extended: the unchanged empty-array original supplies the component bounds; the unchanged `unconditional_panic_98444.rs` supplies the actual reached array/index expression and original PC/span; the existing supplementary LRR control injects u64::MAX to verify no ordinal truncation. The latter two check exact descriptions, fuel/state and retained storage behavior. No original source is edited or new fixture pass inferred. These compile-time-diagnostic fixtures remain outstanding under diagnostic compatibility. The full `str-overrun.rs` runtime fixture remains unsupported until owned String and slice indexing dependencies work.
+
+Apply after the V90 string/numeric lineage, including atomicity-v2. Exact preimage hashes, Rust1.99 formatting and no-fuzz/no-offset replay passed. This packet is uncompiled and unexecuted; bounds/panic scopes and a fresh milestone remain required. No canonical promotion, task completion, runtime/full-fixture count increase or JIT readiness is claimed.

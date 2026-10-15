@@ -1,0 +1,39 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T040",
+    "T061"
+  ],
+  "supersedes": [
+    "root-byte-type-batch-atomicity-v1"
+  ],
+  "satisfies_prerequisite": [
+    "root-byte-type-batch-atomicity-v1"
+  ],
+  "prerequisites": [
+    "root-string-byte-view-v1",
+    "root-string-api-repair-v1"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/runtime/shape_byte_literals.rs",
+      "before_sha256": "080f11d69e62322d253970cb269eedbf4b88c959db868c7b733a8d16b79856ac",
+      "after_sha256": "0564263886ad0a739fd973e1a193d03bbb14db38ac895d0c4911801987ddf1df"
+    }
+  ],
+  "patch_sha256": "d79d61ccc92ecf1fbd78d8468f34f5c21f59a0f5d2e0867653c6eb19d3e5a34c",
+  "patch_bytes": 8421,
+  "created_at": "2026-10-15T13:57:16.295986+00:00",
+  "static_checks": [
+    "Rust1.99 formatting",
+    "exact predecessor hash and no-fuzz/no-offset patch replay"
+  ],
+  "new_test_bodies": 2,
+  "stock_runtime_passes_added": 0,
+  "acceptance_pending": [
+    "strict compilation and Clippy",
+    "all3 closed byte/string descriptor target families and refusal/reuse controls",
+    "affected runtime banks and fresh milestone"
+  ]
+}

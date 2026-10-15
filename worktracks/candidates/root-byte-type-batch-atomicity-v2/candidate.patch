@@ -1,0 +1,213 @@
+--- a/crates/lrr/src/runtime/shape_byte_literals.rs
++++ b/crates/lrr/src/runtime/shape_byte_literals.rs
+@@ -95,15 +95,7 @@
+         &mut self,
+         plan: &ByteLiteralTypes,
+     ) -> Result<(), Diagnostic> {
+-        if self.descriptors.len() != plan.count {
+-            return Err(super::super::value::invalid());
+-        }
+-        for (key, expected) in &plan.keys {
+-            if self.intern(key.clone())? != *expected {
+-                return Err(super::super::value::invalid());
+-            }
+-        }
+-        Ok(())
++        self.commit_fixed_byte_types(plan.count, &plan.keys)
+     }
+ }
+ 
+@@ -192,22 +184,78 @@
+         &mut self,
+         plan: &ByteHintTypes,
+     ) -> Result<TypeId, Diagnostic> {
++        self.commit_fixed_byte_types(plan.count, &plan.keys)?;
++        Ok(plan.reference)
++    }
++    /// The literal and annotation paths publish the same closed byte keys.
++    /// Validate and reserve the entire batch before the first index insertion;
++    /// a later metadata/allocator refusal must not leave an earlier key visible.
++    fn commit_fixed_byte_types(
++        &mut self,
++        count: usize,
++        keys: &[(TypeKey, TypeId)],
++    ) -> Result<(), Diagnostic> {
+         let resource = super::super::arena::resource;
+-        if self.descriptors.len() != plan.count {
++        if self.descriptors.len() != count {
+             return Err(super::super::value::invalid());
++        }
++        if keys.len() > 3 {
++            return Err(super::super::value::invalid());
++        }
++        for (ordinal, (key, expected)) in keys.iter().enumerate() {
++            let index = count.checked_add(ordinal).ok_or_else(resource)?;
++            let predicted = TypeId(
++                u32::try_from(index)
++                    .ok()
++                    .and_then(|n| n.checked_add(17))
++                    .ok_or_else(resource)?,
++            );
++            if *expected != predicted
++                || self.find(key).is_some()
++                || keys[..ordinal].iter().any(|(prior, _)| prior == key)
++            {
++                return Err(super::super::value::invalid());
++            }
++            let byte_target = |target: TypeId| {
++                // The primitive Str descriptor is only a shape. Physical UTF-8
++                // membership is independently checked before a string lease.
++                target == TypeId(16)
++                    || self.descriptor(target).is_ok_and(|descriptor| {
++                        matches!(descriptor.key.as_ref(),
++                        TypeKey::Array { element, .. } | TypeKey::Slice { element }
++                        if *element == TypeId(9))
++                    })
++                    || keys[..ordinal].iter().any(|(prior, id)| {
++                        *id == target
++                            && matches!(prior,
++                        TypeKey::Array { element, .. } | TypeKey::Slice { element }
++                        if *element == TypeId(9))
++                    })
++            };
++            if !match key {
++                TypeKey::Array { element, .. } | TypeKey::Slice { element } => {
++                    *element == TypeId(9)
++                }
++                TypeKey::Ref {
++                    mutable: false,
++                    target,
++                } => byte_target(*target),
++                _ => false,
++            } {
++                return Err(super::super::value::invalid());
++            }
+         }
+         // Both fallible vector reservation and the actual allocator capacity
+         // accounting precede the first logical key publication. Each intern
+         // below then has spare capacity and prepaid metadata for the full batch.
+-        let key_bytes = plan
+-            .keys
++        let key_bytes = keys
+             .len()
+             .checked_mul(Self::byte_hint_key_bytes()?)
+             .ok_or_else(resource)?;
+         let end = self
+             .descriptors
+             .len()
+-            .checked_add(plan.keys.len())
++            .checked_add(keys.len())
+             .filter(|n| *n <= MAX_TYPES)
+             .ok_or_else(resource)?;
+         if self
+@@ -224,7 +272,7 @@
+             return Err(metadata_limit());
+         }
+         self.descriptors
+-            .try_reserve_exact(plan.keys.len())
++            .try_reserve_exact(keys.len())
+             .map_err(|_| resource())?;
+         if self
+             .metadata_bytes()
+@@ -233,18 +281,99 @@
+         {
+             return Err(metadata_limit());
+         }
+-        for (key, expected) in &plan.keys {
++        for (key, expected) in keys {
+             if self.intern(key.clone())? != *expected {
+                 return Err(super::super::value::invalid());
+             }
+         }
+-        Ok(plan.reference)
++        Ok(())
+     }
+ }
+ 
+ #[cfg(test)]
+ mod hint_batch_tests {
+     use super::*;
++    #[test]
++    fn byte_literal_batch_refusals_leave_no_partial_descriptor_prefix() {
++        // Resource fault injection after a pure preview: the configured worker
++        // budget fits one real array descriptor, but not the full slice batch.
++        let mut one = TypeRegistry::default();
++        one.intern(TypeKey::Array {
++            element: TypeId(9),
++            len: 5,
++        })
++        .unwrap();
++        let limit = one.metadata_bytes();
++        let mut registry = TypeRegistry::default();
++        let plan = registry
++            .preview_byte_literal_types(5, ByteLiteralTarget::Slice)
++            .unwrap();
++        registry.max_metadata_bytes = limit;
++        assert_eq!(
++            registry.commit_byte_literal_types(&plan).unwrap_err().code,
++            "LRR-E-METADATA-LIMIT"
++        );
++        assert!(registry.descriptors.is_empty());
++        assert!(registry.by_key.is_empty());
++        assert_eq!(registry.owned_bytes, 0);
++
++        // Validate a late malformed key before the otherwise valid array/slice
++        // prefix can be interned. This mutates only a private test plan.
++        let mut registry = TypeRegistry::default();
++        let mut plan = registry
++            .preview_byte_literal_types(5, ByteLiteralTarget::Slice)
++            .unwrap();
++        plan.keys.last_mut().unwrap().0 = TypeKey::Ref {
++            mutable: false,
++            target: TypeId(u32::MAX),
++        };
++        assert!(registry.commit_byte_literal_types(&plan).is_err());
++        assert!(registry.descriptors.is_empty());
++        assert!(registry.by_key.is_empty());
++        assert_eq!(registry.owned_bytes, 0);
++    }
++    #[test]
++    fn byte_literal_batches_reuse_complete_and_partially_present_keys() {
++        for view in [
++            ByteLiteralTarget::Array,
++            ByteLiteralTarget::Slice,
++            ByteLiteralTarget::Str,
++        ] {
++            for existing in 0..3 {
++                let mut registry = TypeRegistry::default();
++                let array = TypeKey::Array {
++                    element: TypeId(9),
++                    len: 5,
++                };
++                if existing >= 1 {
++                    registry.intern(array.clone()).unwrap();
++                }
++                if existing >= 2 {
++                    registry
++                        .intern(TypeKey::Slice { element: TypeId(9) })
++                        .unwrap();
++                }
++                let plan = registry.preview_byte_literal_types(5, view).unwrap();
++                registry.commit_byte_literal_types(&plan).unwrap();
++                assert_eq!(registry.find(&array), Some(plan.array));
++                assert_eq!(
++                    registry.find(&TypeKey::Ref {
++                        mutable: false,
++                        target: plan.target
++                    }),
++                    Some(plan.reference)
++                );
++                let before = (registry.descriptors.len(), registry.metadata_bytes());
++                let repeat = registry.preview_byte_literal_types(5, view).unwrap();
++                assert!(repeat.keys.is_empty());
++                registry.commit_byte_literal_types(&repeat).unwrap();
++                assert_eq!(
++                    (registry.descriptors.len(), registry.metadata_bytes()),
++                    before
++                );
++            }
++        }
++    }
+     #[test]
+     fn static_byte_hint_metadata_and_count_refusals_publish_no_descriptor() {
+         // A genuine one-key table determines a deterministic budget that fits

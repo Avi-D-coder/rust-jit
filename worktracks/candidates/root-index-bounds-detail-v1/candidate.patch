@@ -1,0 +1,216 @@
+--- a/crates/lrr/src/engine/run_places.rs
++++ b/crates/lrr/src/engine/run_places.rs
+@@ -713,6 +713,10 @@
+         panic!("original out-of-bounds index must panic")
+     };
+     assert_eq!(panic.kind, crate::vm::numeric::PanicKind::IndexOutOfBounds);
++    assert_eq!(
++        panic.description(),
++        "index out of bounds: the len is 5 but the index is 7"
++    );
+     assert_eq!(panic.pc, recipe.recipe().key);
+     assert_eq!(panic.origin.span, recipe.recipe().origin.span);
+     assert_eq!(
+@@ -801,13 +805,16 @@
+             &mut run.store,
+         )
+         .unwrap();
+-    assert!(matches!(
+-        step::step(&mut run.frame, &mut run.store, recipe).unwrap(),
+-        StepOutcome::GuestPanic(crate::vm::step::GuestPanic {
+-            kind: crate::vm::numeric::PanicKind::IndexOutOfBounds,
+-            ..
+-        })
+-    ));
++    let StepOutcome::GuestPanic(panic) =
++        step::step(&mut run.frame, &mut run.store, recipe).unwrap()
++    else {
++        panic!("huge evaluated usize must produce a bounds panic")
++    };
++    assert_eq!(panic.kind, crate::vm::numeric::PanicKind::IndexOutOfBounds);
++    assert_eq!(
++        panic.description(),
++        "index out of bounds: the len is 5 but the index is 18446744073709551615"
++    );
+     assert_eq!(run.frame.counters.started_by_opcode[36], 1);
+     assert_eq!(run.frame.projection_bytes_for_test(), 0);
+     db.finish_run().unwrap();
+--- a/crates/lrr/src/runtime/cell.rs
++++ b/crates/lrr/src/runtime/cell.rs
+@@ -969,19 +969,26 @@
+             let field = match (projection, key) {
+                 (Projection::Field(field), TypeKey::Nominal { .. }) => *field,
+                 (Projection::Tuple(field), TypeKey::Tuple(_)) => *field,
+-                (Projection::Index(index), TypeKey::Array { .. }) => *index,
++                (Projection::Index(index), TypeKey::Array { len, .. }) => {
++                    if *index >= *len {
++                        return Err(PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds {
++                            length: *len,
++                            index: u64::from(*index),
++                        }));
++                    }
++                    *index
++                }
+                 _ => return Err(invalid().into()),
+             };
+             let (object, storage) = self.place_object(target)?;
++            // Bounds use the declared array length above. A missing physical
++            // field inside that length is a representation fault, not a guest
++            // out-of-bounds access with a fabricated shorter array length.
+             let child = *storage.fields.get(field as usize).ok_or_else(|| {
+-                if matches!(projection, Projection::Index(_)) {
+-                    PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds)
+-                } else {
+-                    PlaceFailure::RuntimeFault(Diagnostic::new(
+-                        "LRR-E-PLACE-FIELD",
+-                        "place field is absent".into(),
+-                    ))
+-                }
++                PlaceFailure::RuntimeFault(Diagnostic::new(
++                    "LRR-E-PLACE-FIELD",
++                    "place field is absent".into(),
++                ))
+             })?;
+             if self.cells.get(child)?.owner
+                 != (CellOwner::Field {
+--- a/crates/lrr/src/runtime/place.rs
++++ b/crates/lrr/src/runtime/place.rs
+@@ -9,7 +9,30 @@
+ 
+ #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+ pub enum PlacePanic {
+-    IndexOutOfBounds,
++    IndexOutOfBounds { length: u32, index: u64 },
++}
++impl PlacePanic {
++    pub(crate) fn message(self) -> Result<String, Diagnostic> {
++        use std::fmt::Write;
++        // Fixed formatting of a u32 length and full evaluated u64 index. Admit
++        // every byte before formatting; no guest-dependent allocation length.
++        const CAPACITY: usize =
++            "index out of bounds: the len is ".len() + 10 + " but the index is ".len() + 20;
++        let mut message = String::new();
++        message
++            .try_reserve_exact(CAPACITY)
++            .map_err(|_| resource())?;
++        match self {
++            Self::IndexOutOfBounds { length, index } => {
++                write!(
++                    &mut message,
++                    "index out of bounds: the len is {length} but the index is {index}"
++                )
++                .map_err(|_| resource())?;
++            }
++        }
++        Ok(message)
++    }
+ }
+ #[derive(Debug)]
+ pub enum PlaceFailure {
+@@ -92,7 +115,10 @@
+ pub fn checked_array_index(value: ValueRepr, length: u32) -> Result<Projection, PlaceFailure> {
+     let index = checked_index(value)?;
+     if index >= u64::from(length) {
+-        return Err(PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds));
++        return Err(PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds {
++            length,
++            index,
++        }));
+     }
+     Ok(Projection::Index(
+         u32::try_from(index).map_err(|_| resource())?,
+@@ -161,10 +187,25 @@
+             ValueRepr::unsigned(TypeId(13), index).unwrap(),
+             ValueRepr::unsigned(TypeId(13), u64::MAX).unwrap(),
+         ] {
+-            assert!(matches!(
+-                checked_array_index(value, length),
+-                Err(PlaceFailure::GuestPanic(PlacePanic::IndexOutOfBounds))
+-            ));
++            let Err(PlaceFailure::GuestPanic(
++                panic @ PlacePanic::IndexOutOfBounds {
++                    length: actual_length,
++                    index: actual_index,
++                },
++            )) = checked_array_index(value, length)
++            else {
++                panic!("original empty array must produce an evaluated bounds panic")
++            };
++            assert_eq!(actual_length, length);
++            assert_eq!(actual_index, value.payload);
++            let message = panic.message().unwrap();
++            assert_eq!(
++                message,
++                format!(
++                    "index out of bounds: the len is {length} but the index is {}",
++                    value.payload
++                )
++            );
+         }
+         for value in [
+             ValueRepr::unsigned(TypeId(12), index).unwrap(),
+--- a/crates/lrr/src/vm/step.rs
++++ b/crates/lrr/src/vm/step.rs
+@@ -549,23 +549,25 @@
+     }
+     Ok(true)
+ }
+-fn place_panic_outcome(
+-    frame: &mut Frame,
++fn prepare_place_panic(
+     recipe: &crate::ir::recipe::Recipe,
+     panic: crate::runtime::place::PlacePanic,
+-) -> StepOutcome {
++) -> Result<GuestPanic, Diagnostic> {
+     let kind = match panic {
+-        crate::runtime::place::PlacePanic::IndexOutOfBounds => {
++        crate::runtime::place::PlacePanic::IndexOutOfBounds { .. } => {
+             super::numeric::PanicKind::IndexOutOfBounds
+         }
+     };
+-    frame.status = FrameStatus::Panicked;
+-    StepOutcome::GuestPanic(GuestPanic {
++    Ok(GuestPanic {
+         kind,
+-        message: None,
++        message: Some(panic.message()?),
+         pc: recipe.key.clone(),
+         origin: recipe.origin.clone(),
+     })
++}
++fn place_panic_outcome(frame: &mut Frame, panic: GuestPanic) -> StepOutcome {
++    frame.status = FrameStatus::Panicked;
++    StepOutcome::GuestPanic(panic)
+ }
+ fn string_byte_len(
+     frame: &Frame,
+@@ -1572,11 +1574,15 @@
+                 Err(crate::runtime::place::PlaceFailure::GuestPanic(panic)) => (None, Some(panic)),
+             };
+             let place_panic = projection_panic.or(place_preflight(frame, store, op)?);
++            // Prepare bounded host metadata before opcode fuel or state entry.
++            let prepared_place_panic = place_panic
++                .map(|panic| prepare_place_panic(recipe, panic))
++                .transpose()?;
+             frame.charge_fuel()?;
+             increment(&mut frame.counters.operations_started)?;
+             increment(&mut frame.counters.started_by_opcode[tag])?;
+-            if let Some(panic) = place_panic {
+-                return Ok(place_panic_outcome(frame, recipe, panic));
++            if let Some(panic) = prepared_place_panic {
++                return Ok(place_panic_outcome(frame, panic));
+             }
+             let panic = match op {
+                 Op::Panic { message } => Some((super::numeric::PanicKind::Explicit, message)),
+@@ -1654,7 +1660,10 @@
+                             return Err(error);
+                         }
+                         Err(crate::runtime::place::PlaceFailure::GuestPanic(panic)) => {
+-                            return Ok(place_panic_outcome(frame, recipe, panic));
++                            return Ok(place_panic_outcome(
++                                frame,
++                                prepare_place_panic(recipe, panic)?,
++                            ));
+                         }
+                     },
+                     Err(super::numeric::NumericFailure::RuntimeFault(error)) => return Err(error),

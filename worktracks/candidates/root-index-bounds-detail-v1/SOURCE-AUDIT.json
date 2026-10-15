@@ -1,0 +1,68 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T041"
+  ],
+  "prerequisites": [
+    "root-negative-local-inference-v1"
+  ],
+  "created_at": "2026-10-15T14:04:29.729582+00:00",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_places.rs",
+      "before_sha256": "2fa7051d246001e1c7e51cc171ae6cb0ef916b9b2b944eac6e2f7f0647da2ed6",
+      "after_sha256": "1fd0e6c057e9e296a32e8fd021c52ea3bb31379f627eacb77c4e3af27dde7b73"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell.rs",
+      "before_sha256": "f8117d361836ffef16a3217173b6d4c28ef82fe38374e721ef5530927ba0a7a5",
+      "after_sha256": "61b0ac21348b28bde99787ce79127dc37e16c5549d896b9f30b3e350fc05d28a"
+    },
+    {
+      "path": "crates/lrr/src/runtime/place.rs",
+      "before_sha256": "1fc533c3f5d758d83be83d78aafd898f95f8cf72ec29fa637e8454f25bc34ae8",
+      "after_sha256": "b02daeb97516f80c38fb5de24cf073454750d419910e691d79437a197b609e66"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "before_sha256": "570df94d7bf3c7a7e16d25a5c331d9573a518cfff1ac6038378419241db7fa2f",
+      "after_sha256": "2c15c1b920d5fa4a883ec308ac7442fee616c4f97fa628c2bdfc40fbbdd771c2"
+    }
+  ],
+  "patch_sha256": "7c6dabc3ac0d0d1513c8653b1a8223bb5157769a255777c77c24db117b55b6f0",
+  "patch_bytes": 8866,
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "upstream_witnesses": [
+    {
+      "path": "tests/ui/lint/unconditional_panic_98444.rs",
+      "sha256": "5660939aa18232fae3b4d8f95f0237f1175a162d4dcdb50b2df7e804c13e3779"
+    },
+    {
+      "path": "tests/ui/array-slice-vec/array_const_index-1.rs",
+      "sha256": "c09c39f4a9252426b03750e5d7d28b5b0c1e63b8ef91889ba4451b82adff1ffc"
+    },
+    {
+      "path": "tests/ui/str/str-overrun.rs",
+      "sha256": "6108e526c2442e1fd002fae9cc55e46634495e53344c48b8a10d0a8fa5957992"
+    },
+    {
+      "path": "library/core/src/panicking.rs",
+      "sha256": "7d40c515992a1f93cdefec728a2b1fcfdedb8c363588c7dbebcb0e35fc959185"
+    }
+  ],
+  "static_checks": [
+    "exact V90 predecessor hashes",
+    "exact no-fuzz/no-offset patch replay",
+    "Rust 1.99 formatting"
+  ],
+  "new_test_bodies": 0,
+  "existing_upstream_derived_controls_extended": 3,
+  "stock_runtime_passes_added": 0,
+  "acceptance_pending": [
+    "strict library compilation and Clippy",
+    "existing place/index/panic banks",
+    "frozen-source full milestone"
+  ],
+  "no_full_fixture_claim": "Static-diagnostic originals supply runtime expressions only; str-overrun still requires owned String and slice indexing."
+}

@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Interpreter-first WT02 source implementation and selected stock runtime evidence. V87 full gate failed2866/1/421 on stale scalar-or range expectation; V88 strict affected Clippy and7/7 scope passed; fresh full gate and canonical byte promotion remain pending. New bounded existing-binary probes executed3 unchanged numeric originals once in owning2015: i8-incr andu8-incr-decr runtime-contract passes; integer-literal-suffix-inference failed atid_i8(j), not passed. Root prepared14-leaf source-only negative-local inference repair: deferred literal, context/bound-local/default precedence, opaque exact source/read/phase admission, schema17/tag10, whole unchanged18-call main all4 and wire controls pending. String/API/batch/negative candidates remain uncompiled/unexecuted; no new full-fixture/task/JIT acceptance. Build validation stopped below capacity guard; rejected historical-cache retirement awaits direct human approval; no retry/deletion.",
+      "scope": "Interpreter-first WT02 source implementation. V87 full gate failed2866/1/421 on obsolete range expectation; V88 repaired scope7/7 passed. V90 exact coherent eight-packet string/numeric assembly and strict production-library Clippy plus library test compilation passed, zero test bodies executed; asynchronous affected runtime validation now assigned. Atomicity-v2 replaces the V89-rejected pre-string v1 before source writes. Capacity recovered externally (~79GB); no rejected cache deletion retried. Actual retained CLI numeric evidence remains2 runtime-contract passes and1 suffix-inference failure; newly compiled repair not yet executed. Separate four-leaf T041 precise bounds-panic packet extends3 existing upstream-derived controls, source-only/uncompiled. Fresh full milestone, canonical promotion and all task/runtime/JIT acceptance remain pending.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -546,11 +546,16 @@
         "worktracks/candidates/root-byte-type-batch-atomicity-v1/",
         "artifacts/macos-first/root-negative-local-inference-v1/",
         "worktracks/candidates/root-negative-local-inference-v1/",
-        "worktracks/evidence/2026-10-15-retained-numeric-runtime.json"
+        "worktracks/evidence/2026-10-15-retained-numeric-runtime.json",
+        "worktracks/candidates/root-byte-type-batch-atomicity-v2/",
+        "artifacts/macos-first/root-byte-type-batch-atomicity-v2/",
+        "worktracks/candidates/root-index-bounds-detail-v1/",
+        "artifacts/macos-first/root-index-bounds-detail-v1/",
+        "worktracks/evidence/2026-10-15-v90-string-numeric-compile.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T13:51:46.418028+00:00",
+      "updated_at": "2026-10-15T14:04:29.729582+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

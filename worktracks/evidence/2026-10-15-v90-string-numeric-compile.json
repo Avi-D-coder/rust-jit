@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T14:04:29.729582+00:00",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "source_member": "34314336a8a3d3b4b0347cdc7f040752584ecb91044968a4df9258be1be89f6f",
+  "assembly_terminal": "4b3aaf/0",
+  "import_terminal": "a0e14b/0",
+  "strict_library_terminal": "3eaa30/0",
+  "test_compilation_terminal": "8f9ebd/0",
+  "test_bodies_executed": 0,
+  "checks": [
+    "cargo +1.99.0 clippy -p lrr --lib --locked --offline -- -D warnings",
+    "cargo +1.99.0 test -p lrr --lib --no-run --locked --offline"
+  ],
+  "guarded_source_files": 4354,
+  "guarded_extra_files": 435,
+  "raw_original_files": 507,
+  "imported_pending_cases": 322,
+  "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c",
+  "source_and_originals_unchanged": true,
+  "test_binary_sha256": "7aab96af0d6617fc2ad3da318e7f6194f5a2e4f7bafffd1e1fa506d9a2bca63e",
+  "handoff_sha256": "529dc8a7dea7935ea7cd3dcdcd6ee159f93456d9df639604b82da7fb3c919567",
+  "evidence_manifest_sha256": "fa1d63bb23bea84f74fbb91445a81d65070b4b11002c25467c0b2762d5ac2aee",
+  "collected_compile_scopes_sha256": "446f9ff5ccaff2eae0fc2b4f26c49b7794be6f6d0fcdf9c06fb23d23f1bf1ebf",
+  "independently_verified_all_retained_evidence_hashes": true,
+  "closing_free_bytes": 79044890624,
+  "cache_retirement_performed": false,
+  "scope": "Compile-only checks of the combined eight-packet string/numeric source; no test execution, milestone acceptance, canonical integration or new stock pass. V89 preimage guard failed before writes/Cargo; coherent atomicity-v2 replaces v1. Capacity recovered externally; rejected cache retirement was not retried."
+}
