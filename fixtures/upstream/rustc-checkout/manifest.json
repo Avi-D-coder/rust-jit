@@ -1326,6 +1326,12 @@
       "bytes": 958
     },
     {
+      "path": "tests/ui/lexer/underscores-in-unicode-escapes.rs",
+      "git_blob": "a89d38e05c8678c55236f42e36d477dd49c77219",
+      "sha256": "327799cc480a05d9bd4ae754063f084c26ad64148af3cfe23e9f0d7a77561dbd",
+      "bytes": 218
+    },
+    {
       "path": "tests/ui/lifetimes/issue-19707.rs",
       "git_blob": "6bc7132af3c4339aeedc63b5f1639dbaae442509",
       "sha256": "bb69e8d7b2786b376ca39c47fe79cc46ba6051142c6aa8584a4a81107da74835",
@@ -4128,6 +4134,14 @@
       "directives": [
         "//@ run-pass",
         "//@ reference: input.crlf"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lexer/underscores-in-unicode-escapes.rs",
+      "directives": [
+        "//@ run-pass"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"

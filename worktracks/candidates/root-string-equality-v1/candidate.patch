@@ -1,0 +1,228 @@
+--- a/crates/lrr/src/engine/run_byte_comparisons.rs
++++ b/crates/lrr/src/engine/run_byte_comparisons.rs
+@@ -1,9 +1,9 @@
+-//! Reached source/member admission for byte equality in resolved runtime macros.
++//! Reached source/member admission for immutable literal equality in runtime macros.
+ use super::*;
+ use crate::{
+     core::digest::Digest,
+     db::dependency::{InputKey, InputValue},
+-    facade::byte_equality::{ByteEqualityMember, is_byte_reference},
++    facade::byte_equality::{ByteEqualityMember, ByteShape, is_byte_reference},
+     ir::op::NumericBinary,
+     syntax::{
+         body_index::{ExpressionKind, NodeRole},
+@@ -70,8 +70,13 @@
+         self.member
+             .require(frame.body.profile(), left_source, right_source)?;
+         let (l, r) = self.member.shapes();
+-        store.require_static_byte_value(frame.cell(*left)?, l.length())?;
+-        store.require_static_byte_value(frame.cell(*right)?, r.length())
++        for (slot, shape) in [(*left, l), (*right, r)] {
++            match shape {
++                ByteShape::Utf8 => store.require_static_string_value(frame.cell(slot)?)?,
++                _ => store.require_static_byte_value(frame.cell(slot)?, shape.length())?,
++            }
++        }
++        Ok(())
+     }
+ }
+ impl RunMachine {
+--- a/crates/lrr/src/engine/run_string_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_string_macro_literal_tests.rs
+@@ -152,3 +152,28 @@
+     assert_eq!(effects(&run), before);
+     db.finish_run().unwrap();
+ }
++
++#[test]
++fn unchanged_unicode_underscore_main_completes_string_and_char_assertions_all_editions() {
++    const ORIGINAL: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/underscores-in-unicode-escapes.rs"
++    );
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, mut run, macros, _) = tests::start_source(ORIGINAL, edition, 1000);
++        let contexts = macros.contexts().unwrap();
++        let report = match run.poll_with_runtime_macros(&mut db, &contexts) {
++            RunPoll::Completed(report) => report,
++            RunPoll::Fault(error) => panic!("edition {edition}: {error}"),
++            RunPoll::NeedInput(input) => panic!("edition {edition}: {input:?}"),
++            RunPoll::Panicked(report) => panic!("edition {edition}: {report:?}"),
++        };
++        assert!(matches!(report.value, ValueSummary::Unit));
++        assert_eq!(report.opcode_counters.started_by_opcode[26], 2);
++        assert_eq!(report.opcode_counters.started_by_opcode[10], 2);
++        assert_eq!(
++            report.opcode_counters.operations_started,
++            report.opcode_counters.operations_completed
++        );
++        db.finish_run().unwrap();
++    }
++}
+--- a/crates/lrr/src/facade/byte_equality.rs
++++ b/crates/lrr/src/facade/byte_equality.rs
+@@ -1,4 +1,4 @@
+-//! Closed core PartialEq declarations for shared U8 array/slice operands.
++//! Closed core PartialEq declarations for shared U8 arrays/slices and UTF-8 str.
+ //! Source terms select members; runtime descriptors only check that selection.
+ use crate::{
+     core::{
+@@ -17,12 +17,13 @@
+ pub(crate) enum ByteShape {
+     Array(u32),
+     Slice,
++    Utf8,
+ }
+ impl ByteShape {
+     pub(crate) fn length(self) -> Option<u32> {
+         match self {
+             Self::Array(n) => Some(n),
+-            Self::Slice => None,
++            Self::Slice | Self::Utf8 => None,
+         }
+     }
+ }
+@@ -31,6 +32,7 @@
+         return None;
+     };
+     match pointee.as_ref() {
++        TyTerm::Str => Some(ByteShape::Utf8),
+         TyTerm::Array(element, ConstTerm::Value(n))
+             if **element == TyTerm::Primitive(PrimitiveType::U8) =>
+         {
+@@ -86,11 +88,12 @@
+ impl ByteEqualityFacet {
+     pub(crate) fn for_profile(profile: &ProfileIdentity) -> Result<Self, Diagnostic> {
+         profile.validate_source()?;
+-        let mut e = StableEncoder::new("lrr/v1/core-byte-partial-eq-facet");
++        let mut e = StableEncoder::new("lrr/v2/core-immutable-literal-partial-eq-facet");
+         e.record(profile);
+         e.digest(super::unit(profile, "core"));
+         // Shared-reference forwarding, primitive U8 equality and the four
+-        // pinned array/slice implementation families, including equal-N arrays.
++        // pinned array/slice implementation families, including equal-N arrays,
++        // plus core/src/str/traits.rs PartialEq for str over UTF-8 bytes.
+         for contract in [
+             "PartialEq::eq",
+             "&A:&B forwarding",
+@@ -99,6 +102,7 @@
+             "[u8;N]:[u8]",
+             "[u8]:[u8;N]",
+             "[u8]:[u8]",
++            "str:str via core::str::traits PartialEq byte equality",
+         ] {
+             e.string(contract);
+         }
+@@ -129,14 +133,20 @@
+         if profile != self.profile.as_ref() {
+             return Err(fault("byte PartialEq compiler profile differs"));
+         }
+-        let l = shape(left)
+-            .ok_or_else(|| fault("byte PartialEq left source is not a closed shared U8 view"))?;
+-        let r = shape(right)
+-            .ok_or_else(|| fault("byte PartialEq right source is not a closed shared U8 view"))?;
++        let l = shape(left).ok_or_else(|| {
++            fault("literal PartialEq left source requires shared str or U8 array/slice")
++        })?;
++        let r = shape(right).ok_or_else(|| {
++            fault("literal PartialEq right source requires shared str or U8 array/slice")
++        })?;
++        // Shared physical bytes never create a cross-family PartialEq impl.
++        if (l == ByteShape::Utf8) != (r == ByteShape::Utf8) {
++            return Err(fault("str PartialEq requires two str source operands"));
++        }
+         if matches!((l, r), (ByteShape::Array(a), ByteShape::Array(b)) if a != b) {
+             return Err(fault("array PartialEq requires equal source const lengths"));
+         }
+-        let mut e = StableEncoder::new("lrr/v1/core-byte-partial-eq-instance");
++        let mut e = StableEncoder::new("lrr/v2/core-immutable-literal-partial-eq-instance");
+         e.digest(self.identity);
+         e.record(left);
+         e.record(right);
+@@ -168,6 +178,7 @@
+             Box::new(match shape {
+                 ByteShape::Array(n) => TyTerm::Array(element, ConstTerm::Value(n.into())),
+                 ByteShape::Slice => TyTerm::Slice(element),
++                ByteShape::Utf8 => TyTerm::Str,
+             }),
+         )
+     }
+@@ -184,8 +195,18 @@
+                 .unwrap()
+                 .unwrap();
+             let macro_only = RuntimeMacroCatalog::standard(&profile).unwrap();
+-            for l in [ByteShape::Array(0), ByteShape::Array(600), ByteShape::Slice] {
+-                for r in [ByteShape::Array(0), ByteShape::Array(600), ByteShape::Slice] {
++            for l in [
++                ByteShape::Array(0),
++                ByteShape::Array(600),
++                ByteShape::Slice,
++                ByteShape::Utf8,
++            ] {
++                for r in [
++                    ByteShape::Array(0),
++                    ByteShape::Array(600),
++                    ByteShape::Slice,
++                    ByteShape::Utf8,
++                ] {
+                     let left = reference(l);
+                     let right = reference(r);
+                     assert!(
+@@ -194,7 +215,9 @@
+                             .is_err()
+                     );
+                     let result = actual.byte_equality_member(&profile, &left, &right);
+-                    if matches!((l,r), (ByteShape::Array(a),ByteShape::Array(b)) if a!=b) {
++                    if matches!((l,r), (ByteShape::Array(a),ByteShape::Array(b)) if a!=b)
++                        || (l == ByteShape::Utf8) != (r == ByteShape::Utf8)
++                    {
+                         assert!(result.is_err());
+                     } else {
+                         let selected = result.unwrap();
+--- a/crates/lrr/src/runtime/cell_byte_comparison.rs
++++ b/crates/lrr/src/runtime/cell_byte_comparison.rs
+@@ -1,4 +1,4 @@
+-//! Bounded read-only equality of genuine immutable byte-literal roots.
++//! Bounded read-only equality of genuine immutable byte/UTF-8 literal roots.
+ //!
+ //! This is a physical operation, not trait resolution. Its caller must retain
+ //! the source PartialEq/member admission and bind the cursor to the reached
+@@ -87,6 +87,9 @@
+             } if *element == TypeId(9) && *view_len == len && reference.static_slice.is_none() => {}
+             TypeKey::Slice { element }
+                 if *element == TypeId(9) && reference.static_slice == Some(allocation) => {}
++            _ if reference.target == TypeId(16) && reference.static_slice == Some(allocation) => {
++                self.require_static_string_value(operand)?;
++            }
+             _ => return Err(ownership()),
+         }
+         let (object, storage) = self.place_object(reference.root.cell)?;
+--- a/crates/lrr/src/runtime/cell_byte_literals.rs
++++ b/crates/lrr/src/runtime/cell_byte_literals.rs
+@@ -432,6 +432,26 @@
+         }
+         Ok(())
+     }
++    /// A physical UTF-8 view must have the private committed string lease.
++    /// A descriptor or byte-array backing alone cannot establish that fact.
++    pub(crate) fn require_static_string_value(&self, cell: CellId) -> Result<(), Diagnostic> {
++        let value = self.admit_move(cell)?;
++        if value.kind != 9
++            || !matches!(
++                self.types.descriptor(TypeId(value.type_id))?.key.as_ref(),
++                TypeKey::Ref { mutable: false, target } if *target == TypeId(16)
++            )
++        {
++            return Err(ownership());
++        }
++        let reference = self.references.get(self.reference_from_cell(cell)?)?;
++        if reference.target != TypeId(16) || reference.static_slice.is_none() {
++            return Err(lease_fault());
++        }
++        // This checks immutable root membership and its retained UTF-8 lease,
++        // not a scan or a reinterpretation of arbitrary byte storage.
++        self.validate_reference_record(reference)
++    }
+     pub(crate) fn require_static_byte_value(
+         &self,
+         cell: CellId,

@@ -1,0 +1,347 @@
+--- a/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
+@@ -38,7 +38,7 @@
+     assert!(matches!(d.poll().unwrap(), SourceDiscoveryStep::Sealed(_)));
+     d
+ }
+-fn start_source(
++pub(super) fn start_source(
+     source: &str,
+     edition: u16,
+     fuel: u64,
+@@ -114,10 +114,20 @@
+     run: &mut RunMachine,
+     contexts: &[crate::engine::runtime_macros::RuntimeMacroContext<'_>],
+ ) -> (crate::engine::install::RecipeId, LiteralRecipe, SlotId) {
++    reach_literal_kind(db, run, contexts, LiteralKind::ByteString, false)
++}
++pub(super) fn reach_literal_kind(
++    db: &mut Database,
++    run: &mut RunMachine,
++    contexts: &[crate::engine::runtime_macros::RuntimeMacroContext<'_>],
++    kind: LiteralKind,
++    macro_only: bool,
++) -> (crate::engine::install::RecipeId, LiteralRecipe, SlotId) {
+     for _ in 0..64 {
+         let key = run.frame.pc().clone();
+-        let node = &run.frame.body.nodes()[key.node as usize];
+-        let prepared = if node.role == NodeRole::Expression(ExpressionKind::Macro) {
++        let macro_node = run.frame.body.nodes()[key.node as usize].role
++            == NodeRole::Expression(ExpressionKind::Macro);
++        let prepared = if macro_node {
+             contexts.iter().find_map(|context| {
+                 context
+                     .resolve_at(
+@@ -152,7 +162,8 @@
+                 destination,
+                 ..
+             } = op
+-                && literal.kind == LiteralKind::ByteString
++                && literal.kind == kind
++                && (!macro_only || macro_node)
+             {
+                 return (id, literal.clone(), *destination);
+             }
+@@ -236,7 +247,7 @@
+         recipe: run.installed.get(id).unwrap().recipe().fingerprint(),
+         span: literal.source.clone(),
+         destination,
+-        payload: payload.clone(),
++        payload: MacroLiteralPayload::Bytes(payload.clone()),
+     };
+     proof
+         .require(&run.frame.body, run.frame.pc(), &literal, destination)
+--- a/crates/lrr/src/engine/run_byte_macro_literals.rs
++++ b/crates/lrr/src/engine/run_byte_macro_literals.rs
+@@ -1,4 +1,4 @@
+-//! Current compiler-intrinsic source admission for a byte literal in opaque
++//! Current compiler-intrinsic source admission for an immutable literal in opaque
+ //! macro operands. A verified recipe alone cannot grant that source authority.
+ use super::*;
+ use crate::{
+@@ -10,8 +10,42 @@
+         byte_string_literals::ByteStringLiteral,
+         parse::ParseKey,
+         spans::BodySpan,
++        string_literals::StringLiteral,
+     },
+ };
++
++/// Bytes may share physical storage, but their decoder/source types are distinct.
++#[derive(Clone)]
++enum MacroLiteralPayload {
++    Bytes(ByteStringLiteral),
++    Utf8(StringLiteral),
++}
++impl MacroLiteralPayload {
++    fn from_literal(literal: &LiteralRecipe) -> Result<Self, Diagnostic> {
++        match (literal.kind, &literal.decoded) {
++            (LiteralKind::ByteString, Some(DecodedLiteral::ByteString(payload))) => {
++                Ok(Self::Bytes(payload.clone()))
++            }
++            (LiteralKind::String, Some(DecodedLiteral::String(payload))) => {
++                Ok(Self::Utf8(payload.clone()))
++            }
++            _ => Err(call_fault("macro immutable literal decoder kind differs")),
++        }
++    }
++    fn allocated_bytes(&self) -> Option<usize> {
++        match self {
++            Self::Bytes(payload) => payload.allocated_bytes(),
++            Self::Utf8(payload) => payload.allocated_bytes(),
++        }
++    }
++    fn same_decoded_payload(&self, other: &Self) -> bool {
++        match (self, other) {
++            (Self::Bytes(left), Self::Bytes(right)) => left.same_decoded_payload(right),
++            (Self::Utf8(left), Self::Utf8(right)) => left.same_decoded_payload(right),
++            _ => false,
++        }
++    }
++}
+ 
+ /// Constructed only after current source/name resolution reproduces the actual
+ /// installed operation. It is run-owned, never a cached query or guest value.
+@@ -22,7 +56,7 @@
+     recipe: Digest,
+     span: BodySpan,
+     destination: SlotId,
+-    payload: ByteStringLiteral,
++    payload: MacroLiteralPayload,
+ }
+ impl AdmittedMacroByteLiteral {
+     pub(crate) fn allocated_bytes(&self) -> Option<usize> {
+@@ -50,9 +84,7 @@
+             .nodes()
+             .get(pc.node as usize)
+             .ok_or_else(|| call_fault("macro byte literal source node missing"))?;
+-        let Some(DecodedLiteral::ByteString(payload)) = &literal.decoded else {
+-            return Err(call_fault("macro byte literal decoder certificate missing"));
+-        };
++        let payload = MacroLiteralPayload::from_literal(literal)?;
+         if &self.pc != pc
+             || &pc.body != body.body()
+             || self.source.profile != *body.profile()
+@@ -65,8 +97,7 @@
+             || self.span.relative_end > node.range.end
+             || self.span.relative_start >= self.span.relative_end
+             || self.destination != destination
+-            || literal.kind != LiteralKind::ByteString
+-            || !self.payload.same_decoded_payload(payload)
++            || !self.payload.same_decoded_payload(&payload)
+         {
+             return Err(call_fault(
+                 "macro byte literal source/phase/destination differs",
+@@ -103,7 +134,9 @@
+                     literal,
+                     destination,
+                     ..
+-                } if literal.kind == LiteralKind::ByteString => Some((literal, *destination)),
++                } if matches!(literal.kind, LiteralKind::ByteString | LiteralKind::String) => {
++                    Some((literal, *destination))
++                }
+                 _ => None,
+             });
+         let Some((literal, destination)) = literals.next() else {
+@@ -147,9 +180,7 @@
+                     "macro byte literal current source recipe differs",
+                 ));
+             }
+-            let Some(DecodedLiteral::ByteString(payload)) = &literal.decoded else {
+-                return Err(call_fault("macro byte literal payload absent"));
+-            };
++            let payload = MacroLiteralPayload::from_literal(literal)?;
+             let admission = AdmittedMacroByteLiteral {
+                 pc: key.clone(),
+                 source: source.selection().outline.parse.clone(),
+@@ -157,7 +188,7 @@
+                 recipe: fingerprint,
+                 span: literal.source.clone(),
+                 destination,
+-                payload: payload.clone(),
++                payload,
+             };
+             admission.require(&self.frame.body, key, literal, destination)?;
+             return self.frame.admit_macro_byte_literal(Some(admission));
+@@ -171,3 +202,7 @@
+ #[cfg(test)]
+ #[path = "run_byte_macro_literal_tests.rs"]
+ mod tests;
++
++#[cfg(test)]
++#[path = "run_string_macro_literal_tests.rs"]
++mod string_tests;
+--- /dev/null
++++ b/crates/lrr/src/engine/run_string_macro_literal_tests.rs
+@@ -0,0 +1,154 @@
++//! Actual unchanged upstream assertion operand and LRR source-authority controls.
++//! These stop before string comparison and are not whole-fixture passes.
++use super::*;
++use crate::{
++    ir::op::PrimitiveType,
++    runtime::shape::TypeKey,
++    traits::term::{RegionTerm, TyTerm},
++};
++const ORIGINAL: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/parser/unicode-escape-sequences.rs"
++);
++fn reached(
++    db: &mut Database,
++    run: &mut RunMachine,
++    contexts: &[crate::engine::runtime_macros::RuntimeMacroContext<'_>],
++) -> (crate::engine::install::RecipeId, LiteralRecipe, SlotId) {
++    tests::reach_literal_kind(db, run, contexts, LiteralKind::String, true)
++}
++fn effects(run: &RunMachine) -> (u64, u32, usize, usize, u64) {
++    (
++        run.frame.counters().operations_started,
++        run.store.budget().handles(),
++        run.store.budget().bytes(),
++        run.store.type_metadata_bytes(),
++        run.frame.fuel_snapshot().used,
++    )
++}
++#[test]
++fn unchanged_unicode_macro_string_operand_requires_current_source_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, mut run, macros, _) = tests::start_source(ORIGINAL, edition, 1000);
++        let contexts = macros.contexts().unwrap();
++        let (id, literal, destination) = reached(&mut db, &mut run, &contexts);
++        let Some(DecodedLiteral::String(payload)) = &literal.decoded else {
++            panic!("unchanged original UTF8 operand");
++        };
++        assert_eq!(payload.text(), "☃");
++        let before = effects(&run);
++        assert!(
++            step::step(
++                &mut run.frame,
++                &mut run.store,
++                run.installed.get(id).unwrap()
++            )
++            .is_err()
++        );
++        assert_eq!(effects(&run), before);
++        assert!(run.prepare_macro_byte_literal(&mut db, &[], id).is_err());
++        assert_eq!(effects(&run), before);
++        run.prepare_macro_byte_literal(&mut db, &contexts, id)
++            .unwrap();
++        assert_eq!(effects(&run), before);
++        run.frame
++            .require_macro_byte_literal(&literal, destination)
++            .unwrap();
++        assert!(matches!(
++            step::step(
++                &mut run.frame,
++                &mut run.store,
++                run.installed.get(id).unwrap()
++            )
++            .unwrap(),
++            StepOutcome::Next(_)
++        ));
++        assert_eq!(
++            run.frame.source_view(destination).unwrap(),
++            Some(TyTerm::Ref(
++                RegionTerm::Static,
++                false,
++                Box::new(TyTerm::Str)
++            ))
++        );
++        let reference_type = run
++            .store
++            .find_type(&TypeKey::Ref {
++                mutable: false,
++                target: crate::runtime::shape::TypeId(16),
++            })
++            .unwrap();
++        let cell = run.frame.cell(destination).unwrap();
++        let reference = run.store.reference_from_cell(cell).unwrap();
++        let ticket = run.store.reference_ticket(reference).unwrap();
++        assert_eq!(
++            run.store.peek_ticket(ticket).unwrap().type_id,
++            reference_type.0
++        );
++        run.store.discard(ticket).unwrap();
++        assert_eq!(run.frame.counters().operations_started, before.0 + 1);
++        db.finish_run().unwrap();
++    }
++}
++#[test]
++fn macro_string_certificate_cannot_change_kind_span_slot_or_source_context() {
++    let (mut db, mut run, macros, _) = tests::start_source(ORIGINAL, 2024, 1000);
++    let contexts = macros.contexts().unwrap();
++    let (id, literal, destination) = reached(&mut db, &mut run, &contexts);
++    run.prepare_macro_byte_literal(&mut db, &contexts, id)
++        .unwrap();
++    let before = effects(&run);
++    let mut wrong = literal.clone();
++    wrong.kind = LiteralKind::ByteString;
++    assert!(
++        run.frame
++            .require_macro_byte_literal(&wrong, destination)
++            .is_err()
++    );
++    wrong = literal.clone();
++    wrong.source.relative_end += 1;
++    assert!(
++        run.frame
++            .require_macro_byte_literal(&wrong, destination)
++            .is_err()
++    );
++    assert!(
++        run.frame
++            .require_macro_byte_literal(&literal, SlotId(u32::MAX))
++            .is_err()
++    );
++    // Current macro authority cannot overwrite a conflicting reached source type.
++    run.frame
++        .set_source_view(destination, Some(TyTerm::Primitive(PrimitiveType::U8)))
++        .unwrap();
++    assert!(
++        step::step(
++            &mut run.frame,
++            &mut run.store,
++            run.installed.get(id).unwrap()
++        )
++        .is_err()
++    );
++    assert_eq!(effects(&run), before);
++    db.finish_run().unwrap();
++}
++#[test]
++fn unchanged_macro_string_operand_refuses_republished_source_before_effects() {
++    let (mut db, mut run, macros, inputs) = tests::start_source(ORIGINAL, 2024, 1000);
++    let contexts = macros.contexts().unwrap();
++    let (id, _, _) = reached(&mut db, &mut run, &contexts);
++    run.prepare_macro_byte_literal(&mut db, &contexts, id)
++        .unwrap();
++    let before = effects(&run);
++    db.finish_run().unwrap();
++    inputs.publish(&mut db).unwrap();
++    db.begin_run().unwrap();
++    assert!(matches!(
++        run.poll_with_runtime_macros(&mut db, &contexts),
++        RunPoll::Fault(Diagnostic {
++            code: "LRR-E-INTERNAL-SNAPSHOT",
++            ..
++        })
++    ));
++    assert_eq!(effects(&run), before);
++    db.finish_run().unwrap();
++}
+--- a/crates/lrr/src/vm/step_string_literals.rs
++++ b/crates/lrr/src/vm/step_string_literals.rs
+@@ -29,9 +29,11 @@
+         .nodes()
+         .get(frame.pc().node as usize)
+         .ok_or_else(|| invalid("string indexed node absent"))?;
+-    // Macro operand and generated-token admission must provide their own exact
+-    // source certificate. A plain verified Literal operation is insufficient.
+-    if node.role != NodeRole::Expression(ExpressionKind::Literal)
++    // Opaque macro operands require the current source/compiler receipt. A
++    // verified Literal operation alone cannot grant string source identity.
++    if node.role == NodeRole::Expression(ExpressionKind::Macro) {
++        frame.require_macro_byte_literal(literal, destination)?;
++    } else if node.role != NodeRole::Expression(ExpressionKind::Literal)
+         || frame.pc().phase != 0
+         || node.value != Some(destination)
+         || frame.body.span(node.id)? != literal.source

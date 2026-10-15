@@ -1,0 +1,28 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T041",
+    "T062"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_byte_macro_literal_tests.rs",
+      "before_sha256": "3158784f18661512583b554f5f0dbfaa71619f797ccd297182aa6d157777e346",
+      "after_sha256": "23f07223e96b4551275a774ae86b8ef5088ccb23113b2c734507eda55d03c6b3"
+    },
+    {
+      "path": "crates/lrr/src/syntax/byte_string_literal_tests.rs",
+      "before_sha256": "65746b6735db63462f493e65c478e1317ff3a3e65b89fbb41375b6889a355fc0",
+      "after_sha256": "51bc034c2cd5542b7b6d7a8eab47f44c1c15dde95d7f714ce009478064e6f1c2"
+    }
+  ],
+  "patch_sha256": "49d6f6cc1e4bade059ede4edcbd020a3d8ba59240107e2593fbefe4168eb29c4",
+  "failure_receipt": "V85 655b41/101 strict test-only collapsible_if and chunks_exact_to_as_chunks",
+  "static_checks": [
+    "pinned formatting",
+    "exact two-leaf replay"
+  ],
+  "stock_runtime_passes_added": 0,
+  "created_at": "2026-10-15T11:18:11.289797+00:00"
+}

@@ -1,0 +1,58 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T022",
+    "T024",
+    "T041",
+    "M017"
+  ],
+  "prerequisites": [
+    "root-string-coherent-v1",
+    "root-byte-assertion-lint-repair-v1"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_byte_macro_literal_tests.rs",
+      "before_sha256": "23f07223e96b4551275a774ae86b8ef5088ccb23113b2c734507eda55d03c6b3",
+      "after_sha256": "235069b99dd098199c91417e1a60166ee3650dad8b533d8681dc12607d6f75ab"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_byte_macro_literals.rs",
+      "before_sha256": "f5cbf5cc388df4f134039d2ccf36a54f1daa55e08bf463830ecb0ca696aecde3",
+      "after_sha256": "8cc355bb2e3188654c8dac0f0241890e94a807b659e993319f98eadf7f7d05dd"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_string_macro_literal_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "641145d7706fd9c1715e33a682122cd5f558686abfe8752a6cd9e2048c9bc5d9"
+    },
+    {
+      "path": "crates/lrr/src/vm/step_string_literals.rs",
+      "before_sha256": "78ae1f2836b3af82ed7df40dee1e834b7a0a2eeabf470ab89a2ee7f05e324114",
+      "after_sha256": "07e396ad721891a3e28d5e3558dfee49bf8c7403f363d64c067f294ca922fe0c"
+    }
+  ],
+  "patch_sha256": "16a900b9ef7b3f470b2cfc3c4d75a994e24685ea2652acd09a8b42419885ff05",
+  "patch_bytes": 13512,
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "upstream_witness": {
+    "path": "tests/ui/parser/unicode-escape-sequences.rs",
+    "sha256": "bfe36a9ec10df6e071a6d8c823aaf08ef65522637d87893b5e8d0490b704f2e4"
+  },
+  "static_checks": [
+    "pinned Rust 1.99 formatting",
+    "exact four-leaf patch replay",
+    "unchanged upstream witness bytes"
+  ],
+  "new_test_bodies": 3,
+  "stock_runtime_passes_added": 0,
+  "acceptance_pending": [
+    "strict build",
+    "unchanged original macro operand controls across editions",
+    "byte macro/source guard regression scopes",
+    "full original string assertions after equality/method integration",
+    "integrated milestone"
+  ],
+  "created_at": "2026-10-15T11:19:15.412398+00:00"
+}

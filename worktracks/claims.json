@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V82 strict and 69 affected library controls passed. Unchanged slowparse-bstring whole main (400000 literal bytes) executes all four editions. V84 exact unchanged issue-21475 qualified-range main passes default2015 after genuine Type preparation and owning-module primitive scan repair. These are two upstream runtime-contract witnesses, not full compiletest acceptance or canonical integration. Strict/constant regression checks continue asynchronously before byte22+five. Twenty-leaf coherent ordinary-string candidate is held. Full milestone remains incomplete; guest JIT not started.",
+      "scope": "V86 scoped candidate green:48 distinct test bodies including unchanged CRLF byte main all4, both strict targets and architecture/fmt/fixture/manifest checks pass. Combined milestone running asynchronously on frozen3f018ccc; no canonical promotion yet. String macro operand4 and source-selected equality5 drafts plus unchanged Unicode-underscore original are prepared, uncompiled/unexecuted and held behind coherent string20. Three new byte/range upstream runtime witnesses overall, no new string/full-fixture acceptance or JIT work.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -511,11 +511,17 @@
         "artifacts/macos-first/root-constant-module-boundary-v1/",
         "worktracks/candidates/root-constant-module-boundary-v1/",
         "artifacts/macos-first/root-string-coherent-v1/",
-        "worktracks/candidates/root-string-coherent-v1/"
+        "worktracks/candidates/root-string-coherent-v1/",
+        "artifacts/macos-first/root-byte-assertion-lint-repair-v1/",
+        "worktracks/candidates/root-byte-assertion-lint-repair-v1/",
+        "artifacts/macos-first/root-string-macro-operands-v1/",
+        "worktracks/candidates/root-string-macro-operands-v1/",
+        "artifacts/macos-first/root-string-equality-v1/",
+        "worktracks/candidates/root-string-equality-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T11:14:25.395105+00:00",
+      "updated_at": "2026-10-15T11:24:25.120732+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {
