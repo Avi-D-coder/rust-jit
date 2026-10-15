@@ -1,0 +1,25 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "task_cards": [
+    "T050",
+    "T051"
+  ],
+  "claim": "LOCAL-024",
+  "baseline": "V72 frozen source 45cab3db62234d388faff3014b3287e0621d7ce3abc78940333431187f6320d0",
+  "files": [
+    {
+      "path": "xtask/tests/scalar_match_phases.rs",
+      "before_sha256": "3dcdfefe0eea63ef3b61b7c3612a2cfea753c6173710927062207eeaa6e89578",
+      "after_sha256": "0c3a90b9cc34d48c18142d872de56cc527157b200c4ab3f2bd8ecb821ab0a83d"
+    }
+  ],
+  "patch_sha256": "b7a6051c240a55bcfaf9cf641d60a7b5a293e2a4736d841a356cbfd3405f6409",
+  "patch_bytes": 4454,
+  "stock_runtime_passes_added": 0,
+  "created_at": "2026-10-15T10:41:28.891590+00:00",
+  "acceptance_pending": [
+    "exact scalar_match_phases scope",
+    "existing alias and reference-source refusal controls",
+    "combined milestone after queued byte scopes"
+  ]
+}

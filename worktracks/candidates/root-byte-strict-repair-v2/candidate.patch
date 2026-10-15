@@ -1,0 +1,30 @@
+--- a/crates/lrr/src/runtime/cell_byte_chunks.rs
++++ b/crates/lrr/src/runtime/cell_byte_chunks.rs
+@@ -358,12 +358,11 @@
+         if let Err(error) = self.require_static_byte_cursor(a) {
+             return StaticByteChunkPoll::Failed(error);
+         }
+-        if a.failure.is_none() {
+-            if let Err(error) = self.require_static_byte_membership(a) {
+-                if let Err(error) = self.abort_static_byte_chunks(a, error) {
+-                    return StaticByteChunkPoll::Failed(error);
+-                }
+-            }
++        if a.failure.is_none()
++            && let Err(error) = self.require_static_byte_membership(a)
++            && let Err(error) = self.abort_static_byte_chunks(a, error)
++        {
++            return StaticByteChunkPoll::Failed(error);
+         }
+         let mut steps = 0usize;
+         let mut bytes = 0usize;
+--- a/crates/lrr/src/vm/step_byte_literals.rs
++++ b/crates/lrr/src/vm/step_byte_literals.rs
+@@ -1,6 +1,6 @@
+ //! Ordinary exact-source byte-string admission. No descriptor -> source recovery.
++use super::*;
+ use crate::core::digest::StableEncode;
+-use super::*;
+ use crate::{
+     ir::pc::SlotId,
+     runtime::{

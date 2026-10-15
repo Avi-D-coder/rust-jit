@@ -1,0 +1,29 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "task_cards": [
+    "T041",
+    "T054"
+  ],
+  "claim": "LOCAL-024",
+  "baseline": "V74 581e7dd45b45739adfbbebe75c966577b3f037d2e76482a94d0fa7d0402f9e3f",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/constant_array_publication.rs",
+      "before_sha256": "416be96ce4aeea0625f6161f8a4063f03e915a20c81450510886e0241838fb2b",
+      "after_sha256": "e880234f34f7223efea996eadef36a630e857ff203b266f7c181be005cff085a"
+    },
+    {
+      "path": "crates/lrr/src/syntax/byte_string_literals.rs",
+      "before_sha256": "c00b59dc75bf43a8bdf0109440eeb298b1d6cb28635be920f0016d92589676f0",
+      "after_sha256": "f5b6cab8579b0ce1321a52880b2c36f0ff6e6f82ee75ae1647cbbe99838d7efa"
+    },
+    {
+      "path": "crates/lrr/src/vm/step_byte_literals.rs",
+      "before_sha256": "f04853c43dd23c8c2eec07097af0175078cac0f3de04407f57033a18d5049d34",
+      "after_sha256": "cd59cd08b69e40b984b65cdde356eb73296122abaa3beeea23e1605c990bb6c5"
+    }
+  ],
+  "patch_sha256": "2c7ec3e581a4e696dec9af59c4a3c731e0c3791392302ca29674350db490d922",
+  "patch_bytes": 1064,
+  "stock_runtime_passes_added": 0
+}

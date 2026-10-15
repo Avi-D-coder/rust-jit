@@ -1,0 +1,32 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "task_cards": [
+    "T041",
+    "T054"
+  ],
+  "claim": "LOCAL-024",
+  "baseline": "V76 a1813203f7610656a9487d922ec0d424145f5f21a9e2b0b54a135f9a2228429e",
+  "files": [
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_hint_preflight_tests.rs",
+      "before_sha256": "ddd17887e8b589c328bff47963541338ab8f0fb912f64791718bbaf6015fb832",
+      "after_sha256": "5c4665aa8819da8c72fcb87425b7c5d01ea3f3f4d517b332c15465c96843bc2c"
+    },
+    {
+      "path": "crates/lrr/src/vm/constant_array_transfer_tests.rs",
+      "before_sha256": "3eddd442ad852120a23f8070cf0661040a409d1052cbfcdd88a74843f55744df",
+      "after_sha256": "d3161189f2febf5c576b3de18db678560f73aa7f7d037826e97cb4f7f28c7fad"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_constant_chunk_tests.rs",
+      "before_sha256": "a939138dee0d75ac674f834b6d4153d834dfa2022db4d917542b99635bbf8a7f",
+      "after_sha256": "27d7d1b3469a2410e4f0498ee30b8d089eed64bd1c20453973d330cc92e4ae27"
+    }
+  ],
+  "patch_sha256": "2fea546a01c716da651452af0d34e5a6c8ebf4b768b006dadab8129cde2161b2",
+  "patch_bytes": 1458,
+  "required_additive_imports": [
+    "tests/ui/parser/raw/raw-byte-string-literals.rs"
+  ],
+  "stock_runtime_passes_added": 0
+}

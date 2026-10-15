@@ -1,0 +1,9 @@
+# Scalar match entry contract correction
+
+Source-only T050/T051 harness correction, claim LOCAL-024. No production source or upstream original changes. V72 full milestone terminal `b4b25d/1` reported 2,801 passing host bodies, one failure and 425 unexecuted bodies. The failing `unknown_noncopy_rigid_and_shadowed_matches_refuse_before_source_read` still demanded immediate `Unsupported` for every unresolved parameter type.
+
+Current lowering retains a source-bound parameter ordinal and emits `DefinitionParameter(0)`; execution checks the admitted parameter type before entering the scrutinee. This supports real primitive aliases without guessing identity from printed names. The repaired harness requires exactly one matching `SetHint`, its exact scrutinee slot and successor PC, and no child thunk fetch. The qualified unknown path remains required to produce `Unsupported` without reads or hints. Failure output includes edition, source and actual operations. Existing primitive upstream entry checks gain the same exact slot/PC assertions.
+
+The test retains its selector for existing evidence inventories. It checks preparation only; the existing `alias_bool_match_uses_actual_primitive_parameter_source_all_editions`, `suffixed_reference_argument_reaches_scalar_match_guard_before_owning_read_all_editions` and `rustc_original_reference_parameter_scalar_guard_refuses_before_owning_read_all_editions` remain required runtime companions. This is not an upstream fixture pass or a replacement for executing non-scalar match behavior.
+
+Apply only after verifying the audit before hash against the released V72 source. Run the exact scalar-match harness and runtime companions asynchronously with the existing validation owner. If green, advance the existing byte scoped queue and collect one combined milestone before integration. The string IR packet remains held. Compilation and runtime verification are pending.

@@ -1,0 +1,389 @@
+--- a/crates/lrr/src/runtime/cell_byte_chunks.rs
++++ b/crates/lrr/src/runtime/cell_byte_chunks.rs
+@@ -265,6 +265,7 @@
+                                 root: None,
+                                 array_reference: None,
+                                 slice_reference: None,
++                                string_reference: None,
+                             },
+                             index_bytes()?,
+                             &mut self.budget,
+@@ -482,7 +483,7 @@
+                         root: stamp,
+                         enclosing: Vec::new(),
+                         final_cell: stamp,
+-                        static_slice: if a.plan.view == ByteLiteralTarget::Slice {
++                        static_slice: if a.plan.view != ByteLiteralTarget::Array {
+                             Some(allocation)
+                         } else {
+                             None
+@@ -548,6 +549,7 @@
+             match a.plan.view {
+                 ByteLiteralTarget::Array => record.array_reference = Some(reference),
+                 ByteLiteralTarget::Slice => record.slice_reference = Some(reference),
++                ByteLiteralTarget::Str => record.string_reference = Some(reference),
+             }
+         }
+         a.reference = None;
+--- a/crates/lrr/src/runtime/cell_byte_literals.rs
++++ b/crates/lrr/src/runtime/cell_byte_literals.rs
+@@ -13,6 +13,8 @@
+     root: Option<CellId>,
+     array_reference: Option<RefId>,
+     slice_reference: Option<RefId>,
++    // Publication proves the immutable backing bytes passed UTF-8 validation.
++    string_reference: Option<RefId>,
+ }
+ pub(crate) struct PreparedStaticBytes {
+     session: StoreSession,
+@@ -53,6 +55,7 @@
+         let reference = match view {
+             ByteLiteralTarget::Array => record.array_reference,
+             ByteLiteralTarget::Slice => record.slice_reference,
++            ByteLiteralTarget::Str => record.string_reference,
+         };
+         if let Some(reference) = reference {
+             self.validate_reference_record(self.references.get(reference)?)?;
+@@ -72,6 +75,12 @@
+                 "LRR-E-UNSUPPORTED",
+                 "byte-string payload exceeds its decoder limit".into(),
+             ));
++        }
++        // A str descriptor alone never establishes UTF-8. This bounded, pure
++        // validation precedes descriptor publication, guest handles or writes.
++        // Large allocation and reuse still take the per-byte resumable path.
++        if view == ByteLiteralTarget::Str && std::str::from_utf8(bytes).is_err() {
++            return Err(ownership());
+         }
+         let len = u32::try_from(bytes.len()).map_err(|_| resource())?;
+         let types = self.types.preview_byte_literal_types(len, view)?;
+@@ -266,6 +275,7 @@
+                         root: None,
+                         array_reference: None,
+                         slice_reference: None,
++                        string_reference: None,
+                     },
+                     index_bytes,
+                     &mut self.budget,
+@@ -356,7 +366,7 @@
+                         root: stamp,
+                         enclosing: Vec::new(),
+                         final_cell: stamp,
+-                        static_slice: if plan.view == ByteLiteralTarget::Slice {
++                        static_slice: if plan.view != ByteLiteralTarget::Array {
+                             Some(allocation)
+                         } else {
+                             None
+@@ -370,6 +380,7 @@
+             match plan.view {
+                 ByteLiteralTarget::Array => record.array_reference = Some(reference),
+                 ByteLiteralTarget::Slice => record.slice_reference = Some(reference),
++                ByteLiteralTarget::Str => record.string_reference = Some(reference),
+             };
+             reference
+         };
+@@ -408,7 +419,9 @@
+         if reference.access != Access::Shared
+             || reference.final_cell != reference.root
+             || !reference.enclosing.is_empty()
+-            || !matches!(self.types.descriptor(reference.target)?.key.as_ref(),TypeKey::Slice{element} if *element==TypeId(9))
++            || !(matches!(self.types.descriptor(reference.target)?.key.as_ref(),TypeKey::Slice{element} if *element==TypeId(9))
++                || (reference.target == TypeId(16)
++                    && self.static_literals.get(id)?.string_reference.is_some()))
+         {
+             return Err(lease_fault());
+         }
+@@ -506,3 +519,7 @@
+ #[cfg(test)]
+ #[path = "cell_byte_hint_preflight_tests.rs"]
+ mod hint_preflight_tests;
++
++#[cfg(test)]
++#[path = "cell_static_utf8_tests.rs"]
++mod static_utf8_tests;
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_static_utf8_tests.rs
+@@ -0,0 +1,251 @@
++//! Original-token storage witnesses and LRR lease/cancellation controls.
++//! These are physical component checks, not execution of the upstream mains.
++use super::*;
++use ra_ap_syntax::{AstNode, SyntaxKind};
++const UNICODE: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/parser/unicode-escape-sequences.rs"
++);
++const NULS: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/str/nul-char-equivalence.rs"
++);
++const CRLF: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs"
++);
++fn key() -> crate::core::digest::Digest {
++    crate::core::digest::Digest::of_bytes(b"physical UTF8 storage witness")
++}
++fn source_strings(source: &str, edition: u16) -> Vec<String> {
++    let ra_edition = match edition {
++        2015 => ra_ap_syntax::Edition::Edition2015,
++        2018 => ra_ap_syntax::Edition::Edition2018,
++        2021 => ra_ap_syntax::Edition::Edition2021,
++        2024 => ra_ap_syntax::Edition::Edition2024,
++        _ => unreachable!(),
++    };
++    let parsed = ra_ap_syntax::SourceFile::parse(source, ra_edition);
++    parsed
++        .tree()
++        .syntax()
++        .descendants_with_tokens()
++        .filter_map(|child| child.into_token())
++        .filter(|token| token.kind() == SyntaxKind::STRING)
++        .map(|token| crate::syntax::ast_adapter::string_value(token.text(), edition).unwrap())
++        .collect()
++}
++fn stored_bytes(store: &GuestStore, ticket: TicketId) -> Vec<u8> {
++    let value = store.peek_ticket(ticket).unwrap();
++    let reference = store
++        .references
++        .get(RefId::from_bits(value.payload))
++        .unwrap();
++    assert_eq!(reference.target, TypeId(16));
++    store.validate_reference_record(reference).unwrap();
++    let (_, storage) = store.place_object(reference.root.cell).unwrap();
++    storage
++        .fields
++        .iter()
++        .map(|cell| {
++            assert!(!store.cells.get(*cell).unwrap().writable);
++            u8::try_from(store.read_scalar(*cell).unwrap().payload).unwrap()
++        })
++        .collect()
++}
++#[test]
++fn upstream_unicode_nul_and_crlf_strings_retain_exact_utf8_in_immutable_roots_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        for (source, count) in [(UNICODE, 7), (NULS, 8), (CRLF, 9)] {
++            let values = source_strings(source, edition);
++            assert_eq!(values.len(), count);
++            for text in values {
++                let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++                let plan = store
++                    .prepare_static_bytes(
++                        key(),
++                        text.as_bytes(),
++                        ByteLiteralTarget::Str,
++                        None,
++                        false,
++                    )
++                    .unwrap();
++                let ty = plan.reference_type();
++                let ticket = store.instantiate_static_bytes(plan).unwrap();
++                assert_eq!(store.peek_ticket(ticket).unwrap().type_id, ty.0);
++                assert_eq!(stored_bytes(&store, ticket), text.as_bytes());
++                let reference = RefId::from_bits(store.peek_ticket(ticket).unwrap().payload);
++                let frame = store.new_frame_anchor().unwrap();
++                let cell = store
++                    .new_cell(
++                        StorageContract::Exact(ty),
++                        false,
++                        CellOwner::FrameSlot { frame, slot: 0 },
++                    )
++                    .unwrap();
++                store.initialize(cell, ticket).unwrap();
++                let returned = store.reference_ticket(reference).unwrap();
++                let dropped = store.begin_drop(cell).unwrap();
++                store.discard(dropped).unwrap();
++                store.retire_cell(cell).unwrap();
++                assert_eq!(stored_bytes(&store, returned), text.as_bytes());
++                store.reset(2).unwrap();
++                assert!(store.reference_ticket(reference).is_err());
++                assert!(store.static_literal_index.is_empty());
++            }
++        }
++    }
++}
++#[test]
++fn invalid_utf8_and_forged_str_views_publish_no_string_authority() {
++    let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++    for bytes in [
++        &[0xff][..],
++        &[0xc0, 0x80],
++        &[0xed, 0xa0, 0x80],
++        &[0xf0, 0x9f],
++    ] {
++        let before = (
++            store.budget.handles(),
++            store.budget.bytes(),
++            store.types.metadata_bytes(),
++        );
++        assert!(
++            store
++                .prepare_static_bytes(key(), bytes, ByteLiteralTarget::Str, None, false)
++                .is_err()
++        );
++        assert_eq!(
++            before,
++            (
++                store.budget.handles(),
++                store.budget.bytes(),
++                store.types.metadata_bytes()
++            )
++        );
++        assert!(store.static_literal_index.is_empty());
++    }
++    let plan = store
++        .prepare_static_bytes(key(), &[0xff], ByteLiteralTarget::Slice, None, false)
++        .unwrap();
++    let ticket = store.instantiate_static_bytes(plan).unwrap();
++    let value = store.peek_ticket(ticket).unwrap();
++    let reference = store
++        .references
++        .get(RefId::from_bits(value.payload))
++        .unwrap();
++    store.validate_reference_record(reference).unwrap();
++    let forged = ReferenceRecord {
++        access: Access::Shared,
++        owner: None,
++        target: TypeId(16),
++        root: reference.root,
++        enclosing: Vec::new(),
++        final_cell: reference.final_cell,
++        static_slice: reference.static_slice,
++    };
++    assert!(store.validate_reference_record(&forged).is_err());
++    let id = reference.static_slice.unwrap();
++    assert!(
++        store
++            .static_literals
++            .get(id)
++            .unwrap()
++            .string_reference
++            .is_none()
++    );
++}
++#[test]
++fn utf8_and_byte_slice_views_share_only_the_verified_immutable_backing() {
++    let text = source_strings(UNICODE, 2024).remove(0);
++    let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++    let plan = store
++        .prepare_static_bytes(
++            key(),
++            text.as_bytes(),
++            ByteLiteralTarget::Slice,
++            None,
++            false,
++        )
++        .unwrap();
++    let bytes = store.instantiate_static_bytes(plan).unwrap();
++    let byte_ref = RefId::from_bits(store.peek_ticket(bytes).unwrap().payload);
++    let byte_root = store.references.get(byte_ref).unwrap().root;
++    let plan = store
++        .prepare_static_bytes(key(), text.as_bytes(), ByteLiteralTarget::Str, None, false)
++        .unwrap();
++    let first = store.instantiate_static_bytes(plan).unwrap();
++    let string_ref = RefId::from_bits(store.peek_ticket(first).unwrap().payload);
++    assert_ne!(string_ref, byte_ref);
++    assert_eq!(store.references.get(string_ref).unwrap().root, byte_root);
++    assert_eq!(stored_bytes(&store, first), text.as_bytes());
++    let plan = store
++        .prepare_static_bytes(key(), text.as_bytes(), ByteLiteralTarget::Str, None, false)
++        .unwrap();
++    let second = store.instantiate_static_bytes(plan).unwrap();
++    assert_ne!(first, second);
++    assert_eq!(
++        store.peek_ticket(first).unwrap(),
++        store.peek_ticket(second).unwrap()
++    );
++    let before = (
++        store.budget.handles(),
++        store.budget.bytes(),
++        store.types.metadata_bytes(),
++    );
++    assert!(
++        store
++            .prepare_static_bytes(key(), b"abc", ByteLiteralTarget::Str, None, false)
++            .is_err()
++    );
++    assert_eq!(
++        before,
++        (
++            store.budget.handles(),
++            store.budget.bytes(),
++            store.types.metadata_bytes()
++        )
++    );
++}
++#[test]
++fn utf8_chunk_boundaries_publish_only_complete_valid_roots_and_charge_each_byte() {
++    // Repeat an actual original Unicode token across 256-byte dispatch edges.
++    // This is an LRR bounded-construction supplement, not a new language fixture.
++    let text = source_strings(UNICODE, 2024).remove(0).repeat(171);
++    assert_eq!(text.len(), 513);
++    for cancel in [false, true] {
++        let mut store = GuestStore::new(1, 4000, 4 << 20).unwrap();
++        let plan = store
++            .prepare_static_bytes(key(), text.as_bytes(), ByteLiteralTarget::Str, None, false)
++            .unwrap();
++        let mut activation = store.prepare_static_byte_chunks(plan).unwrap();
++        let mut fuel = crate::vm::fuel::RunFuel::new(2000).unwrap();
++        let mut dispatches = 0;
++        loop {
++            assert!(store.static_literal_index.is_empty());
++            match store.advance_static_byte_chunks(&mut activation, &mut fuel) {
++                StaticByteChunkPoll::Dispatch { steps, bytes, .. } => {
++                    assert!(steps > 0 && steps <= 256 && bytes <= 64 << 10);
++                    dispatches += 1;
++                    if cancel {
++                        fuel.cancellation().cancel();
++                    }
++                }
++                StaticByteChunkPoll::Ready => {
++                    assert!(!cancel);
++                    assert!(dispatches > 0);
++                    assert_eq!(activation.fields_charged(), text.len() as u64);
++                    assert_eq!(fuel.snapshot().used, text.len() as u64);
++                    let ticket = store.commit_static_byte_chunks(&mut activation).unwrap();
++                    assert_eq!(stored_bytes(&store, ticket), text.as_bytes());
++                    assert!(store.commit_static_byte_chunks(&mut activation).is_err());
++                    break;
++                }
++                StaticByteChunkPoll::Failed(error) => {
++                    assert!(cancel);
++                    assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
++                    assert!(activation.finished());
++                    assert!(store.static_literal_index.is_empty());
++                    break;
++                }
++            }
++        }
++    }
++}
+--- a/crates/lrr/src/runtime/shape_byte_literals.rs
++++ b/crates/lrr/src/runtime/shape_byte_literals.rs
+@@ -4,6 +4,8 @@
+ pub(crate) enum ByteLiteralTarget {
+     Array,
+     Slice,
++    /// Immutable UTF-8 view; physical preparation validates the bytes.
++    Str,
+ }
+ pub(crate) struct ByteLiteralTypes {
+     count: usize,
+@@ -54,6 +56,7 @@
+             len,
+         })?;
+         let target = match view {
++            ByteLiteralTarget::Str => TypeId(16),
+             ByteLiteralTarget::Array => array,
+             ByteLiteralTarget::Slice => select(TypeKey::Slice { element: TypeId(9) })?,
+         };
+--- a/crates/lrr/src/vm/step_byte_literals.rs
++++ b/crates/lrr/src/vm/step_byte_literals.rs
+@@ -13,6 +13,10 @@
+ pub(super) fn source(plan: &PreparedStaticBytes) -> Result<TyTerm, Diagnostic> {
+     let element = Box::new(TyTerm::Primitive(PrimitiveType::U8));
+     let target = match plan.target() {
++        // Physical UTF-8 storage cannot invent byte-literal source authority.
++        ByteLiteralTarget::Str => {
++            return Err(invalid("string storage requires its own source admission"));
++        }
+         ByteLiteralTarget::Slice => TyTerm::Slice(element),
+         ByteLiteralTarget::Array => TyTerm::Array(
+             element,

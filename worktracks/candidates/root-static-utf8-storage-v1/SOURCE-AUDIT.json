@@ -1,0 +1,78 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "task_cards": [
+    "T024",
+    "T041",
+    "T062"
+  ],
+  "claim": "LOCAL-024",
+  "prerequisites": [
+    "root-interpreter-bytes-v1",
+    "root-byte-assertions-v1",
+    "root-byte-comparison-admission-v2",
+    "root-byte-import-repair-v1",
+    "root-byte-strict-repair-v2"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_chunks.rs",
+      "before_sha256": "1de1d95b76851dc8727d61075e9d6221fb4d85d0f81589cd109869cba4fd950c",
+      "after_sha256": "04ba8a8ab5d5b46be6e2c07bb882ef57e4881ffb8dbd1995612d68d2e1f40b2d"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_literals.rs",
+      "before_sha256": "15ed5cdc7271bad3dadad1bfa80646cde9363dbadb1a54ad15ad6d92caecfa73",
+      "after_sha256": "a277eed5b717af41193d7ac1f372b6456d03552abca92af0e413801e1bdd035d"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_static_utf8_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "9bf80ff752b0ef2ad7b581f603828942723d2e6b6dc367a658279d1a1377f641"
+    },
+    {
+      "path": "crates/lrr/src/runtime/shape_byte_literals.rs",
+      "before_sha256": "6bbfe00eebadc30f656036af1da445c83371df6cbc7142a32ec20647eaa2fc8c",
+      "after_sha256": "b46f8281c4613890b2784be7451028cbb156238b099ebb99ec17c804f48eb42a"
+    },
+    {
+      "path": "crates/lrr/src/vm/step_byte_literals.rs",
+      "before_sha256": "5f936fc4841861b338158d142c94b2ba8f20f0a37094f9902572a73c590e5420",
+      "after_sha256": "63153d32690cb90d8caa1cc384147f98fad4b2e2f27664ffef32397cb82b55f7"
+    }
+  ],
+  "patch_sha256": "7482ccba974aa58ea18aa888f641787f9e1f82c424c79cddf22abf5f0705a5fe",
+  "patch_bytes": 16169,
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "upstream_witnesses": [
+    {
+      "path": "tests/ui/parser/unicode-escape-sequences.rs",
+      "sha256": "bfe36a9ec10df6e071a6d8c823aaf08ef65522637d87893b5e8d0490b704f2e4",
+      "bytes": 505
+    },
+    {
+      "path": "tests/ui/str/nul-char-equivalence.rs",
+      "sha256": "072d9e7415742e411853ec46e123180fb9aceb6e5d2655ffdf46a6a223ed773c",
+      "bytes": 1059
+    },
+    {
+      "path": "tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs",
+      "sha256": "bb03d92b8289726639b7947f900dca05704b3a20ce26ec183a5a233ea6747289",
+      "bytes": 958
+    }
+  ],
+  "new_component_test_bodies": 4,
+  "stock_runtime_passes_added": 0,
+  "static_checks": [
+    "pinned Rust 1.99 formatting",
+    "exact five-file patch replay",
+    "three upstream witness byte identities"
+  ],
+  "created_at": "2026-10-15T10:47:19.341744+00:00",
+  "acceptance_pending": [
+    "strict build",
+    "original-token storage and lease controls",
+    "byte and reference regression scopes",
+    "string source/VM admission and runtime methods",
+    "combined milestone"
+  ]
+}

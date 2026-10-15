@@ -1,0 +1,40 @@
+--- a/crates/lrr/src/runtime/cell_byte_hint_preflight_tests.rs
++++ b/crates/lrr/src/runtime/cell_byte_hint_preflight_tests.rs
+@@ -56,7 +56,7 @@
+             .unwrap();
+         recipe.revalidate_namespace(&db).unwrap();
+         assert!(matches!(
+-            recipe.recipe().operations.as_slice(),
++            recipe.recipe().operations.as_ref(),
+             [Op::SetHint {
+                 hint: HintRecipe::StaticByteReference(_),
+                 ..
+--- a/crates/lrr/src/vm/constant_array_transfer_tests.rs
++++ b/crates/lrr/src/vm/constant_array_transfer_tests.rs
+@@ -16,7 +16,10 @@
+         value::ValueRepr,
+     },
+     source::snapshot::{CfgSet, SourceBlob},
+-    syntax::{body_index::BodyIndexLimits, parse::ParsedFile},
++    syntax::{
++        body_index::{BodyIndexLimits, ExpressionKind, NodeRole},
++        parse::ParsedFile,
++    },
+     traits::term::{ConstTerm, TyTerm},
+     vm::fuel::RunFuel,
+ };
+--- a/crates/lrr/src/vm/frame_constant_chunk_tests.rs
++++ b/crates/lrr/src/vm/frame_constant_chunk_tests.rs
+@@ -15,7 +15,11 @@
+         reference::Access,
+         value::ValueRepr,
+     },
+-    syntax::{body_index::BodyIndexLimits, outline::BodyHandle, spans::SourceRange},
++    syntax::{
++        body_index::{BodyIndexLimits, ExpressionKind, NodeRole},
++        outline::BodyHandle,
++        spans::SourceRange,
++    },
+ };
+ const TEXT: &str =
+     "const BIG:[u8;1024]=[0;1024];fn chunk_use(){let first=BIG;let second=BIG;}fn main(){}";

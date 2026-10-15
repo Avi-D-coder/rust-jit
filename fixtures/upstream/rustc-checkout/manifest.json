@@ -2106,6 +2106,18 @@
       "bytes": 417
     },
     {
+      "path": "tests/ui/parser/raw/raw-byte-string-literals.rs",
+      "git_blob": "5cde537b72a30de12fb234db56c3f1c4bd9c747a",
+      "sha256": "c05029778286308949f2834ebb462c56e8abb4fda395afd0aba75089254ed4e2",
+      "bytes": 243
+    },
+    {
+      "path": "tests/ui/parser/raw/raw-byte-string-literals.stderr",
+      "git_blob": "a20ce845c326895d220470215797a0061095884d",
+      "sha256": "05377fb25b5d0660732aaacd3e31eb7cefc4c2a47c6587417d0d04b4aa36c4fd",
+      "bytes": 482
+    },
+    {
       "path": "tests/ui/parser/raw/raw-idents.rs",
       "git_blob": "fd0a4c7522a09a5c54cadc1dd1e929f777515330",
       "sha256": "ea07c8b14ab1e180d83fe9cd408b2604b32714d635b8e85f41cc6afeeb3f1a7d",
@@ -4808,6 +4820,12 @@
     },
     {
       "path": "tests/ui/parser/int-literal-too-large-span.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/parser/raw/raw-byte-string-literals.rs",
       "directives": [],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"

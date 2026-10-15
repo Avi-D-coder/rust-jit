@@ -1,0 +1,25 @@
+--- a/crates/lrr/src/engine/constant_array_publication.rs
++++ b/crates/lrr/src/engine/constant_array_publication.rs
+@@ -1,6 +1,5 @@
+ //! Borrowed T054 publication from actual current source/type/query certificates.
+ //! Replays source selection read-only; no provider or guest side effects.
+-#[cfg(test)]
+ use crate::core::digest::StableEncode;
+ use crate::{
+     core::{diagnostic::Diagnostic, digest::Digest},
+--- a/crates/lrr/src/syntax/byte_string_literals.rs
++++ b/crates/lrr/src/syntax/byte_string_literals.rs
+@@ -1,4 +1,5 @@
+ //! Exact pinned byte-string token decode; no reference lifetime/layout authority.
++use crate::core::digest::StableEncode;
+ use crate::{core::diagnostic::Diagnostic, syntax::spans::BodySpan};
+ use ra_ap_syntax::{
+     AstNode, AstToken, SyntaxKind,
+--- a/crates/lrr/src/vm/step_byte_literals.rs
++++ b/crates/lrr/src/vm/step_byte_literals.rs
+@@ -1,4 +1,5 @@
+ //! Ordinary exact-source byte-string admission. No descriptor -> source recovery.
++use crate::core::digest::StableEncode;
+ use super::*;
+ use crate::{
+     ir::pc::SlotId,

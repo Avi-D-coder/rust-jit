@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V72 milestone remains independently running. Byte prerequisite48 then assertions22+admission5 remain queued. New nine-file T022/T024 source-string decoder/verifier schema14 candidate is held behind that queue. Two unchanged Unicode/NUL originals imported canonically; three component controls unexecuted. String VM storage/methods remain pending; no new stock passes or task/JIT completion.",
+      "scope": "V72 full gate failed (2801 pass/1 fail/425 unexecuted); V73 match correction and runtime companions passed (8 host bodies). Byte48 compilation advanced through V74 imports and V75 lint fixes; V76 test-compilation errors repaired by three exact API/import leaves plus the omitted unchanged raw-byte original/sidecar. Asynchronous validation continues; assertions22+admission5 conditional. String9 IR and UTF8 physical5 drafts held. No new upstream runtime/full-fixture passes or task/JIT completion.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -483,7 +483,17 @@
         "artifacts/macos-first/root-byte-comparison-admission-v2/",
         "worktracks/candidates/root-byte-comparison-admission-v2/",
         "artifacts/macos-first/root-string-literal-ir-v1/",
-        "worktracks/candidates/root-string-literal-ir-v1/"
+        "worktracks/candidates/root-string-literal-ir-v1/",
+        "artifacts/macos-first/root-match-context-harness-v1/",
+        "worktracks/candidates/root-match-context-harness-v1/",
+        "artifacts/macos-first/root-byte-import-repair-v1/",
+        "worktracks/candidates/root-byte-import-repair-v1/",
+        "artifacts/macos-first/root-byte-strict-repair-v2/",
+        "worktracks/candidates/root-byte-strict-repair-v2/",
+        "artifacts/macos-first/root-static-utf8-storage-v1/",
+        "worktracks/candidates/root-static-utf8-storage-v1/",
+        "artifacts/macos-first/root-byte-test-compile-repair-v3/",
+        "worktracks/candidates/root-byte-test-compile-repair-v3/"
       ],
       "issue": null,
       "pull_request": null,
