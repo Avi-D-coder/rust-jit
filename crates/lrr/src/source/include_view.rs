@@ -14,12 +14,13 @@ use crate::{
     syntax::token_wire::{Key, TokenForest},
 };
 use std::sync::Arc;
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct ViewDependency {
     pub key: InputKey,
     pub fingerprint: Digest,
     pub request: InputRequest,
 }
+#[derive(Debug)]
 pub struct IncludedSourceView {
     identity: Digest,
     estimated_bytes: usize,
@@ -262,6 +263,30 @@ impl IncludedSourceView {
     }
     pub fn caller_context(&self) -> Key {
         Key(self.producer.parent_context.0)
+    }
+    /// Read-only replay for a source admission consumer. Missing inputs are a
+    /// preparation prerequisite here; this method cannot capture or expand.
+    pub(crate) fn require_published(&self, db: &Database) -> Result<(), Diagnostic> {
+        for dependency in &self.dependencies {
+            if !matches!(db.published_input(&dependency.key), Some((_, fingerprint))
+                if fingerprint == dependency.fingerprint)
+            {
+                return Err(fault("retained included source input is absent or changed"));
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn require_record(
+        &self,
+        record: &crate::expand::record::ExpansionRecord,
+    ) -> Result<(), Diagnostic> {
+        if record.key() != &self.producer
+            || !matches!(self._expansion_lease.as_ref(), InputValue::ExpansionRecord(actual)
+                if actual.same_record(record))
+        {
+            return Err(fault("included source producer record differs"));
+        }
+        Ok(())
     }
     /// Re-observe every producing/capture input before using this retained virtual source.
     pub fn validate(&self, db: &mut Database) -> QueryPoll<()> {

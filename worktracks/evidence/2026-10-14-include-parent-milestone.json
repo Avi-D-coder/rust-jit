@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    "T030",
+    "M013",
+    "M017"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "source_member": "6bc8d32a9b1197a73317b9dfd3f7b8e43b7aac6002de5efb3a41f26b9d04799a",
+  "canonical_checkpoint": "2bddbc7298287a47bcecf856b1ef422f469cdb61",
+  "actual_validation": {
+    "gate03": {
+      "scope": "gate03",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "run",
+        "--offline",
+        "--locked",
+        "-p",
+        "xtask",
+        "--",
+        "gate",
+        "03"
+      ],
+      "exit_code": 1,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "6bc8d32a9b1197a73317b9dfd3f7b8e43b7aac6002de5efb3a41f26b9d04799a",
+      "elapsed_seconds": 448.7756692089897,
+      "started_at": "2026-10-15T04:53:17.222625+00:00",
+      "finished_at": "2026-10-15T05:00:45.998638+00:00",
+      "stdout_sha256": "ad517dfe235e94c25851a9d851de3c996201a098dc082f15c769bfd8b089a0b7",
+      "stderr_sha256": "13fa02107f833fffe7ed1833215d8d9adebf6ffb7717a4397fda9ee32c534770",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "inventory": {
+      "listed": 3203,
+      "passed": 1272,
+      "failed": 3,
+      "unexecuted": 1928,
+      "library_passed": 1070,
+      "library_failed": 0,
+      "ignored": 0
+    },
+    "failed_bodies": [
+      "include_cli::cli_included_macro_definition_resolves_a_later_producer",
+      "include_cli::cli_included_user_macro_shadows_a_compiler_include_without_capture",
+      "include_cli::cli_nested_include_values_match_native_macos"
+    ],
+    "failure": "LRR-E-CALL-CONTEXT: generated result requires its current macro-definition parent source chain",
+    "fixture_registration": "Two functions already listed/executed successfully were registered against the wrong file; CONTROL15/16 now point to runtime_macro_controls.rs."
+  },
+  "receipts": [
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v50/HANDOFF.md",
+      "sha256": "ec5096e20b1acdd959c06d0a83c0bbb38cd60e2b021fdc5cf6ad9f14f15ae673"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v50/COLLECTED-SCOPES.json",
+      "sha256": "15775a1ca650ba1f762375d7bde94dc75683cd597a79a02d9fbcfbde95f6b98c"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v50/SOURCE-FIXTURE-PATH-MISMATCHES.json",
+      "sha256": "ad6ef1e389f35f510fcf5b28ba3434990034829380c0a9c53efde69d018615ad"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v50/ACTUAL-FAILURE-DETAILS.json",
+      "sha256": "ce4a8e2e53b5a88e898866407c9000b60a977cf06887dc130322ebbbc2dcdaa2"
+    }
+  ],
+  "upstream_inventory": {
+    "cases": 308,
+    "original_files": 490,
+    "all_original_files_unchanged": true,
+    "new_runtime_contract_passes_claimed": 0,
+    "configured_full_fixture_passes": 0
+  },
+  "acceptance": {
+    "full_milestone_passed": false,
+    "upstream_runtime_acceptance": "incomplete",
+    "diagnostic_compatibility": "incomplete",
+    "compiler_tooling_compatibility": "incomplete",
+    "full_suite_compatibility": "incomplete",
+    "guest_jit_gate": "closed"
+  },
+  "next": "Private four-leaf include-source provenance correction is under V51 targeted validation. Named range constants remain source-only pending this regression closure. No new runtime completion or task acceptance."
+}

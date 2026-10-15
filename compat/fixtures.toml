@@ -12077,12 +12077,12 @@ test = "unknown_upper_guard_and_future_result_remain_source_positioned_fault_ste
 
 [[fixture]]
 id = "T050-NEGATIVE-RANGE-CONTROL-15"
-path = "crates/lrr/src/syntax/runtime_macro_control_tests.rs"
+path = "crates/lrr/src/syntax/runtime_macro_controls.rs"
 test = "genuine_control_refuses_modified_condition_target_and_span_without_remint"
 
 [[fixture]]
 id = "T050-NEGATIVE-RANGE-CONTROL-16"
-path = "crates/lrr/src/syntax/runtime_macro_control_tests.rs"
+path = "crates/lrr/src/syntax/runtime_macro_controls.rs"
 test = "match_exhaustion_cannot_be_reminted_by_copying_a_phase_slot_or_source_range"
 
 [[fixture]]

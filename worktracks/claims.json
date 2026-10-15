@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Integrated three new whole original runtime programs across4editions, ByteU8 source/components and generated parent/profile/epoch source fixes. V49strict+namespace14+dependency79 closeall49priorcohortfailures; freshfullcombinedmilestone next. Root owns named-range source/IR joins/integration; generic owns private ByteString runtime, stock owns new stock crosscrate macro adapter. Frozen mixed-site alias successor remainsuncompiled.308cases490originals; no configuredfullfixture/task/JIT/Linux/release claim.",
+      "scope": "Integrated four include-source provenance repair leaves after V51 strict/fmt/architecture/fixture-reference and192 distinct runtime-authority checks passed; all3V50 failures closed in include93.308cases490unchanged originals; required fullmilestoneV52next. Root named-range16 queued, ByteString worker separate. No fullmilestone/upstream fixture/task/JIT/release completion.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -444,11 +444,13 @@
         "artifacts/macos-first/root-byte-scalar-source-v1/",
         "artifacts/macos-first/root-compound-borrowed-source-v1/",
         "artifacts/macos-first/root-condition-compound-join-v1/",
-        "xtask/tests/stock_numeric_source_runtime.rs"
+        "xtask/tests/stock_numeric_source_runtime.rs",
+        "artifacts/macos-first/root-included-macro-parent-v1/",
+        "artifacts/macos-first/root-named-range-integrated-candidate-v2/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T04:51:43.621700+00:00",
+      "updated_at": "2026-10-15T05:11:24.389835+00:00",
       "review_after": "2026-10-15T07:16:22.506011+00:00"
     },
     {

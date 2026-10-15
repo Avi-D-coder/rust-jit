@@ -1,0 +1,341 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    "T030",
+    "M013",
+    "M017"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "source_member": "d6f955b28e177633ad0ba54a162ee09cc5caa83cc90a130b6b8298b2891fdda9",
+  "source_paths": [
+    {
+      "path": "crates/lrr/src/expand/generated_syntax.rs",
+      "before": "736757532f7a92eab482e1bb7367ae1eaac14523245722f680e26782f4ecd239",
+      "sha256": "e1665a0dccd7fb0f54e2fd0b1e62d5fbcc8652ed80da5d72ed165d777a36193e"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "before": "ffbb27a33c93b21162e5a3d1531cd63504cc77e1687fd04f17042f985902a9b3",
+      "sha256": "9502737e51f50a7b78bb44ca70604f01e073f596c13fd978123c07350b6945c5"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_return_parent.rs",
+      "before": "f6758596301bcaf8f55970024226073d7c7fe07ceff9619f9fb33269b064b9f2",
+      "sha256": "9303a313f7194182ef5022e30c0fe2ff38e03d32e0f766265402f90abfb2053d"
+    },
+    {
+      "path": "crates/lrr/src/source/include_view.rs",
+      "before": "1a94990fbc177084fa1229426211466b47f1ee28d77f3cf55a747fab2be6c791",
+      "sha256": "42ce6d068029cf117f3784d03b8858f3702129032ce911a542f652913dbaea61"
+    }
+  ],
+  "invariant": "Only the exact authorized retained IncludedSourceView terminates a generated macro-definition provenance chain. Current include capture/producer dependencies, sealed fingerprints, actual origin token membership, source/unit/context and Type absence remain mandatory; no provider preparation or display-text reparse. GeneratedSyntaxInput stable encoding advances v2\u2192v3 to retain include identity. Existing include CLI regressions are required, no new upstream pass claim.",
+  "actual_validation": {
+    "actual-three-failed-include-cli": {
+      "scope": "actual-three-failed-include-cli",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--test",
+        "include_cli",
+        "--locked",
+        "--offline",
+        "--",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1",
+        "cli_included_macro_definition_resolves_a_later_producer",
+        "cli_included_user_macro_shadows_a_compiler_include_without_capture",
+        "cli_nested_include_values_match_native_macos"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 3,
+      "nonempty_test_scope": true,
+      "source_member": "d6f955b28e177633ad0ba54a162ee09cc5caa83cc90a130b6b8298b2891fdda9",
+      "elapsed_seconds": 26.610931083996547,
+      "started_at": "2026-10-15T05:06:37.556151+00:00",
+      "finished_at": "2026-10-15T05:07:04.167192+00:00",
+      "stdout_sha256": "93b9dd4dafbdf6164f8b4537779462284cb3d169a34b7d974a8801f148ab03bc",
+      "stderr_sha256": "d3aa031ea3757c6c00712e329f65a13bec7245bb17336f020f2b467eefbbf3df",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "architecture": {
+      "scope": "architecture",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "run",
+        "-p",
+        "xtask",
+        "--locked",
+        "--offline",
+        "--",
+        "architecture-audit"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "d6f955b28e177633ad0ba54a162ee09cc5caa83cc90a130b6b8298b2891fdda9",
+      "elapsed_seconds": 8.322354499978246,
+      "started_at": "2026-10-15T05:10:08.583097+00:00",
+      "finished_at": "2026-10-15T05:10:16.905256+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "c03d1d699eb450154d3e7f532c99a42bc83885d93ebaf74d3d6b4777898c49bd",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "captured-dependency-bank": {
+      "scope": "captured-dependency-bank",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "xtask",
+        "--test",
+        "captured_dependency_discovery",
+        "--locked",
+        "--offline",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 79,
+      "nonempty_test_scope": true,
+      "source_member": "d6f955b28e177633ad0ba54a162ee09cc5caa83cc90a130b6b8298b2891fdda9",
+      "elapsed_seconds": 44.04343262501061,
+      "started_at": "2026-10-15T05:08:35.143753+00:00",
+      "finished_at": "2026-10-15T05:09:19.187292+00:00",
+      "stdout_sha256": "0d53bf59d8a502b0640679923ee6ee84a099136daa485676215f955e0b6259a3",
+      "stderr_sha256": "caa20de3ff75947593f5d850e7efd5664beda6b3d89487dcd257c9d5149253d6",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "existing-capture-adoption-demand-controls": {
+      "scope": "existing-capture-adoption-demand-controls",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--test",
+        "demand_tokens",
+        "--locked",
+        "--offline",
+        "--",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1",
+        "include_capture_demand_binds_authority_context_reply_and_defers_resumption",
+        "include_capture_adoption_publishes_immutable_query_input_and_invalidates_on_removal"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 2,
+      "nonempty_test_scope": true,
+      "source_member": "d6f955b28e177633ad0ba54a162ee09cc5caa83cc90a130b6b8298b2891fdda9",
+      "elapsed_seconds": 1.821602709009312,
+      "started_at": "2026-10-15T05:09:41.086753+00:00",
+      "finished_at": "2026-10-15T05:09:42.908031+00:00",
+      "stdout_sha256": "69b6f2bcc6bb8789baf79bc6877f1c45353685a4ea9d7b3e65eec54278627653",
+      "stderr_sha256": "770cfbf8007c256f831583d38dedb2462f98a1824289830072bd3476f0c75889",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "existing-include-publication-dependency-controls": {
+      "scope": "existing-include-publication-dependency-controls",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "xtask",
+        "--test",
+        "discovery_compile_inputs",
+        "--locked",
+        "--offline",
+        "--",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1",
+        "included_macro_definition_resolves_a_later_original_producer",
+        "generated_compiler_include_closes_with_exact_adopted_source_dependencies",
+        "nested_included_compiler_inputs_all_join_the_discovery_seal",
+        "included_macro_call_in_another_source_keeps_seal_revalidation"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 4,
+      "nonempty_test_scope": true,
+      "source_member": "d6f955b28e177633ad0ba54a162ee09cc5caa83cc90a130b6b8298b2891fdda9",
+      "elapsed_seconds": 2.880383540992625,
+      "started_at": "2026-10-15T05:09:24.201336+00:00",
+      "finished_at": "2026-10-15T05:09:27.081827+00:00",
+      "stdout_sha256": "f2d514406e3d56144c33d66363f6eead51b9f8a4a693603bf91f38785e0b7f76",
+      "stderr_sha256": "e91bab25d059612d1697521d113f67a8b6ca470d7ff043d3fc393307cb28f2e7",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "fixture-reference": {
+      "scope": "fixture-reference",
+      "argv": [
+        "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/xtask",
+        "fixture-reference-audit"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "d6f955b28e177633ad0ba54a162ee09cc5caa83cc90a130b6b8298b2891fdda9",
+      "elapsed_seconds": 1.5261024170031305,
+      "started_at": "2026-10-15T05:09:47.590870+00:00",
+      "finished_at": "2026-10-15T05:09:49.116832+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "format": {
+      "scope": "format",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "d6f955b28e177633ad0ba54a162ee09cc5caa83cc90a130b6b8298b2891fdda9",
+      "elapsed_seconds": 5.19647399999667,
+      "started_at": "2026-10-15T05:09:59.216169+00:00",
+      "finished_at": "2026-10-15T05:10:04.412401+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "generated-result-namespace": {
+      "scope": "generated-result-namespace",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--lib",
+        "frontend::call_contracts::generated_result_namespace",
+        "--locked",
+        "--offline",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 14,
+      "nonempty_test_scope": true,
+      "source_member": "d6f955b28e177633ad0ba54a162ee09cc5caa83cc90a130b6b8298b2891fdda9",
+      "elapsed_seconds": 23.61112299998058,
+      "started_at": "2026-10-15T05:07:58.115515+00:00",
+      "finished_at": "2026-10-15T05:08:21.726739+00:00",
+      "stdout_sha256": "23ac3e1f211f93742a132da2646eaa17b19631d7d79db53ff278547a8c35aa45",
+      "stderr_sha256": "b2b09146e4703e02b6d2992d75bfbbc94d406e7a1aa504c7e75293a5be4992b2",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "include-cli-bank": {
+      "scope": "include-cli-bank",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--test",
+        "include_cli",
+        "--locked",
+        "--offline",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 93,
+      "nonempty_test_scope": true,
+      "source_member": "d6f955b28e177633ad0ba54a162ee09cc5caa83cc90a130b6b8298b2891fdda9",
+      "elapsed_seconds": 41.41254741701414,
+      "started_at": "2026-10-15T05:07:08.174677+00:00",
+      "finished_at": "2026-10-15T05:07:49.587327+00:00",
+      "stdout_sha256": "9d5c3b63dcf20c2c669a1baf8332cf9eb9326cdc15db3521b76b169bae77bcf6",
+      "stderr_sha256": "89d9bb2fd6417f29ca4947e48a7b6ef1e98cf6d2ae766c21a2413336a6f9f074",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "strict-lrr-tests": {
+      "scope": "strict-lrr-tests",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "-p",
+        "lrr",
+        "--lib",
+        "--tests",
+        "--locked",
+        "--offline",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "d6f955b28e177633ad0ba54a162ee09cc5caa83cc90a130b6b8298b2891fdda9",
+      "elapsed_seconds": 18.955594083003234,
+      "started_at": "2026-10-15T05:06:13.455305+00:00",
+      "finished_at": "2026-10-15T05:06:32.410991+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "4055e12c2d240735903f5ca4a4b69f8c9e38b0d6747c40dda20ace114de21e1b",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    }
+  },
+  "counts": {
+    "include_cli": 93,
+    "generated_namespace": 14,
+    "captured_dependency_discovery": 79,
+    "include_publication_dependency": 4,
+    "capture_adoption_demand": 2,
+    "distinct_bodies": 192,
+    "additional_repeated_exact_predecessor_failures": 3,
+    "all_passed": true
+  },
+  "receipts": [
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v51/HANDOFF.md",
+      "sha256": "c5bff3163cd809bc0a0ade31da84ccc97bcf058f17d8afabf1a86efac8cd25ca"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v51/COLLECTED-SCOPES.json",
+      "sha256": "29691db06faea299c49a80a4b3adc342ebbb808afb2220dce1ae265c09929b6e"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v51/ACTUAL-TOOL-TERMINALS.json",
+      "sha256": "2064b70d6db49bb3ca554944317e51d7de40d996f003033d2dd0d0e04b325717"
+    }
+  ],
+  "upstream_inventory": {
+    "cases": 308,
+    "raw_originals": 490,
+    "unchanged": true,
+    "additional_upstream_runtime_contract_passes_claimed": 0,
+    "configured_full_fixture_passes": 0
+  },
+  "limits": [
+    "V50 failed milestone retained; three exact failed include bodies now pass both individually and in the unfiltered93 bank.",
+    "Fresh integrated full milestone remains required.",
+    "No full runtime, full fixture, task, guest JIT, Linux or release completion."
+  ]
+}

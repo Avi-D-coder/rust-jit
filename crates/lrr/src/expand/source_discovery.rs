@@ -7665,6 +7665,9 @@ impl SourceDiscovery {
                             .get(&record.key().fingerprint())
                             .map(|view| view.diagnostic_origin().clone())
                     }),
+                self.included_views
+                    .get(&record.key().fingerprint())
+                    .cloned(),
             )?;
             rows.insert(
                 crate::db::dependency::InputKey::GeneratedSyntax(unit.key.content),

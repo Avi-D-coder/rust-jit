@@ -104,6 +104,39 @@ fn require_chain(
         .ok_or_else(crate::runtime::arena::resource)?;
     seen.push(identity);
     current_record(db, unit, publication)?;
+    if let Some(view) = &unit.included_source {
+        // Only the actual compiler include producer can terminate this chain.
+        // Its immutable capture and every producing dependency were retained by
+        // authorized discovery, separately from generated display text.
+        view.require_record(record)?;
+        view.require_published(db)?;
+        if !matches!(record.key().macro_identity, MacroIdentity::Builtin { .. })
+            || view.producer() != record.key()
+            || view.location().unit != unit.scope.crate_key
+        {
+            return Err(missing());
+        }
+        for dependency in view.dependencies() {
+            if publication.compiler_inputs.get(&dependency.key) != Some(&dependency.fingerprint) {
+                return Err(missing());
+            }
+        }
+        type_scope(db, publication, &unit.scope, &unit.key.profile, name)?;
+        if origins.is_empty()
+            || origins.iter().any(|origin| {
+                origin.source.unit.0 != view.location().unit.0
+                    || origin.source.content.0 != view.blob().content().0
+                    || origin.source.path != view.location().path.as_str()
+                    || origin.origin != view.origin()
+                    || origin.context != view.caller_context()
+                    || !view.tokens().spans().iter().any(|span| span == *origin)
+            })
+        {
+            return Err(missing());
+        }
+        let _ = seen.pop();
+        return Ok(());
+    }
     let MacroIdentity::Declaration { definition } = record.key().macro_identity else {
         return Err(missing());
     };

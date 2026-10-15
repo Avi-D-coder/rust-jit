@@ -23,6 +23,7 @@ pub struct GeneratedSyntaxInput {
     pub(crate) cfg: CfgSet,
     pub(crate) seal: SealKey,
     pub(crate) producer_origin: Option<Arc<crate::syntax::origin::MacroOrigin>>,
+    pub(crate) included_source: Option<Arc<crate::source::include_view::IncludedSourceView>>,
     pub(crate) definitions: BTreeMap<Digest, crate::source::manifest::DefKey>,
 }
 fn fault(message: &str) -> Diagnostic {
@@ -35,12 +36,23 @@ impl GeneratedSyntaxInput {
         cfg: CfgSet,
         seal: SealKey,
         producer_origin: Option<Arc<crate::syntax::origin::MacroOrigin>>,
+        included_source: Option<Arc<crate::source::include_view::IncludedSourceView>>,
     ) -> Result<(Arc<Self>, BTreeMap<InputKey, InputValue>), Diagnostic> {
         if producer_origin.as_ref().is_some_and(|origin| {
             origin.invocation_identity != record.key().invocation
                 || origin.heap_bytes().is_none_or(|n| n > 64 * 1024)
         }) {
             return Err(fault("generated producer diagnostic origin differs"));
+        }
+        if let Some(view) = &included_source {
+            view.require_record(&record)?;
+            if view.location().unit != scope.crate_key
+                || producer_origin.as_ref().map(|origin| origin.fingerprint())
+                    != Some(view.diagnostic_origin().fingerprint())
+                || view.estimated_bytes() > 32 * 1024 * 1024
+            {
+                return Err(fault("generated include source owner differs"));
+            }
         }
         let items = Arc::new(super::generated_items::GeneratedItems::admit(
             record.key(),
@@ -135,6 +147,7 @@ impl GeneratedSyntaxInput {
                 seal,
                 definitions,
                 producer_origin,
+                included_source,
             }),
             declarations,
         ))
@@ -146,6 +159,8 @@ impl GeneratedSyntaxInput {
             && self.seal.epoch == other.seal.epoch
             && self.seal.unit_graph == other.seal.unit_graph
             && self.items.record().same_record(other.items.record())
+            && self.included_source.as_ref().map(|view| view.identity())
+                == other.included_source.as_ref().map(|view| view.identity())
             && self
                 .producer_origin
                 .as_ref()
@@ -183,6 +198,13 @@ impl GeneratedSyntaxInput {
                         .map_or(Some(0), |origin| origin.heap_bytes())?,
                 )
             })
+            .and_then(|n| {
+                n.checked_add(
+                    self.included_source
+                        .as_ref()
+                        .map_or(0, |view| view.estimated_bytes()),
+                )
+            })
             .and_then(|n| n.checked_add(definitions))
             .and_then(|n| n.checked_add(self.scope.heap_bytes()))
             .and_then(|n| n.checked_add(self.key.profile.semantics.capacity()))
@@ -199,7 +221,7 @@ impl GeneratedSyntaxInput {
     }
 }
 impl StableEncode for GeneratedSyntaxInput {
-    const DOMAIN: &'static str = "lrr/v2/generated-syntax-value";
+    const DOMAIN: &'static str = "lrr/v3/generated-syntax-value";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.record(&self.scope);
@@ -207,5 +229,6 @@ impl StableEncode for GeneratedSyntaxInput {
         e.record(&self.seal);
         e.record(&self.items.record().descriptor());
         e.option(&self.producer_origin, |e, origin| e.record(origin.as_ref()));
+        e.option(&self.included_source, |e, view| e.digest(view.identity()));
     }
 }
