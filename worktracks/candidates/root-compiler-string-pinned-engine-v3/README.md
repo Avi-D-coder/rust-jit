@@ -1,0 +1,3 @@
+# Use the real pinned expansion engine in the original-source harness
+
+V104 strict checks and compilation passed; four of seven priority bodies passed. The three compiler-include bodies now reach the pinned engine identity guard. Their older shared fixture setup used a synthetic byte-macro-dispatch-generations digest, while actual CLI preparation uses source_declarative::engine_version(). Set this test-only setup to that actual pinned identity. The production identity/profile/phase checks and the explicit foreign-engine refusal remain unchanged. Original source bytes, expected runtime assertions and capture authority are preserved. Failed V104 evidence remains; this follow-on is uncompiled until asynchronous validation.

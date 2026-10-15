@@ -1,0 +1,21 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "task_cards": [
+    "T024",
+    "T054",
+    "M018"
+  ],
+  "claim": "LOCAL-024",
+  "at": "2026-10-15T16:06:15.869262+00:00",
+  "source_baseline": "8c7a49b00d340279d568171769131421493cfb948ee6328d6918218b7af03d95",
+  "actual_failure": "V99 strict a383df/1: E0308 at reached_scopes.rs100; Seal::key returns owned SealKey, compared to borrowed request key",
+  "patch_sha256": "f0e2660b5badadfb02b3bbca5c3eff6fe4c9834e1ad68f213972864c6684bad0",
+  "files": [
+    {
+      "path": "crates/lrr/src/cli/reached_scopes.rs",
+      "before_sha256": "00bb8fa408b7ff06c746032a312d482f47aa74e4a79de22772301c7083a28c67",
+      "after_sha256": "b766fb78ba539da9a1c8e76d248f2e146e5dd08df426cfa7186a5707822dd390"
+    }
+  ],
+  "full_milestone_passed": false
+}

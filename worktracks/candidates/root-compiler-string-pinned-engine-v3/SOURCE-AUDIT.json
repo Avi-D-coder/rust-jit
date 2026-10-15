@@ -1,0 +1,20 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T022",
+    "T024",
+    "T061"
+  ],
+  "source_baseline": "b80326573b6fb8e24c806abba9e7c7840df68c72c654d7929af944edaa5cbaab",
+  "patch_sha256": "1cf3445bc12dbc0d7fc1debff7ccbfe6e3b6a9c472f6045f4dbaa11a3f61ad70",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_byte_macro_literal_tests.rs",
+      "before_sha256": "e5e077f63ef6a0521caac53b7b8cccbfb272ce698479af208cce1e47bf697d28",
+      "after_sha256": "3ccb0d600ab5114d51ee0105b6bcf05319ac4cb38d1a0e5ab4bdbabd3dbabf90"
+    }
+  ],
+  "test_only": true,
+  "full_milestone_passed": false
+}

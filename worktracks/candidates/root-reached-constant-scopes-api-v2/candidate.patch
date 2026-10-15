@@ -1,0 +1,11 @@
+--- a/crates/lrr/src/cli/reached_scopes.rs
++++ b/crates/lrr/src/cli/reached_scopes.rs
+@@ -97,7 +97,7 @@
+         compiler.discover_diagnostic(&mut discovery, db, snapshot)?;
+         discovery.publish(db)?;
+         if !matches!(db.published_input(&InputKey::DiscoverySeal(key.clone())),
+-            Some((InputValue::DiscoverySeal(input), _)) if input.seal.key() == key)
++            Some((InputValue::DiscoverySeal(input), _)) if input.seal.key() == *key)
+         {
+             return Err(invalid(
+                 "reached scope discovery did not publish its requested seal",

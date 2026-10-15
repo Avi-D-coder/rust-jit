@@ -1,0 +1,9 @@
+# Reached scope preparation for match scrutinee context
+
+T024/T054/M018 invariant: deriving a numeric scrutinee type from an original range-bound header requires actual owning Value/Type scope publication before retaining its source proof. Header preparation must not execute the constant initializer or fabricate a seal.
+
+V100 strict compilation passed. The new authority control passed and the unchanged character-range main completed its four edition iterations, but the combined whole-main body failed on issue-21475.rs/2015 before scrutinee execution. The earlier match-context producer directly captured a constant path without requesting its module scopes; the later range-value producer already had the new typed demand path.
+
+This three-leaf repair makes match-context capture return typed absent/ready/NeedInput outcomes. It routes the exact original endpoint only to identify its module scopes, requests actual Value and Type publications through the existing bounded coordinator, then reruns full constant-path and header-only source admission. The selected Type scope is prepared before retaining the match proof, preserving its currentness when the actual constant later executes. Both producers share the checked world-derived request helpers. No initializer, value descriptor, guessed type or method spelling supplies authority.
+
+The CLI preparation vector now reserves its bounded metadata capacity with a typed resource refusal. The two unchanged original-main/authority controls remain the pending acceptance witnesses; existing capture suspension refusals, match proofs, return authority and source-run checks remain required. No original, schema, opcode, capability policy or expected result changes. Formatting and exact replay passed; compilation, runtime acceptance and a fresh final milestone remain pending.

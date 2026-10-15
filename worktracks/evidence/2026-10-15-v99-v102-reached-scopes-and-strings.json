@@ -1,0 +1,364 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T16:32:49.486114+00:00",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "claim": "LOCAL-024",
+  "source_candidates": [
+    "worktracks/candidates/root-reached-constant-scopes-v1/README.md",
+    "worktracks/candidates/root-reached-constant-scopes-api-v2/README.md",
+    "worktracks/candidates/root-match-bound-scope-preparation-v1/README.md",
+    "worktracks/candidates/root-string-schema19-combined-v1/README.md"
+  ],
+  "validation_members": [
+    {
+      "validation": "V99",
+      "root_verified_evidence_files": 28,
+      "result_sha256": "0aa8d12f856dc2e9f325d072236eb12327d057b34138d75dc22de11e4f5d2157",
+      "evidence_index_sha256": "5de258c61b9b223b888b7e86862f87107d683fcbd0bc10fe8cd9869aebf043c7",
+      "release_sha256": "13d2411c7f929025d09e2bd737a6c6d95e053d087e171f1338be0185e05efa2e",
+      "results": {
+        "source_member": "8c7a49b00d340279d568171769131421493cfb948ee6328d6918218b7af03d95",
+        "stage": "strict lrr --lib --tests",
+        "exit_code": 101,
+        "diagnostic": "E0308",
+        "path": "crates/lrr/src/cli/reached_scopes.rs",
+        "line": 100,
+        "actual": "input.seal.key() == key",
+        "expected_type": "SealKey",
+        "found_type": "&SealKey",
+        "compiler_help": "consider dereferencing the borrow: input.seal.key() == *key",
+        "test_bodies_executed": 0,
+        "stderr_sha256": "7052520998e38acd15ea776dc63b70bfb99fbc91081db881e5019463d3f5d2d2",
+        "unexecuted": [
+          "test compilation",
+          "unchanged_constant_ranges_complete_through_reached_scopes_all_editions",
+          "reached_scope_requests_refuse_foreign_world_epoch_scope_and_duplicate_progress",
+          "source_run complete 67-body regression bank",
+          "existing capture refusal and source constant controls",
+          "format check",
+          "real architecture audit",
+          "fixture-reference audit",
+          "full milestone (not authorized)"
+        ],
+        "no_source_repair_or_retry": true
+      }
+    },
+    {
+      "validation": "V100",
+      "root_verified_evidence_files": 42,
+      "result_sha256": "342738596f21c01e81d9fa9d35b0b562c427909c920c92bd140da1e621b57358",
+      "evidence_index_sha256": "1340e50612cce97439216d98daf447f7dc7399adee3da96c4a2df70d0e81ffa8",
+      "release_sha256": "40cc3528581bf9d6d4e67ab773893f5a7a24f34f9315cb56616a2597097bb19a",
+      "results": {
+        "source_member": "252ddc1838cd4c7553df7a944a143cbb28b5b810427a88ad65c5c95147bfd432",
+        "stage": "two priority reached-scope bodies",
+        "exit_code": 101,
+        "strict_compile_green": true,
+        "test_compilation_green": true,
+        "listed_library_bodies": 1194,
+        "named_pass": 1,
+        "named_fail": 1,
+        "actual_named_results": [
+          {
+            "name": "cli::reached_scopes::tests::reached_scope_requests_refuse_foreign_world_epoch_scope_and_duplicate_progress",
+            "result": "ok"
+          },
+          {
+            "name": "cli::runtime_capture_tests::unchanged_constant_ranges_complete_through_reached_scopes_all_editions",
+            "result": "FAILED"
+          }
+        ],
+        "failed_location": "crates/lrr/src/cli/runtime_capture_tests.rs:194",
+        "failed_original": "tests/ui/parser/issues/issue-21475.rs",
+        "failed_edition": 2015,
+        "diagnostic_code": "LRR-E-CALL-CONTEXT",
+        "message": "lexical source Value namespace is not currently sealed",
+        "vm_dispatches": 2,
+        "vm_outcomes": 2,
+        "capture_complete": false,
+        "observed_fault": true,
+        "pc": "226c0744163d7badac06805fdb7311260a6aa20fd61f0636752d383edb17d0cc",
+        "original_range": [
+          107,
+          229
+        ],
+        "earlier_in_failed_body": {
+          "original": "tests/ui/match/match-range-char-const.rs",
+          "editions": [
+            2015,
+            2018,
+            2021,
+            2024
+          ],
+          "sequential_all_assertions_reached_before_later_case_failure": true,
+          "independent_named_pass_or_external_CLI_packet_not_inferred": true
+        },
+        "remaining_issue_editions_not_run": [
+          2018,
+          2021,
+          2024
+        ],
+        "stderr_sha256": "ac29e212106910a48b12c042f033c2ec20c438c2a6b579327e05fbe510a053e3",
+        "unexecuted": [
+          "source_run compilation and 67-body regression bank",
+          "31 selected existing capture/source-constant controls",
+          "format check",
+          "real architecture audit",
+          "fixture-reference audit",
+          "full milestone (not authorized)"
+        ],
+        "no_source_repair_or_retry": true
+      }
+    },
+    {
+      "validation": "V101",
+      "root_verified_evidence_files": 95,
+      "result_sha256": "89e57455038646fe138bfad4d926ed4e7e69191b86a8e21093cef81f7d869f9b",
+      "evidence_index_sha256": "9459c1314aefb4d2aa5615def23a21f3aa158455c32340bbf17203a032fe20eb",
+      "release_sha256": "83a2a14122e8e931404d5550117458a0bd8c186d49fb9694d2847a29867c3bef",
+      "results": {
+        "source_member": "727e34b60d9d571aa2a64491827708c7d26c0ebd69194740159a0a509b9f7f10",
+        "default_files": 4356,
+        "extra_inputs": 435,
+        "raw_files": 507,
+        "cases": 322,
+        "distinct_test_bodies": 103,
+        "test_body_executions": 103,
+        "duplicates": 0,
+        "priority": {
+          "named_pass": 2,
+          "whole_originals": [
+            "tests/ui/match/match-range-char-const.rs",
+            "tests/ui/parser/issues/issue-21475.rs"
+          ],
+          "editions": [
+            2015,
+            2018,
+            2021,
+            2024
+          ],
+          "route": "actual standalone capture function via host test, not separate external CLI invocation",
+          "foreign_world_epoch_scope_duplicate_refusal": true
+        },
+        "existing_capture_source_constant_match_authority": 34,
+        "source_run_complete": 67,
+        "actual_library_listed": 1194,
+        "other_library_bodies_not_run": 1158,
+        "scopes": {
+          "strict-library": {
+            "exit_code": 0,
+            "elapsed_seconds": 20.64306516601937,
+            "test_bodies_executed": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "1f5c617f072e89832d3341cc3cad465896d210defaa1fa8b9b39f1bdf9dd8158"
+          },
+          "compile-library-tests": {
+            "exit_code": 0,
+            "elapsed_seconds": 22.04547891698894,
+            "test_bodies_executed": 0,
+            "stdout_sha256": "7c92ba4370a0beb6b243fc7717651c0488c1070b36d1efaec64d7b11a60a633c",
+            "stderr_sha256": "0de8b07de8e9ba477cd21fe189ac4d7cd880a3adc11e627e07527cbfcae107ed"
+          },
+          "compile-source-run": {
+            "exit_code": 0,
+            "elapsed_seconds": 21.77545183399343,
+            "test_bodies_executed": 0,
+            "stdout_sha256": "39edf3573049eb81084969d11ba5851ff713967c9653b91dab0dc0322eae108a",
+            "stderr_sha256": "f2e4b3a646aa136069325c2a6bc01c9c27a552e4598da81241d938c0245c99cd"
+          },
+          "reached-scope-priority": {
+            "exit_code": 0,
+            "elapsed_seconds": 2.9958351670065895,
+            "test_bodies_executed": 2,
+            "stdout_sha256": "9c37776ecb418f95166a592aa2d12490cb62b0f900c84f21dff5ec8b732da09a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "capture-constant-match-authority": {
+            "exit_code": 0,
+            "elapsed_seconds": 17.876725499983877,
+            "test_bodies_executed": 34,
+            "stdout_sha256": "12fa362a04d62bda44333b65b07851187efd2306b58bc76984c5a9cb14f5df00",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "source-full-bank": {
+            "exit_code": 0,
+            "elapsed_seconds": 3.813551875005942,
+            "test_bodies_executed": 67,
+            "stdout_sha256": "5a34fc5ee020a27d52dc8278b2f4b53a6ba4bbb4a33f83c3c967da48ba482d21",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "format": {
+            "exit_code": 0,
+            "elapsed_seconds": 5.308605500002159,
+            "test_bodies_executed": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "architecture": {
+            "exit_code": 0,
+            "elapsed_seconds": 8.71017808400211,
+            "test_bodies_executed": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "802525e5a2f2b3852c4685e0705dd09cbd09ad8c378aa0066797c53263843885"
+          },
+          "fixture-reference": {
+            "exit_code": 0,
+            "elapsed_seconds": 1.5684720829885919,
+            "test_bodies_executed": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "bdeee2f9fc4916071c3027fdf4e949106bb50d48e92bd2cd28fb66b2e5a0be95"
+          }
+        },
+        "source_owner_originals_unchanged": true,
+        "compiled_executables": {
+          "library": {
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/deps/lrr-613ddfd4d90d020a",
+            "sha256": "822f42334c8b3b3efddbcf69512a35f14e0c741e8ae4a2d23e99c047d0c64d4a",
+            "artifact_fresh": false,
+            "compile_terminal": "compile-library-tests/terminal.json"
+          },
+          "source-run": {
+            "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/deps/source_run-6c2c0d77ee670a5a",
+            "sha256": "6c90b8030e559767a17a56ea85a9dc6412799e3dd0d4b3240d29830855a1b683",
+            "artifact_fresh": false,
+            "compile_terminal": "compile-source-run/terminal.json"
+          }
+        },
+        "full_milestone_not_run": true,
+        "prior_failed_gates_preserved": true,
+        "canonical_promotion": false,
+        "retained_external_cli_not_rebuilt_or_executed": true,
+        "free_bytes": 70567215104
+      }
+    },
+    {
+      "validation": "V102",
+      "root_verified_evidence_files": 74,
+      "result_sha256": "1b75e1d8fa877a6028df50582e431fbd29668cb677989a4d941e152be129986c",
+      "evidence_index_sha256": "e7e7efd7d3fcf22788b1fd5b2dcc6625e1f13fcf49a1934956cfa4b15da4f2af",
+      "release_sha256": "c7be21dbdfce8ae52bb9d7c7c184920324cfe211222963e574490479cb1a7a0e",
+      "results": {
+        "source_member": "636fd2eb7bc0e261eb5037ab65e7ea93d523ada78e52caaddbd2ddec1e0c0566",
+        "schema": 19,
+        "default_files": 4361,
+        "extras": 435,
+        "raw_files": 509,
+        "cases": 324,
+        "additive_prior_files_preserved": 507,
+        "additive_prior_case_rows_preserved": 322,
+        "new_originals": [
+          "tests/ui/consts/const-eval/strlen.rs",
+          "tests/ui/str/raw-string-literal-unescaped-unicode.rs"
+        ],
+        "strict_library_passed": true,
+        "strict_xtask_schema_passed": true,
+        "test_compilation_passed": true,
+        "actual_library_listed": 1200,
+        "priority_bodies": 6,
+        "named_pass": 3,
+        "named_fail": 3,
+        "test_results": [
+          {
+            "name": "engine::run::byte_macro_literals::string_tests::original_contains_argument_result_and_resumed_cancel_refuse_without_publication",
+            "result": "FAILED"
+          },
+          {
+            "name": "engine::run::byte_macro_literals::string_tests::original_empty_method_source_result_and_fuel_refusals_precede_publication",
+            "result": "ok"
+          },
+          {
+            "name": "engine::run::byte_macro_literals::string_tests::unchanged_crlf_string_entire_main_including_source_contains_completes_all_editions",
+            "result": "FAILED"
+          },
+          {
+            "name": "engine::run::byte_macro_literals::string_tests::upstream_empty_and_raw_nonempty_string_method_components_execute_actual_length_all_editions",
+            "result": "FAILED"
+          },
+          {
+            "name": "runtime::cell::byte_comparison::string_search::tests::original_crlf_source_search_is_bounded_fuel_accounted_and_read_only_all_editions",
+            "result": "ok"
+          },
+          {
+            "name": "runtime::cell::byte_comparison::string_search::tests::original_search_refuses_nonstring_roots_cancelled_empty_and_faulted_cursor_replay",
+            "result": "ok"
+          }
+        ],
+        "failures": [
+          {
+            "name": "engine::run::byte_macro_literals::string_tests::original_contains_argument_result_and_resumed_cancel_refuse_without_publication",
+            "details": "LRR-E-CATALOG-INCOMPLETE: reached user macro requires source expansion integration; original CRLF macro range831..900"
+          },
+          {
+            "name": "engine::run::byte_macro_literals::string_tests::unchanged_crlf_string_entire_main_including_source_contains_completes_all_editions",
+            "details": "LRR-E-CATALOG-INCOMPLETE: reached user macro requires source expansion integration; original CRLF macro range831..900"
+          },
+          {
+            "name": "engine::run::byte_macro_literals::string_tests::upstream_empty_and_raw_nonempty_string_method_components_execute_actual_length_all_editions",
+            "details": "syntax/string_fixture_facts.rs130 Option::unwrap on None"
+          }
+        ],
+        "stderr_sha256": "50b2874a0a737a1ba9476effbae14627933bd81db22f91141e9b2df9f2c0660e",
+        "full_original_runtime_passes_not_inferred": true,
+        "unexecuted": [
+          "full lrr library bank (1200 declared; only priority6 executed)",
+          "source_run compilation and 67-body regression bank",
+          "affected wire/method/stock integration controls beyond the6",
+          "match_no_arm_exit runtime tests (strict check only)",
+          "format check",
+          "real architecture audit",
+          "fixture-reference audit",
+          "full milestone (not authorized)"
+        ],
+        "source_owner_originals_unchanged": true,
+        "no_source_repair_or_retry": true,
+        "free_bytes": 70050955264
+      }
+    }
+  ],
+  "root_verified_evidence_files_total": 239,
+  "named_outcome_summary": {
+    "V99": {
+      "passed": 0,
+      "failed": 0,
+      "compile_failed": true,
+      "strict_terminal": "a383df/1"
+    },
+    "V100": {
+      "passed": 1,
+      "failed": 1,
+      "strict_terminal": "c961f9/0",
+      "runtime_terminal": "54ddb2/1"
+    },
+    "V101": {
+      "passed": 103,
+      "failed": 0,
+      "priority_terminal": "229177/0",
+      "authority_terminal": "228445/0",
+      "source_run_terminal": "3f6b6f/0"
+    },
+    "V102": {
+      "passed": 3,
+      "failed": 3,
+      "strict_terminal": "a9423e/0",
+      "schema_strict_terminal": "c88cfe/0",
+      "runtime_terminal": "635439/1"
+    }
+  },
+  "counts_from_different_frozen_sources_not_additive": true,
+  "v101_actual_original_main_host_route": [
+    "tests/ui/match/match-range-char-const.rs",
+    "tests/ui/parser/issues/issue-21475.rs"
+  ],
+  "v101_all_four_editions": true,
+  "actual_external_cli_on_v101_not_run": true,
+  "v102_runtime_gap": "reached include_str sealed compiler output not yet connected to executable literal lane",
+  "v102_harness_gap": "raw is_empty source lies in opaque assert tokens",
+  "repair_candidate": "worktracks/candidates/root-compiler-string-literal-v1/README.md",
+  "full_milestone_after_v98_not_run": true,
+  "prior_failed_full_milestone_preserved": true,
+  "canonical_promotion": false,
+  "full_fixture_passes_added": 0,
+  "jit_started": false,
+  "linux_acceptance": false
+}

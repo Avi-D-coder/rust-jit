@@ -1,0 +1,601 @@
+--- a/compat/fixtures.toml
++++ b/compat/fixtures.toml
+@@ -12221,3 +12221,8 @@
+ id = "T061-STR-SEARCH-LIFECYCLE"
+ path = "crates/lrr/src/runtime/cell_string_search_tests.rs"
+ test = "original_search_refuses_nonstring_roots_cancelled_empty_and_faulted_cursor_replay"
++
++[[fixture]]
++id = "T061-STR-INCLUDE-SEALED"
++path = "crates/lrr/src/engine/run_string_macro_literal_tests.rs"
++test = "original_include_string_requires_current_sealed_source_record_and_exact_plan"
+--- a/crates/lrr/src/engine/declarative_runtime.rs
++++ b/crates/lrr/src/engine/declarative_runtime.rs
+@@ -55,7 +55,7 @@
+                 GrammarSlot::Expression | GrammarSlot::Statements
+             ) && matches!(
+                 record.key().macro_identity,
+-                MacroIdentity::Declaration { .. }
++                MacroIdentity::Declaration { .. } | MacroIdentity::Builtin { .. }
+             )
+         }) {
+             if wanted.len() >= 4096 {
+@@ -111,6 +111,34 @@
+         }
+         Ok(this)
+     }
++    /// Only a plan retained after sealed-source preparation can authorize an
++    /// immutable generated literal. A recipe fingerprint alone is not a receipt.
++    pub(super) fn current_literal_plan(
++        &self,
++        db: &Database,
++        pc: &PcKey,
++        installed: &crate::ir::recipe::VerifiedRecipe,
++    ) -> Result<bool, Diagnostic> {
++        let Some(plan) = self.plans.get(pc) else {
++            return Ok(false);
++        };
++        if plan.recipe().recipe().fingerprint() != installed.recipe().fingerprint() {
++            return Err(invalid());
++        }
++        for dependency in &plan.recipe().recipe().dependencies {
++            let crate::db::dependency::DependencyStamp::Input { key, fingerprint } = dependency
++            else {
++                return Err(invalid());
++            };
++            if db
++                .published_input(key)
++                .is_none_or(|(_, current)| current != *fingerprint)
++            {
++                return Err(invalid());
++            }
++        }
++        Ok(true)
++    }
+     pub(super) fn plans(&self) -> impl Iterator<Item = &PreparedDeclarativeExpression> {
+         self.plans.values()
+     }
+--- a/crates/lrr/src/engine/run_byte_macro_literals.rs
++++ b/crates/lrr/src/engine/run_byte_macro_literals.rs
+@@ -56,6 +56,7 @@
+     recipe: Digest,
+     span: BodySpan,
+     destination: SlotId,
++    generated: bool,
+     payload: MacroLiteralPayload,
+ }
+ impl AdmittedMacroByteLiteral {
+@@ -71,6 +72,7 @@
+             && self.recipe == other.recipe
+             && self.span == other.span
+             && self.destination == other.destination
++            && self.generated == other.generated
+             && self.payload.same_decoded_payload(&other.payload)
+     }
+     pub(crate) fn require(
+@@ -90,7 +92,11 @@
+             || self.source.profile != *body.profile()
+             || self.cfg != body.cfg().fingerprint()
+             || node.role != NodeRole::Expression(ExpressionKind::Macro)
+-            || !node.runtime_scalar_slots.contains(&destination)
++            || if self.generated {
++                node.value != Some(destination)
++            } else {
++                !node.runtime_scalar_slots.contains(&destination)
++            }
+             || self.span != literal.source
+             || self.span.body_key != pc.body
+             || self.span.relative_start < node.range.start
+@@ -124,7 +130,7 @@
+         if node.role != NodeRole::Expression(ExpressionKind::Macro) {
+             return self.frame.admit_macro_byte_literal(None);
+         }
+-        let installed = self.installed.get(id)?;
++        let installed = self.installed.get_current(db, id)?;
+         let mut literals = installed
+             .recipe()
+             .operations
+@@ -148,6 +154,9 @@
+             ));
+         }
+         let fingerprint = installed.recipe().fingerprint();
++        let generated = self
++            .declarative_runtime
++            .current_literal_plan(db, key, installed)?;
+         for context in contexts {
+             let source = context.source();
+             let Some(handle) = source
+@@ -167,18 +176,20 @@
+             }
+             // This redoes real lexical/compiler macro selection, not a spelling
+             // check. A user/shadowed/unresolved macro cannot produce this receipt.
+-            let current = context
+-                .resolve_at(
+-                    &self.frame.body,
+-                    key,
+-                    self.runtime_no_item_proofs.values(),
+-                    Some((&self.frame, &self.store)),
+-                )?
+-                .ok_or_else(|| call_fault("macro byte literal current intrinsic absent"))?;
+-            if current.recipe.recipe().fingerprint() != fingerprint {
+-                return Err(call_fault(
+-                    "macro byte literal current source recipe differs",
+-                ));
++            if !generated {
++                let current = context
++                    .resolve_at(
++                        &self.frame.body,
++                        key,
++                        self.runtime_no_item_proofs.values(),
++                        Some((&self.frame, &self.store)),
++                    )?
++                    .ok_or_else(|| call_fault("macro byte literal current intrinsic absent"))?;
++                if current.recipe.recipe().fingerprint() != fingerprint {
++                    return Err(call_fault(
++                        "macro byte literal current source recipe differs",
++                    ));
++                }
+             }
+             let payload = MacroLiteralPayload::from_literal(literal)?;
+             let admission = AdmittedMacroByteLiteral {
+@@ -188,6 +199,7 @@
+                 recipe: fingerprint,
+                 span: literal.source.clone(),
+                 destination,
++                generated,
+                 payload,
+             };
+             admission.require(&self.frame.body, key, literal, destination)?;
+--- a/crates/lrr/src/engine/run_string_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_string_macro_literal_tests.rs
+@@ -36,7 +36,16 @@
+         let key = run.frame.pc().clone();
+         let macro_node = run.frame.body.nodes()[key.node as usize].role
+             == NodeRole::Expression(ExpressionKind::Macro);
+-        let prepared = if macro_node {
++        let generated = if macro_node && !run.installed.contains_pc(&key) {
++            run.declarative_runtime
++                .prepare(db, &run.sources, &run.frame.body, &key)
++                .into_ready()
++                .unwrap()
++                .unwrap()
++        } else {
++            None
++        };
++        let prepared = if macro_node && generated.is_none() {
+             contexts.iter().find_map(|context| {
+                 context
+                     .resolve_at(
+@@ -50,7 +59,14 @@
+         } else {
+             None
+         };
+-        let id = if let Some(prepared) = prepared {
++        let id = if let Some(plan) = generated {
++            let id = run
++                .installed
++                .install_prepared(db, key, plan.recipe())
++                .unwrap();
++            run.declarative_runtime.retain(plan).unwrap();
++            id
++        } else if let Some(prepared) = prepared {
+             if let Some(proof) = prepared.no_item {
+                 run.retain_no_item_proof(proof).unwrap();
+             }
+@@ -890,3 +906,150 @@
+         db.finish_run().unwrap();
+     }
+ }
++
++#[test]
++fn original_include_string_requires_current_sealed_source_record_and_exact_plan() {
++    use crate::{db::dependency::DependencyStamp, expand::identity::MacroIdentity};
++    let (mut db, mut run, _, _) = start_complete_crlf(2024, 100_000);
++    let before = effects(&run);
++    let keys: Vec<_> = run
++        .frame
++        .body
++        .nodes()
++        .iter()
++        .filter(|node| node.role == NodeRole::Expression(ExpressionKind::Macro))
++        .map(|node| {
++            run.frame
++                .body
++                .pc(node.id, crate::ir::pc::Phase::Entry)
++                .unwrap()
++        })
++        .collect();
++    let mut selected = None;
++    for pc in keys {
++        if let Some(plan) = run
++            .declarative_runtime
++            .prepare(&mut db, &run.sources, &run.frame.body, &pc)
++            .into_ready()
++            .unwrap()
++            .unwrap()
++        {
++            assert!(selected.is_none(), "one actual self-include producer");
++            selected = Some((pc, plan));
++        }
++    }
++    let (pc, plan) = selected.expect("original compiler include producer");
++    let recipe = plan.recipe().clone();
++    let expected = recipe
++        .recipe()
++        .dependencies
++        .iter()
++        .find_map(|dependency| {
++            let DependencyStamp::Input {
++                key: InputKey::ExpansionRecord(_),
++                ..
++            } = dependency
++            else {
++                return None;
++            };
++            let DependencyStamp::Input { key, .. } = dependency else {
++                unreachable!()
++            };
++            match db.input(key)?.as_ref() {
++                InputValue::ExpansionRecord(record) => Some(record.descriptor()),
++                _ => None,
++            }
++        })
++        .unwrap();
++    assert!(matches!(
++        expected.key.macro_identity,
++        MacroIdentity::Builtin { .. }
++    ));
++    let source = run
++        .sources
++        .iter()
++        .find(|source| {
++            source
++                .outline()
++                .items
++                .iter()
++                .filter_map(|item| item.body.as_ref())
++                .any(|handle| handle.key() == pc.body)
++        })
++        .unwrap();
++    for mode in 0..7 {
++        let mut wrong = expected.clone();
++        match mode {
++            0 => {
++                wrong.key.macro_identity = MacroIdentity::Builtin {
++                    definition: Digest::of_bytes(b"foreign builtin"),
++                }
++            }
++            1 => {
++                wrong.key.consumer_compile_env = Digest::of_bytes(b"different compile environment")
++            }
++            2 => wrong.key.invocation = Digest::of_bytes(b"different source call"),
++            3 => wrong.key.input_tokens = Digest::of_bytes(b"different original operands"),
++            4 => wrong.key.call_edition = 2015,
++            5 => wrong.key.grammar = crate::expand::identity::GrammarSlot::Statements,
++            _ => wrong.key.engine_version = Digest::of_bytes(b"different expansion engine"),
++        }
++        assert!(
++            matches!(
++                crate::engine::runtime_macros::prepare_declarative_expression(
++                    &mut db,
++                    source,
++                    &run.frame.body,
++                    &pc,
++                    &wrong,
++                ),
++                QueryPoll::Ready(Err(_))
++            ),
++            "invalid compiler binding mode {mode}"
++        );
++        assert_eq!(effects(&run), before);
++    }
++    assert!(
++        !run.declarative_runtime
++            .current_literal_plan(&db, &pc, &recipe)
++            .unwrap()
++    );
++    run.declarative_runtime.retain(plan).unwrap();
++    assert!(
++        run.declarative_runtime
++            .current_literal_plan(&db, &pc, &recipe)
++            .unwrap()
++    );
++    assert!(
++        run.declarative_runtime
++            .current_literal_plan(&Database::default(), &pc, &recipe)
++            .is_err()
++    );
++    let mut changed = recipe.recipe().clone();
++    changed.origin.expansion_ancestry.clear();
++    let changed = crate::ir::validate::verify(
++        crate::ir::recipe::RecipeDraft {
++            key: changed.key,
++            origin: changed.origin,
++            operations: changed.operations.into_vec(),
++            exits: vec![changed.exit],
++            dependencies: changed.dependencies.into_vec(),
++        },
++        &run.frame.body,
++    )
++    .unwrap();
++    assert!(
++        run.declarative_runtime
++            .current_literal_plan(&db, &pc, &changed)
++            .is_err()
++    );
++    let mut foreign = pc.clone();
++    foreign.phase = crate::ir::pc::Phase::Exit.code().unwrap();
++    assert!(
++        !run.declarative_runtime
++            .current_literal_plan(&db, &foreign, &recipe)
++            .unwrap()
++    );
++    assert_eq!(effects(&run), before);
++    db.finish_run().unwrap();
++}
+--- a/crates/lrr/src/engine/runtime_macros.rs
++++ b/crates/lrr/src/engine/runtime_macros.rs
+@@ -490,11 +490,50 @@
+     };
+     let validate = || -> Result<_, Diagnostic> {
+         expected.key.validate()?;
++        let compiler = match &expected.key.macro_identity {
++            MacroIdentity::Declaration { .. } => None,
++            MacroIdentity::Builtin { definition } => {
++                let catalog =
++                    crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                        &source.selection().outline.parse.profile,
++                    )?;
++                let selected = catalog
++                    .definitions()
++                    .find(|member| member.identity == *definition)
++                    .ok_or_else(|| {
++                        fault(
++                            "LRR-E-EXPANSION-INPUT",
++                            "reached compiler definition is not canonical",
++                        )
++                    })?;
++                let descriptor = catalog.select(selected)?.ok_or_else(|| {
++                    fault(
++                        "LRR-E-EXPANSION-INPUT",
++                        "reached compiler descriptor absent",
++                    )
++                })?;
++                use crate::expand::compile_input_identity::CompileInputKind;
++                if !matches!(
++                    descriptor.kind(),
++                    CompileInputKind::IncludeStr | CompileInputKind::IncludeBytes
++                ) || expected.key.definition_edition != selected.definition_edition
++                    || expected.key.grammar != GrammarSlot::Expression
++                {
++                    return Err(fault(
++                        "LRR-E-EXPANSION-INPUT",
++                        "reached compiler literal kind/edition/grammar differs",
++                    ));
++                }
++                Some((*definition, descriptor.kind()))
++            }
++            _ => {
++                return Err(fault(
++                    "LRR-E-EXPANSION-INPUT",
++                    "reached literal macro identity differs",
++                ));
++            }
++        };
+         if expected.wire_bytes > 32 * 1024 * 1024
+-            || !matches!(
+-                expected.key.macro_identity,
+-                MacroIdentity::Declaration { .. }
+-            )
+             || !matches!(
+                 expected.key.grammar,
+                 GrammarSlot::Expression | GrammarSlot::Statements
+@@ -579,9 +618,9 @@
+                 "reached expression invocation/input/context differs",
+             ));
+         }
+-        Ok((handle, node))
++        Ok((handle, node, compiler))
+     };
+-    let (handle, node) = match validate() {
++    let (handle, node, compiler) = match validate() {
+         Ok(value) => value,
+         Err(error) => return QueryPoll::Ready(Err(error)),
+     };
+@@ -608,6 +647,28 @@
+             return QueryPoll::Ready(Err(fault(
+                 "LRR-E-EXPANSION-INPUT",
+                 "reached expression source publication differs",
++            )));
++        }
++        dependencies.push(DependencyStamp::Input {
++            key,
++            fingerprint: value.fingerprint(),
++        });
++    }
++    if compiler.is_some() {
++        let key = InputKey::UnitCompileEnv(source.selection().outline.crate_key);
++        let Some(value) = db.input(&key) else {
++            return QueryPoll::Ready(Err(fault(
++                "LRR-E-EXPANSION-INPUT",
++                "reached compiler environment absent",
++            )));
++        };
++        if !matches!(value.as_ref(), InputValue::UnitCompileEnv(environment)
++            if environment.unit() == source.selection().outline.crate_key
++                && environment.fingerprint() == expected.key.consumer_compile_env)
++        {
++            return QueryPoll::Ready(Err(fault(
++                "LRR-E-EXPANSION-INPUT",
++                "reached compiler environment changed",
+             )));
+         }
+         dependencies.push(DependencyStamp::Input {
+@@ -699,8 +760,31 @@
+             )?);
+         }
+         let span = body.span(NodeId(pc.node))?;
+-        let output =
+-            crate::syntax::generated_expression::literal(value.as_ref(), span.clone(), pc)?;
++        let output = match compiler {
++            Some((definition, kind)) => {
++                let output = crate::syntax::generated_expression::compiler_literal(
++                    value.as_ref(),
++                    span.clone(),
++                    pc,
++                    definition,
++                )?;
++                use crate::{
++                    expand::compile_input_identity::CompileInputKind, ir::op::LiteralKind,
++                };
++                if !matches!(
++                    (kind, output.literal().kind),
++                    (CompileInputKind::IncludeStr, LiteralKind::String)
++                        | (CompileInputKind::IncludeBytes, LiteralKind::ByteString)
++                ) {
++                    return Err(fault(
++                        "LRR-E-EXPANSION-INPUT",
++                        "reached compiler output literal kind differs",
++                    ));
++                }
++                output
++            }
++            None => crate::syntax::generated_expression::literal(value.as_ref(), span.clone(), pc)?,
++        };
+         let recipe = verify_declarative_literal(
+             crate::frontend::thunks::with_temporary_scope_entry(
+                 body,
+--- a/crates/lrr/src/syntax/generated_expression.rs
++++ b/crates/lrr/src/syntax/generated_expression.rs
+@@ -23,6 +23,25 @@
+     source: BodySpan,
+     caller: &crate::ir::pc::PcKey,
+ ) -> Result<GeneratedLiteral, Diagnostic> {
++    literal_with_identity(input, source, caller, None)
++}
++
++/// The engine supplies the canonical compiler definition only after validating
++/// the sealed original-source descriptor and current consumer environment.
++pub(crate) fn compiler_literal(
++    input: &crate::db::dependency::InputValue,
++    source: BodySpan,
++    caller: &crate::ir::pc::PcKey,
++    definition: crate::core::digest::Digest,
++) -> Result<GeneratedLiteral, Diagnostic> {
++    literal_with_identity(input, source, caller, Some(definition))
++}
++fn literal_with_identity(
++    input: &crate::db::dependency::InputValue,
++    source: BodySpan,
++    caller: &crate::ir::pc::PcKey,
++    compiler: Option<crate::core::digest::Digest>,
++) -> Result<GeneratedLiteral, Diagnostic> {
+     use crate::core::digest::StableEncode;
+     if source.body_key != caller.body || caller.phase != crate::ir::pc::Phase::Entry.code()? {
+         return Err(Diagnostic::new(
+@@ -37,10 +56,13 @@
+         ));
+     };
+     if record.key().grammar != GrammarSlot::Expression
+-        || !matches!(
+-            record.key().macro_identity,
+-            crate::expand::identity::MacroIdentity::Declaration { .. }
+-        )
++        || match (&record.key().macro_identity, compiler) {
++            (crate::expand::identity::MacroIdentity::Declaration { .. }, None) => false,
++            (crate::expand::identity::MacroIdentity::Builtin { definition }, Some(expected)) => {
++                *definition != expected
++            }
++            _ => true,
++        }
+     {
+         return Err(Diagnostic::new(
+             "LRR-E-EXPANSION-INPUT",
+--- a/crates/lrr/src/syntax/string_fixture_facts.rs
++++ b/crates/lrr/src/syntax/string_fixture_facts.rs
+@@ -120,14 +120,44 @@
+         };
+         call
+     } else {
+-        tree.syntax()
++        // Macro token trees are intentionally opaque to ordinary AST traversal.
++        // Parse each exact operand as syntax, then bind the selected expression
++        // back to its unchanged original byte range. No expected result is used.
++        for tokens in tree
++            .syntax()
+             .descendants()
+-            .filter_map(ast::MethodCallExpr::cast)
+-            .find(|call| {
+-                call.name_ref()
+-                    .is_some_and(|name| name.text() == "is_empty")
+-            })
+-            .unwrap()
++            .filter_map(ast::MacroCall::cast)
++            .filter_map(|call| call.token_tree())
++        {
++            let text = tokens.syntax().text().to_string();
++            let Some(inside) = text.get(1..text.len().saturating_sub(1)) else {
++                continue;
++            };
++            let operand = ast::Expr::parse(inside, ra_ap_syntax::Edition::Edition2024);
++            if !operand.errors().is_empty() {
++                continue;
++            }
++            let expression = operand.tree();
++            let Some(call) = expression
++                .syntax()
++                .descendants()
++                .filter_map(ast::MethodCallExpr::cast)
++                .find(|call| {
++                    call.name_ref()
++                        .is_some_and(|name| name.text() == "is_empty")
++                })
++            else {
++                continue;
++            };
++            assert!(call.generic_arg_list().is_none());
++            let range = call.syntax().text_range();
++            let base = usize::from(tokens.syntax().text_range().start()) + 1;
++            let original =
++                &source[base + usize::from(range.start())..base + usize::from(range.end())];
++            assert_eq!(original, call.syntax().text().to_string());
++            return original.to_string();
++        }
++        panic!("original is_empty operand absent")
+     };
+     assert!(
+         call.name_ref()
+--- a/docs/tasks.json
++++ b/docs/tasks.json
+@@ -6313,7 +6313,8 @@
+         "unchanged_crlf_string_entire_main_including_source_contains_completes_all_editions",
+         "original_contains_argument_result_and_resumed_cancel_refuse_without_publication",
+         "original_crlf_source_search_is_bounded_fuel_accounted_and_read_only_all_editions",
+-        "original_search_refuses_nonstring_roots_cancelled_empty_and_faulted_cursor_replay"
++        "original_search_refuses_nonstring_roots_cancelled_empty_and_faulted_cursor_replay",
++        "original_include_string_requires_current_sealed_source_record_and_exact_plan"
+       ],
+       "acceptance_contract": "multibyte len/char/slice cases; invalid boundary panic/error; formatter unsupported spec; capture-name lookup; formatting never moves String; failure-only assert message remains lazy.",
+       "commands": [],
+@@ -6323,7 +6324,8 @@
+         "T061-STR-CONTAINS-SOURCE",
+         "T061-STR-CONTAINS-REFUSAL",
+         "T061-STR-SEARCH-PHYSICAL",
+-        "T061-STR-SEARCH-LIFECYCLE"
++        "T061-STR-SEARCH-LIFECYCLE",
++        "T061-STR-INCLUDE-SEALED"
+       ],
+       "artifact_paths": [],
+       "release_complete": false,
+@@ -6355,6 +6357,11 @@
+         },
+         {
+           "fixture_id": "T061-STR-SEARCH-LIFECYCLE",
++          "status": "pending",
++          "evidence_paths": []
++        },
++        {
++          "fixture_id": "T061-STR-INCLUDE-SEALED",
+           "status": "pending",
+           "evidence_paths": []
+         }

@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T16:36:46.531380+00:00",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "claim": "LOCAL-024",
+  "validation_members": [
+    {
+      "validation": "V103",
+      "verified_evidence_files": 30,
+      "failure": {
+        "source_member": "afcf54e0442a7d3c1500f934dc40484ff83e493cb40c1fdffba7c2a73daee83b",
+        "default_files": 4361,
+        "extras": 435,
+        "raw_files": 509,
+        "cases": 324,
+        "strict_exit_code": 101,
+        "actual_terminal": "c6dd98/1",
+        "child_elapsed_seconds": 19.103010416,
+        "error_code": "E0063",
+        "location": "crates/lrr/src/engine/run_byte_macro_literal_tests.rs:401:21",
+        "message": "missing field generated in initializer of engine::run::byte_macro_literals::AdmittedMacroByteLiteral",
+        "test_bodies_executed": 0,
+        "unexecuted": [
+          "library test compilation",
+          "seven priority bodies",
+          "full library",
+          "source_run",
+          "byte/string/declarative/capture authority regressions",
+          "affected schema runtime banks",
+          "format",
+          "architecture",
+          "fixture-reference",
+          "full milestone (not authorized)"
+        ],
+        "source_owner_originals_unchanged": true,
+        "no_retry_or_repair": true,
+        "free_bytes": 69449969664
+      },
+      "failure_sha256": "1035406362bdb126b9a9a302c9a981ebb8b425ab4010acded15d87bdeefb66cd",
+      "evidence_index_sha256": "85937729d57fda024a16be45070d59960387748971038ec574557207a4b83007",
+      "handoff_sha256": "6a42de0acbff46b5da0ee82e6fef301eb0727c7f4a9a4ea768bb02c88a6090e3",
+      "release_sha256": "40ee891905744fc058ab96118e4524376ae826b965a208dde93c1d59b87efaf2"
+    },
+    {
+      "validation": "V104",
+      "verified_evidence_files": 45,
+      "failure": {
+        "source_member": "b80326573b6fb8e24c806abba9e7c7840df68c72c654d7929af944edaa5cbaab",
+        "schema": 19,
+        "default_files": 4361,
+        "extras": 435,
+        "raw_files": 509,
+        "cases": 324,
+        "strict_library_and_tests_passed": true,
+        "library_test_compile_passed": true,
+        "actual_library_listed": 1201,
+        "priority_bodies": 7,
+        "named_pass": 4,
+        "named_fail": 3,
+        "test_results": [
+          {
+            "name": "engine::run::byte_macro_literals::string_tests::original_contains_argument_result_and_resumed_cancel_refuse_without_publication",
+            "result": "FAILED"
+          },
+          {
+            "name": "engine::run::byte_macro_literals::string_tests::original_empty_method_source_result_and_fuel_refusals_precede_publication",
+            "result": "ok"
+          },
+          {
+            "name": "engine::run::byte_macro_literals::string_tests::original_include_string_requires_current_sealed_source_record_and_exact_plan",
+            "result": "FAILED"
+          },
+          {
+            "name": "engine::run::byte_macro_literals::string_tests::unchanged_crlf_string_entire_main_including_source_contains_completes_all_editions",
+            "result": "FAILED"
+          },
+          {
+            "name": "engine::run::byte_macro_literals::string_tests::upstream_empty_and_raw_nonempty_string_method_components_execute_actual_length_all_editions",
+            "result": "ok"
+          },
+          {
+            "name": "runtime::cell::byte_comparison::string_search::tests::original_crlf_source_search_is_bounded_fuel_accounted_and_read_only_all_editions",
+            "result": "ok"
+          },
+          {
+            "name": "runtime::cell::byte_comparison::string_search::tests::original_search_refuses_nonstring_roots_cancelled_empty_and_faulted_cursor_replay",
+            "result": "ok"
+          }
+        ],
+        "failure_code": "LRR-E-EXPANSION-INPUT",
+        "message": "reached declarative expression key/profile/phase differs",
+        "failure_locations": [
+          "run_string_macro_literal_tests.rs:44",
+          "run_string_macro_literal_tests.rs:935",
+          "run_string_macro_literal_tests.rs:778 (whole original CRLF main/2015)"
+        ],
+        "unexecuted": [
+          "full lrr library bank (1201 declared; priority7 executed only)",
+          "source_run and affected byte/string/declarative/capture authority regression banks",
+          "affected schema runtime bank",
+          "format",
+          "architecture",
+          "fixture-reference",
+          "full milestone (not authorized)"
+        ],
+        "source_owner_originals_unchanged": true,
+        "no_source_repair_or_test_retry": true,
+        "private_selection_script_import_error": "9ff5d4/1; select.py renamed to prepare_selection.py before any test execution",
+        "actual_terminals": {
+          "strict": "c8ab28/0",
+          "compile": "e09e79/0",
+          "priority": "f97904/1",
+          "inactive": "c0f859/0"
+        },
+        "free_bytes": 69435625472
+      },
+      "failure_sha256": "685d68e2c9ba1f3f4f70b7a9817b8c2e2b1a1571dfeb72554e26cea6d2883035",
+      "evidence_index_sha256": "b0281cfb992ac54b457f5eede74bf7ed85e3301347e4347b8cc7abd9773b5eb1",
+      "handoff_sha256": "504f0b4348874b39218c9bf75f3c5294d065996be3d579f22759a7dd96dd37f9",
+      "release_sha256": "cddb42f3f06cab4dfb0f3b2a36067f11eab9dd8bb2defa410adc5fa0dfd2765f"
+    }
+  ],
+  "V103_strict_terminal": "c6dd98/1",
+  "V103_bodies_executed": 0,
+  "V104_strict_terminal": "c8ab28/0",
+  "V104_compile_terminal": "e09e79/0",
+  "V104_priority_terminal": "f97904/1",
+  "V104_priority_passed": 4,
+  "V104_priority_failed": 3,
+  "remaining_witness": "original fixture setup supplied synthetic engine digest rather than actual CLI pinned engine identity",
+  "repair_candidate": "worktracks/candidates/root-compiler-string-pinned-engine-v3/README.md",
+  "v105_running_asynchronously": true,
+  "current_source_results_not_additive": true,
+  "broader_scopes_and_full_milestone_unexecuted": true,
+  "canonical_promoted": false,
+  "full_fixture_passes_added": 0
+}

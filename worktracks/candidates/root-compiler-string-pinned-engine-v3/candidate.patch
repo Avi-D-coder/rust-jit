@@ -1,0 +1,11 @@
+--- a/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
+@@ -31,7 +31,7 @@
+     .unwrap()
+     .with_declarative(
+         environment.fingerprint(),
+-        Digest::of_bytes(b"byte-macro-dispatch-generations"),
++        crate::expand::source_declarative::engine_version(),
+     )
+     .unwrap()
+     .with_compiler(std::sync::Arc::new(

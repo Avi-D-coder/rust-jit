@@ -1,0 +1,26 @@
+{
+  "status": "metadata_only_pending_real_audit",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T024",
+    "T054",
+    "T061"
+  ],
+  "source_baseline": "636fd2eb7bc0e261eb5037ab65e7ea93d523ada78e52caaddbd2ddec1e0c0566",
+  "patch_sha256": "3a7ed79fbde8439768dd54250235a29b6c4019cf013fcbc0a47d69f6c72c3cb4",
+  "files": [
+    {
+      "path": "docs/tasks.json",
+      "before_sha256": "cf36babe800fc6c945a9503420b322aa9bb8899b2e3523bb19d4dc365d6768ee",
+      "after_sha256": "8439e6edb2f6c00d9131650ef178257600f438bad8a7b7b7380d31bb36b9c368"
+    }
+  ],
+  "invariants": {
+    "all_acceptance_tests_identical": true,
+    "all_fixture_ids_identical": true,
+    "all_pending_acceptance_identical": true,
+    "all_status_and_commit_fields_identical": true,
+    "Rust_and_upstream_files_changed": false
+  },
+  "full_milestone_passed": false
+}

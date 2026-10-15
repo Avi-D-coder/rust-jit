@@ -1,0 +1,61 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T022",
+    "T024",
+    "T061"
+  ],
+  "source_baseline": "636fd2eb7bc0e261eb5037ab65e7ea93d523ada78e52caaddbd2ddec1e0c0566",
+  "patch_sha256": "be402cf65f8e6f5baad7ea23776de171476fc1416b3488dfff2dc181967edb15",
+  "files": [
+    {
+      "path": "compat/fixtures.toml",
+      "before_sha256": "d5d49c811c2069f7c2e0eda5fca3944b783e7f329234c449e773bed8e3ad7f40",
+      "after_sha256": "ca7b7c46c90de2f3697d850ed2e8e506ecddd82f1f6ab510bc6f93f2ed33187e"
+    },
+    {
+      "path": "crates/lrr/src/engine/declarative_runtime.rs",
+      "before_sha256": "31ddaa1c140e3f13f35fcbd7a03ff927ef503453e5aec631f4cdc9068beefd73",
+      "after_sha256": "b8a7fcc79b81a78a1d1ada402c32bf8ff3270963ca1e140fe23f5d1d5a37d994"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_byte_macro_literals.rs",
+      "before_sha256": "8cc355bb2e3188654c8dac0f0241890e94a807b659e993319f98eadf7f7d05dd",
+      "after_sha256": "0bb23edc19b1f1cfd0901ead91e91d73709b667ef2d3f2fe23cb57c9d1658b86"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_string_macro_literal_tests.rs",
+      "before_sha256": "2c6fb7091e52d55c7994defd9977a5ac8fdf89555c8b99a6ae9695ce950ae8fb",
+      "after_sha256": "907d2af066edd3148fd57eab5a6925d4bda5793d702017a48b7185d099ea7245"
+    },
+    {
+      "path": "crates/lrr/src/engine/runtime_macros.rs",
+      "before_sha256": "a347a5b10fbeb5bf81882e1646c5a4c74f1962c3cf08fe1793e0401914b38d5e",
+      "after_sha256": "1212f4f7c8d9aa426297eac1ecf51cefd672a579f9c4b385df49a9e4fbacfe86"
+    },
+    {
+      "path": "crates/lrr/src/syntax/generated_expression.rs",
+      "before_sha256": "d2af3c639f76f27ab0f2ad2a5e2dc6ccaba7777f48979094560d2a9faa837c80",
+      "after_sha256": "1e3e7e65f6d1dbd3f0a64c72b8795c32964e0895b31212e39e8b9ee3aabd7176"
+    },
+    {
+      "path": "crates/lrr/src/syntax/string_fixture_facts.rs",
+      "before_sha256": "04127f000af826016f9448117422335fbf6b4c1dec48318bb227bd65f36ce4cb",
+      "after_sha256": "28d10f817ba378289c42bbe08dcde56bc79b7e2943d2b1f36dfa1d0c25bd6131"
+    },
+    {
+      "path": "docs/tasks.json",
+      "before_sha256": "cf36babe800fc6c945a9503420b322aa9bb8899b2e3523bb19d4dc365d6768ee",
+      "after_sha256": "a1be6f66f7faec88004721388986a29902031718f94fc1669ee44d176db7228e"
+    }
+  ],
+  "new_host_bodies": 1,
+  "repairs_existing_bodies": 3,
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "exact_replay_zero_offset_zero_fuzz": true
+  },
+  "full_milestone_passed": false,
+  "canonical_promotion": false
+}

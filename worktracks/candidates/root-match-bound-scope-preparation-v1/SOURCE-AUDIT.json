@@ -1,0 +1,41 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "task_cards": [
+    "T024",
+    "T054",
+    "M018"
+  ],
+  "claim": "LOCAL-024",
+  "at": "2026-10-15T16:11:24.847444+00:00",
+  "source_baseline": "252ddc1838cd4c7553df7a944a143cbb28b5b810427a88ad65c5c95147bfd432",
+  "patch_sha256": "06b6ac0095d40ca83bb4573428479f259583a488ae6be6c7bcd1393d84ec2322",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_source_constants.rs",
+      "before_sha256": "9d780b83186bbbbb0efccfdc6ad24bc2c4bfd44cdf130c8321ec6f5c5cf8a0ac",
+      "after_sha256": "19205fa51fe7d770eb5cb66490fa442040a40b9a9c13802ed8e4dea057913035"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_match_bound_context.rs",
+      "before_sha256": "508ed585d9e1066bef5313aa52d06c87fec0c757248c51f1f1c72b72f70d00ff",
+      "after_sha256": "626d18cd2c03c4d570c7671704ec4a7bf0467564f3311be6622f71f451d42f3b"
+    },
+    {
+      "path": "crates/lrr/src/cli/reached_scopes.rs",
+      "before_sha256": "b766fb78ba539da9a1c8e76d248f2e146e5dd08df426cfa7186a5707822dd390",
+      "after_sha256": "66a91223dff3d9a9ec830b2918635b1fd96da64af1df089fd5fd91e51e68eda9"
+    }
+  ],
+  "actual_witness": "V100 reached-scope whole-main control: issue-21475.rs/2015 missing lexical Value seal at match scrutinee context preparation; four preceding character-range edition iterations completed but named body failed",
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "exact_replay_no_offset_no_fuzz": true
+  },
+  "acceptance_pending": [
+    "unchanged_constant_ranges_complete_through_reached_scopes_all_editions",
+    "reached_scope_requests_refuse_foreign_world_epoch_scope_and_duplicate_progress",
+    "existing source_run, source constants, match source context and capture refusal controls",
+    "strict format architecture fixture reference and final milestone"
+  ],
+  "full_milestone_passed": false
+}

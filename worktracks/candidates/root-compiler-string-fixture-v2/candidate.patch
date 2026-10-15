@@ -1,0 +1,10 @@
+--- a/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
+@@ -405,6 +405,7 @@
+         recipe: run.installed.get(id).unwrap().recipe().fingerprint(),
+         span: literal.source.clone(),
+         destination,
++        generated: false,
+         payload: MacroLiteralPayload::Bytes(payload.clone()),
+     };
+     proof

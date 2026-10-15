@@ -1,0 +1,190 @@
+--- a/crates/lrr/src/engine/run_source_constants.rs
++++ b/crates/lrr/src/engine/run_source_constants.rs
+@@ -135,7 +135,7 @@
+     }
+     /// Derive a missing original module Value demand from this source's actual
+     /// current root publication. This does not manufacture a completed seal.
+-    fn required_constant_value_scope(
++    pub(super) fn required_constant_value_scope(
+         db: &Database,
+         source: &PreparedSourceView,
+         scope: &crate::syntax::outline::ScopeKey,
+@@ -193,7 +193,7 @@
+     }
+     /// Demand a Type seal only from the exact actual Value seal's selected world.
+     /// Never synthesize a world identity or execute preparation inside a provider.
+-    fn required_constant_type(
++    pub(super) fn required_constant_type(
+         db: &Database,
+         target: &PreparedSourceView,
+         path: &ConstantPathSelection,
+--- a/crates/lrr/src/engine/run_match_bound_context.rs
++++ b/crates/lrr/src/engine/run_match_bound_context.rs
+@@ -14,6 +14,11 @@
+ };
+ use std::sync::Arc;
+ const LIMIT: usize = 32 << 20;
++enum MatchBoundPreparation {
++    Absent,
++    NeedScope(Box<InputRequest>),
++    Ready(Box<MatchBoundContextPlan>),
++}
+ pub(super) struct MatchBoundContextPlan {
+     caller: usize,
+     body: BodyHandle,
+@@ -52,7 +57,7 @@
+         &self,
+         db: &Database,
+         entry: &PcKey,
+-    ) -> Result<Option<MatchBoundContextPlan>, Diagnostic> {
++    ) -> Result<MatchBoundPreparation, Diagnostic> {
+         let mut owners = self
+             .sources
+             .iter()
+@@ -67,7 +72,7 @@
+                     .map(move |body| (ordinal, body))
+             });
+         let Some((caller, body)) = owners.next() else {
+-            return Ok(None);
++            return Ok(MatchBoundPreparation::Absent);
+         };
+         if owners.next().is_some() {
+             return Err(fault("match context caller source is duplicated"));
+@@ -78,10 +83,50 @@
+             .ok_or_else(|| fault("match context source parse is not prepared"))?;
+         let Some(site) = parsed.scalar_match_context_site(source, body, &self.frame.body, entry)?
+         else {
+-            return Ok(None);
++            return Ok(MatchBoundPreparation::Absent);
+         };
+         if self.sources.len() > 256 {
+             return Err(fault("match context retained source count limit"));
++        }
++        let graph = self
++            .graph
++            .as_ref()
++            .ok_or_else(|| fault("match context source graph absent"))?;
++        let Some(route) = parsed.constant_path_route(source, body, site.endpoint_range())? else {
++            return Ok(MatchBoundPreparation::Absent);
++        };
++        let crate::frontend::names::NameLookup::Defined(definition) = graph.lookup_source_path(
++            crate::source::manifest::Namespace::Value,
++            route.segments(),
++            route.absolute(),
++            &route.context().scope,
++            source.selection().outline.parse.profile.edition,
++        )?
++        else {
++            return Ok(MatchBoundPreparation::Absent);
++        };
++        let target = self.sources.iter().find_map(|view| {
++            view.outline()
++                .items
++                .iter()
++                .find(|item| {
++                    item.def_key.fingerprint() == definition.identity
++                        && item.def_key.item_kind == crate::source::manifest::ItemKind::Constant
++                })
++                .map(|item| (view, &item.scope))
++        });
++        let Some((target_source, target_scope)) = target else {
++            return Ok(MatchBoundPreparation::Absent);
++        };
++        for (owner, scope) in [
++            (source, &route.context().scope),
++            (target_source, target_scope),
++        ] {
++            if let Some(request) =
++                Self::required_constant_value_scope(db, owner, scope, &self.sources)?
++            {
++                return Ok(MatchBoundPreparation::NeedScope(Box::new(request)));
++            }
+         }
+         let views = self.sources.iter().collect::<Vec<_>>();
+         let selection = match ConstantPathSelection::capture_current(
+@@ -96,10 +141,16 @@
+             // A local/other Value member cannot provide a constant result type.
+             // Existing ordinary syntax remains responsible for that reached form.
+             ConstantPathOutcome::LocalBinding(_) | ConstantPathOutcome::OtherValueMember(_) => {
+-                return Ok(None);
++                return Ok(MatchBoundPreparation::Absent);
+             }
+             other => return Err(other.prerequisite_error()),
+         };
++        // Publish the selected bound's actual Type scope before retaining this
++        // match context. Later constant execution then consumes the same world;
++        // it does not invalidate the already executed scrutinee's source proof.
++        if let Some(request) = Self::required_constant_type(db, target_source, &selection)? {
++            return Ok(MatchBoundPreparation::NeedScope(Box::new(request)));
++        }
+         let bound = Arc::new(CurrentRangeBoundContext::capture_current(
+             db, &selection, source, &views, LIMIT,
+         )?);
+@@ -116,12 +167,14 @@
+             .checked_add(std::mem::size_of::<MatchBoundContextPlan>() + 128)
+             .filter(|n| *n <= LIMIT)
+             .ok_or_else(crate::runtime::arena::resource)?;
+-        Ok(Some(MatchBoundContextPlan {
+-            caller,
+-            body: body.clone(),
+-            context: Arc::new(context),
+-            bytes,
+-        }))
++        Ok(MatchBoundPreparation::Ready(Box::new(
++            MatchBoundContextPlan {
++                caller,
++                body: body.clone(),
++                context: Arc::new(context),
++                bytes,
++            },
++        )))
+     }
+     pub(super) fn prepare_match_bound_recipe(
+         &mut self,
+@@ -140,8 +193,11 @@
+                 return QueryPoll::Ready(Ok(None));
+             }
+             fresh = match self.capture_match_bound_context(db, &entry) {
+-                Ok(Some(plan)) => Some(plan),
+-                Ok(None) => return QueryPoll::Ready(Ok(None)),
++                Ok(MatchBoundPreparation::Ready(plan)) => Some(*plan),
++                Ok(MatchBoundPreparation::Absent) => return QueryPoll::Ready(Ok(None)),
++                Ok(MatchBoundPreparation::NeedScope(request)) => {
++                    return QueryPoll::NeedInput(*request);
++                }
+                 Err(error) => return QueryPoll::Ready(Err(error)),
+             };
+         }
+--- a/crates/lrr/src/cli/reached_scopes.rs
++++ b/crates/lrr/src/cli/reached_scopes.rs
+@@ -77,18 +77,18 @@
+         if self.fulfilled.len() >= 256 || !self.fulfilled.insert(key.clone()) {
+             return Err(invalid("reached scope demand made no bounded progress"));
+         }
+-        let mut discovery = SourceDiscovery::new(
+-            self.sources.iter().map(PreparedSourceView::share).collect(),
+-            scope,
+-            *namespace,
+-            key.unit_graph,
+-            key.epoch,
+-        )?
+-        .with_declarative_compiler(
+-            compiler.environment_identity(),
+-            crate::expand::source_declarative::engine_version(),
+-            compiler.catalog.clone(),
+-        )?;
++        let mut sources = Vec::new();
++        sources
++            .try_reserve_exact(self.sources.len())
++            .map_err(|_| crate::runtime::arena::resource())?;
++        sources.extend(self.sources.iter().map(PreparedSourceView::share));
++        let mut discovery =
++            SourceDiscovery::new(sources, scope, *namespace, key.unit_graph, key.epoch)?
++                .with_declarative_compiler(
++                    compiler.environment_identity(),
++                    crate::expand::source_declarative::engine_version(),
++                    compiler.catalog.clone(),
++                )?;
+         if discovery.key() != key {
+             return Err(invalid(
+                 "reached discovery key differs from its exact request",

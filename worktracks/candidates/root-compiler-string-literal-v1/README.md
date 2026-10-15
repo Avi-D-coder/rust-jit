@@ -1,0 +1,9 @@
+# Reached sealed compiler string literals
+
+T022/T024/T061 follow-on to combined schema19 on V102. The invariant is that reached include_str/include_bytes output is usable only through the exact sealed expansion, canonical owning compiler definition, current published consumer environment, original invocation/operands/context/profile/body, and retained installed plan. No macro is executed or file read by the query/VM path. Other compiler output kinds and procedural identities remain outside this literal path.
+
+The pinned generated-expression decoder materializes the already-adopted token output. A separate compiler entry binds its canonical definition; the existing private literal verifier binds caller, span, destination, dependencies and ancestry. Output must have the selected compiler literal kind. VM admission distinguishes ordinary macro operand slots from the generated node's value slot, requiring a retained plan whose recipe and publication dependencies still match. Raw verified recipes, stale publications and foreign PCs do not supply this authority.
+
+The original CRLF main remains unchanged. Its component helper now follows sealed-plan preparation before ordinary intrinsic resolution, as the dispatcher does. A test-only syntax adapter parses the exact opaque macro operand for the existing is_empty component and verifies its original byte slice, without supplying an expected value. One new authority regression checks changed compiler definition/environment/invocation/input/edition/grammar/engine, missing current publication, unretained recipe, changed recipe and foreign PC before effects. No originals, licenses or import manifest change.
+
+Source-only packet: formatting and exact no-fuzz/no-offset replay checked. Validate seven priority bodies and affected interpreter controls asynchronously, then run the final frozen-source milestone before canonical promotion. No runtime-suite, full-fixture, JIT, task completion or Linux claim.
