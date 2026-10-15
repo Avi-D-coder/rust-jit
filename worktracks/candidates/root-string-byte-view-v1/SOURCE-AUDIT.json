@@ -1,0 +1,144 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T061",
+    "T062"
+  ],
+  "prerequisites": [
+    "root-string-ordering-v1",
+    "root-or-range-frontier-contract-v1"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_string_macro_literal_tests.rs",
+      "before_sha256": "d28db3885779394cd8e0fe20f2017b6a4b03d01a2ba7838432e8c09cb75b3d2f",
+      "after_sha256": "e67d7d2f7f8c2931d3559800001d6b5a09a8ea1e50da202f92a22a19ef3124df"
+    },
+    {
+      "path": "crates/lrr/src/facade/string_methods.rs",
+      "before_sha256": "0214663888c0a9b8f58f55060fcd47cb2f72e508d598653f5c9660cc790ee155",
+      "after_sha256": "6e3e0a65fe9f7c70e15242db1874d1e131043cf06c5c6046bb06fed53c6d41db"
+    },
+    {
+      "path": "crates/lrr/src/frontend/primitive_float_methods.rs",
+      "before_sha256": "6afe156387e27bbbe2d6f575b7077208498a67e756f5a00010f863e06fca73cd",
+      "after_sha256": "7460ae9ff52eff5de406436c82a2a5f5e07e4b78b3414afd95c3a923998eaac2"
+    },
+    {
+      "path": "crates/lrr/src/frontend/primitive_float_recipe_tests.rs",
+      "before_sha256": "088dd44c381d09db3844266f505e1edae67d8486c767ea16ab10b18f54bfecab",
+      "after_sha256": "7651bbb4829993f2734542d7f5a591d6f9263879b8840827c362c1db270fd794"
+    },
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_catalog.rs",
+      "before_sha256": "49c614ea704433f8cb4af652334f6b9b172a30f2668278000252028051b48f0c",
+      "after_sha256": "d33aadb958599600b621e13d72d138f28032100c82815a15a5fdbe3e16bf9be7"
+    },
+    {
+      "path": "crates/lrr/src/frontend/runtime_primitive_float_catalog_tests.rs",
+      "before_sha256": "119d33ecabf198cb261c1030183e70a648db6c0246c326003a71622f185a3d35",
+      "after_sha256": "ea8509b493787d1df40e9c2325e718b7dca9d330b421870812f6c4a0cc4a6388"
+    },
+    {
+      "path": "crates/lrr/src/ir/definition_numeric_wire_tests.rs",
+      "before_sha256": "beff225f5b83389389e38238ec7c872f18f6c2c86f46f79bfb98383cf4ffdefb",
+      "after_sha256": "6f96ed02ea3154db6ddc20f0c401ff1ab4cf71c093d366ff323865d59baa0c3c"
+    },
+    {
+      "path": "crates/lrr/src/ir/op.rs",
+      "before_sha256": "caebe7497a0b6b174922968eef30883333be0a682731d8ff5f9f2704ee5eb32b",
+      "after_sha256": "d0275d74b6deb900317df6568d523864a965e05eed425edc1b061be5bc7a6572"
+    },
+    {
+      "path": "crates/lrr/src/ir/parameter_place_wire_tests.rs",
+      "before_sha256": "1890935370ac1a89fd30a3fc9f02cfce8344570c16d3783a1309862bd615e901",
+      "after_sha256": "04eba46e35a58f1a42973ed169c2a70698bd10b1c447375d1916f11d01c8da0d"
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "before_sha256": "4cb5499a41add26e70eab4653254d0c3da4f355e31bb02cbd0a8d57e62e27eb6",
+      "after_sha256": "25322df78ed8af35beeab80a5310979721a266d19a28b039dff42766aaf2552b"
+    },
+    {
+      "path": "crates/lrr/src/ir/validate.rs",
+      "before_sha256": "6cba098e5dc5922045278cfd1501cc25ed99e83261b98c5651113052e62b8f32",
+      "after_sha256": "cb80d26e4e857453bb67ec8e0ffb59de42900d698b2c6b65166d3aa8bb4f7968"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_comparison_tests.rs",
+      "before_sha256": "72b871c7b19215fdc0275b87289815611eed1ed341da155fde0cb6646c8a9985",
+      "after_sha256": "b473a5a74da55305af89c5695462e4c371dfc601a641ce0b6ceae73f31dc7010"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_literals.rs",
+      "before_sha256": "dbd8ebd6338f531d62329d9995f5cbe5ed4aa56fa3965bad0f3a2cedcc75381e",
+      "after_sha256": "372bb6776b3be8fb57e32399ef3bd736b6303c3fcf9088ca31ce90e53780f642"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_string_views.rs",
+      "before_sha256": null,
+      "after_sha256": "20742ccc5905f56951c74877635d6a107a457e69d2c07c3389136c2b18911b71"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_primitive_methods.rs",
+      "before_sha256": "28f9fb43b7a370ef92e3af5d14642956e9d9cd07928ef666acd37dbe3be055e6",
+      "after_sha256": "b129fdebd6c83ead9026794e4571d862cad23869c8ae6389d1d25b9797a2ac94"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_scalars.rs",
+      "before_sha256": "772e196a400013f48c34b3b68ec6da49a88570e0d066ddae326968b2634d1885",
+      "after_sha256": "19dc56114653507521e667de0483f0c93d04475204bcf5544169646bea33d7e3"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "before_sha256": "f46841840d40509249bb30044c9c5b2ce5008f7cb9732ac4271467edb2ed0f06",
+      "after_sha256": "60f6b0bede69319760ecbff80159981caa17abe4ebb6d08edf6e8d42716fb317"
+    },
+    {
+      "path": "xtask/tests/match_no_arm_exit.rs",
+      "before_sha256": "53188162ac4a7e75305bc822d34c07e0dc4bec636c96fb62e8c4ec05bc7da71c",
+      "after_sha256": "7d932991e91692608a138f2a2c1c25cdde30cae912bfd344a280ce1aa5c238bf"
+    }
+  ],
+  "patch_sha256": "3f8e97d3f3ca47bb60d81d201e17d9fb8481b270a6820b82b106584dfd2c121b",
+  "patch_bytes": 57781,
+  "created_at": "2026-10-15T13:08:05.828573+00:00",
+  "static_checks": [
+    "Rust 1.99 formatting",
+    "exact no-fuzz/no-offset leaf patch replay"
+  ],
+  "stock_runtime_passes_added": 0,
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "upstream_witnesses": [
+    {
+      "path": "tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs",
+      "sha256": "bb03d92b8289726639b7947f900dca05704b3a20ce26ec183a5a233ea6747289"
+    },
+    {
+      "path": "tests/ui/array-slice-vec/estr-slice.rs",
+      "sha256": "c33f57cc8badc0315c072be7050862007ffb7fa4a4e9a974c110387f0c289453"
+    }
+  ],
+  "pinned_core_member": {
+    "path": "library/core/src/str/mod.rs",
+    "line": 513,
+    "sha256": "37b9707b62fb84c445cf5c6896c9c42c2a5b195b8823913fe2d0ff4422ec8530"
+  },
+  "new_test_bodies": 5,
+  "schema": 16,
+  "opcode": 46,
+  "recipe_domain": "lrr/v16/lrir-recipe",
+  "string_method_facet_domain": "lrr/v2/str-method-facet",
+  "acceptance_pending": [
+    "strict compilation and Clippy",
+    "all-edition actual original CRLF method operand execution",
+    "original literal payload root/cache controls",
+    "physical source/session/epoch/descriptor/issue/quota refusals",
+    "source region/member/result/fuel controls",
+    "wire/cache schema migration controls",
+    "existing string length/equality/ordering and float scopes",
+    "unchanged whole-main fixture execution including remaining operations",
+    "fresh integrated milestone"
+  ]
+}

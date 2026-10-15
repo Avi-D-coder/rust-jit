@@ -1,0 +1,1455 @@
+--- a/crates/lrr/src/engine/run_string_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_string_macro_literal_tests.rs
+@@ -26,10 +26,11 @@
+     )
+ }
+ 
+-fn reach_length(
++fn reach_string_method(
+     db: &mut Database,
+     run: &mut RunMachine,
+     contexts: &[crate::engine::runtime_macros::RuntimeMacroContext<'_>],
++    opcode: u8,
+ ) -> (crate::engine::install::RecipeId, SlotId, SlotId) {
+     for _ in 0..256 {
+         let key = run.frame.pc().clone();
+@@ -79,7 +80,11 @@
+                 Op::StrByteLen {
+                     source,
+                     destination,
+-                } => Some((*source, *destination)),
++                }
++                | Op::StrAsBytes {
++                    source,
++                    destination,
++                } if op.opcode_tag() == opcode => Some((*source, *destination)),
+                 _ => None,
+             })
+         {
+@@ -98,7 +103,7 @@
+             StepOutcome::Next(_)
+         ));
+     }
+-    panic!("original NUL string length operation was not reached");
++    panic!("original requested string member operation was not reached");
+ }
+ 
+ #[test]
+@@ -109,7 +114,7 @@
+     for edition in [2015, 2018, 2021, 2024] {
+         let (mut db, mut run, macros, _) = tests::start_source(NULS, edition, 10_000);
+         let contexts = macros.contexts().unwrap();
+-        let (id, source, destination) = reach_length(&mut db, &mut run, &contexts);
++        let (id, source, destination) = reach_string_method(&mut db, &mut run, &contexts, 45);
+         let receiver = run.frame.cell(source).unwrap();
+         assert_eq!(run.store.static_string_byte_len(receiver).unwrap(), 4);
+         let value = run.store.admit_move(receiver).unwrap();
+@@ -158,7 +163,7 @@
+     );
+     let (mut db, mut run, macros, _) = tests::start_source(NULS, 2024, 10_000);
+     let contexts = macros.contexts().unwrap();
+-    let (id, source, _) = reach_length(&mut db, &mut run, &contexts);
++    let (id, source, _) = reach_string_method(&mut db, &mut run, &contexts, 45);
+     let used = run.frame.fuel_snapshot().used;
+     run.frame
+         .set_source_view(
+@@ -184,7 +189,7 @@
+ 
+     let (mut db, mut run, macros, _) = tests::start_source(NULS, 2024, used);
+     let contexts = macros.contexts().unwrap();
+-    let (id, _, _) = reach_length(&mut db, &mut run, &contexts);
++    let (id, _, _) = reach_string_method(&mut db, &mut run, &contexts, 45);
+     assert_eq!(run.frame.fuel_snapshot().used, used);
+     let before = effects(&run);
+     assert_eq!(
+@@ -385,3 +390,160 @@
+         db.finish_run().unwrap();
+     }
+ }
++
++const BYTE_VIEW_CRLF: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs"
++);
++#[test]
++fn unchanged_crlf_as_bytes_operand_requires_current_source_and_publishes_once_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, mut run, macros, _) = tests::start_source(BYTE_VIEW_CRLF, edition, 100_000);
++        let contexts = macros.contexts().unwrap();
++        let (id, source, destination) = reach_string_method(&mut db, &mut run, &contexts, 46);
++        let receiver = run.frame.cell(source).unwrap();
++        let value = run.store.admit_move(receiver).unwrap();
++        let source_view = run.frame.source_view(source).unwrap().unwrap();
++        let TyTerm::Ref(region, false, target) = source_view else {
++            panic!("original shared str receiver")
++        };
++        assert_eq!(*target, TyTerm::Str);
++        let expected = TyTerm::Ref(
++            region,
++            false,
++            Box::new(TyTerm::Slice(Box::new(TyTerm::Primitive(
++                PrimitiveType::U8,
++            )))),
++        );
++        assert_eq!(run.frame.counters().started_by_opcode[26], 3); // preceding real assertions
++        let before = effects(&run);
++        run.revalidate_primitive_method(&mut db, &contexts, id)
++            .unwrap();
++        assert_eq!(effects(&run), before);
++        assert!(matches!(
++            step::step(
++                &mut run.frame,
++                &mut run.store,
++                run.installed.get(id).unwrap()
++            )
++            .unwrap(),
++            StepOutcome::Next(_)
++        ));
++        assert_eq!(run.frame.source_view(destination).unwrap(), Some(expected));
++        run.store
++            .require_static_byte_value(run.frame.cell(destination).unwrap(), None)
++            .unwrap();
++        assert_eq!(run.store.admit_move(receiver).unwrap(), value);
++        assert_eq!(run.frame.counters().started_by_opcode[46], 1);
++        assert_eq!(run.frame.counters().operations_started, before.0 + 1);
++        assert_eq!(
++            run.frame.counters().operations_started,
++            run.frame.counters().operations_completed
++        );
++        db.finish_run().unwrap();
++    }
++    // Original evaluated member operand only; later include_str/contains are not exercised.
++}
++#[test]
++fn original_as_bytes_member_and_vm_refuse_mutable_receiver_or_wrong_result_source_before_effects() {
++    let (mut db, mut run, macros, _) = tests::start_source(BYTE_VIEW_CRLF, 2024, 100_000);
++    let contexts = macros.contexts().unwrap();
++    let (id, source, _) = reach_string_method(&mut db, &mut run, &contexts, 46);
++    let used = run.frame.fuel_snapshot().used;
++    run.frame
++        .set_source_view(
++            source,
++            Some(TyTerm::Ref(RegionTerm::Static, true, Box::new(TyTerm::Str))),
++        )
++        .unwrap();
++    let before = effects(&run);
++    assert!(
++        run.revalidate_primitive_method(&mut db, &contexts, id)
++            .is_err()
++    );
++    assert_eq!(
++        step::step(
++            &mut run.frame,
++            &mut run.store,
++            run.installed.get(id).unwrap()
++        )
++        .unwrap_err()
++        .code,
++        "LRR-E-INTERNAL-IR"
++    );
++    assert_eq!(effects(&run), before);
++    db.finish_run().unwrap();
++    // A separate original run avoids reusing a faulted VM frame.
++    let (mut db, mut run, macros, _) = tests::start_source(BYTE_VIEW_CRLF, 2024, 100_000);
++    let contexts = macros.contexts().unwrap();
++    let (id, _, destination) = reach_string_method(&mut db, &mut run, &contexts, 46);
++    run.frame
++        .set_source_view(
++            destination,
++            Some(TyTerm::Ref(
++                RegionTerm::Static,
++                false,
++                Box::new(TyTerm::Str),
++            )),
++        )
++        .unwrap();
++    let before = effects(&run);
++    assert_eq!(
++        step::step(
++            &mut run.frame,
++            &mut run.store,
++            run.installed.get(id).unwrap()
++        )
++        .unwrap_err()
++        .code,
++        "LRR-E-TYPE-CONTEXT"
++    );
++    assert_eq!(effects(&run), before);
++    db.finish_run().unwrap();
++    // Poison only the source region; equal physical layout/backing cannot
++    // make an old method receipt authorize a different source borrow.
++    let (mut db, mut run, macros, _) = tests::start_source(BYTE_VIEW_CRLF, 2024, 100_000);
++    let contexts = macros.contexts().unwrap();
++    let (id, source, _) = reach_string_method(&mut db, &mut run, &contexts, 46);
++    run.frame
++        .set_source_view(
++            source,
++            Some(TyTerm::Ref(
++                RegionTerm::Param(crate::traits::term::ParamKey {
++                    definition: run.frame.body.body().definition,
++                    ordinal: 0,
++                }),
++                false,
++                Box::new(TyTerm::Str),
++            )),
++        )
++        .unwrap();
++    let before = effects(&run);
++    assert!(
++        run.revalidate_primitive_method(&mut db, &contexts, id)
++            .is_err()
++    );
++    assert_eq!(effects(&run), before);
++    db.finish_run().unwrap();
++    let (mut db, mut run, macros, _) = tests::start_source(BYTE_VIEW_CRLF, 2024, used);
++    let contexts = macros.contexts().unwrap();
++    let (id, _, _) = reach_string_method(&mut db, &mut run, &contexts, 46);
++    assert_eq!(run.frame.fuel_snapshot().used, used);
++    let before = effects(&run);
++    assert_eq!(
++        step::step(
++            &mut run.frame,
++            &mut run.store,
++            run.installed.get(id).unwrap()
++        )
++        .unwrap_err()
++        .code,
++        "LRR-E-RUNTIME-RESOURCE"
++    );
++    assert_eq!(
++        run.frame.fuel_snapshot().stop,
++        Some(crate::vm::fuel::FuelStop::Exhausted)
++    );
++    assert_eq!(effects(&run), before);
++    assert_eq!(run.frame.counters().started_by_opcode[46], 0);
++    db.finish_run().unwrap();
++}
+--- a/crates/lrr/src/facade/string_methods.rs
++++ b/crates/lrr/src/facade/string_methods.rs
+@@ -1,5 +1,4 @@
+-//! Compiler-owned `str::len`: the pinned core body is `self.as_bytes().len()`.
+-//! This declaration does not grant receiver/source or physical lease authority.
++//! Compiler-owned str members. Receiver/source and physical lease authority are independent.
+ use crate::{
+     core::{
+         diagnostic::Diagnostic,
+@@ -12,15 +11,38 @@
+ fn fault(message: &str) -> Diagnostic {
+     Diagnostic::new("LRR-E-STRING-METHOD", message.into())
+ }
++#[derive(Debug, Clone, Copy, Eq, PartialEq)]
++pub(crate) enum StringMethodKind {
++    ByteLen,
++    AsBytes,
++}
++impl StringMethodKind {
++    fn name(self) -> &'static str {
++        match self {
++            Self::ByteLen => "len",
++            Self::AsBytes => "as_bytes",
++        }
++    }
++    fn tag(self) -> u8 {
++        match self {
++            Self::ByteLen => 0,
++            Self::AsBytes => 1,
++        }
++    }
++}
+ #[derive(Debug, Clone, Eq, PartialEq)]
+-pub(crate) struct StringLenMethod {
++pub(crate) struct StringMethod {
+     profile: Arc<ProfileIdentity>,
+     core: Digest,
++    kind: StringMethodKind,
+     signature: Digest,
+     body: Digest,
+     identity: Digest,
+ }
+-impl StringLenMethod {
++impl StringMethod {
++    pub(crate) fn kind(&self) -> StringMethodKind {
++        self.kind
++    }
+     pub(crate) fn require_profile(&self, profile: &ProfileIdentity) -> Result<(), Diagnostic> {
+         profile.validate_source()?;
+         if self.profile.as_ref() != profile || self.core != super::unit(profile, "core") {
+@@ -38,47 +60,63 @@
+ #[derive(Debug, Clone)]
+ pub(crate) struct StringMethods {
+     profile: Arc<ProfileIdentity>,
+-    len: StringLenMethod,
++    len: StringMethod,
++    as_bytes: StringMethod,
+     identity: Digest,
++}
++fn member(profile: &Arc<ProfileIdentity>, core: Digest, kind: StringMethodKind) -> StringMethod {
++    let mut signature = StableEncoder::new("lrr/v2/str-method-signature");
++    signature.digest(core);
++    signature.record(profile.as_ref());
++    signature.string("str");
++    signature.string(kind.name());
++    signature.u8(0);
++    signature.u32(0); // shared receiver; no explicit arguments/generics
++    signature.u8(kind.tag());
++    match kind {
++        StringMethodKind::ByteLen => signature.u32(PrimitiveType::Usize.tag()),
++        StringMethodKind::AsBytes => {
++            signature.bool(false);
++            signature.string("receiver-borrow");
++            signature.string("[u8]");
++        }
++    }
++    signature.bool(true); // const
++    let signature = signature.finish();
++    let mut body = StableEncoder::new("lrr/v2/str-method-body");
++    body.digest(signature);
++    body.u8(kind.tag());
++    let body = body.finish();
++    let mut identity = StableEncoder::new("lrr/v2/str-method-member");
++    identity.digest(core);
++    identity.record(profile.as_ref());
++    identity.digest(signature);
++    identity.digest(body);
++    StringMethod {
++        profile: profile.clone(),
++        core,
++        kind,
++        signature,
++        body,
++        identity: identity.finish(),
++    }
+ }
+ impl StringMethods {
+     pub(crate) fn for_profile(profile: &ProfileIdentity) -> Result<Self, Diagnostic> {
+         profile.validate_source()?;
+         let profile = Arc::new(profile.clone());
+         let core = super::unit(&profile, "core");
+-        let mut signature = StableEncoder::new("lrr/v1/str-len-signature");
+-        signature.digest(core);
+-        signature.record(profile.as_ref());
+-        signature.string("str");
+-        signature.string("len");
+-        signature.u8(0); // shared receiver; no explicit arguments or generics
+-        signature.u32(0);
+-        signature.u32(PrimitiveType::Usize.tag());
+-        signature.bool(true); // const
+-        let signature = signature.finish();
+-        let mut body = StableEncoder::new("lrr/v1/str-len-body");
+-        body.digest(signature);
+-        body.u8(0); // UTF-8 byte length, including NUL bytes; no scan/effects
+-        let body = body.finish();
+-        let mut member = StableEncoder::new("lrr/v1/str-len-member");
+-        member.digest(core);
+-        member.record(profile.as_ref());
+-        member.digest(signature);
+-        member.digest(body);
+-        let len = StringLenMethod {
+-            profile: profile.clone(),
+-            core,
+-            signature,
+-            body,
+-            identity: member.finish(),
+-        };
+-        let mut facet = StableEncoder::new("lrr/v1/str-method-facet");
++        let len = member(&profile, core, StringMethodKind::ByteLen);
++        let as_bytes = member(&profile, core, StringMethodKind::AsBytes);
++        let mut facet = StableEncoder::new("lrr/v2/str-method-facet");
+         facet.record(profile.as_ref());
+         facet.digest(core);
+         facet.digest(len.identity);
++        facet.digest(as_bytes.identity);
+         Ok(Self {
+             profile,
+             len,
++            as_bytes,
+             identity: facet.finish(),
+         })
+     }
+@@ -88,12 +126,16 @@
+     pub(crate) fn identity(&self) -> Digest {
+         self.identity
+     }
+-    pub(crate) fn lookup(&self, name: &str) -> Option<&StringLenMethod> {
+-        (name == "len").then_some(&self.len)
++    pub(crate) fn lookup(&self, name: &str) -> Option<&StringMethod> {
++        match name {
++            "len" => Some(&self.len),
++            "as_bytes" => Some(&self.as_bytes),
++            _ => None,
++        }
+     }
+-    pub(crate) fn require_member(&self, member: &StringLenMethod) -> Result<(), Diagnostic> {
++    pub(crate) fn require_member(&self, member: &StringMethod) -> Result<(), Diagnostic> {
+         member.require_profile(&self.profile)?;
+-        if member != &self.len {
++        if self.lookup(member.kind.name()) != Some(member) {
+             return Err(fault("str method signature/body/member identity differs"));
+         }
+         Ok(())
+@@ -105,33 +147,47 @@
+                     .allocated_bytes()
+                     .ok_or_else(|| fault("str method metadata overflow"))?,
+             )
++            .and_then(|n| n.checked_add(self.as_bytes.allocated_bytes()?))
+             .ok_or_else(|| fault("str method facet metadata overflow"))
+     }
+ }
+-
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+     #[test]
+     fn string_member_refuses_changed_signature_body_core_and_profile() {
+         let facet = StringMethods::for_profile(&ProfileIdentity::current()).unwrap();
+-        let actual = facet.lookup("len").unwrap();
+-        for kind in 0..4 {
+-            let mut wrong = actual.clone();
+-            match kind {
+-                0 => wrong.signature = Digest([231; 32]),
+-                1 => wrong.body = Digest([232; 32]),
+-                2 => wrong.core = Digest([233; 32]),
+-                _ => {
+-                    wrong.profile = Arc::new(ProfileIdentity {
+-                        edition: 2015,
+-                        ..ProfileIdentity::current()
+-                    })
+-                }
++        for actual in [
++            facet.lookup("len").unwrap(),
++            facet.lookup("as_bytes").unwrap(),
++        ] {
++            for kind in 0..5 {
++                let mut wrong = actual.clone();
++                match kind {
++                    0 => wrong.signature = Digest([231; 32]),
++                    1 => wrong.body = Digest([232; 32]),
++                    2 => wrong.core = Digest([233; 32]),
++                    3 => {
++                        wrong.profile = Arc::new(ProfileIdentity {
++                            edition: 2015,
++                            ..ProfileIdentity::current()
++                        })
++                    }
++                    _ => {
++                        wrong.kind = match actual.kind {
++                            StringMethodKind::ByteLen => StringMethodKind::AsBytes,
++                            StringMethodKind::AsBytes => StringMethodKind::ByteLen,
++                        }
++                    }
++                };
++                assert!(facet.require_member(&wrong).is_err());
+             }
+-            assert!(facet.require_member(&wrong).is_err());
++            facet.require_member(actual).unwrap();
+         }
+-        facet.require_member(actual).unwrap();
+-        assert!(facet.lookup("as_bytes").is_none());
++        assert_ne!(
++            facet.lookup("len").unwrap(),
++            facet.lookup("as_bytes").unwrap()
++        );
++        assert!(facet.lookup("chars").is_none());
+     }
+ }
+--- a/crates/lrr/src/frontend/primitive_float_methods.rs
++++ b/crates/lrr/src/frontend/primitive_float_methods.rs
+@@ -114,9 +114,10 @@
+ #[derive(Debug, Clone, Eq, PartialEq)]
+ pub(crate) enum PrimitiveMethodAdmission {
+     Float(PrimitiveFloatAdmission),
+-    StringLength {
++    String {
+         written: RuntimePrimitiveMethod,
+-        member: crate::facade::string_methods::StringLenMethod,
++        receiver: TyTerm,
++        member: crate::facade::string_methods::StringMethod,
+     },
+ }
+ impl PrimitiveMethodAdmission {
+@@ -137,17 +138,46 @@
+                 Some(TyTerm::Ref(_, false, target)) if target.as_ref() == &TyTerm::Str)
+         {
+             return Err(fault(
+-                "str::len requires its actual shared str source receiver",
++                "str method requires its actual shared str source receiver",
+             ));
+         }
++        let receiver = frame
++            .source_view_ref(written.receiver())?
++            .ok_or_else(|| fault("string receiver source absent"))?
++            .clone();
+         store.require_static_string_value(frame.cell(written.receiver())?)?;
+-        let member = catalog
+-            .string_len_method()
+-            .ok_or_else(|| fault("str::len compiler member is unavailable"))?;
++        let (member, expected_kind) = match written.kind() {
++            RuntimePrimitiveMethodKind::StrByteLen => {
++                let member = catalog
++                    .string_len_method()
++                    .ok_or_else(|| fault("str::len compiler member is unavailable"))?;
++                catalog.require_string_len_method(member)?;
++                (
++                    member,
++                    crate::facade::string_methods::StringMethodKind::ByteLen,
++                )
++            }
++            RuntimePrimitiveMethodKind::StrAsBytes => {
++                let member = catalog
++                    .string_method("as_bytes")
++                    .ok_or_else(|| fault("str::as_bytes compiler member is unavailable"))?;
++                catalog.require_string_method(member)?;
++                (
++                    member,
++                    crate::facade::string_methods::StringMethodKind::AsBytes,
++                )
++            }
++            RuntimePrimitiveMethodKind::IsNan => {
++                return Err(fault("float method entered string member selection"));
++            }
++        };
+         member.require_profile(&source.selection().outline.parse.profile)?;
+-        catalog.require_string_len_method(member)?;
+-        Ok(Self::StringLength {
++        if member.kind() != expected_kind {
++            return Err(fault("str method source/member kind differs"));
++        }
++        Ok(Self::String {
+             written,
++            receiver,
+             member: member.clone(),
+         })
+     }
+@@ -159,27 +189,46 @@
+     ) -> Result<Op, Diagnostic> {
+         match self {
+             Self::Float(admission) => admission.operation(written, source, key),
+-            Self::StringLength {
++            Self::String {
+                 written: selected,
++                receiver: _,
+                 member,
+             } => {
+                 written.require(&source.selection().outline.parse, key)?;
+-                if written != selected || written.kind() != RuntimePrimitiveMethodKind::StrByteLen {
+-                    return Err(fault("str::len admission source phase/member differs"));
++                if written != selected {
++                    return Err(fault("str method admission source phase differs"));
+                 }
+                 member.require_profile(&source.selection().outline.parse.profile)?;
+-                Ok(Op::StrByteLen {
+-                    source: written.receiver(),
+-                    destination: written.destination(),
+-                })
++                match (written.kind(), member.kind()) {
++                    (
++                        RuntimePrimitiveMethodKind::StrByteLen,
++                        crate::facade::string_methods::StringMethodKind::ByteLen,
++                    ) => Ok(Op::StrByteLen {
++                        source: written.receiver(),
++                        destination: written.destination(),
++                    }),
++                    (
++                        RuntimePrimitiveMethodKind::StrAsBytes,
++                        crate::facade::string_methods::StringMethodKind::AsBytes,
++                    ) => Ok(Op::StrAsBytes {
++                        source: written.receiver(),
++                        destination: written.destination(),
++                    }),
++                    _ => Err(fault("str method source/member kind differs")),
++                }
+             }
+         }
+     }
+     pub(crate) fn allocated_bytes(&self) -> Option<usize> {
+         std::mem::size_of::<Self>().checked_add(match self {
+             Self::Float(admission) => admission.allocated_bytes()?,
+-            Self::StringLength { written, member } => written
++            Self::String {
++                written,
++                receiver,
++                member,
++            } => written
+                 .allocated_bytes()?
++                .checked_add(receiver.heap_bytes()?)?
+                 .checked_add(member.allocated_bytes()?)?,
+         })
+     }
+--- a/crates/lrr/src/frontend/primitive_float_recipe_tests.rs
++++ b/crates/lrr/src/frontend/primitive_float_recipe_tests.rs
+@@ -110,7 +110,7 @@
+         assert_eq!(constant.edition(), edition);
+         assert_eq!(constant.hygiene_context(), locals.context());
+         assert_eq!(constant.opcode_tag(), 41);
+-        assert_eq!(OPCODE_COUNT, 46); // tag 42 reserved; source constants43, parameter places44, str byte length45
++        assert_eq!(OPCODE_COUNT, 47); // tag 42 reserved; source constants43, parameter places44, str byte length45, byte view46
+         let RecipeExit::Next(next) = &recipe.exit else {
+             panic!("missing structural next")
+         };
+--- a/crates/lrr/src/frontend/runtime_macro_catalog.rs
++++ b/crates/lrr/src/frontend/runtime_macro_catalog.rs
+@@ -141,19 +141,32 @@
+             .ok_or_else(|| fault("primitive method compiler facet is absent"))?
+             .require_member(member)
+     }
+-    pub(crate) fn string_len_method(
+-        &self,
+-    ) -> Option<&crate::facade::string_methods::StringLenMethod> {
+-        self.string_methods.as_ref()?.lookup("len")
+-    }
+-    pub(crate) fn require_string_len_method(
+-        &self,
+-        member: &crate::facade::string_methods::StringLenMethod,
++    pub(crate) fn string_method(
++        &self,
++        name: &str,
++    ) -> Option<&crate::facade::string_methods::StringMethod> {
++        self.string_methods.as_ref()?.lookup(name)
++    }
++    pub(crate) fn require_string_method(
++        &self,
++        member: &crate::facade::string_methods::StringMethod,
+     ) -> Result<(), Diagnostic> {
+         self.string_methods
+             .as_ref()
+             .ok_or_else(|| fault("str method compiler facet absent"))?
+             .require_member(member)
++    }
++    pub(crate) fn string_len_method(&self) -> Option<&crate::facade::string_methods::StringMethod> {
++        self.string_methods.as_ref()?.lookup("len")
++    }
++    pub(crate) fn require_string_len_method(
++        &self,
++        member: &crate::facade::string_methods::StringMethod,
++    ) -> Result<(), Diagnostic> {
++        if member.kind() != crate::facade::string_methods::StringMethodKind::ByteLen {
++            return Err(fault("expected the str::len member"));
++        }
++        self.require_string_method(member)
+     }
+     /// Includes the independent inherent declaration facet, without changing
+     /// any existing macro definition identities or export routes.
+--- a/crates/lrr/src/frontend/runtime_primitive_float_catalog_tests.rs
++++ b/crates/lrr/src/frontend/runtime_primitive_float_catalog_tests.rs
+@@ -20,12 +20,20 @@
+         let runtime = compiler.runtime_catalog().unwrap().unwrap();
+         let member = runtime.string_len_method().unwrap();
+         runtime.require_string_len_method(member).unwrap();
++        let bytes = runtime.string_method("as_bytes").unwrap();
++        runtime.require_string_method(bytes).unwrap();
++        assert_ne!(bytes, member);
++        assert!(runtime.require_string_len_method(bytes).is_err());
+         let raw = RuntimeMacroCatalog::new(crate::facade::unit(&profile, "core"), edition).unwrap();
+         let macro_only = RuntimeMacroCatalog::standard(&profile).unwrap();
+         assert!(raw.string_len_method().is_none());
+         assert!(macro_only.string_len_method().is_none());
+         assert!(raw.require_string_len_method(member).is_err());
+         assert!(macro_only.require_string_len_method(member).is_err());
++        assert!(raw.string_method("as_bytes").is_none());
++        assert!(macro_only.string_method("as_bytes").is_none());
++        assert!(raw.require_string_method(bytes).is_err());
++        assert!(macro_only.require_string_method(bytes).is_err());
+         let other = CompileInputCatalog::standalone(&ProfileIdentity {
+             edition: if edition == 2024 { 2021 } else { 2024 },
+             ..ProfileIdentity::current()
+@@ -35,6 +43,7 @@
+         .unwrap()
+         .unwrap();
+         assert!(other.require_string_len_method(member).is_err());
++        assert!(other.require_string_method(bytes).is_err());
+     }
+ }
+ #[test]
+--- a/crates/lrr/src/ir/definition_numeric_wire_tests.rs
++++ b/crates/lrr/src/ir/definition_numeric_wire_tests.rs
+@@ -259,8 +259,8 @@
+ }
+ #[test]
+ fn recipe_schema_separates_definition_context_from_prior_cache_world() {
+-    assert_eq!(crate::ir::op::LRIR_RECIPE_SCHEMA, 15);
+-    assert_eq!(Recipe::DOMAIN, "lrr/v15/lrir-recipe");
++    assert_eq!(crate::ir::op::LRIR_RECIPE_SCHEMA, 16);
++    assert_eq!(Recipe::DOMAIN, "lrr/v16/lrir-recipe");
+     let body = body();
+     let recipe = verify(
+         draft(
+@@ -274,7 +274,7 @@
+     )
+     .unwrap();
+     let recipe = recipe.recipe();
+-    let mut expected = StableEncoder::new("lrr/v15/lrir-recipe");
++    let mut expected = StableEncoder::new("lrr/v16/lrir-recipe");
+     expected.record(&recipe.key);
+     expected.record(&recipe.origin.span.body_key);
+     expected.u32(recipe.origin.span.relative_start);
+--- a/crates/lrr/src/ir/op.rs
++++ b/crates/lrr/src/ir/op.rs
+@@ -130,7 +130,7 @@
+     }
+ }
+ /// Explicit recipe/cache compatibility, independent of host enum layout.
+-pub const LRIR_RECIPE_SCHEMA: u32 = 15;
++pub const LRIR_RECIPE_SCHEMA: u32 = 16;
+ pub const DECODED_INTEGER_SCHEMA: u32 = 1;
+ #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+ pub enum IntegerLexicalError {
+@@ -248,7 +248,7 @@
+ /// Stable opcode inventory. Runtime counter storage must use this bound.
+ // Tag42 remains reserved for the separately frozen managed Vec instruction.
+ pub const SOURCE_CONSTANT_OPCODE: u8 = 43;
+-pub const OPCODE_COUNT: usize = 46;
++pub const OPCODE_COUNT: usize = 47;
+ pub type OpcodeCounters = [u64; OPCODE_COUNT];
+ 
+ /// Closed source-bound floating value. Public callers can inspect or clone a
+@@ -416,6 +416,10 @@
+ #[derive(Debug, Clone, Eq, PartialEq)]
+ pub enum Op {
+     /// Byte count of an already evaluated, source-admitted shared str.
++    StrAsBytes {
++        source: SlotId,
++        destination: SlotId,
++    },
+     StrByteLen {
+         source: SlotId,
+         destination: SlotId,
+@@ -623,6 +627,7 @@
+     pub(crate) fn opcode_tag(&self) -> u8 {
+         match self {
+             Self::StrByteLen { .. } => 45,
++            Self::StrAsBytes { .. } => 46,
+             Self::SourceConstant { .. } => SOURCE_CONSTANT_OPCODE,
+             Self::CompoundHint { .. } => 40,
+             Self::ProjectTuple { .. } => 35,
+@@ -683,6 +688,7 @@
+     pub fn effect_class(&self) -> EffectClass {
+         match self {
+             Self::StrByteLen { .. }
++            | Self::StrAsBytes { .. }
+             | Self::MakePlace { .. }
+             | Self::ParameterPlace { .. }
+             | Self::ValuePlace { .. }
+--- a/crates/lrr/src/ir/parameter_place_wire_tests.rs
++++ b/crates/lrr/src/ir/parameter_place_wire_tests.rs
+@@ -22,10 +22,10 @@
+ );
+ #[test]
+ fn unchanged_dereference_parameters_address_original_cells_without_owning_read_all_editions() {
+-    assert_eq!(LRIR_RECIPE_SCHEMA, 15);
+-    assert_eq!(Recipe::DOMAIN, "lrr/v15/lrir-recipe");
++    assert_eq!(LRIR_RECIPE_SCHEMA, 16);
++    assert_eq!(Recipe::DOMAIN, "lrr/v16/lrir-recipe");
+     assert_eq!(SOURCE_CONSTANT_OPCODE, 43);
+-    assert_eq!(OPCODE_COUNT, 46);
++    assert_eq!(OPCODE_COUNT, 47);
+     for edition in [2015, 2018, 2021, 2024] {
+         let parsed = ParsedFile::parse(
+             &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
+@@ -128,48 +128,57 @@
+                     .filter_map(|other| other.value)
+                     .find(|other| *other != source)
+                     .unwrap();
+-                let mut length = original.clone();
+-                length.operations = vec![Op::StrByteLen {
+-                    source,
+-                    destination,
+-                }];
+-                let verified = verify(length.clone(), &body).unwrap();
+-                let recipe = verified.recipe();
+-                assert_eq!(recipe.operations[0].opcode_tag(), 45);
+-                let mut expected = StableEncoder::new("lrr/v15/lrir-recipe");
+-                expected.record(&recipe.key);
+-                expected.record(&recipe.origin.span.body_key);
+-                expected.u32(recipe.origin.span.relative_start);
+-                expected.u32(recipe.origin.span.relative_end);
+-                expected.u64(0);
+-                expected.u64(1);
+-                expected.u32(45);
+-                expected.u32(source.0);
+-                expected.u32(destination.0);
+-                expected.u32(0);
+-                let RecipeExit::Next(next) = &recipe.exit else {
+-                    panic!("length wire continuation")
+-                };
+-                expected.record(next);
+-                expected.u64(0);
+-                assert_eq!(recipe.fingerprint(), expected.finish());
+-                let mut old = StableEncoder::new("lrr/v14/lrir-recipe");
+-                recipe.encode_fields(&mut old);
+-                assert_ne!(recipe.fingerprint(), old.finish());
+-                for invalid_source in [destination, crate::ir::pc::SlotId(u32::MAX)] {
+-                    let mut wrong = length.clone();
+-                    wrong.operations = vec![Op::StrByteLen {
+-                        source: invalid_source,
+-                        destination,
+-                    }];
+-                    assert_eq!(verify(wrong, &body).unwrap_err().code, "LRR-E-INTERNAL-IR");
++                for opcode in [45u32, 46] {
++                    let operation = |source, destination| {
++                        if opcode == 45 {
++                            Op::StrByteLen {
++                                source,
++                                destination,
++                            }
++                        } else {
++                            Op::StrAsBytes {
++                                source,
++                                destination,
++                            }
++                        }
++                    };
++                    let mut length = original.clone();
++                    length.operations = vec![operation(source, destination)];
++                    let verified = verify(length.clone(), &body).unwrap();
++                    let recipe = verified.recipe();
++                    assert_eq!(u32::from(recipe.operations[0].opcode_tag()), opcode);
++                    let mut expected = StableEncoder::new("lrr/v16/lrir-recipe");
++                    expected.record(&recipe.key);
++                    expected.record(&recipe.origin.span.body_key);
++                    expected.u32(recipe.origin.span.relative_start);
++                    expected.u32(recipe.origin.span.relative_end);
++                    expected.u64(0);
++                    expected.u64(1);
++                    expected.u32(opcode);
++                    expected.u32(source.0);
++                    expected.u32(destination.0);
++                    expected.u32(0);
++                    let RecipeExit::Next(next) = &recipe.exit else {
++                        panic!("length wire continuation")
++                    };
++                    expected.record(next);
++                    expected.u64(0);
++                    assert_eq!(recipe.fingerprint(), expected.finish());
++                    let mut old = StableEncoder::new("lrr/v15/lrir-recipe");
++                    recipe.encode_fields(&mut old);
++                    assert_ne!(recipe.fingerprint(), old.finish());
++                    for invalid_source in [destination, crate::ir::pc::SlotId(u32::MAX)] {
++                        let mut wrong = length.clone();
++                        wrong.operations = vec![operation(invalid_source, destination)];
++                        assert_eq!(verify(wrong, &body).unwrap_err().code, "LRR-E-INTERNAL-IR");
++                    }
++                    let mut duplicate = length.clone();
++                    duplicate.operations.push(length.operations[0].clone());
++                    assert_eq!(
++                        verify(duplicate, &body).unwrap_err().code,
++                        "LRR-E-INTERNAL-IR"
++                    );
+                 }
+-                let mut duplicate = length.clone();
+-                duplicate.operations.push(length.operations[0].clone());
+-                assert_eq!(
+-                    verify(duplicate, &body).unwrap_err().code,
+-                    "LRR-E-INTERNAL-IR"
+-                );
+             }
+             let mut another = original;
+             another.operations = vec![Op::ParameterPlace {
+--- a/crates/lrr/src/ir/recipe.rs
++++ b/crates/lrr/src/ir/recipe.rs
+@@ -225,12 +225,20 @@
+     }
+ }
+ impl StableEncode for Recipe {
+-    const DOMAIN: &'static str = "lrr/v15/lrir-recipe";
++    const DOMAIN: &'static str = "lrr/v16/lrir-recipe";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         e.record(&self.key);
+         span(e, &self.origin.span);
+         e.sequence(&self.origin.expansion_ancestry, |e, d| e.digest(*d));
+         e.sequence(&self.operations, |e, op| match op {
++            Op::StrAsBytes {
++                source,
++                destination,
++            } => {
++                e.u32(46);
++                e.u32(source.0);
++                e.u32(destination.0);
++            }
+             Op::StrByteLen {
+                 source,
+                 destination,
+--- a/crates/lrr/src/ir/validate.rs
++++ b/crates/lrr/src/ir/validate.rs
+@@ -971,11 +971,15 @@
+             Op::StrByteLen {
+                 source,
+                 destination,
++            }
++            | Op::StrAsBytes {
++                source,
++                destination,
+             } => {
+                 slot(body, *source, SlotKind::Value)?;
+                 slot(body, *destination, SlotKind::Value)?;
+                 if source == destination {
+-                    return Err(invalid("str length cannot overwrite its receiver"));
++                    return Err(invalid("str method cannot overwrite its receiver"));
+                 }
+                 Some(*destination)
+             }
+--- a/crates/lrr/src/runtime/cell_byte_comparison_tests.rs
++++ b/crates/lrr/src/runtime/cell_byte_comparison_tests.rs
+@@ -340,3 +340,235 @@
+     );
+     assert_eq!((first.budget.handles(), first.budget.bytes()), before);
+ }
++
++#[test]
++fn unchanged_string_operands_as_bytes_share_one_root_and_cached_slice_lease_all_editions() {
++    use crate::{
++        core::profile::ProfileIdentity, source::snapshot::SourceBlob, syntax::parse::ParsedFile,
++    };
++    use ra_ap_syntax::{AstNode, AstToken, ast};
++    const ORIGINAL: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/estr-slice.rs"
++    );
++    for edition in [2015, 2018, 2021, 2024] {
++        let parsed = ParsedFile::parse(
++            &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
++            ProfileIdentity {
++                edition,
++                ..ProfileIdentity::current()
++            },
++        )
++        .unwrap();
++        assert!(parsed.errors.is_empty());
++        let values: Vec<_> = parsed
++            .parsed
++            .tree()
++            .syntax()
++            .descendants()
++            .filter_map(ast::LetStmt::cast)
++            .filter_map(|binding| {
++                let ast::Expr::Literal(literal) = binding.initializer()? else {
++                    return None;
++                };
++                Some(
++                    ast::String::cast(literal.token())?
++                        .value()
++                        .unwrap()
++                        .into_owned(),
++                )
++            })
++            .collect();
++        assert_eq!(values.len(), 8);
++        let mut store = store();
++        for (i, text) in values.iter().enumerate() {
++            let source = operand(
++                &mut store,
++                format!("original-{i}").as_bytes(),
++                text.as_bytes(),
++                ByteLiteralTarget::Str,
++            );
++            let value = store.admit_move(source).unwrap();
++            let root = store
++                .references
++                .get(store.reference_from_cell(source).unwrap())
++                .unwrap()
++                .root;
++            let (object, storage) = store.place_object(root.cell).unwrap();
++            let fields = storage.fields.clone();
++            let before = (
++                store.budget.handles(),
++                store.budget.bytes(),
++                store.type_metadata_bytes(),
++            );
++            let plan = store.prepare_static_string_bytes(source, false).unwrap();
++            let reference_type = plan.reference_type();
++            assert_eq!(
++                before,
++                (
++                    store.budget.handles(),
++                    store.budget.bytes(),
++                    store.type_metadata_bytes()
++                )
++            );
++            let ticket = store.instantiate_static_string_bytes(plan).unwrap();
++            let bytes = store.peek_ticket(ticket).unwrap();
++            assert_eq!(bytes.type_id, reference_type.0);
++            let reference = RefId::from_bits(bytes.payload);
++            let actual = store.references.get(reference).unwrap();
++            assert_eq!(actual.root, root);
++            assert_eq!(actual.final_cell, root);
++            assert_eq!(actual.access, Access::Shared);
++            assert!(
++                matches!(store.types.descriptor(actual.target).unwrap().key.as_ref(),TypeKey::Slice{element} if *element==TypeId(9))
++            );
++            store.discard(ticket).unwrap();
++            let next = store.prepare_static_string_bytes(source, false).unwrap();
++            let handles = store.budget.handles();
++            let ticket = store.instantiate_static_string_bytes(next).unwrap();
++            assert_eq!(store.peek_ticket(ticket).unwrap().payload, reference.bits());
++            assert_eq!(store.budget.handles(), handles + 1); // only the new transfer ticket
++            store.discard(ticket).unwrap();
++            assert_eq!(store.admit_move(source).unwrap(), value);
++            let (after_object, after_storage) = store.place_object(root.cell).unwrap();
++            assert_eq!(after_object, object);
++            assert_eq!(after_storage.fields, fields);
++        }
++    }
++}
++#[test]
++fn string_byte_view_refuses_foreign_reset_stale_descriptor_and_double_issue_plans_before_effects() {
++    let mut first = store();
++    let source = operand(&mut first, b"source", b"hello", ByteLiteralTarget::Str);
++    let plan = first.prepare_static_string_bytes(source, false).unwrap();
++    let mut second = store();
++    let before = (
++        second.budget.handles(),
++        second.budget.bytes(),
++        second.type_metadata_bytes(),
++    );
++    assert_eq!(
++        second
++            .instantiate_static_string_bytes(plan)
++            .unwrap_err()
++            .code,
++        "LRR-E-STALE-HANDLE"
++    );
++    assert_eq!(
++        before,
++        (
++            second.budget.handles(),
++            second.budget.bytes(),
++            second.type_metadata_bytes()
++        )
++    );
++    let plan = first.prepare_static_string_bytes(source, false).unwrap();
++    first.types.intern(TypeKey::Tuple(Box::new([]))).unwrap();
++    let before = (
++        first.budget.handles(),
++        first.budget.bytes(),
++        first.type_metadata_bytes(),
++    );
++    assert_eq!(
++        first
++            .instantiate_static_string_bytes(plan)
++            .unwrap_err()
++            .code,
++        "LRR-E-STALE-HANDLE"
++    );
++    assert_eq!(
++        before,
++        (
++            first.budget.handles(),
++            first.budget.bytes(),
++            first.type_metadata_bytes()
++        )
++    );
++    let first_plan = first.prepare_static_string_bytes(source, false).unwrap();
++    let stale_plan = first.prepare_static_string_bytes(source, false).unwrap();
++    let ticket = first.instantiate_static_string_bytes(first_plan).unwrap();
++    let before = (
++        first.budget.handles(),
++        first.budget.bytes(),
++        first.type_metadata_bytes(),
++    );
++    assert_eq!(
++        first
++            .instantiate_static_string_bytes(stale_plan)
++            .unwrap_err()
++            .code,
++        "LRR-E-STALE-HANDLE"
++    );
++    assert_eq!(
++        before,
++        (
++            first.budget.handles(),
++            first.budget.bytes(),
++            first.type_metadata_bytes()
++        )
++    );
++    first.discard(ticket).unwrap();
++    let plan = first.prepare_static_string_bytes(source, false).unwrap();
++    first.reset(2).unwrap();
++    let before = (
++        first.budget.handles(),
++        first.budget.bytes(),
++        first.type_metadata_bytes(),
++    );
++    assert_eq!(
++        first
++            .instantiate_static_string_bytes(plan)
++            .unwrap_err()
++            .code,
++        "LRR-E-STALE-HANDLE"
++    );
++    assert_eq!(
++        before,
++        (
++            first.budget.handles(),
++            first.budget.bytes(),
++            first.type_metadata_bytes()
++        )
++    );
++}
++#[test]
++fn string_byte_view_cannot_infer_utf8_from_bytes_or_publish_after_quota_refusal() {
++    let mut store = GuestStore::new(1, 1000, 8 << 20).unwrap();
++    let byte_only = operand(&mut store, b"bytes", b"hello", ByteLiteralTarget::Slice);
++    let before = (
++        store.budget.handles(),
++        store.budget.bytes(),
++        store.type_metadata_bytes(),
++    );
++    assert!(store.prepare_static_string_bytes(byte_only, false).is_err());
++    assert_eq!(
++        before,
++        (
++            store.budget.handles(),
++            store.budget.bytes(),
++            store.type_metadata_bytes()
++        )
++    );
++    let source = operand(&mut store, b"str", b"hello", ByteLiteralTarget::Str);
++    let remaining = store.budget.max_handles() - store.budget.handles();
++    for _ in 0..remaining {
++        store.ticket(ValueRepr::unit()).unwrap();
++    }
++    let before = (
++        store.budget.handles(),
++        store.budget.bytes(),
++        store.type_metadata_bytes(),
++    );
++    let error = match store.prepare_static_string_bytes(source, true) {
++        Err(error) => error,
++        Ok(_) => panic!("exhausted byte-view quota was admitted"),
++    };
++    assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
++    assert_eq!(
++        before,
++        (
++            store.budget.handles(),
++            store.budget.bytes(),
++            store.type_metadata_bytes()
++        )
++    );
++}
+--- a/crates/lrr/src/runtime/cell_byte_literals.rs
++++ b/crates/lrr/src/runtime/cell_byte_literals.rs
+@@ -576,3 +576,7 @@
+ #[cfg(test)]
+ #[path = "cell_static_utf8_tests.rs"]
+ mod static_utf8_tests;
++
++#[path = "cell_string_views.rs"]
++mod string_views;
++pub(crate) use string_views::PreparedStaticStringBytes;
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_string_views.rs
+@@ -0,0 +1,187 @@
++//! A shared byte-slice view of a genuine immutable UTF-8 string root.
++//! No content copy, new root, UTF-8 inference, or source lifetime authority.
++use super::*;
++
++pub(crate) struct PreparedStaticStringBytes {
++    session: StoreSession,
++    epoch: u32,
++    source: CellStamp,
++    source_value: ValueRepr,
++    root: CellStamp,
++    literal: StaticLiteralId,
++    existing: Option<RefId>,
++    array_type: TypeId,
++    target_type: TypeId,
++    reference_type: TypeId,
++    needs_cell: bool,
++}
++impl PreparedStaticStringBytes {
++    pub(crate) fn reference_type(&self) -> TypeId {
++        self.reference_type
++    }
++}
++impl GuestStore {
++    pub(crate) fn prepare_static_string_bytes(
++        &self,
++        source: CellId,
++        needs_cell: bool,
++    ) -> Result<PreparedStaticStringBytes, Diagnostic> {
++        self.require_static_string_value(source)?;
++        let reference = self.references.get(self.reference_from_cell(source)?)?;
++        let literal = reference.static_slice.ok_or_else(lease_fault)?;
++        let root_type = self.place_type(reference.root.cell)?;
++        let TypeKey::Array { element, len } = self.types.descriptor(root_type)?.key.as_ref() else {
++            return Err(lease_fault());
++        };
++        if *element != TypeId(9) {
++            return Err(lease_fault());
++        }
++        let types = self
++            .types
++            .preview_byte_literal_types(*len, ByteLiteralTarget::Slice)?;
++        if types.array != root_type {
++            return Err(lease_fault());
++        }
++        let plan = PreparedStaticStringBytes {
++            session: self.pattern_binding_session,
++            epoch: self.budget.epoch(),
++            source: self.place_stamp(source)?,
++            source_value: self.admit_move(source)?,
++            root: reference.root,
++            literal,
++            existing: self.static_literals.get(literal)?.slice_reference,
++            array_type: types.array,
++            target_type: types.target,
++            reference_type: types.reference,
++            needs_cell,
++        };
++        drop(types);
++        self.preflight_static_string_bytes(&plan)?;
++        Ok(plan)
++    }
++    fn preflight_static_string_bytes(
++        &self,
++        plan: &PreparedStaticStringBytes,
++    ) -> Result<(ByteHintTypes, TypeId, TypeId), Diagnostic> {
++        if plan.session != self.pattern_binding_session
++            || plan.epoch != self.budget.epoch()
++            || self.place_stamp(plan.source.cell)? != plan.source
++            || self.admit_move(plan.source.cell)? != plan.source_value
++        {
++            return Err(stale());
++        }
++        self.require_static_string_value(plan.source.cell)?;
++        let source = self
++            .references
++            .get(self.reference_from_cell(plan.source.cell)?)?;
++        if source.root != plan.root
++            || source.static_slice != Some(plan.literal)
++            || self.static_literals.get(plan.literal)?.slice_reference != plan.existing
++        {
++            return Err(stale());
++        }
++        self.require_static_root(plan.literal, plan.root.cell)?;
++        let root_type = self.place_type(plan.root.cell)?;
++        let TypeKey::Array { element, len } = self.types.descriptor(root_type)?.key.as_ref() else {
++            return Err(lease_fault());
++        };
++        if *element != TypeId(9) || root_type != plan.array_type {
++            return Err(lease_fault());
++        }
++        // Rebuild a current descriptor batch. If another descriptor publication
++        // shifted predicted IDs, reject before reservations or view publication.
++        let types = self
++            .types
++            .preview_byte_literal_types(*len, ByteLiteralTarget::Slice)?;
++        if (types.array, types.target, types.reference)
++            != (plan.array_type, plan.target_type, plan.reference_type)
++        {
++            return Err(stale());
++        }
++        if let Some(id) = plan.existing {
++            let reference = self.references.get(id)?;
++            self.validate_reference_record(reference)?;
++            if reference.root != plan.root
++                || reference.final_cell != plan.root
++                || reference.target != types.target
++                || reference.access != Access::Shared
++                || reference.static_slice != Some(plan.literal)
++                || !reference.enclosing.is_empty()
++            {
++                return Err(lease_fault());
++            }
++        }
++        let hints = self.types.preview_byte_hint_types(None)?;
++        let lease = usize::from(plan.existing.is_none());
++        let cells = usize::from(plan.needs_cell);
++        let handles = u32::try_from(
++            lease
++                .checked_add(cells)
++                .and_then(|n| n.checked_add(1))
++                .ok_or_else(resource)?,
++        )
++        .map_err(|_| resource())?;
++        let bytes = self
++            .cells
++            .reservation_bytes(cells)?
++            .checked_add(self.references.reservation_bytes(lease)?)
++            .and_then(|n| n.checked_add(self.tickets.reservation_bytes(1).ok()?))
++            .and_then(|n| n.checked_add(types.scratch_bytes().ok()?))
++            .and_then(|n| n.checked_add(hints.scratch_bytes().ok()?))
++            .ok_or_else(resource)?;
++        self.budget.check(handles, bytes)?;
++        Ok((hints, types.target, types.reference))
++    }
++    /// Issue one transfer ticket; a cached shared lease is reused on later
++    /// invocations. The source value and all backing cells remain unchanged.
++    pub(crate) fn instantiate_static_string_bytes(
++        &mut self,
++        plan: PreparedStaticStringBytes,
++    ) -> Result<TicketId, Diagnostic> {
++        let (types, target, expected_reference) = self.preflight_static_string_bytes(&plan)?;
++        let lease = usize::from(plan.existing.is_none());
++        self.cells
++            .reserve(usize::from(plan.needs_cell), &mut self.budget)?;
++        self.references.reserve(lease, &mut self.budget)?;
++        self.tickets.reserve(1, &mut self.budget)?;
++        let reference_type = self.types.commit_byte_hint_types(&types)?;
++        if reference_type != expected_reference {
++            return Err(lease_fault());
++        }
++        let reference = if let Some(reference) = plan.existing {
++            reference
++        } else {
++            let reference: RefId = self
++                .references
++                .allocate(
++                    ReferenceRecord {
++                        access: Access::Shared,
++                        owner: None,
++                        target,
++                        root: plan.root,
++                        enclosing: Vec::new(),
++                        final_cell: plan.root,
++                        static_slice: Some(plan.literal),
++                    },
++                    0,
++                    &mut self.budget,
++                )?
++                .into();
++            self.static_literals.get_mut(plan.literal)?.slice_reference = Some(reference);
++            reference
++        };
++        self.tickets
++            .allocate(
++                TransferTicket {
++                    value: ValueRepr {
++                        kind: 9,
++                        type_id: reference_type.0,
++                        payload: reference.bits(),
++                    },
++                },
++                0,
++                &mut self.budget,
++            )
++            .map(TicketId::from)
++    }
++}
+--- a/crates/lrr/src/syntax/runtime_macro_primitive_methods.rs
++++ b/crates/lrr/src/syntax/runtime_macro_primitive_methods.rs
+@@ -9,6 +9,7 @@
+ pub(crate) enum RuntimePrimitiveMethodKind {
+     IsNan,
+     StrByteLen,
++    StrAsBytes,
+ }
+ #[derive(Debug, Clone, Eq, PartialEq)]
+ pub(crate) struct RuntimePrimitiveMethod {
+--- a/crates/lrr/src/syntax/runtime_macro_scalars.rs
++++ b/crates/lrr/src/syntax/runtime_macro_scalars.rs
+@@ -658,8 +658,10 @@
+                     }
+                     ast::Expr::MethodCallExpr(call) => {
+                         let name = call.name_ref().ok_or_else(unsupported)?;
+-                        if !matches!(name.text(), "is_nan" | "r#is_nan" | "len" | "r#len")
+-                            || call.generic_arg_list().is_some()
++                        if !matches!(
++                            name.text(),
++                            "is_nan" | "r#is_nan" | "len" | "r#len" | "as_bytes" | "r#as_bytes"
++                        ) || call.generic_arg_list().is_some()
+                             || call
+                                 .arg_list()
+                                 .ok_or_else(unsupported)?
+@@ -680,6 +682,8 @@
+                             destination,
+                             if matches!(name.text(), "len" | "r#len") {
+                                 RuntimePrimitiveMethodKind::StrByteLen
++                            } else if matches!(name.text(), "as_bytes" | "r#as_bytes") {
++                                RuntimePrimitiveMethodKind::StrAsBytes
+                             } else {
+                                 RuntimePrimitiveMethodKind::IsNan
+                             },
+--- a/crates/lrr/src/vm/step.rs
++++ b/crates/lrr/src/vm/step.rs
+@@ -595,8 +595,60 @@
+     frame.preflight_primitive_operator_capacity(destination, store)?;
+     Ok((len, ty))
+ }
++fn string_byte_view(
++    frame: &Frame,
++    store: &GuestStore,
++    source: crate::ir::pc::SlotId,
++    destination: crate::ir::pc::SlotId,
++) -> Result<
++    (
++        crate::runtime::cell::byte_literals::PreparedStaticStringBytes,
++        crate::traits::term::TyTerm,
++    ),
++    Diagnostic,
++> {
++    use crate::traits::term::TyTerm;
++    frame.require_store(store)?;
++    if source == destination {
++        return Err(invalid("str byte view cannot overwrite its receiver"));
++    }
++    let Some(TyTerm::Ref(region, false, target)) = frame.source_view_ref(source)? else {
++        return Err(invalid("str byte view requires its shared source receiver"));
++    };
++    if target.as_ref() != &TyTerm::Str {
++        return Err(invalid("str byte view requires str source identity"));
++    }
++    // A static physical backing cannot strengthen a source borrow lifetime.
++    let result = TyTerm::Ref(
++        region.clone(),
++        false,
++        Box::new(TyTerm::Slice(Box::new(TyTerm::Primitive(
++            PrimitiveType::U8,
++        )))),
++    );
++    if frame
++        .source_view_ref(destination)?
++        .is_some_and(|prior| prior != &result)
++    {
++        return Err(Diagnostic::new(
++            "LRR-E-TYPE-CONTEXT",
++            "str byte view result conflicts with retained source context".into(),
++        ));
++    }
++    frame.preflight_source_view(destination, Some(&result))?;
++    let plan = store.prepare_static_string_bytes(
++        frame.cell(source)?,
++        frame.literal_destination_needs_cell(destination)?,
++    )?;
++    frame.preflight_write_type(destination, plan.reference_type(), store)?;
++    Ok((plan, result))
++}
+ fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Diagnostic> {
+     match op {
++        Op::StrAsBytes {
++            source,
++            destination,
++        } => string_byte_view(frame, store, *source, *destination).map(|_| ()),
+         Op::StrByteLen {
+             source,
+             destination,
+@@ -1105,6 +1157,20 @@
+     byte_hint: Option<crate::runtime::cell::byte_literals::PreparedStaticByteHint>,
+ ) -> Result<(), Diagnostic> {
+     match op {
++        Op::StrAsBytes {
++            source,
++            destination,
++        } => {
++            let (plan, result) = string_byte_view(frame, store, *source, *destination)?;
++            frame.reserve_primitive_operator_result(*destination, store)?;
++            let ticket = store.instantiate_static_string_bytes(plan)?;
++            if let Err(error) = frame.write(*destination, ticket, store) {
++                store.discard(ticket)?;
++                return Err(error);
++            }
++            frame.set_source_view(*destination, Some(result))
++        }
++
+         Op::StrByteLen {
+             source,
+             destination,
+--- a/xtask/tests/match_no_arm_exit.rs
++++ b/xtask/tests/match_no_arm_exit.rs
+@@ -199,7 +199,7 @@
+     expected.u32(7); // fixed wire discriminant, not Rust enum layout
+     expected.u64(0); // dependencies
+     assert_eq!(recipe.fingerprint(), expected.finish());
+-    const { assert!(LRIR_RECIPE_SCHEMA == 15) };
++    const { assert!(LRIR_RECIPE_SCHEMA == 16) };
+     assert_ne!(Recipe::DOMAIN, "lrr/v4/lrir-recipe");
+     assert_ne!(Recipe::DOMAIN, "lrr/v5/lrir-recipe");
+     assert_ne!(Recipe::DOMAIN, "lrr/v6/lrir-recipe");

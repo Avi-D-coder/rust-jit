@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V87 combined milestone running on frozen2e19361d after strict+22 scoped depth/immutable-root passes. Root added source string patterns with separate literal/comparison phases and ordinary equality admission; three pending controls include whole unchanged match-borrowed-str main all4. Coherent31-leaf v3 exactly replays against V87 and preserves depth repair and validated range context. All string work remains uncompiled/unexecuted; no canonical byte promotion, new runtime/full-fixture acceptance or JIT.",
+      "scope": "V87 full milestone failed on an obsolete scalar-or range-refusal expectation (2866 passed, 1 failed, 421 unexecuted); V88 strict affected Clippy and all 7 scalar_or_patterns tests passed with frozen source/owner unchanged. Fresh full milestone remains pending before canonical byte promotion. Coherent string literals/calls/patterns, length, ordering and shared as_bytes views are source-only uncompiled/unexecuted candidates; no new stock runtime/full-fixture acceptance or JIT. Validation remains stopped below the free-space guard; exact historical-cache retirement awaits direct human approval after automatic review rejected deletion.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -537,11 +537,13 @@
         "artifacts/macos-first/root-string-ordering-v1/",
         "worktracks/candidates/root-string-ordering-v1/",
         "artifacts/macos-first/root-or-range-frontier-contract-v1/",
-        "worktracks/candidates/root-or-range-frontier-contract-v1/"
+        "worktracks/candidates/root-or-range-frontier-contract-v1/",
+        "artifacts/macos-first/root-string-byte-view-v1/",
+        "worktracks/candidates/root-string-byte-view-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T12:38:40.411232+00:00",
+      "updated_at": "2026-10-15T13:17:34.287064+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {
