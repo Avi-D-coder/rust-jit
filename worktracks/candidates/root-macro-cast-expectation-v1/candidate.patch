@@ -1,0 +1,146 @@
+--- a/compat/fixtures.toml
++++ b/compat/fixtures.toml
+@@ -12246,3 +12246,13 @@
+ id = "T054-MACRO-CONST-IR"
+ path = "crates/lrr/src/syntax/runtime_macro_constant_paths.rs"
+ test = "macro_constant_recipe_requires_closed_site_and_exact_origin_slots_exits_and_query"
++
++[[fixture]]
++id = "T051-MACRO-CAST-PREFIX"
++path = "crates/lrr/src/engine/run_macro_cast_context_tests.rs"
++test = "unchanged_cast_main_executes_seven_assertions_before_its_raw_pointer_frontier_all_editions"
++
++[[fixture]]
++id = "T051-MACRO-CHAR-MAIN"
++path = "crates/lrr/src/engine/run_macro_cast_context_tests.rs"
++test = "unchanged_u8_character_cast_entire_main_completes_once_all_editions"
+--- a/crates/lrr/src/engine/run_byte_macro_literals.rs
++++ b/crates/lrr/src/engine/run_byte_macro_literals.rs
+@@ -218,3 +218,7 @@
+ #[cfg(test)]
+ #[path = "run_string_macro_literal_tests.rs"]
+ mod string_tests;
++
++#[cfg(test)]
++#[path = "run_macro_cast_context_tests.rs"]
++mod cast_context_tests;
+--- /dev/null
++++ b/crates/lrr/src/engine/run_macro_cast_context_tests.rs
+@@ -0,0 +1,65 @@
++//! Actual stock cast execution; prefix controls are not whole-fixture passes.
++use super::*;
++const CASTS: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/cast/cast.rs");
++const U8_CHAR: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/cast/u8-to-char-cast-9918.rs"
++);
++#[test]
++fn unchanged_cast_main_executes_seven_assertions_before_its_raw_pointer_frontier_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, mut run, macros, _) = tests::start_source(CASTS, edition, 10_000);
++        let contexts = macros.contexts().unwrap();
++        let RunPoll::Fault(error) = run.poll_with_runtime_macros(&mut db, &contexts) else {
++            panic!("unchanged cast main raw-pointer frontier was not reached");
++        };
++        assert_eq!(error.code, "LRR-E-UNSUPPORTED");
++        assert_eq!(
++            error.message,
++            "cast target requires symbolic type resolution"
++        );
++        let pc = run.frame.pc();
++        let span = run.frame.body.span(NodeId(pc.node)).unwrap();
++        let body = run.sources[0]
++            .outline()
++            .items
++            .iter()
++            .filter_map(|item| item.body.as_ref())
++            .find(|body| body.key() == pc.body)
++            .unwrap();
++        assert_eq!(
++            &CASTS[(body.range.start + span.relative_start) as usize
++                ..(body.range.start + span.relative_end) as usize],
++            "x as *const _"
++        );
++        assert_eq!(run.frame.counters().started_by_opcode[26], 7);
++        assert_eq!(run.frame.counters().started_by_opcode[12], 13);
++        assert_eq!(
++            run.frame.counters().operations_started,
++            run.frame.counters().operations_completed
++        );
++        db.finish_run().unwrap();
++    }
++    // Actual unchanged prefix only. Pointer inference/library effects remain required.
++}
++#[test]
++fn unchanged_u8_character_cast_entire_main_completes_once_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, mut run, macros, _) = tests::start_source(U8_CHAR, edition, 10_000);
++        let contexts = macros.contexts().unwrap();
++        let report = match run.poll_with_runtime_macros(&mut db, &contexts) {
++            RunPoll::Completed(report) => report,
++            RunPoll::Fault(error) => panic!("unchanged u8 char main/{edition}: {error}"),
++            RunPoll::NeedInput(input) => panic!("unchanged u8 char main/{edition}: {input:?}"),
++            RunPoll::Panicked(report) => panic!("unchanged u8 char main/{edition}: {report:?}"),
++        };
++        assert!(matches!(report.value, ValueSummary::Unit));
++        assert_eq!(report.opcode_counters.started_by_opcode[26], 1);
++        assert_eq!(report.opcode_counters.started_by_opcode[12], 1);
++        assert_eq!(
++            report.opcode_counters.operations_started,
++            report.opcode_counters.operations_completed
++        );
++        db.finish_run().unwrap();
++    }
++}
+--- a/crates/lrr/src/syntax/runtime_macro_scalars.rs
++++ b/crates/lrr/src/syntax/runtime_macro_scalars.rs
+@@ -675,7 +675,7 @@
+                             return Err(unsupported());
+                         };
+                         let child = cast.expr().ok_or_else(unsupported)?;
+-                        let default = super::numeric_fallback::literal_only(&child)?;
++                        let default = super::numeric_fallback::cast_operand(&child, target)?;
+                         let source = allocate()?;
+                         stack.push(Work::Operation(Op::PrimitiveCast {
+                             source,
+--- a/docs/tasks.json
++++ b/docs/tasks.json
+@@ -5649,7 +5649,9 @@
+         "unchanged_match_range_main_edition_2015",
+         "unchanged_match_range_main_edition_2018",
+         "unchanged_match_range_main_edition_2021",
+-        "unchanged_match_range_main_edition_2024"
++        "unchanged_match_range_main_edition_2024",
++        "unchanged_cast_main_executes_seven_assertions_before_its_raw_pointer_frontier_all_editions",
++        "unchanged_u8_character_cast_entire_main_completes_once_all_editions"
+       ],
+       "acceptance_contract": "untaken arms remain unprepared; no-match and let-else fallthrough diagnostics are precise; successful ? does not force conversion; failing ? calls From once and validates the enclosing return contract.",
+       "commands": [],
+@@ -5661,7 +5663,9 @@
+         "T051-STOCK-RANGE-BOUNDARIES-ED2015",
+         "T051-STOCK-RANGE-BOUNDARIES-ED2018",
+         "T051-STOCK-RANGE-BOUNDARIES-ED2021",
+-        "T051-STOCK-RANGE-BOUNDARIES-ED2024"
++        "T051-STOCK-RANGE-BOUNDARIES-ED2024",
++        "T051-MACRO-CAST-PREFIX",
++        "T051-MACRO-CHAR-MAIN"
+       ],
+       "artifact_paths": [
+         "artifacts/macos-first/root-match-no-arm-v1/HANDOFF.md",
+@@ -5670,7 +5674,15 @@
+         "worktracks/evidence/2026-10-14-scalar-range-runtime.json"
+       ],
+       "release_complete": false,
+-      "validation_scope": "Integrated bounded scalar/or/single-alternative guard and typed no-arm components;586 same-production library bodies and30 component bodies passed, strict Clippy/architecture/fmt collected. Integrated milestone pending; general transactional patterns, overlapping guard retry, full if-let/while-let/question-mark and uniform Section15.5 bound-op phase acceptance incomplete. No card or full-fixture acceptance."
++      "validation_scope": "Integrated bounded scalar/or/single-alternative guard and typed no-arm components;586 same-production library bodies and30 component bodies passed, strict Clippy/architecture/fmt collected. Integrated milestone pending; general transactional patterns, overlapping guard retry, full if-let/while-let/question-mark and uniform Section15.5 bound-op phase acceptance incomplete. No card or full-fixture acceptance.",
++      "current_macro_cast_expectation_candidate": {
++        "status": "source_only_uncompiled_unexecuted_held",
++        "source_candidate": "worktracks/candidates/root-macro-cast-expectation-v1/README.md",
++        "scope": "Reuse existing pinned cast_operand expectations in opaque assertion operands; cast.rs remains prefix-only before raw-pointer inference",
++        "full_milestone_passed": false,
++        "canonical_promotion": false,
++        "full_fixture_passes_added": 0
++      }
+     },
+     {
+       "id": "T052",
