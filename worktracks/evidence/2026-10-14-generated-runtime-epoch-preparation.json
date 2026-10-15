@@ -422,10 +422,41 @@
     ]
   },
   "full_milestone": {
-    "status": "running",
+    "status": "failed_infrastructure_collected_unaccepted",
     "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
     "actual_session": 8176,
     "actual_pid": 34814,
-    "terminal": null
+    "terminal": {
+      "session": 8176,
+      "chunk": "32c6f8",
+      "outer_exit_code": 1,
+      "nested_gate_exit_code": null
+    },
+    "reason": "ENOSPC in nested gate and post-source evidence writer; no fresh gate reports or named host results were saved",
+    "fresh_host_counts": null,
+    "prior_reports": "All seven reports remain byte-identical to V58; not counted as V62",
+    "post_failure_source_guard": {
+      "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
+      "default_files": 4281,
+      "extra_files": 435,
+      "raw_originals": 490,
+      "target_owner_unchanged": true,
+      "actual_terminal": "59590e/0"
+    },
+    "final_receipt_hashes": {
+      "HANDOFF.md": "3271e9433254f67073f66062a355379207f94df001c224c1e2288e7be1069f05",
+      "EVIDENCE-HASHES.json": "990e4dea5c3f3d9858cb752c6c17d34526f3ccf1b17a82dd5faec179729bb46c",
+      "ACTUAL-GATE-INFRASTRUCTURE-FAILURE.json": "69af4f95db3ddc4e5c97158bb29597e7286671419f41bb610038e280971ee7f7",
+      "POST-FAILURE-SOURCE-GUARD.json": "de50cb68f0c13e42de125595b1b8962338b4782efbabfa0e24dc118edd9be2c4"
+    },
+    "resource_recovery": {
+      "action": "Removed only generated debug/tmp/rustc_info from confirmed inactive root-main-v69-integration-validation-v1 target",
+      "actual_terminal": "32843/f459d7/0",
+      "owner_sha256_preserved": "2145c51e8db22890d8e23a2678ac3cf13f0cd61fe71ea722c5acd57470c40217",
+      "source_and_evidence_preserved": true,
+      "current_target_T3_unchanged": true,
+      "available_kib_after": 13987844,
+      "df_terminal": "cb4b41/0"
+    }
   }
 }

@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Integrated10 exact leaves after V62 strict/192runtime+23return+2parent/audits green; required fullgate03 authorizedunchangedf3f64cc5 unaccepted. Genuine nested macro parent scopes, source/layout checked return faults, sevenharness epoch setups. V60/V61 failures preserved; no new upstream/task/JIT acceptance. Named11/Byte12/context13V2queued.",
+      "scope": "V62 ten integrated leaves retain217 scoped regression passes; fullgate infrastructure failure collected (ENOSPC, unknown nestedexit/fullhostcounts), source/original/owner guards unchanged. V63 string-token newline repair validating next. Named11/Byte12/context13/byteCRLF and large-byte resumable candidate queued; no new upstream/task/JIT acceptance.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -461,11 +461,15 @@
         "artifacts/macos-first/root-generated-return-mismatch-v1/",
         "artifacts/macos-first/root-generated-return-parent-repair-v1/",
         "artifacts/macos-first/root-return-fix-future-joins-v1/",
-        "artifacts/macos-first/root-generated-runtime-coherent-v1/"
+        "artifacts/macos-first/root-generated-runtime-coherent-v1/",
+        "artifacts/macos-first/root-string-token-newlines-v2/",
+        "artifacts/macos-first/root-large-byte-runtime-v1/",
+        "artifacts/macos-first/sol-large-byte-chunks-v1/",
+        "artifacts/macos-first/sol-large-byte-chunks-quota-v2/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T06:49:56.303177+00:00",
+      "updated_at": "2026-10-15T07:40:45.277297+00:00",
       "review_after": "2026-10-15T07:16:22.506011+00:00"
     },
     {

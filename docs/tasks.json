@@ -2744,7 +2744,18 @@
       },
       "evidence": [
         "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
-      ]
+      ],
+      "current_runtime_epoch_milestone": {
+        "version": 62,
+        "status": "failed_infrastructure_collected_unaccepted",
+        "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
+        "scoped_existing_tests_passed": 217,
+        "full_gate_host_counts": null,
+        "outer_exit_code": 1,
+        "nested_gate_exit_code": null,
+        "reason": "disk exhaustion; prior V58 reports not reused",
+        "evidence_path": "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
+      }
     },
     {
       "id": "T033",
@@ -10036,7 +10047,18 @@
         "worktracks/evidence/2026-10-14-adopted-source-registry.json",
         "worktracks/evidence/2026-10-14-child-macro-runtime-epoch.json",
         "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
-      ]
+      ],
+      "current_runtime_epoch_milestone": {
+        "version": 62,
+        "status": "failed_infrastructure_collected_unaccepted",
+        "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
+        "scoped_existing_tests_passed": 217,
+        "full_gate_host_counts": null,
+        "outer_exit_code": 1,
+        "nested_gate_exit_code": null,
+        "reason": "disk exhaustion; prior V58 reports not reused",
+        "evidence_path": "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
+      }
     },
     {
       "id": "M011",
@@ -10537,7 +10559,18 @@
         "worktracks/evidence/2026-10-14-adopted-source-registry.json",
         "worktracks/evidence/2026-10-14-child-macro-runtime-epoch.json",
         "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
-      ]
+      ],
+      "current_runtime_epoch_milestone": {
+        "version": 62,
+        "status": "failed_infrastructure_collected_unaccepted",
+        "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
+        "scoped_existing_tests_passed": 217,
+        "full_gate_host_counts": null,
+        "outer_exit_code": 1,
+        "nested_gate_exit_code": null,
+        "reason": "disk exhaustion; prior V58 reports not reused",
+        "evidence_path": "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
+      }
     },
     {
       "id": "M013",
@@ -18163,7 +18196,18 @@
         "worktracks/evidence/2026-10-14-adopted-source-registry.json",
         "worktracks/evidence/2026-10-14-child-macro-runtime-epoch.json",
         "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
-      ]
+      ],
+      "current_runtime_epoch_milestone": {
+        "version": 62,
+        "status": "failed_infrastructure_collected_unaccepted",
+        "source_member": "f3f64cc5165cf0affd9860bdb8d89a74f456f86905326b0a1434b6da469c7d11",
+        "scoped_existing_tests_passed": 217,
+        "full_gate_host_counts": null,
+        "outer_exit_code": 1,
+        "nested_gate_exit_code": null,
+        "reason": "disk exhaustion; prior V58 reports not reused",
+        "evidence_path": "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
+      }
     },
     {
       "id": "M014",
