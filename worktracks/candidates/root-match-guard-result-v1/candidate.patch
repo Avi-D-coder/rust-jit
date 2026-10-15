@@ -1,0 +1,497 @@
+--- a/compat/fixtures.toml
++++ b/compat/fixtures.toml
+@@ -12266,3 +12266,18 @@
+ id = "T050-LOCAL-LITERAL-SOURCE"
+ path = "crates/lrr/src/syntax/scalar_match_local_literal.rs"
+ test = "intrinsic_local_source_does_not_default_unresolved_numbers_or_follow_effects"
++
++[[fixture]]
++id = "T050-OPAQUE-GUARD-STOCK"
++path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
++test = "unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions"
++
++[[fixture]]
++id = "T050-OPAQUE-GUARD-ONCE"
++path = "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
++test = "opaque_guard_runs_once_only_after_pattern_and_discards_each_boolean_temporary"
++
++[[fixture]]
++id = "T025-MATCH-RESULT-ISLAND"
++path = "crates/lrr/src/syntax/runtime_macro_control_tests.rs"
++test = "result_numeric_island_excludes_scrutinee_guard_and_rigid_arm_constraints"
+--- a/crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs
++++ b/crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs
+@@ -33,13 +33,28 @@
+     run_with_fuel(text, edition, 100_000)
+ }
+ fn run_with_fuel(text: &str, edition: u16, fuel: u64) -> (Database, RunMachine, RunPoll) {
++    run_entry(
++        text,
++        edition,
++        fuel,
++        "main",
++        "tests/ui/match/match-on-negative-integer-ranges.rs",
++    )
++}
++fn run_entry(
++    text: &str,
++    edition: u16,
++    fuel: u64,
++    entry: &str,
++    filename: &str,
++) -> (Database, RunMachine, RunPoll) {
+     let profile = ProfileIdentity {
+         edition,
+         ..ProfileIdentity::current()
+     };
+     let cfg = CfgSet::guest_default();
+     let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
+-    let path = SourcePath::new("tests/ui/match/match-on-negative-integer-ranges.rs").unwrap();
++    let path = SourcePath::new(filename).unwrap();
+     let unit = Digest::of_bytes(path.as_str().as_bytes());
+     let selection = SourceSelection {
+         path: path.clone(),
+@@ -73,7 +88,7 @@
+         .outline()
+         .items
+         .iter()
+-        .find(|i| i.def_key.declared_name == "main")
++        .find(|i| i.def_key.declared_name == entry)
+         .unwrap()
+         .body
+         .as_ref()
+@@ -311,3 +326,98 @@
+     assert_eq!(actual.started_by_opcode[0], 3);
+     assert_eq!(limited.fuel_snapshot().used, used - 1);
+ }
++
++// Run an original function without rewriting its source or calling it a main /
++// full-fixture pass. Its fourth assertion still requires static storage support.
++#[test]
++fn unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions()
++{
++    const TEXT: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/match/overeager-sub-match-pruning-13027.rs"
++    );
++    for edition in [2015, 2018, 2021, 2024] {
++        let (_, machine, outcome) = run_entry(
++            TEXT,
++            edition,
++            100_000,
++            "lit_shadow_range",
++            "tests/ui/match/overeager-sub-match-pruning-13027.rs",
++        );
++        let RunPoll::Fault(error) = outcome else {
++            panic!("unchanged static frontier was skipped");
++        };
++        assert_eq!(error.code, "LRR-E-UNSUPPORTED");
++        assert_eq!(
++            error.message,
++            "assertion constant path requires current source query preparation"
++        );
++        let counters = machine.opcode_counters().unwrap();
++        assert_eq!(counters.started_by_opcode[26], 3);
++        assert_eq!(counters.started_by_opcode[25], 0);
++        assert_eq!(counters.started_by_opcode[19], 1);
++        assert_eq!(machine.action_snapshot().published, 1);
++        assert_eq!(machine.action_snapshot().consumed, 1);
++        assert_eq!(machine.action_snapshot().pending, None);
++        let span = machine.diagnostic_current_span().unwrap();
++        // The exact error remains attached to the original fourth assertion.
++        let origin = machine
++            .diagnostic_source_origin(&span, 4096)
++            .unwrap()
++            .unwrap();
++        assert!(
++            TEXT[origin.range.start as usize..origin.range.end as usize].contains("match CONST")
++        );
++    }
++}
++
++#[test]
++fn opaque_guard_runs_once_only_after_pattern_and_discards_each_boolean_temporary() {
++    // LRR-specific exact-once controls supplement the original runtime witness.
++    for edition in [2015, 2018, 2021, 2024] {
++        for text in [
++            "fn guard()->bool{false}fn cold()->bool{loop{}}fn main(){assert_eq!(2,match 1_i32{0_i32 if cold()=>0,1_i32 if guard()=>1,_=>2});}",
++            "fn guard()->bool{true}fn cold()->bool{loop{}}fn main(){assert_eq!(2,match 1_i32{1_i32 if guard()=>2,_ if cold()=>0,_=>1});}",
++        ] {
++            let (db, machine, outcome) = run(text, edition);
++            let RunPoll::Completed(report) = outcome else {
++                panic!("guard route failed: {outcome:?}")
++            };
++            assert!(matches!(report.value, ValueSummary::Unit));
++            assert_eq!(report.opcode_counters.started_by_opcode[19], 1);
++            assert_eq!(report.opcode_counters.started_by_opcode[26], 1);
++            assert_eq!(report.opcode_counters.started_by_opcode[25], 0);
++            assert_eq!(machine.action_snapshot().published, 1);
++            assert_eq!(machine.action_snapshot().consumed, 1);
++            assert_eq!(machine.action_snapshot().pending, None);
++            let parsed = crate::syntax::parse::ParsedFile::parse(
++                &SourceBlob::new(text.as_bytes().to_vec()).unwrap(),
++                ProfileIdentity {
++                    edition,
++                    ..ProfileIdentity::current()
++                },
++            )
++            .unwrap();
++            let outline = parsed
++                .outline(
++                    Digest::of_bytes(b"tests/ui/match/match-on-negative-integer-ranges.rs"),
++                    vec![],
++                    &CfgSet::guest_default(),
++                )
++                .unwrap();
++            let cold = outline
++                .items
++                .iter()
++                .find(|item| item.def_key.declared_name == "cold")
++                .unwrap()
++                .body
++                .as_ref()
++                .unwrap()
++                .key();
++            assert!(db.memo(&QueryKey::BodyStructure(cold)).is_none());
++            assert_eq!(
++                report.opcode_counters.operations_started,
++                report.opcode_counters.operations_completed
++            );
++        }
++    }
++}
+--- a/crates/lrr/src/syntax/numeric_fallback.rs
++++ b/crates/lrr/src/syntax/numeric_fallback.rs
+@@ -8,6 +8,13 @@
+ use ra_ap_syntax::{AstNode, AstToken, SyntaxKind, ast};
+ 
+ pub(super) fn literal_only(expression: &ast::Expr) -> Result<Option<PrimitiveType>, Diagnostic> {
++    literal_only_with_work(expression, &mut 0)
++}
++
++fn literal_only_with_work(
++    expression: &ast::Expr,
++    visited: &mut usize,
++) -> Result<Option<PrimitiveType>, Diagnostic> {
+     // The result of an operator can be primitive even when an operand uses
+     // the standard shared-reference forwarding impl. A reference result itself
+     // never gets a primitive hint from this closed-syntax check.
+@@ -28,9 +35,8 @@
+     let primitive_operator_result =
+         matches!(root, ast::Expr::BinExpr(_) | ast::Expr::PrefixExpr(_));
+     let mut family = None;
+-    let mut visited = 0usize;
+     for node in expression.syntax().descendants() {
+-        source_work(&mut visited)?;
++        source_work(visited)?;
+         if ast::Attr::can_cast(node.kind())
+             || ast::Item::can_cast(node.kind())
+             || ast::MacroCall::can_cast(node.kind())
+@@ -77,7 +83,7 @@
+                 // share one budget. Multiple borrows cannot multiply uncharged
+                 // source work, and no guest borrow or dereference occurs here.
+                 for nested in inner.syntax().descendants() {
+-                    source_work(&mut visited)?;
++                    source_work(visited)?;
+                     if ast::RefExpr::can_cast(nested.kind()) {
+                         return Ok(None);
+                     }
+@@ -321,12 +327,92 @@
+     Ok(())
+ }
+ 
++// Only result expressions join this numeric island. Scrutinees, patterns and
++// guards are independent constraints and must never supply a result default.
++// This is a soft expectation: suffixes, names, calls, attributes or mixed result
++// families leave the normal reached constraint path intact, without diagnostics.
++fn result_island(expression: &ast::Expr) -> Result<Option<PrimitiveType>, Diagnostic> {
++    let mut pending = Vec::new();
++    pending
++        .try_reserve_exact(1)
++        .map_err(|_| crate::runtime::arena::resource())?;
++    pending.push(expression.clone());
++    let mut visited = 0usize;
++    let mut family = None;
++    while let Some(expression) = pending.pop() {
++        source_work(&mut visited)?;
++        if expression
++            .syntax()
++            .children()
++            .any(|node| ast::Attr::can_cast(node.kind()))
++        {
++            return Ok(None);
++        }
++        match expression {
++            ast::Expr::ParenExpr(group) => {
++                let Some(inner) = group.expr() else {
++                    return Ok(None);
++                };
++                pending
++                    .try_reserve(1)
++                    .map_err(|_| crate::runtime::arena::resource())?;
++                pending.push(inner);
++            }
++            ast::Expr::MatchExpr(matched) => {
++                let Some(list) = matched.match_arm_list() else {
++                    return Ok(None);
++                };
++                let mut count = 0usize;
++                for arm in list.arms() {
++                    source_work(&mut visited)?;
++                    count = count.checked_add(1).filter(|n| *n <= 4096).ok_or_else(|| {
++                        Diagnostic::new("LRR-E-METADATA-LIMIT", "numeric result arm limit".into())
++                    })?;
++                    if arm
++                        .syntax()
++                        .children()
++                        .any(|node| ast::Attr::can_cast(node.kind()))
++                    {
++                        return Ok(None);
++                    }
++                    let Some(result) = arm.expr() else {
++                        return Ok(None);
++                    };
++                    if pending.len() >= 4096 {
++                        return Err(Diagnostic::new(
++                            "LRR-E-METADATA-LIMIT",
++                            "numeric result work limit".into(),
++                        ));
++                    }
++                    pending
++                        .try_reserve(1)
++                        .map_err(|_| crate::runtime::arena::resource())?;
++                    pending.push(result);
++                }
++                if count == 0 {
++                    return Ok(None);
++                }
++            }
++            _ => {
++                let Some(next) = literal_only_with_work(&expression, &mut visited)? else {
++                    return Ok(None);
++                };
++                if family.is_some_and(|old| old != next) {
++                    return Ok(None);
++                }
++                family = Some(next);
++            }
++        }
++    }
++    Ok(family)
++}
++
+ pub(super) fn pair(
+     left: &ast::Expr,
+     right: &ast::Expr,
+ ) -> Result<Option<PrimitiveType>, Diagnostic> {
+-    let left = literal_only(left)?;
+-    let right = literal_only(right)?;
++    let left = result_island(left)?;
++    let right = result_island(right)?;
+     Ok(left.filter(|_| left == right))
+ }
+ 
+--- a/crates/lrr/src/syntax/runtime_macro_control_tests.rs
++++ b/crates/lrr/src/syntax/runtime_macro_control_tests.rs
+@@ -142,7 +142,7 @@
+     for text in [
+         "fn main(){assert_eq!(false,match 9_i32{0_i32..=UNKNOWN=>true,_=>false});}",
+         "fn main(){assert_eq!(true,match 1_i32{1_i32=>true,_=>loop{}});}",
+-        "fn main(){assert_eq!(false,match 9_i32{0_i32 if missing()=>true,_=>false});}",
++        "fn main(){assert_eq!(false,match 9_i32{0_i32 if loop{}=>true,_=>false});}",
+     ] {
+         let (parsed, body, index, sites) = entered(text, 2024);
+         let (site, args) = &sites[0];
+@@ -161,7 +161,7 @@
+         let written = &text[(body.range.start + span.relative_start) as usize
+             ..(body.range.start + span.relative_end) as usize];
+         assert!(
+-            written == "UNKNOWN" || written == "loop{}" || written == "if missing()",
++            written == "UNKNOWN" || written == "loop{}",
+             "unexpected actual fault source: {written}"
+         );
+         assert!(
+@@ -310,3 +310,34 @@
+         assert_ne!(body.key(), otherbody.key());
+     }
+ }
++
++#[test]
++fn result_numeric_island_excludes_scrutinee_guard_and_rigid_arm_constraints() {
++    for (text, expected) in [
++        (
++            "match value(){0 if guard()=>1,_=>2}",
++            Some(PrimitiveType::I32),
++        ),
++        ("match true{true=>1.0,_=>2.0}", Some(PrimitiveType::F64)),
++        ("match true{true=>1_u8,_=>2}", None),
++        ("match true{true=>value(),_=>2}", None),
++        ("match true{true=>1.0,_=>2}", None),
++        ("match true{true=>loop{},_=>2}", None),
++    ] {
++        let expression = ast::Expr::parse(text, ra_ap_syntax::Edition::Edition2024).tree();
++        let peer = ast::Expr::parse(
++            if expected == Some(PrimitiveType::F64) {
++                "3.0"
++            } else {
++                "3"
++            },
++            ra_ap_syntax::Edition::Edition2024,
++        )
++        .tree();
++        assert_eq!(
++            super::super::numeric_fallback::pair(&peer, &expression).unwrap(),
++            expected,
++            "{text}"
++        );
++    }
++}
+--- a/crates/lrr/src/syntax/runtime_macro_controls.rs
++++ b/crates/lrr/src/syntax/runtime_macro_controls.rs
+@@ -458,7 +458,7 @@
+         let end = self.label()?;
+         let mut sequence = self.sequence(
+             arms.len()
+-                .checked_mul(32)
++                .checked_mul(48)
+                 .and_then(|n| n.checked_add(4))
+                 .ok_or_else(|| invalid("scalar match work overflow"))?,
+         )?;
+@@ -473,11 +473,10 @@
+             let yes = self.label()?;
+             let no = arms.get(ordinal + 1).map_or(end, |(_, entry)| *entry);
+             let pattern = arm.pat().ok_or_else(unsupported)?;
+-            let guarded = arm.guard().is_some()
+-                || arm
+-                    .syntax()
+-                    .children()
+-                    .any(|child| ast::Attr::can_cast(child.kind()));
++            let attributed = arm
++                .syntax()
++                .children()
++                .any(|child| ast::Attr::can_cast(child.kind()));
+             self.pattern(
+                 Pattern {
+                     pattern,
+@@ -492,19 +491,38 @@
+                 span,
+             )?;
+             sequence.push(Work::Mark(yes));
+-            if guarded {
++            if attributed {
+                 sequence.push(Work::Fault(
+                     unsupported(),
+-                    map_syntax(
+-                        arm.guard()
+-                            .map(|g| g.syntax().clone())
+-                            .as_ref()
+-                            .unwrap_or(arm.syntax()),
+-                        context,
+-                        &origin,
+-                    )?,
++                    map_syntax(arm.syntax(), context, &origin)?,
+                 ));
+             } else {
++                if let Some(guard) = arm.guard() {
++                    let guard_expression = guard.condition().ok_or_else(unsupported)?;
++                    let guard_span = span(&guard_expression)?;
++                    let condition = allocate()?;
++                    let accepted = self.label()?;
++                    let rejected = self.label()?;
++                    let body = self.label()?;
++                    sequence.push(Work::Operation(Op::SetHint {
++                        child: condition,
++                        hint: HintRecipe::Primitive(PrimitiveType::Bool),
++                    }));
++                    sequence.push(Work::Expression(
++                        guard_expression,
++                        condition,
++                        context.base,
++                        context.parent,
++                    ));
++                    sequence.push(Self::branch(&guard_span, condition, accepted, rejected));
++                    sequence.push(Work::Mark(rejected));
++                    sequence.push(Work::Operation(Op::Discard { source: condition }));
++                    sequence.push(Self::jump(&guard_span, no));
++                    sequence.push(Work::Mark(accepted));
++                    sequence.push(Work::Operation(Op::Discard { source: condition }));
++                    sequence.push(Self::jump(&guard_span, body));
++                    sequence.push(Work::Mark(body));
++                }
+                 sequence.push(Work::Expression(
+                     arm.expr().ok_or_else(unsupported)?,
+                     context.destination,
+--- a/docs/tasks.json
++++ b/docs/tasks.json
+@@ -1493,7 +1493,8 @@
+         "unchanged_float2_main_edition_2021",
+         "unchanged_float2_main_edition_2024",
+         "byte_literal_guards_source_descriptor_origin_and_stale_body_before_entry_all_editions",
+-        "byte_literal_fuel_and_combined_ticket_cell_quota_refuse_without_source_invention_all_editions"
++        "byte_literal_fuel_and_combined_ticket_cell_quota_refuse_without_source_invention_all_editions",
++        "result_numeric_island_excludes_scrutinee_guard_and_rigid_arm_constraints"
+       ],
+       "acceptance_contract": "exhaustive i8/u8 arithmetic boundary loops; random wider arithmetic/cast comparisons; works/fails context examples; signed-min literal; distinct usize/u64 contracts. Gate checks Rust constraint-aware numeric fallback and preserves known source widths; nonnumeric unknowns never default.",
+       "commands": [],
+@@ -1593,7 +1594,8 @@
+         "T025-STOCK-FLOAT2-ED2021",
+         "T025-STOCK-FLOAT2-ED2024",
+         "T025-BYTE-SCALAR-02",
+-        "T025-BYTE-SCALAR-03"
++        "T025-BYTE-SCALAR-03",
++        "T025-MATCH-RESULT-ISLAND"
+       ],
+       "artifact_paths": [
+         "docs/numeric-kernel.md",
+@@ -1791,6 +1793,14 @@
+         "full_milestone_failure_evidence": "worktracks/evidence/2026-10-15-v94-full-milestone-failure.json",
+         "latest_scoped_evidence": "worktracks/evidence/2026-10-15-v95-v96-string-boundary.json",
+         "latest_status": "V95 scoped27/27, strict/fmt/architecture passed; V96 stale compat selector audit failed; exact metadata repair and fresh full milestone pending"
++      },
++      "opaque_match_guard_result_candidate": {
++        "status": "source_only_uncompiled_unexecuted",
++        "upstream_case": "tests/ui/match/overeager-sub-match-pruning-13027.rs",
++        "scope": "original lit_shadow_range function prefix through three assertions, then required static frontier; separate LRR exact-once/cold controls; no main/full-fixture pass",
++        "pending_controls": [
++          "result_numeric_island_excludes_scrutinee_guard_and_rigid_arm_constraints"
++        ]
+       }
+     },
+     {
+@@ -5604,7 +5614,9 @@
+         "unchanged_original_byte_matches_execute_only_their_actual_scoped_components_all_editions",
+         "byte_range_unknown_or_wrong_family_upper_is_cold_until_lower_matches",
+         "unchanged_guarded_char_local_entire_main_takes_second_arm_all_editions",
+-        "intrinsic_local_source_does_not_default_unresolved_numbers_or_follow_effects"
++        "intrinsic_local_source_does_not_default_unresolved_numbers_or_follow_effects",
++        "unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions",
++        "opaque_guard_runs_once_only_after_pattern_and_discards_each_boolean_temporary"
+       ],
+       "acceptance_contract": "failed arms preserve scrutinee ownership; true arms move once; conflicting moves fault before commit; or-pattern names/modes and binding order validate; overlapping alternatives can rerun false guards without replaying scrutinee evaluation.",
+       "commands": [],
+@@ -5636,7 +5648,9 @@
+         "T050-BYTE-SCALAR-06",
+         "T050-BYTE-SCALAR-07",
+         "T050-LOCAL-LITERAL-MAIN",
+-        "T050-LOCAL-LITERAL-SOURCE"
++        "T050-LOCAL-LITERAL-SOURCE",
++        "T050-OPAQUE-GUARD-STOCK",
++        "T050-OPAQUE-GUARD-ONCE"
+       ],
+       "artifact_paths": [
+         "artifacts/macos-first/root-match-integration-v1/validation-v6/terminal.json",
+@@ -5665,6 +5679,15 @@
+         "full_milestone_passed": false,
+         "canonical_promotion": false,
+         "full_fixture_passes_added": 0
++      },
++      "opaque_match_guard_result_candidate": {
++        "status": "source_only_uncompiled_unexecuted",
++        "upstream_case": "tests/ui/match/overeager-sub-match-pruning-13027.rs",
++        "scope": "original lit_shadow_range function prefix through three assertions, then required static frontier; separate LRR exact-once/cold controls; no main/full-fixture pass",
++        "pending_controls": [
++          "unchanged_overlapping_match_function_runs_three_assertions_before_static_frontier_all_editions",
++          "opaque_guard_runs_once_only_after_pattern_and_discards_each_boolean_temporary"
++        ]
+       }
+     },
+     {

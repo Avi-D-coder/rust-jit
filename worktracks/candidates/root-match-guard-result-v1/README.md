@@ -1,0 +1,11 @@
+# Source-owned guards and numeric match-result context
+
+T025/T050, LOCAL-024. Actual V108 stock evidence stops the unchanged `overeager-sub-match-pruning-13027.rs` at its first assertion: the leading unsuffixed integer has no concrete context when its peer is a match result. The existing opaque match source plan also treats every guard as unsupported. This candidate addresses both reached frontiers without conflating scrutinee and result types.
+
+Only result leaves participate in a soft numeric fallback island. Scrutinees, patterns and guard expressions do not supply result type; suffixes, calls, names, attributes, mixed numeric families and unsupported result syntax preserve the ordinary constraint path. One shared checked source-work counter bounds nested results and literal walks. No expression or guard is evaluated to derive the hint.
+
+After a zero-binding scalar pattern succeeds, the original guard expression executes once with Boolean context. Both paths discard its temporary; false proceeds to the next original arm and true enters that arm's result. Nonmatching patterns keep guards cold. Branches use existing source-bound forward phases, calls, typed operations and fuel/cleanup behavior. Attributed arms retain their actual reached refusal.
+
+Three host bodies are pending: an unchanged original function component through its first three assertions, stopping at the actual fourth static assertion; exact-once/cold-call supplemental controls; and the result-only numeric constraint control. The complete main still needs static storage and broader pattern/aggregate support. A previous unsupported-call-guard source control now uses a still-unsupported loop guard, preserving its source-origin and cold-path oracle. Existing main tests use their original entry/path; only the helper accepts an explicit unchanged original function entry for the disclosed component.
+
+Apply after the macro-constant, cast, local-match and expected-failure observer packets, retaining the independent Type-setup and lint follow-ons. Formatting and exact replay are checked; compilation, runtime bodies and the fresh full milestone remain unexecuted. Imported originals are unchanged, no target is created, and no stock runtime/full-fixture pass or canonical promotion is claimed.

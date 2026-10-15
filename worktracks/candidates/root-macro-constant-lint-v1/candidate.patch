@@ -1,0 +1,28 @@
+--- a/crates/lrr/src/engine/constant_array_publication.rs
++++ b/crates/lrr/src/engine/constant_array_publication.rs
+@@ -72,10 +72,10 @@
+                 if let Some(site) = range {
+                     site.require_source(caller)?;
+                 }
+-                if let Some(site) = macro_site {
+-                    if site.source() != &caller.selection().outline.parse {
+-                        return Err(crate::runtime::arena::stale());
+-                    }
++                if let Some(site) = macro_site
++                    && site.source() != &caller.selection().outline.parse
++                {
++                    return Err(crate::runtime::arena::stale());
+                 }
+                 path.revalidate(binding.construction().database(), caller, views)
+             }
+--- a/crates/lrr/src/syntax/constant_paths.rs
++++ b/crates/lrr/src/syntax/constant_paths.rs
+@@ -176,7 +176,7 @@
+             || segment.generic_arg_list().is_some()
+             || segment.coloncolon_token().is_some()
+             || segment.name_ref().is_none()
+-            || expression.syntax().text().to_string() != token.text()
++            || expression.syntax().text() != token.text()
+         {
+             return Ok(None);
+         }

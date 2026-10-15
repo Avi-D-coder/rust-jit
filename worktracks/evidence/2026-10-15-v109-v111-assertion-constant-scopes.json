@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T18:10:37.624743+00:00",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "scoped_versions_not_additive": [
+    {
+      "version": "V109",
+      "source_member": "071f2cc9a6f97d70ddcac0ececaa4fa51017d66b5d0341d4410d2554509c237c",
+      "distinct_passed_bodies": 32,
+      "duplicates": 0,
+      "scopes": [
+        {
+          "scope": "static-panic-bank",
+          "actual_terminal": "06f9f2/0",
+          "passed": 32,
+          "receipt_sha256": "4f6efd0b73258991ab078eb3b36b81c54774f1472dc9fd8dbe726ac9d136ce23",
+          "stdout_sha256": "93e7c0100eed35c9bd2f95b6dd9e69ad03782a4db528362e38a883e135ab2260",
+          "source_member": "071f2cc9a6f97d70ddcac0ececaa4fa51017d66b5d0341d4410d2554509c237c"
+        }
+      ],
+      "results_sha256": "6979ff6484660f30cae4d9e452f02e360b22a3f62d501312c267048dc2467463",
+      "release_sha256": "fa4abf70e45e15fa0b29ddfafadf343f134a68d3259c08f8b6edcb151124cd5c",
+      "handoff_sha256": "4a1f988301bbe5f9464c7b06d509f328e58fa33dc51e4207d14a6d00cba6da66"
+    },
+    {
+      "version": "V111",
+      "source_member": "f81d36f3f23a64dd8a17f527edd9ffd1abb84bfc35aac5b3ec3b5ab68f1be881",
+      "distinct_passed_bodies": 200,
+      "duplicates": 0,
+      "scopes": [
+        {
+          "scope": "macro-constant-priority-four",
+          "actual_terminal": "eb9508/0",
+          "passed": 4,
+          "receipt_sha256": "2b367df5432b22b5d7e34d739ba1f8ea25ddc9956afbb1d8a52e9769af8bc5a5",
+          "stdout_sha256": "54b5092a0f347bd7dfac8ae1654506e23e78073944696fd872d46b3a68103de7",
+          "source_member": "f81d36f3f23a64dd8a17f527edd9ffd1abb84bfc35aac5b3ec3b5ab68f1be881"
+        },
+        {
+          "scope": "source-constant-macro-authority",
+          "actual_terminal": "5727a5/0",
+          "passed": 122,
+          "receipt_sha256": "28ca50bb78e3c1f29a3ed172748c8b1534b51167d110bb6710028ecc8d69f498",
+          "stdout_sha256": "d3a6d11d2c904c4f85c974d0261e1f73bb2631f03fe823d714032f8607704643",
+          "source_member": "f81d36f3f23a64dd8a17f527edd9ffd1abb84bfc35aac5b3ec3b5ab68f1be881"
+        },
+        {
+          "scope": "pure-source-constants-full-bank",
+          "actual_terminal": "804a56/0",
+          "passed": 11,
+          "receipt_sha256": "1f8388f095afc0b6961f4929dfe1c9dd77bc6a49ab9592736cf8419861675eb8",
+          "stdout_sha256": "dee547666419d94e1c988d9af31ece6be74924272ece7c0338ecee56d444e4a9",
+          "source_member": "f81d36f3f23a64dd8a17f527edd9ffd1abb84bfc35aac5b3ec3b5ab68f1be881"
+        },
+        {
+          "scope": "constant-query-identity-full-bank",
+          "actual_terminal": "4941a7/0",
+          "passed": 8,
+          "receipt_sha256": "cddc934eb5d3b32e4baf7c37155719f3d4befe1e03ef5dc1663c503e0ea465b4",
+          "stdout_sha256": "fc28fad55e518ab94236bd7953638aada8c15c59105bf63078586b2b132bec72",
+          "source_member": "f81d36f3f23a64dd8a17f527edd9ffd1abb84bfc35aac5b3ec3b5ab68f1be881"
+        },
+        {
+          "scope": "constant-array-instantiation-full-bank",
+          "actual_terminal": "7192bd/0",
+          "passed": 10,
+          "receipt_sha256": "3f143361074d64c47078bf382d87112c7cb4d28b674dc553e14c02243298830c",
+          "stdout_sha256": "8bb4295212bbb4eabdbcfe265c2d55e3c9f55e9bd5c81a4caf2b4a94ea6ed4da",
+          "source_member": "f81d36f3f23a64dd8a17f527edd9ffd1abb84bfc35aac5b3ec3b5ab68f1be881"
+        },
+        {
+          "scope": "constant-wire-full-bank",
+          "actual_terminal": "b4df09/0",
+          "passed": 6,
+          "receipt_sha256": "3be5074b59e93045918b364f3f9faccf939a6d28a937a68338bf43b3256b5c06",
+          "stdout_sha256": "b80ca496e6931a17fc6bdd0ab5d165ab51b89bdede2fabb2dc5465cf02df19e9",
+          "source_member": "f81d36f3f23a64dd8a17f527edd9ffd1abb84bfc35aac5b3ec3b5ab68f1be881"
+        },
+        {
+          "scope": "runtime-macros-full-bank",
+          "actual_terminal": "c4e5a0/0",
+          "passed": 3,
+          "receipt_sha256": "98f98d404fb59b9c1e92109bc1411cd0850805ff9e89467d272e906495c11f4a",
+          "stdout_sha256": "271d7d10f819b3ad21e07e244cdd1e210de19e8e8e6b95386a9e742879098e67",
+          "source_member": "f81d36f3f23a64dd8a17f527edd9ffd1abb84bfc35aac5b3ec3b5ab68f1be881"
+        },
+        {
+          "scope": "runtime-macro-plans-full-bank",
+          "actual_terminal": "ccb9c1/0",
+          "passed": 4,
+          "receipt_sha256": "39194e0fbe78d86f84ebc44a531d8faca3987d94afa58e99c71edb12304feb58",
+          "stdout_sha256": "8223f539e680a3277961bbf6b7722d0f67c78e947559fc35fe104c25b7c46414",
+          "source_member": "f81d36f3f23a64dd8a17f527edd9ffd1abb84bfc35aac5b3ec3b5ab68f1be881"
+        },
+        {
+          "scope": "static-panic-recipes-full-bank",
+          "actual_terminal": "ebef47/0",
+          "passed": 32,
+          "receipt_sha256": "9d84039acb8f186b997121dd38ec64426825d944cc75091ae669c7f5f6ab7e64",
+          "stdout_sha256": "937ca954f24f71e1f278cad1ee195b54648683541ead2dc8ea1902372bca5c02",
+          "source_member": "f81d36f3f23a64dd8a17f527edd9ffd1abb84bfc35aac5b3ec3b5ab68f1be881"
+        }
+      ],
+      "results_sha256": "ae7d32aaad5fd4409f0597d8717ace3c8680adf9b5919c2171a09f878a2bd261",
+      "release_sha256": "f43c1ed765e9278d5343a344b4d11ea28d8b3e54bf3479a78b666cbdf7d6aa0e",
+      "handoff_sha256": "d8594e4cbcb322092baf33513c5fad9f07e950c62ff92d2f4324b4796663dad8"
+    }
+  ],
+  "v110_strict_failure": {
+    "actual_terminal": "831219/1",
+    "stderr_sha256": "6bbd52a85229d2cda3d7225c5b97efa47640c96bc540b3670697dd529a0c8b00",
+    "test_bodies": 0,
+    "diagnostics": [
+      "collapsible_if",
+      "cmp_owned"
+    ],
+    "follow_on": "worktracks/candidates/root-macro-constant-lint-v1/README.md"
+  },
+  "v109_scope": "Real owning Type preparation fixes four failed assertion-call setups; all32 existing bank oracles unchanged and passed",
+  "v111_scope": "Original scalar const operands in composed assertions use current source/name/query/IR/publication authority;fournew controls+122existing library+74integration controls passed",
+  "new_unchanged_main_component": "const-fn-nested.rs complete main all four editions through production standalone host route; one host body, not a new CLI/full-fixture count",
+  "v108_failed_milestone_retained": true,
+  "full_milestone_passed": false,
+  "canonical_promotion": false,
+  "current_stock_cli_counts_unchanged": {
+    "runtime_contract_pass": 46,
+    "interpreter_failure": 69
+  },
+  "full_fixture_passes_added": 0,
+  "root_rechecked_raw_scope_counts_and_receipts": true,
+  "guest_jit_allowed": false
+}

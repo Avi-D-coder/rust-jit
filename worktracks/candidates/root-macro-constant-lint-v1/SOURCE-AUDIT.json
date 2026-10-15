@@ -1,0 +1,33 @@
+{
+  "status": "source_only_uncompiled_held",
+  "at": "2026-10-15T18:04:56.814802+00:00",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T032",
+    "T054"
+  ],
+  "requires_candidate_patch_sha256": "4c7e676d268e792d4c947c0170bce5d395afe2c04ec4dab7b52d8529aeafb02b",
+  "patch_sha256": "489218ad182c4a4827e16a5cf90be4483756afbbca7d518ceab5d98dff4afc75",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/constant_array_publication.rs",
+      "before_sha256": "0ca236d5c2bc2d008e0fe813cb56bcebb1dfbde111154e3456cd71dd21107c65",
+      "after_sha256": "725d36c241589da469cd0e6d8c24640e11c886573ad15ccb9c9db175d7ebeedc",
+      "bytes": 18729
+    },
+    {
+      "path": "crates/lrr/src/syntax/constant_paths.rs",
+      "before_sha256": "9f50e4107f04b753bae4443c97f8bde12091d471c8450d1c8412b0db8ac2a5ef",
+      "after_sha256": "e26b6f6f7d3b343f7c4a07c961ed4c8bf02bb9515da6ed3e79d9a05ae1709c29",
+      "bytes": 14476
+    }
+  ],
+  "actual_diagnostic_terminal": "831219/1",
+  "production_behavior_changed": false,
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "exact_replay_zero_fuzz_zero_offset": true
+  },
+  "runtime_contract_passes_added": 0,
+  "canonical_promotion": false
+}
