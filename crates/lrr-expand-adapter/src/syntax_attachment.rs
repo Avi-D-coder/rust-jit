@@ -8,14 +8,15 @@ use crate::{
 };
 use span::{SpanMap, TextRange};
 use syntax::{AstNode, SyntaxNode, WalkEvent, ast};
+mod lists;
+pub use lists::ListSlot;
 
 const MAX_TEXT: u32 = 32 * 1024 * 1024;
 const MAX_NODES: usize = 2_000_000;
 const MAX_DEPTH: usize = 4096;
 const MAX_RETAINED_INPUT: usize = 64 * 1024 * 1024;
 
-/// Single-node grammar slots. Statement/item lists need list attachment rather
-/// than an invented block scope, and are deliberately not admitted here yet.
+/// Single-node grammar slots. Lists use `attach_list` to preserve caller scope.
 #[derive(Clone, Copy, Debug)]
 pub enum FragmentSlot {
     Expression,
@@ -56,6 +57,13 @@ pub struct SyntaxAttachment {
     store: SpanStore,
     // Conservative cumulative charge, including superseded records. Admission
     // happens before cloning the span store, not after retaining another input.
+    retained_input_bytes: usize,
+}
+
+struct PreparedFragment {
+    root: SyntaxNode,
+    origins: SpanMap,
+    store: SpanStore,
     retained_input_bytes: usize,
 }
 
@@ -157,6 +165,22 @@ fn splice_origins(
     Ok(result)
 }
 
+fn replace_node(target: &SyntaxNode, replacement: &SyntaxNode) -> Result<SyntaxNode, AdapterError> {
+    // Rowan's replace_with requires the same kind. Replace a selected child
+    // inside its parent before rebuilding the unchanged-kind ancestor chain.
+    let green = replacement.green().to_owned();
+    Ok(if let Some(parent) = target.parent() {
+        let index = parent
+            .children_with_tokens()
+            .position(|element| element.as_node() == Some(target))
+            .ok_or_else(|| error("attachment target lost its parent position"))?;
+        let green = parent.green().replace_child(index, green.into());
+        SyntaxNode::new_root(parent.replace_with(green))
+    } else {
+        SyntaxNode::new_root(green)
+    })
+}
+
 impl SyntaxAttachment {
     pub fn parse(input: &TokenForest, grammar: DeclarationGrammar) -> Result<Self, AdapterError> {
         let retained_input_bytes = input.allocated_bytes()?;
@@ -186,63 +210,78 @@ impl SyntaxAttachment {
         output: &TokenForest,
         slot: FragmentSlot,
     ) -> Result<(), AdapterError> {
-        if start >= end || end > u32::from(self.root.text_range().len()) {
-            return Err(error("attachment range is outside the current syntax"));
-        }
-        let range = TextRange::new(start.into(), end.into());
-        let call = self
-            .root
-            .descendants()
-            .find(|node| ast::MacroCall::can_cast(node.kind()) && node.text_range() == range)
-            .ok_or_else(|| error("attachment range does not select a macro call"))?;
+        let call = self.select_call(start, end)?;
+        let range = call.text_range();
         let target = call
             .parent()
             .filter(|node| slot.accepts_call(node) && node.text_range() == range)
             .ok_or_else(|| error("attachment grammar differs from the caller slot"))?;
+        let prepared = self.prepare(output, slot.grammar())?;
+        if !slot.accepts_output(&prepared.root) {
+            return Err(error(
+                "expansion did not produce the selected fragment grammar",
+            ));
+        }
+        self.apply(range, prepared, |replacement| {
+            replace_node(&target, replacement)
+        })
+    }
+
+    fn select_call(&self, start: u32, end: u32) -> Result<SyntaxNode, AdapterError> {
+        if start >= end || end > u32::from(self.root.text_range().len()) {
+            return Err(error("attachment range is outside the current syntax"));
+        }
+        let range = TextRange::new(start.into(), end.into());
+        self.root
+            .descendants()
+            .find(|node| ast::MacroCall::can_cast(node.kind()) && node.text_range() == range)
+            .ok_or_else(|| error("attachment range does not select a macro call"))
+    }
+
+    fn prepare(
+        &self,
+        output: &TokenForest,
+        grammar: DeclarationGrammar,
+    ) -> Result<PreparedFragment, AdapterError> {
         let retained_input_bytes = self
             .retained_input_bytes
             .checked_add(output.allocated_bytes()?)
             .filter(|bytes| *bytes <= MAX_RETAINED_INPUT)
             .ok_or_else(|| error("attachment retained input budget"))?;
         let mut store = self.store.clone();
-        let (replacement, replacement_origins) =
-            declaration_output::parse_root(output, slot.grammar(), &mut store)?;
-        if !slot.accepts_output(&replacement) {
-            return Err(error(
-                "expansion did not produce the selected fragment grammar",
-            ));
-        }
-        check_tree(&replacement)?;
-        let replacement_len = u32::from(replacement.text_range().len());
-        check_origins(&replacement_origins, replacement_len)?;
+        let (root, origins) = declaration_output::parse_root(output, grammar, &mut store)?;
+        check_tree(&root)?;
+        check_origins(&origins, u32::from(root.text_range().len()))?;
+        Ok(PreparedFragment {
+            root,
+            origins,
+            store,
+            retained_input_bytes,
+        })
+    }
+
+    fn apply(
+        &mut self,
+        range: TextRange,
+        prepared: PreparedFragment,
+        rebuild: impl FnOnce(&SyntaxNode) -> Result<SyntaxNode, AdapterError>,
+    ) -> Result<(), AdapterError> {
+        check_tree(&prepared.root)?;
+        let replacement_len = u32::from(prepared.root.text_range().len());
+        check_origins(&prepared.origins, replacement_len)?;
         let final_len = u32::from(self.root.text_range().len())
-            .checked_sub(end - start)
+            .checked_sub(u32::from(range.len()))
             .and_then(|length| length.checked_add(replacement_len))
             .filter(|length| *length <= MAX_TEXT)
             .ok_or_else(|| error("attached syntax text budget"))?;
         let origins = splice_origins(
             &self.origins,
             range,
-            &replacement_origins,
+            &prepared.origins,
             replacement_len,
             final_len,
         )?;
-        // Replace the grammar node itself, not only its MacroCall child. The
-        // surrounding AST preserves expansion precedence and caller scopes.
-        // Rowan's replace_with requires an unchanged node kind. Replace the
-        // selected child in its parent first; rebuilding that same-kind parent
-        // then recreates the ancestor chain without retaining MACRO_EXPR/PAT.
-        let green = replacement.green().to_owned();
-        let root = if let Some(parent) = target.parent() {
-            let index = parent
-                .children_with_tokens()
-                .position(|element| element.as_node() == Some(&target))
-                .ok_or_else(|| error("attachment target lost its parent position"))?;
-            let green = parent.green().replace_child(index, green.into());
-            SyntaxNode::new_root(parent.replace_with(green))
-        } else {
-            SyntaxNode::new_root(green)
-        };
+        let root = rebuild(&prepared.root)?;
         check_tree(&root)?;
         if u32::from(root.text_range().len()) != final_len {
             return Err(error(
@@ -251,8 +290,8 @@ impl SyntaxAttachment {
         }
         self.root = root;
         self.origins = origins;
-        self.store = store;
-        self.retained_input_bytes = retained_input_bytes;
+        self.store = prepared.store;
+        self.retained_input_bytes = prepared.retained_input_bytes;
         Ok(())
     }
 

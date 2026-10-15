@@ -446,7 +446,7 @@
           "id": "WT08-02",
           "title": "Nested producer discovery",
           "status": "planned",
-          "notes": "LOCAL-024 E-R5-005 bounded structural attachment candidate, unaccepted; async component validation, source/body publication and statement/item list integration pending. Existing macro-specific runtime paths remain architectural blockers."
+          "notes": "LOCAL-024 E-R5-005 common AST node/list transport scoped component: actual101/101 adapter controls and strict Clippy pass. Ordinary admitted source/body publication, lowering and all8 runtime shortcut removals remain pending; no task/runtime/JIT acceptance. See worktracks/evidence/2026-10-15-common-list-attachment.json."
         },
         {
           "id": "WT08-03",

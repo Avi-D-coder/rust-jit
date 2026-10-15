@@ -1536,6 +1536,18 @@
       "bytes": 318
     },
     {
+      "path": "tests/ui/macros/empty-trailing-stmt.rs",
+      "git_blob": "3d78ed4a4759a2515bf201d54cb6b6a4012adf46",
+      "sha256": "5ad49f0b94ff8bf0df41a93de4e76c7926e94ba8b5e7081768f8796eb1a18af8",
+      "bytes": 142
+    },
+    {
+      "path": "tests/ui/macros/empty-trailing-stmt.stderr",
+      "git_blob": "97a2edd396605a6071ba80d527a23ad84e2e6e1c",
+      "sha256": "0ddf8458285a191945358e571726573bb1013010b9f03183c884ee598472301f",
+      "bytes": 594
+    },
+    {
       "path": "tests/ui/macros/expr_2021_cargo_fix_edition.fixed",
       "git_blob": "c0d27609358933dc4869196f1983edcdfe12e782",
       "sha256": "4d5d96e940a3553d8b08cacbef72165924bfe86281abf4a4b0fd8fceb159134c",
@@ -1666,6 +1678,24 @@
       "git_blob": "35040a2229bd3273311ab20677b34b8f922f347f",
       "sha256": "0c303ac4ed0293b4e0d778ead301ce90aa0608aa869db36002d7ec23f11d4d7a",
       "bytes": 463
+    },
+    {
+      "path": "tests/ui/macros/macro-stmt-2.rs",
+      "git_blob": "663d8ddc4843ab88aced41cebc17c0b11ce61754",
+      "sha256": "92f2c3552719e505f7d5d73abe1f541cf68fd258202494a4674c0bbb2daa5bb3",
+      "bytes": 348
+    },
+    {
+      "path": "tests/ui/macros/macro-stmt.rs",
+      "git_blob": "fcbd50687a78c10db1cbf84e07cde4c1b3d6fc71",
+      "sha256": "d73c275bbf40996901881d79803e383081c0f1d6fc342eb4c9d2d6f29ab4d455",
+      "bytes": 549
+    },
+    {
+      "path": "tests/ui/macros/macro-stmt_macro_in_expr_macro.rs",
+      "git_blob": "8b634b4aa54014189c63aa3f96a7bd1460ef9627",
+      "sha256": "ca78005c706853cff27b5c0de8f3039258b87b60db065cc862c8fddf5040250d",
+      "bytes": 266
     },
     {
       "path": "tests/ui/macros/macro_undefined.rs",
@@ -4289,6 +4319,12 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/macros/empty-trailing-stmt.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/macros/expr_2021_cargo_fix_edition.rs",
       "directives": [
         "//@ run-rustfix",
@@ -4383,6 +4419,30 @@
     {
       "path": "tests/ui/macros/macro-non-lifetime.rs",
       "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/macro-stmt-2.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/macro-stmt.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/macros/macro-stmt_macro_in_expr_macro.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"
     },

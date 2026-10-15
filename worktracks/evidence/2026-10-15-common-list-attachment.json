@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T19:43:00.700700+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "M014",
+    "T063"
+  ],
+  "erratum": "E-R5-005",
+  "source_baseline": "849baa6d57d7b576018a45e905bfdd2b565499e2",
+  "scope": "Generic pinned AST list attachment component. Ordinary source/body admission, shared runtime lowering and audited shortcut removal are still pending.",
+  "implemented": [
+    "Statement, item, trait-item and impl-item grammar attachment into the actual caller list",
+    "Nested generated declarations retain caller scope; real generated blocks remain blocks",
+    "Real caller semicolon applies to the final generated expression statement with its actual source origin",
+    "Empty expansion preserves preceding ExprStmt status and does not manufacture a tail value",
+    "One common atomic prepare/apply path shared by expression/pattern/type and list attachments; no name-specific runtime operations"
+  ],
+  "source_files": [
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment.rs",
+      "sha256": "3beddf76b1c71bae28faf0980e70e01b12366c581e166669cf9cd721ca6eb9a7"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment/lists.rs",
+      "sha256": "bc542c6606605cb00bc1ce1cc943dc9e104e37218637aa24865a30684c4ee8aa"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/tests/syntax_attachment_lists.rs",
+      "sha256": "e4f800d6429969c6cf8dec8e33725779d143e755776ef9bd9f47ac00fc2fe88a"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/manifest.json",
+      "sha256": "d0dd43dac221a0f78f10aa80d49c4041fc98469f196fb64db53abcdb87e763b3"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/empty-trailing-stmt.rs",
+      "sha256": "5ad49f0b94ff8bf0df41a93de4e76c7926e94ba8b5e7081768f8796eb1a18af8"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/empty-trailing-stmt.stderr",
+      "sha256": "0ddf8458285a191945358e571726573bb1013010b9f03183c884ee598472301f"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/macro-stmt-2.rs",
+      "sha256": "92f2c3552719e505f7d5d73abe1f541cf68fd258202494a4674c0bbb2daa5bb3"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/macro-stmt.rs",
+      "sha256": "d73c275bbf40996901881d79803e383081c0f1d6fc342eb4c9d2d6f29ab4d455"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/macro-stmt_macro_in_expr_macro.rs",
+      "sha256": "ca78005c706853cff27b5c0de8f3039258b87b60db065cc862c8fddf5040250d"
+    }
+  ],
+  "validation": [
+    {
+      "version": "list-v1",
+      "scope": "8 structural controls",
+      "terminal_chunk": "c63d3a",
+      "outer_exit_code": 1,
+      "cargo_exit_code": 101,
+      "passed": 7,
+      "failed": 1,
+      "full_adapter_suffix": "unexecuted",
+      "strict_suffix": "unexecuted",
+      "failure": "Test wrongly required an ungrouped BinExpr for $expr transcription. Pinned mbe Fragment::Expr explicitly wraps 8*2 in parentheses.",
+      "repair": "Require actual ParenExpr with exact BinExpr lhs8/rhs2/op*, preserving the upstream input and production output.",
+      "raw_root": "artifacts/macos-first/sol-common-list-attachment-validation-v1"
+    },
+    {
+      "version": "list-v2",
+      "scope": "full adapter suite including8 new bodies",
+      "command": "cargo +1.99.0 test --offline --locked -p lrr-expand-adapter",
+      "terminal_chunk": "cc371a",
+      "outer_exit_code": 0,
+      "cargo_exit_code": 0,
+      "distinct_bodies": 101,
+      "passed": 101,
+      "failed": 0,
+      "duplicate_executions": 0,
+      "elapsed_seconds": 45.30566629199893
+    },
+    {
+      "version": "list-v2",
+      "scope": "strict all-targets adapter Clippy, compile only",
+      "command": "cargo +1.99.0 clippy --offline --locked -p lrr-expand-adapter --all-targets -- -D warnings",
+      "terminal_chunk": "28d94f",
+      "outer_exit_code": 0,
+      "cargo_exit_code": 0,
+      "test_executions": 0,
+      "elapsed_seconds": 4.324149416002911
+    }
+  ],
+  "owning_platform": "macOS aarch64-apple-darwin Rust1.99.0",
+  "editions": [
+    2015,
+    2018,
+    2021,
+    2024
+  ],
+  "upstream": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "license": "MIT OR Apache-2.0",
+    "files": 509,
+    "cases": 323,
+    "new_cases": 4,
+    "new_original_files": 5,
+    "unchanged_witnesses": [
+      {
+        "path": "tests/ui/macros/empty-trailing-stmt.rs",
+        "git_blob": "3d78ed4a4759a2515bf201d54cb6b6a4012adf46",
+        "sha256": "5ad49f0b94ff8bf0df41a93de4e76c7926e94ba8b5e7081768f8796eb1a18af8",
+        "bytes": 142
+      },
+      {
+        "path": "tests/ui/macros/macro-as-fn-body.rs",
+        "git_blob": "188c7f7f728c9739868f058639d2f539830e2b01",
+        "sha256": "6ae5e64fd603f1817e3e5a8b69c09b7b72cf39ab8ecc8d58df6706c3b9bf3797",
+        "bytes": 496
+      },
+      {
+        "path": "tests/ui/macros/macro-nested_stmt_macros.rs",
+        "git_blob": "054aa3cb29306e770e6b967889532afd85682866",
+        "sha256": "abef2c55f007cf929838a1cae6e3e329f8bf4747979db3e78b11580d5b86eb49",
+        "bytes": 344
+      },
+      {
+        "path": "tests/ui/macros/macro-stmt-2.rs",
+        "git_blob": "663d8ddc4843ab88aced41cebc17c0b11ce61754",
+        "sha256": "92f2c3552719e505f7d5d73abe1f541cf68fd258202494a4674c0bbb2daa5bb3",
+        "bytes": 348
+      },
+      {
+        "path": "tests/ui/macros/macro-stmt.rs",
+        "git_blob": "fcbd50687a78c10db1cbf84e07cde4c1b3d6fc71",
+        "sha256": "d73c275bbf40996901881d79803e383081c0f1d6fc342eb4c9d2d6f29ab4d455",
+        "bytes": 549
+      },
+      {
+        "path": "tests/ui/macros/macro-stmt_macro_in_expr_macro.rs",
+        "git_blob": "8b634b4aa54014189c63aa3f96a7bd1460ef9627",
+        "sha256": "ca78005c706853cff27b5c0de8f3039258b87b60db065cc862c8fddf5040250d",
+        "bytes": 266
+      }
+    ],
+    "exercised_contract": "Syntax/expansion transport only; no guest main execution or upstream diagnostic assertions",
+    "runtime_contract_passes_added": 0,
+    "full_fixture_passes_added": 0
+  },
+  "release": {
+    "at": "2026-10-15T19:41:19.148821+00:00",
+    "source_member": "ed5ebcad91ae0716dd8869395d5b867627681be7addd8f07885dfc1aa58c6a12",
+    "baseline": "849baa6d57d7b576018a45e905bfdd2b565499e2",
+    "packet_sha256": "9f0dd51bd77ae886b96dfc80cfebe0032fbf3f2c84deaae4e289f9aaa8298e1e",
+    "full_adapter_exit": 0,
+    "strict_exit": 0,
+    "distinct_bodies": 101,
+    "passed": 101,
+    "failed": 0,
+    "duplicate_executions": 0,
+    "strict_bodies": 0,
+    "source_guard": {
+      "source_member": "ed5ebcad91ae0716dd8869395d5b867627681be7addd8f07885dfc1aa58c6a12",
+      "frozen_files": 4873,
+      "symlinks": 3,
+      "owner_sha256": "0bd624e7fe6ee6b51310c3c5a72a6471ffd2186359f284ba15bf8bcd65bdf932",
+      "raw_files": 509,
+      "cases": 323,
+      "manifest_sha256": "d0dd43dac221a0f78f10aa80d49c4041fc98469f196fb64db53abcdb87e763b3",
+      "licenses": {
+        "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+        "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+      },
+      "free_bytes": 64546844672
+    },
+    "target_inactive": true,
+    "released": true,
+    "scope": "adapter-only structural syntax/hygiene transport; no body/publication/interpreter/runtime acceptance",
+    "architectural_hold": "E-R5-005 remains",
+    "preserved_predecessors": [
+      "single attachment v1 compile failure",
+      "single attachment v2 structural failures",
+      "single attachment v3 strict lints",
+      "list v1 oracle failure"
+    ],
+    "no_source_repairs_retries_targetcopies_or_clean": true
+  },
+  "reproduction_environment": {
+    "CARGO_TARGET_DIR": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target",
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "RUST_TEST_THREADS": "1",
+    "RUSTUP_TOOLCHAIN": "1.99.0",
+    "LRR_VALIDATION_SOURCE_ROOT": "/Users/avi/Code/rust-jit/artifacts/macos-first/sol-common-list-attachment-validation-v2/source",
+    "LRR_RUSTC_CHECKOUT": "/Users/avi/Code/rust-jit/rustc/rust",
+    "CARGO_PROFILE_DEV_OPT_LEVEL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_DEV_DEBUG_ASSERTIONS": "true",
+    "CARGO_PROFILE_DEV_INCREMENTAL": "false",
+    "CARGO_PROFILE_TEST_OPT_LEVEL": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG_ASSERTIONS": "true",
+    "CARGO_PROFILE_TEST_INCREMENTAL": "false"
+  },
+  "private_receipt_sha256": {
+    "artifacts/macos-first/sol-common-list-attachment-validation-v1/HANDOFF.md": "0d969f8ac5904455dbc8cb1700c081a07ed4ae82c9b6e066f2a57951753eab14",
+    "artifacts/macos-first/sol-common-list-attachment-validation-v1/RELEASE.json": "3c0f930352bedc2008a9747e83920f47370c003cc92253940a48219e2a2dfcb8",
+    "artifacts/macos-first/sol-common-list-attachment-validation-v1/EVIDENCE-HASHES.json": "29d7741699a9f9f94a30fb09a2cc5e591808bd04d58e22a1c860f91c3ce0461e",
+    "artifacts/macos-first/sol-common-list-attachment-validation-v2/HANDOFF.md": "de7a7b2db2e95e252611ea05c5ccfe6e7770555c9572e5f96f2359c899072b1b",
+    "artifacts/macos-first/sol-common-list-attachment-validation-v2/RELEASE.json": "2bc43cfca696ef11f0b5a9cc82694f9610f3ee5ba16fc4910cfa693a8f5d34ed",
+    "artifacts/macos-first/sol-common-list-attachment-validation-v2/EVIDENCE-HASHES.json": "ed8a809d60a67252b08fc172b1a706167c20e08e20ed83b45d49f07b3da47d99",
+    "artifacts/macos-first/sol-common-list-attachment-validation-v2/full-adapter/command.json": "2230743760f958a21671014b44ec991e503d24da3a6b1c7395d0af78e4147318",
+    "artifacts/macos-first/sol-common-list-attachment-validation-v2/full-adapter/child-terminal.json": "10b0ef32fb7d5a110ecb9c29ccae5ca1851aad2daf839230da882faa7ee7f072",
+    "artifacts/macos-first/sol-common-list-attachment-validation-v2/strict-adapter/command.json": "9e395cfb1101e9131c953e18e4e7eb3c97d8c2dcba4dcfa1152aad3a65c1f0e2",
+    "artifacts/macos-first/sol-common-list-attachment-validation-v2/strict-adapter/child-terminal.json": "1e17fb76e5b81636bd3052c59eae5f78b3770c3d2198f6e17e72381ba80323e0"
+  },
+  "next_required": [
+    "Complete retained original/generated origin-context closure for a genuine admitted source/body view",
+    "Body/cache identities must include structural syntax/origins; preserve original source member identity and currentness",
+    "Ordinary indexing/thunks and shared pattern transactions for generated Rust",
+    "Remove all8 audited macro-specific runtime/lowering/index/verifier shortcuts",
+    "Interpreter/runtime/edition/ownership/suspension milestone"
+  ],
+  "acceptance": {
+    "ordinary_interpreter_route": false,
+    "common_macro_engine": false,
+    "task_complete": false,
+    "guest_jit_prerequisite": false,
+    "release": false
+  }
+}

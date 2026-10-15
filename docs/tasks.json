@@ -6544,7 +6544,17 @@
       "commands": [],
       "fixture_ids": [],
       "artifact_paths": [],
-      "release_complete": false
+      "release_complete": false,
+      "common_macro_engine_rework": {
+        "syntax_transport_component": {
+          "evidence": "worktracks/evidence/2026-10-15-common-list-attachment.json",
+          "passed_adapter_bodies": 101,
+          "strict_clippy": true,
+          "source_and_body_publication": false,
+          "ordinary_runtime_route": false,
+          "card_complete": false
+        }
+      }
     },
     {
       "id": "T064",
@@ -18975,7 +18985,15 @@
         "old_component_evidence_preserved": true,
         "old_macro_specific_passes_establish_common_engine": false,
         "acceptance": "unchanged upstream runtime witnesses plus route/identity/effect/cleanup regressions through the common engine; no macro-specific expression/pattern evaluator",
-        "guest_jit_authorized": false
+        "guest_jit_authorized": false,
+        "syntax_transport_component": {
+          "evidence": "worktracks/evidence/2026-10-15-common-list-attachment.json",
+          "passed_adapter_bodies": 101,
+          "strict_clippy": true,
+          "source_and_body_publication": false,
+          "ordinary_runtime_route": false,
+          "card_complete": false
+        }
       }
     },
     {
