@@ -1,0 +1,159 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T024",
+    "T062"
+  ],
+  "prerequisites": [
+    "root-string-call-coherent-v3",
+    "root-string-schema-test-repair-v1"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "before_sha256": "947442075ead9228410d75df9d6ecd9ecd459d10cebd0f52c194bafbb63e0e16",
+      "after_sha256": "68eb44156f483262fabc4a151d212be1ecbae58b97ef978e06c5b0afa928e4a2"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_primitive_float_methods.rs",
+      "before_sha256": "a68bc9d12cf49491515fc4db7f06b7ec9f019634ae7d86596c5b5a0420af76fd",
+      "after_sha256": "87f3ac8a896f172565d2504e2d26059579dc00eea320f63cb4e9289509426a26"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_string_macro_literal_tests.rs",
+      "before_sha256": "27776e480e02b557e5ff5479076a6041b6d3715c5af94873e8e825f8543390d8",
+      "after_sha256": "d28db3885779394cd8e0fe20f2017b6a4b03d01a2ba7838432e8c09cb75b3d2f"
+    },
+    {
+      "path": "crates/lrr/src/engine/runtime_macros.rs",
+      "before_sha256": "1498f04d83476b21fc6cdc444af98d24672e3ddf865c31f3ea0bce43e9be0570",
+      "after_sha256": "062cb7f324f9f2c88360ca489f142cbbd8b9d3e4e310e8c734a5fecaa3be6a20"
+    },
+    {
+      "path": "crates/lrr/src/facade/mod.rs",
+      "before_sha256": "7850a30c3ef351858a135a964242b0bfc50b29b4b1228c91a4f9dc09862b90f8",
+      "after_sha256": "a309af1dfa6608b7b623e1aa24bfcb8a843d3d4f97dbcdd115a755a0b145bf06"
+    },
+    {
+      "path": "crates/lrr/src/facade/string_methods.rs",
+      "before_sha256": null,
+      "after_sha256": "0214663888c0a9b8f58f55060fcd47cb2f72e508d598653f5c9660cc790ee155"
+    },
+    {
+      "path": "crates/lrr/src/frontend/compile_input_catalog.rs",
+      "before_sha256": "c66d70fe7bcc83fbaf4bcfb10c9e77e36e0eee873974681961811d8a446dd30b",
+      "after_sha256": "51b63163240f72676cb64b6b7702f77dc734335db93d5b02530ea58f2c5f2924"
+    },
+    {
+      "path": "crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs",
+      "before_sha256": "34656b84c197b05602743bc1dc17705edbc1897cbfb2d33b7cd996955ec25e56",
+      "after_sha256": "595d12c2677478733c17580ef77e92b232180dec287a946277ad71aa9486d22e"
+    },
+    {
+      "path": "crates/lrr/src/frontend/primitive_float_methods.rs",
+      "before_sha256": "c73c2eb23a12299fe85828f673ed41448d3625dd8edee73ae370e56872059716",
+      "after_sha256": "6afe156387e27bbbe2d6f575b7077208498a67e756f5a00010f863e06fca73cd"
+    },
+    {
+      "path": "crates/lrr/src/frontend/primitive_float_recipe_tests.rs",
+      "before_sha256": "1673455fab06dcd76435b253c0fc6cb4ca2e8b8228c93a20ce9f396b78bd257a",
+      "after_sha256": "088dd44c381d09db3844266f505e1edae67d8486c767ea16ab10b18f54bfecab"
+    },
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_catalog.rs",
+      "before_sha256": "d6d53eebe79ea2d643daa4a141c112530ecca6d33bf9f5b1a6aa585238a00341",
+      "after_sha256": "80f6d6b976fe5564911ec62f7b66bceeef6ebe7e435b8a728e12b311e02997d4"
+    },
+    {
+      "path": "crates/lrr/src/frontend/runtime_macro_plan.rs",
+      "before_sha256": "9e7112be22e9d5af7e7e39df3ad2fae1bcab621f7db28fa27348f07358326b30",
+      "after_sha256": "d0409fde56a7c94aacf4ba9ed6594339bf34df808acbc0c93692685304b04280"
+    },
+    {
+      "path": "crates/lrr/src/frontend/runtime_primitive_float_catalog_tests.rs",
+      "before_sha256": "33bf01c4e0961e0f25a602f1074a4f51886210ee6c4989f2562f93e6822ab89c",
+      "after_sha256": "119d33ecabf198cb261c1030183e70a648db6c0246c326003a71622f185a3d35"
+    },
+    {
+      "path": "crates/lrr/src/ir/definition_numeric_wire_tests.rs",
+      "before_sha256": "0c8ece3dfe2a0410e4f9dd86700e024067a89ba9c52524e8a7cc96aaef639b7c",
+      "after_sha256": "beff225f5b83389389e38238ec7c872f18f6c2c86f46f79bfb98383cf4ffdefb"
+    },
+    {
+      "path": "crates/lrr/src/ir/op.rs",
+      "before_sha256": "55ba623929ebbad1323ac8e53d7f9290dcb3140cead9b237762d115de3330894",
+      "after_sha256": "caebe7497a0b6b174922968eef30883333be0a682731d8ff5f9f2704ee5eb32b"
+    },
+    {
+      "path": "crates/lrr/src/ir/parameter_place_wire_tests.rs",
+      "before_sha256": "0b8987b07476bcdefb629bb7a70e3dd5ac0f19eb820cc405e7eb98fd7a6386b5",
+      "after_sha256": "1890935370ac1a89fd30a3fc9f02cfce8344570c16d3783a1309862bd615e901"
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "before_sha256": "7efa5484efb09bdc990c4f67515b5b2773fe2a3693dab3639524d4d4518a7d30",
+      "after_sha256": "4cb5499a41add26e70eab4653254d0c3da4f355e31bb02cbd0a8d57e62e27eb6"
+    },
+    {
+      "path": "crates/lrr/src/ir/validate.rs",
+      "before_sha256": "6fd4c68251d106d5b0be9512eeeb5cbefb24d3b3eb220ef4c8d92aa704b5f222",
+      "after_sha256": "6cba098e5dc5922045278cfd1501cc25ed99e83261b98c5651113052e62b8f32"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_literals.rs",
+      "before_sha256": "87030972e4fddb7a0a35d1d04e5e54a6c408499437d88558ee6682a7a62be532",
+      "after_sha256": "dbd8ebd6338f531d62329d9995f5cbe5ed4aa56fa3965bad0f3a2cedcc75381e"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_primitive_methods.rs",
+      "before_sha256": "66ff0c615641515d294b6c5331e5e4f3c83b651521f7ab54799768f7eb626af3",
+      "after_sha256": "28f9fb43b7a370ef92e3af5d14642956e9d9cd07928ef666acd37dbe3be055e6"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_scalars.rs",
+      "before_sha256": "ffae63a8e322b79740e7d7749b67d51b1480686fd68d5dfe2caa023e2125cc8c",
+      "after_sha256": "772e196a400013f48c34b3b68ec6da49a88570e0d066ddae326968b2634d1885"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "before_sha256": "b9b363950f337e0b932e3f88cc7fa37ab392f002a46898a238c7b48045c6dcb9",
+      "after_sha256": "f46841840d40509249bb30044c9c5b2ce5008f7cb9732ac4271467edb2ed0f06"
+    },
+    {
+      "path": "xtask/tests/match_no_arm_exit.rs",
+      "before_sha256": "6029ab0f2227d1c4a410fb4695344c8d1e24f8c033a09ef2d6c6206be873fc93",
+      "after_sha256": "53188162ac4a7e75305bc822d34c07e0dc4bec636c96fb62e8c4ec05bc7da71c"
+    }
+  ],
+  "patch_sha256": "64590e2edbc64c1bfba30e5e5697abddc0add626732f26215756a0015b86b7ea",
+  "patch_bytes": 43458,
+  "created_at": "2026-10-15T12:22:05.159616+00:00",
+  "static_checks": [
+    "Rust 1.99 formatting",
+    "exact no-fuzz/no-offset leaf patch replay"
+  ],
+  "stock_runtime_passes_added": 0,
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "upstream_witness": {
+    "path": "tests/ui/str/nul-char-equivalence.rs",
+    "sha256": "072d9e7415742e411853ec46e123180fb9aceb6e5d2655ffdf46a6a223ed773c"
+  },
+  "pinned_core_body": {
+    "path": "library/core/src/str/mod.rs",
+    "sha256": "37b9707b62fb84c445cf5c6896c9c42c2a5b195b8823913fe2d0ff4422ec8530",
+    "line": 155
+  },
+  "schema": 15,
+  "opcode": 45,
+  "recipe_domain": "lrr/v15/lrir-recipe",
+  "compiler_facet_domain": "lrr/v5/prepared-compiler-facet-membership",
+  "acceptance_pending": [
+    "strict compile and clippy",
+    "unchanged all-edition NUL method operand controls",
+    "source/member/lease/fuel refusal controls",
+    "wire schema controls",
+    "existing float method and string scopes",
+    "integrated milestone"
+  ]
+}

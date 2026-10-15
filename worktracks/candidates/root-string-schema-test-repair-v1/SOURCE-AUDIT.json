@@ -1,0 +1,31 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T024",
+    "T062"
+  ],
+  "prerequisites": [
+    "root-string-call-coherent-v3"
+  ],
+  "files": [
+    {
+      "path": "xtask/tests/match_no_arm_exit.rs",
+      "before_sha256": "bb140408cf9f28422ccf24a2e2ad8d4a66ce4cfab329460308d5a35f5d6e3d84",
+      "after_sha256": "6029ab0f2227d1c4a410fb4695344c8d1e24f8c033a09ef2d6c6206be873fc93"
+    }
+  ],
+  "patch_sha256": "0c72fb3fc67480c1ad1cba8eb26e61c841af15f9212d8af514c11689fb8c3de8",
+  "patch_bytes": 530,
+  "created_at": "2026-10-15T12:21:55.499919+00:00",
+  "static_checks": [
+    "Rust 1.99 formatting",
+    "exact no-fuzz/no-offset leaf patch replay"
+  ],
+  "stock_runtime_passes_added": 0,
+  "acceptance_pending": [
+    "strict xtask compilation",
+    "existing match-no-arm-exit runtime scope",
+    "integrated milestone"
+  ]
+}

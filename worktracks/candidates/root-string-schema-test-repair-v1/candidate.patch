@@ -1,0 +1,11 @@
+--- a/xtask/tests/match_no_arm_exit.rs
++++ b/xtask/tests/match_no_arm_exit.rs
+@@ -199,7 +199,7 @@
+     expected.u32(7); // fixed wire discriminant, not Rust enum layout
+     expected.u64(0); // dependencies
+     assert_eq!(recipe.fingerprint(), expected.finish());
+-    const { assert!(LRIR_RECIPE_SCHEMA == 13) };
++    const { assert!(LRIR_RECIPE_SCHEMA == 14) };
+     assert_ne!(Recipe::DOMAIN, "lrr/v4/lrir-recipe");
+     assert_ne!(Recipe::DOMAIN, "lrr/v5/lrir-recipe");
+     assert_ne!(Recipe::DOMAIN, "lrr/v6/lrir-recipe");

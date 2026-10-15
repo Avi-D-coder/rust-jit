@@ -529,11 +529,15 @@
         "artifacts/macos-first/root-string-patterns-v1/",
         "worktracks/candidates/root-string-patterns-v1/",
         "artifacts/macos-first/root-string-call-coherent-v3/",
-        "worktracks/candidates/root-string-call-coherent-v3/"
+        "worktracks/candidates/root-string-call-coherent-v3/",
+        "artifacts/macos-first/root-string-length-v1/",
+        "worktracks/candidates/root-string-length-v1/",
+        "artifacts/macos-first/root-string-schema-test-repair-v1/",
+        "worktracks/candidates/root-string-schema-test-repair-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T11:58:14.992340+00:00",
+      "updated_at": "2026-10-15T12:22:53.308947+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {
