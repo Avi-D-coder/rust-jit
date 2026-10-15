@@ -1,0 +1,64 @@
+--- a/compat/fixtures.toml
++++ b/compat/fixtures.toml
+@@ -12179,3 +12179,14 @@
+ id = "M017-GENERATED-SOURCE-AUTHORITY-07"
+ path = "crates/lrr/src/frontend/generated_return_parent_profile_tests.rs"
+ test = "genuine_generated_export_retains_actual_parent_record_and_original_tokens"
++
++
++[[fixture]]
++id = "T061-STR-EMPTY-SOURCE"
++path = "crates/lrr/src/engine/run_string_macro_literal_tests.rs"
++test = "upstream_empty_and_raw_nonempty_string_method_components_execute_actual_length_all_editions"
++
++[[fixture]]
++id = "T061-STR-EMPTY-REFUSAL"
++path = "crates/lrr/src/engine/run_string_macro_literal_tests.rs"
++test = "original_empty_method_source_result_and_fuel_refusals_precede_publication"
+--- a/docs/tasks.json
++++ b/docs/tasks.json
+@@ -6305,12 +6305,30 @@
+       "title": "String and formatting",
+       "status": "not_started",
+       "commit_id": null,
+-      "acceptance_tests": [],
++      "acceptance_tests": [
++        "upstream_empty_and_raw_nonempty_string_method_components_execute_actual_length_all_editions",
++        "original_empty_method_source_result_and_fuel_refusals_precede_publication"
++      ],
+       "acceptance_contract": "multibyte len/char/slice cases; invalid boundary panic/error; formatter unsupported spec; capture-name lookup; formatting never moves String; failure-only assert message remains lazy.",
+       "commands": [],
+-      "fixture_ids": [],
++      "fixture_ids": [
++        "T061-STR-EMPTY-SOURCE",
++        "T061-STR-EMPTY-REFUSAL"
++      ],
+       "artifact_paths": [],
+-      "release_complete": false
++      "release_complete": false,
++      "pending_acceptance": [
++        {
++          "fixture_id": "T061-STR-EMPTY-SOURCE",
++          "status": "pending",
++          "evidence_paths": []
++        },
++        {
++          "fixture_id": "T061-STR-EMPTY-REFUSAL",
++          "status": "pending",
++          "evidence_paths": []
++        }
++      ]
+     },
+     {
+       "id": "T062",
+--- a/xtask/tests/match_no_arm_exit.rs
++++ b/xtask/tests/match_no_arm_exit.rs
+@@ -199,7 +199,7 @@
+     expected.u32(7); // fixed wire discriminant, not Rust enum layout
+     expected.u64(0); // dependencies
+     assert_eq!(recipe.fingerprint(), expected.finish());
+-    const { assert!(LRIR_RECIPE_SCHEMA == 17) };
++    const { assert!(LRIR_RECIPE_SCHEMA == 18) };
+     assert_ne!(Recipe::DOMAIN, "lrr/v4/lrir-recipe");
+     assert_ne!(Recipe::DOMAIN, "lrr/v5/lrir-recipe");
+     assert_ne!(Recipe::DOMAIN, "lrr/v6/lrir-recipe");

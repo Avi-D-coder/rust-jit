@@ -6431,7 +6431,9 @@
         "copied_originals": 2,
         "component_and_refusal_bodies_pending": 2,
         "full_fixture_passes_added": 0,
-        "canonical_promotion": false
+        "canonical_promotion": false,
+        "acceptance_reference_candidate": "worktracks/candidates/root-string-empty-acceptance-references-v1/README.md",
+        "static_review": "Exact schema18 expectation also required in match_no_arm_exit; included in held follow-on, no compile/runtime pass"
       }
     },
     {

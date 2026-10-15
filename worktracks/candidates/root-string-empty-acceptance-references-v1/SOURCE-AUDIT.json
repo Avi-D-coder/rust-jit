@@ -1,0 +1,47 @@
+{
+  "status": "source_only_pending_controls",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T022",
+    "T061"
+  ],
+  "prerequisites": [
+    "root-string-empty-v1",
+    "V97 schema17 full milestone and canonical promotion"
+  ],
+  "source_member": "3243e3b9a266c947140df89f478382858e0d41236ab3400561ad2b9339f9dc09",
+  "files": [
+    {
+      "path": "compat/fixtures.toml",
+      "before_sha256": "c2d9af3ed07cf73d9e67b90f63d895d01a2ed4394922b1fd3d4d3087d56f1b84",
+      "after_sha256": "3704194f771af550a4654e1a535f94a24e6b0577e0bdfe545e328d2ae749fc33"
+    },
+    {
+      "path": "docs/tasks.json",
+      "before_sha256": "8fc7c75d3ce99eccc2c8065498734feefe3df284b2a3b9ff64f56409d732c0f0",
+      "after_sha256": "52dcf67e0fd268d454264e2338424af5ab5262af8c8d9ab2a836c80a040491da"
+    },
+    {
+      "path": "xtask/tests/match_no_arm_exit.rs",
+      "before_sha256": "c36a54af420bf62e78b6f5d7f375510641f62965b36bd725d9eed17d1ca6b60a",
+      "after_sha256": "f1a2737d2f47dc8b4c8c38f35ec05499bdd845ea5d89918655b7da1f9714fd86"
+    }
+  ],
+  "patch_sha256": "4c875d08f2c15b1da7159a35d4db2e2d597b47952f8f330ed4f68dde37055abe",
+  "patch_bytes": 2462,
+  "static_checks": [
+    "exact V97 metadata preimages",
+    "JSON/TOML parsed",
+    "unique matching fixture IDs",
+    "exact no-fuzz/no-offset replay",
+    "Rust1.99 formatting of schema assertion leaf",
+    "review found compile-time schema17 assertion in match_no_arm_exit; exact schema18 expectation retained"
+  ],
+  "acceptance_pending": [
+    "is_empty candidate assembled after schema17 release",
+    "actual fixture-reference audit",
+    "two component/refusal controls and strict checks",
+    "fresh milestone"
+  ],
+  "task_completion_claimed": false
+}
