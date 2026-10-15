@@ -31,13 +31,13 @@ const STOCK: &str = include_str!(
     "../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-nested_stmt_macros.rs"
 );
 
-struct Fixture {
+pub(super) struct Fixture {
     inputs: PreparedSourceInputs,
-    prepared: Arc<PreparedSourceSyntax>,
-    discovery: SourceDiscovery,
-    db: Database,
+    pub(super) prepared: Arc<PreparedSourceSyntax>,
+    pub(super) discovery: SourceDiscovery,
+    pub(super) db: Database,
 }
-fn fixture(edition: u16, complete: bool) -> Fixture {
+pub(super) fn fixture(edition: u16, complete: bool) -> Fixture {
     let (provider, index, inputs) = assembly::world(STOCK, edition);
     let outer = assembly::request(&provider, &index);
     let generated = assembly::output(&provider, index.scan(), &outer, 1);
@@ -96,7 +96,7 @@ fn fixture(edition: u16, complete: bool) -> Fixture {
         db,
     }
 }
-fn seal(f: &mut Fixture) {
+pub(super) fn seal(f: &mut Fixture) {
     // Only actual producer replies can close discovery. Never interpret an
     // unsupported phase or an error as a completed namespace.
     for _ in 0..16 {
@@ -120,7 +120,7 @@ fn seal(f: &mut Fixture) {
     }
     panic!("stock declaration discovery did not close")
 }
-fn admit(f: &mut Fixture) -> Arc<RetainedSyntaxInput> {
+pub(super) fn admit(f: &mut Fixture) -> Arc<RetainedSyntaxInput> {
     match RetainedSyntaxInput::prepare(&mut f.db, f.prepared.clone(), f.discovery.key().clone()) {
         QueryPoll::Ready(Ok(input)) => input,
         QueryPoll::Ready(Err(error)) => panic!("retained admission failed: {error:?}"),

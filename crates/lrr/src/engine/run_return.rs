@@ -187,6 +187,7 @@ impl RunMachine {
             // entry until cleanup actually finished. Transfer exactly once.
             self.call_bytes = bytes;
             self.frame = suspended.caller;
+            self.body_lease = suspended.body_lease;
             self.pending = suspended.pending;
             self.frame.resume_call(
                 suspended.resume,

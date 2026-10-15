@@ -38,6 +38,9 @@ use std::collections::BTreeMap;
 #[path = "run_argument_hints.rs"]
 mod argument_hints;
 #[cfg(test)]
+#[path = "run_body_lease_tests.rs"]
+mod body_lease_tests;
+#[cfg(test)]
 #[path = "run_borrows.rs"]
 mod borrows;
 #[path = "run_constructors.rs"]
@@ -164,6 +167,7 @@ struct PreparedSourceCall {
     callee: Box<SourceCallable>,
     contracts: PreparedCallContracts,
     body: BodyIndex,
+    body_lease: Option<crate::db::memo::BodyExecutionLease>,
     retained_bytes: usize,
 }
 #[derive(Clone)]
@@ -179,6 +183,7 @@ struct SuspendedCall {
     action: crate::vm::action::ActionId,
     origin: crate::ir::recipe::Origin,
     caller: Frame,
+    body_lease: crate::db::memo::BodyExecutionLease,
     resume: PcKey,
     result: SlotId,
     call: PreparedSourceCall,
@@ -245,6 +250,7 @@ impl CallLimits {
 }
 pub struct RunMachine {
     frame: Frame,
+    body_lease: crate::db::memo::BodyExecutionLease,
     store: GuestStore,
     installed: InstalledRecipes,
     terminal: bool,
@@ -314,6 +320,11 @@ impl RunMachine {
                 "entered body structure result mismatch".into(),
             )));
         };
+        let body_lease = match db.pin_guest_body(index.body()) {
+            QueryPoll::Ready(Ok(lease)) => lease,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
         let initialize = (|| {
             let mut store = GuestStore::new(1, 2_000_000, 256 * 1024 * 1024)?;
             let mut frame = Frame::new(
@@ -328,6 +339,7 @@ impl RunMachine {
             )?;
             Ok(Self {
                 frame,
+                body_lease,
                 store,
                 installed,
                 terminal: false,
@@ -1048,11 +1060,17 @@ impl RunMachine {
                         Ok(context) => context,
                         Err(e) => return QueryPoll::Ready(Err(e)),
                     };
+                    let body_lease = match db.pin_guest_body(body.body()) {
+                        QueryPoll::Ready(Ok(lease)) => lease,
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    };
                     QueryPoll::Ready(Ok(PreparedSourceCall {
                         context: Some(context),
                         callee,
                         contracts,
                         body: body.as_ref().clone(),
+                        body_lease: Some(body_lease),
                         retained_bytes,
                     }))
                 }
@@ -1619,6 +1637,13 @@ impl RunMachine {
         db: &mut Database,
         contexts: &[super::runtime_macros::RuntimeMacroContext<'_>],
     ) -> RunPoll {
+        if self.body_lease.body() != self.frame.body.body() {
+            self.terminal = true;
+            return RunPoll::Fault(Diagnostic::new(
+                "LRR-E-INTERNAL-SNAPSHOT",
+                "active frame and body source lease differ".into(),
+            ));
+        }
         if db.source_revision() != self.installed.source_revision() {
             if self.frame.has_source_constant_activation() {
                 return self.fail_source_constant(Diagnostic::new(
@@ -1631,6 +1656,33 @@ impl RunMachine {
                 "LRR-E-INTERNAL-SNAPSHOT",
                 "runtime macro dispatch source publication is stale".into(),
             ));
+        }
+        let current = (|| {
+            for lease in std::iter::once(&self.body_lease)
+                .chain(self.calls.iter().map(|call| &call.body_lease))
+                .chain(
+                    self.prepared_call
+                        .iter()
+                        .filter_map(|call| call.body_lease.as_ref()),
+                )
+            {
+                match lease.require_current(db) {
+                    QueryPoll::Ready(Ok(())) => {}
+                    other => return other,
+                }
+            }
+            QueryPoll::Ready(Ok(()))
+        })();
+        match current {
+            QueryPoll::Ready(Ok(())) => {}
+            QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+            QueryPoll::Ready(Err(error)) => {
+                if self.frame.has_source_constant_activation() {
+                    return self.fail_source_constant(error);
+                }
+                self.terminal = true;
+                return RunPoll::Fault(error);
+            }
         }
         if contexts.len() > 1024
             || contexts.iter().enumerate().any(|(i, context)| {
@@ -2335,6 +2387,13 @@ impl RunMachine {
                         self.calls
                             .try_reserve(1)
                             .map_err(|_| call_fault("call continuation allocation failed"))?;
+                        let callee_lease = call
+                            .body_lease
+                            .take()
+                            .ok_or_else(|| call_fault("sealed callee source lease absent"))?;
+                        if callee_lease.body() != call.body.body() {
+                            return Err(call_fault("sealed callee source lease differs"));
+                        }
                         let mut callee = Frame::new_in_run(
                             call.body.clone(),
                             call.body.pc(NodeId(0), Phase::Entry)?,
@@ -2395,12 +2454,14 @@ impl RunMachine {
                         let pending = std::mem::take(&mut self.pending);
                         self.frame.counters = OpcodeCounters::default();
                         let caller = std::mem::replace(&mut self.frame, callee);
+                        let body_lease = std::mem::replace(&mut self.body_lease, callee_lease);
                         self.call_bytes = call_bytes;
                         self.peak_guest_frames = self.peak_guest_frames.max(depth);
                         self.calls.push(SuspendedCall {
                             action: consumed.id,
                             origin: consumed.origin,
                             caller,
+                            body_lease,
                             resume: consumed.resume,
                             result: consumed.result,
                             call,

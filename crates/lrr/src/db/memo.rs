@@ -23,10 +23,15 @@ mod constant_inputs;
 #[path = "source_view_inputs.rs"]
 mod source_view_inputs;
 
+#[path = "body_leases.rs"]
+mod body_leases;
 #[path = "prepared_modules.rs"]
 mod prepared_modules;
+#[path = "retained_body_inputs.rs"]
+mod retained_body_inputs;
 #[path = "retained_syntax_inputs.rs"]
 mod retained_syntax_inputs;
+pub(crate) use body_leases::BodyExecutionLease;
 
 #[derive(Debug, Clone)]
 pub struct MemoEntry {
@@ -126,6 +131,7 @@ pub struct Database {
     run_active: bool,
     run_budgets: Option<crate::engine::telemetry::CacheBudgets>,
     source_pins: Vec<SourcePin>,
+    body_leases: Vec<std::sync::Weak<body_leases::BodyExecutionOwner>>,
     prepared_sources: Vec<std::sync::Weak<crate::source::changes::PreparedSourceState>>,
     // Allocation addresses are private accounting identities, never semantic keys,
     // serialized output, or eviction-order inputs. Weak owners prevent address reuse.
@@ -147,6 +153,7 @@ impl Default for Database {
             run_active: false,
             run_budgets: None,
             source_pins: vec![],
+            body_leases: vec![],
             prepared_sources: vec![],
             query_pins: BTreeMap::new(),
             input_pins: BTreeMap::new(),
@@ -328,6 +335,10 @@ impl Database {
         prepared_capacity: usize,
     ) -> Result<crate::engine::telemetry::CacheUsage, Diagnostic> {
         let mut usage = crate::engine::telemetry::CacheUsage::default();
+        let body_leases =
+            body_leases::metadata(self.body_leases.capacity(), self.body_leases.len())?;
+        usage.memo_bytes = account_add(usage.memo_bytes, body_leases)?;
+        usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, body_leases)?;
         let mut source_allocations = std::collections::BTreeSet::new();
         let mut map_allocations = std::collections::BTreeSet::new();
         let mut inventory_allocations = std::collections::BTreeSet::new();

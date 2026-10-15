@@ -97,6 +97,9 @@ impl RetainedSyntaxInput {
     pub fn key(&self) -> &ParseKey {
         &self.key
     }
+    pub(crate) fn prepared(&self) -> &PreparedSourceSyntax {
+        &self.prepared
+    }
     pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
         Ok(self.bytes)
     }

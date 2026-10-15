@@ -20,3 +20,6 @@ mod prepared_module_registry_tests;
 
 #[cfg(test)]
 mod retained_syntax_tests;
+
+#[cfg(test)]
+mod retained_body_tests;

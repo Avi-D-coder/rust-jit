@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "at": "2026-10-15T20:29:24.695448+00:00",
+  "at": "2026-10-15T21:26:26.098294+00:00",
   "claim": "LOCAL-024",
   "tasks": [
     "M014",
@@ -806,5 +806,139 @@
     "guest_jit_prerequisite": false,
     "full_suite_compatibility": false,
     "release": false
+  },
+  "milestone_actual": {
+    "release": "artifacts/macos-first/sol-common-source-assembly-validation-v3/RELEASE.json",
+    "release_sha256": "b181872b30686e5e89858210bc092c13e25e421137d639e5601d8bfde03bd7d4",
+    "actual": {
+      "at": "2026-10-15T21:21:31.136588+00:00",
+      "source_member": "be46fdbe2bfee309ea1bb366f2394ae2de3aecab7b48839f4e50f378f60eaedd",
+      "gate_terminal": "54d16e/1",
+      "gate_exit_code": 1,
+      "gate_elapsed_seconds": 3132.4454662500066,
+      "host_command_exit_code": 101,
+      "collection_terminal": "86dc11/0",
+      "collector_harness_failure": {
+        "terminal": "dfb639/1",
+        "reason": "default Python lacks tomllib; rerun collector only with pinned Python3.14.8; no Rust rerun"
+      },
+      "listed_bodies": 3259,
+      "passed_bodies": 2833,
+      "failed_bodies": 1,
+      "unstarted_bodies": 425,
+      "interrupted_bodies": 0,
+      "ignored_bodies": 0,
+      "named_failures": [
+        "unknown_noncopy_rigid_and_shadowed_matches_refuse_before_source_read"
+      ],
+      "scoped_distinct_rust_passes": 16,
+      "scoped_passes_repeated_in_gate": 16,
+      "new_gitignore_data_controls": 8,
+      "prior_unchanged_python_guard_controls": 8,
+      "fresh_reports": [
+        {
+          "path": "artifacts/gates/00.json",
+          "sha256": "a9cd177507fa95d7701348c965f795d173dd96bd49c215fdc0a96241310be5dd",
+          "bytes": 714934,
+          "mtime": 1792099222.938716
+        },
+        {
+          "path": "artifacts/gates/01.json",
+          "sha256": "298954e985076052290eece528db73833019d17a85fafd6aa703c99246a7c284",
+          "bytes": 63061,
+          "mtime": 1792099223.6455414
+        },
+        {
+          "path": "artifacts/gates/02.json",
+          "sha256": "e36ee3691752dc9c92b25f71416a2bc1ccca109a6c469b74f03cd6016f8e85da",
+          "bytes": 1724,
+          "mtime": 1792099224.3338091
+        },
+        {
+          "path": "artifacts/gates/03.json",
+          "sha256": "452a825227884600f668fbbbc0f0101b21d97baadc1c2c11988fae4ddfdd5f51",
+          "bytes": 1735,
+          "mtime": 1792099225.0182626
+        },
+        {
+          "path": "artifacts/gates/m001-components.json",
+          "sha256": "aad7d9da73b11cc8a07b91c005a90b165e09519c470df2aca7e7a59f75730359",
+          "bytes": 45616,
+          "mtime": 1792099216.4756212
+        },
+        {
+          "path": "artifacts/gates/m002-components.json",
+          "sha256": "65e7cd43d423ef71f30faef6735ad7a92715c5b7af9dab652a92dd253408a901",
+          "bytes": 13495,
+          "mtime": 1792099220.5965965
+        },
+        {
+          "path": "artifacts/gates/m003-components.json",
+          "sha256": "9cf4940a64da22fd7fd3e132da4312236bd604913936dc5cd393dbbcf63b5fcf",
+          "bytes": 5974,
+          "mtime": 1792099221.5633683
+        },
+        {
+          "path": "artifacts/bootstrap.json",
+          "sha256": "863e06a43dad290951a384043d6d98be1e41b897e560369dc6b8d5c22d569dd6",
+          "bytes": 47928,
+          "mtime": 1792099222.2511122
+        },
+        {
+          "path": "artifacts/dependency-licenses.json",
+          "sha256": "10d389a913153af12d8edaecdb4e2aa5f1f3dcbcb5e800deac64f9ef2ac940b4",
+          "bytes": 57903,
+          "mtime": 1792099214.1726322
+        }
+      ],
+      "fixture_reference_counts": {
+        "fixture_reference_count": 2429,
+        "fixture_references_exactly_listed": 2429,
+        "fixture_references_exactly_passed": 2038
+      },
+      "ledger_reference_counts": {
+        "ledger_reference_rows": 2713,
+        "ledger_unique_required_selectors": 2674,
+        "ledger_rows_exactly_listed": 2709,
+        "ledger_rows_exactly_passed": 2299
+      },
+      "unmatched_ledger_rows": [
+        {
+          "task": "T025",
+          "test": "source_shift_counts_use_u32_context_without_reinterpreting_explicit_counts"
+        },
+        {
+          "task": "T040",
+          "test": "rustc_structural_dispatch_refuses_missing_or_wrong_context_before_effects"
+        },
+        {
+          "task": "M003",
+          "test": "MX003: real identity!(3_i64) and attribute echo token/span roundtrips"
+        },
+        {
+          "task": "M003",
+          "test": "MX004: server hash, artifact hash, compiler tuple, and protocol mismatches rejected before loading"
+        }
+      ],
+      "source_guard": {
+        "source_member": "be46fdbe2bfee309ea1bb366f2394ae2de3aecab7b48839f4e50f378f60eaedd",
+        "frozen_files": 4892,
+        "symlinks": 3,
+        "owner_sha256": "90aeaf5b24c93f36d4583f11bed27e1446d02d33dd39088cb5cf9f0b7d1fe939",
+        "raw_files": 509,
+        "cases": 323,
+        "manifest_sha256": "d0dd43dac221a0f78f10aa80d49c4041fc98469f196fb64db53abcdb87e763b3",
+        "licenses": {
+          "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+          "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+        },
+        "free_bytes": 62646571008
+      },
+      "target_inactive": true,
+      "released": true,
+      "no_source_fixes_or_Rust_reruns_or_target_copy_clean": true,
+      "architectural_hold": "E-R5-005 remains; no publication/VM/runtime/full-fixture/task/JIT acceptance"
+    },
+    "triage": "Source review: generic parameter_context can emit a DefinitionParameter hint at match entry; the retained negative expects Unsupported there. The runtime primitive-source admission point must be checked independently before changing this test. Failure is retained, no source repair or green milestone claimed."
   }
 }

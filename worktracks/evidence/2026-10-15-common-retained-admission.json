@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "at": "2026-10-15T20:44:11.339577+00:00",
+  "at": "2026-10-15T21:26:26.098294+00:00",
   "claim": "LOCAL-024",
   "tasks": [
     "M014",
@@ -9,7 +9,7 @@
   ],
   "erratum": "E-R5-005",
   "source_baseline": "a77f2c386b3fc123aeefa50f4702b38cd81937d3",
-  "scope": "Typed retained source parsing provenance, current source/epoch/seal admission, atomic derived input publication. Source-only candidate awaiting asynchronous validation.",
+  "scope": "Typed retained source parsing provenance and atomic derived input publication; 20 scoped component controls and strict all-targets validation passed. No VM or architecture acceptance.",
   "implemented_candidate": [
     "RetainedSyntaxInput requires genuine current source publication and lease, explicit current expansion epoch, closed syntax and actual discovery certificate covering each retained output descriptor",
     "Canonical typed input identity binds prepared syntax, actual seal and publication; no manufactured SourceBlob or textual reparse",
@@ -66,14 +66,65 @@
     }
   ],
   "validation": {
-    "state": "queued_after_existing_assembly_v3_gate_terminal_and_target_release",
-    "agent": "/root/edition_macro_logic",
-    "target": "artifacts/macos-first/root-constant-next-validation-v1/validation-target",
-    "frozen_packet": "artifacts/macos-first/common-retained-admission-v1/SOURCE.json",
-    "rust_tests_executed_for_this_candidate": 0,
-    "root_rustfmt_exit": 0,
-    "planning_check": "12 tracks,60 items,35 claims; no runtime acceptance",
-    "source_unchanged_since_freeze": true
+    "state": "scoped_pass",
+    "release": "artifacts/macos-first/sol-common-retained-admission-validation-v1/RELEASE.json",
+    "release_sha256": "16931912edd6c4ed2139550f9c76cea398f6c0ebe507a28d7a3c0807fd93d4a6",
+    "actual": {
+      "at": "2026-10-15T21:24:14.466842+00:00",
+      "source_member": "542859e9de9f4325c8f022423b3f51caed0aec3116097f3dfc9300ff5899eb1a",
+      "terminals": {
+        "admission-new": "e51db2/0",
+        "assembly-regression": "88f9df/0",
+        "parse-retained": "022139/0",
+        "strict-workspace": "603a4c/0"
+      },
+      "distinct_passed_bodies": 20,
+      "failed_bodies": 0,
+      "duplicated_bodies": 0,
+      "actual_passed_names": [
+        "service::retained_syntax_tests::admitted_stock_syntax_uses_pure_parse_and_ordinary_body_index_in_every_edition",
+        "service::retained_syntax_tests::cached_retained_parse_cannot_survive_epoch_replacement",
+        "service::retained_syntax_tests::generic_input_publication_cannot_admit_retained_syntax",
+        "service::retained_syntax_tests::incomplete_expansion_is_not_admissible_even_with_closed_discovery",
+        "service::retained_syntax_tests::missing_actual_discovery_requests_input_without_publishing_syntax",
+        "service::retained_syntax_tests::source_universe_replacement_removes_retained_input_and_old_seal",
+        "expand::source_declarative::assembly::tests::already_attached_request_cannot_be_applied_twice",
+        "expand::source_declarative::assembly::tests::rejects_another_issued_record_without_disguising_it_as_source",
+        "expand::source_declarative::assembly::tests::rejects_wrong_source_scan_zero_epoch_and_wrong_output_epoch",
+        "expand::source_declarative::assembly::tests::repeated_origin_keys_keep_distinct_generated_invocation_occurrences",
+        "expand::source_declarative::assembly::tests::upstream_forwarded_statement_keeps_the_issued_call_and_generated_let",
+        "expand::source_declarative::assembly::tests::upstream_nested_statement_and_expression_requests_attach_to_ordinary_bodies",
+        "syntax::parse::retained::tests::expanded_expression_uses_normal_body_nodes_and_verified_thunks",
+        "syntax::parse::retained::tests::fused_tokens_can_cross_origin_intervals_without_resolving_their_names",
+        "syntax::parse::retained::tests::identical_display_text_cannot_hide_a_different_body_tree",
+        "syntax::parse::retained::tests::non_item_snapshots_cannot_be_replayed_as_source_units",
+        "syntax::parse::retained::tests::original_utf8_body_identity_keeps_its_exact_byte_contract",
+        "syntax::parse::retained::tests::token_owning_editions_participate_in_retained_body_identity",
+        "syntax::parse::retained::tests::unrelated_cold_body_edits_preserve_retained_body_identity_across_offset_changes",
+        "syntax::parse::retained::tests::upstream_nested_statement_items_enter_the_normal_index_and_lexical_inventory"
+      ],
+      "strict": "workspace all-targets -D warnings passed",
+      "milestone": "not run on admission alone; prior AssemblyV3 gate failure retained",
+      "source_guard": {
+        "source_member": "542859e9de9f4325c8f022423b3f51caed0aec3116097f3dfc9300ff5899eb1a",
+        "frozen_files": 4897,
+        "symlinks": 3,
+        "owner_sha256": "ca72d5867031627d6681cb0d44af4e3be7325b80a649abb7888fa55760c7b8b5",
+        "raw_files": 509,
+        "cases": 323,
+        "manifest_sha256": "d0dd43dac221a0f78f10aa80d49c4041fc98469f196fb64db53abcdb87e763b3",
+        "licenses": {
+          "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+          "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+        },
+        "free_bytes": 62514835456
+      },
+      "target_inactive": true,
+      "released": true,
+      "no_source_fixes_retries_copies_clean": true,
+      "architectural_hold": "E-R5-005 and all eight shortcut blockers remain; no publication/VM/runtime/full-fixture/task acceptance"
+    },
+    "milestone": "not run on this component; prior source-assembly gate remains failed"
   },
   "required_next": [
     "Collect actual scoped/strict terminals on exact frozen source; repair any failures without changing oracles",

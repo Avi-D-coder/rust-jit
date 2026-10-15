@@ -300,7 +300,7 @@ fn rustc_nested_return_dispatcher_cancel_preserves_pending_ticket_without_public
 /// source contracts and the once-consumed CallAction come from normal machinery.
 /// Stop at the original Return before dispatcher cleanup, so admission can be
 /// inspected without adding a test-only yield to production polling.
-fn original_caller_return_frontier() -> (Database, RunMachine, TicketId) {
+pub(super) fn original_caller_return_frontier() -> (Database, RunMachine, TicketId) {
     const SOURCE: &str =
         include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/return/return-nil.rs");
     let (mut db, mut run) = borrows::tests::start_stock_body(SOURCE, "main");
@@ -383,6 +383,7 @@ fn original_caller_return_frontier() -> (Database, RunMachine, TicketId) {
                 let mut call = run.prepared_call.take().unwrap();
                 call.callee.revalidate(&mut db).unwrap();
                 assert!(call.contracts.parameter_descriptors.is_empty());
+                let callee_lease = call.body_lease.take().unwrap();
                 let mut callee = Frame::new_in_run(
                     call.body.clone(),
                     call.body.pc(NodeId(0), Phase::Entry).unwrap(),
@@ -403,12 +404,14 @@ fn original_caller_return_frontier() -> (Database, RunMachine, TicketId) {
                 run.collected.accumulate(run.frame.counters()).unwrap();
                 run.frame.counters = OpcodeCounters::default();
                 let caller = std::mem::replace(&mut run.frame, callee);
+                let body_lease = std::mem::replace(&mut run.body_lease, callee_lease);
                 run.call_bytes = call.retained_bytes;
                 run.peak_guest_frames = 2;
                 run.calls.push(SuspendedCall {
                     action: consumed.id,
                     origin: consumed.origin,
                     caller,
+                    body_lease,
                     resume: consumed.resume,
                     result: consumed.result,
                     call,

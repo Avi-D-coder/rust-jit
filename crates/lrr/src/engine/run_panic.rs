@@ -79,6 +79,7 @@ impl RunMachine {
                 .ok_or_else(|| panic_fault("panic caller disappeared"))?;
             self.call_bytes = bytes;
             self.frame = suspended.caller;
+            self.body_lease = suspended.body_lease;
             self.pending = suspended.pending;
             self.frame.status = crate::vm::frame::FrameStatus::Panicked;
             let active = self

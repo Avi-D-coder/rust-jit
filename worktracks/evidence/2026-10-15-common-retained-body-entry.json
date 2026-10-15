@@ -1,0 +1,686 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T21:35:49.023566+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "M014",
+    "T024",
+    "T063"
+  ],
+  "erratum": "E-R5-005",
+  "source_baseline": "a629361ce04ee69c91f05229e46e32770d194c58",
+  "scope": "M014/T024/T063 pre-entry publication of genuine original definitions from current retained syntax, per-frame source/body ownership through actual calls/returns/panic and stale-epoch refusal before guest work. Four service and two engine controls; component only. All eight E-R5-005 shortcuts still present; no CLI/common-engine acceptance. Source review successor refreshes all four actual derived rows on a new parse even when a semantic body/header fingerprint survives changed offsets; existing stock authority control now checks the actual anchored body attachment. No change to frame/call/return/panic logic.",
+  "source_packet": "artifacts/macos-first/common-retained-body-entry-v2/SOURCE.json",
+  "source_packet_sha256": "4f971a971f52f4b7edae7ed9681042aee4b330dc4a0142595f7886feb2b20ed6",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/db/body_leases.rs",
+      "sha256": "5f747fd1c6173f80f2017e5075bab599cb96b8120ba641423637458a4d9f8425"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_body_inputs.rs",
+      "sha256": "c99b196ce7db8cd0bf53a72d256e9eabacf6fb981aa7f4e9dce1db9bd22c867a"
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "97f7e9380af42ad3d16046921a5ab6754387b464d0f1999eda9898b5b77223ef"
+    },
+    {
+      "path": "crates/lrr/src/db/retained_syntax.rs",
+      "sha256": "c983687ff4d5339a45ead8313127b9cc9e4439bf66046fbdad03f6155b122c9d"
+    },
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "be70e95abe3967b506223655965d60a6ad6eefc57079ab556fb6123089e856ac"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_panic.rs",
+      "sha256": "bfa8c5ce060c5ce688aebd3a75691a79a4c65fa73cb87583999670da1a17afb6"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_return.rs",
+      "sha256": "e727814da2779b8e64b801e9f0c98d55d719d5a983753d8fef8776d86a1849d1"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_return_tests.rs",
+      "sha256": "009e5ceb43d36fd3c424ab22b6a97e45d04b79e154ec9599b3d0faec760b0919"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_body_lease_tests.rs",
+      "sha256": "5d6e1dd20b4028470f00af595ffc0a15351d9ead94b0b74801ee62107b41cdc7"
+    },
+    {
+      "path": "crates/lrr/src/service/mod.rs",
+      "sha256": "3456e6b55704e20b8bd8c72671b20b75a230773fa8518a82af8b0cc2f851d15f"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_syntax_tests.rs",
+      "sha256": "a57f5629f395723b1e82d973c526392b6a2134619066c8e0e5b2d37ba94dd63e"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_body_tests.rs",
+      "sha256": "0d3f57b8c838a985c633e04117a5790343aa4d63e3177124cef4e034bbace5ca"
+    }
+  ],
+  "implemented_candidate": [
+    "Database publishes actual original retained source/header/body/context rows atomically against proven occurrence anchors and current actual source/epoch/seal",
+    "Every active/suspended/prepared-call VM frame owns an actual body/source/parse lease; definition publication refuses live owners and transfers ownership on actual return/panic restoration",
+    "Ordinary root/callee entry pins source before guest-frame or consumed call effects; polling rechecks source/epoch dependencies before guest work",
+    "New parse publication refreshes all actual location-bearing rows even when semantic header/body fingerprints survive changed offsets"
+  ],
+  "validation": {
+    "state": "v2_scoped_and_strict_pass_v1_broad_library_evidence_preserved_separately",
+    "v1_actual_scopes": {
+      "service-new": {
+        "path": "artifacts/macos-first/sol-common-retained-body-entry-validation-v1/service-new/terminal.json",
+        "sha256": "08c0e1ed653fbf061a75f59baa18366aaca232ca3c9d28715960f7cd6eee9684",
+        "actual": {
+          "exit_code": 0,
+          "elapsed_seconds": 23.27537891699467,
+          "finished_at": "2026-10-15T21:28:44.184359+00:00",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "service::retained_body_tests",
+            "--",
+            "--test-threads=1"
+          ],
+          "source_before": {
+            "source_member": "f9d2f397557e1eb99850a4219376b50c63a75d01268d6162301e1dc639dcb8e7",
+            "frozen_files": 4909,
+            "symlinks": 3,
+            "owner_sha256": "64455302b0095397c6d01cbf43cc3d6b38ba115b21a96c989cf200bfd21d3125",
+            "raw_files": 509,
+            "cases": 323,
+            "manifest_sha256": "d0dd43dac221a0f78f10aa80d49c4041fc98469f196fb64db53abcdb87e763b3",
+            "licenses": {
+              "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+              "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+            },
+            "free_bytes": 62252294144
+          },
+          "source_after": {
+            "source_member": "f9d2f397557e1eb99850a4219376b50c63a75d01268d6162301e1dc639dcb8e7",
+            "frozen_files": 4909,
+            "symlinks": 3,
+            "owner_sha256": "64455302b0095397c6d01cbf43cc3d6b38ba115b21a96c989cf200bfd21d3125",
+            "raw_files": 509,
+            "cases": 323,
+            "manifest_sha256": "d0dd43dac221a0f78f10aa80d49c4041fc98469f196fb64db53abcdb87e763b3",
+            "licenses": {
+              "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+              "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+            },
+            "free_bytes": 62208356352
+          },
+          "source_unchanged": true,
+          "tests": [
+            {
+              "name": "service::retained_body_tests::body_publication_requires_the_actual_typed_source_and_original_anchor",
+              "result": "ok"
+            },
+            {
+              "name": "service::retained_body_tests::unchanged_stock_body_publishes_atomically_only_before_frame_entry_in_every_edition",
+              "result": "ok"
+            },
+            {
+              "name": "service::retained_body_tests::unowned_body_can_advance_epoch_but_an_old_frame_cannot_execute_or_be_retargeted",
+              "result": "ok"
+            },
+            {
+              "name": "service::retained_body_tests::user_macro_nonliteral_output_executes_ordinary_numeric_lowering_in_every_edition",
+              "result": "ok"
+            }
+          ],
+          "bodies": 4,
+          "passed": 4,
+          "failed": 0,
+          "stdout_sha256": "b51dac81a38e1a4e3417208c39b7d93317bff08aa4569ce1d0225b4b64d0923a",
+          "stderr_sha256": "f9ecf4d431d1caa8a90f863da0b091758c98741bded0c59e96e5cbfca768f533",
+          "architectural_hold": "E-R5-005 remains; body-entry component only, no CLI/common-engine/architecture acceptance"
+        }
+      },
+      "engine-new": {
+        "path": "artifacts/macos-first/sol-common-retained-body-entry-validation-v1/engine-new/terminal.json",
+        "sha256": "52b7f9b8cbcce197d1d08010280fd0537f9400825a614b4e9c0799331c3bf688",
+        "actual": {
+          "exit_code": 0,
+          "elapsed_seconds": 0.12026808300288394,
+          "finished_at": "2026-10-15T21:28:47.171919+00:00",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "engine::run::body_lease_tests",
+            "--",
+            "--test-threads=1"
+          ],
+          "source_before": {
+            "source_member": "f9d2f397557e1eb99850a4219376b50c63a75d01268d6162301e1dc639dcb8e7",
+            "frozen_files": 4909,
+            "symlinks": 3,
+            "owner_sha256": "64455302b0095397c6d01cbf43cc3d6b38ba115b21a96c989cf200bfd21d3125",
+            "raw_files": 509,
+            "cases": 323,
+            "manifest_sha256": "d0dd43dac221a0f78f10aa80d49c4041fc98469f196fb64db53abcdb87e763b3",
+            "licenses": {
+              "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+              "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+            },
+            "free_bytes": 62183010304
+          },
+          "source_after": {
+            "source_member": "f9d2f397557e1eb99850a4219376b50c63a75d01268d6162301e1dc639dcb8e7",
+            "frozen_files": 4909,
+            "symlinks": 3,
+            "owner_sha256": "64455302b0095397c6d01cbf43cc3d6b38ba115b21a96c989cf200bfd21d3125",
+            "raw_files": 509,
+            "cases": 323,
+            "manifest_sha256": "d0dd43dac221a0f78f10aa80d49c4041fc98469f196fb64db53abcdb87e763b3",
+            "licenses": {
+              "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+              "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+            },
+            "free_bytes": 62182719488
+          },
+          "source_unchanged": true,
+          "tests": [
+            {
+              "name": "engine::run::body_lease_tests::dropping_an_unentered_original_frame_releases_its_definition",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::body_lease_tests::original_caller_and_callee_ownership_follow_actual_return_cleanup",
+              "result": "ok"
+            }
+          ],
+          "bodies": 2,
+          "passed": 2,
+          "failed": 0,
+          "stdout_sha256": "b7f23d77b6bc7c1e6eb71d9e5422cfcb5a5f8cfb19b1bd634c94f9d7739bbb6b",
+          "stderr_sha256": "5374d21bb12443df46515f0f295390c669ab96c2ee2cad64635e5ba608c5cd15",
+          "architectural_hold": "E-R5-005 remains; body-entry component only, no CLI/common-engine/architecture acceptance"
+        }
+      },
+      "return-regression": {
+        "path": "artifacts/macos-first/sol-common-retained-body-entry-validation-v1/return-regression/terminal.json",
+        "sha256": "0c9932cba422b40c73f7b50e63c6f1e6800becb5a26454de5fc0fd034fc11d5c",
+        "actual": {
+          "exit_code": 0,
+          "elapsed_seconds": 0.2827218749735039,
+          "finished_at": "2026-10-15T21:28:55.500155+00:00",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "engine::run::return_tests",
+            "--",
+            "--test-threads=1"
+          ],
+          "source_before": {
+            "source_member": "f9d2f397557e1eb99850a4219376b50c63a75d01268d6162301e1dc639dcb8e7",
+            "frozen_files": 4909,
+            "symlinks": 3,
+            "owner_sha256": "64455302b0095397c6d01cbf43cc3d6b38ba115b21a96c989cf200bfd21d3125",
+            "raw_files": 509,
+            "cases": 323,
+            "manifest_sha256": "d0dd43dac221a0f78f10aa80d49c4041fc98469f196fb64db53abcdb87e763b3",
+            "licenses": {
+              "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+              "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+            },
+            "free_bytes": 62207565824
+          },
+          "source_after": {
+            "source_member": "f9d2f397557e1eb99850a4219376b50c63a75d01268d6162301e1dc639dcb8e7",
+            "frozen_files": 4909,
+            "symlinks": 3,
+            "owner_sha256": "64455302b0095397c6d01cbf43cc3d6b38ba115b21a96c989cf200bfd21d3125",
+            "raw_files": 509,
+            "cases": 323,
+            "manifest_sha256": "d0dd43dac221a0f78f10aa80d49c4041fc98469f196fb64db53abcdb87e763b3",
+            "licenses": {
+              "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+              "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+            },
+            "free_bytes": 62226366464
+          },
+          "source_unchanged": true,
+          "tests": [
+            {
+              "name": "engine::run::return_tests::original_alias_return_baz_body_reports_symbolic_hint_frontier",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::return_tests::original_alias_return_contracts_normalize_in_owning_source_context",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::return_tests::original_alias_return_contracts_preserve_source_identity_at_equal_descriptor",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::return_tests::original_named_primitive_result_context_preserves_rigid_source_identity",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::return_tests::original_named_primitive_return_refuses_rigid_view_before_selected_source_admission",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::return_tests::rustc_nested_return_dispatcher_cancel_preserves_pending_ticket_without_publication",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::return_tests::rustc_nested_return_dispatcher_publishes_root_only_after_bounded_cleanup",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::return_tests::rustc_original_caller_return_destination_refuses_before_cleanup_or_owner_consumption",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::return_tests::rustc_original_caller_return_rejects_other_canonical_resume_and_result_before_effects",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::return_tests::rustc_original_caller_return_reserves_destination_before_cleanup_and_resumes_once",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::return_tests::rustc_original_concrete_return_rejects_rigid_source_before_cleanup_or_publication",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::return_tests::rustc_original_explicit_unit_return_keeps_unreachable_let_cold",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::return_tests::rustc_original_immediate_return_bodies_execute_with_other_bodies_cold",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::return_tests::rustc_original_return_nil_resumes_caller_once_after_callee_cleanup",
+              "result": "ok"
+            }
+          ],
+          "bodies": 14,
+          "passed": 14,
+          "failed": 0,
+          "stdout_sha256": "c8afecffbe0577f9b65603d32ba486cea1f10ee216e3a03174779de3ae6c6945",
+          "stderr_sha256": "5374d21bb12443df46515f0f295390c669ab96c2ee2cad64635e5ba608c5cd15",
+          "architectural_hold": "E-R5-005 remains; body-entry component only, no CLI/common-engine/architecture acceptance"
+        }
+      },
+      "panic-regression": {
+        "path": "artifacts/macos-first/sol-common-retained-body-entry-validation-v1/panic-regression/terminal.json",
+        "sha256": "629b030419c79f039f09cc078621485536abf36f6704b0aa4fd577890d78e957",
+        "actual": {
+          "exit_code": 0,
+          "elapsed_seconds": 0.3767777500033844,
+          "finished_at": "2026-10-15T21:28:56.339670+00:00",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "engine::run::panic_tests",
+            "--",
+            "--test-threads=1"
+          ],
+          "source_before": {
+            "source_member": "f9d2f397557e1eb99850a4219376b50c63a75d01268d6162301e1dc639dcb8e7",
+            "frozen_files": 4909,
+            "symlinks": 3,
+            "owner_sha256": "64455302b0095397c6d01cbf43cc3d6b38ba115b21a96c989cf200bfd21d3125",
+            "raw_files": 509,
+            "cases": 323,
+            "manifest_sha256": "d0dd43dac221a0f78f10aa80d49c4041fc98469f196fb64db53abcdb87e763b3",
+            "licenses": {
+              "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+              "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+            },
+            "free_bytes": 62226362368
+          },
+          "source_after": {
+            "source_member": "f9d2f397557e1eb99850a4219376b50c63a75d01268d6162301e1dc639dcb8e7",
+            "frozen_files": 4909,
+            "symlinks": 3,
+            "owner_sha256": "64455302b0095397c6d01cbf43cc3d6b38ba115b21a96c989cf200bfd21d3125",
+            "raw_files": 509,
+            "cases": 323,
+            "manifest_sha256": "d0dd43dac221a0f78f10aa80d49c4041fc98469f196fb64db53abcdb87e763b3",
+            "licenses": {
+              "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+              "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+            },
+            "free_bytes": 62201737216
+          },
+          "source_unchanged": true,
+          "tests": [
+            {
+              "name": "engine::run::panic_tests::rustc_original_argument_panic_keeps_println_callee_body_cold",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::panic_tests::rustc_original_argument_panic_retires_selected_metadata_after_root_cleanup",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::panic_tests::rustc_original_callee_condition_panic_unwinds_caller_without_entering_cold_inner_panics",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::panic_tests::rustc_original_default_panic_preserves_message_and_cleans_root",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::panic_tests::rustc_original_explicit_panic_program_publishes_only_after_cleanup",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::panic_tests::rustc_original_failed_assertion_preserves_assertion_kind_and_cleans_root",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::panic_tests::rustc_original_first_panic_keeps_second_panic_recipe_cold",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::panic_tests::rustc_original_loop_body_panic_cleans_enclosing_scopes_before_publication",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::panic_tests::rustc_original_second_argument_panic_keeps_later_box_hint_and_callee_cold",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::panic_tests::rustc_panic_frontier_cancellation_stops_without_expected_panic_publication",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::panic_tests::rustc_panic_frontier_retains_first_panic_through_bounded_aggregate_cleanup",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::panic_tests::rustc_panic_frontier_second_panic_admission_refuses_before_more_cleanup",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::panic_tests::rustc_panic_metadata_admission_counts_pending_source_calls_before_cleanup",
+              "result": "ok"
+            },
+            {
+              "name": "engine::run::panic_tests::unchanged_crlf_string_tokens_panic_through_real_runtime_macros_all_editions",
+              "result": "ok"
+            }
+          ],
+          "bodies": 14,
+          "passed": 14,
+          "failed": 0,
+          "stdout_sha256": "6fa91d834681b2cd5095dee7d51204728b37274fbe74c1122cfac6e6afef79b5",
+          "stderr_sha256": "5374d21bb12443df46515f0f295390c669ab96c2ee2cad64635e5ba608c5cd15",
+          "architectural_hold": "E-R5-005 remains; body-entry component only, no CLI/common-engine/architecture acceptance"
+        }
+      }
+    },
+    "v2_tests_executed": 4,
+    "source_unchanged_since_freeze": true,
+    "agent": "/root/edition_macro_logic",
+    "target": "artifacts/macos-first/root-constant-next-validation-v1/validation-target",
+    "v1_release": {
+      "path": "artifacts/macos-first/sol-common-retained-body-entry-validation-v1/RELEASE.json",
+      "sha256": "d05f34d59a1ea47d2a97cff12ca1d74ac695ec30c90ef2a91c0b82997aee2fda",
+      "source_member": "f9d2f397557e1eb99850a4219376b50c63a75d01268d6162301e1dc639dcb8e7",
+      "stages": {
+        "service-new": {
+          "actual_tool_terminal": "09e146/0",
+          "child_terminal_sha256": "08c0e1ed653fbf061a75f59baa18366aaca232ca3c9d28715960f7cd6eee9684",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "service::retained_body_tests",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "elapsed_seconds": 23.27537891699467,
+          "bodies": 4
+        },
+        "engine-new": {
+          "actual_tool_terminal": "3437b8/0",
+          "child_terminal_sha256": "52b7f9b8cbcce197d1d08010280fd0537f9400825a614b4e9c0799331c3bf688",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "engine::run::body_lease_tests",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "elapsed_seconds": 0.12026808300288394,
+          "bodies": 2
+        },
+        "return-regression": {
+          "actual_tool_terminal": "f81f2f/0 serial sequence",
+          "child_terminal_sha256": "0c9932cba422b40c73f7b50e63c6f1e6800becb5a26454de5fc0fd034fc11d5c",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "engine::run::return_tests",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "elapsed_seconds": 0.2827218749735039,
+          "bodies": 14
+        },
+        "panic-regression": {
+          "actual_tool_terminal": "f81f2f/0 serial sequence",
+          "child_terminal_sha256": "629b030419c79f039f09cc078621485536abf36f6704b0aa4fd577890d78e957",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "engine::run::panic_tests",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "elapsed_seconds": 0.3767777500033844,
+          "bodies": 14
+        },
+        "lrr-library": {
+          "actual_tool_terminal": "f81f2f/0 serial sequence",
+          "child_terminal_sha256": "ff7ab9384ee6d06e3cb47866e0486bec3b23321663964714375a1c9753b21157",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "--offline",
+            "--locked",
+            "-p",
+            "lrr",
+            "--lib",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "elapsed_seconds": 197.55279424999026,
+          "bodies": 1129
+        },
+        "strict-workspace": {
+          "actual_tool_terminal": "f81f2f/0 serial sequence",
+          "child_terminal_sha256": "78a291b1cd66c075f3c84e9fac8d4703ca0836d1a133df12aa21588736b1a2d0",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "clippy",
+            "--offline",
+            "--locked",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings"
+          ],
+          "exit_code": 0,
+          "elapsed_seconds": 25.077348667022306,
+          "bodies": 0
+        }
+      },
+      "distinct_passed_bodies": 1129,
+      "passed_body_executions": 1163,
+      "repeated_selected_bodies_inside_library": 34,
+      "failed_bodies": 0,
+      "source_guard": {
+        "source_member": "f9d2f397557e1eb99850a4219376b50c63a75d01268d6162301e1dc639dcb8e7",
+        "frozen_files": 4909,
+        "symlinks": 3,
+        "owner_sha256": "64455302b0095397c6d01cbf43cc3d6b38ba115b21a96c989cf200bfd21d3125",
+        "raw_files": 509,
+        "cases": 323,
+        "manifest_sha256": "d0dd43dac221a0f78f10aa80d49c4041fc98469f196fb64db53abcdb87e763b3",
+        "licenses": {
+          "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+          "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+        },
+        "free_bytes": 62190088192
+      },
+      "released": true
+    },
+    "v2_release": {
+      "path": "artifacts/macos-first/sol-common-retained-body-entry-validation-v2/RELEASE.json",
+      "sha256": "c88c5dc452b418472c20288f16fd0a7b795b99555df09c6543e0b26291fa4956",
+      "actual": {
+        "at": "2026-10-15T21:35:01.294287+00:00",
+        "source_member": "6ea1cf7f4b49ded71dc41bc902ded322608df00e356c8045896c50dec717a511",
+        "source_diff_from_v1": [
+          "crates/lrr/src/db/retained_body_inputs.rs",
+          "crates/lrr/src/service/retained_body_tests.rs"
+        ],
+        "stages": {
+          "service-new": {
+            "actual_tool_terminal": "f21ad1/0",
+            "child_terminal_sha256": "5706af36e466f0c36f85ad10af2219f4a4ca52416779ce925eac87b5d8329837",
+            "argv": [
+              "cargo",
+              "+1.99.0",
+              "test",
+              "--offline",
+              "--locked",
+              "-p",
+              "lrr",
+              "--lib",
+              "service::retained_body_tests",
+              "--",
+              "--test-threads=1"
+            ],
+            "exit_code": 0,
+            "elapsed_seconds": 21.21266329201171,
+            "bodies": 4
+          },
+          "strict-workspace": {
+            "actual_tool_terminal": "fce59d/0",
+            "child_terminal_sha256": "cb3f607aaf4b573a4ca1b363aecf7ba2371897dd60683a6c50fd7a16525afcf2",
+            "argv": [
+              "cargo",
+              "+1.99.0",
+              "clippy",
+              "--offline",
+              "--locked",
+              "--workspace",
+              "--all-targets",
+              "--",
+              "-D",
+              "warnings"
+            ],
+            "exit_code": 0,
+            "elapsed_seconds": 24.899837708013365,
+            "bodies": 0
+          }
+        },
+        "distinct_passed_bodies": 4,
+        "failed_bodies": 0,
+        "actual_passed_names": [
+          "service::retained_body_tests::body_publication_requires_the_actual_typed_source_and_original_anchor",
+          "service::retained_body_tests::unchanged_stock_body_publishes_atomically_only_before_frame_entry_in_every_edition",
+          "service::retained_body_tests::unowned_body_can_advance_epoch_but_an_old_frame_cannot_execute_or_be_retargeted",
+          "service::retained_body_tests::user_macro_nonliteral_output_executes_ordinary_numeric_lowering_in_every_edition"
+        ],
+        "strict": "workspace all-targets -D warnings passed",
+        "prior_v1_evidence": "1129 distinct library passes,34 earlier repeated selected executions, strict; preserved separately, not fresh V2 coverage",
+        "milestone": "not launched; explicitly held",
+        "source_guard": {
+          "source_member": "6ea1cf7f4b49ded71dc41bc902ded322608df00e356c8045896c50dec717a511",
+          "frozen_files": 4909,
+          "symlinks": 3,
+          "owner_sha256": "3cc84810cd5395b716d2f05d839d59c0165e437ac902e89c8d671ec07e904298",
+          "raw_files": 509,
+          "cases": 323,
+          "manifest_sha256": "d0dd43dac221a0f78f10aa80d49c4041fc98469f196fb64db53abcdb87e763b3",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 62066110464
+        },
+        "target_inactive": true,
+        "released": true,
+        "no_source_fixes_retries_copies_clean": true,
+        "architectural_hold": "E-R5-005 and all eight shortcut blockers remain; no CLI/common-engine/full-fixture/task acceptance"
+      }
+    },
+    "target_released": true
+  },
+  "acceptance_limits": [
+    "Old eight macro-specific shortcuts remain; no common CLI macro engine acceptance",
+    "Nonliteral arithmetic is an actual original source function executed through ordinary thunks in all four editions, a component witness only",
+    "Generated scopes/member catalogs, hygienic ordinary names/patterns, diagnostics and lazy selected-body-only macro preparation remain pending",
+    "No new upstream runtime/fullfixture passes, no completed T/H/M card, no JIT authorization",
+    "Prior source-assembly milestone still fails; no full milestone on this candidate"
+  ]
+}

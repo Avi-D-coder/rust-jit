@@ -240,6 +240,7 @@
   "existing_execution_receipts_preserved": true,
   "existing_stock_counts_are_not_common_engine_acceptance": true,
   "pending_cumulative_promotion": "held_even_if_V123_tests_pass",
-  "production_repair_status": "in_progress_retained_syntax_attachment_and_ordinary_parser_components_committed_typed_current_source_admission_candidate_unvalidated_no_vm_integration_or_shortcut_removal",
-  "guest_jit_allowed": false
+  "production_repair_status": "in_progress_retained_syntax_source_admission_original_anchors_and_frame_source_ownership_components; actual_nonliteral_user_macro_body_executes_ordinary_lowering_in_all_four_editions; common_CLI_hygienic_name_pattern_integration_and_all_eight_shortcut_removals_still_pending",
+  "guest_jit_allowed": false,
+  "repair_evidence": "worktracks/evidence/2026-10-15-common-retained-body-entry.json"
 }
