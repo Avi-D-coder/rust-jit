@@ -162,6 +162,121 @@ const FORWARDED: &str =
     include_str!("../../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-stmt-2.rs");
 
 #[test]
+fn original_declaration_anchor_survives_a_copied_header_before_it() {
+    let (provider, index) = provider(
+        "macro_rules! emit{($item:item)=>{$item};}emit!(fn original(){});fn original(){}",
+        2024,
+    );
+    let original = provider
+        .module_source()
+        .outline()
+        .items
+        .iter()
+        .find(|item| item.def_key.declared_name == "original")
+        .unwrap();
+    let request = request(&provider, &index);
+    let generated = output(&provider, index.scan(), &request, 1);
+    let prepared = SourceSyntaxAssembly::new(&provider, &index, 1)
+        .unwrap()
+        .attach(&request, generated)
+        .unwrap()
+        .finish()
+        .unwrap();
+    let anchor = prepared
+        .original_declarations()
+        .iter()
+        .find(|anchor| anchor.original_definition() == original.def_key.fingerprint())
+        .unwrap();
+    let parsed =
+        ParsedFile::from_syntax_snapshot(prepared.syntax().clone(), provider.profile().clone())
+            .unwrap();
+    let outline = parsed
+        .outline(
+            original.def_key.crate_key,
+            vec![],
+            provider.module_source().captured_macro_cfg().unwrap(),
+        )
+        .unwrap();
+    let copies = outline
+        .items
+        .iter()
+        .filter(|item| item.def_key.declared_name == "original")
+        .collect::<Vec<_>>();
+    assert_eq!(copies.len(), 2);
+    let actual = copies
+        .iter()
+        .find(|item| item.declaration_span == anchor.declaration_range())
+        .unwrap();
+    assert_eq!(actual.def_key.duplicate_ordinal, 1);
+    assert_ne!(actual.def_key.fingerprint(), anchor.original_definition());
+    assert_ne!(copies[0].declaration_span, anchor.declaration_range());
+    assert_eq!(anchor.original_range(), original.declaration_span);
+}
+
+#[test]
+fn original_initializer_anchor_tracks_a_completely_replaced_expression() {
+    let (provider, index) = provider(
+        "macro_rules! value{()=>{1_i32+2_i32};}const X:i32=value!();fn main(){}",
+        2024,
+    );
+    let original = provider
+        .module_source()
+        .outline()
+        .items
+        .iter()
+        .find(|item| item.def_key.declared_name == "X")
+        .unwrap();
+    let request = request(&provider, &index);
+    let generated = output(&provider, index.scan(), &request, 1);
+    let prepared = SourceSyntaxAssembly::new(&provider, &index, 1)
+        .unwrap()
+        .attach(&request, generated)
+        .unwrap()
+        .finish()
+        .unwrap();
+    let anchor = prepared
+        .original_declarations()
+        .iter()
+        .find(|anchor| anchor.original_definition() == original.def_key.fingerprint())
+        .unwrap();
+    let parsed =
+        ParsedFile::from_syntax_snapshot(prepared.syntax().clone(), provider.profile().clone())
+            .unwrap();
+    let outline = parsed
+        .outline(
+            original.def_key.crate_key,
+            vec![],
+            provider.module_source().captured_macro_cfg().unwrap(),
+        )
+        .unwrap();
+    let actual = outline
+        .items
+        .iter()
+        .find(|item| item.def_key.declared_name == "X")
+        .unwrap();
+    assert_eq!(
+        anchor.body_range(),
+        actual.body.as_ref().map(|body| body.range)
+    );
+    let index = parsed
+        .index_body(actual.body.as_ref().unwrap(), BodyIndexLimits::default())
+        .unwrap();
+    assert_eq!(
+        index
+            .nodes()
+            .iter()
+            .filter(|node| matches!(
+                node.role,
+                crate::syntax::body_index::NodeRole::Expression(
+                    crate::syntax::body_index::ExpressionKind::Literal
+                )
+            ))
+            .count(),
+        2
+    );
+}
+
+#[test]
 fn upstream_nested_statement_and_expression_requests_attach_to_ordinary_bodies() {
     for edition in [2015, 2018, 2021, 2024] {
         for (stock, remaining) in [(NESTED, 0), (EXPRESSION, 1)] {
@@ -196,6 +311,14 @@ fn upstream_nested_statement_and_expression_requests_attach_to_ordinary_bodies()
             assert_eq!(prepared.epoch(), 1);
             assert_eq!(prepared.outputs().len(), 2);
             assert_eq!(prepared.pending_calls().len(), remaining);
+            for original in &provider.module_source().outline().items {
+                let anchor = prepared
+                    .original_declarations()
+                    .iter()
+                    .find(|anchor| anchor.original_definition() == original.def_key.fingerprint())
+                    .expect("original declaration anchor");
+                assert_eq!(anchor.original_range(), original.declaration_span);
+            }
             let parsed = ParsedFile::from_syntax_snapshot(
                 prepared.syntax().clone(),
                 provider.profile().clone(),

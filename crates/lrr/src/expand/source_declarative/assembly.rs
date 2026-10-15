@@ -26,6 +26,10 @@ use std::{
     sync::Arc,
 };
 
+#[path = "assembly_anchors.rs"]
+mod anchors;
+pub use anchors::OriginalDeclarationAnchor;
+
 const MAX_CALLS: usize = 100_000;
 const MAX_METADATA: usize = 128 * 1024 * 1024;
 fn fault(message: &str) -> Diagnostic {
@@ -65,6 +69,7 @@ pub struct SourceSyntaxAssembly {
     tree: SyntaxAttachment,
     calls: Vec<CallBinding>,
     outputs: Vec<Arc<GeneratedDeclarations>>,
+    originals: Vec<OriginalDeclarationAnchor>,
     retained_bytes: usize,
 }
 /// A checked immutable preparation result. Even an empty pending-call set is
@@ -74,6 +79,7 @@ pub struct PreparedSourceSyntax {
     epoch: u64,
     syntax: Arc<SyntaxSnapshot>,
     outputs: Vec<Arc<GeneratedDeclarations>>,
+    originals: Vec<OriginalDeclarationAnchor>,
     pending: Vec<Digest>,
     identity: Digest,
 }
@@ -95,6 +101,11 @@ impl PreparedSourceSyntax {
     }
     pub fn outputs(&self) -> &[Arc<GeneratedDeclarations>] {
         &self.outputs
+    }
+    /// Original declaration occurrences tracked through exact tree edits. These
+    /// identify source anchors, not a published generated-member namespace.
+    pub fn original_declarations(&self) -> &[OriginalDeclarationAnchor] {
+        &self.originals
     }
     pub(crate) fn metadata_excluding_snapshot(&self) -> Result<usize, Diagnostic> {
         let mut bytes = charge(
@@ -118,6 +129,7 @@ impl PreparedSourceSyntax {
         for output in &self.outputs {
             bytes = charge(bytes, output.metadata_bytes()?)?;
         }
+        bytes = charge(bytes, anchors::metadata(&self.originals)?)?;
         Ok(bytes)
     }
 }
@@ -184,7 +196,11 @@ impl SourceSyntaxAssembly {
         if seen.len() != producers.len() {
             return Err(fault("source syntax invocation capture incomplete"));
         }
-        let retained_bytes = charge(scan.retained_bytes(), source.prepared_metadata_bytes()?)?;
+        let originals = anchors::capture(source, &tree)?;
+        let retained_bytes = charge(
+            charge(scan.retained_bytes(), source.prepared_metadata_bytes()?)?,
+            anchors::metadata(&originals)?,
+        )?;
         charge_calls(retained_bytes, calls.len())?;
         Ok(Self {
             source: source.share(),
@@ -192,6 +208,7 @@ impl SourceSyntaxAssembly {
             tree,
             calls,
             outputs: vec![],
+            originals,
             retained_bytes,
         })
     }
@@ -266,37 +283,38 @@ impl SourceSyntaxAssembly {
         self.outputs
             .try_reserve(1)
             .map_err(|_| fault("source syntax output retention allocation"))?;
-        match key.grammar {
+        let edit = match key.grammar {
             GrammarSlot::Expression => {
                 self.tree
-                    .attach(call.start, call.end, &tokens, FragmentSlot::Expression)
+                    .attach_with_edit(call.start, call.end, &tokens, FragmentSlot::Expression)
             }
             GrammarSlot::Pattern => {
                 self.tree
-                    .attach(call.start, call.end, &tokens, FragmentSlot::Pattern)
+                    .attach_with_edit(call.start, call.end, &tokens, FragmentSlot::Pattern)
             }
             GrammarSlot::Type => {
                 self.tree
-                    .attach(call.start, call.end, &tokens, FragmentSlot::Type)
+                    .attach_with_edit(call.start, call.end, &tokens, FragmentSlot::Type)
             }
             GrammarSlot::Statements => {
                 self.tree
-                    .attach_list(call.start, call.end, &tokens, ListSlot::Statements)
+                    .attach_list_with_edit(call.start, call.end, &tokens, ListSlot::Statements)
             }
             GrammarSlot::Items => {
                 self.tree
-                    .attach_list(call.start, call.end, &tokens, ListSlot::Items)
+                    .attach_list_with_edit(call.start, call.end, &tokens, ListSlot::Items)
             }
             GrammarSlot::TraitItems => {
                 self.tree
-                    .attach_list(call.start, call.end, &tokens, ListSlot::TraitItems)
+                    .attach_list_with_edit(call.start, call.end, &tokens, ListSlot::TraitItems)
             }
             GrammarSlot::ImplItems => {
                 self.tree
-                    .attach_list(call.start, call.end, &tokens, ListSlot::ImplItems)
+                    .attach_list_with_edit(call.start, call.end, &tokens, ListSlot::ImplItems)
             }
         }
         .map_err(adapter)?;
+        self.originals = anchors::translate(self.originals, edit)?;
         let mut prior = self.calls.into_iter();
         calls.extend(prior.by_ref().take(position));
         prior
@@ -318,9 +336,10 @@ impl SourceSyntaxAssembly {
             .map_err(|_| fault("source syntax pending allocation"))?;
         pending.extend(self.calls.iter().filter_map(|c| c.invocation));
         let syntax = Arc::new(self.tree.snapshot().map_err(adapter)?);
+        anchors::validate(&self.source, syntax.clone(), &self.originals)?;
         self.outputs
             .sort_by_key(|output| output.record().key().fingerprint());
-        let mut identity = StableEncoder::new("lrr/v1/prepared-source-syntax");
+        let mut identity = StableEncoder::new("lrr/v2/prepared-source-syntax/original-anchors");
         identity.string(self.source.selection().path.as_str());
         identity.record(&self.source.selection().outline);
         identity.u64(self.epoch);
@@ -333,11 +352,16 @@ impl SourceSyntaxAssembly {
         for invocation in &pending {
             identity.digest(*invocation);
         }
+        identity.u64(self.originals.len() as u64);
+        for anchor in &self.originals {
+            anchor.encode(&mut identity);
+        }
         Ok(PreparedSourceSyntax {
             source: self.source,
             epoch: self.epoch,
             syntax,
             outputs: self.outputs,
+            originals: self.originals,
             pending,
             identity: identity.finish(),
         })

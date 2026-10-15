@@ -12,6 +12,8 @@ mod lists;
 pub use lists::ListSlot;
 mod snapshot;
 pub use snapshot::SyntaxSnapshot;
+mod edit;
+pub use edit::SyntaxEdit;
 
 const MAX_TEXT: u32 = 32 * 1024 * 1024;
 const MAX_NODES: usize = 2_000_000;
@@ -212,6 +214,18 @@ impl SyntaxAttachment {
         output: &TokenForest,
         slot: FragmentSlot,
     ) -> Result<(), AdapterError> {
+        self.attach_with_edit(start, end, output, slot).map(|_| ())
+    }
+
+    /// Attach syntax and retain the exact edit used to translate original
+    /// declaration anchors. The receipt is produced only after successful commit.
+    pub fn attach_with_edit(
+        &mut self,
+        start: u32,
+        end: u32,
+        output: &TokenForest,
+        slot: FragmentSlot,
+    ) -> Result<SyntaxEdit, AdapterError> {
         let call = self.select_call(start, end)?;
         let range = call.text_range();
         let target = call
@@ -267,11 +281,12 @@ impl SyntaxAttachment {
         range: TextRange,
         prepared: PreparedFragment,
         rebuild: impl FnOnce(&SyntaxNode) -> Result<SyntaxNode, AdapterError>,
-    ) -> Result<(), AdapterError> {
+    ) -> Result<SyntaxEdit, AdapterError> {
         check_tree(&prepared.root)?;
         let replacement_len = u32::from(prepared.root.text_range().len());
         check_origins(&prepared.origins, replacement_len)?;
-        let final_len = u32::from(self.root.text_range().len())
+        let old_len = u32::from(self.root.text_range().len());
+        let final_len = old_len
             .checked_sub(u32::from(range.len()))
             .and_then(|length| length.checked_add(replacement_len))
             .filter(|length| *length <= MAX_TEXT)
@@ -290,11 +305,12 @@ impl SyntaxAttachment {
                 "attached syntax length differs from the origin splice",
             ));
         }
+        let edit = SyntaxEdit::new(range, replacement_len, old_len, final_len)?;
         self.root = root;
         self.origins = origins;
         self.store = prepared.store;
         self.retained_input_bytes = prepared.retained_input_bytes;
-        Ok(())
+        Ok(edit)
     }
 
     /// Content identity only, never expansion or source authority. Include

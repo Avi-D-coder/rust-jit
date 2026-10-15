@@ -124,6 +124,17 @@ impl SyntaxAttachment {
         output: &TokenForest,
         slot: ListSlot,
     ) -> Result<(), AdapterError> {
+        self.attach_list_with_edit(start, end, output, slot)
+            .map(|_| ())
+    }
+
+    pub fn attach_list_with_edit(
+        &mut self,
+        start: u32,
+        end: u32,
+        output: &TokenForest,
+        slot: ListSlot,
+    ) -> Result<SyntaxEdit, AdapterError> {
         let call = self.select_call(start, end)?;
         let target = self.select_list(call, slot)?;
         let mut prepared = self.prepare(output, slot.grammar())?;

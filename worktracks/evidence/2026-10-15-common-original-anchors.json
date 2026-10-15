@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T21:06:03.147900+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "M014",
+    "T024",
+    "T063"
+  ],
+  "erratum": "E-R5-005",
+  "source_baseline": "65edc14a5cf38bb571d3dff2539830b56fc3b6f8",
+  "scope": "M014/T024/T063 exact pinned splice receipts and original selected declaration anchors across expression/list attachment. Actual initial unexpanded tree pairs exact source DefKeys and headers, then locations follow edits; generated copied headers cannot alias originals through changed duplicate ordinals. Special initializer anchor treatment tracks semantic body extent after whole-expression replacement, not execution semantics.3 new adapter controls +2new assembly controls and strengthened unchanged stock original checks. Baseline65ed includes pending retained admission and origin components; combined source must validate those controls plus strictboth before any acceptance. No derived definition/body/namespace or VM publication.",
+  "source_packet_sha256": "c6a1e1117ea6a37d8cbf9b4fcbfae232912bd91a8486e348646e7bea4d78f8d5",
+  "source_files": [
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment.rs",
+      "sha256": "125bce096ace0912c76247032ac88dba987138e8b84eb918931305f1afda3788"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment/lists.rs",
+      "sha256": "13beb55d6dc0f76e9a9d4025fa99f3852a68336080a1f2c48ddad472801b6343"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment/edit.rs",
+      "sha256": "d97f817c4f9d68281f858dd44987664d74a78b23c37f02bc4d542f9e96a44635"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/tests/syntax_attachment_edits.rs",
+      "sha256": "acc772b2cf8e9cd52c11ed834a91185bad7acb2b359c31b0f5c28c0ded1080d6"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "c6f5c2b050329e493f5ddd45e208e918e48203841f741215ca4b1df1e7641450"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly_anchors.rs",
+      "sha256": "3ef89ec3c0e667164f1193be5b1db03fdd5514ac11861e27770d56aef6411a5d"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly_tests.rs",
+      "sha256": "0d8d52e6f04118ca39255572e2cdb9ddd52bdc329462dfcd5702aab40a87b471"
+    }
+  ],
+  "implemented_candidate": [
+    "Pinned single-node/list attachment returns an immutable successful edit receipt, including caller-semicolon removal/insertion and empty list output",
+    "Checked original node range translation distinguishes surviving containing nodes, shifted following nodes, consumed nodes and invalid crossing anchors",
+    "SourceSyntaxAssembly pairs actual original selected DefKeys/headers only before expansion, then translates original declaration/header/body anchors through actual edits",
+    "Finish validates anchored actual declaration/header/body ranges and source item kind/name; it never uses post-expansion duplicate ordinals to reidentify originals",
+    "Original initializer body extent follows actual whole-expression replacement; canonical prepared-source identity v2 explicitly encodes anchor facts and bounded retained metadata",
+    "Three adapter controls and two new assembly controls cover exact receipt geometry, refusal atomicity, copied function headers and complete initializer replacement; existing all-edition unchanged nested statement controls now check retained original anchors"
+  ],
+  "validation": {
+    "state": "queued_combined_after_current_assembly_v3_gate_and_admission_diagnostics",
+    "agent": "/root/edition_macro_logic",
+    "target": "artifacts/macos-first/root-constant-next-validation-v1/validation-target",
+    "source_packet": "artifacts/macos-first/common-original-anchors-v1/SOURCE.json",
+    "rust_tests_executed_for_this_candidate": 0,
+    "root_rustfmt_exit": 0,
+    "planning_check": "12 tracks,60 items,35 claims; no runtime acceptance",
+    "source_unchanged_since_freeze": true
+  },
+  "required_next": [
+    "Collect actual frozen source scoped/strict results for anchors, admission and origin components; preserve all failed attempts",
+    "Admit derived definition/body and source leases with actual current source/seal checks and unchanged original member identity",
+    "Protect active/suspended frame identities while preparing unentered bodies; ordinary entry/lowering must not silently switch an existing frame",
+    "Reconcile generated member/scope identities and use the shared pattern/expression/control engine",
+    "Delete all eight audited shortcuts via actual common VM integration and complete upstream runtime acceptance"
+  ],
+  "acceptance": {
+    "candidate_compiles": false,
+    "candidate_tests_pass": false,
+    "derived_member_publication": false,
+    "source_body_lease_publication": false,
+    "ordinary_vm_route": false,
+    "eight_shortcuts_removed": false,
+    "new_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "task_complete": false,
+    "guest_jit_prerequisite": false
+  }
+}
