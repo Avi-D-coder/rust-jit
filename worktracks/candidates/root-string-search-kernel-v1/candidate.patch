@@ -1,0 +1,353 @@
+--- a/crates/lrr/src/runtime/cell_byte_comparison.rs
++++ b/crates/lrr/src/runtime/cell_byte_comparison.rs
+@@ -245,3 +245,7 @@
+ #[path = "cell_string_ordering.rs"]
+ mod string_ordering;
+ pub(crate) use string_ordering::{StaticStringOrdering, StaticStringOrderingPoll};
++
++#[path = "cell_string_search.rs"]
++mod string_search;
++pub(crate) use string_search::{StaticStringSearch, StaticStringSearchPoll};
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_string_search.rs
+@@ -0,0 +1,133 @@
++//! Bounded substring search over two genuine immutable UTF-8 roots.
++//! This physical cursor grants no source Pattern/member authority. It cannot be
++//! cached as a recipe, cloned for replay or resumed after any terminal outcome.
++use super::*;
++
++pub(crate) struct StaticStringSearch {
++    captured: StaticByteComparison,
++    candidate: u32,
++    matched: u32,
++}
++#[derive(Debug, Eq, PartialEq)]
++pub(crate) enum StaticStringSearchPoll {
++    Dispatch { pairs: u32 },
++    Complete { contains: bool, pairs: u32 },
++}
++impl StaticStringSearch {
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        std::mem::size_of::<Self>()
++    }
++    pub(crate) fn require_operands(
++        &self,
++        haystack: CellId,
++        needle: CellId,
++    ) -> Result<(), Diagnostic> {
++        self.captured.require_operands(haystack, needle)
++    }
++}
++impl GuestStore {
++    pub(crate) fn prepare_static_string_search(
++        &self,
++        haystack: CellId,
++        needle: CellId,
++    ) -> Result<StaticStringSearch, Diagnostic> {
++        self.require_static_string_value(haystack)?;
++        self.require_static_string_value(needle)?;
++        Ok(StaticStringSearch {
++            captured: self.prepare_static_byte_comparison(haystack, needle)?,
++            candidate: 0,
++            matched: 0,
++        })
++    }
++    pub(crate) fn admit_static_string_search(
++        &self,
++        cursor: &StaticStringSearch,
++        haystack: CellId,
++        needle: CellId,
++    ) -> Result<(), Diagnostic> {
++        if cursor.candidate != 0 || cursor.matched != 0 {
++            return Err(lease_fault());
++        }
++        self.require_static_string_value(haystack)?;
++        self.require_static_string_value(needle)?;
++        self.admit_static_byte_comparison(&cursor.captured, haystack, needle)
++    }
++    pub(crate) fn advance_static_string_search(
++        &self,
++        cursor: &mut StaticStringSearch,
++        fuel: &mut RunFuel,
++    ) -> Result<StaticStringSearchPoll, Diagnostic> {
++        if cursor.captured.terminal {
++            return Err(lease_fault());
++        }
++        let outcome = self.static_string_search_chunk(cursor, fuel);
++        if !matches!(outcome, Ok(StaticStringSearchPoll::Dispatch { .. })) {
++            cursor.captured.terminal = true;
++        }
++        outcome
++    }
++    fn static_string_search_chunk(
++        &self,
++        cursor: &mut StaticStringSearch,
++        fuel: &mut RunFuel,
++    ) -> Result<StaticStringSearchPoll, Diagnostic> {
++        self.validate_static_byte_comparison(&cursor.captured)?;
++        let haystack = cursor.captured.left;
++        let needle = cursor.captured.right;
++        self.require_static_string_value(haystack.operand.cell)?;
++        self.require_static_string_value(needle.operand.cell)?;
++        fuel.poll()?;
++        if cursor.matched > needle.len || cursor.candidate > haystack.len {
++            return Err(lease_fault());
++        }
++        // An empty UTF-8 pattern occurs at the initial boundary. Polling still
++        // precedes this result, and the VM must charge its own opcode once.
++        if needle.len == 0 {
++            return Ok(StaticStringSearchPoll::Complete {
++                contains: true,
++                pairs: 0,
++            });
++        }
++        let Some(last) = haystack.len.checked_sub(needle.len) else {
++            return Ok(StaticStringSearchPoll::Complete {
++                contains: false,
++                pairs: 0,
++            });
++        };
++        let mut pairs = 0u32;
++        while pairs < PAIRS_PER_DISPATCH && cursor.candidate <= last {
++            fuel.charge()?;
++            let offset = cursor
++                .candidate
++                .checked_add(cursor.matched)
++                .ok_or_else(resource)?;
++            let left = self.comparison_byte(haystack, offset)?;
++            let right = self.comparison_byte(needle, cursor.matched)?;
++            pairs += 1;
++            if left == right {
++                cursor.matched = cursor.matched.checked_add(1).ok_or_else(resource)?;
++                if cursor.matched == needle.len {
++                    return Ok(StaticStringSearchPoll::Complete {
++                        contains: true,
++                        pairs,
++                    });
++                }
++            } else {
++                cursor.candidate = cursor.candidate.checked_add(1).ok_or_else(resource)?;
++                cursor.matched = 0;
++            }
++        }
++        if cursor.candidate > last {
++            Ok(StaticStringSearchPoll::Complete {
++                contains: false,
++                pairs,
++            })
++        } else {
++            Ok(StaticStringSearchPoll::Dispatch { pairs })
++        }
++    }
++}
++
++#[cfg(test)]
++#[path = "cell_string_search_tests.rs"]
++mod tests;
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_string_search_tests.rs
+@@ -0,0 +1,204 @@
++//! Physical search witnesses from unchanged upstream source, plus LRR lifecycle
++//! controls. These do not execute or pass the upstream main or source member.
++use super::super::tests::{operand, store};
++use super::*;
++use crate::runtime::shape::ByteLiteralTarget;
++const CRLF: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs"
++);
++
++fn original_needle(edition: u16) -> String {
++    crate::syntax::string_fixture_facts::all_string_tokens(CRLF, edition)
++        .pop()
++        .expect("original contains argument")
++}
++fn resources(store: &GuestStore) -> (u32, usize, usize) {
++    (
++        store.budget.handles(),
++        store.budget.bytes(),
++        store.types.metadata_bytes(),
++    )
++}
++#[test]
++fn original_crlf_source_search_is_bounded_fuel_accounted_and_read_only_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let found = original_needle(edition);
++        assert_eq!(found, "string\r\nliteral");
++        let absent =
++            crate::syntax::string_fixture_facts::all_string_tokens(CRLF, edition).remove(0);
++        assert_eq!(absent, "string\nliteral");
++        // The cooked LF token is a disclosed negative component adapter: the
++        // unchanged original file has CRLF, not LF immediately after string.
++        for (needle, expected) in [(found, true), (absent, false)] {
++            let mut store = store();
++            let haystack = operand(
++                &mut store,
++                b"original source",
++                CRLF.as_bytes(),
++                ByteLiteralTarget::Str,
++            );
++            let pattern = operand(
++                &mut store,
++                b"original pattern",
++                needle.as_bytes(),
++                ByteLiteralTarget::Str,
++            );
++            let before = resources(&store);
++            let mut cursor = store
++                .prepare_static_string_search(haystack, pattern)
++                .unwrap();
++            assert!(cursor.metadata_bytes() < 1024);
++            cursor.require_operands(haystack, pattern).unwrap();
++            store
++                .admit_static_string_search(&cursor, haystack, pattern)
++                .unwrap();
++            let mut fuel = RunFuel::new(100_000).unwrap();
++            let mut pairs_seen = 0u64;
++            let mut dispatches = 0;
++            loop {
++                let (finished, pairs) = match store
++                    .advance_static_string_search(&mut cursor, &mut fuel)
++                    .unwrap()
++                {
++                    StaticStringSearchPoll::Dispatch { pairs } => {
++                        dispatches += 1;
++                        assert!(
++                            store
++                                .admit_static_string_search(&cursor, haystack, pattern)
++                                .is_err()
++                        );
++                        (false, pairs)
++                    }
++                    StaticStringSearchPoll::Complete { contains, pairs } => {
++                        assert_eq!(
++                            contains, expected,
++                            "actual original source search component"
++                        );
++                        (true, pairs)
++                    }
++                };
++                assert!(pairs <= 256);
++                pairs_seen += u64::from(pairs);
++                assert_eq!(fuel.snapshot().used, pairs_seen);
++                assert_eq!(resources(&store), before);
++                if finished {
++                    break;
++                }
++            }
++            assert!(dispatches > 0 && pairs_seen >= needle.len() as u64);
++            assert!(
++                store
++                    .advance_static_string_search(&mut cursor, &mut fuel)
++                    .is_err()
++            );
++            assert_eq!(resources(&store), before);
++        }
++    }
++}
++#[test]
++fn original_search_refuses_nonstring_roots_cancelled_empty_and_faulted_cursor_replay() {
++    let text = original_needle(2024);
++    let mut store = store();
++    let haystack = operand(
++        &mut store,
++        b"original source",
++        CRLF.as_bytes(),
++        ByteLiteralTarget::Str,
++    );
++    let pattern = operand(
++        &mut store,
++        b"original pattern",
++        text.as_bytes(),
++        ByteLiteralTarget::Str,
++    );
++    let bytes = operand(
++        &mut store,
++        b"byte view is not str",
++        text.as_bytes(),
++        ByteLiteralTarget::Slice,
++    );
++    let empty = operand(
++        &mut store,
++        b"empty cancellation control",
++        b"",
++        ByteLiteralTarget::Str,
++    );
++    let before = resources(&store);
++    assert!(store.prepare_static_string_search(haystack, bytes).is_err());
++    for (needle, cancel) in [(pattern, false), (empty, true)] {
++        let mut cursor = store
++            .prepare_static_string_search(haystack, needle)
++            .unwrap();
++        let mut fuel = RunFuel::new(0).unwrap();
++        if cancel {
++            fuel.cancellation().cancel();
++        }
++        let error = store
++            .advance_static_string_search(&mut cursor, &mut fuel)
++            .unwrap_err();
++        assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
++        assert_eq!(fuel.snapshot().used, 0);
++        let mut fresh = RunFuel::new(100_000).unwrap();
++        assert!(
++            store
++                .advance_static_string_search(&mut cursor, &mut fresh)
++                .is_err()
++        );
++        assert_eq!(fresh.snapshot().used, 0);
++        assert_eq!(resources(&store), before);
++    }
++    let mut empty_cursor = store.prepare_static_string_search(haystack, empty).unwrap();
++    let mut fuel = RunFuel::new(0).unwrap();
++    assert_eq!(
++        store
++            .advance_static_string_search(&mut empty_cursor, &mut fuel)
++            .unwrap(),
++        StaticStringSearchPoll::Complete {
++            contains: true,
++            pairs: 0
++        }
++    );
++    let mut reverse = store
++        .prepare_static_string_search(pattern, haystack)
++        .unwrap();
++    let mut no_pairs = RunFuel::new(0).unwrap();
++    assert_eq!(
++        store
++            .advance_static_string_search(&mut reverse, &mut no_pairs)
++            .unwrap(),
++        StaticStringSearchPoll::Complete {
++            contains: false,
++            pairs: 0
++        }
++    );
++    let mut other = super::super::tests::store();
++    let other_haystack = operand(
++        &mut other,
++        b"original source",
++        CRLF.as_bytes(),
++        ByteLiteralTarget::Str,
++    );
++    let other_pattern = operand(
++        &mut other,
++        b"original pattern",
++        text.as_bytes(),
++        ByteLiteralTarget::Str,
++    );
++    assert_eq!((haystack, pattern), (other_haystack, other_pattern));
++    let mut foreign = store
++        .prepare_static_string_search(haystack, pattern)
++        .unwrap();
++    let mut untouched = RunFuel::new(100_000).unwrap();
++    assert!(
++        other
++            .advance_static_string_search(&mut foreign, &mut untouched)
++            .is_err()
++    );
++    assert_eq!(untouched.snapshot().used, 0);
++    assert!(
++        store
++            .advance_static_string_search(&mut foreign, &mut untouched)
++            .is_err()
++    );
++    assert_eq!(resources(&store), before);
++}

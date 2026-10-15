@@ -1,0 +1,66 @@
+{
+  "status": "source_only_partial_search_foundation_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T024",
+    "T061"
+  ],
+  "created_at": "2026-10-15T15:14:08.448864+00:00",
+  "prerequisites": [
+    "schema17 byte/string milestone and canonical promotion",
+    "source-selected contains member/Pattern argument admission and VM continuation still required"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_comparison.rs",
+      "before_sha256": "349bdaa64a8971e9a57069c523923a0308a3667f58f742122a9407e0e1b3635e",
+      "after_sha256": "ef76d37a9743508e9f7fbee54fb29b8a268d28822dfe0e075a117b42bac94d6a"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_string_search.rs",
+      "before_sha256": null,
+      "after_sha256": "5fe6cc321592c42be7d512a710ce20a9653b8a9b6d61b7452fae43f8e166cbc9"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_string_search_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "b598b793e67e7c0f3b60ccf6c57c2b7e5316560a0b3dd9254162a24fc8153ce0"
+    }
+  ],
+  "patch_sha256": "51c52909b0a71586df104b78c0279acf97e318913ce6b52ec2cc6c130af430d7",
+  "patch_bytes": 12785,
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "upstream_runtime_witness": "tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs",
+  "witness_sha256": "bb03d92b8289726639b7947f900dca05704b3a20ce26ec183a5a233ea6747289",
+  "core_sources": [
+    {
+      "path": "library/core/src/str/mod.rs",
+      "sha256": "37b9707b62fb84c445cf5c6896c9c42c2a5b195b8823913fe2d0ff4422ec8530"
+    },
+    {
+      "path": "library/core/src/str/pattern.rs",
+      "sha256": "65cccbd6d88548c3d08a0c2a35363da2d0b484ad6d6be89c01feca21c8e229d9"
+    }
+  ],
+  "dispatch_pair_bound": 256,
+  "fuel_per_compared_pair": 1,
+  "allocation_during_search": false,
+  "worst_case": "quadratic comparisons, bounded per dispatch and by run fuel; no speedup claim",
+  "new_physical_and_refusal_bodies": 2,
+  "new_originals": 0,
+  "stock_runtime_passes_added": 0,
+  "static_checks": [
+    "Rust1.99 formatting",
+    "exact V97 byte-comparison preimage",
+    "exact no-fuzz/no-offset replay"
+  ],
+  "do_not_integrate_or_validate_as_complete_method": true,
+  "remaining": [
+    "closed canonical contains<&str>/Pattern member source selection",
+    "written one-argument source plan and replay",
+    "stable appended opcode/schema and wire controls",
+    "run-bound VM activation, result/fuel/source refusal and cleanup integration",
+    "actual unchanged entire CRLF main all owning editions",
+    "strict checks and fresh milestone"
+  ]
+}

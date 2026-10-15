@@ -1,0 +1,9 @@
+# Bounded immutable string search foundation
+
+T024/T061 invariant: every inspected pair is fuel charged, every dispatch compares at most256 pairs, and both operands retain genuine immutable UTF-8 membership in the same store/session/epoch. No result allocation, source type, Pattern selection or library authority comes from this physical cursor.
+
+The unchanged CRLF upstream main ends with source.contains("string\r\nliteral"). Its exact included file text and original argument drive one pending physical component body in all four editions. A disclosed negative uses the original cooked LF token against the unchanged CRLF file. A second LRR authority/resource body covers byte-slice rejection, empty cancellation, exhausted fuel, terminal replay, longer patterns and colliding cell IDs from a foreign store. These are unexecuted physical controls, not execution or acceptance of that main.
+
+The non-cloneable cursor reuses private checked byte/root stamps, scans candidate offsets and charges each compared pair. It polls cancellation even for empty/too-long patterns. Any completion or error seals the cursor. Searching valid UTF-8 bytes is equivalent for a valid str needle: a nonempty needle's leading byte cannot start inside a continuation sequence. Empty needles match the initial character boundary. Worst-case comparisons are quadratic; fixed dispatch/fuel bounds are explicit, with no performance claim.
+
+This three-leaf packet is a partial source-only foundation. Source-selected contains<&str>/Pattern authority, one-argument lowering, stable opcode/schema, frame continuation and complete original-main execution remain to be implemented. Do not integrate it alone or hide unused-item warnings with dummy calls/allow attributes. Existing schema17 validation is untouched; no compiler, runtime, task, full-fixture or JIT pass is claimed. Rust1.99 formatting and exact replay passed. The existing upstream originals/licenses remain unchanged.

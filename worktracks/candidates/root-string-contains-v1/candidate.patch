@@ -1,0 +1,1636 @@
+--- a/compat/fixtures.toml
++++ b/compat/fixtures.toml
+@@ -12190,3 +12190,24 @@
+ id = "T061-STR-EMPTY-REFUSAL"
+ path = "crates/lrr/src/engine/run_string_macro_literal_tests.rs"
+ test = "original_empty_method_source_result_and_fuel_refusals_precede_publication"
++
++
++[[fixture]]
++id = "T061-STR-CONTAINS-SOURCE"
++path = "crates/lrr/src/engine/run_string_macro_literal_tests.rs"
++test = "unchanged_crlf_string_entire_main_including_source_contains_completes_all_editions"
++
++[[fixture]]
++id = "T061-STR-CONTAINS-REFUSAL"
++path = "crates/lrr/src/engine/run_string_macro_literal_tests.rs"
++test = "original_contains_argument_result_and_resumed_cancel_refuse_without_publication"
++
++[[fixture]]
++id = "T061-STR-SEARCH-PHYSICAL"
++path = "crates/lrr/src/runtime/cell_string_search_tests.rs"
++test = "original_crlf_source_search_is_bounded_fuel_accounted_and_read_only_all_editions"
++
++[[fixture]]
++id = "T061-STR-SEARCH-LIFECYCLE"
++path = "crates/lrr/src/runtime/cell_string_search_tests.rs"
++test = "original_search_refuses_nonstring_roots_cancelled_empty_and_faulted_cursor_replay"
+--- a/crates/lrr/src/engine/run_capture.rs
++++ b/crates/lrr/src/engine/run_capture.rs
+@@ -79,6 +79,7 @@
+                 Op::StrByteLen { .. }
+                 | Op::StrAsBytes { .. }
+                 | Op::StrIsEmpty { .. }
++                | Op::StrContains { .. }
+                 | Op::SourceConstant { .. }
+                 | Op::PrimitiveFloatingConstant { .. }
+                 | Op::ProjectField { .. }
+@@ -263,6 +264,11 @@
+         // Capture-state control only. No guest execution or fixture acceptance
+         // is inferred from this private observer's synthetic observations.
+         for operation in [
++            Op::StrContains {
++                source: SlotId(0),
++                pattern: SlotId(2),
++                destination: SlotId(1),
++            },
+             Op::StrIsEmpty {
+                 source: SlotId(0),
+                 destination: SlotId(1),
+--- a/crates/lrr/src/engine/run_string_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_string_macro_literal_tests.rs
+@@ -77,6 +77,11 @@
+             .operations
+             .iter()
+             .find_map(|op| match op {
++                Op::StrContains {
++                    source,
++                    destination,
++                    ..
++                } if opcode == 48 => Some((*source, *destination)),
+                 Op::StrByteLen {
+                     source,
+                     destination,
+@@ -718,3 +723,160 @@
+         db.finish_run().unwrap();
+     }
+ }
++
++// Execute every assertion in the exact original main, including self-include
++// preparation. Configured CLI/output/full-fixture acceptance stays separate.
++const COMPLETE_CRLF: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs"
++);
++fn start_complete_crlf(
++    edition: u16,
++    fuel: u64,
++) -> (
++    Database,
++    RunMachine,
++    crate::engine::standalone_macros::CompletedStandaloneRuntimeMacros,
++    crate::source::changes::PreparedSourceInputs,
++) {
++    let directory = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++        .join("../../fixtures/upstream/rustc-checkout/tests/ui/lexer");
++    let name = "lexer-crlf-line-endings-string-literal-doc-comment.rs";
++    assert_eq!(
++        std::fs::read(directory.join(name)).unwrap(),
++        COMPLETE_CRLF.as_bytes()
++    );
++    tests::start_source_named(COMPLETE_CRLF, name, Some(&directory), edition, fuel)
++}
++#[test]
++fn unchanged_crlf_string_entire_main_including_source_contains_completes_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, mut run, macros, _) = start_complete_crlf(edition, 100_000);
++        let contexts = macros.contexts().unwrap();
++        let report = match run.poll_with_runtime_macros(&mut db, &contexts) {
++            RunPoll::Completed(report) => report,
++            RunPoll::Fault(error) => panic!("original CRLF main/{edition}: {error}"),
++            RunPoll::NeedInput(input) => panic!("original CRLF main/{edition}: {input:?}"),
++            RunPoll::Panicked(report) => panic!("original CRLF main/{edition}: {report:?}"),
++        };
++        assert!(matches!(report.value, ValueSummary::Unit));
++        assert_eq!(report.live_edition, edition);
++        assert_eq!(report.opcode_counters.started_by_opcode[26], 5);
++        assert_eq!(report.opcode_counters.started_by_opcode[46], 1);
++        assert_eq!(report.opcode_counters.started_by_opcode[48], 1);
++        assert_eq!(
++            report.opcode_counters.operations_started,
++            report.opcode_counters.operations_completed
++        );
++        assert!(run.calls.is_empty() && run.pending.is_empty());
++        assert!(run.frame.active_scopes().is_empty());
++        db.finish_run().unwrap();
++    }
++}
++#[test]
++fn original_contains_argument_result_and_resumed_cancel_refuse_without_publication() {
++    for mode in 0..4 {
++        let (mut db, mut run, macros, _) = start_complete_crlf(2024, 100_000);
++        let contexts = macros.contexts().unwrap();
++        let (id, _, destination) = reach_string_method(&mut db, &mut run, &contexts, 48);
++        let pattern = run
++            .installed
++            .get(id)
++            .unwrap()
++            .recipe()
++            .operations
++            .iter()
++            .find_map(|op| {
++                if let Op::StrContains { pattern, .. } = op {
++                    Some(*pattern)
++                } else {
++                    None
++                }
++            })
++            .unwrap();
++        if mode == 3 {
++            let used = run.frame.fuel_snapshot().used;
++            db.finish_run().unwrap();
++            let (mut db, mut run, macros, _) = start_complete_crlf(2024, used);
++            let contexts = macros.contexts().unwrap();
++            let (id, _, _) = reach_string_method(&mut db, &mut run, &contexts, 48);
++            let before = effects(&run);
++            let error = step::step(
++                &mut run.frame,
++                &mut run.store,
++                run.installed.get(id).unwrap(),
++            )
++            .unwrap_err();
++            assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
++            assert_eq!(effects(&run), before);
++            assert_eq!(run.frame.counters().started_by_opcode[48], 0);
++            db.finish_run().unwrap();
++            continue;
++        }
++        if mode == 0 {
++            run.frame
++                .set_source_view(
++                    pattern,
++                    Some(TyTerm::Ref(RegionTerm::Static, true, Box::new(TyTerm::Str))),
++                )
++                .unwrap();
++            assert!(
++                run.revalidate_primitive_method(&mut db, &contexts, id)
++                    .is_err()
++            );
++        } else if mode == 1 {
++            run.frame
++                .set_source_view(destination, Some(TyTerm::Primitive(PrimitiveType::Usize)))
++                .unwrap();
++        } else {
++            assert!(matches!(
++                step::step(
++                    &mut run.frame,
++                    &mut run.store,
++                    run.installed.get(id).unwrap()
++                )
++                .unwrap(),
++                StepOutcome::Dispatch
++            ));
++            assert!(run.frame.has_string_search_activation());
++            assert!(matches!(
++                run.store
++                    .state(run.frame.cell(destination).unwrap())
++                    .unwrap(),
++                crate::runtime::cell::CellState::Uninit
++            ));
++            assert_eq!(run.frame.counters().started_by_opcode[48], 1);
++            run.frame.fuel.cancellation().cancel();
++        }
++        let before = effects(&run);
++        let error = step::step(
++            &mut run.frame,
++            &mut run.store,
++            run.installed.get(id).unwrap(),
++        )
++        .unwrap_err();
++        assert_eq!(
++            error.code,
++            match mode {
++                0 => "LRR-E-INTERNAL-IR",
++                1 => "LRR-E-GENERIC-BINDING",
++                _ => "LRR-E-RUNTIME-RESOURCE",
++            }
++        );
++        assert_eq!(effects(&run), before);
++        assert_eq!(
++            run.frame.counters().started_by_opcode[48],
++            u64::from(mode == 2)
++        );
++        let terminal = effects(&run);
++        assert!(
++            step::step(
++                &mut run.frame,
++                &mut run.store,
++                run.installed.get(id).unwrap()
++            )
++            .is_err()
++        );
++        assert_eq!(effects(&run), terminal);
++        db.finish_run().unwrap();
++    }
++}
+--- a/crates/lrr/src/facade/string_methods.rs
++++ b/crates/lrr/src/facade/string_methods.rs
+@@ -16,6 +16,7 @@
+     ByteLen,
+     AsBytes,
+     IsEmpty,
++    Contains,
+ }
+ impl StringMethodKind {
+     fn name(self) -> &'static str {
+@@ -23,6 +24,7 @@
+             Self::ByteLen => "len",
+             Self::AsBytes => "as_bytes",
+             Self::IsEmpty => "is_empty",
++            Self::Contains => "contains",
+         }
+     }
+     fn tag(self) -> u8 {
+@@ -30,6 +32,7 @@
+             Self::ByteLen => 0,
+             Self::AsBytes => 1,
+             Self::IsEmpty => 2,
++            Self::Contains => 3,
+         }
+     }
+ }
+@@ -66,6 +69,7 @@
+     len: StringMethod,
+     as_bytes: StringMethod,
+     is_empty: StringMethod,
++    contains: StringMethod,
+     identity: Digest,
+ }
+ fn member(profile: &Arc<ProfileIdentity>, core: Digest, kind: StringMethodKind) -> StringMethod {
+@@ -75,18 +79,24 @@
+     signature.string("str");
+     signature.string(kind.name());
+     signature.u8(0);
+-    signature.u32(0); // shared receiver; no explicit arguments/generics
++    signature.u32(u32::from(kind == StringMethodKind::Contains)); // exact closed explicit arguments
++    if kind == StringMethodKind::Contains {
++        signature.string("core::str::pattern::Pattern for &str");
++        signature.string("shared str argument; independent source region");
++    }
+     signature.u8(kind.tag());
+     match kind {
+         StringMethodKind::ByteLen => signature.u32(PrimitiveType::Usize.tag()),
+-        StringMethodKind::IsEmpty => signature.u32(PrimitiveType::Bool.tag()),
++        StringMethodKind::IsEmpty | StringMethodKind::Contains => {
++            signature.u32(PrimitiveType::Bool.tag())
++        }
+         StringMethodKind::AsBytes => {
+             signature.bool(false);
+             signature.string("receiver-borrow");
+             signature.string("[u8]");
+         }
+     }
+-    signature.bool(true); // const
++    signature.bool(kind != StringMethodKind::Contains); // contains is not const
+     let signature = signature.finish();
+     let mut body = StableEncoder::new("lrr/v2/str-method-body");
+     body.digest(signature);
+@@ -114,17 +124,20 @@
+         let len = member(&profile, core, StringMethodKind::ByteLen);
+         let as_bytes = member(&profile, core, StringMethodKind::AsBytes);
+         let is_empty = member(&profile, core, StringMethodKind::IsEmpty);
+-        let mut facet = StableEncoder::new("lrr/v3/str-method-facet");
++        let contains = member(&profile, core, StringMethodKind::Contains);
++        let mut facet = StableEncoder::new("lrr/v4/str-method-facet");
+         facet.record(profile.as_ref());
+         facet.digest(core);
+         facet.digest(len.identity);
+         facet.digest(as_bytes.identity);
+         facet.digest(is_empty.identity);
++        facet.digest(contains.identity);
+         Ok(Self {
+             profile,
+             len,
+             as_bytes,
+             is_empty,
++            contains,
+             identity: facet.finish(),
+         })
+     }
+@@ -139,6 +152,7 @@
+             "len" => Some(&self.len),
+             "as_bytes" => Some(&self.as_bytes),
+             "is_empty" => Some(&self.is_empty),
++            "contains" => Some(&self.contains),
+             _ => None,
+         }
+     }
+@@ -158,6 +172,7 @@
+             )
+             .and_then(|n| n.checked_add(self.as_bytes.allocated_bytes()?))
+             .and_then(|n| n.checked_add(self.is_empty.allocated_bytes()?))
++            .and_then(|n| n.checked_add(self.contains.allocated_bytes()?))
+             .ok_or_else(|| fault("str method facet metadata overflow"))
+     }
+ }
+@@ -171,6 +186,7 @@
+             facet.lookup("len").unwrap(),
+             facet.lookup("as_bytes").unwrap(),
+             facet.lookup("is_empty").unwrap(),
++            facet.lookup("contains").unwrap(),
+         ] {
+             for kind in 0..5 {
+                 let mut wrong = actual.clone();
+@@ -187,9 +203,9 @@
+                     _ => {
+                         wrong.kind = match actual.kind {
+                             StringMethodKind::ByteLen => StringMethodKind::AsBytes,
+-                            StringMethodKind::AsBytes | StringMethodKind::IsEmpty => {
+-                                StringMethodKind::ByteLen
+-                            }
++                            StringMethodKind::AsBytes
++                            | StringMethodKind::IsEmpty
++                            | StringMethodKind::Contains => StringMethodKind::ByteLen,
+                         }
+                     }
+                 };
+--- a/crates/lrr/src/frontend/primitive_float_methods.rs
++++ b/crates/lrr/src/frontend/primitive_float_methods.rs
+@@ -117,6 +117,7 @@
+     String {
+         written: RuntimePrimitiveMethod,
+         receiver: TyTerm,
++        argument: Option<TyTerm>,
+         member: crate::facade::string_methods::StringMethod,
+     },
+ }
+@@ -146,6 +147,26 @@
+             .ok_or_else(|| fault("string receiver source absent"))?
+             .clone();
+         store.require_static_string_value(frame.cell(written.receiver())?)?;
++        let argument = if let Some(slot) = written.argument() {
++            if written.kind() != RuntimePrimitiveMethodKind::StrContains
++                || !matches!(frame.source_view_ref(slot)?,
++                    Some(TyTerm::Ref(_, false, target)) if target.as_ref() == &TyTerm::Str)
++            {
++                return Err(fault("str Pattern requires the actual shared str argument"));
++            }
++            store.require_static_string_value(frame.cell(slot)?)?;
++            Some(
++                frame
++                    .source_view_ref(slot)?
++                    .ok_or_else(|| fault("str Pattern source absent"))?
++                    .clone(),
++            )
++        } else {
++            if written.kind() == RuntimePrimitiveMethodKind::StrContains {
++                return Err(fault("str contains Pattern argument is absent"));
++            }
++            None
++        };
+         let (member, expected_kind) = match written.kind() {
+             RuntimePrimitiveMethodKind::StrByteLen => {
+                 let member = catalog
+@@ -155,6 +176,16 @@
+                 (
+                     member,
+                     crate::facade::string_methods::StringMethodKind::ByteLen,
++                )
++            }
++            RuntimePrimitiveMethodKind::StrContains => {
++                let member = catalog
++                    .string_method("contains")
++                    .ok_or_else(|| fault("str::contains compiler member is unavailable"))?;
++                catalog.require_string_method(member)?;
++                (
++                    member,
++                    crate::facade::string_methods::StringMethodKind::Contains,
+                 )
+             }
+             RuntimePrimitiveMethodKind::StrIsEmpty => {
+@@ -188,6 +219,7 @@
+         Ok(Self::String {
+             written,
+             receiver,
++            argument,
+             member: member.clone(),
+         })
+     }
+@@ -202,6 +234,7 @@
+             Self::String {
+                 written: selected,
+                 receiver: _,
++                argument: _,
+                 member,
+             } => {
+                 written.require(&source.selection().outline.parse, key)?;
+@@ -218,6 +251,16 @@
+                         destination: written.destination(),
+                     }),
+                     (
++                        RuntimePrimitiveMethodKind::StrContains,
++                        crate::facade::string_methods::StringMethodKind::Contains,
++                    ) => Ok(Op::StrContains {
++                        source: written.receiver(),
++                        pattern: written
++                            .argument()
++                            .ok_or_else(|| fault("str Pattern slot absent"))?,
++                        destination: written.destination(),
++                    }),
++                    (
+                         RuntimePrimitiveMethodKind::StrIsEmpty,
+                         crate::facade::string_methods::StringMethodKind::IsEmpty,
+                     ) => Ok(Op::StrIsEmpty {
+@@ -242,10 +285,12 @@
+             Self::String {
+                 written,
+                 receiver,
++                argument,
+                 member,
+             } => written
+                 .allocated_bytes()?
+                 .checked_add(receiver.heap_bytes()?)?
++                .checked_add(argument.as_ref().map_or(Some(0), TyTerm::heap_bytes)?)?
+                 .checked_add(member.allocated_bytes()?)?,
+         })
+     }
+--- a/crates/lrr/src/frontend/primitive_float_recipe_tests.rs
++++ b/crates/lrr/src/frontend/primitive_float_recipe_tests.rs
+@@ -110,7 +110,7 @@
+         assert_eq!(constant.edition(), edition);
+         assert_eq!(constant.hygiene_context(), locals.context());
+         assert_eq!(constant.opcode_tag(), 41);
+-        assert_eq!(OPCODE_COUNT, 48); // tag42 reserved; constants43, parameters44, str length45/bytes46/empty47
++        assert_eq!(OPCODE_COUNT, 49); // tag42 reserved; constants43, parameters44, str length45/bytes46/empty47/contains48
+         let RecipeExit::Next(next) = &recipe.exit else {
+             panic!("missing structural next")
+         };
+--- a/crates/lrr/src/frontend/runtime_primitive_float_catalog_tests.rs
++++ b/crates/lrr/src/frontend/runtime_primitive_float_catalog_tests.rs
+@@ -29,12 +29,20 @@
+         assert_ne!(empty, member);
+         assert_ne!(empty, bytes);
+         assert!(runtime.require_string_len_method(empty).is_err());
++        let contains = runtime.string_method("contains").unwrap();
++        runtime.require_string_method(contains).unwrap();
++        assert_ne!(contains, empty);
++        assert!(runtime.require_string_len_method(contains).is_err());
+         let raw = RuntimeMacroCatalog::new(crate::facade::unit(&profile, "core"), edition).unwrap();
+         let macro_only = RuntimeMacroCatalog::standard(&profile).unwrap();
+         assert!(raw.string_len_method().is_none());
+         assert!(macro_only.string_len_method().is_none());
+         assert!(raw.require_string_len_method(member).is_err());
+         assert!(macro_only.require_string_len_method(member).is_err());
++        assert!(raw.string_method("contains").is_none());
++        assert!(macro_only.string_method("contains").is_none());
++        assert!(raw.require_string_method(contains).is_err());
++        assert!(macro_only.require_string_method(contains).is_err());
+         assert!(raw.string_method("is_empty").is_none());
+         assert!(macro_only.string_method("is_empty").is_none());
+         assert!(raw.require_string_method(empty).is_err());
+@@ -54,6 +62,7 @@
+         assert!(other.require_string_len_method(member).is_err());
+         assert!(other.require_string_method(bytes).is_err());
+         assert!(other.require_string_method(empty).is_err());
++        assert!(other.require_string_method(contains).is_err());
+     }
+ }
+ #[test]
+--- a/crates/lrr/src/ir/definition_numeric_wire_tests.rs
++++ b/crates/lrr/src/ir/definition_numeric_wire_tests.rs
+@@ -259,8 +259,8 @@
+ }
+ #[test]
+ fn recipe_schema_separates_definition_context_from_prior_cache_world() {
+-    assert_eq!(crate::ir::op::LRIR_RECIPE_SCHEMA, 18);
+-    assert_eq!(Recipe::DOMAIN, "lrr/v18/lrir-recipe");
++    assert_eq!(crate::ir::op::LRIR_RECIPE_SCHEMA, 19);
++    assert_eq!(Recipe::DOMAIN, "lrr/v19/lrir-recipe");
+     let body = body();
+     let recipe = verify(
+         draft(
+@@ -274,7 +274,7 @@
+     )
+     .unwrap();
+     let recipe = recipe.recipe();
+-    let mut expected = StableEncoder::new("lrr/v18/lrir-recipe");
++    let mut expected = StableEncoder::new("lrr/v19/lrir-recipe");
+     expected.record(&recipe.key);
+     expected.record(&recipe.origin.span.body_key);
+     expected.u32(recipe.origin.span.relative_start);
+--- a/crates/lrr/src/ir/op.rs
++++ b/crates/lrr/src/ir/op.rs
+@@ -133,7 +133,7 @@
+     }
+ }
+ /// Explicit recipe/cache compatibility, independent of host enum layout.
+-pub const LRIR_RECIPE_SCHEMA: u32 = 18;
++pub const LRIR_RECIPE_SCHEMA: u32 = 19;
+ pub const DECODED_INTEGER_SCHEMA: u32 = 1;
+ #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+ pub enum IntegerLexicalError {
+@@ -251,7 +251,7 @@
+ /// Stable opcode inventory. Runtime counter storage must use this bound.
+ // Tag42 remains reserved for the separately frozen managed Vec instruction.
+ pub const SOURCE_CONSTANT_OPCODE: u8 = 43;
+-pub const OPCODE_COUNT: usize = 48;
++pub const OPCODE_COUNT: usize = 49;
+ pub type OpcodeCounters = [u64; OPCODE_COUNT];
+ 
+ /// Closed source-bound floating value. Public callers can inspect or clone a
+@@ -418,7 +418,13 @@
+ 
+ #[derive(Debug, Clone, Eq, PartialEq)]
+ pub enum Op {
+-    /// Byte count of an already evaluated, source-admitted shared str.
++    /// Bounded source-selected str::contains<&str> over immutable UTF-8 roots.
++    StrContains {
++        source: SlotId,
++        pattern: SlotId,
++        destination: SlotId,
++    },
++    /// Emptiness of an already evaluated, source-admitted shared str.
+     StrIsEmpty {
+         source: SlotId,
+         destination: SlotId,
+@@ -636,6 +642,7 @@
+             Self::StrByteLen { .. } => 45,
+             Self::StrAsBytes { .. } => 46,
+             Self::StrIsEmpty { .. } => 47,
++            Self::StrContains { .. } => 48,
+             Self::SourceConstant { .. } => SOURCE_CONSTANT_OPCODE,
+             Self::CompoundHint { .. } => 40,
+             Self::ProjectTuple { .. } => 35,
+@@ -698,6 +705,7 @@
+             Self::StrByteLen { .. }
+             | Self::StrAsBytes { .. }
+             | Self::StrIsEmpty { .. }
++            | Self::StrContains { .. }
+             | Self::MakePlace { .. }
+             | Self::ParameterPlace { .. }
+             | Self::ValuePlace { .. }
+--- a/crates/lrr/src/ir/parameter_place_wire_tests.rs
++++ b/crates/lrr/src/ir/parameter_place_wire_tests.rs
+@@ -22,10 +22,10 @@
+ );
+ #[test]
+ fn unchanged_dereference_parameters_address_original_cells_without_owning_read_all_editions() {
+-    assert_eq!(LRIR_RECIPE_SCHEMA, 18);
+-    assert_eq!(Recipe::DOMAIN, "lrr/v18/lrir-recipe");
++    assert_eq!(LRIR_RECIPE_SCHEMA, 19);
++    assert_eq!(Recipe::DOMAIN, "lrr/v19/lrir-recipe");
+     assert_eq!(SOURCE_CONSTANT_OPCODE, 43);
+-    assert_eq!(OPCODE_COUNT, 48);
++    assert_eq!(OPCODE_COUNT, 49);
+     for edition in [2015, 2018, 2021, 2024] {
+         let parsed = ParsedFile::parse(
+             &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
+@@ -128,11 +128,17 @@
+                     .filter_map(|other| other.value)
+                     .find(|other| *other != source)
+                     .unwrap();
+-                for opcode in [45u32, 46, 47] {
++                for opcode in [45u32, 46, 47, 48] {
+                     let operation = |source, destination| {
+                         if opcode == 45 {
+                             Op::StrByteLen {
+                                 source,
++                                destination,
++                            }
++                        } else if opcode == 48 {
++                            Op::StrContains {
++                                source,
++                                pattern: source,
+                                 destination,
+                             }
+                         } else if opcode == 47 {
+@@ -152,7 +158,7 @@
+                     let verified = verify(length.clone(), &body).unwrap();
+                     let recipe = verified.recipe();
+                     assert_eq!(u32::from(recipe.operations[0].opcode_tag()), opcode);
+-                    let mut expected = StableEncoder::new("lrr/v18/lrir-recipe");
++                    let mut expected = StableEncoder::new("lrr/v19/lrir-recipe");
+                     expected.record(&recipe.key);
+                     expected.record(&recipe.origin.span.body_key);
+                     expected.u32(recipe.origin.span.relative_start);
+@@ -161,6 +167,9 @@
+                     expected.u64(1);
+                     expected.u32(opcode);
+                     expected.u32(source.0);
++                    if opcode == 48 {
++                        expected.u32(source.0);
++                    }
+                     expected.u32(destination.0);
+                     expected.u32(0);
+                     let RecipeExit::Next(next) = &recipe.exit else {
+@@ -169,9 +178,20 @@
+                     expected.record(next);
+                     expected.u64(0);
+                     assert_eq!(recipe.fingerprint(), expected.finish());
+-                    let mut old = StableEncoder::new("lrr/v17/lrir-recipe");
++                    let mut old = StableEncoder::new("lrr/v18/lrir-recipe");
+                     recipe.encode_fields(&mut old);
+                     assert_ne!(recipe.fingerprint(), old.finish());
++                    if opcode == 48 {
++                        for bad_pattern in [destination, crate::ir::pc::SlotId(u32::MAX)] {
++                            let mut wrong = length.clone();
++                            wrong.operations = vec![Op::StrContains {
++                                source,
++                                pattern: bad_pattern,
++                                destination,
++                            }];
++                            assert!(verify(wrong, &body).is_err());
++                        }
++                    }
+                     for invalid_source in [destination, crate::ir::pc::SlotId(u32::MAX)] {
+                         let mut wrong = length.clone();
+                         wrong.operations = vec![operation(invalid_source, destination)];
+--- a/crates/lrr/src/ir/recipe.rs
++++ b/crates/lrr/src/ir/recipe.rs
+@@ -229,12 +229,22 @@
+     }
+ }
+ impl StableEncode for Recipe {
+-    const DOMAIN: &'static str = "lrr/v18/lrir-recipe";
++    const DOMAIN: &'static str = "lrr/v19/lrir-recipe";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         e.record(&self.key);
+         span(e, &self.origin.span);
+         e.sequence(&self.origin.expansion_ancestry, |e, d| e.digest(*d));
+         e.sequence(&self.operations, |e, op| match op {
++            Op::StrContains {
++                source,
++                pattern,
++                destination,
++            } => {
++                e.u32(48);
++                e.u32(source.0);
++                e.u32(pattern.0);
++                e.u32(destination.0);
++            }
+             Op::StrIsEmpty {
+                 source,
+                 destination,
+--- a/crates/lrr/src/ir/validate.rs
++++ b/crates/lrr/src/ir/validate.rs
+@@ -973,6 +973,19 @@
+                     ));
+                 }
+                 charge(&mut bytes, constant.metadata_bytes())?;
++                Some(*destination)
++            }
++            Op::StrContains {
++                source,
++                pattern,
++                destination,
++            } => {
++                slot(body, *source, SlotKind::Value)?;
++                slot(body, *pattern, SlotKind::Value)?;
++                slot(body, *destination, SlotKind::Value)?;
++                if source == destination || pattern == destination {
++                    return Err(invalid("str contains cannot overwrite an operand"));
++                }
+                 Some(*destination)
+             }
+             Op::StrByteLen {
+--- a/crates/lrr/src/runtime/cell_byte_comparison.rs
++++ b/crates/lrr/src/runtime/cell_byte_comparison.rs
+@@ -245,3 +245,7 @@
+ #[path = "cell_string_ordering.rs"]
+ mod string_ordering;
+ pub(crate) use string_ordering::{StaticStringOrdering, StaticStringOrderingPoll};
++
++#[path = "cell_string_search.rs"]
++mod string_search;
++pub(crate) use string_search::{StaticStringSearch, StaticStringSearchPoll};
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_string_search.rs
+@@ -0,0 +1,133 @@
++//! Bounded substring search over two genuine immutable UTF-8 roots.
++//! This physical cursor grants no source Pattern/member authority. It cannot be
++//! cached as a recipe, cloned for replay or resumed after any terminal outcome.
++use super::*;
++
++pub(crate) struct StaticStringSearch {
++    captured: StaticByteComparison,
++    candidate: u32,
++    matched: u32,
++}
++#[derive(Debug, Eq, PartialEq)]
++pub(crate) enum StaticStringSearchPoll {
++    Dispatch { pairs: u32 },
++    Complete { contains: bool, pairs: u32 },
++}
++impl StaticStringSearch {
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        std::mem::size_of::<Self>()
++    }
++    pub(crate) fn require_operands(
++        &self,
++        haystack: CellId,
++        needle: CellId,
++    ) -> Result<(), Diagnostic> {
++        self.captured.require_operands(haystack, needle)
++    }
++}
++impl GuestStore {
++    pub(crate) fn prepare_static_string_search(
++        &self,
++        haystack: CellId,
++        needle: CellId,
++    ) -> Result<StaticStringSearch, Diagnostic> {
++        self.require_static_string_value(haystack)?;
++        self.require_static_string_value(needle)?;
++        Ok(StaticStringSearch {
++            captured: self.prepare_static_byte_comparison(haystack, needle)?,
++            candidate: 0,
++            matched: 0,
++        })
++    }
++    pub(crate) fn admit_static_string_search(
++        &self,
++        cursor: &StaticStringSearch,
++        haystack: CellId,
++        needle: CellId,
++    ) -> Result<(), Diagnostic> {
++        if cursor.candidate != 0 || cursor.matched != 0 {
++            return Err(lease_fault());
++        }
++        self.require_static_string_value(haystack)?;
++        self.require_static_string_value(needle)?;
++        self.admit_static_byte_comparison(&cursor.captured, haystack, needle)
++    }
++    pub(crate) fn advance_static_string_search(
++        &self,
++        cursor: &mut StaticStringSearch,
++        fuel: &mut RunFuel,
++    ) -> Result<StaticStringSearchPoll, Diagnostic> {
++        if cursor.captured.terminal {
++            return Err(lease_fault());
++        }
++        let outcome = self.static_string_search_chunk(cursor, fuel);
++        if !matches!(outcome, Ok(StaticStringSearchPoll::Dispatch { .. })) {
++            cursor.captured.terminal = true;
++        }
++        outcome
++    }
++    fn static_string_search_chunk(
++        &self,
++        cursor: &mut StaticStringSearch,
++        fuel: &mut RunFuel,
++    ) -> Result<StaticStringSearchPoll, Diagnostic> {
++        self.validate_static_byte_comparison(&cursor.captured)?;
++        let haystack = cursor.captured.left;
++        let needle = cursor.captured.right;
++        self.require_static_string_value(haystack.operand.cell)?;
++        self.require_static_string_value(needle.operand.cell)?;
++        fuel.poll()?;
++        if cursor.matched > needle.len || cursor.candidate > haystack.len {
++            return Err(lease_fault());
++        }
++        // An empty UTF-8 pattern occurs at the initial boundary. Polling still
++        // precedes this result, and the VM must charge its own opcode once.
++        if needle.len == 0 {
++            return Ok(StaticStringSearchPoll::Complete {
++                contains: true,
++                pairs: 0,
++            });
++        }
++        let Some(last) = haystack.len.checked_sub(needle.len) else {
++            return Ok(StaticStringSearchPoll::Complete {
++                contains: false,
++                pairs: 0,
++            });
++        };
++        let mut pairs = 0u32;
++        while pairs < PAIRS_PER_DISPATCH && cursor.candidate <= last {
++            fuel.charge()?;
++            let offset = cursor
++                .candidate
++                .checked_add(cursor.matched)
++                .ok_or_else(resource)?;
++            let left = self.comparison_byte(haystack, offset)?;
++            let right = self.comparison_byte(needle, cursor.matched)?;
++            pairs += 1;
++            if left == right {
++                cursor.matched = cursor.matched.checked_add(1).ok_or_else(resource)?;
++                if cursor.matched == needle.len {
++                    return Ok(StaticStringSearchPoll::Complete {
++                        contains: true,
++                        pairs,
++                    });
++                }
++            } else {
++                cursor.candidate = cursor.candidate.checked_add(1).ok_or_else(resource)?;
++                cursor.matched = 0;
++            }
++        }
++        if cursor.candidate > last {
++            Ok(StaticStringSearchPoll::Complete {
++                contains: false,
++                pairs,
++            })
++        } else {
++            Ok(StaticStringSearchPoll::Dispatch { pairs })
++        }
++    }
++}
++
++#[cfg(test)]
++#[path = "cell_string_search_tests.rs"]
++mod tests;
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_string_search_tests.rs
+@@ -0,0 +1,204 @@
++//! Physical search witnesses from unchanged upstream source, plus LRR lifecycle
++//! controls. These do not execute or pass the upstream main or source member.
++use super::super::tests::{operand, store};
++use super::*;
++use crate::runtime::shape::ByteLiteralTarget;
++const CRLF: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs"
++);
++
++fn original_needle(edition: u16) -> String {
++    crate::syntax::string_fixture_facts::all_string_tokens(CRLF, edition)
++        .pop()
++        .expect("original contains argument")
++}
++fn resources(store: &GuestStore) -> (u32, usize, usize) {
++    (
++        store.budget.handles(),
++        store.budget.bytes(),
++        store.types.metadata_bytes(),
++    )
++}
++#[test]
++fn original_crlf_source_search_is_bounded_fuel_accounted_and_read_only_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let found = original_needle(edition);
++        assert_eq!(found, "string\r\nliteral");
++        let absent =
++            crate::syntax::string_fixture_facts::all_string_tokens(CRLF, edition).remove(0);
++        assert_eq!(absent, "string\nliteral");
++        // The cooked LF token is a disclosed negative component adapter: the
++        // unchanged original file has CRLF, not LF immediately after string.
++        for (needle, expected) in [(found, true), (absent, false)] {
++            let mut store = store();
++            let haystack = operand(
++                &mut store,
++                b"original source",
++                CRLF.as_bytes(),
++                ByteLiteralTarget::Str,
++            );
++            let pattern = operand(
++                &mut store,
++                b"original pattern",
++                needle.as_bytes(),
++                ByteLiteralTarget::Str,
++            );
++            let before = resources(&store);
++            let mut cursor = store
++                .prepare_static_string_search(haystack, pattern)
++                .unwrap();
++            assert!(cursor.metadata_bytes() < 1024);
++            cursor.require_operands(haystack, pattern).unwrap();
++            store
++                .admit_static_string_search(&cursor, haystack, pattern)
++                .unwrap();
++            let mut fuel = RunFuel::new(100_000).unwrap();
++            let mut pairs_seen = 0u64;
++            let mut dispatches = 0;
++            loop {
++                let (finished, pairs) = match store
++                    .advance_static_string_search(&mut cursor, &mut fuel)
++                    .unwrap()
++                {
++                    StaticStringSearchPoll::Dispatch { pairs } => {
++                        dispatches += 1;
++                        assert!(
++                            store
++                                .admit_static_string_search(&cursor, haystack, pattern)
++                                .is_err()
++                        );
++                        (false, pairs)
++                    }
++                    StaticStringSearchPoll::Complete { contains, pairs } => {
++                        assert_eq!(
++                            contains, expected,
++                            "actual original source search component"
++                        );
++                        (true, pairs)
++                    }
++                };
++                assert!(pairs <= 256);
++                pairs_seen += u64::from(pairs);
++                assert_eq!(fuel.snapshot().used, pairs_seen);
++                assert_eq!(resources(&store), before);
++                if finished {
++                    break;
++                }
++            }
++            assert!(dispatches > 0 && pairs_seen >= needle.len() as u64);
++            assert!(
++                store
++                    .advance_static_string_search(&mut cursor, &mut fuel)
++                    .is_err()
++            );
++            assert_eq!(resources(&store), before);
++        }
++    }
++}
++#[test]
++fn original_search_refuses_nonstring_roots_cancelled_empty_and_faulted_cursor_replay() {
++    let text = original_needle(2024);
++    let mut store = store();
++    let haystack = operand(
++        &mut store,
++        b"original source",
++        CRLF.as_bytes(),
++        ByteLiteralTarget::Str,
++    );
++    let pattern = operand(
++        &mut store,
++        b"original pattern",
++        text.as_bytes(),
++        ByteLiteralTarget::Str,
++    );
++    let bytes = operand(
++        &mut store,
++        b"byte view is not str",
++        text.as_bytes(),
++        ByteLiteralTarget::Slice,
++    );
++    let empty = operand(
++        &mut store,
++        b"empty cancellation control",
++        b"",
++        ByteLiteralTarget::Str,
++    );
++    let before = resources(&store);
++    assert!(store.prepare_static_string_search(haystack, bytes).is_err());
++    for (needle, cancel) in [(pattern, false), (empty, true)] {
++        let mut cursor = store
++            .prepare_static_string_search(haystack, needle)
++            .unwrap();
++        let mut fuel = RunFuel::new(0).unwrap();
++        if cancel {
++            fuel.cancellation().cancel();
++        }
++        let error = store
++            .advance_static_string_search(&mut cursor, &mut fuel)
++            .unwrap_err();
++        assert_eq!(error.code, "LRR-E-RUNTIME-RESOURCE");
++        assert_eq!(fuel.snapshot().used, 0);
++        let mut fresh = RunFuel::new(100_000).unwrap();
++        assert!(
++            store
++                .advance_static_string_search(&mut cursor, &mut fresh)
++                .is_err()
++        );
++        assert_eq!(fresh.snapshot().used, 0);
++        assert_eq!(resources(&store), before);
++    }
++    let mut empty_cursor = store.prepare_static_string_search(haystack, empty).unwrap();
++    let mut fuel = RunFuel::new(0).unwrap();
++    assert_eq!(
++        store
++            .advance_static_string_search(&mut empty_cursor, &mut fuel)
++            .unwrap(),
++        StaticStringSearchPoll::Complete {
++            contains: true,
++            pairs: 0
++        }
++    );
++    let mut reverse = store
++        .prepare_static_string_search(pattern, haystack)
++        .unwrap();
++    let mut no_pairs = RunFuel::new(0).unwrap();
++    assert_eq!(
++        store
++            .advance_static_string_search(&mut reverse, &mut no_pairs)
++            .unwrap(),
++        StaticStringSearchPoll::Complete {
++            contains: false,
++            pairs: 0
++        }
++    );
++    let mut other = super::super::tests::store();
++    let other_haystack = operand(
++        &mut other,
++        b"original source",
++        CRLF.as_bytes(),
++        ByteLiteralTarget::Str,
++    );
++    let other_pattern = operand(
++        &mut other,
++        b"original pattern",
++        text.as_bytes(),
++        ByteLiteralTarget::Str,
++    );
++    assert_eq!((haystack, pattern), (other_haystack, other_pattern));
++    let mut foreign = store
++        .prepare_static_string_search(haystack, pattern)
++        .unwrap();
++    let mut untouched = RunFuel::new(100_000).unwrap();
++    assert!(
++        other
++            .advance_static_string_search(&mut foreign, &mut untouched)
++            .is_err()
++    );
++    assert_eq!(untouched.snapshot().used, 0);
++    assert!(
++        store
++            .advance_static_string_search(&mut foreign, &mut untouched)
++            .is_err()
++    );
++    assert_eq!(resources(&store), before);
++}
+--- a/crates/lrr/src/syntax/runtime_macro_primitive_methods.rs
++++ b/crates/lrr/src/syntax/runtime_macro_primitive_methods.rs
+@@ -11,6 +11,7 @@
+     StrByteLen,
+     StrAsBytes,
+     StrIsEmpty,
++    StrContains,
+ }
+ #[derive(Debug, Clone, Eq, PartialEq)]
+ pub(crate) struct RuntimePrimitiveMethod {
+@@ -19,6 +20,7 @@
+     span: BodySpan,
+     receiver: SlotId,
+     destination: SlotId,
++    argument: Option<SlotId>,
+     written_receiver: Option<PrimitiveType>,
+     kind: RuntimePrimitiveMethodKind,
+ }
+@@ -30,13 +32,18 @@
+         destination: SlotId,
+         kind: RuntimePrimitiveMethodKind,
+         expression: &ast::Expr,
++        argument: Option<SlotId>,
+     ) -> Result<Self, Diagnostic> {
++        if (kind == RuntimePrimitiveMethodKind::StrContains) != argument.is_some() {
++            return Err(invalid("primitive method explicit argument differs"));
++        }
+         Ok(Self {
+             source,
+             key: None,
+             span,
+             receiver,
+             destination,
++            argument,
+             written_receiver: if kind == RuntimePrimitiveMethodKind::IsNan {
+                 written_receiver(expression)?
+             } else {
+@@ -51,7 +58,10 @@
+         key: &PcKey,
+         ordinal: usize,
+     ) -> Result<(), Diagnostic> {
+-        if self.key.is_some() || self.span.body_key != key.body || self.receiver == self.destination
++        if self.key.is_some()
++            || self.span.body_key != key.body
++            || self.receiver == self.destination
++            || self.argument == Some(self.destination)
+         {
+             return Err(invalid("primitive method source/slots differ"));
+         }
+@@ -91,6 +101,9 @@
+     }
+     pub(crate) fn destination(&self) -> SlotId {
+         self.destination
++    }
++    pub(crate) fn argument(&self) -> Option<SlotId> {
++        self.argument
+     }
+     pub(crate) fn kind(&self) -> RuntimePrimitiveMethodKind {
+         self.kind
+--- a/crates/lrr/src/syntax/runtime_macro_scalars.rs
++++ b/crates/lrr/src/syntax/runtime_macro_scalars.rs
+@@ -687,16 +687,21 @@
+                                 | "r#as_bytes"
+                                 | "is_empty"
+                                 | "r#is_empty"
++                                | "contains"
++                                | "r#contains"
+                         ) || call.generic_arg_list().is_some()
+-                            || call
+-                                .arg_list()
+-                                .ok_or_else(unsupported)?
+-                                .args()
+-                                .next()
+-                                .is_some()
+                         {
+                             return Err(unsupported());
+                         }
++                        let mut arguments = call.arg_list().ok_or_else(unsupported)?.args();
++                        let argument = arguments.next();
++                        let contains = matches!(name.text(), "contains" | "r#contains");
++                        if arguments.next().is_some() || contains != argument.is_some() {
++                            return Err(unsupported());
++                        }
++                        let argument = argument
++                            .map(|expression| allocate().map(|slot| (expression, slot)))
++                            .transpose()?;
+                         let receiver = call.receiver().ok_or_else(unsupported)?;
+                         let span = original_span(&ast::Expr::MethodCallExpr(call.clone()))?;
+                         controls::require_written(self, body, &span, call.syntax())?;
+@@ -708,6 +713,8 @@
+                             destination,
+                             if matches!(name.text(), "len" | "r#len") {
+                                 RuntimePrimitiveMethodKind::StrByteLen
++                            } else if contains {
++                                RuntimePrimitiveMethodKind::StrContains
+                             } else if matches!(name.text(), "is_empty" | "r#is_empty") {
+                                 RuntimePrimitiveMethodKind::StrIsEmpty
+                             } else if matches!(name.text(), "as_bytes" | "r#as_bytes") {
+@@ -716,11 +723,15 @@
+                                 RuntimePrimitiveMethodKind::IsNan
+                             },
+                             &receiver,
++                            argument.as_ref().map(|(_, slot)| *slot),
+                         )?;
+                         let written = method.written_receiver();
+                         stack.push(Work::Step(RuntimeScalarStep::PrimitiveMethod(Box::new(
+                             method,
+                         ))));
++                        if let Some((argument, slot)) = argument {
++                            stack.push(Work::Expression(argument, slot, base, parent));
++                        }
+                         stack.push(Work::Expression(receiver, slot, base, parent));
+                         if let Some(primitive) = written {
+                             stack.push(Work::Operation(Op::SetHint {
+--- a/crates/lrr/src/vm/frame.rs
++++ b/crates/lrr/src/vm/frame.rs
+@@ -14,6 +14,8 @@
+ mod constant_array_frame;
+ #[path = "frame_source_constant.rs"]
+ mod source_constant_frame;
++#[path = "frame_string_search.rs"]
++mod string_search_frame;
+ pub(crate) use constant_array_frame::{ConstantPublicationActivation, ConstantPublicationChunk};
+ #[cfg(test)]
+ #[path = "integer_literal_decode_tests.rs"]
+@@ -207,6 +209,7 @@
+     byte_activation: Option<byte_literal_frame::BoundByteLiteral>,
+     byte_comparison: Option<crate::engine::run::byte_comparisons::AdmittedByteComparison>,
+     byte_comparison_activation: Option<byte_comparison_frame::BoundByteComparison>,
++    string_search_activation: Option<string_search_frame::BoundStringSearch>,
+     macro_byte_literal: Option<crate::engine::run::byte_macro_literals::AdmittedMacroByteLiteral>,
+     copy_activation: Option<aggregate_copy_frame::OpActivation>,
+     cleanup_activation: Option<scope_cleanup_frame::Activation>,
+@@ -422,6 +425,7 @@
+             byte_activation: None,
+             byte_comparison: None,
+             byte_comparison_activation: None,
++            string_search_activation: None,
+             macro_byte_literal: None,
+             copy_activation: None,
+             cleanup_activation: None,
+--- a/crates/lrr/src/vm/frame_aggregate_copy.rs
++++ b/crates/lrr/src/vm/frame_aggregate_copy.rs
+@@ -32,6 +32,7 @@
+             .map(|_| self.source_constant_operation_index().unwrap_or(0))
+             .or_else(|| self.byte_literal_operation_index())
+             .or_else(|| self.byte_comparison_operation_index())
++            .or_else(|| self.string_search_operation_index())
+             .or_else(|| {
+                 self.copy_activation
+                     .as_ref()
+@@ -53,6 +54,7 @@
+             .as_ref()
+             .ok_or_else(|| invalid("copy activation absent"))?;
+         if self.cleanup_activation.is_some()
++            || self.string_search_activation.is_some()
+             || activation.pc != self.pc.fingerprint()
+             || activation.operation_index as usize != index
+             || activation.expected != *op
+@@ -80,7 +82,7 @@
+         op: &Op,
+         store: &mut GuestStore,
+     ) -> Result<bool, Diagnostic> {
+-        if self.copy_activation.is_some() {
++        if self.copy_activation.is_some() || self.string_search_activation.is_some() {
+             return Err(invalid("copy activation already active"));
+         }
+         let (source, destination, mode) = match op {
+--- a/crates/lrr/src/vm/frame_byte_comparisons.rs
++++ b/crates/lrr/src/vm/frame_byte_comparisons.rs
+@@ -177,6 +177,7 @@
+         if self.status != FrameStatus::Running
+             || self.byte_comparison_activation.is_some()
+             || self.byte_activation.is_some()
++            || self.string_search_activation.is_some()
+             || self.copy_activation.is_some()
+             || self.cleanup_activation.is_some()
+             || self.constant_activation.is_some()
+@@ -245,6 +246,7 @@
+             || self.source_view_ref(destination)? != a.prior_source.as_ref()
+             || store.location_epoch(a.destination)? != a.destination_epoch
+             || self.byte_activation.is_some()
++            || self.string_search_activation.is_some()
+             || self.copy_activation.is_some()
+             || self.cleanup_activation.is_some()
+             || self.constant_activation.is_some()
+--- a/crates/lrr/src/vm/frame_byte_literals.rs
++++ b/crates/lrr/src/vm/frame_byte_literals.rs
+@@ -112,6 +112,7 @@
+         if self.status != FrameStatus::Running
+             || self.byte_activation.is_some()
+             || self.has_byte_comparison_activation()
++            || self.has_string_search_activation()
+             || self.copy_activation.is_some()
+             || self.cleanup_activation.is_some()
+             || self.constant_activation.is_some()
+--- a/crates/lrr/src/vm/frame_source_constant.rs
++++ b/crates/lrr/src/vm/frame_source_constant.rs
+@@ -40,6 +40,7 @@
+             || a.pc != self.pc.fingerprint()
+             || a.instruction != constant.identity()
+             || !a.publication.charged_on_entry()
++            || self.string_search_activation.is_some()
+             || self.copy_activation.is_some()
+             || self.cleanup_activation.is_some()
+         {
+--- /dev/null
++++ b/crates/lrr/src/vm/frame_string_search.rs
+@@ -0,0 +1,255 @@
++//! One run-bound str::contains operation; no query or native execution.
++use super::*;
++use crate::{
++    ir::op::{Op, PrimitiveType},
++    runtime::cell::byte_comparison::{StaticStringSearch, StaticStringSearchPoll},
++    traits::term::TyTerm,
++};
++pub(super) struct BoundStringSearch {
++    pc: PcKey,
++    operation_index: usize,
++    operation: Op,
++    haystack: CellId,
++    needle: CellId,
++    receiver_source: TyTerm,
++    pattern_source: TyTerm,
++    destination: CellId,
++    destination_epoch: u32,
++    scope: ScopeId,
++    prior_source: Option<TyTerm>,
++    physical: StaticStringSearch,
++}
++fn shared_str(source: Option<&TyTerm>) -> bool {
++    matches!(source, Some(TyTerm::Ref(_, false, target)) if target.as_ref() == &TyTerm::Str)
++}
++impl Frame {
++    pub(crate) fn has_string_search_activation(&self) -> bool {
++        self.string_search_activation.is_some()
++    }
++    pub(crate) fn string_search_operation_index(&self) -> Option<usize> {
++        self.string_search_activation
++            .as_ref()
++            .map(|a| a.operation_index)
++    }
++    fn search_metadata(
++        &self,
++        physical: &StaticStringSearch,
++        source: SlotId,
++        pattern: SlotId,
++    ) -> Result<(), Diagnostic> {
++        Self::metadata_bytes(&self.body, self.parameter_metadata_count())
++            .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
++            .and_then(|n| n.checked_add(self.projection_bytes))
++            .and_then(|n| n.checked_add(self.source_field_bytes()?))
++            .and_then(|n| n.checked_add(self.macro_byte_literal_bytes()?))
++            .and_then(|n| n.checked_add(std::mem::size_of::<BoundStringSearch>()))
++            .and_then(|n| n.checked_add(physical.metadata_bytes()))
++            .and_then(|n| {
++                n.checked_add(
++                    self.source_view_ref(source)
++                        .ok()?
++                        .and_then(TyTerm::heap_bytes)?,
++                )
++            })
++            .and_then(|n| {
++                n.checked_add(
++                    self.source_view_ref(pattern)
++                        .ok()?
++                        .and_then(TyTerm::heap_bytes)?,
++                )
++            })
++            .filter(|n| *n <= 32 << 20)
++            .ok_or_else(crate::runtime::arena::resource)?;
++        Ok(())
++    }
++    pub(crate) fn prepare_string_search(
++        &self,
++        op: &Op,
++        store: &GuestStore,
++    ) -> Result<Option<StaticStringSearch>, Diagnostic> {
++        let Op::StrContains {
++            source,
++            pattern,
++            destination,
++        } = op
++        else {
++            return Ok(None);
++        };
++        self.require_store(store)?;
++        if source == destination
++            || pattern == destination
++            || !shared_str(self.source_view_ref(*source)?)
++            || !shared_str(self.source_view_ref(*pattern)?)
++        {
++            return Err(invalid(
++                "str search requires actual shared str source and Pattern argument",
++            ));
++        }
++        self.preflight_primitive_operator_result(
++            *destination,
++            TypeId(2),
++            Some(PrimitiveType::Bool),
++            store,
++        )?;
++        self.preflight_primitive_operator_capacity(*destination, store)?;
++        let physical =
++            store.prepare_static_string_search(self.cell(*source)?, self.cell(*pattern)?)?;
++        self.search_metadata(&physical, *source, *pattern)?;
++        Ok(Some(physical))
++    }
++    pub(crate) fn begin_string_search(
++        &mut self,
++        index: usize,
++        op: &Op,
++        physical: StaticStringSearch,
++        store: &mut GuestStore,
++    ) -> Result<(), Diagnostic> {
++        self.require_store(store)?;
++        if self.status != FrameStatus::Running
++            || self.string_search_activation.is_some()
++            || self.byte_activation.is_some()
++            || self.byte_comparison_activation.is_some()
++            || self.copy_activation.is_some()
++            || self.cleanup_activation.is_some()
++            || self.constant_activation.is_some()
++        {
++            return Err(invalid("str search overlaps another bounded operation"));
++        }
++        let Op::StrContains {
++            source,
++            pattern,
++            destination,
++        } = op
++        else {
++            return Err(invalid("str search requires its exact contains operation"));
++        };
++        if source == destination
++            || pattern == destination
++            || !shared_str(self.source_view_ref(*source)?)
++            || !shared_str(self.source_view_ref(*pattern)?)
++        {
++            return Err(invalid("str search source views changed before entry"));
++        }
++        let haystack = self.cell(*source)?;
++        let needle = self.cell(*pattern)?;
++        store.admit_static_string_search(&physical, haystack, needle)?;
++        self.preflight_primitive_operator_result(
++            *destination,
++            TypeId(2),
++            Some(PrimitiveType::Bool),
++            store,
++        )?;
++        self.preflight_primitive_operator_capacity(*destination, store)?;
++        self.search_metadata(&physical, *source, *pattern)?;
++        let receiver_source = self
++            .source_view(*source)?
++            .ok_or_else(|| invalid("str receiver source absent"))?;
++        let pattern_source = self
++            .source_view(*pattern)?
++            .ok_or_else(|| invalid("str Pattern source absent"))?;
++        let prior_source = self.source_view(*destination)?;
++        self.reserve_primitive_operator_result(*destination, store)?;
++        let cell = self.prepare_write(*destination, store)?;
++        self.string_search_activation = Some(BoundStringSearch {
++            pc: self.pc.clone(),
++            operation_index: index,
++            operation: op.clone(),
++            haystack,
++            needle,
++            receiver_source,
++            pattern_source,
++            destination: cell,
++            destination_epoch: store.location_epoch(cell)?,
++            scope: self.slot(*destination)?.scope,
++            prior_source,
++            physical,
++        });
++        Ok(())
++    }
++    pub(crate) fn check_string_search_activation(
++        &self,
++        index: usize,
++        op: &Op,
++        store: &GuestStore,
++    ) -> Result<SlotId, Diagnostic> {
++        self.require_store(store)?;
++        let Op::StrContains {
++            source,
++            pattern,
++            destination,
++        } = op
++        else {
++            return Err(invalid("str search resumed at a different operation kind"));
++        };
++        let a = self
++            .string_search_activation
++            .as_ref()
++            .ok_or_else(|| invalid("str search continuation absent"))?;
++        if self.status != FrameStatus::Running
++            || self.pc != a.pc
++            || index != a.operation_index
++            || op != &a.operation
++            || self.cell(*source)? != a.haystack
++            || self.cell(*pattern)? != a.needle
++            || self.source_view_ref(*source)? != Some(&a.receiver_source)
++            || self.source_view_ref(*pattern)? != Some(&a.pattern_source)
++            || self.slot(*destination)?.cell != Some(a.destination)
++            || self.slot(*destination)?.scope != a.scope
++            || self.source_view_ref(*destination)? != a.prior_source.as_ref()
++            || store.location_epoch(a.destination)? != a.destination_epoch
++            || self.byte_activation.is_some()
++            || self.byte_comparison_activation.is_some()
++            || self.copy_activation.is_some()
++            || self.cleanup_activation.is_some()
++            || self.constant_activation.is_some()
++        {
++            return Err(invalid(
++                "str search continuation source, PC or result binding changed",
++            ));
++        }
++        a.physical.require_operands(a.haystack, a.needle)?;
++        self.preflight_primitive_operator_result(
++            *destination,
++            TypeId(2),
++            Some(PrimitiveType::Bool),
++            store,
++        )?;
++        Ok(*destination)
++    }
++    pub(crate) fn advance_string_search(
++        &mut self,
++        index: usize,
++        op: &Op,
++        store: &mut GuestStore,
++    ) -> Result<bool, Diagnostic> {
++        let destination = self.check_string_search_activation(index, op, store)?;
++        let mut active = self
++            .string_search_activation
++            .take()
++            .ok_or_else(|| invalid("str search continuation disappeared"))?;
++        let poll = store.advance_static_string_search(&mut active.physical, &mut self.fuel);
++        self.counters.fuel_used = self.fuel.snapshot().used;
++        match poll? {
++            StaticStringSearchPoll::Dispatch { pairs } => {
++                if pairs > 256 {
++                    return Err(invalid("str search exceeded dispatch pair bound"));
++                }
++                self.string_search_activation = Some(active);
++                Ok(false)
++            }
++            StaticStringSearchPoll::Complete { contains, pairs } => {
++                if pairs > 256 {
++                    return Err(invalid("str search exceeded completion pair bound"));
++                }
++                self.fuel.poll()?;
++                let ticket = store.ticket(ValueRepr::boolean(contains))?;
++                if let Err(error) = self.write(destination, ticket, store) {
++                    store.discard(ticket)?;
++                    return Err(error);
++                }
++                self.set_source_view(destination, Some(TyTerm::Primitive(PrimitiveType::Bool)))?;
++                Ok(true)
++            }
++        }
++    }
++}
+--- a/crates/lrr/src/vm/step.rs
++++ b/crates/lrr/src/vm/step.rs
+@@ -673,6 +673,7 @@
+ }
+ fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Diagnostic> {
+     match op {
++        Op::StrContains { .. } => frame.prepare_string_search(op, store).map(|_| ()),
+         Op::StrIsEmpty {
+             source,
+             destination,
+@@ -1193,6 +1194,9 @@
+     byte_hint: Option<crate::runtime::cell::byte_literals::PreparedStaticByteHint>,
+ ) -> Result<(), Diagnostic> {
+     match op {
++        Op::StrContains { .. } => Err(invalid(
++            "str search requires its bounded operation continuation",
++        )),
+         Op::StrIsEmpty {
+             source,
+             destination,
+@@ -1536,6 +1540,13 @@
+                 .ok_or_else(|| invalid("byte comparison operation absent from resumed recipe"))?;
+             frame.check_byte_comparison_activation(resume, op, store)?;
+         }
++        if frame.has_string_search_activation() {
++            let op = recipe
++                .operations
++                .get(resume)
++                .ok_or_else(|| invalid("str search operation absent from resumed recipe"))?;
++            frame.check_string_search_activation(resume, op, store)?;
++        }
+         if frame.has_copy_activation() {
+             let op = recipe
+                 .operations
+@@ -1584,6 +1595,13 @@
+                 increment(&mut frame.counters.operations_completed)?;
+                 continue;
+             }
++            if frame.has_string_search_activation() {
++                if !frame.advance_string_search(index, op, store)? {
++                    return Ok(StepOutcome::Dispatch);
++                }
++                increment(&mut frame.counters.operations_completed)?;
++                continue;
++            }
+             if frame.has_copy_activation() {
+                 frame.check_copy_activation(index, op)?;
+                 if !frame.advance_aggregate_copy(store)? {
+@@ -1606,6 +1624,7 @@
+             state_preflight(frame, store, op)?;
+             let byte_hint = byte_literals::prepare_hint(store, op)?;
+             let byte_comparison = frame.prepare_byte_comparison(op, store)?;
++            let string_search = frame.prepare_string_search(op, store)?;
+             let numeric_result = if byte_comparison.is_some() {
+                 None
+             } else {
+@@ -1642,6 +1661,14 @@
+                     pc: recipe.key.clone(),
+                     origin: recipe.origin.clone(),
+                 }));
++            }
++            if let Some(physical) = string_search {
++                frame.begin_string_search(index, op, physical, store)?;
++                if !frame.advance_string_search(index, op, store)? {
++                    return Ok(StepOutcome::Dispatch);
++                }
++                increment(&mut frame.counters.operations_completed)?;
++                continue;
+             }
+             let prepared = match prepared {
+                 Some(PreparedLiteral::String(plan)) if plan.len() > 256 => {
+--- a/docs/tasks.json
++++ b/docs/tasks.json
+@@ -6307,13 +6307,21 @@
+       "commit_id": null,
+       "acceptance_tests": [
+         "upstream_empty_and_raw_nonempty_string_method_components_execute_actual_length_all_editions",
+-        "original_empty_method_source_result_and_fuel_refusals_precede_publication"
++        "original_empty_method_source_result_and_fuel_refusals_precede_publication",
++        "unchanged_crlf_string_entire_main_including_source_contains_completes_all_editions",
++        "original_contains_argument_result_and_resumed_cancel_refuse_without_publication",
++        "original_crlf_source_search_is_bounded_fuel_accounted_and_read_only_all_editions",
++        "original_search_refuses_nonstring_roots_cancelled_empty_and_faulted_cursor_replay"
+       ],
+       "acceptance_contract": "multibyte len/char/slice cases; invalid boundary panic/error; formatter unsupported spec; capture-name lookup; formatting never moves String; failure-only assert message remains lazy.",
+       "commands": [],
+       "fixture_ids": [
+         "T061-STR-EMPTY-SOURCE",
+-        "T061-STR-EMPTY-REFUSAL"
++        "T061-STR-EMPTY-REFUSAL",
++        "T061-STR-CONTAINS-SOURCE",
++        "T061-STR-CONTAINS-REFUSAL",
++        "T061-STR-SEARCH-PHYSICAL",
++        "T061-STR-SEARCH-LIFECYCLE"
+       ],
+       "artifact_paths": [],
+       "release_complete": false,
+@@ -6325,6 +6333,26 @@
+         },
+         {
+           "fixture_id": "T061-STR-EMPTY-REFUSAL",
++          "status": "pending",
++          "evidence_paths": []
++        },
++        {
++          "fixture_id": "T061-STR-CONTAINS-SOURCE",
++          "status": "pending",
++          "evidence_paths": []
++        },
++        {
++          "fixture_id": "T061-STR-CONTAINS-REFUSAL",
++          "status": "pending",
++          "evidence_paths": []
++        },
++        {
++          "fixture_id": "T061-STR-SEARCH-PHYSICAL",
++          "status": "pending",
++          "evidence_paths": []
++        },
++        {
++          "fixture_id": "T061-STR-SEARCH-LIFECYCLE",
+           "status": "pending",
+           "evidence_paths": []
+         }
+--- a/xtask/tests/match_no_arm_exit.rs
++++ b/xtask/tests/match_no_arm_exit.rs
+@@ -199,7 +199,7 @@
+     expected.u32(7); // fixed wire discriminant, not Rust enum layout
+     expected.u64(0); // dependencies
+     assert_eq!(recipe.fingerprint(), expected.finish());
+-    const { assert!(LRIR_RECIPE_SCHEMA == 18) };
++    const { assert!(LRIR_RECIPE_SCHEMA == 19) };
+     assert_ne!(Recipe::DOMAIN, "lrr/v4/lrir-recipe");
+     assert_ne!(Recipe::DOMAIN, "lrr/v5/lrir-recipe");
+     assert_ne!(Recipe::DOMAIN, "lrr/v6/lrir-recipe");

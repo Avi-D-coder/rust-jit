@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Interpreter-first WT02. V94 full milestone failed:1973 passed/1 failed/1354 unexecuted of3328 host bodies. V95 syntax-boundary/positive-condition repair passed27 distinct controls, strict lint, format and real architecture. V96 metadata audit failed on remaining stale compat selector; exact one-leaf follow-on prepared for real audit and fresh asynchronous full gate. Separate str::is_empty schema18/op47 candidate remains held, uncompiled/unexecuted. No canonical promotion, task, new stock full-fixture or JIT acceptance. Read-only promotion inventory covers103 leaves (99 exact public packet hashes,3 unchanged originals+manifest); held is_empty acceptance/schema references prepared, including the separately found const schema assertion.",
+      "scope": "Interpreter-first WT02. V94 failed full milestone retained; V95 boundary/condition repair27 controls and strict/fmt/architecture passed. V97 corrected both selectors, real fixture audit8d3fc4/0 passed; one fresh full gate remains live on frozen3243e3b9 with source/owner guards. Root prepared103-leaf promotion inventory, str::is_empty(schema18/op47) and source-selected contains<&str>(final schema19/op48) candidates while validation ran. Contains includes bounded UTF8 search, PC/cell/source-bound VM continuation and4 pending controls including unchanged complete CRLF main. Both successors uncompiled/unexecuted, planned as one combined schema19 batch after prior milestone/promotion and7 queued original CLI observations. No canonical byte/string promotion, new stock full-fixture/task/JIT acceptance or weakened file verification.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -571,11 +571,15 @@
         "worktracks/evidence/2026-10-15-v94-full-milestone-failure.json",
         "worktracks/candidates/root-string-condition-fixture-reference-repair-v1/",
         "worktracks/evidence/2026-10-15-v95-v96-string-boundary.json",
-        "worktracks/candidates/root-string-empty-acceptance-references-v1/"
+        "worktracks/candidates/root-string-empty-acceptance-references-v1/",
+        "worktracks/candidates/root-string-search-kernel-v1/",
+        "artifacts/macos-first/root-string-search-kernel-v1/",
+        "worktracks/candidates/root-string-contains-v1/",
+        "artifacts/macos-first/root-string-contains-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T14:45:19.297959+00:00",
+      "updated_at": "2026-10-15T15:39:56.588063+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

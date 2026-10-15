@@ -6434,6 +6434,20 @@
         "canonical_promotion": false,
         "acceptance_reference_candidate": "worktracks/candidates/root-string-empty-acceptance-references-v1/README.md",
         "static_review": "Exact schema18 expectation also required in match_no_arm_exit; included in held follow-on, no compile/runtime pass"
+      },
+      "current_string_contains_candidate": {
+        "status": "source_only_uncompiled_unexecuted_held",
+        "source_candidate": "worktracks/candidates/root-string-contains-v1/README.md",
+        "source_foundation": "worktracks/candidates/root-string-search-kernel-v1/README.md",
+        "schema": 19,
+        "opcode": 48,
+        "opcode_count": 49,
+        "source_scope": "closed canonical shared-str Pattern argument; general Pattern/owned String/ordinary methods incomplete",
+        "original_main_witness": "tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs",
+        "new_pending_bodies": 4,
+        "compose_with_empty_parent_before_validation": true,
+        "full_fixture_passes_added": 0,
+        "canonical_promotion": false
       }
     },
     {

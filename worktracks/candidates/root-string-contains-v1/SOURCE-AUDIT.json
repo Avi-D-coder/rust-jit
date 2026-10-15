@@ -1,0 +1,197 @@
+{
+  "status": "source_only_uncompiled_unexecuted_held",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T022",
+    "T024",
+    "T061"
+  ],
+  "created_at": "2026-10-15T15:33:41.702535+00:00",
+  "prerequisites": [
+    "root-string-empty-v1",
+    "root-string-empty-acceptance-references-v1",
+    "V97 schema17 full milestone and canonical promotion"
+  ],
+  "supersedes": [
+    "root-string-search-kernel-v1"
+  ],
+  "files": [
+    {
+      "path": "compat/fixtures.toml",
+      "before_sha256": "3704194f771af550a4654e1a535f94a24e6b0577e0bdfe545e328d2ae749fc33",
+      "after_sha256": "9cba98d7ec5cb9b91fc912fe5ce42426252ee17e083c9feccce6d5d8acff0a4f"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_capture.rs",
+      "before_sha256": "debffcc6308ba5b0b7a94aaffec1da91c6795c240c360d868bcb3888aa052fd2",
+      "after_sha256": "9cb1286f4dc5bc3179f14f9a2a2d1531fb7b217ff69b1feee6d707d09a21c9f4"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_string_macro_literal_tests.rs",
+      "before_sha256": "bad8b328c67eb2e512e49d82b3c96e7513c12bddb84d17051d8ced062fabbfae",
+      "after_sha256": "08b8695827dc92a9a734c5cc775c823082e29b8d1a80132d5d26f7c5e8a6d182"
+    },
+    {
+      "path": "crates/lrr/src/facade/string_methods.rs",
+      "before_sha256": "23eb8b8b8cb986b9147a04290ae7579db8debc827f59ad400ee073815d3e81e4",
+      "after_sha256": "9f1038d7ce309ea455abdb8379b0a6fe7be34a46c15b63927efa7d0a08b77889"
+    },
+    {
+      "path": "crates/lrr/src/frontend/primitive_float_methods.rs",
+      "before_sha256": "970bcd3a639afcbdcda3309682be5df55eab9c76668256832fd492ccdac2f3ca",
+      "after_sha256": "ebbe21f1842a0ea160f6e4b5e2a8b8c3556bae443465c24d5fa165b89e27e3aa"
+    },
+    {
+      "path": "crates/lrr/src/frontend/primitive_float_recipe_tests.rs",
+      "before_sha256": "039ec6cbdba25948f5c3afd61f532e8ce72be2933a620d575f073a04e6fb300a",
+      "after_sha256": "695021831dac6c5b786d963b542c11ac8169827e679bb2b45462807789d7da1c"
+    },
+    {
+      "path": "crates/lrr/src/frontend/runtime_primitive_float_catalog_tests.rs",
+      "before_sha256": "70bf5bed4508133b256783a13885e6009a4bebab43484fcb8a6d483f2c00ad68",
+      "after_sha256": "8f695074983b06aca6f3b9e0b988ee599b39246e9bf12f15f1a2d8962b285201"
+    },
+    {
+      "path": "crates/lrr/src/ir/definition_numeric_wire_tests.rs",
+      "before_sha256": "5e8336f45c4a088793d058ccaf9d87be64f4dc1104443498446e7338662f2a59",
+      "after_sha256": "c3850e87c44280636cb37ef930564fd5dce2f50f33ca6a3d50e53ed47c44c8fd"
+    },
+    {
+      "path": "crates/lrr/src/ir/op.rs",
+      "before_sha256": "6d5d1506fcf63d7933f6e2b235d7579b749f5a31b4da20d3dbd13faa4b98efa2",
+      "after_sha256": "0a461e478b83c55b8c7df03d0763f25cd8288f047d628ff1db4f8510f2c976bd"
+    },
+    {
+      "path": "crates/lrr/src/ir/parameter_place_wire_tests.rs",
+      "before_sha256": "3c03b67a7170d6c70d49ccf03c4082ad65e1901edaf6c2c1f7bccad321ecaf2b",
+      "after_sha256": "b285882cb48dd93eabec1b24dc47d480653e9ace7c9f66e332b22992daba41d6"
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "before_sha256": "267d5f742dec96400e1e97192d0c8cd5daf98297fb2b98ceb23c33b53078a8d7",
+      "after_sha256": "c1ecc495c7d0837a761468b6bdeb9b622c3946097c23e5a7f4d2a5ebe6d75ee7"
+    },
+    {
+      "path": "crates/lrr/src/ir/validate.rs",
+      "before_sha256": "34a618f537c53210b8a69209ad56ccde145288880571daa7978df61ebc5854df",
+      "after_sha256": "e307ca52a61a8712c7a8527f74473bec21a9c606bf659447f7e320978e4c00d4"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_comparison.rs",
+      "before_sha256": "349bdaa64a8971e9a57069c523923a0308a3667f58f742122a9407e0e1b3635e",
+      "after_sha256": "ef76d37a9743508e9f7fbee54fb29b8a268d28822dfe0e075a117b42bac94d6a"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_string_search.rs",
+      "before_sha256": null,
+      "after_sha256": "5fe6cc321592c42be7d512a710ce20a9653b8a9b6d61b7452fae43f8e166cbc9"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_string_search_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "b598b793e67e7c0f3b60ccf6c57c2b7e5316560a0b3dd9254162a24fc8153ce0"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_primitive_methods.rs",
+      "before_sha256": "f8e8e683861aecf3737d38e657855ab5cee3f39a84ee42764c0fe9a03b4e80c6",
+      "after_sha256": "648b73afc15f87dea49958c74db1010bed78f8f77b1ff7f67a49e7f59dc7b9f5"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_scalars.rs",
+      "before_sha256": "e6702d4c66c4b1b458f1bcb9783194b4ea8900e3c99b8e2d9513fe86348a2eb1",
+      "after_sha256": "565fc4abccf633b6efbcea387d92ac8ecadd598e8ba2ab76af6bf200f1e97022"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "before_sha256": "7cbeb272b5235f2d7e8b9689d024cf9ce6661744f9c5c5efda8f5b50860db43e",
+      "after_sha256": "832bdfc05e3a5723c0805fee582104e4649593b0d84bc47502763677e868f02f"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_aggregate_copy.rs",
+      "before_sha256": "ed4cc87ff3e85b4e54f0591459de7f905acef7371d2048e96122403a7e0ca042",
+      "after_sha256": "62acb8ce80e0cd212b774a65788b93d680f97d11474e1755d48ab078eda47aeb"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_byte_comparisons.rs",
+      "before_sha256": "193369995fa8a97dcec484f7b17530374d9c68d2429b72ba9ee5e4c266d54c7b",
+      "after_sha256": "dee72eeae3af245b73988aa1a0accfe480107bae9c88ec4d3c48e5011322913b"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_byte_literals.rs",
+      "before_sha256": "65bfb3e83e2f88aff67d28e271e8a1c1413cbce2d04b352c31b1ebe7e1f20712",
+      "after_sha256": "3d17eee219048f72e27043b57d20ffc17f0679189048d215c1c2120c95413be0"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_source_constant.rs",
+      "before_sha256": "b896d1112d6b51352fb8bbca54dc2c49761fe249e5c80ef73c5bfd8732ce1260",
+      "after_sha256": "aea75f6f60b84b098053ee7da972b93c84511c8654a5deec6381d88ec84f4b12"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_string_search.rs",
+      "before_sha256": null,
+      "after_sha256": "11970f0d812a353dbf17e9eabc2ff57860fb854fdb147a9f75f3e538a3f26ec3"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "before_sha256": "57c98eae80ec2d67a75b94beac699988cd37fc35b13848200167e37607fe56c5",
+      "after_sha256": "9726ab955c9b8ce0e1989509ac0ca70341e32220b1dc555c115be5be10f53e5e"
+    },
+    {
+      "path": "docs/tasks.json",
+      "before_sha256": "52dcf67e0fd268d454264e2338424af5ab5262af8c8d9ab2a836c80a040491da",
+      "after_sha256": "8552a5da683852bb0ac26efc88f0f7c4a9f2dad4efa2542a08277ebed465dc59"
+    },
+    {
+      "path": "xtask/tests/match_no_arm_exit.rs",
+      "before_sha256": "f1a2737d2f47dc8b4c8c38f35ec05499bdd845ea5d89918655b7da1f9714fd86",
+      "after_sha256": "d3d40d41d9ec693a4ac2af140ba694d31603766ea13340a0379cb3f7b660f1af"
+    }
+  ],
+  "patch_sha256": "1b0f64dc357c8cb796b9b8de5980206239889787beb83df779a9a4cc9143a79b",
+  "patch_bytes": 65535,
+  "schema": 19,
+  "recipe_domain": "lrr/v19/lrir-recipe",
+  "opcode": 48,
+  "opcode_count": 49,
+  "canonical_member_kind_tag": 3,
+  "string_facet_domain": "lrr/v4/str-method-facet",
+  "supported_pattern_scope": "actual source shared str and canonical closed core Pattern for &str only",
+  "core_witnesses": [
+    {
+      "path": "library/core/src/str/mod.rs",
+      "sha256": "37b9707b62fb84c445cf5c6896c9c42c2a5b195b8823913fe2d0ff4422ec8530"
+    },
+    {
+      "path": "library/core/src/str/pattern.rs",
+      "sha256": "65cccbd6d88548c3d08a0c2a35363da2d0b484ad6d6be89c01feca21c8e229d9"
+    }
+  ],
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "upstream_full_main_witness": "tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs",
+  "upstream_witness_sha256": "bb03d92b8289726639b7947f900dca05704b3a20ce26ec183a5a233ea6747289",
+  "raw_originals_added": 0,
+  "raw_originals_after_parent_expected": 509,
+  "pending_cases_after_parent_expected": 324,
+  "new_bodies": 4,
+  "new_bodies_in_parent": 2,
+  "new_fixture_references": 4,
+  "bounded_pairs_per_dispatch": 256,
+  "worst_case_comparisons": "quadratic, bounded by fuel; no speedup claim",
+  "static_checks": [
+    "Rust1.99 formatting of24 private Rust leaves",
+    "explicit appended opcode48 and schema19/current counter49 assertions",
+    "JSON/TOML parse and four exact unique new test selectors",
+    "exact no-fuzz/no-offset replay"
+  ],
+  "acceptance_pending": [
+    "prior schema17 full milestone and source integration",
+    "actual compilation/strict lint",
+    "actual architecture/fixture audits",
+    "6 new bodies across parent and this candidate plus affected wire/facade/storage/VM banks",
+    "complete unchanged CRLF main all4 editions and owning-edition CLI runtime evidence",
+    "fresh combined milestone"
+  ],
+  "stock_runtime_passes_added": 0,
+  "task_completion_claimed": false,
+  "canonical_promotion": false
+}
