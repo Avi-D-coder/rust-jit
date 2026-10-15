@@ -1,0 +1,781 @@
+--- a/crates/lrr/src/engine/lexical_numeric_callees_tests.rs
++++ b/crates/lrr/src/engine/lexical_numeric_callees_tests.rs
+@@ -299,3 +299,52 @@
+         db.finish_run().unwrap();
+     }
+ }
++
++#[test]
++fn unchanged_integer_literal_suffix_inference_main_executes_all_calls_all_editions() {
++    // Full unchanged main, not the local-header component setup above. The
++    // original repeated shadows, signed minima and parameter contexts execute.
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, view, discovery) = setup(ORIGINAL, edition);
++        let macros =
++            crate::engine::standalone_macros::CompletedStandaloneRuntimeMacros::from_discovery(
++                &view, &discovery,
++            )
++            .unwrap();
++        let contexts = macros.contexts().unwrap();
++        let main = view
++            .outline()
++            .items
++            .iter()
++            .find(|item| item.def_key.declared_name == "main")
++            .unwrap()
++            .body
++            .as_ref()
++            .unwrap()
++            .key();
++        db.begin_run().unwrap();
++        let QueryPoll::Ready(Ok(mut machine)) =
++            RunMachine::start_with_discovery(&mut db, main, 100000, discovery)
++        else {
++            panic!("original main was not started in edition {edition}")
++        };
++        machine.enable_runtime_capture().unwrap();
++        let report = match machine.poll_with_runtime_macros(&mut db, &contexts) {
++            RunPoll::Completed(report) => report,
++            RunPoll::Fault(error) => panic!("edition {edition}: {error}"),
++            RunPoll::NeedInput(input) => panic!("edition {edition}: {input:?}"),
++            RunPoll::Panicked(report) => panic!("edition {edition}: {report:?}"),
++        };
++        assert!(matches!(report.value, ValueSummary::Unit));
++        assert_eq!(report.live_edition, edition);
++        assert_eq!(report.opcode_counters.started_by_opcode[19], 18);
++        assert_eq!(
++            report.opcode_counters.operations_started,
++            report.opcode_counters.operations_completed
++        );
++        assert!(machine.runtime_capture_facts().unwrap().complete());
++        assert!(machine.calls.is_empty() && machine.pending.is_empty());
++        assert!(machine.frame.active_scopes().is_empty());
++        db.finish_run().unwrap();
++    }
++}
+--- a/crates/lrr/src/ir/definition_numeric_wire_tests.rs
++++ b/crates/lrr/src/ir/definition_numeric_wire_tests.rs
+@@ -259,8 +259,8 @@
+ }
+ #[test]
+ fn recipe_schema_separates_definition_context_from_prior_cache_world() {
+-    assert_eq!(crate::ir::op::LRIR_RECIPE_SCHEMA, 16);
+-    assert_eq!(Recipe::DOMAIN, "lrr/v16/lrir-recipe");
++    assert_eq!(crate::ir::op::LRIR_RECIPE_SCHEMA, 17);
++    assert_eq!(Recipe::DOMAIN, "lrr/v17/lrir-recipe");
+     let body = body();
+     let recipe = verify(
+         draft(
+@@ -274,7 +274,7 @@
+     )
+     .unwrap();
+     let recipe = recipe.recipe();
+-    let mut expected = StableEncoder::new("lrr/v16/lrir-recipe");
++    let mut expected = StableEncoder::new("lrr/v17/lrir-recipe");
+     expected.record(&recipe.key);
+     expected.record(&recipe.origin.span.body_key);
+     expected.u32(recipe.origin.span.relative_start);
+@@ -503,3 +503,105 @@
+         }
+     }
+ }
++
++#[test]
++fn original_negative_local_fallback_wire_requires_exact_source_read_phase_and_destination() {
++    use crate::core::digest::StableEncode;
++    const ORIGINAL: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs"
++    );
++    let parsed = ParsedFile::parse(
++        &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity::current(),
++    )
++    .unwrap();
++    let outline = parsed
++        .outline(Digest([42; 32]), vec![], &CfgSet::guest_default())
++        .unwrap();
++    let handle = outline
++        .items
++        .iter()
++        .find(|item| item.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap();
++    let body = parsed.index_body(handle, Default::default()).unwrap();
++    let start = u32::try_from(ORIGINAL.find("id_i8(j)").unwrap() + "id_i8(".len()).unwrap()
++        - handle.range.start;
++    let node = body
++        .nodes()
++        .iter()
++        .find(|node| {
++            node.range.start == start
++                && node.range.end == start + 1
++                && node.role
++                    == NodeRole::Expression(crate::syntax::body_index::ExpressionKind::Path)
++        })
++        .unwrap();
++    let key = body.pc(node.id, Phase::Entry).unwrap();
++    let verified = parsed.initial_thunk(handle, &body, &key).unwrap();
++    let recipe = verified.recipe();
++    let (child, proof) = recipe
++        .operations
++        .iter()
++        .find_map(|op| match op {
++            Op::SetHint {
++                child,
++                hint: HintRecipe::LocalIntegerFallback(proof),
++            } => Some((*child, proof)),
++            _ => None,
++        })
++        .unwrap();
++    proof.require(&body, &key, child).unwrap();
++    let mut expected = StableEncoder::new("lrr/v7/definition-numeric-hint-test");
++    expected.u32(10);
++    expected.record(proof.as_ref());
++    assert_eq!(
++        hint_digest(HintRecipe::LocalIntegerFallback(proof.clone())),
++        expected.finish()
++    );
++    assert_ne!(
++        hint_digest(HintRecipe::LocalIntegerFallback(proof.clone())),
++        hint_digest(HintRecipe::Primitive(PrimitiveType::I32))
++    );
++    let original = RecipeDraft {
++        key: recipe.key.clone(),
++        origin: recipe.origin.clone(),
++        operations: recipe.operations.to_vec(),
++        exits: vec![recipe.exit.clone()],
++        dependencies: recipe.dependencies.to_vec(),
++    };
++    verify(original.clone(), &body).unwrap();
++    let mut wrong = original.clone();
++    wrong.key.phase = Phase::Exit.code().unwrap();
++    assert!(verify(wrong, &body).is_err());
++    let other = body
++        .nodes()
++        .iter()
++        .filter_map(|node| node.value)
++        .find(|slot| *slot != child)
++        .unwrap();
++    let mut wrong = original.clone();
++    for op in &mut wrong.operations {
++        if let Op::SetHint {
++            child,
++            hint: HintRecipe::LocalIntegerFallback(_),
++        } = op
++        {
++            *child = other;
++        }
++    }
++    assert!(verify(wrong, &body).is_err());
++    let mut wrong = original;
++    wrong.operations = vec![Op::BindLocal {
++        binding: proof.binding(),
++        source: child,
++        hint: HintRecipe::LocalIntegerFallback(proof.clone()),
++        writable: false,
++    }];
++    assert!(verify(wrong, &body).is_err());
++    let mut old = StableEncoder::new("lrr/v16/lrir-recipe");
++    recipe.encode_fields(&mut old);
++    assert_ne!(recipe.fingerprint(), old.finish());
++}
+--- a/crates/lrr/src/ir/op.rs
++++ b/crates/lrr/src/ir/op.rs
+@@ -61,6 +61,9 @@
+ }
+ #[derive(Debug, Clone, Eq, PartialEq)]
+ pub enum HintRecipe {
++    /// A source-proven deferred negative integer local. A reached destination
++    /// or already-bound local wins; only an otherwise unconstrained read uses i32.
++    LocalIntegerFallback(Box<crate::syntax::LocalIntegerFallback>),
+     /// Header/site/current-namespace proof for an actual original match entry.
+     RangeBoundContext(
+         std::sync::Arc<crate::syntax::scalar_match_context::AdmittedScalarMatchContext>,
+@@ -130,7 +133,7 @@
+     }
+ }
+ /// Explicit recipe/cache compatibility, independent of host enum layout.
+-pub const LRIR_RECIPE_SCHEMA: u32 = 16;
++pub const LRIR_RECIPE_SCHEMA: u32 = 17;
+ pub const DECODED_INTEGER_SCHEMA: u32 = 1;
+ #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+ pub enum IntegerLexicalError {
+--- a/crates/lrr/src/ir/parameter_place_wire_tests.rs
++++ b/crates/lrr/src/ir/parameter_place_wire_tests.rs
+@@ -22,8 +22,8 @@
+ );
+ #[test]
+ fn unchanged_dereference_parameters_address_original_cells_without_owning_read_all_editions() {
+-    assert_eq!(LRIR_RECIPE_SCHEMA, 16);
+-    assert_eq!(Recipe::DOMAIN, "lrr/v16/lrir-recipe");
++    assert_eq!(LRIR_RECIPE_SCHEMA, 17);
++    assert_eq!(Recipe::DOMAIN, "lrr/v17/lrir-recipe");
+     assert_eq!(SOURCE_CONSTANT_OPCODE, 43);
+     assert_eq!(OPCODE_COUNT, 47);
+     for edition in [2015, 2018, 2021, 2024] {
+@@ -147,7 +147,7 @@
+                     let verified = verify(length.clone(), &body).unwrap();
+                     let recipe = verified.recipe();
+                     assert_eq!(u32::from(recipe.operations[0].opcode_tag()), opcode);
+-                    let mut expected = StableEncoder::new("lrr/v16/lrir-recipe");
++                    let mut expected = StableEncoder::new("lrr/v17/lrir-recipe");
+                     expected.record(&recipe.key);
+                     expected.record(&recipe.origin.span.body_key);
+                     expected.u32(recipe.origin.span.relative_start);
+@@ -164,7 +164,7 @@
+                     expected.record(next);
+                     expected.u64(0);
+                     assert_eq!(recipe.fingerprint(), expected.finish());
+-                    let mut old = StableEncoder::new("lrr/v15/lrir-recipe");
++                    let mut old = StableEncoder::new("lrr/v16/lrir-recipe");
+                     recipe.encode_fields(&mut old);
+                     assert_ne!(recipe.fingerprint(), old.finish());
+                     for invalid_source in [destination, crate::ir::pc::SlotId(u32::MAX)] {
+--- a/crates/lrr/src/ir/recipe.rs
++++ b/crates/lrr/src/ir/recipe.rs
+@@ -177,6 +177,10 @@
+ }
+ fn hint(e: &mut StableEncoder, h: &HintRecipe) {
+     match h {
++        HintRecipe::LocalIntegerFallback(proof) => {
++            e.u32(10);
++            e.record(proof.as_ref());
++        }
+         HintRecipe::RangeBoundContext(context) => {
+             e.u32(9);
+             e.record(context.as_ref());
+@@ -225,7 +229,7 @@
+     }
+ }
+ impl StableEncode for Recipe {
+-    const DOMAIN: &'static str = "lrr/v16/lrir-recipe";
++    const DOMAIN: &'static str = "lrr/v17/lrir-recipe";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         e.record(&self.key);
+         span(e, &self.origin.span);
+--- a/crates/lrr/src/ir/validate.rs
++++ b/crates/lrr/src/ir/validate.rs
+@@ -581,6 +581,13 @@
+             | Op::Literal { hint, .. } => Some(hint),
+             _ => None,
+         };
++        if let Some(super::op::HintRecipe::LocalIntegerFallback(proof)) = annotation {
++            let Op::SetHint { child, .. } = op else {
++                return Err(invalid("local integer fallback is only an exact read hint"));
++            };
++            proof.require(body, &draft.key, *child)?;
++            charge(&mut bytes, proof.allocated_bytes())?;
++        }
+         if let Some(super::op::HintRecipe::RangeBoundContext(context)) = annotation {
+             let Op::SetHint { child, .. } = op else {
+                 return Err(invalid(
+--- a/crates/lrr/src/syntax/mod.rs
++++ b/crates/lrr/src/syntax/mod.rs
+@@ -28,6 +28,7 @@
+ pub mod body_index;
+ 
+ mod thunks;
++pub use thunks::LocalIntegerFallback;
+ pub(crate) use thunks::runtime_macro_numeric_context::MacroNumericSite;
+ pub(crate) use thunks::scalar_match_context;
+ 
+--- a/crates/lrr/src/syntax/numeric_fallback.rs
++++ b/crates/lrr/src/syntax/numeric_fallback.rs
+@@ -218,7 +218,11 @@
+ /// An operator initializer separately needs a numeric result to run operands.
+ pub(super) fn operator_initializer(
+     expression: &ast::Expr,
++    allow_deferred_integer: bool,
+ ) -> Result<Option<PrimitiveType>, Diagnostic> {
++    if allow_deferred_integer && deferred_integer_initializer(expression)? {
++        return Ok(None);
++    }
+     let mut root = expression.clone();
+     let mut depth = 0usize;
+     while let ast::Expr::ParenExpr(parenthesis) = root {
+@@ -238,6 +242,70 @@
+     } else {
+         Ok(None)
+     }
++}
++
++/// Match precisely the unsuffixed integer prefix that ordinary lowering folds
++/// into a deferred literal, including its bounded parentheses. This is syntax
++/// evidence only; it supplies neither a call identity nor a concrete parameter.
++pub(super) fn deferred_integer_initializer(expression: &ast::Expr) -> Result<bool, Diagnostic> {
++    let mut root = expression.clone();
++    let mut depth = 0usize;
++    loop {
++        if root
++            .syntax()
++            .children()
++            .any(|node| ast::Attr::can_cast(node.kind()))
++        {
++            return Ok(false);
++        }
++        let ast::Expr::ParenExpr(group) = root else {
++            break;
++        };
++        depth = depth.checked_add(1).filter(|n| *n <= 256).ok_or_else(|| {
++            Diagnostic::new(
++                "LRR-E-METADATA-LIMIT",
++                "numeric initializer parenthesis limit".into(),
++            )
++        })?;
++        let Some(inner) = group.expr() else {
++            return Ok(false);
++        };
++        root = inner;
++    }
++    let ast::Expr::PrefixExpr(prefix) = root else {
++        return Ok(false);
++    };
++    if !prefix.op_token().is_some_and(|token| token.text() == "-") {
++        return Ok(false);
++    }
++    let Some(mut operand) = prefix.expr() else {
++        return Ok(false);
++    };
++    loop {
++        if operand
++            .syntax()
++            .children()
++            .any(|node| ast::Attr::can_cast(node.kind()))
++        {
++            return Ok(false);
++        }
++        let ast::Expr::ParenExpr(group) = operand else {
++            break;
++        };
++        depth = depth.checked_add(1).filter(|n| *n <= 256).ok_or_else(|| {
++            Diagnostic::new(
++                "LRR-E-METADATA-LIMIT",
++                "numeric initializer parenthesis limit".into(),
++            )
++        })?;
++        let Some(inner) = group.expr() else {
++            return Ok(false);
++        };
++        operand = inner;
++    }
++    Ok(matches!(operand, ast::Expr::Literal(literal)
++        if literal.token().kind() == SyntaxKind::INT_NUMBER
++            && ast::IntNumber::cast(literal.token()).is_some_and(|number| number.suffix().is_none())))
+ }
+ 
+ fn source_work(visited: &mut usize) -> Result<(), Diagnostic> {
+--- a/crates/lrr/src/syntax/runtime_macro_calls.rs
++++ b/crates/lrr/src/syntax/runtime_macro_calls.rs
+@@ -268,6 +268,17 @@
+             return Err(invalid("scalar fault lacks exact source origin"));
+         }
+         for (ordinal, step) in steps.iter_mut().enumerate() {
++            if let RuntimeScalarStep::Operation(Op::SetHint {
++                hint: HintRecipe::LocalIntegerFallback(proof),
++                ..
++            }) = step
++            {
++                proof.bind(index, &pc(ordinal)?)?;
++                retained_bytes = retained_bytes
++                    .checked_add(proof.allocated_bytes())
++                    .filter(|n| *n <= 32 * 1024 * 1024)
++                    .ok_or_else(|| invalid("local fallback retained metadata limit"))?;
++            }
+             if let RuntimeScalarStep::PrimitiveMethod(method) = step {
+                 method.bind(index, key, ordinal)?;
+                 retained_bytes = retained_bytes
+--- a/crates/lrr/src/syntax/runtime_macro_scalars.rs
++++ b/crates/lrr/src/syntax/runtime_macro_scalars.rs
+@@ -321,13 +321,32 @@
+                             return Err(unsupported());
+                         }
+                         let name = segment.name_ref().ok_or_else(unsupported)?;
+-                        stack.push(Work::Operation(self.runtime_macro_binding_read(
++                        let read = self.runtime_macro_binding_read(
+                             body,
+                             index,
+                             key,
+                             name.text(),
+                             destination,
+-                        )?));
++                        )?;
++                        let fallback = if let Op::ReadLocal { binding, .. } = &read {
++                            super::thunks::local_integer_fallback(
++                                self,
++                                index,
++                                body,
++                                *binding,
++                                destination,
++                                key,
++                            )?
++                        } else {
++                            None
++                        };
++                        stack.push(Work::Operation(read));
++                        if let Some(proof) = fallback {
++                            stack.push(Work::Operation(Op::SetHint {
++                                child: destination,
++                                hint: HintRecipe::LocalIntegerFallback(proof),
++                            }));
++                        }
+                     }
+                     ast::Expr::RefExpr(reference) => {
+                         if reference.raw_token().is_some() {
+--- a/crates/lrr/src/syntax/thunks.rs
++++ b/crates/lrr/src/syntax/thunks.rs
+@@ -13,7 +13,7 @@
+             DecodedLiteral, DefinitionNumericContext, HintRecipe, LiteralKind, LiteralRecipe,
+             NumericBinary, NumericUnary, Op, PrimitiveType,
+         },
+-        pc::{NodeId, PcKey, Phase},
++        pc::{NodeId, PcKey, Phase, SlotId},
+         recipe::{ControlRecipe, Origin, RecipeDraft, RecipeExit, VerifiedRecipe},
+         validate::verify,
+     },
+@@ -667,6 +667,175 @@
+     };
+     local_binding_at(parsed, index, body, path.syntax(), &name)
+ }
++/// Private source admission. A binding ordinal alone cannot mint this hint.
++#[derive(Debug, Clone, Eq, PartialEq)]
++pub struct LocalIntegerFallback {
++    body: crate::source::manifest::BodyKey,
++    index: crate::core::digest::Digest,
++    binding: NodeId,
++    destination: SlotId,
++    site: NodeId,
++    key: Option<PcKey>,
++}
++impl LocalIntegerFallback {
++    pub(crate) fn binding(&self) -> NodeId {
++        self.binding
++    }
++    pub(crate) fn allocated_bytes(&self) -> usize {
++        std::mem::size_of::<Self>()
++    }
++    pub(crate) fn require(
++        &self,
++        body: &BodyIndex,
++        key: &PcKey,
++        child: SlotId,
++    ) -> Result<(), Diagnostic> {
++        use crate::core::digest::StableEncode;
++        if body.body() != &self.body
++            || body.fingerprint() != self.index
++            || self.key.as_ref() != Some(key)
++            || child != self.destination
++            || key.node != self.site.0
++        {
++            return Err(error(
++                "local integer fallback source/index/phase/destination differs",
++            ));
++        }
++        Ok(())
++    }
++    pub(super) fn bind(&mut self, body: &BodyIndex, key: &PcKey) -> Result<(), Diagnostic> {
++        if self.key.is_some() || key.node != self.site.0 || key.body != self.body {
++            return Err(error(
++                "local integer fallback phase already bound or differs",
++            ));
++        }
++        self.key = Some(key.clone());
++        self.require(body, key, self.destination)
++    }
++}
++impl crate::core::digest::StableEncode for LocalIntegerFallback {
++    const DOMAIN: &'static str = "lrr/v1/local-integer-fallback";
++    fn encode_fields(&self, e: &mut crate::core::digest::StableEncoder) {
++        e.record(&self.body);
++        e.digest(self.index);
++        e.u32(self.binding.0);
++        e.u32(self.destination.0);
++        e.u32(self.site.0);
++        e.option(&self.key, |e, key| e.record(key));
++    }
++}
++
++/// Exact original declaration evidence for a soft integer default at a local
++/// read. Lookup stays inside this entered body and never visits another body.
++pub(super) fn local_integer_fallback(
++    parsed: &ParsedFile,
++    index: &BodyIndex,
++    body: &BodyHandle,
++    binding: NodeId,
++    destination: SlotId,
++    key: &PcKey,
++) -> Result<Option<Box<LocalIntegerFallback>>, Diagnostic> {
++    use crate::core::digest::StableEncode;
++    if index.body() != &body.key() || index.profile() != &parsed.profile {
++        return Err(error("local fallback source/body differs"));
++    }
++    let node = index
++        .nodes()
++        .get(binding.0 as usize)
++        .filter(|node| node.role == NodeRole::Pattern)
++        .ok_or_else(|| error("local fallback binding absent"))?;
++    let start = body
++        .range
++        .start
++        .checked_add(node.range.start)
++        .ok_or_else(|| error("local fallback source start overflow"))?;
++    let end = body
++        .range
++        .start
++        .checked_add(node.range.end)
++        .ok_or_else(|| error("local fallback source end overflow"))?;
++    let root = parsed.entered_body_root(body)?;
++    let range = ra_ap_syntax::TextRange::new(start.into(), end.into());
++    if !root.text_range().contains_range(range) {
++        return Err(error("local fallback pattern outside entered body"));
++    }
++    let Some(pattern) = root
++        .covering_element(range)
++        .ancestors()
++        .filter_map(ast::IdentPat::cast)
++        .find(|pattern| pattern.syntax().text_range() == range)
++    else {
++        return Ok(None);
++    };
++    if pattern.ref_token().is_some() || pattern.at_token().is_some() {
++        return Ok(None);
++    }
++    let Some(statement) = pattern.syntax().parent().and_then(ast::LetStmt::cast) else {
++        return Ok(None);
++    };
++    if statement.ty().is_some()
++        || statement.let_else().is_some()
++        || !statement
++            .pat()
++            .is_some_and(|actual| actual.syntax() == pattern.syntax())
++    {
++        return Ok(None);
++    }
++    let Some(initializer) = statement.initializer() else {
++        return Ok(None);
++    };
++    if !super::numeric_fallback::deferred_integer_initializer(&initializer)? {
++        return Ok(None);
++    }
++    let site = index
++        .nodes()
++        .get(key.node as usize)
++        .ok_or_else(|| error("local fallback read node absent"))?;
++    let macro_read = site.role == NodeRole::Expression(ExpressionKind::Macro);
++    if key.body != body.key()
++        || (!macro_read && key.phase != Phase::Entry.code()?)
++        || if macro_read {
++            !site.runtime_scalar_slots.contains(&destination)
++        } else {
++            site.role != NodeRole::Expression(ExpressionKind::Path)
++                || site.value != Some(destination)
++        }
++    {
++        return Err(error("local fallback read/destination differs"));
++    }
++    if !macro_read {
++        let start = body
++            .range
++            .start
++            .checked_add(site.range.start)
++            .ok_or_else(|| error("local fallback read start overflow"))?;
++        let end = body
++            .range
++            .start
++            .checked_add(site.range.end)
++            .ok_or_else(|| error("local fallback read end overflow"))?;
++        let read_range = ra_ap_syntax::TextRange::new(start.into(), end.into());
++        let path = root
++            .covering_element(read_range)
++            .ancestors()
++            .filter_map(ast::PathExpr::cast)
++            .find(|path| path.syntax().text_range() == read_range)
++            .ok_or_else(|| error("local fallback exact read absent"))?;
++        if local_binding(parsed, index, body, &path)? != Some(binding) {
++            return Err(error("local fallback names another source binding"));
++        }
++    }
++    let proof = LocalIntegerFallback {
++        body: body.key(),
++        index: index.fingerprint(),
++        binding,
++        destination,
++        site: site.id,
++        key: if macro_read { None } else { Some(key.clone()) },
++    };
++    Ok(Some(Box::new(proof)))
++}
++
+ /// Pure statement attribute preprocessing in the captured owning cfg world.
+ fn statement_cfg(
+     syntax: &SyntaxNode,
+@@ -2223,7 +2392,7 @@
+                 // A written type always wins.
+                 if hint == HintRecipe::None
+                     && let Some(primitive) =
+-                        super::numeric_fallback::operator_initializer(&initializer)?
++                        super::numeric_fallback::operator_initializer(&initializer, !by_reference)?
+                 {
+                     hint = HintRecipe::Primitive(local_numeric_constraints::operator_type(
+                         self, index, body, &statement, &pattern, primitive,
+@@ -4277,22 +4446,39 @@
+                     }
+                     return unsupported("non-local path awaits ordinary namespace resolution");
+                 };
++                let mut operations = Vec::new();
++                if !place_context(path.syntax())
++                    && let Some(proof) = local_integer_fallback(
++                        self,
++                        index,
++                        body,
++                        binding,
++                        node.value.expect("path value"),
++                        key,
++                    )?
++                {
++                    operations.push(Op::SetHint {
++                        child: node.value.expect("path value"),
++                        hint: HintRecipe::LocalIntegerFallback(proof),
++                    });
++                }
++                operations.push(if place_context(path.syntax()) {
++                    Op::MakePlace {
++                        binding,
++                        destination: node
++                            .place
++                            .ok_or_else(|| error("local receiver place absent"))?,
++                    }
++                } else {
++                    Op::ReadLocal {
++                        binding,
++                        destination: node.value.expect("path value"),
++                    }
++                });
+                 draft(
+                     index,
+                     key,
+-                    vec![if place_context(path.syntax()) {
+-                        Op::MakePlace {
+-                            binding,
+-                            destination: node
+-                                .place
+-                                .ok_or_else(|| error("local receiver place absent"))?,
+-                        }
+-                    } else {
+-                        Op::ReadLocal {
+-                            binding,
+-                            destination: node.value.expect("path value"),
+-                        }
+-                    }],
++                    operations,
+                     RecipeExit::Next(return_pc(index, body, path.syntax())?),
+                 )
+             }
+--- a/crates/lrr/src/vm/frame.rs
++++ b/crates/lrr/src/vm/frame.rs
+@@ -1405,7 +1405,8 @@
+             // they never manufacture an annotation without that frame context.
+             HintRecipe::BorrowTarget { .. }
+             | HintRecipe::DefinitionNumeric(_)
+-            | HintRecipe::DefinitionParameter(_) => None,
++            | HintRecipe::DefinitionParameter(_)
++            | HintRecipe::LocalIntegerFallback(_) => None,
+             HintRecipe::ArrayPrimitive { element, len } => Some(TyTerm::Array(
+                 Box::new(TyTerm::Primitive(*element)),
+                 crate::traits::term::ConstTerm::Value(u64::from(*len)),
+@@ -3831,6 +3832,59 @@
+             StorageContract::Unbound => None,
+         };
+         Ok(hint)
++    }
++    fn local_integer_fallback_value(
++        &self,
++        binding: NodeId,
++        child: SlotId,
++        store: &GuestStore,
++    ) -> Result<Option<(TypeId, Option<crate::traits::term::TyTerm>)>, Diagnostic> {
++        self.preflight_hint(child)?;
++        // A reached concrete argument/result context wins. Never turn this
++        // source-proven default into a cast or overwrite a source lifetime.
++        if self.hint(child)?.is_some() || self.source_view_ref(child)?.is_some() {
++            return Ok(None);
++        }
++        let selected = if let Some(hint) = self.local_hint_value(binding, store)? {
++            if !(4..=13).contains(&hint.0) {
++                return Err(invalid("integer local fallback has a non-integer binding"));
++            }
++            // This is the same already-bound literal/local source route used
++            // by LocalHint; no descriptor/name lookup selects a trait member.
++            (hint, self.binding_sources[binding.0 as usize].clone())
++        } else {
++            let primitive = crate::ir::op::PrimitiveType::I32;
++            (
++                crate::runtime::shape::PrimitiveIdentity::from_recipe(primitive)?.id(),
++                Some(crate::traits::term::TyTerm::Primitive(primitive)),
++            )
++        };
++        self.preflight_source_view(child, selected.1.as_ref())?;
++        Ok(Some(selected))
++    }
++    pub(crate) fn preflight_local_integer_fallback(
++        &self,
++        binding: NodeId,
++        child: SlotId,
++        store: &GuestStore,
++    ) -> Result<(), Diagnostic> {
++        // Require the actual executed local even when a stronger context wins.
++        self.binding(binding)?;
++        self.local_integer_fallback_value(binding, child, store)?;
++        Ok(())
++    }
++    pub(crate) fn local_integer_fallback(
++        &mut self,
++        binding: NodeId,
++        child: SlotId,
++        store: &GuestStore,
++    ) -> Result<(), Diagnostic> {
++        self.binding(binding)?;
++        if let Some((hint, source)) = self.local_integer_fallback_value(binding, child, store)? {
++            self.declared_hint(child, Some(hint))?;
++            self.set_source_view(child, source)?;
++        }
++        Ok(())
+     }
+     fn definition_assign_kind(
+         &self,
+--- a/crates/lrr/src/vm/step.rs
++++ b/crates/lrr/src/vm/step.rs
+@@ -728,6 +728,10 @@
+         Op::ScopeEnter { scope } => frame.preflight_enter(*scope),
+         Op::ScopeLeave { scope } => frame.preflight_cleanup_scope(*scope),
+         Op::SetHint { child, hint } => {
++            if let HintRecipe::LocalIntegerFallback(proof) = hint {
++                proof.require(&frame.body, frame.pc(), *child)?;
++                return frame.preflight_local_integer_fallback(proof.binding(), *child, store);
++            }
+             if let HintRecipe::RangeBoundContext(context) = hint {
+                 context.require_hint(&frame.body, frame.pc(), *child)?;
+                 frame.preflight_source_view(
+@@ -1296,6 +1300,10 @@
+             operator,
+         } => frame.numeric_hint(*parent, *child, *left, *operator, store),
+         Op::SetHint { child, hint } => {
++            if let HintRecipe::LocalIntegerFallback(proof) = hint {
++                proof.require(&frame.body, frame.pc(), *child)?;
++                return frame.local_integer_fallback(proof.binding(), *child, store);
++            }
+             if let Some((primitive, descriptor)) =
+                 frame.normalized_root_return_hint(*child, hint)?
+             {
+--- a/xtask/tests/match_no_arm_exit.rs
++++ b/xtask/tests/match_no_arm_exit.rs
+@@ -199,7 +199,7 @@
+     expected.u32(7); // fixed wire discriminant, not Rust enum layout
+     expected.u64(0); // dependencies
+     assert_eq!(recipe.fingerprint(), expected.finish());
+-    const { assert!(LRIR_RECIPE_SCHEMA == 16) };
++    const { assert!(LRIR_RECIPE_SCHEMA == 17) };
+     assert_ne!(Recipe::DOMAIN, "lrr/v4/lrir-recipe");
+     assert_ne!(Recipe::DOMAIN, "lrr/v5/lrir-recipe");
+     assert_ne!(Recipe::DOMAIN, "lrr/v6/lrir-recipe");

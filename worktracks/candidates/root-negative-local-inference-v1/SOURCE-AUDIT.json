@@ -1,0 +1,130 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T024",
+    "T025",
+    "T032"
+  ],
+  "prerequisites": [
+    "root-string-byte-view-v1",
+    "root-string-api-repair-v1",
+    "root-byte-type-batch-atomicity-v1",
+    "root-or-range-frontier-contract-v1"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/lexical_numeric_callees_tests.rs",
+      "before_sha256": "f3b9fc66619ebf1e1ed9bf0b94fc6dfe7ffacdfa7655e0a40f328f3ca9f8b220",
+      "after_sha256": "44c76c23504fdfd10c46a7233a8792fe3432e2a1580d52565eabfa530b3f9f15"
+    },
+    {
+      "path": "crates/lrr/src/ir/definition_numeric_wire_tests.rs",
+      "before_sha256": "6f96ed02ea3154db6ddc20f0c401ff1ab4cf71c093d366ff323865d59baa0c3c",
+      "after_sha256": "e162a9e271ceca2055f0828f9c0760faaab123ea6ae1514f681960d97c6611d2"
+    },
+    {
+      "path": "crates/lrr/src/ir/op.rs",
+      "before_sha256": "d0275d74b6deb900317df6568d523864a965e05eed425edc1b061be5bc7a6572",
+      "after_sha256": "6537178e77cc3ed12a3b52a1c42d88e15960512b6eb25537cef06b8a366bfb12"
+    },
+    {
+      "path": "crates/lrr/src/ir/parameter_place_wire_tests.rs",
+      "before_sha256": "04eba46e35a58f1a42973ed169c2a70698bd10b1c447375d1916f11d01c8da0d",
+      "after_sha256": "33016400f2ace96804d1d950592fe93bdeffa7c3268f2dd2cf7efc16995a81e1"
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "before_sha256": "25322df78ed8af35beeab80a5310979721a266d19a28b039dff42766aaf2552b",
+      "after_sha256": "640cb3b96efc11ceddcc6559bdd04c0e8acd3f78f1f5af9948cf256d00f22bc1"
+    },
+    {
+      "path": "crates/lrr/src/ir/validate.rs",
+      "before_sha256": "cb80d26e4e857453bb67ec8e0ffb59de42900d698b2c6b65166d3aa8bb4f7968",
+      "after_sha256": "37f63557232b1554b1d1ab753db3ea7e9532ab3a474fb29bfeeefb722ab94d70"
+    },
+    {
+      "path": "crates/lrr/src/syntax/mod.rs",
+      "before_sha256": "1317f6d24a08e485fc565f398eb1ec4a82b37e9e4467090e8952e085688c5b16",
+      "after_sha256": "5e61a6b01f716511ed5c6a3b506ebe56a5dc3726c8eec8c7d26751dcfb5d35e5"
+    },
+    {
+      "path": "crates/lrr/src/syntax/numeric_fallback.rs",
+      "before_sha256": "13425eae0b9aefb4736abb5f7e20e699a09533e70f307c525bf2541b88a2f985",
+      "after_sha256": "4ee61ef87eb2fbce1fbe48a6f83c5d7da145d7e710856b791191ba230f9b050c"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_calls.rs",
+      "before_sha256": "a70707a360348aef3e940ade475b253f1250579f741fa05050375ced8ef6c69c",
+      "after_sha256": "90e03645ecff89e3c68f218075a4ba899e6f8aec17596cb2b9965299cae615ff"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_scalars.rs",
+      "before_sha256": "19dc56114653507521e667de0483f0c93d04475204bcf5544169646bea33d7e3",
+      "after_sha256": "4cfb7337a4f5512e8b5bd8f04a51376985593a4eeb6414f25ff5a008bef1d035"
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "before_sha256": "22f95b9e53891fe47c802beadc57986147175131a4cfab8797715d9195fd97ec",
+      "after_sha256": "701ecf1828790678caa5d7b2de16c9afc0432db6e80c015039ddd47c9ba86cde"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "before_sha256": "ea7dddfa4e3466b1f92191b7b168af4a6d2d9f363076b06df8c0285f009a3c26",
+      "after_sha256": "7cbeb272b5235f2d7e8b9689d024cf9ce6661744f9c5c5efda8f5b50860db43e"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "before_sha256": "dfd6945ef010524a664c1b981f2f41430560d307ba0dab3501d79a2268e39294",
+      "after_sha256": "570df94d7bf3c7a7e16d25a5c331d9573a518cfff1ac6038378419241db7fa2f"
+    },
+    {
+      "path": "xtask/tests/match_no_arm_exit.rs",
+      "before_sha256": "7d932991e91692608a138f2a2c1c25cdde30cae912bfd344a280ce1aa5c238bf",
+      "after_sha256": "c36a54af420bf62e78b6f5d7f375510641f62965b36bd725d9eed17d1ca6b60a"
+    }
+  ],
+  "patch_sha256": "1de0096a8c15380f3adcdc613465ff6b3bbaf5b3bae5dabc6b8099615b891cb6",
+  "patch_bytes": 31016,
+  "created_at": "2026-10-15T13:50:48.851064+00:00",
+  "schema": 17,
+  "recipe_domain": "lrr/v17/lrir-recipe",
+  "hint_tag": 10,
+  "opcode_count_unchanged": 47,
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "upstream_witness": {
+    "path": "tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+    "sha256": "f502f13f4f96fe146c05a02dd1a387eb3d4d9932915da35c047975d40eade4a6",
+    "reproduced_failure_line": 17,
+    "source_bytes": [
+      391,
+      399
+    ],
+    "exact_text": "id_i8(j)"
+  },
+  "failure_evidence": "worktracks/evidence/2026-10-15-retained-numeric-runtime.json",
+  "static_checks": [
+    "all exact predecessor hashes",
+    "Rust 1.99 leaf formatting",
+    "exact no-fuzz/no-offset patch replay"
+  ],
+  "new_test_bodies": 2,
+  "existing_wire_controls_extended": true,
+  "stock_runtime_passes_added_by_candidate": 0,
+  "acceptance_pending": [
+    "strict compilation and Clippy",
+    "complete unchanged suffix-inference main and18calls in all4 editions",
+    "fallback wire/structural controls",
+    "soft-default destination/bound-local/conflicting-source branch controls",
+    "affected named numeric and macro/ref/generic scopes",
+    "fresh integrated milestone"
+  ],
+  "source_admission": "private body/index/binding/read-site/destination/exact-phase proof; replayed by verifier and VM",
+  "source_admission_domain": "lrr/v1/local-integer-fallback",
+  "prepublication_review": {
+    "static_review": "06930f/0",
+    "finding": "raw binding ordinal was not an exact source admission",
+    "correction": "opaque proof, finalized macro-step binding, verifier/VM revalidation; arbitrary-pattern acceptance removed",
+    "compilation_or_execution": false
+  }
+}

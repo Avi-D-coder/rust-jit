@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-15T13:43:01.459228+00:00",
+  "scope": "Selected runtime contracts through the retained existing executable; not current candidate, rustc compiletest or full-suite acceptance",
+  "platform": "aarch64-apple-darwin",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "interpreter_binary": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/lrr",
+  "interpreter_sha256": "f617fe9a36bf6017aab9bebed2433153340840a54d571261589265eeb87524f7",
+  "source_digester_sha256": "38d89151c79fae24d5050cd2e16315c0fb0963fd41150db83cae68627d69bcd7",
+  "manifest_sha256": "626be79213701306a4b2351ab252c2fcce6d438ff62e7bd6d6e1a819cd84d40b",
+  "actual_terminal": "657195/1",
+  "counts": {
+    "runtime_contract_pass": 2,
+    "interpreter_failure": 1
+  },
+  "selected_cases": [
+    {
+      "case": "tests/ui/numbers-arithmetic/i8-incr.rs",
+      "status": "runtime_contract_pass",
+      "mode": "run-pass",
+      "edition": 2015,
+      "source_sha256": "eeb83cacf6480156db31ba39eff9f044a1bef565e66ef03872036f059a0c8cc0",
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/i8-incr.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "b4b1c47ffc64564154c268f2f93223cc07c1e90bd02157fd9fad835ed6704b7a"
+        ],
+        "exit_code": 0,
+        "pid": 67328,
+        "timed_out": false,
+        "output_limited": false,
+        "elapsed_seconds": 0.06287983298534527,
+        "stdout_bytes": 1996,
+        "stdout_sha256": "4f5ec4a01d83888da6f0ddff5accfed9afa89bbae93b304e17b1379b73ded9c9",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "case": "tests/ui/numbers-arithmetic/u8-incr-decr.rs",
+      "status": "runtime_contract_pass",
+      "mode": "run-pass",
+      "edition": 2015,
+      "source_sha256": "74190a656a2f2735ac4c11426b99531dd919fca4d4a4267991c4cc62dc42c511",
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/u8-incr-decr.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "8634f616f2bd7724d83e7e8ff1b3ba8e3c9b883ae11f9bc53d06ab82c5215294"
+        ],
+        "exit_code": 0,
+        "pid": 67329,
+        "timed_out": false,
+        "output_limited": false,
+        "elapsed_seconds": 0.04592020800919272,
+        "stdout_bytes": 2006,
+        "stdout_sha256": "f8e3847ad9fedf73221eb58bcbcc2d2da2628e00026a78e652384986ab8f567f",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "case": "tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+      "status": "interpreter_failure",
+      "mode": "run-pass",
+      "edition": 2015,
+      "source_sha256": "f502f13f4f96fe146c05a02dd1a387eb3d4d9932915da35c047975d40eade4a6",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "cd458e4bb96aeff9a471aa42a53335b86ddf421d4dbd17fb48d378d6a15af7e1"
+        ],
+        "exit_code": 2,
+        "pid": 67330,
+        "timed_out": false,
+        "output_limited": false,
+        "elapsed_seconds": 0.05052212500595488,
+        "stdout_bytes": 2660,
+        "stdout_sha256": "ee1bef44d71e36bfb7a31b8e05308436a4691cc235209e0c4edba4b2c95b4825",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "failure": {
+    "case": "tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+    "code": "LRR-E-CALL-ARG-TYPE",
+    "message": "argument descriptor differs from the reached concrete signature",
+    "source_bytes": [
+      391,
+      399
+    ],
+    "source_line": 17,
+    "exact_text": "id_i8(j)"
+  },
+  "report_sha256": "54ccbdafcd1a783aa18dd529c2e25090285f61c30afdd3e7f9cf3ab1b60e3d21",
+  "summary_sha256": "697ccefdcbe34611c5d9c3a361eec9952b2fdbe77471ec3c97dca36ea9384556",
+  "file_manifest_sha256": "f4f92db32b0b91b13259e9b07f9e4ad1376366d572dc8d215ea613ad12976a2b",
+  "local_report": "/private/tmp/lrr-retained-numeric-capture-20261015T132916Z/selected-report.json",
+  "input_guard": "all_imported_originals_manifest_binaries_owner_unchanged",
+  "retained_evidence_bytes": 109390,
+  "no_build_or_preparation": true,
+  "each_selected_case_executed_once": true,
+  "full_fixture_passes_added": 0,
+  "aggregate_compatibility_not_recomputed": true,
+  "guest_jit_allowed": false
+}
