@@ -1,0 +1,77 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T041",
+    "T050",
+    "T051",
+    "T062",
+    "M017"
+  ],
+  "prerequisites": [
+    "root-string-call-coherent-v2"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_byte_comparisons.rs",
+      "before_sha256": "d021a0febd0d87b3053f67010685e29a1533ccbfae65e15d64a91c1425fdb968",
+      "after_sha256": "ddf262fae8fcbbe8ac8c8518f3b2f8f37f1cc762b893ac87dc6de1d3c6006f07"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_string_macro_literal_tests.rs",
+      "before_sha256": "ce618a23146b2f7af5bc1039e897287e798ce02bec9b54212a105dd55befe77c",
+      "after_sha256": "27776e480e02b557e5ff5479076a6041b6d3715c5af94873e8e825f8543390d8"
+    },
+    {
+      "path": "crates/lrr/src/syntax/body_index.rs",
+      "before_sha256": "c1a7d77ce92e4fd2745b3671f75e5e7a338091f912dc2c36e5afe4f7e1c49a40",
+      "after_sha256": "138f0166560c3adeec9fc9acf9c0cfe93b7672ebe5c3a2d9e8efa75434dbb086"
+    },
+    {
+      "path": "crates/lrr/src/syntax/literal_match.rs",
+      "before_sha256": "042ccf72239f013376e83d77077b02d7ac41d47681b7b6c55b055edbf8570f81",
+      "after_sha256": "2c611043bdd88da1e49a22ba51d6bbe8da3215d33926716ee97567dc48a9e25e"
+    },
+    {
+      "path": "crates/lrr/src/vm/step_string_literal_tests.rs",
+      "before_sha256": "6fbf6b0bad20c3368ec8adb40a03274c57115587bcdb17b297f170d15a459fbf",
+      "after_sha256": "878ad09e33be670360ad78455332cd8f13244a4fbfb0f63ab984cf6d900f3e02"
+    },
+    {
+      "path": "crates/lrr/src/vm/step_string_literals.rs",
+      "before_sha256": "07e396ad721891a3e28d5e3558dfee49bf8c7403f363d64c067f294ca922fe0c",
+      "after_sha256": "0e4227bde2a208f4f50414922438fcb87195f5fa84bd03c0610c95e429eec4af"
+    }
+  ],
+  "patch_sha256": "91fc38cebb881d8a5084cf72ed84962ebd4b50a3671ceffc43777f3fb4f9f5f6",
+  "patch_bytes": 19790,
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "upstream_witness": {
+    "path": "tests/ui/match/match-borrowed-str.rs",
+    "sha256": "b4eac0329eed1a049e713e374d30a7a0a4999b512db6c700b5f8aaf2e49a86b5"
+  },
+  "body_structure_domain": "lrr/v5/original-body-structure",
+  "static_checks": [
+    "Rust 1.99 formatting",
+    "exact six-leaf patch replay"
+  ],
+  "new_test_bodies": 3,
+  "stock_runtime_passes_added": 0,
+  "acceptance_pending": [
+    "strict build",
+    "all-edition unchanged whole-main borrowed string match",
+    "structural marker and exact slot/span/phase refusal controls",
+    "existing scalar match and immutable comparison scopes",
+    "integrated milestone"
+  ],
+  "created_at": "2026-10-15T11:54:32.834152+00:00",
+  "prepublication_rebase": {
+    "path": "crates/lrr/src/syntax/literal_match.rs",
+    "initial_before": "b5e085f23831cccba07172a99ec81df93bd12190f3bb79f93494b07bed78e566",
+    "initial_after": "96dac204ef12ad0df79b9ba1271e2c432ab9850318beaf90aaa5e465adb9b69b",
+    "correct_frozen_before": "042ccf72239f013376e83d77077b02d7ac41d47681b7b6c55b055edbf8570f81",
+    "rebased_after": "2c611043bdd88da1e49a22ba51d6bbe8da3215d33926716ee97567dc48a9e25e",
+    "reason": "Preserve validated byte-range source context; pattern changes were initially based on older canonical source. Exact no-fuzz replay over V87 succeeded.",
+    "patch_stdout": "patching file 'crates/lrr/src/syntax/literal_match.rs'\n"
+  }
+}

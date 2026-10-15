@@ -1,0 +1,9 @@
+# Source string patterns and ordinary equality
+
+T041/T050/T051/T062/M017 follow-on to the shared string call candidate. The unchanged rustc `tests/ui/match/match-borrowed-str.rs` requires a source call, a string pattern and ordinary `y == "foo"` evaluation before its assertion can complete. The new all-edition whole-main control requires all of these effects, a real call, two comparisons and complete cleanup.
+
+String patterns evaluate their literal at Entry and compare at Operand(0), after the immutable UTF-8 reference exists. The existing bounded comparison activation handles cancellation, per-pair fuel and one result publication. A failed test discards the expected value and continues; a successful test commits the arm without consuming the scrutinee. String alternatives do not impose scalar hints on the scrutinee. Its actual source view and checked string lease remain required at comparison.
+
+The body index retains an encoded structural string-pattern marker and advances its domain to `lrr/v5/original-body-structure`. Only marked pattern nodes gain this extra phase. Literal admission checks the owning match's exact scratch destination, original span and Entry phase. Ordinary equality admission reproduces the current source recipe from the owning pinned parse and requires the compiler member plus both actual source views and physical leases. The existing macro path retains its current intrinsic receipt checks.
+
+Six leaves are formatted and exactly replayed. Three controls are added: the unchanged whole-main witness, the structural phase marker, and pattern slot/span/phase refusal before effects. All Rust compilation and execution remain pending; no runtime or full-fixture pass is added. The source-aware alias, owned string, mutable view and general pattern-binding work remains outstanding.

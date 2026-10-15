@@ -1,0 +1,448 @@
+--- a/crates/lrr/src/engine/run_byte_comparisons.rs
++++ b/crates/lrr/src/engine/run_byte_comparisons.rs
+@@ -1,4 +1,4 @@
+-//! Reached source/member admission for immutable literal equality in runtime macros.
++//! Reached source/member admission for immutable equality in macros and source expressions.
+ use super::*;
+ use crate::{
+     core::digest::Digest,
+@@ -93,10 +93,14 @@
+             .nodes()
+             .get(key.node as usize)
+             .ok_or_else(|| call_fault("byte comparison node absent"))?;
+-        if node.role != NodeRole::Expression(ExpressionKind::Macro) {
++        let macro_node = node.role == NodeRole::Expression(ExpressionKind::Macro);
++        if !macro_node
++            && node.role != NodeRole::Expression(ExpressionKind::Other)
++            && !(node.role == NodeRole::Pattern && node.string_pattern_phase)
++        {
+             return self.frame.admit_byte_comparison(None);
+         }
+-        let installed = self.installed.get(id)?;
++        let installed = self.installed.get_current(db, id)?;
+         let mut selected = None;
+         for op in installed.recipe().operations.iter() {
+             let Op::NumericBinary {
+@@ -143,15 +147,31 @@
+             {
+                 return Err(call_fault("byte comparison source publication changed"));
+             }
+-            let current = context
+-                .resolve_at(
+-                    &self.frame.body,
+-                    key,
+-                    self.runtime_no_item_proofs.values(),
+-                    Some((&self.frame, &self.store)),
+-                )?
+-                .ok_or_else(|| call_fault("byte comparison current intrinsic absent"))?;
+-            if current.recipe.recipe().fingerprint() != fingerprint {
++            let current_fingerprint = if macro_node {
++                context
++                    .resolve_at(
++                        &self.frame.body,
++                        key,
++                        self.runtime_no_item_proofs.values(),
++                        Some((&self.frame, &self.store)),
++                    )?
++                    .ok_or_else(|| call_fault("byte comparison current intrinsic absent"))?
++                    .recipe
++                    .recipe()
++                    .fingerprint()
++            } else {
++                // Reproduce the ordinary recipe from the current owning parse.
++                // A public verified NumericBinary or matching physical bytes
++                // cannot substitute for this exact source/operator relation.
++                let parsed = db
++                    .prepared_parse(&source.selection().outline.parse)
++                    .ok_or_else(|| call_fault("ordinary comparison owning parse absent"))?;
++                parsed
++                    .initial_thunk(handle, &self.frame.body, key)?
++                    .recipe()
++                    .fingerprint()
++            };
++            if current_fingerprint != fingerprint {
+                 return Err(call_fault("byte comparison current source recipe differs"));
+             }
+             let member = context.byte_equality_member(
+--- a/crates/lrr/src/engine/run_string_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_string_macro_literal_tests.rs
+@@ -177,3 +177,31 @@
+         db.finish_run().unwrap();
+     }
+ }
++
++#[test]
++fn unchanged_borrowed_str_match_main_completes_pattern_call_and_ordinary_equality_all_editions() {
++    const ORIGINAL: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/match/match-borrowed-str.rs"
++    );
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, mut run, macros, _) = tests::start_source(ORIGINAL, edition, 10_000);
++        let contexts = macros.contexts().unwrap();
++        let report = match run.poll_with_runtime_macros(&mut db, &contexts) {
++            RunPoll::Completed(report) => report,
++            RunPoll::Fault(error) => panic!("edition {edition}: {error}"),
++            RunPoll::NeedInput(input) => panic!("edition {edition}: {input:?}"),
++            RunPoll::Panicked(report) => panic!("edition {edition}: {report:?}"),
++        };
++        assert!(matches!(report.value, ValueSummary::Unit));
++        assert_eq!(report.opcode_counters.started_by_opcode[26], 1);
++        assert_eq!(report.opcode_counters.started_by_opcode[19], 1);
++        assert_eq!(report.opcode_counters.started_by_opcode[10], 2);
++        assert_eq!(
++            report.opcode_counters.operations_started,
++            report.opcode_counters.operations_completed
++        );
++        assert!(run.calls.is_empty() && run.pending.is_empty());
++        assert!(run.frame.active_scopes().is_empty());
++        db.finish_run().unwrap();
++    }
++}
+--- a/crates/lrr/src/syntax/body_index.rs
++++ b/crates/lrr/src/syntax/body_index.rs
+@@ -138,6 +138,8 @@
+     pub runtime_scalar_phases: u16,
+     /// Structural range-pattern continuation only; indexing never prepares bounds.
+     pub scalar_range_phase: bool,
++    /// A string pattern evaluates its literal before the bounded comparison.
++    pub string_pattern_phase: bool,
+     /// Exact syntactic unary minus over a (possibly grouped) integer token.
+     /// No magnitude, suffix type, name or value is prepared while indexing.
+     pub negative_integer_literal: bool,
+@@ -280,7 +282,9 @@
+             && !(node.role == NodeRole::Expression(ExpressionKind::Macro)
+                 && (n == 0 || n < node.runtime_scalar_phases)
+                 && node.runtime_temporaries[0].is_some())
+-            && !(node.role == NodeRole::Pattern && node.scalar_range_phase && n == 0)
++            && !(node.role == NodeRole::Pattern
++                && (node.scalar_range_phase || node.string_pattern_phase)
++                && n == 0)
+         {
+             return Err(fault("structural operand phase absent"));
+         }
+@@ -292,7 +296,7 @@
+     }
+ }
+ impl StableEncode for BodyIndex {
+-    const DOMAIN: &'static str = "lrr/v4/original-body-structure";
++    const DOMAIN: &'static str = "lrr/v5/original-body-structure";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         e.record(&self.body);
+         e.record(&self.profile);
+@@ -336,6 +340,7 @@
+             e.sequence(&n.runtime_scalar_slots, |e, slot| e.u32(slot.0));
+             e.u32(u32::from(n.runtime_scalar_phases));
+             e.bool(n.scalar_range_phase);
++            e.bool(n.string_pattern_phase);
+             e.bool(n.negative_integer_literal);
+             e.option(&n.constructor_guard, |e, slot| e.u32(slot.0));
+             e.option(&n.tail_scope, |e, scope| e.u32(scope.0));
+@@ -1169,6 +1174,13 @@
+                 runtime_scalar_phases,
+                 scalar_range_phase: role == NodeRole::Pattern
+                     && ast::RangePat::can_cast(frame.syntax.kind()),
++                string_pattern_phase: role == NodeRole::Pattern
++                    && ast::LiteralPat::cast(frame.syntax.clone()).is_some_and(|pattern| {
++                        pattern.minus_token().is_none()
++                            && pattern.literal().is_some_and(|literal| {
++                                literal.token().kind() == ra_ap_syntax::SyntaxKind::STRING
++                            })
++                    }),
+                 negative_integer_literal: expr.as_ref().is_some_and(negative_integer_literal),
+                 constructor_guard,
+                 tail_scope,
+@@ -1291,6 +1303,7 @@
+                 runtime_scalar_slots: Vec::new(),
+                 runtime_scalar_phases: 0,
+                 scalar_range_phase: false,
++                string_pattern_phase: false,
+                 negative_integer_literal: false,
+                 constructor_guard: None,
+                 tail_scope: None,
+@@ -1387,6 +1400,62 @@
+         assert_eq!(bytes, usize::MAX);
+     }
+     #[test]
++    fn upstream_string_pattern_phase_is_structural_encoded_and_exclusive_all_editions() {
++        use crate::source::snapshot::{CfgSet, SourceBlob};
++        const SOURCE: &str = include_str!(
++            "../../../../fixtures/upstream/rustc-checkout/tests/ui/match/match-borrowed-str.rs"
++        );
++        for edition in [2015, 2018, 2021, 2024] {
++            let parsed = ParsedFile::parse(
++                &SourceBlob::new(SOURCE.as_bytes().to_vec()).unwrap(),
++                ProfileIdentity {
++                    edition,
++                    ..ProfileIdentity::current()
++                },
++            )
++            .unwrap();
++            let outline = parsed
++                .outline(Digest([246; 32]), vec![], &CfgSet::guest_default())
++                .unwrap();
++            let body = outline
++                .items
++                .iter()
++                .find(|item| item.def_key.declared_name == "compare")
++                .unwrap()
++                .body
++                .as_ref()
++                .unwrap();
++            let index = parsed.index_body(body, Default::default()).unwrap();
++            let strings: Vec<_> = index
++                .nodes()
++                .iter()
++                .filter(|node| node.string_pattern_phase)
++                .collect();
++            assert_eq!(strings.len(), 1);
++            let pattern = strings[0];
++            assert_eq!(pattern.role, NodeRole::Pattern);
++            assert!(!pattern.scalar_range_phase);
++            assert_eq!(
++                &SOURCE[(body.range.start + pattern.range.start) as usize
++                    ..(body.range.start + pattern.range.end) as usize],
++                "\"foo\""
++            );
++            index.pc(pattern.id, Phase::Operand(0)).unwrap();
++            assert!(index.pc(pattern.id, Phase::Operand(1)).is_err());
++            for node in index
++                .pattern_locations()
++                .filter(|node| node.id != pattern.id)
++            {
++                assert!(!node.string_pattern_phase);
++                assert!(index.pc(node.id, Phase::Operand(0)).is_err());
++            }
++            let mut missing = index.clone();
++            missing.nodes[pattern.id.0 as usize].string_pattern_phase = false;
++            assert_ne!(missing.fingerprint(), index.fingerprint());
++            assert!(missing.pc(pattern.id, Phase::Operand(0)).is_err());
++        }
++    }
++    #[test]
+     fn range_phase_is_source_structural_encoded_and_exclusive_to_actual_range_nodes() {
+         use crate::source::snapshot::{CfgSet, SourceBlob};
+         const SOURCE: &str = "const RET:u8=1;fn chosen(c:u8){match c{0..=4=>(),_=>()}}";
+@@ -1413,7 +1482,7 @@
+             let index = parsed.index_body(body, Default::default()).unwrap();
+             assert_eq!(
+                 <BodyIndex as StableEncode>::DOMAIN,
+-                "lrr/v4/original-body-structure"
++                "lrr/v5/original-body-structure"
+             );
+             let ranges: Vec<_> = index
+                 .nodes()
+--- a/crates/lrr/src/syntax/literal_match.rs
++++ b/crates/lrr/src/syntax/literal_match.rs
+@@ -566,8 +566,15 @@
+         arms.try_reserve(1).map_err(|_| limit())?;
+         arms.push(arm);
+     }
+-    let ty = if let Some(primitive) = context(parsed, index, body, &source, expected, 0, &mut work)?
+-    {
++    // A string pattern never imposes a scalar hint on its scrutinee. Its
++    // actual reached source view and immutable lease select equality later.
++    // This structural scan does not decode or prepare a cold pattern literal.
++    let string_patterns = arms.iter().any(|arm| arm.alternatives.iter().any(|alternative|
++        matches!(&alternative.pattern, ast::Pat::LiteralPat(pattern)
++            if pattern.literal().is_some_and(|literal| literal.token().kind() == SyntaxKind::STRING))));
++    let ty = if string_patterns {
++        HintRecipe::None
++    } else if let Some(primitive) = context(parsed, index, body, &source, expected, 0, &mut work)? {
+         HintRecipe::Primitive(primitive)
+     } else if let Some(parameter) = parameter_context(parsed, index, body, &source)? {
+         // A current primitive source is required before ReadParameter. This
+@@ -979,6 +986,7 @@
+                 | SyntaxKind::INT_NUMBER
+                 | SyntaxKind::CHAR
+                 | SyntaxKind::BYTE
++                | SyntaxKind::STRING
+         ) || (literal.token().kind() != SyntaxKind::INT_NUMBER
+             && pattern.minus_token().is_some())
+             || (literal.token().kind() == SyntaxKind::INT_NUMBER
+@@ -1103,8 +1111,24 @@
+                 _ if recipe.kind == LiteralKind::Bool => HintRecipe::Primitive(PrimitiveType::Bool),
+                 Some(DecodedLiteral::Char(_)) => HintRecipe::Primitive(PrimitiveType::Char),
+                 Some(DecodedLiteral::Byte(_)) => HintRecipe::Primitive(PrimitiveType::U8),
++                Some(DecodedLiteral::String(_)) => HintRecipe::None,
+                 _ => plan.ty.clone(),
+             };
++            if recipe.kind == LiteralKind::String {
++                if !index.nodes()[alternative.id.0 as usize].string_pattern_phase {
++                    return Err(error("string pattern continuation marker absent"));
++                }
++                return draft(
++                    index,
++                    key,
++                    vec![Op::Literal {
++                        literal: recipe,
++                        hint,
++                        destination: expected,
++                    }],
++                    RecipeExit::Next(index.pc(alternative.id, Phase::Operand(0))?),
++                );
++            }
+             draft(
+                 index,
+                 key,
+@@ -1114,6 +1138,26 @@
+                         hint,
+                         destination: expected,
+                     },
++                    Op::NumericBinary {
++                        left: source,
++                        right: expected,
++                        destination: test,
++                        operator: NumericBinary::Eq,
++                    },
++                    Op::Discard { source: expected },
++                ],
++                RecipeExit::Branch {
++                    condition: test,
++                    yes: index.pc(alternative.id, Phase::Commit)?,
++                    no: index.pc(alternative.id, Phase::Exit)?,
++                },
++            )
++        }
++        Phase::Operand(0) if index.nodes()[alternative.id.0 as usize].string_pattern_phase => {
++            draft(
++                index,
++                key,
++                vec![
+                     Op::NumericBinary {
+                         left: source,
+                         right: expected,
+--- a/crates/lrr/src/vm/step_string_literal_tests.rs
++++ b/crates/lrr/src/vm/step_string_literal_tests.rs
+@@ -18,6 +18,99 @@
+ const CRLF: &str = include_str!(
+     "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs"
+ );
++
++#[test]
++fn original_string_pattern_literal_requires_own_match_slot_and_entry_before_effects() {
++    const ORIGINAL: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/match/match-borrowed-str.rs"
++    );
++    for edition in [2015, 2018, 2021, 2024] {
++        let parsed = ParsedFile::parse(
++            &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
++            ProfileIdentity {
++                edition,
++                ..ProfileIdentity::current()
++            },
++        )
++        .unwrap();
++        let outline = parsed
++            .outline(Digest([247; 32]), vec![], &CfgSet::guest_default())
++            .unwrap();
++        let body = outline
++            .items
++            .iter()
++            .find(|item| item.def_key.declared_name == "compare")
++            .unwrap()
++            .body
++            .as_ref()
++            .unwrap();
++        let index = parsed.index_body(body, Default::default()).unwrap();
++        let node = index
++            .nodes()
++            .iter()
++            .find(|node| node.string_pattern_phase)
++            .unwrap();
++        let key = index.pc(node.id, Phase::Entry).unwrap();
++        let recipe = parsed.initial_thunk(body, &index, &key).unwrap();
++        let [
++            Op::Literal {
++                literal,
++                destination,
++                ..
++            },
++        ] = recipe.recipe().operations.as_ref()
++        else {
++            panic!("original pattern literal must have its own dispatch")
++        };
++        let (mut frame, mut store) = frame(&index, &recipe);
++        let before = (
++            store.budget().handles(),
++            store.budget().bytes(),
++            store.type_metadata_bytes(),
++            frame.fuel_snapshot(),
++            frame.counters().operations_started,
++        );
++        prepare(&frame, &store, literal, *destination, None).unwrap();
++        assert!(prepare(&frame, &store, literal, SlotId(u32::MAX), None).is_err());
++        let mut wrong = literal.clone();
++        wrong.source.relative_end += 1;
++        assert!(prepare(&frame, &store, &wrong, *destination, None).is_err());
++        assert_eq!(
++            (
++                store.budget().handles(),
++                store.budget().bytes(),
++                store.type_metadata_bytes(),
++                frame.fuel_snapshot(),
++                frame.counters().operations_started
++            ),
++            before
++        );
++        assert!(matches!(
++            super::super::step(&mut frame, &mut store, &recipe).unwrap(),
++            StepOutcome::Next(_)
++        ));
++        assert_eq!(*frame.pc(), index.pc(node.id, Phase::Operand(0)).unwrap());
++        let before = (
++            store.budget().handles(),
++            store.budget().bytes(),
++            store.type_metadata_bytes(),
++            frame.fuel_snapshot(),
++            frame.counters().operations_started,
++        );
++        assert!(prepare(&frame, &store, literal, *destination, None).is_err());
++        assert_eq!(
++            (
++                store.budget().handles(),
++                store.budget().bytes(),
++                store.type_metadata_bytes(),
++                frame.fuel_snapshot(),
++                frame.counters().operations_started
++            ),
++            before
++        );
++    }
++}
++
+ fn recipes(original: &str, edition: u16) -> Vec<(BodyIndex, VerifiedRecipe)> {
+     let parsed = ParsedFile::parse(
+         &SourceBlob::new(original.as_bytes().to_vec()).unwrap(),
+--- a/crates/lrr/src/vm/step_string_literals.rs
++++ b/crates/lrr/src/vm/step_string_literals.rs
+@@ -33,6 +33,30 @@
+     // verified Literal operation alone cannot grant string source identity.
+     if node.role == NodeRole::Expression(ExpressionKind::Macro) {
+         frame.require_macro_byte_literal(literal, destination)?;
++    } else if node.role == NodeRole::Pattern && node.string_pattern_phase {
++        if frame.pc().phase != 0 || frame.body.span(node.id)? != literal.source {
++            return Err(invalid("string pattern requires its exact literal entry"));
++        }
++        let mut parent = node.parent;
++        let mut expected = None;
++        for _ in 0..frame.body.nodes().len() {
++            let Some(id) = parent else { break };
++            let ancestor = frame
++                .body
++                .nodes()
++                .get(id.0 as usize)
++                .ok_or_else(|| invalid("string pattern ancestor absent"))?;
++            if ancestor.role == NodeRole::Expression(ExpressionKind::Match) {
++                expected = ancestor.runtime_temporaries[0];
++                break;
++            }
++            parent = ancestor.parent;
++        }
++        if expected != Some(destination) {
++            return Err(invalid(
++                "string pattern literal belongs to another match slot",
++            ));
++        }
+     } else if node.role != NodeRole::Expression(ExpressionKind::Literal)
+         || frame.pc().phase != 0
+         || node.value != Some(destination)
