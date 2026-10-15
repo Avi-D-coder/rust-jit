@@ -419,6 +419,20 @@
              } else {
                  None
              };
+@@ -2377,6 +2380,13 @@
+                     let plan = self.constant_plans.get(self.frame.pc()).ok_or_else(|| {
+                         call_fault("source constant installed without its source plan")
+                     })?;
++                    plan.require_macro_context(
++                        &self.sources,
++                        contexts,
++                        &self.frame.body,
++                        self.frame.pc(),
++                        self.runtime_no_item_proofs.values(),
++                    )?;
+                     let construction = plan.construction(db, &self.sources)?;
+                     let views = self.sources.iter().collect::<Vec<_>>();
+                     let proof = plan.proof(
 --- a/crates/lrr/src/engine/run_source_constants.rs
 +++ b/crates/lrr/src/engine/run_source_constants.rs
 @@ -24,13 +24,20 @@
@@ -451,7 +465,52 @@
      bytes: usize,
  }
  fn current_value(outcome: &Outcome) -> Result<&ConstantQueryValue, Diagnostic> {
-@@ -105,6 +113,10 @@
+@@ -59,6 +67,44 @@
+             QueryValue::Constant(value) => value.key(),
+             _ => panic!("actual prepared source constant has no successful parent memo"),
+         }
++    }
++    /// Every physical dispatch reselects the actual compiler intrinsic using
++    /// its retained no-item proof. A cached constant recipe is not macro authority.
++    pub(super) fn require_macro_context<'p>(
++        &self,
++        sources: &[PreparedSourceView],
++        contexts: &[crate::engine::runtime_macros::RuntimeMacroContext<'_>],
++        body: &BodyIndex,
++        pc: &PcKey,
++        proofs: impl Iterator<Item = &'p crate::frontend::runtime_macro_plan::RuntimeNoItemProof>
++        + Clone,
++    ) -> Result<(), Diagnostic> {
++        let Some(site) = self.macro_site.as_deref() else {
++            return Ok(());
++        };
++        let caller = sources
++            .get(self.caller)
++            .ok_or_else(|| call_fault("constant macro caller absent"))?;
++        site.require(&caller.selection().outline.parse, body, pc)?;
++        let mut selected = false;
++        for context in contexts.iter().filter(|context| {
++            context.source().selection() == caller.selection()
++                && context.source().same_publication(caller)
++        }) {
++            let current = context
++                .constant_path_at(body, pc, proofs.clone())?
++                .ok_or_else(|| call_fault("constant macro current intrinsic operand absent"))?;
++            if &current != site || selected {
++                return Err(call_fault(
++                    "constant macro current source operand differs or is duplicated",
++                ));
++            }
++            selected = true;
++        }
++        if !selected {
++            return Err(call_fault("constant macro current source context absent"));
++        }
++        Ok(())
+     }
+     pub(super) fn construction<'a>(
+         &'a self,
+@@ -105,6 +151,10 @@
                  _ => None,
              })
              .ok_or_else(|| call_fault("constant instruction absent"))?;
@@ -462,7 +521,7 @@
          match &self.range {
              Some(site)=>crate::engine::constant_array_publication::AdmittedConstantUse::capture_range_for_dispatch(
                  frame,destination,&sources[self.caller],views,(&self.path,site),binding,store),
-@@ -214,9 +226,17 @@
+@@ -214,9 +264,17 @@
              .is_none()
              .then_some(InputRequest::Discover { key }))
      }
@@ -476,11 +535,11 @@
 +    pub(super) fn prepare_source_constant_recipe_with_macros(
 +        &mut self,
 +        db: &mut Database,
-+        contexts: &[super::runtime_macros::RuntimeMacroContext<'_>],
++        contexts: &[crate::engine::runtime_macros::RuntimeMacroContext<'_>],
      ) -> QueryPoll<Option<VerifiedRecipe>> {
          let pc = self.frame.pc().clone();
          let Some(node) = self.frame.body.nodes().get(pc.node as usize) else {
-@@ -227,8 +247,32 @@
+@@ -227,8 +285,32 @@
          let range_candidate = node.role == NodeRole::Pattern
              && node.scalar_range_phase
              && matches!(Phase::from_code(pc.phase), Phase::Entry | Phase::Operand(0));
@@ -514,7 +573,7 @@
          }
          let Some(graph) = self.graph.as_ref() else {
              return QueryPoll::Ready(Ok(None));
-@@ -271,7 +315,10 @@
+@@ -271,7 +353,10 @@
              let range = match &range_site {
                  Some(site) => site.endpoint_range(),
                  None => {
@@ -526,7 +585,7 @@
                      SourceRange {
                          start: body
                              .range
-@@ -329,16 +376,28 @@
+@@ -329,16 +414,28 @@
              }
              let views = self.sources.iter().collect::<Vec<_>>();
              match ConstantPathSelection::capture_current(db, source, body, range, &views, LIMIT)? {
@@ -559,7 +618,7 @@
              Ok(Some(ReachedConstantPath::Selected(selection))) => *selection,
              Ok(Some(ReachedConstantPath::NeedScope(request))) => {
                  return QueryPoll::NeedInput(*request);
-@@ -418,6 +477,12 @@
+@@ -418,6 +515,12 @@
                  }
                  Err(error) => return QueryPoll::Ready(Err(error)),
              }
@@ -572,7 +631,7 @@
          }
          let mut child = None;
          let wire = if let Some(scalar) = result.scalar() {
-@@ -534,8 +599,8 @@
+@@ -534,8 +637,8 @@
              dependencies.sort_unstable();
              dependencies.dedup();
  
@@ -583,7 +642,7 @@
                      &self.frame.body,
                      site,
                      parent.key(),
-@@ -544,7 +609,17 @@
+@@ -544,7 +647,17 @@
                      &value,
                      dependencies,
                  )?,
@@ -602,7 +661,7 @@
                      &self.frame.body,
                      &pc,
                      parent.key(),
-@@ -566,14 +641,18 @@
+@@ -566,14 +679,18 @@
                          source: site.test(),
                      });
                  }
@@ -623,7 +682,7 @@
                  operations.push(Op::NumericBinary {
                      operator: site.comparison(),
                      left: site.scrutinee(),
-@@ -601,13 +680,19 @@
+@@ -601,13 +718,19 @@
                  exits,
                  dependencies,
              };
@@ -646,7 +705,7 @@
              };
              let bytes = path
                  .metadata_bytes()
-@@ -628,6 +713,13 @@
+@@ -628,6 +751,13 @@
                              .checked_add(current_value(o).ok()?.metadata_bytes().ok()?)
                      })?)
                  })
@@ -660,7 +719,7 @@
                  .and_then(|n| n.checked_add(std::mem::size_of::<SourceConstantPlan>() + 256))
                  .filter(|n| *n <= LIMIT)
                  .ok_or_else(crate::runtime::arena::resource)?;
-@@ -641,6 +733,7 @@
+@@ -641,6 +771,7 @@
                  outcome,
                  recipe,
                  range,

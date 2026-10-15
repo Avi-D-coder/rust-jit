@@ -1,13 +1,13 @@
 {
   "status": "source_only_uncompiled_unexecuted_held",
-  "at": "2026-10-15T17:21:16.844157+00:00",
+  "at": "2026-10-15T17:23:59.730500+00:00",
   "claim": "LOCAL-024",
   "task_cards": [
     "T032",
     "T054"
   ],
   "source_baseline": "fdde8eac1bca99ea1e102fd5308e39ccb4c06e0862dbc9459f6b7e8c29b46b25",
-  "patch_sha256": "345888f0f24246cadced32f9fa58aa06c00cdddcbe668ee0dbcd3782e991ee35",
+  "patch_sha256": "4c7e676d268e792d4c947c0170bce5d395afe2c04ec4dab7b52d8529aeafb02b",
   "files": [
     {
       "path": "compat/fixtures.toml",
@@ -36,14 +36,14 @@
     {
       "path": "crates/lrr/src/engine/run.rs",
       "before_sha256": "9a41eb6575d562b1bb7c788d582c1b75589f9fc671dccdc720bbfc7192466c29",
-      "after_sha256": "b340bb094c99f971862822e1718a5cfc61d7031298a2e670ba253ccc1f77f9d5",
-      "bytes": 109674
+      "after_sha256": "52b30032636f0ee0f9c4a7b4edbe8a348949a3779757153a417e7bf3b07b3f2f",
+      "bytes": 109964
     },
     {
       "path": "crates/lrr/src/engine/run_source_constants.rs",
       "before_sha256": "19205fa51fe7d770eb5cb66490fa442040a40b9a9c13802ed8e4dea057913035",
-      "after_sha256": "925a89883d10862b6e6895e833523edfdee26a267966e7ddfb754e753d404cb3",
-      "bytes": 31161
+      "after_sha256": "a10051de16fba82478ea83b01f94b316b46139d97182153fcdf8534da217ae83",
+      "bytes": 32803
     },
     {
       "path": "crates/lrr/src/engine/runtime_macros.rs",
