@@ -4,8 +4,9 @@ use lrr::{
 };
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
-const LIB: &str = include_str!("../../../artifacts/m002-lib-tests-unit-graph.json");
-const INTEGRATION: &str = include_str!("../../../artifacts/m002-integration-unit-graph.json");
+const LIB: &str = include_str!("../../../fixtures/macros/cargo-unit-graphs/lib-tests.json");
+const INTEGRATION: &str =
+    include_str!("../../../fixtures/macros/cargo-unit-graphs/integration.json");
 fn context(graph: &Value, integration: bool) -> UnitContext {
     let root = graph["roots"][0].as_u64().unwrap() as usize;
     UnitContext {

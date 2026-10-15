@@ -111,7 +111,7 @@ impl ParsedFile {
         };
         if !valid
             || range(root.text_range()) != handle.range
-            || Digest::of_bytes(root.text().to_string().as_bytes()) != handle.key.content
+            || self.body_content_identity(&root)? != handle.key.content
         {
             return Err(error("container kind/range/content mismatch"));
         }
@@ -346,6 +346,7 @@ impl ParsedFile {
                 if let Some(header) = item_budget.collect(
                     &item,
                     super::body_items::BodyItemContext {
+                        parsed: self,
                         parent: body,
                         containing,
                         scope,

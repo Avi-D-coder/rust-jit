@@ -551,6 +551,8 @@ A unique named function keeps its `DefKey` when only its body changes. Duplicate
 
 Within one `BodyKey`, assign syntax node IDs in deterministic preorder. A changed body invalidates all its node IDs and executable recipes. Unchanged function bodies retain their keys even when another body earlier in the file changes byte length. This is the chosen incremental granularity.
 
+For an original UTF-8 body, `exact_body_bytes` retains the exact source-byte digest. For an assembled retained syntax tree, it identifies an explicitly tagged canonical encoding of the pinned node/token structure, token text and owning-edition runs. Flattened display text is insufficient: an expansion can preserve grouping that the same text would parse differently. Do not include absolute file offsets or whole-file content identities in this body-local structural encoding. Retain the complete source/hygiene/expansion records separately in the immutable source input; name/member recipes must depend on their current admitted source views and seals even when the structural `BodyKey` is unchanged. A structural content key never grants source, namespace or execution authority. See E-R5-005.
+
 ### 6.3 Source locations are separate from semantic identity
 
 Store executable locations as `BodySpan { body_key, relative_start, relative_end }`. Store declaration locations as `HeaderSpan { def_key, relative_start, relative_end }`. The active snapshot supplies the current file and base offset. Never bake whole-file line numbers into reusable native artifacts.

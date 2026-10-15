@@ -263,6 +263,17 @@ impl SpanStore {
                 Ok(key)
             },
         )?;
+        self.export_records(vec![root], used)
+    }
+
+    /// Export a closed origin table independently of a token serialization.
+    /// Attached syntax cannot be round-tripped through tokens without losing
+    /// fragment boundaries. Its source map still needs these exact records.
+    pub(crate) fn export_records(
+        &self,
+        roots: Vec<TokenTree>,
+        used: BTreeSet<Key>,
+    ) -> Result<TokenForest, AdapterError> {
         let mut contexts = BTreeSet::new();
         let mut records = Vec::new();
         for key in used {
@@ -294,7 +305,7 @@ impl SpanStore {
                     .ok_or_else(|| error("unknown exported context"))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let forest = TokenForest::new(vec![root], contexts, records)?;
+        let forest = TokenForest::new(roots, contexts, records)?;
         forest.encoded_len()?; // Enforce the complete output-record budget without allocating wire.
         Ok(forest)
     }

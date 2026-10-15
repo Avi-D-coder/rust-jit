@@ -1387,6 +1387,19 @@
         "full_milestone_failure_evidence": "worktracks/evidence/2026-10-15-v94-full-milestone-failure.json",
         "latest_scoped_evidence": "worktracks/evidence/2026-10-15-v95-v96-string-boundary.json",
         "latest_status": "V95 scoped27/27, strict/fmt/architecture passed; V96 stale compat selector audit failed; exact metadata repair and fresh full milestone pending"
+      },
+      "common_macro_engine_rework": {
+        "retained_body_component": {
+          "evidence": "worktracks/evidence/2026-10-15-common-retained-body.json",
+          "lrr_parser_body_index_thunk_controls": 22,
+          "existing_cargo_unit_controls": 6,
+          "adapter_controls": 104,
+          "strict_all_targets_clippy": true,
+          "source_and_body_publication": false,
+          "ordinary_runtime_route": false,
+          "full_project_gate": "running_async_unaccepted",
+          "card_complete": false
+        }
       }
     },
     {
@@ -6552,6 +6565,17 @@
           "strict_clippy": true,
           "source_and_body_publication": false,
           "ordinary_runtime_route": false,
+          "card_complete": false
+        },
+        "retained_body_component": {
+          "evidence": "worktracks/evidence/2026-10-15-common-retained-body.json",
+          "lrr_parser_body_index_thunk_controls": 22,
+          "existing_cargo_unit_controls": 6,
+          "adapter_controls": 104,
+          "strict_all_targets_clippy": true,
+          "source_and_body_publication": false,
+          "ordinary_runtime_route": false,
+          "full_project_gate": "running_async_unaccepted",
           "card_complete": false
         }
       }
@@ -18992,6 +19016,17 @@
           "strict_clippy": true,
           "source_and_body_publication": false,
           "ordinary_runtime_route": false,
+          "card_complete": false
+        },
+        "retained_body_component": {
+          "evidence": "worktracks/evidence/2026-10-15-common-retained-body.json",
+          "lrr_parser_body_index_thunk_controls": 22,
+          "existing_cargo_unit_controls": 6,
+          "adapter_controls": 104,
+          "strict_all_targets_clippy": true,
+          "source_and_body_publication": false,
+          "ordinary_runtime_route": false,
+          "full_project_gate": "running_async_unaccepted",
           "card_complete": false
         }
       }

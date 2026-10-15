@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "scope": "Existing M002/M013 compile-time fixture dependencies relocated unchanged from ignored historical artifacts so a source-only checkout can compile the existing controls. Original artifacts remain local; no new upstream imports or runtime acceptance.",
+  "files": [
+    {
+      "path": "fixtures/macros/modules/ordinary/main.rs",
+      "original_local_path": "artifacts/macos-first/m013-ordinary-module-witness/main.rs",
+      "sha256": "8e458a01168410e3b3fc8af916ccb851e4d3f25b32c5098dd432e6d769f7d863"
+    },
+    {
+      "path": "fixtures/macros/modules/ordinary/child.rs",
+      "original_local_path": "artifacts/macos-first/m013-ordinary-module-witness/child.rs",
+      "sha256": "f397895d688b002bf0cd83cd586aad71256bd1fbd55a273ed0eec404671b1491"
+    },
+    {
+      "path": "fixtures/macros/modules/ordinary/child/grandchild.rs",
+      "original_local_path": "artifacts/macos-first/m013-ordinary-module-witness/child/grandchild.rs",
+      "sha256": "cb4e976559f4df02177232dd3ab9613e5b6e04d3748ec8c589689e7f2053c984"
+    },
+    {
+      "path": "fixtures/macros/modules/generated/live.rs",
+      "original_local_path": "artifacts/macos-first/m013-generated-module-probe/live.rs",
+      "sha256": "52d81b1333e93ccc5d6d082b8d79bbe1bddeed89ebdf4386af24bb52353f4697"
+    },
+    {
+      "path": "fixtures/macros/modules/generated/child.rs",
+      "original_local_path": "artifacts/macos-first/m013-generated-module-probe/child.rs",
+      "sha256": "e82b03a534a0a767ee8cd71980555ce9680bfab12cd765dee218b6061422cd20"
+    },
+    {
+      "path": "fixtures/macros/cargo-unit-graphs/lib-tests.json",
+      "original_local_path": "artifacts/m002-lib-tests-unit-graph.json",
+      "sha256": "f3e5fe3bf00d7e7616d715256dd795ad28b6eae491e2f264fba1b6be1a681e00"
+    },
+    {
+      "path": "fixtures/macros/cargo-unit-graphs/integration.json",
+      "original_local_path": "artifacts/m002-integration-unit-graph.json",
+      "sha256": "b6351f5b124154e710e9149ea506771413d1f785613b9b0899fc631414a0f5dc"
+    }
+  ]
+}

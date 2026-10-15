@@ -1,0 +1,1 @@
+mod grandchild;pub fn made()->i64{grandchild::made()}

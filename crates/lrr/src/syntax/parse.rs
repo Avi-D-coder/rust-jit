@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 
 #[path = "parse_crlf.rs"]
 mod crlf;
+#[path = "parse_retained.rs"]
+mod retained;
 
 /// Keep pinned-parser newline repairs identical for original files and bounded
 /// operand wrappers. This never rewrites the retained tree or source offsets.
@@ -67,6 +69,7 @@ pub struct ParsedFile {
     pub(crate) declaration_grammar: Option<crate::expand::identity::GrammarSlot>,
     estimated_bytes: usize,
     token_editions: Option<Vec<(u32, u16)>>,
+    retained_syntax: Option<retained::RetainedSyntax>,
 }
 impl ParsedFile {
     pub(crate) fn has_runtime_macro_syntax(&self) -> bool {
@@ -150,6 +153,7 @@ impl ParsedFile {
             token_editions: None,
             generated_origin: None,
             declaration_grammar: None,
+            retained_syntax: None,
         })
     }
     pub(crate) fn from_generated_items(
@@ -228,6 +232,7 @@ impl ParsedFile {
             token_editions: None,
             generated_origin: Some(items.record().descriptor().fingerprint()),
             declaration_grammar: Some(crate::expand::identity::GrammarSlot::Items),
+            retained_syntax: None,
         };
         parsed.attach_generated_token_editions(
             &tokens,
@@ -320,6 +325,7 @@ impl ParsedFile {
             token_editions: None,
             generated_origin: Some(identity),
             declaration_grammar: Some(grammar),
+            retained_syntax: None,
         })
     }
     /// Retain the same token-context editions used by the pinned syntax bridge.

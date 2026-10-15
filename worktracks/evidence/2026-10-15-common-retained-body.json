@@ -1,0 +1,918 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T20:05:52.269753+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "M014",
+    "T024",
+    "T063"
+  ],
+  "erratum": "E-R5-005",
+  "source_baseline": "2e60db7ca9888c3a5e9ca8292a4afb6d20d618c2",
+  "scope": "Retained syntax/origin representation and ordinary parser/body-index/thunk component. Source publication, currentness integration, VM execution and all eight macro-specific shortcut removals remain outstanding.",
+  "implemented": [
+    "Immutable opaque syntax snapshot retains exact used source-span records and full context ancestry, including actual caller semicolons",
+    "Ordinary ParsedFile replays pinned syntax events directly, preserving expansion grouping without reparsing display text or adding synthetic scopes",
+    "Ordinary outline, body index and nested item/container verification share structural body identity for retained syntax and preserve exact UTF-8 byte identity for original sources",
+    "Retained body identity includes pinned node/token shape, text and owning edition runs; unrelated cold body edits and absolute offset shifts preserve the unchanged body key",
+    "Ordinary initial thunk/verifier probes inspect expanded nodes without opaque macro scalar slots or phases",
+    "Seven existing small compile-time source/graph fixture inputs moved unchanged from ignored historical artifacts into tracked fixtures, with only include_str path redirects and provenance"
+  ],
+  "source_files": [
+    {
+      "path": "crates/lrr-expand-adapter/src/span_store.rs",
+      "sha256": "5a76899334c68f1ffaee0528cc9e91aeff016e3bc4650a9576ba2586890a9dc1"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment.rs",
+      "sha256": "c7aea3974027705ec228f872dff479a8f0935bf261357a51fc11f1ee50fae579"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment/snapshot.rs",
+      "sha256": "c87d853243ce54ffddc3f68304313122f4b9dd12abe73e6565713a5443f31165"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/tests/syntax_snapshot.rs",
+      "sha256": "1c17006c0dad3594fca8c9fe812c47270a57d4bf5455e43b0ed3f25d04725eb5"
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse.rs",
+      "sha256": "c6e50f2b86d99ae4c9b9c4e627069af3fa993d6ff413abd8bd5d6892d32c9e28"
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse_retained.rs",
+      "sha256": "38d7a95459f6b5b3a54501814e0571ecb3f0c26f4af43845e9de8cedc7d4644c"
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse_retained_tests.rs",
+      "sha256": "324063c2c9b64c201ca5102ffd8397876f71b7ce2e1eab958edf9a9a0e08e1a4"
+    },
+    {
+      "path": "crates/lrr/src/syntax/body_items.rs",
+      "sha256": "da97e696f534f3bb39f1c80b344c89ebfc0128dd811362117e4d714f611e0eb4"
+    },
+    {
+      "path": "crates/lrr/src/syntax/entered_macros.rs",
+      "sha256": "dc034a70c65ccd521f1912240c2bdd2703cde124950647d36f431c0fa60b73cb"
+    },
+    {
+      "path": "crates/lrr/src/syntax/body_index.rs",
+      "sha256": "4e6b8bcd7fae22f7a7961ef12e0d048e181657017cbe2784005b377c281b27bd"
+    },
+    {
+      "path": "crates/lrr/src/syntax/outline.rs",
+      "sha256": "d9cfc730c35f5781088ae3f70f43a3313048bbbebf5a676ef1aaef2e165fc6a4"
+    },
+    {
+      "path": "crates/lrr/tests/module_cli.rs",
+      "sha256": "19bf6b0d06c9160736b851b8e96ec4a5314a067c5fb5fefa6a398c06864a55f4"
+    },
+    {
+      "path": "crates/lrr/tests/cargo_units.rs",
+      "sha256": "c8d575a92b17c0c7c6dc2e006bf14c9185227890903b09e5ee35b03f4807d51d"
+    },
+    {
+      "path": "fixtures/macros/retained-input-provenance.json",
+      "sha256": "1459da143ed13a71ce96baf1377f5bb2680694594ee320c4f869d57a8f9987c0"
+    },
+    {
+      "path": "fixtures/macros/modules/ordinary/main.rs",
+      "sha256": "8e458a01168410e3b3fc8af916ccb851e4d3f25b32c5098dd432e6d769f7d863"
+    },
+    {
+      "path": "fixtures/macros/modules/ordinary/child.rs",
+      "sha256": "f397895d688b002bf0cd83cd586aad71256bd1fbd55a273ed0eec404671b1491"
+    },
+    {
+      "path": "fixtures/macros/modules/ordinary/child/grandchild.rs",
+      "sha256": "cb4e976559f4df02177232dd3ab9613e5b6e04d3748ec8c589689e7f2053c984"
+    },
+    {
+      "path": "fixtures/macros/modules/generated/live.rs",
+      "sha256": "52d81b1333e93ccc5d6d082b8d79bbe1bddeed89ebdf4386af24bb52353f4697"
+    },
+    {
+      "path": "fixtures/macros/modules/generated/child.rs",
+      "sha256": "e82b03a534a0a767ee8cd71980555ce9680bfab12cd765dee218b6061422cd20"
+    },
+    {
+      "path": "fixtures/macros/cargo-unit-graphs/lib-tests.json",
+      "sha256": "f3e5fe3bf00d7e7616d715256dd795ad28b6eae491e2f264fba1b6be1a681e00"
+    },
+    {
+      "path": "fixtures/macros/cargo-unit-graphs/integration.json",
+      "sha256": "b6351f5b124154e710e9149ea506771413d1f785613b9b0899fc631414a0f5dc"
+    }
+  ],
+  "source_packet_sha256": "4a4f42f7752bf61f1be3e96299a0b9717ae0b41db5392956d539dd4bacf3bba1",
+  "source_member": "8cc92cebe11915872a2c3d2e6ef5a4b4a105019821376d377b7bdc289a074b96",
+  "frozen_file_count": 4886,
+  "frozen_symlinks": 3,
+  "validation": [
+    {
+      "version": "snapshot-v1",
+      "scope": "full-adapter",
+      "raw_root": "artifacts/macos-first/sol-common-syntax-snapshot-validation-v1/full-adapter",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr-expand-adapter"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 48.244682625023415,
+      "distinct_bodies": 104,
+      "passed": 104,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "snapshot-v1",
+      "scope": "strict-adapter",
+      "raw_root": "artifacts/macos-first/sol-common-syntax-snapshot-validation-v1/strict-adapter",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr-expand-adapter",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 4.44506533301319,
+      "distinct_bodies": 0,
+      "passed": 0,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": true
+    },
+    {
+      "version": "body-v1",
+      "scope": "retained-new",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v1/retained-new",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "syntax::parse::retained::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 101,
+      "elapsed_seconds": 27.615431958984118,
+      "distinct_bodies": 8,
+      "passed": 7,
+      "failed": 1,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "body-v2",
+      "scope": "body-index",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v2/body-index",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "syntax::body_index",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 0.10794454099959694,
+      "distinct_bodies": 4,
+      "passed": 4,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "body-v2",
+      "scope": "entered-macros",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v2/entered-macros",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "syntax::entered_macros",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 0.10050891700666398,
+      "distinct_bodies": 1,
+      "passed": 1,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "body-v2",
+      "scope": "parse-existing",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v2/parse-existing",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "syntax::parse",
+        "--",
+        "--test-threads=1",
+        "--skip",
+        "syntax::parse::retained::tests"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 0.12797833301010542,
+      "distinct_bodies": 9,
+      "passed": 9,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "body-v2",
+      "scope": "retained-new",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v2/retained-new",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "syntax::parse::retained::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 21.229527083982248,
+      "distinct_bodies": 8,
+      "passed": 8,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "body-v2",
+      "scope": "strict-lrr",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v2/strict-lrr",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "child_exit_code": 101,
+      "elapsed_seconds": 10.814545874978648,
+      "distinct_bodies": 0,
+      "passed": 0,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": true
+    },
+    {
+      "version": "body-v3",
+      "scope": "body-index",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v3/body-index",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "syntax::body_index",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 0.10376979102147743,
+      "distinct_bodies": 4,
+      "passed": 4,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "body-v3",
+      "scope": "entered-macros",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v3/entered-macros",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "syntax::entered_macros",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 0.09790887500275858,
+      "distinct_bodies": 1,
+      "passed": 1,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "body-v3",
+      "scope": "parse-existing",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v3/parse-existing",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "syntax::parse",
+        "--",
+        "--test-threads=1",
+        "--skip",
+        "syntax::parse::retained::tests"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 0.12417016699328087,
+      "distinct_bodies": 9,
+      "passed": 9,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "body-v3",
+      "scope": "retained-new",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v3/retained-new",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "syntax::parse::retained::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 20.706692000007024,
+      "distinct_bodies": 8,
+      "passed": 8,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "body-v3",
+      "scope": "strict-lrr",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v3/strict-lrr",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "child_exit_code": 101,
+      "elapsed_seconds": 8.196320832998026,
+      "distinct_bodies": 0,
+      "passed": 0,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": true
+    },
+    {
+      "version": "body-v4",
+      "scope": "body-index",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v4/body-index",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "syntax::body_index",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 0.11266895799781196,
+      "distinct_bodies": 4,
+      "passed": 4,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "body-v4",
+      "scope": "cargo-units",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v4/cargo-units",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--test",
+        "cargo_units",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 27.039780207996955,
+      "distinct_bodies": 6,
+      "passed": 6,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "body-v4",
+      "scope": "entered-macros",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v4/entered-macros",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "syntax::entered_macros",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 0.10679470899049193,
+      "distinct_bodies": 1,
+      "passed": 1,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "body-v4",
+      "scope": "full-adapter",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v4/full-adapter",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr-expand-adapter"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 50.66102170801605,
+      "distinct_bodies": 104,
+      "passed": 104,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "body-v4",
+      "scope": "parse-existing",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v4/parse-existing",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "syntax::parse",
+        "--",
+        "--test-threads=1",
+        "--skip",
+        "syntax::parse::retained::tests"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 0.13485162498545833,
+      "distinct_bodies": 9,
+      "passed": 9,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "body-v4",
+      "scope": "retained-new",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v4/retained-new",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--lib",
+        "syntax::parse::retained::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 21.170128083002055,
+      "distinct_bodies": 8,
+      "passed": 8,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": false
+    },
+    {
+      "version": "body-v4",
+      "scope": "strict-adapter",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v4/strict-adapter",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr-expand-adapter",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 1.5610182910168078,
+      "distinct_bodies": 0,
+      "passed": 0,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": true
+    },
+    {
+      "version": "body-v4",
+      "scope": "strict-lrr",
+      "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v4/strict-lrr",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "--offline",
+        "--locked",
+        "-p",
+        "lrr",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "child_exit_code": 0,
+      "elapsed_seconds": 20.598874999996042,
+      "distinct_bodies": 0,
+      "passed": 0,
+      "failed": 0,
+      "source_unchanged": true,
+      "compile_only": true
+    }
+  ],
+  "failure_history": [
+    {
+      "version": "body-v1",
+      "result": "7 passed,1 failed; later suffix unexecuted",
+      "cause": "Test assumed flattened TT display could be lexically reparsed. Pinned token sink emits adjacent identifier leaves without inserting source whitespace.",
+      "repair": "Test-only alternate AST grouping constructed structurally with identical leaf bytes/origins/profile; actual grouping/body-hash/foreign-handle oracles preserved. Production unchanged."
+    },
+    {
+      "version": "body-v2",
+      "result": "22 controls passed; strict failed",
+      "cause": "Unused production Digest import after hashing moved into the common representation helper.",
+      "repair": "Move Digest import to existing cfg(test) module; no semantic change."
+    },
+    {
+      "version": "body-v3",
+      "result": "22 controls passed; strict all-target compilation failed; adapter/milestone suffix unexecuted",
+      "cause": "Seven existing include_str source/graph inputs were ignored local artifacts and absent from Git-only archive.",
+      "repair": "Preserve exact bytes in fixtures/macros, redirect only include_str paths and retain provenance; no oracle change."
+    }
+  ],
+  "current_scope": {
+    "lrr_component_bodies": 22,
+    "existing_cargo_unit_bodies": 6,
+    "adapter_bodies": 104,
+    "strict_lrr_all_targets": true,
+    "strict_adapter_all_targets": true,
+    "not_added_to_milestone_counts": true
+  },
+  "upstream": {
+    "imported_cases": 323,
+    "original_files": 509,
+    "new_imports": 0,
+    "new_guest_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "witness": "tests/ui/macros/macro-nested_stmt_macros.rs",
+    "witness_scope": "Unchanged original expanded and indexed; generated local declarations verified in all four editions. Not guest execution or a full fixture pass."
+  },
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "editions": [
+    2015,
+    2018,
+    2021,
+    2024
+  ],
+  "private_receipt_sha256": {
+    "artifacts/macos-first/sol-common-syntax-snapshot-validation-v1/full-adapter/command.json": "73ed9b6157bde4988f4b2f07397c56533d29faa7b74eb89c23239d34413b9a47",
+    "artifacts/macos-first/sol-common-syntax-snapshot-validation-v1/full-adapter/terminal.json": "07922157c2e2c4753dda6dea6d2c77aaa2e629c78261e3e2f3ca86afabaada2c",
+    "artifacts/macos-first/sol-common-syntax-snapshot-validation-v1/full-adapter/child-terminal.json": "7961992ca42802599287cb2d6d18d29aecbc42d9ec46fe3fd6e5cf2abfac782d",
+    "artifacts/macos-first/sol-common-syntax-snapshot-validation-v1/strict-adapter/command.json": "28fc6dc1553c7f3c133e9772bbd98e50f8c2f45f6e79e5196af90d19718fb267",
+    "artifacts/macos-first/sol-common-syntax-snapshot-validation-v1/strict-adapter/terminal.json": "b5fd06e931086fa573319206e6ff98079d4637fb2bfbd32151087d1f2fdf8c78",
+    "artifacts/macos-first/sol-common-syntax-snapshot-validation-v1/strict-adapter/child-terminal.json": "c3e7a65fe2c4278b7f94f95dd798ad56fd304dfe6e1fdc04febd7f34427d8769",
+    "artifacts/macos-first/sol-common-syntax-snapshot-validation-v1/SOURCE-FROZEN.json": "5f826c8c2b5ed68fca7eb4856be2724e1ca83e448097d180ca905b6a90c91fdc",
+    "artifacts/macos-first/sol-common-syntax-snapshot-validation-v1/HANDOFF.md": "d1490be21381326eba1adb035df9b1131f7df44a68c01f2efae01988a8ef4e3a",
+    "artifacts/macos-first/sol-common-syntax-snapshot-validation-v1/RELEASE.json": "92cf75cc6528b2e26436a8e8b5d5264e11907e086b95bdd3797ebd917eb795ed",
+    "artifacts/macos-first/sol-common-syntax-snapshot-validation-v1/EVIDENCE-HASHES.json": "9b7b56f7cedb1564c113b0e09055019ab1f0300eae3f83fe44d0fc430bdd6194",
+    "artifacts/macos-first/sol-common-retained-body-validation-v1/retained-new/command.json": "4093f931dd4e85120e708d3fd64f1f73b9f0c90cfcb2bc2aabc1adf2aead1514",
+    "artifacts/macos-first/sol-common-retained-body-validation-v1/retained-new/terminal.json": "90c434939ae8aee2d6d975bcf285aa784b2068b0c80c679e6c71aec938106315",
+    "artifacts/macos-first/sol-common-retained-body-validation-v1/retained-new/child-terminal.json": "8bc31614134f81d832e0f180493433ab2977d2d9c8743d1c6927e08af5359f65",
+    "artifacts/macos-first/sol-common-retained-body-validation-v1/SOURCE-FROZEN.json": "b65e4b3c56d6ff67a86eb777bfab703fbd14afe0b8f85d53167ebd01e83ec3f1",
+    "artifacts/macos-first/sol-common-retained-body-validation-v1/HANDOFF.md": "57c2c92f759f27a6a62fba3d32bd1beb591ab2d1f39437cf3f223e31c185bc19",
+    "artifacts/macos-first/sol-common-retained-body-validation-v1/RELEASE.json": "9b4160a86dc91b3d3b49643c32e0c1b4fe80943630dfd7ff9040d75e2a79a321",
+    "artifacts/macos-first/sol-common-retained-body-validation-v1/EVIDENCE-HASHES.json": "e612ba619f0cd6b39ea959ccb222a01a8ca7bd476d9a2a753f00e446ee218e3f",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/body-index/command.json": "6a7845e21e872c54496087df4594221c6149ed4e3852fad7ba3dfb7e30c58450",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/body-index/terminal.json": "25466102435772d27d790be9ddb0c7dc4037a67a13920ca31782a360c35f0191",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/body-index/child-terminal.json": "e41ffb666bbf0122fcfaf0088035626cabeea5bc58e8179bee889738afe41f4c",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/entered-macros/command.json": "7a36fc18ad1e66e0855921f2df79280d74751e2c560a8041e74389237474f87d",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/entered-macros/terminal.json": "23c47d5424a7da9720b04ef767665e4626bf18382b469290ce892c71a992110a",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/entered-macros/child-terminal.json": "b8c96305bef30bd6bb13f830d2863f2d5596241ebca439cbac6d8eb665cb88ed",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/parse-existing/command.json": "c637662787857fd60dba86c806936c89e3d5622daee822c0c8cbeedf9336a5d4",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/parse-existing/terminal.json": "b481b0f00cfbda8a8a3387c34e3623181ba881bcfd5ef50c6f9beb764916446e",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/parse-existing/child-terminal.json": "5519226edde93b796f3ffa9fc2567f285a613111a66a4ac6740e703f9d52fd07",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/retained-new/command.json": "2e1647bffa2e43362f943b81c37a1a3cc2c9db194544970fafc86db51f615843",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/retained-new/terminal.json": "7312156c705ebc04da91ef1ddb1c1e20d0db644a5e8d1aac63c453fd67414685",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/retained-new/child-terminal.json": "f884be18c59e3d216808bb7f52996c77ee459dd5d15f6bd7bd6e601d47985a93",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/strict-lrr/command.json": "046e9bedff3a7b7b4cf3e354c49d4ebe194da2778ee0293d086fb818af2afbf2",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/strict-lrr/terminal.json": "f245876676de1755385f8939f9fd2dd9c66e23f6b91b3fe723a7e7f57285ab5a",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/strict-lrr/child-terminal.json": "7361485b67312a0fc8e0d1f5a53eca014439f14d62e1038de343fb88ab20e4c6",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/SOURCE-FROZEN.json": "307fa6d43cf1f7a04f83bcb7a9822cea593d4dc1e8aabe274b5075cff6d45aa9",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/HANDOFF.md": "b4afb43a97b104cbd0a610fbcef3b7b917d9031d58fd46aebb8dedef84fc5530",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/RELEASE.json": "54860a092757fee47b498d9648489d2dd686da6d43235ff6318e73bd6d81ea5f",
+    "artifacts/macos-first/sol-common-retained-body-validation-v2/EVIDENCE-HASHES.json": "834a41a5407954c40fd6ae4e4ec46c768fd9f14e23644e49ad1c408e1b955274",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/body-index/command.json": "29652a0ff51dc6c5d0b2b64bcc829817b7c34bd7424da8f329cb6288573c411b",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/body-index/terminal.json": "7bcdf0aaf29f29f43f099e6110eab335b0f4b64ecdc3ae8a319943c0ed4975b9",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/body-index/child-terminal.json": "3642b26892dd9810a3e3ff6b5b42f4fa0115743b0f09550bbe46df71e70013bf",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/entered-macros/command.json": "cdbb20ed5c41277243c99208f0d10580477286673cd50b589f9865a4910f8b0e",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/entered-macros/terminal.json": "b5f90ea543daf49a142f2efdc32bab7823188e5a458f818452d11d4f3e367c6d",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/entered-macros/child-terminal.json": "62fa6711fb0d926030f845c745ad9769b659df3c9676f611a4f5d3ff768b771c",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/parse-existing/command.json": "9ffcf446c43cd224161d2c59320fa456fc2dc0e1efeb01e950e5f18b6c772d70",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/parse-existing/terminal.json": "b88171278270abba5b73d44c664f00878bd41649342c5b83978d963b0bf3ac98",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/parse-existing/child-terminal.json": "7021fefb94a4319e0829adcef48a2ddb3f98451cda3d4f6c5fc026f3373c9c63",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/retained-new/command.json": "6ee150718a64b45883be813373f55e14a2d54d75bdfa9c34c1ec70a8d1646795",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/retained-new/terminal.json": "b1a9cf7469b5e2ceadde80bbe7df76154b54242f15c71e8553858cf56c73fc7c",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/retained-new/child-terminal.json": "65b014607e87714978a7cba5141d66cd2a33fe8925d44a2d7d9de2c9d71d8d56",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/strict-lrr/command.json": "9bc9bff6899fa28adecac9cdd5decf469cc0500774ce69f5506ad8ebceb17708",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/strict-lrr/terminal.json": "b60c9fff42a83351fe3b0a1cfb211c529fbdf382f96b6fb20605a72181022271",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/strict-lrr/child-terminal.json": "d8ab32735dd03e67ac35473676b7d7c1bfa7e34a96bfa3e1396e8b3ea64240ee",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/SOURCE-FROZEN.json": "9833de476dd3f186e8baeb47b59ae4b892c4cdc99ee52ec6e9add910011dbe5d",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/HANDOFF.md": "1f63039faa471e32ae14d6ff329e1e6fbb6202900fb45519375c89d74ce5c008",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/RELEASE.json": "dbd2cc7b2fd779f342194dd694ed2c4cc7a2eb9c7ed000896638f00696ed199c",
+    "artifacts/macos-first/sol-common-retained-body-validation-v3/EVIDENCE-HASHES.json": "0ebb6b2815c4acc725a0451e256fbea0119f35e8e86928bb41525cf2ea121eba",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/body-index/command.json": "408e64cbe6430ed53559a5e6e6ad5257c38a9ddbfe71315b2e7e35c2ae4d9be4",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/body-index/terminal.json": "f2efe19f0b9a71604273a14f16ee824b3af16d3ccaffeff854f9785357f4f348",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/body-index/child-terminal.json": "a0e31613ec2257b5cf966400d0044e0d39758e6ae10f443a8de12d0fce002aa9",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/cargo-units/command.json": "1a7855c1f2678e476432694134caf6d0ff2565f536986cdd91de26da046af72b",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/cargo-units/terminal.json": "b76e39cdb72ef7c0a3134350d667807449f971c9172b02101b91980c1693b7ad",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/cargo-units/child-terminal.json": "974a3ef7c8d166950edc2c2329550f8400ad417773144ad283ab869f915410f8",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/entered-macros/command.json": "a3dbe9e1a24c4c7431e973c39fd9098ab0a9f7b17dacc330913595f869a224bd",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/entered-macros/terminal.json": "804b496a913120a45762e06b0dc76927122bed6908c437f66dd429ebc50e8160",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/entered-macros/child-terminal.json": "07840003cc4d117f97e17a4165ede3e0fc68de6ff25a79ba97eac33cd1a9202e",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/full-adapter/command.json": "45f80305acb4dc0b31f35966d3ce64449479170d34acac96072acfab6b1cd0e3",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/full-adapter/terminal.json": "8e1a11b3507011b960cf271339d429a36fdcf209b70c791ec3355262ab37f24b",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/full-adapter/child-terminal.json": "a1acb3a1b129a9e527029a69de7c4c8a16898679aa4048d1e889f9346f2b39aa",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/parse-existing/command.json": "6f4daa96de38ed466892ff6ea080e4c2a2e665100f7789891dc10cee8e50893f",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/parse-existing/terminal.json": "cda782291896ed718ca8758df0eae628e987bf2c105dc4ccda751f39c1a1c317",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/parse-existing/child-terminal.json": "31654c780c571f16466df97254fc7e4458573e89519c6c92ee24650f67dd33e1",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/retained-new/command.json": "65dad9eb300dae63eaf270deaca90b4241b30cc5767fe27455e22487b97c30ec",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/retained-new/terminal.json": "59b284c73a3c68ba1cd784f3ae898a305685c448a5b5c19ef45cda5cb2e98681",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/retained-new/child-terminal.json": "ad9bcaeef77c15eab3d20ea8c1d595ab3e4b4d348f997cc1e278e14f9a1a5c0f",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/strict-adapter/command.json": "64e01aab2e0b1ed0f3e8aa6b5c7b5b96f518f7e7ae49b9f83e3c341014021ea2",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/strict-adapter/terminal.json": "323fc3c426305162af3c944c8f288ae21458f1684cc8ae7a8fd64677ac53992e",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/strict-adapter/child-terminal.json": "6e87ad8c89735d6432cfac36572903b763f640350aad8cf642a397e755f59db0",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/strict-lrr/command.json": "9ac0fc932bf54f86ffe51f539f729cf9b19da4375a928b0f9d648934b868cae6",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/strict-lrr/terminal.json": "9003f3a67a32e22dfa9f0bd282607d9d742281fb9229f7293b7cc682917d35c8",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/strict-lrr/child-terminal.json": "9cc4d7664f05d767381ae991249a1cbb3239151c1405d8c6d738286e83a6c271",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/SOURCE-FROZEN.json": "1722a91c3397eb07342d4fe27515cfa90e641690e02c00ed56b358112f779c3f",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/PROVENANCE-CHECK.json": "f0473ffb5f8b2a2040cd6737c96536ac3610b29a26ca6c95b0c0eea88dc26ae0",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/gate03/command.json": "45ba8c71772cadc83f7c514aec413cf2798bc32d43ea1063f3b2366b747f6d92",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/GATE-PREFLIGHT.json": "0cff38a9af076f55f9ddcfa4ff341f47d06710e8a844605e4a1598c6e718eeca",
+    "artifacts/macos-first/sol-common-retained-body-validation-v4/TARGET-INACTIVE-BEFORE-GATE.json": "85fa24f706f127537b4bc95fc4466724cf9f5e661b2b14a0713c52f70e4ed90d"
+  },
+  "required_next": [
+    "Admit composite retained source via existing immutable query/input/publication framework, binding genuine caller/body, issued request, exact expansion record, current epoch/seal and full origin closure",
+    "Preserve current SourceLease/content checks; never disguise structured syntax identity as a SourceBlob byte digest",
+    "Connect generated code to common name/member/numeric inference and transactional pattern lowering and actual VM execution",
+    "Remove all eight audited macro-specific runtime/lowering/index/verifier shortcuts after common-path authority/lifetime/currentness coverage",
+    "Collect a fresh complete interpreter milestone; component green does not clear E-R5-005 or guest JIT prerequisite"
+  ],
+  "acceptance": {
+    "representation_component_only": true,
+    "source_and_body_publication": false,
+    "ordinary_runtime_route": false,
+    "common_macro_engine": false,
+    "task_complete": false,
+    "guest_jit_prerequisite": false,
+    "full_suite_compatibility": false,
+    "release": false
+  },
+  "milestone": {
+    "status": "running_async_unaccepted",
+    "argv": [
+      "cargo",
+      "+1.99.0",
+      "run",
+      "--offline",
+      "--locked",
+      "-p",
+      "xtask",
+      "--",
+      "gate",
+      "03"
+    ],
+    "raw_root": "artifacts/macos-first/sol-common-retained-body-validation-v4/gate03",
+    "source_member": "8cc92cebe11915872a2c3d2e6ef5a4b4a105019821376d377b7bdc289a074b96",
+    "started_at": "2026-10-15T20:05:18.944114+00:00",
+    "fresh_report_preflight": {
+      "at": "2026-10-15T20:05:18.684653+00:00",
+      "source_guard": {
+        "source_member": "8cc92cebe11915872a2c3d2e6ef5a4b4a105019821376d377b7bdc289a074b96",
+        "frozen_files": 4886,
+        "symlinks": 3,
+        "owner_sha256": "4b551006feeb81c7ab49c512a7b3afaa7e76ee9e4451c3d3dbc7d3373605c1f3",
+        "raw_files": 509,
+        "cases": 323,
+        "manifest_sha256": "d0dd43dac221a0f78f10aa80d49c4041fc98469f196fb64db53abcdb87e763b3",
+        "licenses": {
+          "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+          "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+        },
+        "free_bytes": 63793926144
+      },
+      "completed_scopes": {
+        "retained-new": {
+          "exit": 0,
+          "bodies": 8
+        },
+        "parse-existing": {
+          "exit": 0,
+          "bodies": 9
+        },
+        "body-index": {
+          "exit": 0,
+          "bodies": 4
+        },
+        "entered-macros": {
+          "exit": 0,
+          "bodies": 1
+        },
+        "cargo-units": {
+          "exit": 0,
+          "bodies": 6
+        },
+        "strict-lrr": {
+          "exit": 0,
+          "bodies": 0
+        },
+        "full-adapter": {
+          "exit": 0,
+          "bodies": 104
+        },
+        "strict-adapter": {
+          "exit": 0,
+          "bodies": 0
+        }
+      },
+      "prior_reports": [
+        {
+          "path": "artifacts/gates/00.json",
+          "existed": false
+        },
+        {
+          "path": "artifacts/gates/01.json",
+          "existed": false
+        },
+        {
+          "path": "artifacts/gates/02.json",
+          "existed": false
+        },
+        {
+          "path": "artifacts/gates/03.json",
+          "existed": false
+        },
+        {
+          "path": "artifacts/gates/m001-components.json",
+          "existed": false
+        },
+        {
+          "path": "artifacts/gates/m002-components.json",
+          "existed": false
+        },
+        {
+          "path": "artifacts/gates/m003-components.json",
+          "existed": false
+        },
+        {
+          "path": "artifacts/bootstrap.json",
+          "existed": false
+        },
+        {
+          "path": "artifacts/dependency-licenses.json",
+          "existed": false
+        }
+      ],
+      "no_old_report_substitution": true,
+      "documented_command": [
+        "cargo",
+        "+1.99.0",
+        "run",
+        "--offline",
+        "--locked",
+        "-p",
+        "xtask",
+        "--",
+        "gate",
+        "03"
+      ],
+      "documentation": "lrr_rust2024_macros_traits_implementation_spec.md:2131; xtask/src/main.rs gate dispatch",
+      "architectural_hold": "E-R5-005 remains regardless of gate result"
+    },
+    "terminal_result": null,
+    "note": "No complete gate terminal or totals collected at this source checkpoint. Historical reports are not substituted; E-R5-005 is independently blocking."
+  },
+  "current_scoped_terminal_refs": {
+    "retained-new": "95363f/0",
+    "parse-existing": "8b283c/0",
+    "body-index": "bec045/0",
+    "entered-macros": "345bec/0",
+    "cargo-units": "1349a9/0",
+    "strict-lrr": "bb7768/0",
+    "full-adapter": "0887ee/0",
+    "strict-adapter": "c23f05/0"
+  }
+}

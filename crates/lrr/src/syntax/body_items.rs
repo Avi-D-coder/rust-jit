@@ -64,6 +64,7 @@ fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-SCOPE", message.into())
 }
 pub(crate) struct BodyItemContext<'a> {
+    pub parsed: &'a super::parse::ParsedFile,
     pub parent: &'a BodyHandle,
     pub containing: &'a ScopeKey,
     pub scope: u32,
@@ -93,6 +94,7 @@ impl BodyItemBudget {
         attribute_input: Option<Digest>,
     ) -> Result<Option<BodyItem>, Diagnostic> {
         let BodyItemContext {
+            parsed,
             parent,
             containing,
             scope,
@@ -244,12 +246,16 @@ impl BodyItemBudget {
             duplicate_ordinal,
         };
         let definition = def_key.fingerprint();
-        let body = executable.map(|n| BodyHandle {
-            def_key: definition,
-            body_hash: Digest::of_bytes(n.text().to_string().as_bytes()),
-            range: range(n.text_range()),
-            entry_blocked: attribute_input.is_some(),
-        });
+        let body = if let Some(n) = executable {
+            Some(BodyHandle {
+                def_key: definition,
+                body_hash: parsed.body_content_identity(&n)?,
+                range: range(n.text_range()),
+                entry_blocked: attribute_input.is_some(),
+            })
+        } else {
+            None
+        };
         let mut namespaces = if named { vec![namespace] } else { vec![] };
         if let ast::Item::Struct(n) = item
             && (node
@@ -262,15 +268,19 @@ impl BodyItemBudget {
         {
             namespaces.push(Namespace::Value);
         }
-        let container_handle = container.as_ref().map(|n| ContainerHandle {
-            key: ContainerKey {
-                definition,
-                content: Digest::of_bytes(n.text().to_string().as_bytes()),
-                kind,
-            },
-            range: range(n.text_range()),
-            entry_blocked: attribute_input.is_some(),
-        });
+        let container_handle = if let Some(n) = container.as_ref() {
+            Some(ContainerHandle {
+                key: ContainerKey {
+                    definition,
+                    content: parsed.body_content_identity(n)?,
+                    kind,
+                },
+                range: range(n.text_range()),
+                entry_blocked: attribute_input.is_some(),
+            })
+        } else {
+            None
+        };
         Ok(Some(BodyItem {
             scope,
             item: ItemOutline {

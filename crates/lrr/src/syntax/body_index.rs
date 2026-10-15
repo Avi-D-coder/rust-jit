@@ -8,7 +8,7 @@ use super::{
 use crate::{
     core::{
         diagnostic::Diagnostic,
-        digest::{Digest, StableEncode, StableEncoder},
+        digest::{StableEncode, StableEncoder},
         profile::ProfileIdentity,
     },
     ir::pc::{NodeId, PcKey, Phase, SlotId, SlotKind},
@@ -467,15 +467,9 @@ impl ParsedFile {
             .take(257)
             .find(|node| range(node.text_range()) == body.range && ast::Expr::can_cast(node.kind()))
             .ok_or_else(|| fault("body expression syntax boundary absent"))?;
-        let text = root.text();
-        let mut content = String::new();
-        content
-            .try_reserve_exact(usize::from(text.len()))
-            .map_err(|_| limit("body content verification allocation"))?;
-        text.for_each_chunk(|chunk| content.push_str(chunk));
         if range(root.text_range()) != body.range
             || !ast::Expr::can_cast(root.kind())
-            || Digest::of_bytes(content.as_bytes()) != body.body_hash
+            || self.body_content_identity(&root)? != body.body_hash
         {
             return Err(fault("body source range/content mismatch"));
         }
@@ -1311,6 +1305,7 @@ impl ParsedFile {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::digest::Digest;
     #[test]
     fn rustc_single_token_const_initializer_uses_exact_expression_scope() {
         use crate::source::snapshot::{CfgSet, SourceBlob};

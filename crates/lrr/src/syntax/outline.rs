@@ -168,6 +168,8 @@ impl StableEncode for DeclarationContext {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BodyHandle {
     pub def_key: Digest,
+    /// Exact UTF-8 bytes for text sources; tagged structural representation
+    /// (including owning editions) for retained syntax. Never display text alone.
     pub body_hash: Digest,
     pub range: SourceRange,
     pub entry_blocked: bool,
@@ -1066,12 +1068,16 @@ impl ParsedFile {
                     syntax: header.fingerprint(),
                 });
             }
-            let body = executable.map(|body| BodyHandle {
-                def_key: definition,
-                body_hash: Digest::of_bytes(body.text().to_string().as_bytes()),
-                range: range(body.text_range()),
-                entry_blocked: blocked,
-            });
+            let body = if let Some(body) = executable {
+                Some(BodyHandle {
+                    def_key: definition,
+                    body_hash: self.body_content_identity(&body)?,
+                    range: range(body.text_range()),
+                    entry_blocked: blocked,
+                })
+            } else {
+                None
+            };
             let span = range(node.text_range());
             let transform = scope.owner.is_none()
                 && header.attributes.iter().any(|a| {

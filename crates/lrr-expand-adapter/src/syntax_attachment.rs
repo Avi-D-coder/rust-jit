@@ -10,6 +10,8 @@ use span::{SpanMap, TextRange};
 use syntax::{AstNode, SyntaxNode, WalkEvent, ast};
 mod lists;
 pub use lists::ListSlot;
+mod snapshot;
+pub use snapshot::SyntaxSnapshot;
 
 const MAX_TEXT: u32 = 32 * 1024 * 1024;
 const MAX_NODES: usize = 2_000_000;

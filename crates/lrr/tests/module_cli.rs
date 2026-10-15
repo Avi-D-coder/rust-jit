@@ -55,17 +55,15 @@ fn cli_adopted_source_ordinary_grandchild_matches_native_witness() {
     let (root, output) = fixture(&[
         (
             "main.rs",
-            include_str!("../../../artifacts/macos-first/m013-ordinary-module-witness/main.rs"),
+            include_str!("../../../fixtures/macros/modules/ordinary/main.rs"),
         ),
         (
             "child.rs",
-            include_str!("../../../artifacts/macos-first/m013-ordinary-module-witness/child.rs"),
+            include_str!("../../../fixtures/macros/modules/ordinary/child.rs"),
         ),
         (
             "child/grandchild.rs",
-            include_str!(
-                "../../../artifacts/macos-first/m013-ordinary-module-witness/child/grandchild.rs"
-            ),
+            include_str!("../../../fixtures/macros/modules/ordinary/child/grandchild.rs"),
         ),
     ]);
     assert_eq!(value(&output), "2053");
@@ -275,8 +273,8 @@ fn mx028_discovery_refuses_unexpanded_cycle_and_resolves_originating_reexports()
 }
 #[test]
 fn cli_generated_external_module_matches_actual_native_macos() {
-    let live = include_str!("../../../artifacts/macos-first/m013-generated-module-probe/live.rs");
-    let child = include_str!("../../../artifacts/macos-first/m013-generated-module-probe/child.rs");
+    let live = include_str!("../../../fixtures/macros/modules/generated/live.rs");
+    let child = include_str!("../../../fixtures/macros/modules/generated/child.rs");
     let (root, cli) = fixture(&[("main.rs", live), ("child.rs", child)]);
     let actual = value(&cli);
     let version = Command::new("rustc")
