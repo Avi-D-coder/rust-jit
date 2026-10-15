@@ -18,16 +18,11 @@ use lrr::{
 #[derive(Clone, Copy)]
 enum Frontier {
     OperandPreparation(&'static str, &'static str),
-    FloatingMethod,
 }
 impl Frontier {
     fn diagnostic(self) -> (&'static str, &'static str) {
         match self {
             Self::OperandPreparation(code, message) => (code, message),
-            Self::FloatingMethod => (
-                "LRR-E-UNSUPPORTED",
-                "reached assertion operand requires pending non-scalar expression integration",
-            ),
         }
     }
 }
@@ -167,19 +162,6 @@ fn run_source(source: &str, label: &str, frontier: Option<Frontier>) {
                         assert_eq!(counters.started_by_opcode[9], 0);
                         assert_eq!(counters.started_by_opcode[10], 0);
                     }
-                    Frontier::FloatingMethod => {
-                        assert_eq!(counters.started_by_opcode[41], 1);
-                        assert_eq!(counters.started_by_opcode[7], 1);
-                        assert_eq!(counters.started_by_opcode[26], 0);
-                        assert_eq!(counters.started_by_opcode[10], 0);
-                        let stack = error.guest_stack.as_ref().expect("original method origin");
-                        assert_eq!(stack.frames[0].body.body_key, main);
-                        assert!(stack.frames[0].locations.iter().any(|at| {
-                            at.source.path == "original.rs"
-                                && source.get(at.range.start as usize..at.range.end as usize)
-                                    == Some("assert!(nan.is_nan())")
-                        }));
-                    }
                 }
                 assert_eq!(counters.panic_scopes_cleaned, 0);
                 db.finish_run().unwrap();
@@ -248,13 +230,12 @@ fn component_original_mixed_signed_unsigned_shift_counts_exact_unsupported_front
     );
 }
 #[test]
-fn component_original_float_nan_exact_unsupported_frontier() {
-    run_source(
+fn original_float_nan() {
+    run_original(
         include_str!(
             "../../fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/float-nan.rs"
         ),
         "tests/ui/numbers-arithmetic/float-nan.rs",
-        Some(Frontier::FloatingMethod),
     );
 }
 #[test]

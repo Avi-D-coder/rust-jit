@@ -32,6 +32,8 @@ pub struct CompileInputCatalog {
     definitions: BTreeMap<Digest, (MacroDefinition, CompileInputDescriptor)>,
     attributes: Option<super::builtin_attributes::BuiltinAttributeCatalog>,
     value_binding: Option<value_binding::CompilerValueBindingFacet>,
+    primitive_float_methods:
+        Option<std::sync::Arc<crate::facade::primitive_float_methods::PrimitiveFloatMethods>>,
 }
 impl CompileInputCatalog {
     /// Caller supplies a compiler-owned facet. User macros cannot construct descriptors.
@@ -72,6 +74,7 @@ impl CompileInputCatalog {
             definitions,
             attributes: None,
             value_binding: None,
+            primitive_float_methods: None,
         })
     }
     /// Construct the pinned compiler facets for a captured standalone profile.
@@ -127,6 +130,9 @@ impl CompileInputCatalog {
         self.value_binding = Some(value_binding::CompilerValueBindingFacet::for_profile(
             profile,
         )?);
+        self.primitive_float_methods = Some(std::sync::Arc::new(
+            crate::facade::primitive_float_methods::PrimitiveFloatMethods::for_profile(profile)?,
+        ));
         Ok(self)
     }
     pub(crate) fn runtime_catalog(
@@ -147,7 +153,38 @@ impl CompileInputCatalog {
         } else {
             runtime
         };
+        let runtime = runtime.with_primitive_float_methods(self)?;
         Ok(Some(runtime))
+    }
+    /// Keep the exact existing foreign Macro inventory, but attach inherent
+    /// methods only from this actual canonical owning compiler facet. A set of
+    /// participating source profiles is not an inherent-member minting API.
+    pub(crate) fn runtime_catalog_for_profiles(
+        &self,
+        profiles: &BTreeSet<crate::core::profile::ProfileIdentity>,
+    ) -> Result<super::runtime_macro_catalog::RuntimeMacroCatalog, Diagnostic> {
+        let facet = self
+            .primitive_float_methods()?
+            .ok_or_else(|| fault("owning primitive method compiler facet is absent"))?;
+        super::runtime_macro_catalog::RuntimeMacroCatalog::standard_for_profiles(
+            facet.profile(),
+            profiles,
+        )?
+        .with_primitive_float_methods(self)
+    }
+    pub(super) fn primitive_float_methods(
+        &self,
+    ) -> Result<
+        Option<&std::sync::Arc<crate::facade::primitive_float_methods::PrimitiveFloatMethods>>,
+        Diagnostic,
+    > {
+        let Some(facet) = &self.primitive_float_methods else {
+            return Ok(None);
+        };
+        if self.canonical_standalone_member(facet.profile())?.is_none() {
+            return Err(fault("primitive method compiler membership differs"));
+        }
+        Ok(Some(facet))
     }
     pub(crate) fn runtime_prelude_unit(&self, standard: bool) -> Digest {
         if standard {

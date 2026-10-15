@@ -28,18 +28,19 @@ pub(super) fn capture(
     inside: &str,
     token_range: SourceRange,
 ) -> Result<RuntimeMacroArguments, crate::core::diagnostic::Diagnostic> {
+    let normalized = super::newline_input::NormalizedArguments::new(inside)?;
     let prefix = "fn __lrr_capture(){let _=[";
     let mut wrapped = String::new();
     let bytes = prefix
         .len()
-        .checked_add(inside.len())
+        .checked_add(normalized.as_str().len())
         .and_then(|n| n.checked_add(3))
         .ok_or_else(|| fault("vec argument wrapper overflow"))?;
     wrapped
         .try_reserve_exact(bytes)
         .map_err(|_| fault("vec argument wrapper allocation"))?;
     wrapped.push_str(prefix);
-    wrapped.push_str(inside);
+    wrapped.push_str(normalized.as_str());
     wrapped.push_str("];}");
     let edition = match source.edition {
         2015 => Edition::Edition2015,
@@ -120,8 +121,9 @@ pub(super) fn capture(
         let end = usize::try_from(offset.end)
             .map_err(|_| fault("vec end offset overflow"))?
             .checked_sub(prefix.len())
-            .filter(|n| *n <= inside.len())
+            .filter(|n| *n <= normalized.as_str().len())
             .ok_or_else(|| fault("vec operand escapes original input"))?;
+        let (start, end) = normalized.original_range(start, end)?;
         ranges.push(SourceRange {
             start: base
                 .checked_add(u32::try_from(start).map_err(|_| fault("vec source offset overflow"))?)
@@ -152,3 +154,7 @@ pub(super) fn capture(
         zero_arg_predicate_call: None,
     })
 }
+
+#[cfg(test)]
+#[path = "runtime_vec_newline_tests.rs"]
+mod newline_tests;

@@ -10918,7 +10918,7 @@ test = "component_original_mixed_signed_unsigned_shift_counts_exact_unsupported_
 [[fixture]]
 id = "T025-STOCK-NUMERIC-V1-7"
 path = "xtask/tests/stock_numeric_edgecases_v1.rs"
-test = "component_original_float_nan_exact_unsupported_frontier"
+test = "original_float_nan"
 
 [[fixture]]
 id = "T025-STOCK-NUMERIC-V1-8"
@@ -11143,7 +11143,7 @@ test = "cached_floating_recipe_refuses_new_rigid_source_even_with_matching_descr
 [[fixture]]
 id = "T041-FLOAT-DISPATCH-6"
 path = "crates/lrr/src/engine/run_floating_constant_tests.rs"
-test = "unchanged_float_nan_main_commits_first_binding_then_reaches_natural_method_frontier"
+test = "unchanged_float_nan_whole_main_executes_all_assertions_all_editions"
 
 [[fixture]]
 id = "T031-ALIAS-RETURN-1"

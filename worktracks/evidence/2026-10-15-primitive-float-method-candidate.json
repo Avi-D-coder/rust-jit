@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "at": "2026-10-15T09:02:33.119445+00:00",
-  "status": "source_only_unexecuted",
+  "status": "scoped_tested_source_integrated_full_milestone_pending",
   "claim": "LOCAL-035",
   "tasks": [
     "T062",
@@ -28,16 +28,16 @@
     "independent_review": "Source and API review only; source_view clone removed."
   },
   "validation": {
-    "rust_compilation": "V66 production dependency compiled; strict lib/tests failed on two dead-code helpers",
-    "whole_original_execution": "unexecuted",
-    "interpreter_correctness_controls": "unexecuted",
+    "rust_compilation": "V68 strict lib/tests passed, actual0ed2c8/0",
+    "whole_original_execution": "Unchanged float-nan.rs completes all65assertions across2015/2018/2021/2024 in real VM controls; owning2015 actual CLI capture is a runtime_contract_pass.",
+    "interpreter_correctness_controls": "V69 ten floating controls passed, including both cached dispatch rejection controls",
     "milestone": "unexecuted",
     "full_fixture_pass_delta": 0,
     "strict_actual_terminal": "7ff416/1",
     "strict_source_unchanged": true,
     "repair_candidate": "artifacts/macos-first/root-primitive-float-lint-repair-v1/manifest.json",
     "repair_manifest_sha256": "e9a6ff1d5fffc442dfddbccd36e6cef3e08d7852e2c833db7a3c96907e78a01b",
-    "next": "V68 background strict and planned runtime scopes; no float runtime pass yet",
+    "next": "Required full milestone gate03 on unchanged V72 source in background; byte/string runtime work remains.",
     "v67": {
       "actual_terminal": "4e6f80/1",
       "status": "strict test compilation failed",
@@ -46,6 +46,89 @@
       "executed_bodies": 0,
       "repair_manifest": "artifacts/macos-first/root-primitive-float-test-slice-repair-v1/manifest.json",
       "repair_manifest_sha256": "11814c39097b812ea95689f548039fc6c39b8b0b64061c0d4e804154321be648"
+    },
+    "v68": {
+      "strict_actual_terminal": "0ed2c8/0",
+      "runtime_actual_terminal": "55f5f2/1",
+      "executed_bodies": 20,
+      "passed_bodies": 17,
+      "failed_bodies": 3,
+      "source_unchanged": true,
+      "handoff": {
+        "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v68/HANDOFF.md",
+        "sha256": "fd65eed252f18699ed3368031de850eb894c25a661686e4a632547d845cbcd0b"
+      }
+    },
+    "v69": {
+      "actual_terminal": "86aca2/1",
+      "executed_bodies": 11,
+      "passed_bodies": 10,
+      "failed_bodies": 1,
+      "source_unchanged": true,
+      "failure": "LRR-E-TYPE-CONTEXT at assert!(!( -1. < nan));44 completed assertions in edition2015",
+      "source_member": "e1cfa58a03c33e1920ff1a73ff3a205d150365b763b3a0c9ccf330eed3688c92",
+      "handoff": {
+        "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v69/HANDOFF.md",
+        "sha256": "d49fb2f43db559fadc224cc3a478e63ddcf82d1820bc4ef4b6efd9e8e3e678dd"
+      }
+    },
+    "negative_float_repair": {
+      "manifest": "artifacts/macos-first/root-negative-float-scalar-v1/manifest.json",
+      "manifest_sha256": "a1b28f9bf4428c3a4d000fb03591d26e8125f94cda9bfc410b447390a7cc200e",
+      "static_format_and_replay": "d665f5/0",
+      "scope": "Signed floating literals retain deferred numeric context without evaluating the right operand early."
+    },
+    "v70_floating": {
+      "actual_terminal": "92017e/0",
+      "passed_bodies": 11,
+      "failed_bodies": 0,
+      "source_member": "4265bfaedc1b3df63742b3e8ca184325fcb955e035fc88aa6b33c7d2558dca0d",
+      "source_unchanged": true,
+      "original_assertions_per_edition": 65,
+      "editions": [
+        2015,
+        2018,
+        2021,
+        2024
+      ]
+    },
+    "v70": {
+      "actual_scoped_batch_terminal": "6752c0/0",
+      "passed_host_bodies": 76,
+      "failed_host_bodies": 1,
+      "failed_host_test": "component_original_float_nan_exact_unsupported_frontier",
+      "failure_actual_terminal": "41b608/1",
+      "reason": "Original now completes; obsolete negative assertion requires migration.",
+      "strict_and_format_architecture": "passed",
+      "source_unchanged": true,
+      "source_member": "4265bfaedc1b3df63742b3e8ca184325fcb955e035fc88aa6b33c7d2558dca0d",
+      "handoff_sha256": "05dc64f681f580048909853b1969ebc5a0be2af6903b56c5758ec546fa9ee404",
+      "actual_runtime_contract_passes": 6,
+      "capture_refusal_controls": 102,
+      "runtime_evidence": "worktracks/evidence/2026-10-15-selected-upstream-runtime.json"
+    },
+    "v71": {
+      "status": "assembly_refused_before_source_write_or_Cargo",
+      "reason": "Frozen docs/tasks preimage differs from newer canonical bookkeeping; v3 migration preserves each metadata history and changes only two selectors."
+    },
+    "v72": {
+      "exact_positive_terminal": "405dc4/0",
+      "passed_test_bodies": 1,
+      "editions": [
+        2015,
+        2018,
+        2021,
+        2024
+      ],
+      "strict_xtask": "passed",
+      "fixture_reference": "passed",
+      "format": "passed",
+      "manifest": "passed, actual7837ce/0",
+      "planning": "failed only in isolated snapshot:28 omitted historical/.github links; canonical planning checked separately",
+      "reference_directive_probe": "actual interpreter_failure at first original string literal, preserving input.crlf metadata; no fixture pass",
+      "handoff_sha256": "c4f234d3b5cb7f463e5ddff149ae82efad166b97ae883ce5cc6f698d3cb8709f",
+      "evidence_hashes_sha256": "f7fd59637ec93a8c8aca4e898ae7d24b79ec790acc2ed89e10ae27e155c28a6c",
+      "source_unchanged": true
     }
   },
   "remaining_scope": [
@@ -54,6 +137,13 @@
     "other float inherent methods",
     "general trait method dispatch"
   ],
-  "integration": "Queued behind actual V65 collection and ordinary/scalar CRLF prerequisites; sole target owner, frozen source required.",
-  "updated_at": "2026-10-15T09:11:42.293972+00:00"
+  "integration": {
+    "actual_terminal": "4e552e/0",
+    "paths": 28,
+    "receipt": "artifacts/macos-first/root-primitive-float-integrated-v1/INTEGRATED-V72.json",
+    "receipt_sha256": "251f91eedaadd2c4ef9f2ae5a242b55fc9058b4e73833f8053defca453e4da00",
+    "source_member": "45cab3db62234d388faff3014b3287e0621d7ce3abc78940333431187f6320d0",
+    "canonical_metadata": "Same two selector changes on newer canonical bookkeeping; Rust/tool bytes exact."
+  },
+  "updated_at": "2026-10-15T09:47:30.570133+00:00"
 }

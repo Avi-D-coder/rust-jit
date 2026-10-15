@@ -61,6 +61,8 @@ mod panic_tests;
 #[cfg(test)]
 #[path = "run_places.rs"]
 mod places;
+#[path = "run_primitive_float_methods.rs"]
+mod primitive_float_methods;
 #[cfg(test)]
 #[path = "run_replacement_tests.rs"]
 mod replacement_tests;
@@ -269,6 +271,14 @@ pub struct RunMachine {
     runtime_call_bytes: usize,
     floating_plans: BTreeMap<PcKey, crate::frontend::primitive_constants::FloatingConstantRecipe>,
     floating_plan_bytes: usize,
+    primitive_methods: BTreeMap<
+        PcKey,
+        (
+            crate::frontend::runtime_macro_plan::PrimitiveFloatAdmission,
+            crate::core::digest::Digest,
+        ),
+    >,
+    primitive_method_bytes: usize,
     constant_plans: BTreeMap<PcKey, source_constants::SourceConstantPlan>,
     constant_plan_bytes: usize,
     declarative_runtime: super::declarative_runtime::DeclarativeRuntimePlans,
@@ -336,6 +346,8 @@ impl RunMachine {
                 runtime_call_bytes: 0,
                 floating_plans: BTreeMap::new(),
                 floating_plan_bytes: 0,
+                primitive_methods: BTreeMap::new(),
+                primitive_method_bytes: 0,
                 constant_plans: BTreeMap::new(),
                 constant_plan_bytes: 0,
                 declarative_runtime: Default::default(),
@@ -1759,12 +1771,23 @@ impl RunMachine {
                     if recipe.is_some() {
                         break;
                     }
-                    match context.resolve(
+                    match context.resolve_at(
                         &self.frame.body,
                         &pc,
                         self.runtime_no_item_proofs.values(),
+                        Some((&self.frame, &self.store)),
                     ) {
                         Ok(Some(found)) => {
+                            if let Some(method) = found.primitive_method
+                                && let Err(error) = self.retain_primitive_method(
+                                    &pc,
+                                    method,
+                                    found.recipe.recipe().fingerprint(),
+                                )
+                            {
+                                self.terminal = true;
+                                return RunPoll::Fault(error);
+                            }
                             if let Some(call) = found.call
                                 && let Err(error) = self.retain_runtime_call(&pc, call)
                             {
@@ -2228,6 +2251,10 @@ impl RunMachine {
                     }
                     _ => {}
                 }
+            }
+            if let Err(error) = self.revalidate_primitive_method(db, contexts, id) {
+                self.terminal = true;
+                return RunPoll::Fault(error);
             }
             match self.revalidate_floating_recipe(db, contexts, id) {
                 QueryPoll::Ready(Ok(())) => {}

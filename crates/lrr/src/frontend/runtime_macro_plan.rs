@@ -11,6 +11,9 @@ use crate::{
         runtime_macro_arguments::RuntimeMacroArguments,
     },
 };
+#[path = "primitive_float_methods.rs"]
+mod primitive_methods;
+pub(crate) use primitive_methods::PrimitiveFloatAdmission;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum OperandUse {
     Predicate,
@@ -534,6 +537,7 @@ impl RuntimeIntrinsicPlan {
             Some(RuntimeScalarStep::CallSeal(call)) => (*call, RuntimeMacroCallPhase::Seal),
             Some(
                 RuntimeScalarStep::Operation(_)
+                | RuntimeScalarStep::PrimitiveMethod(_)
                 | RuntimeScalarStep::Fault(_)
                 | RuntimeScalarStep::Control(_),
             ) => return Ok(None),
@@ -552,6 +556,34 @@ impl RuntimeIntrinsicPlan {
         Ok(Some(std::sync::Arc::clone(call)))
     }
 
+    pub(crate) fn scalar_primitive_method_witness(
+        &self,
+        source: &crate::source::changes::PreparedSourceView,
+        body: &crate::syntax::body_index::BodyIndex,
+        key: &crate::ir::pc::PcKey,
+    ) -> Result<Option<crate::syntax::runtime_macro_scalars::RuntimePrimitiveMethod>, Diagnostic>
+    {
+        use crate::{ir::pc::Phase, syntax::runtime_macro_scalars::RuntimeScalarStep};
+        let handle = self.scalar_assertion_body(source, body, key)?;
+        let ordinal = match Phase::from_code(key.phase) {
+            Phase::Entry => 0,
+            Phase::Operand(n) => usize::from(n) + 1,
+            Phase::Commit | Phase::Exit => return Ok(None),
+        };
+        let plan = source.runtime_macro_scalar_plan(handle, body, key, &self.arguments)?;
+        match plan.steps().get(ordinal) {
+            Some(RuntimeScalarStep::PrimitiveMethod(method)) => {
+                method.require(&source.selection().outline.parse, key)?;
+                Ok(Some(method.as_ref().clone()))
+            }
+            Some(_) => Ok(None),
+            None => Err(Diagnostic::new(
+                "LRR-E-RUNTIME-MACRO",
+                "primitive method phase outside source plan".into(),
+            )),
+        }
+    }
+
     /// Reached scalar operands execute as ordinary bounded source-PC phases.
     /// Success records the Assert opcode; failure alone demands message syntax.
     pub(crate) fn lower_scalar_assertion_recipe(
@@ -560,6 +592,16 @@ impl RuntimeIntrinsicPlan {
         body: &crate::syntax::body_index::BodyIndex,
         key: &crate::ir::pc::PcKey,
         next: crate::ir::pc::PcKey,
+    ) -> Result<StaticPanicRecipeLowering, Diagnostic> {
+        self.lower_scalar_assertion_with_method(source, body, key, next, None)
+    }
+    pub(crate) fn lower_scalar_assertion_with_method(
+        &self,
+        source: &crate::source::changes::PreparedSourceView,
+        body: &crate::syntax::body_index::BodyIndex,
+        key: &crate::ir::pc::PcKey,
+        next: crate::ir::pc::PcKey,
+        admission: Option<&PrimitiveFloatAdmission>,
     ) -> Result<StaticPanicRecipeLowering, Diagnostic> {
         use crate::ir::{
             op::Op,
@@ -618,6 +660,18 @@ impl RuntimeIntrinsicPlan {
                 match step {
                     RuntimeScalarStep::Operation(operation) => {
                         (vec![operation.clone()], following()?)
+                    }
+                    RuntimeScalarStep::PrimitiveMethod(method) => {
+                        let admission = admission.ok_or_else(|| {
+                            Diagnostic::new(
+                                "LRR-E-TYPE-CONTEXT",
+                                "primitive method requires reached receiver admission".into(),
+                            )
+                        })?;
+                        (
+                            vec![admission.operation(method, source, key)?],
+                            following()?,
+                        )
                     }
                     RuntimeScalarStep::Control(control) => {
                         control.require(&source.selection().outline.parse, body, key)?;
@@ -774,7 +828,12 @@ impl RuntimeIntrinsicPlan {
             .as_ref()
             .and_then(|plan| plan.fault_span(key))
             .cloned();
-        let origin_span = if let Some(span) = control_span {
+        let method_span = self
+            .scalar_primitive_method_witness(source, body, key)?
+            .map(|method| method.span().clone());
+        let origin_span = if let Some(span) = method_span {
+            span
+        } else if let Some(span) = control_span {
             span
         } else if let Some(span) = fault_span {
             span

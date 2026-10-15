@@ -120,6 +120,7 @@ pub(super) fn source_call_path(call: &ast::CallExpr) -> Result<(String, Vec<Stri
 #[derive(Debug)]
 pub(crate) enum RuntimeScalarStep {
     Operation(Op),
+    PrimitiveMethod(Box<super::RuntimePrimitiveMethod>),
     CallPrepare(u32),
     CallAdvance(u32, u32),
     CallSeal(u32),
@@ -181,7 +182,7 @@ impl RuntimeScalarPlan {
         Ok(selected)
     }
     pub(super) fn finish(
-        steps: Vec<RuntimeScalarStep>,
+        mut steps: Vec<RuntimeScalarStep>,
         drafts: Vec<CallDraft>,
         origins: Vec<(usize, BodySpan)>,
         index: &BodyIndex,
@@ -265,6 +266,19 @@ impl RuntimeScalarPlan {
                 .count()
         {
             return Err(invalid("scalar fault lacks exact source origin"));
+        }
+        for (ordinal, step) in steps.iter_mut().enumerate() {
+            if let RuntimeScalarStep::PrimitiveMethod(method) = step {
+                method.bind(index, key, ordinal)?;
+                retained_bytes = retained_bytes
+                    .checked_add(
+                        method
+                            .allocated_bytes()
+                            .ok_or_else(|| invalid("primitive method metadata overflow"))?,
+                    )
+                    .filter(|n| *n <= 32 * 1024 * 1024)
+                    .ok_or_else(|| invalid("primitive method metadata limit"))?;
+            }
         }
         for step in &steps {
             if let RuntimeScalarStep::Control(control) = step {

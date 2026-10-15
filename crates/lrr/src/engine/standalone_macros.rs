@@ -69,9 +69,14 @@ impl StandaloneRuntimeMacros {
             &available,
             &disabled,
         )?;
-        let catalog = RuntimeMacroCatalog::standard(profile)?;
         let compiler =
             crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(profile)?;
+        let catalog = compiler.runtime_catalog()?.ok_or_else(|| {
+            Diagnostic::new(
+                "LRR-E-RUNTIME-MACRO",
+                "owning standalone compiler runtime catalogue is absent".into(),
+            )
+        })?;
         let exports = vec![
             compiler.source_routes()?,
             compiler.source_exports(standard)?,
@@ -194,7 +199,7 @@ impl CompletedStandaloneRuntimeMacros {
             exports.push(compiler.source_exports(standard)?);
             catalogs.insert(
                 profile.clone(),
-                RuntimeMacroCatalog::standard_for_profiles(profile, &profiles)?,
+                compiler.runtime_catalog_for_profiles(&profiles)?,
             );
         }
         Ok(Self {

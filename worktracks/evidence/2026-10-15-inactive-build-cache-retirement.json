@@ -1,0 +1,71 @@
+{
+  "status": "completed",
+  "at": "2026-10-15T09:38:54.163254+00:00",
+  "inactive_owner_confirmation": "edition_macro_logic read-only8d0bb6/0; both targets released; current T3 independently fresh",
+  "active_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c",
+  "inactive_owners": [
+    {
+      "path": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-validation-agent-target-v1/.lrr-validation-owner-v1.json",
+      "sha256": "429754406094d6847f6d49797cfa6c33e364a55860b5e9499037bb63d52fd110"
+    },
+    {
+      "path": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-milestone-owned-target-v2/.lrr-validation-owner-v1.json",
+      "sha256": "38d0da888baf5a0eaa6f73fcc3bc0c47435bd514d88d5c5579789e39534b9d8d"
+    }
+  ],
+  "caches": [
+    {
+      "path": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-validation-agent-target-v1/debug/deps",
+      "entries": 2696,
+      "inventory_sha256": "b1ac947b46a8a16451fb967f24e3021cdf8bde25158d80271c7a66b5279c8e3e",
+      "inventory": "artifacts/macos-first/root-inactive-cargo-cache-retirement-v1/revision5-validation-agent-target-v1-deps-inventory.json"
+    },
+    {
+      "path": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-validation-agent-target-v1/debug/build",
+      "entries": 388,
+      "inventory_sha256": "7a324fc358d23f9e0ed4ec12262841f54b930cc3560541abca56c6f60495abc3",
+      "inventory": "artifacts/macos-first/root-inactive-cargo-cache-retirement-v1/revision5-validation-agent-target-v1-build-inventory.json"
+    },
+    {
+      "path": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-validation-agent-target-v1/debug/incremental",
+      "entries": 0,
+      "inventory_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "inventory": "artifacts/macos-first/root-inactive-cargo-cache-retirement-v1/revision5-validation-agent-target-v1-incremental-inventory.json"
+    },
+    {
+      "path": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-validation-agent-target-v1/debug/.fingerprint",
+      "entries": 6183,
+      "inventory_sha256": "96a3946f8d994c8a5f712108640e0727d5be8d39921e45f594e0bfa403766e61",
+      "inventory": "artifacts/macos-first/root-inactive-cargo-cache-retirement-v1/revision5-validation-agent-target-v1-fingerprint-inventory.json"
+    },
+    {
+      "path": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-milestone-owned-target-v2/debug/deps",
+      "entries": 2640,
+      "inventory_sha256": "46388eaec965e2de7bdbbc0ba705de48d337a1df6aaf85382f7a62c20edb9e9e",
+      "inventory": "artifacts/macos-first/root-inactive-cargo-cache-retirement-v1/revision5-milestone-owned-target-v2-deps-inventory.json"
+    },
+    {
+      "path": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-milestone-owned-target-v2/debug/build",
+      "entries": 388,
+      "inventory_sha256": "b7f0385914c6f1ee8f32043f558ec4613b9b7650c9db945e5d505a6e5b3c1e41",
+      "inventory": "artifacts/macos-first/root-inactive-cargo-cache-retirement-v1/revision5-milestone-owned-target-v2-build-inventory.json"
+    },
+    {
+      "path": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-milestone-owned-target-v2/debug/incremental",
+      "entries": 0,
+      "inventory_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "inventory": "artifacts/macos-first/root-inactive-cargo-cache-retirement-v1/revision5-milestone-owned-target-v2-incremental-inventory.json"
+    },
+    {
+      "path": "artifacts/macos-first/parallel-interpreter-followups-v2/revision5-milestone-owned-target-v2/debug/.fingerprint",
+      "entries": 6046,
+      "inventory_sha256": "4e773a251fdbc003d5f2b22f1f4170f873c6493d10f5fe777384e0a0ab89ac4f",
+      "inventory": "artifacts/macos-first/root-inactive-cargo-cache-retirement-v1/revision5-milestone-owned-target-v2-fingerprint-inventory.json"
+    }
+  ],
+  "available_bytes_before": 3328954368,
+  "available_bytes_after": 21479624704,
+  "active_owner_unchanged": true,
+  "source_and_reports_preserved": true,
+  "local_inventory_receipt_sha256": "f57db80c55d53630e96f9135205830340a64d881dac1e2110d78b9ad83ae43ee"
+}

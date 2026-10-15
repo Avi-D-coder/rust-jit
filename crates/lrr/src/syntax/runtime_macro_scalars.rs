@@ -14,8 +14,8 @@ use crate::{
     facade::macros::RuntimeMacroKind,
     ir::{
         op::{
-            BorrowAccess, HintRecipe, LiteralKind, LiteralRecipe, NumericBinary, NumericUnary, Op,
-            PrimitiveType,
+            BorrowAccess, DecodedLiteral, HintRecipe, LiteralKind, LiteralRecipe, NumericBinary,
+            NumericUnary, Op, PrimitiveType,
         },
         pc::{PcKey, SlotId},
     },
@@ -36,10 +36,16 @@ fn unsupported() -> Diagnostic {
 }
 #[path = "runtime_macro_calls.rs"]
 mod calls;
+#[path = "runtime_macro_primitive_methods.rs"]
+mod primitive_methods;
 use calls::{ArgumentBorrowDraft, CallDraft};
+pub(crate) use primitive_methods::RuntimePrimitiveMethod;
 #[cfg(test)]
 #[path = "runtime_macro_call_tests.rs"]
 mod call_tests;
+#[cfg(test)]
+#[path = "runtime_macro_scalar_newline_tests.rs"]
+mod newline_tests;
 #[cfg(test)]
 #[path = "runtime_macro_reference_tests.rs"]
 mod reference_tests;
@@ -115,7 +121,7 @@ impl ParsedFile {
             let prefix = "fn __lrr_operand(){let __lrr_value=";
             let wrapped = format!("{prefix}{text};}}");
             let parsed = ast::SourceFile::parse(&wrapped, edition);
-            if !parsed.errors().is_empty() {
+            if !super::parse::diagnostics(&parsed, edition).is_empty() {
                 return Err(invalid("scalar assertion operand grammar differs"));
             }
             let expression = parsed
@@ -562,7 +568,38 @@ impl ParsedFile {
                         while let ast::Expr::ParenExpr(group) = selected {
                             selected = group.expr().ok_or_else(unsupported)?;
                         }
+                        // Keep a signed floating literal unresolved until its consumer
+                        // supplies numeric context, just as for signed integers below.
+                        // Evaluating a separate unary operation would demand a width
+                        // before a later comparison operand has been reached.
                         if operator == NumericUnary::Neg
+                            && let ast::Expr::Literal(literal) = &selected
+                            && literal.token().kind() == SyntaxKind::FLOAT_NUMBER
+                        {
+                            let span = original_span(&ast::Expr::PrefixExpr(prefix.clone()))?;
+                            let mut recipe = literal_recipe(literal, span)?;
+                            let Some(DecodedLiteral::Float { decimal, .. }) = &mut recipe.decoded
+                            else {
+                                return Err(invalid("negative float decoder differs from source"));
+                            };
+                            let capacity = decimal
+                                .len()
+                                .checked_add(1)
+                                .ok_or_else(|| invalid("negative float size overflow"))?;
+                            let mut signed = String::new();
+                            signed
+                                .try_reserve_exact(capacity)
+                                .map_err(|_| invalid("negative float allocation refused"))?;
+                            signed.push('-');
+                            signed.push_str(decimal);
+                            *decimal = signed;
+                            recipe.spelling = prefix.syntax().text().to_string();
+                            stack.push(Work::Operation(Op::Literal {
+                                literal: recipe,
+                                hint: HintRecipe::None,
+                                destination,
+                            }));
+                        } else if operator == NumericUnary::Neg
                             && let ast::Expr::Literal(literal) = selected
                             && literal.token().kind() == SyntaxKind::INT_NUMBER
                             && let Some(number) = ast::IntNumber::cast(literal.token())
@@ -618,6 +655,42 @@ impl ParsedFile {
                                 .map(HintRecipe::Primitive)
                                 .unwrap_or(HintRecipe::None),
                         }));
+                    }
+                    ast::Expr::MethodCallExpr(call) => {
+                        let name = call.name_ref().ok_or_else(unsupported)?;
+                        if !matches!(name.text(), "is_nan" | "r#is_nan")
+                            || call.generic_arg_list().is_some()
+                            || call
+                                .arg_list()
+                                .ok_or_else(unsupported)?
+                                .args()
+                                .next()
+                                .is_some()
+                        {
+                            return Err(unsupported());
+                        }
+                        let receiver = call.receiver().ok_or_else(unsupported)?;
+                        let span = original_span(&ast::Expr::MethodCallExpr(call.clone()))?;
+                        controls::require_written(self, body, &span, call.syntax())?;
+                        let slot = allocate()?;
+                        let method = RuntimePrimitiveMethod::new(
+                            self.key(),
+                            span,
+                            slot,
+                            destination,
+                            &receiver,
+                        )?;
+                        let written = method.written_receiver();
+                        stack.push(Work::Step(RuntimeScalarStep::PrimitiveMethod(Box::new(
+                            method,
+                        ))));
+                        stack.push(Work::Expression(receiver, slot, base, parent));
+                        if let Some(primitive) = written {
+                            stack.push(Work::Operation(Op::SetHint {
+                                child: slot,
+                                hint: HintRecipe::Primitive(primitive),
+                            }));
+                        }
                     }
                     ast::Expr::CallExpr(call) => {
                         let written_call = call.syntax().text().to_string();

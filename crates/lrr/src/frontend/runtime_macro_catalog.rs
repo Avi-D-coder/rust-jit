@@ -27,8 +27,72 @@ pub struct RuntimeMacroCatalog {
     // Selection-only standard facets from actual other participating source
     // profiles. They are never exposed as this catalogue's local exports.
     foreign_definitions: BTreeMap<Digest, (MacroDefinition, RuntimeMacroKind)>,
+    primitive_float_methods:
+        Option<std::sync::Arc<crate::facade::primitive_float_methods::PrimitiveFloatMethods>>,
 }
 impl RuntimeMacroCatalog {
+    /// Only the owning compiler's privately retained canonical standard facet is
+    /// attached. Manual and macro-only catalogues never gain this declaration.
+    pub(super) fn with_primitive_float_methods(
+        mut self,
+        compiler: &super::compile_input_catalog::CompileInputCatalog,
+    ) -> Result<Self, Diagnostic> {
+        let Some(facet) = compiler.primitive_float_methods()? else {
+            return Ok(self);
+        };
+        if self.primitive_float_methods.is_some()
+            || self.unit != crate::facade::unit(facet.profile(), "core")
+            || self.edition != facet.profile().edition
+            || self.standard != Some(crate::facade::unit(facet.profile(), "std"))
+            || self.allocation != Some(crate::facade::unit(facet.profile(), "alloc"))
+        {
+            return Err(fault("primitive method catalogue owner/profile differs"));
+        }
+        self.primitive_float_methods = Some(facet.clone());
+        Ok(self)
+    }
+    pub(crate) fn primitive_float_method(
+        &self,
+        receiver: crate::ir::op::PrimitiveType,
+        name: &str,
+    ) -> Option<&crate::facade::primitive_float_methods::PrimitiveFloatMethod> {
+        self.primitive_float_methods
+            .as_ref()?
+            .lookup(receiver, name)
+    }
+    pub(crate) fn require_primitive_float_method(
+        &self,
+        member: &crate::facade::primitive_float_methods::PrimitiveFloatMethod,
+    ) -> Result<(), Diagnostic> {
+        self.primitive_float_methods
+            .as_ref()
+            .ok_or_else(|| fault("primitive method compiler facet is absent"))?
+            .require_member(member)
+    }
+    /// Includes the independent inherent declaration facet, without changing
+    /// any existing macro definition identities or export routes.
+    #[cfg(test)]
+    pub(crate) fn fingerprint(&self) -> Digest {
+        let mut e = StableEncoder::new("lrr/v1/runtime-macro-and-method-catalogue");
+        e.digest(self.unit);
+        e.u16(self.edition);
+        e.option(&self.standard, |e, unit| e.digest(*unit));
+        e.option(&self.allocation, |e, unit| e.digest(*unit));
+        for inventory in [&self.definitions, &self.foreign_definitions] {
+            e.u64(inventory.len() as u64);
+            for (identity, (definition, kind)) in inventory {
+                e.digest(*identity);
+                e.digest(definition.identity);
+                e.digest(definition.defining_unit);
+                e.u16(definition.definition_edition);
+                e.string(kind.name());
+            }
+        }
+        e.option(&self.primitive_float_methods, |e, facet| {
+            e.digest(facet.identity())
+        });
+        e.finish()
+    }
     /// The pinned standard inventory used both during source preparation and
     /// during database/generated certificate revalidation. This confers no
     /// runtime authority and cannot accept a user definition by its spelling.
@@ -126,6 +190,7 @@ impl RuntimeMacroCatalog {
             allocation: None,
             definitions,
             foreign_definitions: BTreeMap::new(),
+            primitive_float_methods: None,
         })
     }
     /// Std-owned definitions remain distinct from the core runtime facet. This
@@ -358,3 +423,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "runtime_primitive_float_catalog_tests.rs"]
+mod primitive_float_tests;

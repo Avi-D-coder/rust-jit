@@ -13,6 +13,32 @@ use serde::{Deserialize, Serialize};
 #[path = "parse_crlf.rs"]
 mod crlf;
 
+/// Keep pinned-parser newline repairs identical for original files and bounded
+/// operand wrappers. This never rewrites the retained tree or source offsets.
+pub(super) fn diagnostics(
+    parsed: &Parse<ast::SourceFile>,
+    edition: Edition,
+) -> Vec<ParseDiagnostic> {
+    let tree = parsed.tree();
+    let mut crlf_errors = crlf::TokenErrors::default();
+    parsed
+        .errors()
+        .into_iter()
+        .filter(|error| {
+            !crlf_errors.normalized_literal_error(
+                tree.syntax(),
+                error.range(),
+                &error.to_string(),
+                edition,
+            )
+        })
+        .map(|error| ParseDiagnostic {
+            range: range(error.range()),
+            message: error.to_string(),
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct ParseKey {
     pub content: Digest,
@@ -101,24 +127,7 @@ impl ParsedFile {
         let text = std::str::from_utf8(blob.bytes())
             .map_err(|e| Diagnostic::new("LRR-E-SOURCE-UTF8", e.to_string()))?;
         let parsed = ast::SourceFile::parse(text, edition);
-        let tree = parsed.tree();
-        let mut crlf_errors = crlf::TokenErrors::default();
-        let errors: Vec<_> = parsed
-            .errors()
-            .into_iter()
-            .filter(|error| {
-                !crlf_errors.normalized_literal_error(
-                    tree.syntax(),
-                    error.range(),
-                    &error.to_string(),
-                    edition,
-                )
-            })
-            .map(|e| ParseDiagnostic {
-                range: range(e.range()),
-                message: e.to_string(),
-            })
-            .collect();
+        let errors = diagnostics(&parsed, edition);
         // Rowans's internal allocator overhead is an estimate, documented in
         // docs/query-keys.md. Owned capacities are accounted separately.
         let elements = parsed.tree().syntax().descendants_with_tokens().count();

@@ -473,7 +473,8 @@
         "artifacts/macos-first/root-literal-crlf-diagnostics-v1/",
         "artifacts/macos-first/root-scalar-crlf-v1/",
         "artifacts/macos-first/root-upstream-runtime-runner-v1/",
-        "artifacts/macos-first/root-constant-local-negative-repair-v1/"
+        "artifacts/macos-first/root-constant-local-negative-repair-v1/",
+        "artifacts/macos-first/root-byte-float-rebase-v1/"
       ],
       "issue": null,
       "pull_request": null,
@@ -710,7 +711,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "T062/T034/T025/M018/M019 source-only is_nan member and interpreter integration, driven by unchanged float-nan.rs. Root owns source-plan/receiver admission/cached dispatch; generic_call_logic handed off disjoint canonical facet and standalone publication. Exact16-leaf packet queued with sole validator after V65 collection and CRLF prerequisites. V66 production compiled; strict failed on two dead-code helpers. Two dead helpers repaired; V67 exposed test-only Box slice API error, one-line AsRef repair queued for V68. Runtime scopes/full fixture passes remain unexecuted.",
+      "scope": "T062/T034/T025/M018/M019 primitive is_nan slice integrated after scoped runtime, authority, strict, format, fixture and manifest checks. V70 76 host bodies passed; obsolete negative migrated and V72 all-edition positive passes. Six unchanged CLI runtime contracts pass; two string/byte failures retained. Full milestone running separately; no task/library/JIT completion.",
       "paths": [
         "crates/lrr/src/engine/run.rs",
         "crates/lrr/src/engine/run_floating_constant_tests.rs",
@@ -730,11 +731,19 @@
         "crates/lrr/src/syntax/runtime_macro_scalars.rs",
         "artifacts/macos-first/root-primitive-float-integrated-v1/",
         "artifacts/macos-first/root-primitive-float-lint-repair-v1/",
-        "artifacts/macos-first/root-primitive-float-test-slice-repair-v1/"
+        "artifacts/macos-first/root-primitive-float-test-slice-repair-v1/",
+        "artifacts/macos-first/root-primitive-float-outcome-repair-v1/",
+        "artifacts/macos-first/root-negative-float-scalar-v1/",
+        "tools/rustc_checkout_runtime.py",
+        "tools/check_rustc_runtime_capture.py",
+        "xtask/examples/lrr_source_digests.rs",
+        "xtask/tests/stock_numeric_edgecases_v1.rs",
+        "compat/fixtures.toml",
+        "docs/tasks.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T09:11:42.293972+00:00",
+      "updated_at": "2026-10-15T09:47:30.570133+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     }
   ]

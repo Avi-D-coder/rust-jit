@@ -1,0 +1,430 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T09:27:45.251645+00:00",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "source_member": "4265bfaedc1b3df63742b3e8ca184325fcb955e035fc88aa6b33c7d2558dca0d",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "interpreter_sha256": "5c3019a51b553eb5f103a814e7ec7d6f4c8feeb19bca669da4ee0dd39bc27e6b",
+  "source_digester_sha256": "4225e7e2d9cc149397c3e4291f01f880f7dccd76332ea1a431a0db1294d566ef",
+  "native_execution": false,
+  "reports": [
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v70/runner-arithmetic-five/runtime-report/report.json",
+      "sha256": "51b432be3755ad3463f7523abd26ffb047a44eafbefccac048cdc6c1d7b1f292"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v70/runner-float-nan/runtime-report/report.json",
+      "sha256": "932e4cfed75fdaed8a1b964b6b694581cb82c030be6fb5f0f20e834196084a6a"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v70/runner-crlf-byte/runtime-report/report.json",
+      "sha256": "d8097bd7afa881b5dff56ef2874b5c332c19d9f7be0cbc7ce46c940902624e36"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v72/runner-reference-blocker/runtime-report/report.json",
+      "sha256": "b036397ca16d11f250598d9f57b090d28436bfaed65c75eee60b614a14c245bc",
+      "source_member": "45cab3db62234d388faff3014b3287e0621d7ce3abc78940333431187f6320d0"
+    }
+  ],
+  "selected_cases": [
+    {
+      "case": "tests/ui/numbers-arithmetic/i32-sub.rs",
+      "status": "runtime_contract_pass",
+      "edition": 2015,
+      "source_sha256": "57db50eb4f791a05b515f3032b8e2f45b24adfef208e6596c7b733432558ad27",
+      "actual_exit_code": 0,
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "terminal": null
+    },
+    {
+      "case": "tests/ui/numbers-arithmetic/arith-unsigned.rs",
+      "status": "runtime_contract_pass",
+      "edition": 2015,
+      "source_sha256": "dc06b2b7d93d5148eeca5294b03227ef0bce1d97e05adc23a2b132f168c0e16e",
+      "actual_exit_code": 0,
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "terminal": null
+    },
+    {
+      "case": "tests/ui/numbers-arithmetic/floatlits.rs",
+      "status": "runtime_contract_pass",
+      "edition": 2015,
+      "source_sha256": "8ac6638db52e1db1149795db6f9bbc1b93edaddffb409c3f97c1532791e4e985",
+      "actual_exit_code": 0,
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "terminal": null
+    },
+    {
+      "case": "tests/ui/numbers-arithmetic/isize-base.rs",
+      "status": "runtime_contract_pass",
+      "edition": 2015,
+      "source_sha256": "b554630379a981b5354e216f1391e81fe0bb3e300417a9f1dd7a29735adcd253",
+      "actual_exit_code": 0,
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "terminal": null
+    },
+    {
+      "case": "tests/ui/numbers-arithmetic/integer-literal-radix.rs",
+      "status": "runtime_contract_pass",
+      "edition": 2015,
+      "source_sha256": "16c665a96bdcd8ae5ba95ae80708acbf8914db8dc3989ed3ec9793db6c19b89d",
+      "actual_exit_code": 0,
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "terminal": null
+    },
+    {
+      "case": "tests/ui/numbers-arithmetic/float-nan.rs",
+      "status": "runtime_contract_pass",
+      "edition": 2015,
+      "source_sha256": "50a2c50502c1b60a42f38b6ac7778f06039ab591573ef406f004d9512e011a00",
+      "actual_exit_code": 0,
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "terminal": null
+    },
+    {
+      "case": "tests/ui/lexer/crlf-in-byte-string-literal.rs",
+      "status": "interpreter_failure",
+      "edition": 2015,
+      "source_sha256": "01787de25f8660b8356312cf7e7deb21641130588697b9b5f99c8a21fa7a3eb0",
+      "actual_exit_code": 2,
+      "checks": null,
+      "terminal": {
+        "code": "LRR-E-UNSUPPORTED",
+        "diagnostic": {
+          "code": "LRR-E-UNSUPPORTED",
+          "generated_origin": null,
+          "guest_stack": {
+            "frames": [
+              {
+                "body": {
+                  "body_key": {
+                    "definition": "860ee3cfe728afc5b9a9e9cc9d8084b8b7d6ed0b8d9659935430eec2ad8b452b",
+                    "exact_body_bytes": "c46ff4bfef31524aa3ddb24926a343bd9f1f5c5e641de2fe3ce4b0482e988a51"
+                  },
+                  "relative_end": 59,
+                  "relative_start": 1
+                },
+                "locations": [
+                  {
+                    "range": {
+                      "end": 247,
+                      "start": 189
+                    },
+                    "source": {
+                      "content": [
+                        10,
+                        50,
+                        223,
+                        65,
+                        20,
+                        31,
+                        113,
+                        34,
+                        146,
+                        41,
+                        170,
+                        244,
+                        186,
+                        33,
+                        223,
+                        223,
+                        106,
+                        174,
+                        192,
+                        57,
+                        214,
+                        180,
+                        83,
+                        90,
+                        122,
+                        131,
+                        248,
+                        164,
+                        196,
+                        48,
+                        2,
+                        169
+                      ],
+                      "path": "crlf-in-byte-string-literal.rs",
+                      "unit": [
+                        252,
+                        61,
+                        185,
+                        242,
+                        62,
+                        133,
+                        167,
+                        251,
+                        17,
+                        105,
+                        3,
+                        43,
+                        53,
+                        89,
+                        146,
+                        101,
+                        153,
+                        218,
+                        88,
+                        245,
+                        30,
+                        187,
+                        196,
+                        37,
+                        181,
+                        16,
+                        182,
+                        36,
+                        243,
+                        84,
+                        211,
+                        143
+                      ]
+                    }
+                  }
+                ],
+                "pc": "27cb7a8962735814a23516fbf3a6cba76fafd7607bf11cd5540f0c4cb3a687d1"
+              }
+            ],
+            "omitted_frames": 0
+          },
+          "macro_origin": null,
+          "message": "literal kind awaits numeric/source integration",
+          "origin_attachment_failure": null,
+          "rendered_generated_origin": null,
+          "rendered_guest_stack": null,
+          "rendered_macro_origin": null
+        },
+        "message": "literal kind awaits numeric/source integration",
+        "phase": "executor",
+        "status": "fault"
+      }
+    },
+    {
+      "case": "tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs",
+      "status": "interpreter_failure",
+      "edition": 2015,
+      "source_sha256": "bb03d92b8289726639b7947f900dca05704b3a20ce26ec183a5a233ea6747289",
+      "reference_rules": [
+        "input.crlf"
+      ],
+      "actual_exit_code": 2,
+      "checks": null,
+      "terminal": {
+        "code": "LRR-E-UNSUPPORTED",
+        "diagnostic": {
+          "code": "LRR-E-UNSUPPORTED",
+          "generated_origin": null,
+          "guest_stack": {
+            "frames": [
+              {
+                "body": {
+                  "body_key": {
+                    "definition": "a896c10a86d870f5d08a1f167f14382c535c8f6002aa57c8d7923981780e7efd",
+                    "exact_body_bytes": "6dd23fe85be0a7a0fadc78f33b0d4d88ffe76cfa4c5486161de883893f640753"
+                  },
+                  "relative_end": 32,
+                  "relative_start": 15
+                },
+                "locations": [
+                  {
+                    "range": {
+                      "end": 432,
+                      "start": 415
+                    },
+                    "source": {
+                      "content": [
+                        159,
+                        37,
+                        186,
+                        106,
+                        71,
+                        44,
+                        197,
+                        4,
+                        203,
+                        25,
+                        87,
+                        186,
+                        32,
+                        213,
+                        230,
+                        167,
+                        77,
+                        210,
+                        19,
+                        243,
+                        60,
+                        88,
+                        12,
+                        209,
+                        62,
+                        243,
+                        172,
+                        2,
+                        245,
+                        238,
+                        169,
+                        60
+                      ],
+                      "path": "lexer-crlf-line-endings-string-literal-doc-comment.rs",
+                      "unit": [
+                        133,
+                        237,
+                        154,
+                        98,
+                        129,
+                        30,
+                        8,
+                        111,
+                        144,
+                        8,
+                        159,
+                        229,
+                        233,
+                        132,
+                        38,
+                        84,
+                        74,
+                        173,
+                        197,
+                        255,
+                        88,
+                        72,
+                        222,
+                        17,
+                        203,
+                        196,
+                        159,
+                        187,
+                        243,
+                        30,
+                        74,
+                        194
+                      ]
+                    }
+                  }
+                ],
+                "pc": "c75e9c6bb037c56e982ef3d92e69d660063ff108d58699e6ae9bd1acd33fffa2"
+              }
+            ],
+            "omitted_frames": 0
+          },
+          "macro_origin": null,
+          "message": "literal kind awaits numeric/source integration",
+          "origin_attachment_failure": null,
+          "rendered_generated_origin": null,
+          "rendered_guest_stack": null,
+          "rendered_macro_origin": null
+        },
+        "message": "literal kind awaits numeric/source integration",
+        "phase": "executor",
+        "status": "fault"
+      }
+    }
+  ],
+  "upstream_runtime_acceptance": {
+    "status": "incomplete",
+    "selected_runtime_contract_passes": 6,
+    "selected_interpreter_failures": 2,
+    "complete_inventory_executed": false
+  },
+  "diagnostic_compatibility": {
+    "status": "unassessed"
+  },
+  "compiler_tooling_compatibility": {
+    "status": "unassessed"
+  },
+  "full_suite_compatibility": {
+    "status": "incomplete"
+  },
+  "full_configured_fixture_pass_delta": 0,
+  "guest_jit_allowed": false,
+  "reproduction": "Build the LRR CLI and xtask lrr_source_digests example with Rust1.99.0; run tools/rustc_checkout_runtime.py with --lrr, --source-digester, --report-dir and --case for each unchanged original. Reports must be outside the source checkout. Preserve upstream manifest, source and binary hashes.",
+  "reference_directive_migration": "V70 unsupported_harness receipt retained separately; pinned compiletest recognizes reference as metadata only. V72 records input.crlf and actually executes the original to its string-literal unsupported runtime failure, never promoting it to pass."
+}

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-15T09:02:33.119445+00:00",
+  "updated_at": "2026-10-15T09:47:30.570133+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -381,7 +381,8 @@
           "title": "Option Result and scalar APIs",
           "status": "in_progress",
           "candidate": "artifacts/macos-first/root-primitive-float-integrated-v1/HANDOFF.md",
-          "acceptance_scope": "Source-only canonical f32/f64 is_nan plus entered assertion receiver admission/currentness; unchanged float-nan whole-main and authority regressions drafted. Compilation and runtime unexecuted; broad scalar API/library task incomplete."
+          "acceptance_scope": "Integrated source-aware f32/f64 is_nan and signed floating literal context. Unchanged float-nan.rs completes65assertions in all four official editions; six selected actual CLI runtime contracts pass, two string/byte runtime failures retained. Full milestone and broad library task remain incomplete.",
+          "evidence": "worktracks/evidence/2026-10-15-primitive-float-method-candidate.json"
         },
         {
           "id": "WT07-02",

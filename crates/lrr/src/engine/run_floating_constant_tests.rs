@@ -1,4 +1,4 @@
-//! Original first-initializer dispatch only, plus retained-proof controls.
+//! Unchanged float-nan runtime contract and LRR retained-source authority controls.
 use super::*;
 use crate::{
     core::{digest::Digest, profile::ProfileIdentity},
@@ -51,12 +51,24 @@ fn start_with_fuel(
     CompletedStandaloneRuntimeMacros,
     PreparedSourceInputs,
 ) {
+    start_source(ORIGINAL, edition, fuel)
+}
+fn start_source(
+    source: &str,
+    edition: u16,
+    fuel: u64,
+) -> (
+    Database,
+    RunMachine,
+    CompletedStandaloneRuntimeMacros,
+    PreparedSourceInputs,
+) {
     let profile = ProfileIdentity {
         edition,
         ..ProfileIdentity::current()
     };
     let cfg = CfgSet::guest_default();
-    let blob = SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap();
+    let blob = SourceBlob::new(source.as_bytes().to_vec()).unwrap();
     let path = SourcePath::new("float-nan.rs").unwrap();
     let unit = Digest::of_bytes(b"original-floating-dispatch");
     let selected = SourceSelection {
@@ -344,141 +356,260 @@ fn cached_floating_recipe_refuses_new_rigid_source_even_with_matching_descriptor
 }
 
 #[test]
-fn unchanged_float_nan_main_commits_first_binding_then_reaches_natural_method_frontier() {
+fn unchanged_float_nan_whole_main_executes_all_assertions_all_editions() {
     for edition in [2015, 2018, 2021, 2024] {
-        let (mut db, mut run, macros, _) = start(edition);
+        let (mut db, mut run, macros, _) = start_with_fuel(edition, 100_000);
         let contexts = macros.contexts().unwrap();
-        let RunPoll::Fault(error) = run.poll_with_runtime_macros(&mut db, &contexts) else {
-            panic!("unchanged original did not reach the expected unsupported method frontier")
+        let report = match run.poll_with_runtime_macros(&mut db, &contexts) {
+            RunPoll::Completed(report) => report,
+            RunPoll::Fault(error) => panic!(
+                "unchanged float-nan.rs edition {edition}, pc {:?}, assertions {}: {error:?}",
+                run.frame.pc(),
+                run.frame.counters.started_by_opcode[26]
+            ),
+            RunPoll::Panicked(report) => {
+                panic!("unchanged float-nan.rs edition {edition} panicked: {report:?}")
+            }
+            RunPoll::NeedInput(request) => {
+                panic!("unchanged float-nan.rs edition {edition} suspended: {request:?}")
+            }
         };
-        assert_eq!(error.code, "LRR-E-UNSUPPORTED");
+        assert!(matches!(report.value, ValueSummary::Unit));
+        let assertions =
+            ORIGINAL.matches("assert!(").count() + ORIGINAL.matches("assert_eq!(").count();
         assert_eq!(
-            error.message,
-            "reached assertion operand requires pending non-scalar expression integration"
+            report.opcode_counters.started_by_opcode[26],
+            assertions as u64
         );
-        assert_eq!(run.frame.counters.started_by_opcode[41], 1);
-        assert_eq!(run.frame.counters.started_by_opcode[7], 1);
-        assert_eq!(run.frame.counters.started_by_opcode[26], 0);
-        assert!(run.frame.fuel_snapshot().used < 1000);
-        assert_eq!(run.frame.fuel_snapshot().stop, None);
+        assert_eq!(report.opcode_counters.started_by_opcode[41], 3);
+        assert_eq!(report.opcode_counters.started_by_opcode[7], 3);
+        assert_eq!(
+            report.opcode_counters.operations_started,
+            report.opcode_counters.operations_completed
+        );
+        assert_eq!(report.opcode_counters.panic_scopes_cleaned, 0);
+        assert!(run.frame.active_scopes().is_empty());
+        assert!(run.calls.is_empty() && run.pending.is_empty());
+        assert!(run.returning.is_none() && run.unwinding.is_none());
+        assert!(run.terminal);
+        assert_eq!(
+            run.primitive_methods.len(),
+            ORIGINAL.matches(".is_nan()").count()
+        );
+        db.finish_run().unwrap();
+    }
+}
 
-        // The natural current PC is the original assertion containing is_nan;
-        // the reached operand phase rejects its MethodCallExpr before the
-        // assertion opcode or later INFINITY initializer can execute.
-        let written = "assert!(nan.is_nan())";
-        let source = &run.sources[0];
-        let handle = source
-            .outline()
-            .items
-            .iter()
-            .find(|item| item.def_key.declared_name == "main")
-            .unwrap()
-            .body
-            .as_ref()
-            .unwrap();
-        let absolute = u32::try_from(ORIGINAL.find(written).unwrap()).unwrap();
-        let expected = crate::syntax::spans::BodySpan {
-            body_key: run.root_body.clone(),
-            relative_start: absolute - handle.range.start,
-            relative_end: absolute - handle.range.start + u32::try_from(written.len()).unwrap(),
+#[test]
+fn primitive_float_method_receiver_call_is_evaluated_once() {
+    // LRR exact-once protocol regression; the language witness is unchanged above.
+    let source = "fn receiver() -> f64 { f64::NAN } fn main() { assert!(receiver().is_nan()); }";
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, mut run, macros, _) = start_source(source, edition, 100_000);
+        let contexts = macros.contexts().unwrap();
+        let RunPoll::Completed(report) = run.poll_with_runtime_macros(&mut db, &contexts) else {
+            panic!("receiver call did not complete");
         };
-        let pc = run.frame.pc();
-        assert_eq!(pc.phase, Phase::Operand(0).code().unwrap());
-        let node = &run.frame.body.nodes()[pc.node as usize];
-        assert_eq!(node.role, NodeRole::Expression(ExpressionKind::Macro));
-        assert_eq!(run.frame.body.span(node.id).unwrap(), expected);
-        // The condition already has its real Bool hint from Entry. Inspect
-        // an unused reserved scalar slot rather than overwrite that contract.
-        let probe = *node.runtime_scalar_slots.first().unwrap();
-        let stack = error
-            .guest_stack
-            .as_ref()
-            .expect("natural fault source origin absent");
-        assert_eq!(stack.frames.len(), 1);
-        assert_eq!(stack.omitted_frames, 0);
-        assert_eq!(stack.frames[0].pc, pc.fingerprint());
-        assert_eq!(stack.frames[0].body, expected);
-        assert_eq!(stack.frames[0].locations.len(), 1);
-        let at = &stack.frames[0].locations[0];
-        assert_eq!(at.range.start, absolute);
-        assert_eq!(
-            at.range.end,
-            absolute + u32::try_from(written.len()).unwrap()
-        );
-        assert_eq!(
-            &ORIGINAL[at.range.start as usize..at.range.end as usize],
-            written
-        );
-        assert_eq!(
-            at.source.content.0,
-            source.selection().outline.parse.content.0
-        );
-        assert_eq!(at.source.unit.0, source.selection().outline.crate_key.0);
-        assert_eq!(at.source.path, source.selection().path.as_str());
-        assert!(error.origin_attachment_failure.is_none());
+        assert!(matches!(report.value, ValueSummary::Unit));
+        assert_eq!(report.opcode_counters.started_by_opcode[19], 1);
+        assert_eq!(report.opcode_counters.started_by_opcode[41], 1);
+        assert_eq!(report.opcode_counters.started_by_opcode[26], 1);
+        assert_eq!(run.primitive_methods.len(), 1);
+        assert!(run.frame.active_scopes().is_empty());
+        db.finish_run().unwrap();
+    }
+}
 
-        let bindings: Vec<_> = run
-            .installed
-            .recipes()
-            .flat_map(|recipe| recipe.recipe().operations.iter())
-            .filter_map(|op| match op {
-                Op::BindLocal { binding, .. } => Some(*binding),
-                _ => None,
+#[test]
+fn primitive_float_method_does_not_infer_source_from_runtime_numeric_defaults() {
+    for source in [
+        "fn main(){ assert!((0.0).is_nan()); }",
+        "fn main(){ let n:i64=0; assert!(n.is_nan()); }",
+    ] {
+        for edition in [2015, 2018, 2021, 2024] {
+            let (mut db, mut run, macros, _) = start_source(source, edition, 100_000);
+            let contexts = macros.contexts().unwrap();
+            let RunPoll::Fault(error) = run.poll_with_runtime_macros(&mut db, &contexts) else {
+                panic!("unadmitted receiver acquired a primitive method");
+            };
+            assert_eq!(error.code, "LRR-E-TYPE-CONTEXT");
+            assert!(run.primitive_methods.is_empty());
+            assert_eq!(run.frame.counters.started_by_opcode[26], 0);
+            db.finish_run().unwrap();
+        }
+    }
+}
+
+#[test]
+fn primitive_float_method_literal_widths_and_cold_unresolved_receiver() {
+    let source = "fn main(){ assert!((0.0f32/0.0).is_nan()); assert!(!(1.0f64).is_nan()); if false { assert!((0.0).is_nan()); } }";
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, mut run, macros, _) = start_source(source, edition, 100_000);
+        let contexts = macros.contexts().unwrap();
+        let RunPoll::Completed(report) = run.poll_with_runtime_macros(&mut db, &contexts) else {
+            panic!("written widths or cold receiver failed");
+        };
+        assert_eq!(report.opcode_counters.started_by_opcode[26], 2);
+        assert_eq!(run.primitive_methods.len(), 2);
+        assert!(run.frame.active_scopes().is_empty());
+        db.finish_run().unwrap();
+    }
+}
+
+// Stop on the real original source method after executing its receiver once.
+// This is a retained-proof control, not a whole-fixture execution adapter.
+fn prepare_first_method(
+    db: &mut Database,
+    run: &mut RunMachine,
+    contexts: &[crate::engine::runtime_macros::RuntimeMacroContext<'_>],
+) -> (crate::engine::install::RecipeId, SlotId) {
+    for _ in 0..128 {
+        let key = run.frame.pc().clone();
+        let node = &run.frame.body.nodes()[key.node as usize];
+        let prepared = if node.role == NodeRole::Expression(ExpressionKind::Macro) {
+            contexts.iter().find_map(|context| {
+                context
+                    .resolve_at(
+                        &run.frame.body,
+                        &key,
+                        run.runtime_no_item_proofs.values(),
+                        Some((&run.frame, &run.store)),
+                    )
+                    .unwrap()
             })
-            .collect();
-        assert_eq!(bindings.len(), 1);
-        let binding = bindings[0];
-        let span = run.frame.body.span(binding).unwrap();
-        assert_eq!(
-            &ORIGINAL[(handle.range.start + span.relative_start) as usize
-                ..(handle.range.start + span.relative_end) as usize],
-            "nan"
-        );
-        let cell = run.frame.binding_cell_for_test(binding).unwrap();
-        let value = run.store.read_scalar(cell).unwrap();
-        assert_eq!((value.kind, value.type_id), (7, 15));
-        assert!(f64::from_bits(value.payload).is_nan());
-        assert_eq!(
-            run.store.declared(cell).unwrap(),
-            crate::runtime::cell::StorageContract::Exact(crate::runtime::shape::TypeId(15))
-        );
-        assert_eq!(
-            run.store.state(cell).unwrap(),
-            crate::runtime::cell::CellState::Live(value)
-        );
+        } else {
+            None
+        };
+        let id = if let Some(prepared) = prepared {
+            if let Some(proof) = prepared.no_item {
+                run.retain_no_item_proof(proof).unwrap();
+            }
+            if let Some(method) = prepared.primitive_method {
+                let receiver = match prepared.recipe.recipe().operations.as_ref() {
+                    [
+                        Op::NumericBinary {
+                            operator: crate::ir::op::NumericBinary::Ne,
+                            left,
+                            right,
+                            ..
+                        },
+                    ] if left == right => *left,
+                    _ => panic!("selected method does not compare its single retained receiver"),
+                };
+                run.retain_primitive_method(&key, method, prepared.recipe.recipe().fingerprint())
+                    .unwrap();
+                let id = run
+                    .installed
+                    .install_prepared(db, key, &prepared.recipe)
+                    .unwrap();
+                return (id, receiver);
+            }
+            assert!(prepared.call.is_none());
+            run.installed
+                .install_prepared(db, key, &prepared.recipe)
+                .unwrap()
+        } else if let Some(recipe) = run
+            .prepare_floating_recipe(db, contexts)
+            .into_ready()
+            .unwrap()
+            .unwrap()
+        {
+            run.installed.install_prepared(db, key, &recipe).unwrap()
+        } else {
+            run.installed
+                .resolve(db, key)
+                .into_ready()
+                .unwrap()
+                .unwrap()
+        };
+        match step::step(
+            &mut run.frame,
+            &mut run.store,
+            run.installed.get(id).unwrap(),
+        )
+        .unwrap()
+        {
+            // Dispatch is documented bounded operation progress at the same PC;
+            // replay the retained opcode until its real exit, within this bound.
+            StepOutcome::Next(_) | StepOutcome::Dispatch => {}
+            outcome => panic!(
+                "unexpected original receiver outcome at {:?}: {outcome:?}",
+                run.frame.pc()
+            ),
+        }
+    }
+    panic!("original first primitive method was not reached")
+}
 
-        // Existing local_hint is a metadata-only projection of the committed
-        // binding's source table. The current rejected assertion has an unused
-        // value slot, so this inspection allocates no cell/ticket and changes no
-        // executed counters or fuel. It does not execute the unsupported method.
-        assert!(run.frame.cell(probe).is_err());
+#[test]
+fn primitive_float_cached_method_rechecks_source_type_and_actual_descriptor_before_effects() {
+    for primitive in [
+        crate::ir::op::PrimitiveType::F64,
+        crate::ir::op::PrimitiveType::F32,
+    ] {
+        let (mut db, mut run, macros, _) = start(2024);
+        let contexts = macros.contexts().unwrap();
+        let (id, receiver) = prepare_first_method(&mut db, &mut run, &contexts);
+        run.revalidate_primitive_method(&mut db, &contexts, id)
+            .unwrap();
+        let replacement = if primitive == crate::ir::op::PrimitiveType::F64 {
+            TyTerm::Param(crate::traits::term::ParamKey {
+                definition: run.root_body.definition,
+                ordinal: 0,
+            })
+        } else {
+            TyTerm::Primitive(primitive)
+        };
+        run.frame
+            .set_source_view(receiver, Some(replacement))
+            .unwrap();
         let before = (
             run.frame.fuel_snapshot(),
-            serde_json::to_value(&run.frame.counters).unwrap(),
             run.store.budget().handles(),
             run.store.budget().bytes(),
+            serde_json::to_value(&run.frame.counters).unwrap(),
         );
-        run.frame.local_hint(binding, probe, &run.store).unwrap();
-        assert_eq!(
-            run.frame.hint(probe).unwrap(),
-            Some(crate::runtime::shape::TypeId(15))
-        );
-        assert_eq!(
-            run.frame.source_view(probe).unwrap(),
-            Some(TyTerm::Primitive(crate::ir::op::PrimitiveType::F64))
-        );
+        let error = run
+            .revalidate_primitive_method(&mut db, &contexts, id)
+            .unwrap_err();
+        assert_eq!(error.code, "LRR-E-TYPE-CONTEXT");
         assert_eq!(
             (
                 run.frame.fuel_snapshot(),
-                serde_json::to_value(&run.frame.counters).unwrap(),
                 run.store.budget().handles(),
-                run.store.budget().bytes()
+                run.store.budget().bytes(),
+                serde_json::to_value(&run.frame.counters).unwrap()
             ),
             before
         );
-        assert_eq!(run.store.read_scalar(cell).unwrap(), value);
+        assert_eq!(run.frame.counters.started_by_opcode[26], 0);
         db.finish_run().unwrap();
-        // Actual original progress ends at the natural first is_nan frontier.
-        // This test requires unsupported, and is not a full fixture pass.
     }
+}
+
+#[test]
+fn primitive_float_cached_method_requires_current_context_and_source_generation() {
+    let (mut db, mut run, macros, inputs) = start(2024);
+    let contexts = macros.contexts().unwrap();
+    let (id, _) = prepare_first_method(&mut db, &mut run, &contexts);
+    let before = (run.frame.fuel_snapshot(), run.store.budget().handles());
+    assert!(run.revalidate_primitive_method(&mut db, &[], id).is_err());
+    run.revalidate_primitive_method(&mut db, &contexts, id)
+        .unwrap();
+    db.finish_run().unwrap();
+    inputs.publish(&mut db).unwrap();
+    db.begin_run().unwrap();
+    assert!(matches!(
+        run.poll_with_runtime_macros(&mut db, &contexts),
+        RunPoll::Fault(Diagnostic {
+            code: "LRR-E-INTERNAL-SNAPSHOT",
+            ..
+        })
+    ));
+    assert_eq!(
+        (run.frame.fuel_snapshot(), run.store.budget().handles()),
+        before
+    );
+    assert_eq!(run.frame.counters.started_by_opcode[26], 0);
+    db.finish_run().unwrap();
 }

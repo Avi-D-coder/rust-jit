@@ -35,6 +35,7 @@ pub struct RuntimeMacroContext<'a> {
 }
 pub(crate) struct PreparedRuntimeMacro {
     pub recipe: Box<VerifiedRecipe>,
+    pub primitive_method: Option<crate::frontend::runtime_macro_plan::PrimitiveFloatAdmission>,
     pub no_item: Option<crate::frontend::runtime_macro_plan::RuntimeNoItemProof>,
     pub call: Option<std::sync::Arc<crate::syntax::runtime_macro_scalars::RuntimeMacroCall>>,
 }
@@ -148,11 +149,21 @@ impl<'a> RuntimeMacroContext<'a> {
         }
         Ok(())
     }
+    #[cfg(test)]
     pub(crate) fn resolve<'p>(
         &self,
         body: &BodyIndex,
         pc: &PcKey,
         proofs: impl Iterator<Item = &'p crate::frontend::runtime_macro_plan::RuntimeNoItemProof>,
+    ) -> Result<Option<PreparedRuntimeMacro>, Diagnostic> {
+        self.resolve_at(body, pc, proofs, None)
+    }
+    pub(crate) fn resolve_at<'p>(
+        &self,
+        body: &BodyIndex,
+        pc: &PcKey,
+        proofs: impl Iterator<Item = &'p crate::frontend::runtime_macro_plan::RuntimeNoItemProof>,
+        reached: Option<(&crate::vm::frame::Frame, &crate::runtime::cell::GuestStore)>,
     ) -> Result<Option<PreparedRuntimeMacro>, Diagnostic> {
         let Some(handle) = self
             .source
@@ -210,6 +221,28 @@ impl<'a> RuntimeMacroContext<'a> {
                 } else {
                     None
                 };
+                let primitive_method = if scalar_assertion {
+                    match plan.scalar_primitive_method_witness(self.source, body, pc)? {
+                        Some(written) => {
+                            let (frame, store) = reached.ok_or_else(|| {
+                                fault(
+                                    "LRR-E-TYPE-CONTEXT",
+                                    "primitive method lacks a reached receiver",
+                                )
+                            })?;
+                            if frame.pc() != pc || frame.body.body() != body.body() {
+                                return Err(fault(
+                                    "LRR-E-TYPE-CONTEXT",
+                                    "primitive method reached frame differs",
+                                ));
+                            }
+                            Some(crate::frontend::runtime_macro_plan::PrimitiveFloatAdmission::select(written, self.source, self.catalog, frame, store)?)
+                        }
+                        None => None,
+                    }
+                } else {
+                    None
+                };
                 let lowering = match plan.arguments().kind() {
                     RuntimeMacroKind::Vec => {
                         return Err(fault(
@@ -245,18 +278,27 @@ impl<'a> RuntimeMacroContext<'a> {
                     }
                     RuntimeMacroKind::Assert
                     | RuntimeMacroKind::AssertEq
-                    | RuntimeMacroKind::AssertNe => plan.lower_scalar_assertion_recipe(
-                        self.source,
-                        body,
-                        pc,
-                        self.source.runtime_macro_successor(handle, body, pc)?,
-                    ),
+                    | RuntimeMacroKind::AssertNe => {
+                        let next = self.source.runtime_macro_successor(handle, body, pc)?;
+                        if primitive_method.is_some() {
+                            plan.lower_scalar_assertion_with_method(
+                                self.source,
+                                body,
+                                pc,
+                                next,
+                                primitive_method.as_ref(),
+                            )
+                        } else {
+                            plan.lower_scalar_assertion_recipe(self.source, body, pc, next)
+                        }
+                    }
                 };
                 match lowering? {
                     StaticPanicRecipeLowering::Recipe(recipe) => Ok(Some(PreparedRuntimeMacro {
                         recipe,
                         no_item: plan.no_item_proof(&pc.body),
                         call,
+                        primitive_method,
                     })),
                     StaticPanicRecipeLowering::NeedsFormatting => Err(fault(
                         "LRR-E-UNSUPPORTED",
