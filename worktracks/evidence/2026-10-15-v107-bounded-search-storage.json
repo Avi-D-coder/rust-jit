@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T16:56:48.331741+00:00",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "claim": "LOCAL-024",
+  "validations": [
+    {
+      "validation": "V106",
+      "root_verified_retained_files": 33,
+      "evidence_index_sha256": "6c591c149d81179ef60247d9a3797a912ec56dffc488ebc3595f7e2ad8ffa80b",
+      "handoff_sha256": "1eaac323afa973eabefb770d3331a018ee877c21109b045632d7e9a74ce226c3",
+      "release_sha256": "5605b8414182484af86d7ca4d42492e64fe8ac698a5a28fe19b43c5681608b82",
+      "results": {
+        "source_member": "340c8ebf2314d74ab06bcc2642a389a69ba3053a88a6724f9a3c0ec57bc5c29f",
+        "default_files": 4361,
+        "extras": 435,
+        "raw_files": 509,
+        "cases": 324,
+        "status": "compile_only_pass_runtime_held_for_accounting_followon",
+        "actual_terminals": {
+          "assembly": "8a3040/0",
+          "strict-library": "bc6bc1/0",
+          "compile-library-tests": "61d28d/0"
+        },
+        "test_bodies_executed": 0,
+        "hold_reason": "Root source review found missing fixed Option<Box<[BoundStringSearch]>> metadata field charge; heap capacity charge already present. No runtime acceptance before successor.",
+        "unexecuted": [
+          "bounded256KiB/2000frame priority",
+          "sevenstring controls",
+          "source_run67",
+          "affected xtask builds and banks",
+          "other affected library controls",
+          "all audits",
+          "ledger merge",
+          "115CLI characterization",
+          "full milestone"
+        ],
+        "source_owner_originals_unchanged": true,
+        "no_retry_or_source_repair": true,
+        "free_bytes": 67054772224
+      }
+    },
+    {
+      "validation": "V107",
+      "root_verified_retained_files": 140,
+      "evidence_index_sha256": "877613cd326e0359aeaba1f4e9b124a816193e23ef88fb51ad9b9a393a09eea4",
+      "handoff_sha256": "27d2b56853a874e7eec816d61efe60e3013917a2a9d53ab53e142c2903f88835",
+      "release_sha256": "ba75459f627980b890e2c0016bfdbc9b3bfb66b6385e619bfcf8cf6e27836c80",
+      "results": {
+        "source_member": "58b8eda4a3a94acd91fa68eed07af9bb09299e80ca679460b025c745469cccbd",
+        "default_files": 4361,
+        "extras": 435,
+        "raw_files": 509,
+        "cases": 324,
+        "actual_terminals": {
+          "strict-library": "590b07/0",
+          "compile-library-tests": "0850bf/0",
+          "strict-affected-xtask": "2c213a/0",
+          "compile-affected-xtask": "22b9ed/0",
+          "bounded-stack-priority": "688af3/0",
+          "compiler-string-priority-seven": "6e100a/0",
+          "source-run-full-bank": "56b3c0/0",
+          "byte-string-capture-authority": "681e00/0",
+          "match-no-arm-exit-full-bank": "7b5e98/0",
+          "runtime-macro-arguments-full-bank": "dc4766/0",
+          "stock-numeric-edgecases-v1-full-bank": "a70ab0/0",
+          "format": "b68734/0",
+          "architecture": "73604d/0",
+          "fixture-reference": "07ee4b/0"
+        },
+        "test_counts": {
+          "bounded-stack-priority": 1,
+          "compiler-string-priority-seven": 7,
+          "source-run-full-bank": 67,
+          "byte-string-capture-authority": 57,
+          "match-no-arm-exit-full-bank": 5,
+          "runtime-macro-arguments-full-bank": 4,
+          "stock-numeric-edgecases-v1-full-bank": 10
+        },
+        "distinct_named_passes": 150,
+        "completed_executions": 151,
+        "duplicate_executions": 1,
+        "duplicate_body": "two_thousand_guest_frames_complete_on_a_bounded_host_thread_stack",
+        "failed_ignored_or_interrupted": 0,
+        "no_stack_or_profile_override": true,
+        "full_library_not_repeated": "V1051201-pass historical source evidence only; V10764library bodies executed",
+        "source_owner_originals_unchanged": true,
+        "unexecuted": [
+          "ledger-only final merge and audit",
+          "115selected CLI characterization",
+          "required fresh full milestone"
+        ],
+        "free_bytes": 66426646528
+      }
+    }
+  ],
+  "V107_scoped_seal_terminal": "7069aa/0",
+  "V107_source_member": "58b8eda4a3a94acd91fa68eed07af9bb09299e80ca679460b025c745469cccbd",
+  "distinct_host_bodies_passed": 150,
+  "host_body_executions": 151,
+  "duplicate_bounded_stack_execution": 1,
+  "prior_library_1201_is_separate_V105_evidence": true,
+  "unchanged_stack_bytes": 262144,
+  "unchanged_guest_depth": 2000,
+  "all_seven_string_controls_passed": true,
+  "full_source_bank_passed": 67,
+  "other_byte_string_capture_authority_passed": 57,
+  "affected_xtask_passed": 19,
+  "strict_format_architecture_reference_passed": true,
+  "source_originals_extras_owner_unchanged": true,
+  "upstream_originals": 509,
+  "imported_cases_pending": 324,
+  "source_candidates": [
+    "worktracks/candidates/root-string-search-frame-storage-v1/README.md",
+    "worktracks/candidates/root-string-search-frame-metadata-v2/README.md",
+    "worktracks/candidates/root-interpreter-cumulative-v1/README.md"
+  ],
+  "static_prologue_comparison_bytes": {
+    "V105_start_with_sources": 63568,
+    "V107_start_with_sources": 59808,
+    "V105_start": 33104,
+    "V107_start": 30832,
+    "includes_saved_frame_pointers": true,
+    "dynamic_backtrace_or_performance_causality_claim": false
+  },
+  "final_ledger_audits_and_115_stock_cli_and_fresh_full_milestone": "queued V108 asynchronously; no terminal yet",
+  "canonical_promoted": false,
+  "full_fixture_passes_added": 0,
+  "jit_started": false,
+  "linux_accepted": false
+}

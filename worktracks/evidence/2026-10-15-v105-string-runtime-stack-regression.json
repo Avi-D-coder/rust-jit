@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T16:50:31.130753+00:00",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "claim": "LOCAL-024",
+  "result": {
+    "source_member": "a6030afa2b1346337e503142176debd2e5d1d3987c3ee1885da654a2513bfd46",
+    "default_files": 4361,
+    "extras": 435,
+    "raw_files": 509,
+    "cases": 324,
+    "strict_library_and_tests_passed": true,
+    "strict_affected_xtask_passed": true,
+    "library_and_affected_xtask_compiled": true,
+    "priority_pass": 7,
+    "full_library_pass": 1201,
+    "source_run_pass": 63,
+    "source_run_interrupted": [
+      "two_thousand_guest_frames_complete_on_a_bounded_host_thread_stack"
+    ],
+    "source_run_unstarted": [
+      "while_reenters_fresh_iteration_storage_and_reuses_installed_thunks",
+      "written_and_inferred_local_views_survive_assignment_and_shadowing",
+      "written_call_arguments_use_parameter_hints_and_nested_call_contexts"
+    ],
+    "named_failed_assertions": 0,
+    "distinct_named_passes": 1264,
+    "completed_executions": 1271,
+    "duplicate_executions": 7,
+    "child_exit_code": -6,
+    "failure_message": "thread 'lrr-2000-frame-oracle' (7177275) has overflowed its stack\nfatal runtime error: stack overflow, aborting",
+    "unchanged_stack_contract": "256KiB; no RUST_MIN_STACK; opt0/debug0/assertions on/incremental false",
+    "actual_terminals": {
+      "assembly": "463a2b/0",
+      "strict-library": "c7e3b4/0",
+      "compile-library-tests": "874bf9/0",
+      "priority-seven": "6ca8bf/0",
+      "full-library": "573ac4/0",
+      "strict-affected-xtask": "c4c0c0/0",
+      "compile-affected-xtask": "dd0028/0",
+      "source-run-full-bank": "e2459e/1",
+      "inactive": "a01735/0"
+    },
+    "unexecuted_banks": {
+      "match_no_arm_exit": 5,
+      "runtime_macro_arguments": 4,
+      "stock_numeric_edgecases_v1": 10
+    },
+    "unexecuted_other": [
+      "format",
+      "architecture",
+      "fixture-reference",
+      "final ledger merge/audits",
+      "115 selected CLI characterization",
+      "full milestone"
+    ],
+    "source_owner_originals_unchanged": true,
+    "no_retry_or_source_repair": true,
+    "free_bytes": 67662626816
+  },
+  "root_verified_retained_files": 85,
+  "failure_sha256": "6eb00525d0288a72cc8a20a56fb824247c443a2542e7d62df917747190d5a0f9",
+  "evidence_index_sha256": "50649864af70dcd194cfa2423a1e32244d733e37c968bbb882957551d5bbdeb3",
+  "handoff_sha256": "3bfb663b354349a87af90de22fbf6291d038a0216e881ad3c9415dbf27ef6ba2",
+  "release_sha256": "944cdd22f14c555d28d8d6782c171cad2839d11c77d11a04e9d374caae136401",
+  "new_repair_candidates": [
+    "worktracks/candidates/root-string-search-frame-storage-v1/README.md",
+    "worktracks/candidates/root-string-search-frame-metadata-v2/README.md"
+  ],
+  "static_stack_review": {
+    "start_with_sources_reserve_bytes": 63568,
+    "start_reserve_bytes": 33104,
+    "includes_saved_frame_pointers": true,
+    "backtrace_or_sole_cause_claim": false
+  },
+  "unfiltered_library_passes_not_upstream_full_fixtures": true,
+  "runtime_blocker_preserved": true,
+  "full_milestone_not_run": true,
+  "canonical_promoted": false,
+  "full_fixture_passes_added": 0
+}

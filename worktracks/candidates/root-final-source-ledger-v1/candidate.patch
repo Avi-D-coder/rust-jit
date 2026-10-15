@@ -140,7 +140,7 @@
      },
      {
        "id": "T050",
-@@ -6327,6 +6421,50 @@
+@@ -6329,6 +6423,50 @@
        ],
        "artifact_paths": [],
        "release_complete": false,
@@ -191,7 +191,7 @@
        "pending_acceptance": [
          {
            "fixture_id": "T061-STR-EMPTY-SOURCE",
-@@ -7453,7 +7591,15 @@
+@@ -7460,7 +7598,15 @@
            "evidence_paths": []
          }
        ],
@@ -208,7 +208,7 @@
      },
      {
        "id": "H003",
-@@ -10046,7 +10192,7 @@
+@@ -10053,7 +10199,7 @@
        "title": "Attributes, helpers, and cfg",
        "acceptance_contract": "MX018\u2013MX020. Depends: M009.",
        "release_complete": false,
@@ -217,7 +217,7 @@
        "completion_scope": "component",
        "integration_dependencies": [
          "T034",
-@@ -10074,7 +10220,36 @@
+@@ -10081,7 +10227,36 @@
            "status": "pending",
            "evidence_paths": []
          }
@@ -255,7 +255,7 @@
      },
      {
        "id": "M011",
-@@ -10545,7 +10720,7 @@
+@@ -10552,7 +10727,7 @@
        "title": "Expansion epochs and revalidation",
        "acceptance_contract": "MX025/MX026; mutable external-input macro changes result without rebuilding binary. Depends: M011.",
        "release_complete": false,
@@ -264,7 +264,7 @@
        "completion_scope": "component",
        "integration_dependencies": [
          "T034",
-@@ -10568,7 +10743,25 @@
+@@ -10575,7 +10750,25 @@
            "status": "pending",
            "evidence_paths": []
          }
@@ -291,7 +291,7 @@
      },
      {
        "id": "M013",
-@@ -18190,8 +18383,40 @@
+@@ -18197,8 +18390,40 @@
        },
        "evidence": [
          "worktracks/evidence/2026-10-14-include-parent-milestone.json",
@@ -334,7 +334,7 @@
      },
      {
        "id": "M014",
-@@ -19034,7 +19259,20 @@
+@@ -19041,7 +19266,20 @@
            "status": "pending",
            "evidence_paths": []
          }
@@ -356,7 +356,7 @@
      },
      {
        "id": "M016",
-@@ -19498,7 +19736,7 @@
+@@ -19505,7 +19743,7 @@
        "title": "Symbolic type/binder terms",
        "acceptance_contract": "TR001/TR002; type/lifetime/const arg namespaces distinct. Depends: T045,M016.",
        "release_complete": false,
@@ -365,7 +365,7 @@
        "current_generated_parent_profile_authority": {
          "status": "component_integrated_full_milestone_pending",
          "evidence_path": "worktracks/evidence/2026-10-14-generated-parent-profile-authority.json",
-@@ -19506,7 +19744,10 @@
+@@ -19513,7 +19751,10 @@
        },
        "evidence": [
          "worktracks/evidence/2026-10-14-include-parent-milestone.json",

@@ -1,0 +1,10 @@
+--- a/crates/lrr/src/vm/frame.rs
++++ b/crates/lrr/src/vm/frame.rs
+@@ -285,6 +285,7 @@
+             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<byte_literal_frame::BoundByteLiteral>>()))
+             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<crate::engine::run::byte_comparisons::AdmittedByteComparison>>()))
+             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<byte_comparison_frame::BoundByteComparison>>()))
++            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<Box<[string_search_frame::BoundStringSearch]>>>()))
+             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<crate::engine::run::byte_macro_literals::AdmittedMacroByteLiteral>>()))
+             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<aggregate_copy_frame::OpActivation>>()))
+             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<scope_cleanup_frame::Activation>>()))

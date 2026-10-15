@@ -1,0 +1,7 @@
+# Bound optional string-search storage to reached execution
+
+T032/T061 invariant: a non-searching guest frame need not carry the full optional search cursor inline, while actual contains retains exactly one run/source/PC-bound non-cloneable cursor. V105 unfiltered library1201 passed, but source_run's unchanged256KiB/2000-guest-frame oracle aborted with host stack overflow;63 named source cases passed and3 remained unstarted. No oracle, stack/profile, fuel or cancellation limit is changed.
+
+Replace the large inline optional activation with an indirect single-entry allocation. Checked Vec reservation and actual capacity metadata accounting happen in preparation before opcode fuel/counters or guest writes. After entry, the reserved storage becomes a private boxed slice; resume requires exactly one element. Dispatch mutates the same cursor/storage in place, while completion/refusal retires it before publication. No target copies, unsafe, native/compile authority or source changes are introduced.
+
+Static disassembly confirms the failed source reserves63,568bytes in start_with_sources and33,104bytes in start (including frame-pointer save), larger than the earlier schema17 startup. This describes compiled prologues, not a backtrace or a proved sole cause. The unchanged bounded-stack oracle and search/currentness/fuel/cancellation controls must pass on the repaired source before promotion. Packet formatting and exact zero-fuzz/offset replay checked; no execution result is supplied by this source-only packet.

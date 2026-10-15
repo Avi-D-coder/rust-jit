@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Interpreter-first WT02. V101 reached Value/Type and match-bound scope preparation passes103 distinct controls:2 new (two unchanged original mains through actual standalone host route, all4 editions; foreign world/epoch/scope/duplicate refusal),34 existing capture/constant/match authority,67 source_run. Strict/fmt/real architecture/reference audit pass. V99 compile failure and V1001pass/1fail preserved. V102 combined schema19 compiles and strict checks pass, then3/6priority pass and3 fail:reached include_str compiler output gap plus opaque-token component extraction. Root8leaf production/harness repair and one-line existing receipt fixture initialization are in asynchronous validation; V103 missing fixture field compile failure retained. No canonical byte/string promotion; fresh full milestone still required. Historical11 distinct upstream CLI programs span builds, not current-build/full-fixture passes. No task/JIT/Linux completion. V104 strict/compile green and4/7priority pass;3hit real pinned-engine guard because of synthetic test setup identity. Exact test-only engine alignment is in V105 background validation.",
+      "scope": "Interpreter-first WT02. V107 checked reached-only search storage and fixed pointer accounting passes150distinct hostcontrols/151executions (only bounded-stack duplicate):fullsource67,7string,57authority,19affected integration. Unchanged256KiB/2000-frame oracle passes; no limits/assertions relaxed. Strict/fmt/realarchitecture/reference audits green. V1051201librarypasses remain separate source evidence; V105stackabort preserved. V108 exact final history-ledger merge/audits,115unchanged plain-run-pass CLI characterization and onefreshfullmilestone queued asynchronously. Cumulative118-leaf source packet includes all exact repairs; canonicalpromotion held. No stockfull-fixture/task/JIT/Linux completion.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -584,11 +584,13 @@
         "worktracks/candidates/root-reached-constant-scopes-v1/",
         "artifacts/macos-first/root-reached-constant-scopes-v1/",
         "artifacts/macos-first/root-compiler-string-literal-v1/",
-        "artifacts/macos-first/root-compiler-string-fixture-v2/"
+        "artifacts/macos-first/root-compiler-string-fixture-v2/",
+        "artifacts/macos-first/root-string-search-frame-storage-v1/",
+        "artifacts/macos-first/root-string-search-frame-metadata-v2/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T16:36:46.532280+00:00",
+      "updated_at": "2026-10-15T16:56:48.332536+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

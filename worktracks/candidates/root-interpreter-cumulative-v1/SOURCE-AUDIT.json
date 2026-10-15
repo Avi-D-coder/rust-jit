@@ -1,16 +1,16 @@
 {
-  "status": "source_only_candidate_scoped_validation_failed",
+  "status": "source_only_final_combined_validation_pending",
   "claim": "LOCAL-024",
-  "at": "2026-10-15T16:19:06.212576+00:00",
-  "canonical_source_preimages": "8d1942d7c3 canonical source plus unchanged current docs/tasks preimage",
-  "lineage": "V101 plus final schema19 combined candidate; pending validation",
-  "patch_sha256": "842c7f93758b7be77c900747564d73b970282be8cc5ff2edbcf9d5348f1a72c5",
+  "at": "2026-10-15T16:50:46.078057+00:00",
+  "canonical_source_preimages": "ecd4592 canonical source plus unchanged current docs/tasks preimage",
+  "lineage": "V107 reached-only search storage/accounting plus canonical-history ledger merge; scoped and milestone validation pending",
+  "patch_sha256": "2ce61a2bf4188490d4dcb52124eaf10f560ef70faec309cee611d3d6a903af02",
   "files": [
     {
       "path": "compat/fixtures.toml",
       "before_sha256": "2a1676e1937a7b5bd6575751df49771fd576e1b68f923785772a89b1e39baeaa",
-      "after_sha256": "d5d49c811c2069f7c2e0eda5fca3944b783e7f329234c449e773bed8e3ad7f40",
-      "bytes": 414619
+      "after_sha256": "ca7b7c46c90de2f3697d850ed2e8e506ecddd82f1f6ab510bc6f93f2ed33187e",
+      "bytes": 414814
     },
     {
       "path": "crates/lrr/src/cli/mod.rs",
@@ -41,6 +41,12 @@
       "before_sha256": "2de9a1bca4cef830d879ae1c03b14a817960070d5984b8baa016163cee12dae9",
       "after_sha256": "e880234f34f7223efea996eadef36a630e857ff203b266f7c181be005cff085a",
       "bytes": 15900
+    },
+    {
+      "path": "crates/lrr/src/engine/declarative_runtime.rs",
+      "before_sha256": "31ddaa1c140e3f13f35fcbd7a03ff927ef503453e5aec631f4cdc9068beefd73",
+      "after_sha256": "b8a7fcc79b81a78a1d1ada402c32bf8ff3270963ca1e140fe23f5d1d5a37d994",
+      "bytes": 8124
     },
     {
       "path": "crates/lrr/src/engine/lexical_numeric_callees_tests.rs",
@@ -87,14 +93,14 @@
     {
       "path": "crates/lrr/src/engine/run_byte_macro_literal_tests.rs",
       "before_sha256": null,
-      "after_sha256": "2210efb3d30ad35106d78d73b996279baecf8c58db2255ae5e39cc53c6b84065",
-      "bytes": 23265
+      "after_sha256": "3ccb0d600ab5114d51ee0105b6bcf05319ac4cb38d1a0e5ab4bdbabd3dbabf90",
+      "bytes": 23290
     },
     {
       "path": "crates/lrr/src/engine/run_byte_macro_literals.rs",
       "before_sha256": null,
-      "after_sha256": "8cc355bb2e3188654c8dac0f0241890e94a807b659e993319f98eadf7f7d05dd",
-      "bytes": 8142
+      "after_sha256": "0bb23edc19b1f1cfd0901ead91e91d73709b667ef2d3f2fe23cb57c9d1658b86",
+      "bytes": 8582
     },
     {
       "path": "crates/lrr/src/engine/run_capture.rs",
@@ -129,14 +135,14 @@
     {
       "path": "crates/lrr/src/engine/run_string_macro_literal_tests.rs",
       "before_sha256": null,
-      "after_sha256": "2c6fb7091e52d55c7994defd9977a5ac8fdf89555c8b99a6ae9695ce950ae8fb",
-      "bytes": 34003
+      "after_sha256": "907d2af066edd3148fd57eab5a6925d4bda5793d702017a48b7185d099ea7245",
+      "bytes": 39387
     },
     {
       "path": "crates/lrr/src/engine/runtime_macros.rs",
       "before_sha256": "d0ca01f00493bbd46655f31541b20336dd4882bf1300c618d14cfacdf0feceda",
-      "after_sha256": "a347a5b10fbeb5bf81882e1646c5a4c74f1962c3cf08fe1793e0401914b38d5e",
-      "bytes": 30730
+      "after_sha256": "1212f4f7c8d9aa426297eac1ecf51cefd672a579f9c4b385df49a9e4fbacfe86",
+      "bytes": 34347
     },
     {
       "path": "crates/lrr/src/facade/byte_equality.rs",
@@ -415,6 +421,12 @@
       "bytes": 10979
     },
     {
+      "path": "crates/lrr/src/syntax/generated_expression.rs",
+      "before_sha256": "d2af3c639f76f27ab0f2ad2a5e2dc6ccaba7777f48979094560d2a9faa837c80",
+      "after_sha256": "1e3e7e65f6d1dbd3f0a64c72b8795c32964e0895b31212e39e8b9ee3aabd7176",
+      "bytes": 6297
+    },
+    {
       "path": "crates/lrr/src/syntax/literal_match.rs",
       "before_sha256": "b5e085f23831cccba07172a99ec81df93bd12190f3bb79f93494b07bed78e566",
       "after_sha256": "2c611043bdd88da1e49a22ba51d6bbe8da3215d33926716ee97567dc48a9e25e",
@@ -501,8 +513,8 @@
     {
       "path": "crates/lrr/src/syntax/string_fixture_facts.rs",
       "before_sha256": null,
-      "after_sha256": "04127f000af826016f9448117422335fbf6b4c1dec48318bb227bd65f36ce4cb",
-      "bytes": 4948
+      "after_sha256": "28d10f817ba378289c42bbe08dcde56bc79b7e2943d2b1f36dfa1d0c25bd6131",
+      "bytes": 6355
     },
     {
       "path": "crates/lrr/src/syntax/string_literal_ir_tests.rs",
@@ -537,8 +549,8 @@
     {
       "path": "crates/lrr/src/vm/frame.rs",
       "before_sha256": "ede9f10dcede5cbbb9e572eeb77dcff6f2697d8c8686eded71ff0f03a1bea643",
-      "after_sha256": "4bebd0fd042d7d9dadcb7ea1e98e63357cc1c3b53492859da96d72a4ab9aa9f8",
-      "bytes": 303094
+      "after_sha256": "5b1634c88d37346c1dfb0018298452d527edc77e6c57e7c9bac2126751e6577f",
+      "bytes": 303228
     },
     {
       "path": "crates/lrr/src/vm/frame_aggregate_copy.rs",
@@ -585,8 +597,8 @@
     {
       "path": "crates/lrr/src/vm/frame_string_search.rs",
       "before_sha256": null,
-      "after_sha256": "11970f0d812a353dbf17e9eabc2ff57860fb854fdb147a9f75f3e538a3f26ec3",
-      "bytes": 9513
+      "after_sha256": "b452092cdc05665142df18cb529aed7dda439e36e954008c21119a356100e934",
+      "bytes": 10977
     },
     {
       "path": "crates/lrr/src/vm/step.rs",
@@ -699,21 +711,19 @@
     {
       "path": "docs/tasks.json",
       "before_sha256": "ddf2f5871cc1f18a4dea19c7648ff89bb34e2567aef30c5c3ce2705107358579",
-      "after_sha256": "8439e6edb2f6c00d9131650ef178257600f438bad8a7b7b7380d31bb36b9c368",
-      "bytes": 1429659
+      "after_sha256": "6551283ca51b0ae7d16ac64a5b952924fb3d537eff1ebaa9c75781c5f5d06de5",
+      "bytes": 1429916
     }
   ],
   "static_replay": {
     "exact": true,
     "fuzz": 0,
     "offset": 0,
-    "files": 116
+    "files": 118
   },
   "upstream_raw_files_expected": 509,
   "imported_cases_pending_expected": 324,
   "full_milestone_passed": false,
   "canonical_source_promoted": false,
-  "original_licenses_preserved": true,
-  "later_validation_receipt": "worktracks/evidence/2026-10-15-v99-v102-reached-scopes-and-strings.json",
-  "later_validation_source": "636fd2eb7bc0e261eb5037ab65e7ea93d523ada78e52caaddbd2ddec1e0c0566"
+  "original_licenses_preserved": true
 }

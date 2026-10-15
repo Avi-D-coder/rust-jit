@@ -1,0 +1,34 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T032",
+    "T061"
+  ],
+  "source_baseline": "a6030afa2b1346337e503142176debd2e5d1d3987c3ee1885da654a2513bfd46",
+  "patch_sha256": "ecb8da0a099d9ff3b410402b29c7d419454d9c276c91d6c64f18a9c42910c7d9",
+  "files": [
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "before_sha256": "4bebd0fd042d7d9dadcb7ea1e98e63357cc1c3b53492859da96d72a4ab9aa9f8",
+      "after_sha256": "b78f9f4d2c99855532fb2009e1f9c27a8ae1c8b999776ac442db3393a583fb56"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_string_search.rs",
+      "before_sha256": "11970f0d812a353dbf17e9eabc2ff57860fb854fdb147a9f75f3e538a3f26ec3",
+      "after_sha256": "b452092cdc05665142df18cb529aed7dda439e36e954008c21119a356100e934"
+    }
+  ],
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "exact_replay_zero_offset_zero_fuzz": true
+  },
+  "acceptance_existing": [
+    "two_thousand_guest_frames_complete_on_a_bounded_host_thread_stack",
+    "original_contains_argument_result_and_resumed_cancel_refuse_without_publication",
+    "unchanged_crlf_string_entire_main_including_source_contains_completes_all_editions",
+    "original_search_refuses_nonstring_roots_cancelled_empty_and_faulted_cursor_replay"
+  ],
+  "full_milestone_passed": false,
+  "canonical_promotion": false
+}

@@ -9,7 +9,7 @@
  
  [[fixture]]
  id = "H002-CLAUSE-SCOPE-1"
-@@ -12179,3 +12179,45 @@
+@@ -12179,3 +12179,50 @@
  id = "M017-GENERATED-SOURCE-AUTHORITY-07"
  path = "crates/lrr/src/frontend/generated_return_parent_profile_tests.rs"
  test = "genuine_generated_export_retains_actual_parent_record_and_original_tokens"
@@ -55,6 +55,11 @@
 +id = "T061-STR-SEARCH-LIFECYCLE"
 +path = "crates/lrr/src/runtime/cell_string_search_tests.rs"
 +test = "original_search_refuses_nonstring_roots_cancelled_empty_and_faulted_cursor_replay"
++
++[[fixture]]
++id = "T061-STR-INCLUDE-SEALED"
++path = "crates/lrr/src/engine/run_string_macro_literal_tests.rs"
++test = "original_include_string_requires_current_sealed_source_record_and_exact_plan"
 --- a/crates/lrr/src/cli/mod.rs
 +++ b/crates/lrr/src/cli/mod.rs
 @@ -9,6 +9,7 @@
@@ -648,6 +653,52 @@
                  e.digest(path.definition());
                  e.record(path.context());
                  e.record(&path.body().key());
+--- a/crates/lrr/src/engine/declarative_runtime.rs
++++ b/crates/lrr/src/engine/declarative_runtime.rs
+@@ -55,7 +55,7 @@
+                 GrammarSlot::Expression | GrammarSlot::Statements
+             ) && matches!(
+                 record.key().macro_identity,
+-                MacroIdentity::Declaration { .. }
++                MacroIdentity::Declaration { .. } | MacroIdentity::Builtin { .. }
+             )
+         }) {
+             if wanted.len() >= 4096 {
+@@ -111,6 +111,34 @@
+         }
+         Ok(this)
+     }
++    /// Only a plan retained after sealed-source preparation can authorize an
++    /// immutable generated literal. A recipe fingerprint alone is not a receipt.
++    pub(super) fn current_literal_plan(
++        &self,
++        db: &Database,
++        pc: &PcKey,
++        installed: &crate::ir::recipe::VerifiedRecipe,
++    ) -> Result<bool, Diagnostic> {
++        let Some(plan) = self.plans.get(pc) else {
++            return Ok(false);
++        };
++        if plan.recipe().recipe().fingerprint() != installed.recipe().fingerprint() {
++            return Err(invalid());
++        }
++        for dependency in &plan.recipe().recipe().dependencies {
++            let crate::db::dependency::DependencyStamp::Input { key, fingerprint } = dependency
++            else {
++                return Err(invalid());
++            };
++            if db
++                .published_input(key)
++                .is_none_or(|(_, current)| current != *fingerprint)
++            {
++                return Err(invalid());
++            }
++        }
++        Ok(true)
++    }
+     pub(super) fn plans(&self) -> impl Iterator<Item = &PreparedDeclarativeExpression> {
+         self.plans.values()
+     }
 --- a/crates/lrr/src/engine/lexical_numeric_callees_tests.rs
 +++ b/crates/lrr/src/engine/lexical_numeric_callees_tests.rs
 @@ -299,3 +299,52 @@
@@ -1728,7 +1779,7 @@
 +}
 --- /dev/null
 +++ b/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
-@@ -0,0 +1,678 @@
+@@ -0,0 +1,679 @@
 +//! Original-source admission controls, distinct from the full-main runtime witness.
 +use super::*;
 +use crate::{
@@ -1762,7 +1813,7 @@
 +    .unwrap()
 +    .with_declarative(
 +        environment.fingerprint(),
-+        Digest::of_bytes(b"byte-macro-dispatch-generations"),
++        crate::expand::source_declarative::engine_version(),
 +    )
 +    .unwrap()
 +    .with_compiler(std::sync::Arc::new(
@@ -2136,6 +2187,7 @@
 +        recipe: run.installed.get(id).unwrap().recipe().fingerprint(),
 +        span: literal.source.clone(),
 +        destination,
++        generated: false,
 +        payload: MacroLiteralPayload::Bytes(payload.clone()),
 +    };
 +    proof
@@ -2409,7 +2461,7 @@
 +}
 --- /dev/null
 +++ b/crates/lrr/src/engine/run_byte_macro_literals.rs
-@@ -0,0 +1,208 @@
+@@ -0,0 +1,220 @@
 +//! Current compiler-intrinsic source admission for an immutable literal in opaque
 +//! macro operands. A verified recipe alone cannot grant that source authority.
 +use super::*;
@@ -2468,6 +2520,7 @@
 +    recipe: Digest,
 +    span: BodySpan,
 +    destination: SlotId,
++    generated: bool,
 +    payload: MacroLiteralPayload,
 +}
 +impl AdmittedMacroByteLiteral {
@@ -2483,6 +2536,7 @@
 +            && self.recipe == other.recipe
 +            && self.span == other.span
 +            && self.destination == other.destination
++            && self.generated == other.generated
 +            && self.payload.same_decoded_payload(&other.payload)
 +    }
 +    pub(crate) fn require(
@@ -2502,7 +2556,11 @@
 +            || self.source.profile != *body.profile()
 +            || self.cfg != body.cfg().fingerprint()
 +            || node.role != NodeRole::Expression(ExpressionKind::Macro)
-+            || !node.runtime_scalar_slots.contains(&destination)
++            || if self.generated {
++                node.value != Some(destination)
++            } else {
++                !node.runtime_scalar_slots.contains(&destination)
++            }
 +            || self.span != literal.source
 +            || self.span.body_key != pc.body
 +            || self.span.relative_start < node.range.start
@@ -2536,7 +2594,7 @@
 +        if node.role != NodeRole::Expression(ExpressionKind::Macro) {
 +            return self.frame.admit_macro_byte_literal(None);
 +        }
-+        let installed = self.installed.get(id)?;
++        let installed = self.installed.get_current(db, id)?;
 +        let mut literals = installed
 +            .recipe()
 +            .operations
@@ -2560,6 +2618,9 @@
 +            ));
 +        }
 +        let fingerprint = installed.recipe().fingerprint();
++        let generated = self
++            .declarative_runtime
++            .current_literal_plan(db, key, installed)?;
 +        for context in contexts {
 +            let source = context.source();
 +            let Some(handle) = source
@@ -2579,18 +2640,20 @@
 +            }
 +            // This redoes real lexical/compiler macro selection, not a spelling
 +            // check. A user/shadowed/unresolved macro cannot produce this receipt.
-+            let current = context
-+                .resolve_at(
-+                    &self.frame.body,
-+                    key,
-+                    self.runtime_no_item_proofs.values(),
-+                    Some((&self.frame, &self.store)),
-+                )?
-+                .ok_or_else(|| call_fault("macro byte literal current intrinsic absent"))?;
-+            if current.recipe.recipe().fingerprint() != fingerprint {
-+                return Err(call_fault(
-+                    "macro byte literal current source recipe differs",
-+                ));
++            if !generated {
++                let current = context
++                    .resolve_at(
++                        &self.frame.body,
++                        key,
++                        self.runtime_no_item_proofs.values(),
++                        Some((&self.frame, &self.store)),
++                    )?
++                    .ok_or_else(|| call_fault("macro byte literal current intrinsic absent"))?;
++                if current.recipe.recipe().fingerprint() != fingerprint {
++                    return Err(call_fault(
++                        "macro byte literal current source recipe differs",
++                    ));
++                }
 +            }
 +            let payload = MacroLiteralPayload::from_literal(literal)?;
 +            let admission = AdmittedMacroByteLiteral {
@@ -2600,6 +2663,7 @@
 +                recipe: fingerprint,
 +                span: literal.source.clone(),
 +                destination,
++                generated,
 +                payload,
 +            };
 +            admission.require(&self.frame.body, key, literal, destination)?;
@@ -3542,7 +3606,7 @@
 +mod range_constant_tests;
 --- /dev/null
 +++ b/crates/lrr/src/engine/run_string_macro_literal_tests.rs
-@@ -0,0 +1,892 @@
+@@ -0,0 +1,1055 @@
 +//! Actual unchanged upstream assertion operand and LRR source-authority controls.
 +//! Operand/method components and refusal controls are not whole-fixture passes.
 +use super::*;
@@ -3581,7 +3645,16 @@
 +        let key = run.frame.pc().clone();
 +        let macro_node = run.frame.body.nodes()[key.node as usize].role
 +            == NodeRole::Expression(ExpressionKind::Macro);
-+        let prepared = if macro_node {
++        let generated = if macro_node && !run.installed.contains_pc(&key) {
++            run.declarative_runtime
++                .prepare(db, &run.sources, &run.frame.body, &key)
++                .into_ready()
++                .unwrap()
++                .unwrap()
++        } else {
++            None
++        };
++        let prepared = if macro_node && generated.is_none() {
 +            contexts.iter().find_map(|context| {
 +                context
 +                    .resolve_at(
@@ -3595,7 +3668,14 @@
 +        } else {
 +            None
 +        };
-+        let id = if let Some(prepared) = prepared {
++        let id = if let Some(plan) = generated {
++            let id = run
++                .installed
++                .install_prepared(db, key, plan.recipe())
++                .unwrap();
++            run.declarative_runtime.retain(plan).unwrap();
++            id
++        } else if let Some(prepared) = prepared {
 +            if let Some(proof) = prepared.no_item {
 +                run.retain_no_item_proof(proof).unwrap();
 +            }
@@ -4435,6 +4515,153 @@
 +        db.finish_run().unwrap();
 +    }
 +}
++
++#[test]
++fn original_include_string_requires_current_sealed_source_record_and_exact_plan() {
++    use crate::{db::dependency::DependencyStamp, expand::identity::MacroIdentity};
++    let (mut db, mut run, _, _) = start_complete_crlf(2024, 100_000);
++    let before = effects(&run);
++    let keys: Vec<_> = run
++        .frame
++        .body
++        .nodes()
++        .iter()
++        .filter(|node| node.role == NodeRole::Expression(ExpressionKind::Macro))
++        .map(|node| {
++            run.frame
++                .body
++                .pc(node.id, crate::ir::pc::Phase::Entry)
++                .unwrap()
++        })
++        .collect();
++    let mut selected = None;
++    for pc in keys {
++        if let Some(plan) = run
++            .declarative_runtime
++            .prepare(&mut db, &run.sources, &run.frame.body, &pc)
++            .into_ready()
++            .unwrap()
++            .unwrap()
++        {
++            assert!(selected.is_none(), "one actual self-include producer");
++            selected = Some((pc, plan));
++        }
++    }
++    let (pc, plan) = selected.expect("original compiler include producer");
++    let recipe = plan.recipe().clone();
++    let expected = recipe
++        .recipe()
++        .dependencies
++        .iter()
++        .find_map(|dependency| {
++            let DependencyStamp::Input {
++                key: InputKey::ExpansionRecord(_),
++                ..
++            } = dependency
++            else {
++                return None;
++            };
++            let DependencyStamp::Input { key, .. } = dependency else {
++                unreachable!()
++            };
++            match db.input(key)?.as_ref() {
++                InputValue::ExpansionRecord(record) => Some(record.descriptor()),
++                _ => None,
++            }
++        })
++        .unwrap();
++    assert!(matches!(
++        expected.key.macro_identity,
++        MacroIdentity::Builtin { .. }
++    ));
++    let source = run
++        .sources
++        .iter()
++        .find(|source| {
++            source
++                .outline()
++                .items
++                .iter()
++                .filter_map(|item| item.body.as_ref())
++                .any(|handle| handle.key() == pc.body)
++        })
++        .unwrap();
++    for mode in 0..7 {
++        let mut wrong = expected.clone();
++        match mode {
++            0 => {
++                wrong.key.macro_identity = MacroIdentity::Builtin {
++                    definition: Digest::of_bytes(b"foreign builtin"),
++                }
++            }
++            1 => {
++                wrong.key.consumer_compile_env = Digest::of_bytes(b"different compile environment")
++            }
++            2 => wrong.key.invocation = Digest::of_bytes(b"different source call"),
++            3 => wrong.key.input_tokens = Digest::of_bytes(b"different original operands"),
++            4 => wrong.key.call_edition = 2015,
++            5 => wrong.key.grammar = crate::expand::identity::GrammarSlot::Statements,
++            _ => wrong.key.engine_version = Digest::of_bytes(b"different expansion engine"),
++        }
++        assert!(
++            matches!(
++                crate::engine::runtime_macros::prepare_declarative_expression(
++                    &mut db,
++                    source,
++                    &run.frame.body,
++                    &pc,
++                    &wrong,
++                ),
++                QueryPoll::Ready(Err(_))
++            ),
++            "invalid compiler binding mode {mode}"
++        );
++        assert_eq!(effects(&run), before);
++    }
++    assert!(
++        !run.declarative_runtime
++            .current_literal_plan(&db, &pc, &recipe)
++            .unwrap()
++    );
++    run.declarative_runtime.retain(plan).unwrap();
++    assert!(
++        run.declarative_runtime
++            .current_literal_plan(&db, &pc, &recipe)
++            .unwrap()
++    );
++    assert!(
++        run.declarative_runtime
++            .current_literal_plan(&Database::default(), &pc, &recipe)
++            .is_err()
++    );
++    let mut changed = recipe.recipe().clone();
++    changed.origin.expansion_ancestry.clear();
++    let changed = crate::ir::validate::verify(
++        crate::ir::recipe::RecipeDraft {
++            key: changed.key,
++            origin: changed.origin,
++            operations: changed.operations.into_vec(),
++            exits: vec![changed.exit],
++            dependencies: changed.dependencies.into_vec(),
++        },
++        &run.frame.body,
++    )
++    .unwrap();
++    assert!(
++        run.declarative_runtime
++            .current_literal_plan(&db, &pc, &changed)
++            .is_err()
++    );
++    let mut foreign = pc.clone();
++    foreign.phase = crate::ir::pc::Phase::Exit.code().unwrap();
++    assert!(
++        !run.declarative_runtime
++            .current_literal_plan(&db, &foreign, &recipe)
++            .unwrap()
++    );
++    assert_eq!(effects(&run), before);
++    db.finish_run().unwrap();
++}
 --- a/crates/lrr/src/engine/runtime_macros.rs
 +++ b/crates/lrr/src/engine/runtime_macros.rs
 @@ -35,7 +35,7 @@
@@ -4475,6 +4702,136 @@
                          }
                          None => None,
                      }
+@@ -477,11 +490,50 @@
+     };
+     let validate = || -> Result<_, Diagnostic> {
+         expected.key.validate()?;
++        let compiler = match &expected.key.macro_identity {
++            MacroIdentity::Declaration { .. } => None,
++            MacroIdentity::Builtin { definition } => {
++                let catalog =
++                    crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++                        &source.selection().outline.parse.profile,
++                    )?;
++                let selected = catalog
++                    .definitions()
++                    .find(|member| member.identity == *definition)
++                    .ok_or_else(|| {
++                        fault(
++                            "LRR-E-EXPANSION-INPUT",
++                            "reached compiler definition is not canonical",
++                        )
++                    })?;
++                let descriptor = catalog.select(selected)?.ok_or_else(|| {
++                    fault(
++                        "LRR-E-EXPANSION-INPUT",
++                        "reached compiler descriptor absent",
++                    )
++                })?;
++                use crate::expand::compile_input_identity::CompileInputKind;
++                if !matches!(
++                    descriptor.kind(),
++                    CompileInputKind::IncludeStr | CompileInputKind::IncludeBytes
++                ) || expected.key.definition_edition != selected.definition_edition
++                    || expected.key.grammar != GrammarSlot::Expression
++                {
++                    return Err(fault(
++                        "LRR-E-EXPANSION-INPUT",
++                        "reached compiler literal kind/edition/grammar differs",
++                    ));
++                }
++                Some((*definition, descriptor.kind()))
++            }
++            _ => {
++                return Err(fault(
++                    "LRR-E-EXPANSION-INPUT",
++                    "reached literal macro identity differs",
++                ));
++            }
++        };
+         if expected.wire_bytes > 32 * 1024 * 1024
+-            || !matches!(
+-                expected.key.macro_identity,
+-                MacroIdentity::Declaration { .. }
+-            )
+             || !matches!(
+                 expected.key.grammar,
+                 GrammarSlot::Expression | GrammarSlot::Statements
+@@ -566,9 +618,9 @@
+                 "reached expression invocation/input/context differs",
+             ));
+         }
+-        Ok((handle, node))
++        Ok((handle, node, compiler))
+     };
+-    let (handle, node) = match validate() {
++    let (handle, node, compiler) = match validate() {
+         Ok(value) => value,
+         Err(error) => return QueryPoll::Ready(Err(error)),
+     };
+@@ -595,6 +647,28 @@
+             return QueryPoll::Ready(Err(fault(
+                 "LRR-E-EXPANSION-INPUT",
+                 "reached expression source publication differs",
++            )));
++        }
++        dependencies.push(DependencyStamp::Input {
++            key,
++            fingerprint: value.fingerprint(),
++        });
++    }
++    if compiler.is_some() {
++        let key = InputKey::UnitCompileEnv(source.selection().outline.crate_key);
++        let Some(value) = db.input(&key) else {
++            return QueryPoll::Ready(Err(fault(
++                "LRR-E-EXPANSION-INPUT",
++                "reached compiler environment absent",
++            )));
++        };
++        if !matches!(value.as_ref(), InputValue::UnitCompileEnv(environment)
++            if environment.unit() == source.selection().outline.crate_key
++                && environment.fingerprint() == expected.key.consumer_compile_env)
++        {
++            return QueryPoll::Ready(Err(fault(
++                "LRR-E-EXPANSION-INPUT",
++                "reached compiler environment changed",
+             )));
+         }
+         dependencies.push(DependencyStamp::Input {
+@@ -686,8 +760,31 @@
+             )?);
+         }
+         let span = body.span(NodeId(pc.node))?;
+-        let output =
+-            crate::syntax::generated_expression::literal(value.as_ref(), span.clone(), pc)?;
++        let output = match compiler {
++            Some((definition, kind)) => {
++                let output = crate::syntax::generated_expression::compiler_literal(
++                    value.as_ref(),
++                    span.clone(),
++                    pc,
++                    definition,
++                )?;
++                use crate::{
++                    expand::compile_input_identity::CompileInputKind, ir::op::LiteralKind,
++                };
++                if !matches!(
++                    (kind, output.literal().kind),
++                    (CompileInputKind::IncludeStr, LiteralKind::String)
++                        | (CompileInputKind::IncludeBytes, LiteralKind::ByteString)
++                ) {
++                    return Err(fault(
++                        "LRR-E-EXPANSION-INPUT",
++                        "reached compiler output literal kind differs",
++                    ));
++                }
++                output
++            }
++            None => crate::syntax::generated_expression::literal(value.as_ref(), span.clone(), pc)?,
++        };
+         let recipe = verify_declarative_literal(
+             crate::frontend::thunks::with_temporary_scope_entry(
+                 body,
 --- /dev/null
 +++ b/crates/lrr/src/facade/byte_equality.rs
 @@ -0,0 +1,389 @@
@@ -14197,6 +14554,52 @@
          let site = ConstantPathSite {
              selection: view.selection().clone(),
              body: body.clone(),
+--- a/crates/lrr/src/syntax/generated_expression.rs
++++ b/crates/lrr/src/syntax/generated_expression.rs
+@@ -23,6 +23,25 @@
+     source: BodySpan,
+     caller: &crate::ir::pc::PcKey,
+ ) -> Result<GeneratedLiteral, Diagnostic> {
++    literal_with_identity(input, source, caller, None)
++}
++
++/// The engine supplies the canonical compiler definition only after validating
++/// the sealed original-source descriptor and current consumer environment.
++pub(crate) fn compiler_literal(
++    input: &crate::db::dependency::InputValue,
++    source: BodySpan,
++    caller: &crate::ir::pc::PcKey,
++    definition: crate::core::digest::Digest,
++) -> Result<GeneratedLiteral, Diagnostic> {
++    literal_with_identity(input, source, caller, Some(definition))
++}
++fn literal_with_identity(
++    input: &crate::db::dependency::InputValue,
++    source: BodySpan,
++    caller: &crate::ir::pc::PcKey,
++    compiler: Option<crate::core::digest::Digest>,
++) -> Result<GeneratedLiteral, Diagnostic> {
+     use crate::core::digest::StableEncode;
+     if source.body_key != caller.body || caller.phase != crate::ir::pc::Phase::Entry.code()? {
+         return Err(Diagnostic::new(
+@@ -37,10 +56,13 @@
+         ));
+     };
+     if record.key().grammar != GrammarSlot::Expression
+-        || !matches!(
+-            record.key().macro_identity,
+-            crate::expand::identity::MacroIdentity::Declaration { .. }
+-        )
++        || match (&record.key().macro_identity, compiler) {
++            (crate::expand::identity::MacroIdentity::Declaration { .. }, None) => false,
++            (crate::expand::identity::MacroIdentity::Builtin { definition }, Some(expected)) => {
++                *definition != expected
++            }
++            _ => true,
++        }
+     {
+         return Err(Diagnostic::new(
+             "LRR-E-EXPANSION-INPUT",
 --- a/crates/lrr/src/syntax/literal_match.rs
 +++ b/crates/lrr/src/syntax/literal_match.rs
 @@ -566,8 +566,15 @@
@@ -16157,7 +16560,7 @@
 +}
 --- /dev/null
 +++ b/crates/lrr/src/syntax/string_fixture_facts.rs
-@@ -0,0 +1,144 @@
+@@ -0,0 +1,174 @@
 +//! Owned stock string facts for storage/VM witnesses. Test-only parser boundary.
 +use super::{
 +    body_index::{BodyIndex, ExpressionKind, NodeRole},
@@ -16280,14 +16683,44 @@
 +        };
 +        call
 +    } else {
-+        tree.syntax()
++        // Macro token trees are intentionally opaque to ordinary AST traversal.
++        // Parse each exact operand as syntax, then bind the selected expression
++        // back to its unchanged original byte range. No expected result is used.
++        for tokens in tree
++            .syntax()
 +            .descendants()
-+            .filter_map(ast::MethodCallExpr::cast)
-+            .find(|call| {
-+                call.name_ref()
-+                    .is_some_and(|name| name.text() == "is_empty")
-+            })
-+            .unwrap()
++            .filter_map(ast::MacroCall::cast)
++            .filter_map(|call| call.token_tree())
++        {
++            let text = tokens.syntax().text().to_string();
++            let Some(inside) = text.get(1..text.len().saturating_sub(1)) else {
++                continue;
++            };
++            let operand = ast::Expr::parse(inside, ra_ap_syntax::Edition::Edition2024);
++            if !operand.errors().is_empty() {
++                continue;
++            }
++            let expression = operand.tree();
++            let Some(call) = expression
++                .syntax()
++                .descendants()
++                .filter_map(ast::MethodCallExpr::cast)
++                .find(|call| {
++                    call.name_ref()
++                        .is_some_and(|name| name.text() == "is_empty")
++                })
++            else {
++                continue;
++            };
++            assert!(call.generic_arg_list().is_none());
++            let range = call.syntax().text_range();
++            let base = usize::from(tokens.syntax().text_range().start()) + 1;
++            let original =
++                &source[base + usize::from(range.start())..base + usize::from(range.end())];
++            assert_eq!(original, call.syntax().text().to_string());
++            return original.to_string();
++        }
++        panic!("original is_empty operand absent")
 +    };
 +    assert!(
 +        call.name_ref()
@@ -17252,23 +17685,24 @@
 +    byte_activation: Option<byte_literal_frame::BoundByteLiteral>,
 +    byte_comparison: Option<crate::engine::run::byte_comparisons::AdmittedByteComparison>,
 +    byte_comparison_activation: Option<byte_comparison_frame::BoundByteComparison>,
-+    string_search_activation: Option<string_search_frame::BoundStringSearch>,
++    string_search_activation: Option<Box<[string_search_frame::BoundStringSearch]>>,
 +    macro_byte_literal: Option<crate::engine::run::byte_macro_literals::AdmittedMacroByteLiteral>,
      copy_activation: Option<aggregate_copy_frame::OpActivation>,
      cleanup_activation: Option<scope_cleanup_frame::Activation>,
      call_progress: Vec<(super::call::CallIdentity, (u32, u32))>,
-@@ -269,6 +282,10 @@
+@@ -269,6 +282,11 @@
              .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<super::call::CallStartFacts>>()))
              .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<std::sync::Arc<crate::syntax::runtime_macro_scalars::RuntimeMacroCall>>>()))
              .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<source_constant_frame::BoundSourceConstant>>()))
 +            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<byte_literal_frame::BoundByteLiteral>>()))
 +            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<crate::engine::run::byte_comparisons::AdmittedByteComparison>>()))
 +            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<byte_comparison_frame::BoundByteComparison>>()))
++            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<Box<[string_search_frame::BoundStringSearch]>>>()))
 +            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<crate::engine::run::byte_macro_literals::AdmittedMacroByteLiteral>>()))
              .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<aggregate_copy_frame::OpActivation>>()))
              .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<scope_cleanup_frame::Activation>>()))
              .and_then(|bytes| bytes.checked_add(std::mem::size_of::<crate::runtime::cell::StoreSession>()))
-@@ -405,6 +422,11 @@
+@@ -405,6 +423,11 @@
              constructor_mapping_bytes: 0,
              projection_bytes: 0,
              constant_activation: None,
@@ -17280,7 +17714,7 @@
              copy_activation: None,
              cleanup_activation: None,
              call_progress: Default::default(),
-@@ -625,6 +647,18 @@
+@@ -625,6 +648,18 @@
                          "LRR-E-OWNERSHIP",
                          "parameter reference access differs from its source view".into(),
                      ));
@@ -17299,7 +17733,7 @@
                  }
                  Self::require_borrow_source_target(Some(target.as_ref()), *actual_target, store)
              }
-@@ -1111,7 +1145,7 @@
+@@ -1111,7 +1146,7 @@
          self.context = Some(context);
          Ok(())
      }
@@ -17308,7 +17742,7 @@
      /// Abstract/composite parameter tables still require later source integration.
      pub(crate) fn install_parameter_sources(
          &mut self,
-@@ -1126,8 +1160,9 @@
+@@ -1126,8 +1161,9 @@
                          source,
                          crate::traits::term::TyTerm::Primitive(_)
                              | crate::traits::term::TyTerm::Param(_)
@@ -17320,7 +17754,7 @@
              })
          {
              return Err(invalid(
-@@ -1190,8 +1225,9 @@
+@@ -1190,8 +1226,9 @@
      fn supported_source(source: &crate::traits::term::TyTerm) -> bool {
          use crate::traits::term::TyTerm;
          matches!(source, TyTerm::Primitive(_) | TyTerm::Param(_))
@@ -17331,7 +17765,7 @@
                  || matches!(target.as_ref(), TyTerm::Array(element, crate::traits::term::ConstTerm::Value(len))
                      if matches!(element.as_ref(), TyTerm::Primitive(_)) && u32::try_from(*len).is_ok())))
              || matches!(source, TyTerm::Array(element, crate::traits::term::ConstTerm::Value(len))
-@@ -1355,11 +1391,26 @@
+@@ -1355,11 +1392,26 @@
      ) -> Option<crate::traits::term::TyTerm> {
          use crate::{ir::op::HintRecipe, traits::term::TyTerm};
          match hint {
@@ -17359,7 +17793,7 @@
              HintRecipe::ArrayPrimitive { element, len } => Some(TyTerm::Array(
                  Box::new(TyTerm::Primitive(*element)),
                  crate::traits::term::ConstTerm::Value(u64::from(*len)),
-@@ -1389,6 +1440,12 @@
+@@ -1389,6 +1441,12 @@
      }
      /// Source attachment is admitted while its current call environment still
      /// owns the tree, before cleanup retires that environment or runs effects.
@@ -17372,7 +17806,7 @@
      pub(crate) fn preflight_source_view(
          &self,
          slot: SlotId,
-@@ -3016,7 +3073,11 @@
+@@ -3016,7 +3074,11 @@
              // Named operands retain their source width or remain unresolved.
              None
          } else if comparison {
@@ -17385,7 +17819,7 @@
          } else {
              left_type.or(parent_type)
          };
-@@ -3297,7 +3358,9 @@
+@@ -3297,7 +3359,9 @@
          Ok(())
      }
      /// A primitive operator may retain only its independently admitted result
@@ -17396,7 +17830,7 @@
      pub(crate) fn preflight_primitive_operator_result(
          &self,
          destination: SlotId,
-@@ -3310,7 +3373,8 @@
+@@ -3310,7 +3374,8 @@
          if let Some(expected) = self.source_view_ref(destination)? {
              match expected {
                  TyTerm::Primitive(expected)
@@ -17406,7 +17840,7 @@
                  _ => {
                      return Err(Diagnostic::new(
                          "LRR-E-GENERIC-BINDING",
-@@ -3470,6 +3534,16 @@
+@@ -3470,6 +3535,16 @@
          hint: &crate::ir::op::HintRecipe,
      ) -> Result<(), Diagnostic> {
          let expected = match hint {
@@ -17423,7 +17857,7 @@
              crate::ir::op::HintRecipe::DefinitionParameter(ordinal) => {
                  let expected = crate::traits::term::TyTerm::Primitive(
                      self.definition_parameter_primitive(*ordinal)?,
-@@ -3765,6 +3839,59 @@
+@@ -3765,6 +3840,59 @@
              StorageContract::Unbound => None,
          };
          Ok(hint)
@@ -18279,7 +18713,7 @@
          {
 --- /dev/null
 +++ b/crates/lrr/src/vm/frame_string_search.rs
-@@ -0,0 +1,255 @@
+@@ -0,0 +1,287 @@
 +//! One run-bound str::contains operation; no query or native execution.
 +use super::*;
 +use crate::{
@@ -18301,6 +18735,13 @@
 +    prior_source: Option<TyTerm>,
 +    physical: StaticStringSearch,
 +}
++/// Reserve one activation before opcode fuel/counters or guest publication.
++/// Keeping the empty-frame representation indirect also bounds startup stack
++/// use in programs that never execute a string search.
++pub(crate) struct PreparedStringSearch {
++    physical: StaticStringSearch,
++    storage: Vec<BoundStringSearch>,
++}
 +fn shared_str(source: Option<&TyTerm>) -> bool {
 +    matches!(source, Some(TyTerm::Ref(_, false, target)) if target.as_ref() == &TyTerm::Str)
 +}
@@ -18311,20 +18752,23 @@
 +    pub(crate) fn string_search_operation_index(&self) -> Option<usize> {
 +        self.string_search_activation
 +            .as_ref()
-+            .map(|a| a.operation_index)
++            .and_then(|a| a.first().map(|entry| entry.operation_index))
 +    }
 +    fn search_metadata(
 +        &self,
 +        physical: &StaticStringSearch,
 +        source: SlotId,
 +        pattern: SlotId,
++        capacity: usize,
 +    ) -> Result<(), Diagnostic> {
 +        Self::metadata_bytes(&self.body, self.parameter_metadata_count())
 +            .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
 +            .and_then(|n| n.checked_add(self.projection_bytes))
 +            .and_then(|n| n.checked_add(self.source_field_bytes()?))
 +            .and_then(|n| n.checked_add(self.macro_byte_literal_bytes()?))
-+            .and_then(|n| n.checked_add(std::mem::size_of::<BoundStringSearch>()))
++            .and_then(|n| {
++                n.checked_add(capacity.checked_mul(std::mem::size_of::<BoundStringSearch>())?)
++            })
 +            .and_then(|n| n.checked_add(physical.metadata_bytes()))
 +            .and_then(|n| {
 +                n.checked_add(
@@ -18348,7 +18792,7 @@
 +        &self,
 +        op: &Op,
 +        store: &GuestStore,
-+    ) -> Result<Option<StaticStringSearch>, Diagnostic> {
++    ) -> Result<Option<PreparedStringSearch>, Diagnostic> {
 +        let Op::StrContains {
 +            source,
 +            pattern,
@@ -18376,17 +18820,28 @@
 +        self.preflight_primitive_operator_capacity(*destination, store)?;
 +        let physical =
 +            store.prepare_static_string_search(self.cell(*source)?, self.cell(*pattern)?)?;
-+        self.search_metadata(&physical, *source, *pattern)?;
-+        Ok(Some(physical))
++        let mut storage = Vec::new();
++        storage
++            .try_reserve_exact(1)
++            .map_err(|_| crate::runtime::arena::resource())?;
++        self.search_metadata(&physical, *source, *pattern, storage.capacity())?;
++        Ok(Some(PreparedStringSearch { physical, storage }))
 +    }
 +    pub(crate) fn begin_string_search(
 +        &mut self,
 +        index: usize,
 +        op: &Op,
-+        physical: StaticStringSearch,
++        prepared: PreparedStringSearch,
 +        store: &mut GuestStore,
 +    ) -> Result<(), Diagnostic> {
++        let PreparedStringSearch {
++            physical,
++            mut storage,
++        } = prepared;
 +        self.require_store(store)?;
++        if !storage.is_empty() || storage.capacity() < 1 {
++            return Err(invalid("str search activation reservation differs"));
++        }
 +        if self.status != FrameStatus::Running
 +            || self.string_search_activation.is_some()
 +            || self.byte_activation.is_some()
@@ -18422,7 +18877,7 @@
 +            store,
 +        )?;
 +        self.preflight_primitive_operator_capacity(*destination, store)?;
-+        self.search_metadata(&physical, *source, *pattern)?;
++        self.search_metadata(&physical, *source, *pattern, storage.capacity())?;
 +        let receiver_source = self
 +            .source_view(*source)?
 +            .ok_or_else(|| invalid("str receiver source absent"))?;
@@ -18432,7 +18887,7 @@
 +        let prior_source = self.source_view(*destination)?;
 +        self.reserve_primitive_operator_result(*destination, store)?;
 +        let cell = self.prepare_write(*destination, store)?;
-+        self.string_search_activation = Some(BoundStringSearch {
++        storage.push(BoundStringSearch {
 +            pc: self.pc.clone(),
 +            operation_index: index,
 +            operation: op.clone(),
@@ -18446,6 +18901,7 @@
 +            prior_source,
 +            physical,
 +        });
++        self.string_search_activation = Some(storage.into_boxed_slice());
 +        Ok(())
 +    }
 +    pub(crate) fn check_string_search_activation(
@@ -18463,10 +18919,13 @@
 +        else {
 +            return Err(invalid("str search resumed at a different operation kind"));
 +        };
-+        let a = self
++        let storage = self
 +            .string_search_activation
 +            .as_ref()
 +            .ok_or_else(|| invalid("str search continuation absent"))?;
++        let [a] = storage.as_ref() else {
++            return Err(invalid("str search continuation count differs"));
++        };
 +        if self.status != FrameStatus::Running
 +            || self.pc != a.pc
 +            || index != a.operation_index
@@ -18505,18 +18964,25 @@
 +        store: &mut GuestStore,
 +    ) -> Result<bool, Diagnostic> {
 +        let destination = self.check_string_search_activation(index, op, store)?;
-+        let mut active = self
++        let storage = self
 +            .string_search_activation
-+            .take()
++            .as_mut()
 +            .ok_or_else(|| invalid("str search continuation disappeared"))?;
++        let [active] = storage.as_mut() else {
++            return Err(invalid("str search continuation count differs"));
++        };
 +        let poll = store.advance_static_string_search(&mut active.physical, &mut self.fuel);
 +        self.counters.fuel_used = self.fuel.snapshot().used;
++        // A refusal or completion retires the one cursor, including allocation.
++        // Dispatch retains that same non-cloneable cursor and storage in place.
++        if !matches!(poll, Ok(StaticStringSearchPoll::Dispatch { .. })) {
++            self.string_search_activation = None;
++        }
 +        match poll? {
 +            StaticStringSearchPoll::Dispatch { pairs } => {
 +                if pairs > 256 {
 +                    return Err(invalid("str search exceeded dispatch pair bound"));
 +                }
-+                self.string_search_activation = Some(active);
 +                Ok(false)
 +            }
 +            StaticStringSearchPoll::Complete { contains, pairs } => {
@@ -20796,7 +21262,7 @@
        ],
        "acceptance_contract": "array length constant, recursive bounded const fn, cycle, cold effect branch, reached forbidden effect, and two uses with independently mutable guest arrays. Constant memo contains no guest handles.",
        "commands": [],
-@@ -6399,10 +6401,24 @@
+@@ -6399,10 +6401,26 @@
        "title": "String and formatting",
        "status": "not_started",
        "commit_id": null,
@@ -20807,7 +21273,8 @@
 +        "unchanged_crlf_string_entire_main_including_source_contains_completes_all_editions",
 +        "original_contains_argument_result_and_resumed_cancel_refuse_without_publication",
 +        "original_crlf_source_search_is_bounded_fuel_accounted_and_read_only_all_editions",
-+        "original_search_refuses_nonstring_roots_cancelled_empty_and_faulted_cursor_replay"
++        "original_search_refuses_nonstring_roots_cancelled_empty_and_faulted_cursor_replay",
++        "original_include_string_requires_current_sealed_source_record_and_exact_plan"
 +      ],
        "acceptance_contract": "multibyte len/char/slice cases; invalid boundary panic/error; formatter unsupported spec; capture-name lookup; formatting never moves String; failure-only assert message remains lazy.",
        "commands": [],
@@ -20818,12 +21285,13 @@
 +        "T061-STR-CONTAINS-SOURCE",
 +        "T061-STR-CONTAINS-REFUSAL",
 +        "T061-STR-SEARCH-PHYSICAL",
-+        "T061-STR-SEARCH-LIFECYCLE"
++        "T061-STR-SEARCH-LIFECYCLE",
++        "T061-STR-INCLUDE-SEALED"
 +      ],
        "artifact_paths": [],
        "release_complete": false,
        "current_string_numeric_bounds_candidate": {
-@@ -6448,7 +6464,39 @@
+@@ -6448,7 +6466,44 @@
          "compose_with_empty_parent_before_validation": true,
          "full_fixture_passes_added": 0,
          "canonical_promotion": false
@@ -20859,12 +21327,17 @@
 +          "fixture_id": "T061-STR-SEARCH-LIFECYCLE",
 +          "status": "pending",
 +          "evidence_paths": []
++        },
++        {
++          "fixture_id": "T061-STR-INCLUDE-SEALED",
++          "status": "pending",
++          "evidence_paths": []
 +        }
 +      ]
      },
      {
        "id": "T062",
-@@ -7129,7 +7177,7 @@
+@@ -7129,7 +7184,7 @@
          "wildcard_condition_patterns_evaluate_once_without_binding_or_copying_source",
          "condition_bindings_do_not_leak_into_else_following_statements_or_own_scrutinee",
          "irrefutable_condition_test_preserves_scalar_source_until_move_commit",

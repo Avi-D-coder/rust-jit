@@ -1,0 +1,3 @@
+# Charge the frame's optional search pointer
+
+Follow-on to root-string-search-frame-storage-v1: Frame::metadata_bytes explicitly enumerates activation fields. Add the optional boxed search slice pointer to that fixed accounting; the storage packet already checks actual reserved activation capacity and payload metadata before opcode entry. The earlier inline search field was absent from this manual list. No stack/test/fuel/quota limit changes. Root identified this during static review before runtime validation; V106 strict/compilation evidence remains separate. Validate the complete pair against the unchanged bounded-stack and search lifecycle/refusal controls.

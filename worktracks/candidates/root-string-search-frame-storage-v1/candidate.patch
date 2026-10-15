@@ -1,0 +1,164 @@
+--- a/crates/lrr/src/vm/frame.rs
++++ b/crates/lrr/src/vm/frame.rs
+@@ -209,7 +209,7 @@
+     byte_activation: Option<byte_literal_frame::BoundByteLiteral>,
+     byte_comparison: Option<crate::engine::run::byte_comparisons::AdmittedByteComparison>,
+     byte_comparison_activation: Option<byte_comparison_frame::BoundByteComparison>,
+-    string_search_activation: Option<string_search_frame::BoundStringSearch>,
++    string_search_activation: Option<Box<[string_search_frame::BoundStringSearch]>>,
+     macro_byte_literal: Option<crate::engine::run::byte_macro_literals::AdmittedMacroByteLiteral>,
+     copy_activation: Option<aggregate_copy_frame::OpActivation>,
+     cleanup_activation: Option<scope_cleanup_frame::Activation>,
+--- a/crates/lrr/src/vm/frame_string_search.rs
++++ b/crates/lrr/src/vm/frame_string_search.rs
+@@ -19,6 +19,13 @@
+     prior_source: Option<TyTerm>,
+     physical: StaticStringSearch,
+ }
++/// Reserve one activation before opcode fuel/counters or guest publication.
++/// Keeping the empty-frame representation indirect also bounds startup stack
++/// use in programs that never execute a string search.
++pub(crate) struct PreparedStringSearch {
++    physical: StaticStringSearch,
++    storage: Vec<BoundStringSearch>,
++}
+ fn shared_str(source: Option<&TyTerm>) -> bool {
+     matches!(source, Some(TyTerm::Ref(_, false, target)) if target.as_ref() == &TyTerm::Str)
+ }
+@@ -29,20 +36,23 @@
+     pub(crate) fn string_search_operation_index(&self) -> Option<usize> {
+         self.string_search_activation
+             .as_ref()
+-            .map(|a| a.operation_index)
++            .and_then(|a| a.first().map(|entry| entry.operation_index))
+     }
+     fn search_metadata(
+         &self,
+         physical: &StaticStringSearch,
+         source: SlotId,
+         pattern: SlotId,
++        capacity: usize,
+     ) -> Result<(), Diagnostic> {
+         Self::metadata_bytes(&self.body, self.parameter_metadata_count())
+             .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
+             .and_then(|n| n.checked_add(self.projection_bytes))
+             .and_then(|n| n.checked_add(self.source_field_bytes()?))
+             .and_then(|n| n.checked_add(self.macro_byte_literal_bytes()?))
+-            .and_then(|n| n.checked_add(std::mem::size_of::<BoundStringSearch>()))
++            .and_then(|n| {
++                n.checked_add(capacity.checked_mul(std::mem::size_of::<BoundStringSearch>())?)
++            })
+             .and_then(|n| n.checked_add(physical.metadata_bytes()))
+             .and_then(|n| {
+                 n.checked_add(
+@@ -66,7 +76,7 @@
+         &self,
+         op: &Op,
+         store: &GuestStore,
+-    ) -> Result<Option<StaticStringSearch>, Diagnostic> {
++    ) -> Result<Option<PreparedStringSearch>, Diagnostic> {
+         let Op::StrContains {
+             source,
+             pattern,
+@@ -94,17 +104,28 @@
+         self.preflight_primitive_operator_capacity(*destination, store)?;
+         let physical =
+             store.prepare_static_string_search(self.cell(*source)?, self.cell(*pattern)?)?;
+-        self.search_metadata(&physical, *source, *pattern)?;
+-        Ok(Some(physical))
++        let mut storage = Vec::new();
++        storage
++            .try_reserve_exact(1)
++            .map_err(|_| crate::runtime::arena::resource())?;
++        self.search_metadata(&physical, *source, *pattern, storage.capacity())?;
++        Ok(Some(PreparedStringSearch { physical, storage }))
+     }
+     pub(crate) fn begin_string_search(
+         &mut self,
+         index: usize,
+         op: &Op,
+-        physical: StaticStringSearch,
++        prepared: PreparedStringSearch,
+         store: &mut GuestStore,
+     ) -> Result<(), Diagnostic> {
++        let PreparedStringSearch {
++            physical,
++            mut storage,
++        } = prepared;
+         self.require_store(store)?;
++        if !storage.is_empty() || storage.capacity() < 1 {
++            return Err(invalid("str search activation reservation differs"));
++        }
+         if self.status != FrameStatus::Running
+             || self.string_search_activation.is_some()
+             || self.byte_activation.is_some()
+@@ -140,7 +161,7 @@
+             store,
+         )?;
+         self.preflight_primitive_operator_capacity(*destination, store)?;
+-        self.search_metadata(&physical, *source, *pattern)?;
++        self.search_metadata(&physical, *source, *pattern, storage.capacity())?;
+         let receiver_source = self
+             .source_view(*source)?
+             .ok_or_else(|| invalid("str receiver source absent"))?;
+@@ -150,7 +171,7 @@
+         let prior_source = self.source_view(*destination)?;
+         self.reserve_primitive_operator_result(*destination, store)?;
+         let cell = self.prepare_write(*destination, store)?;
+-        self.string_search_activation = Some(BoundStringSearch {
++        storage.push(BoundStringSearch {
+             pc: self.pc.clone(),
+             operation_index: index,
+             operation: op.clone(),
+@@ -164,6 +185,7 @@
+             prior_source,
+             physical,
+         });
++        self.string_search_activation = Some(storage.into_boxed_slice());
+         Ok(())
+     }
+     pub(crate) fn check_string_search_activation(
+@@ -181,10 +203,13 @@
+         else {
+             return Err(invalid("str search resumed at a different operation kind"));
+         };
+-        let a = self
++        let storage = self
+             .string_search_activation
+             .as_ref()
+             .ok_or_else(|| invalid("str search continuation absent"))?;
++        let [a] = storage.as_ref() else {
++            return Err(invalid("str search continuation count differs"));
++        };
+         if self.status != FrameStatus::Running
+             || self.pc != a.pc
+             || index != a.operation_index
+@@ -223,18 +248,25 @@
+         store: &mut GuestStore,
+     ) -> Result<bool, Diagnostic> {
+         let destination = self.check_string_search_activation(index, op, store)?;
+-        let mut active = self
++        let storage = self
+             .string_search_activation
+-            .take()
++            .as_mut()
+             .ok_or_else(|| invalid("str search continuation disappeared"))?;
++        let [active] = storage.as_mut() else {
++            return Err(invalid("str search continuation count differs"));
++        };
+         let poll = store.advance_static_string_search(&mut active.physical, &mut self.fuel);
+         self.counters.fuel_used = self.fuel.snapshot().used;
++        // A refusal or completion retires the one cursor, including allocation.
++        // Dispatch retains that same non-cloneable cursor and storage in place.
++        if !matches!(poll, Ok(StaticStringSearchPoll::Dispatch { .. })) {
++            self.string_search_activation = None;
++        }
+         match poll? {
+             StaticStringSearchPoll::Dispatch { pairs } => {
+                 if pairs > 256 {
+                     return Err(invalid("str search exceeded dispatch pair bound"));
+                 }
+-                self.string_search_activation = Some(active);
+                 Ok(false)
+             }
+             StaticStringSearchPoll::Complete { contains, pairs } => {

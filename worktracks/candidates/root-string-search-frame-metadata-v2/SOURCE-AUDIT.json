@@ -1,0 +1,19 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T032",
+    "T061"
+  ],
+  "source_baseline": "340c8ebf2314d74ab06bcc2642a389a69ba3053a88a6724f9a3c0ec57bc5c29f",
+  "patch_sha256": "ee6dc8ce394ab03458e22c3db3c35a100e82afa34dd7f0a192bc04f95cdc7c08",
+  "files": [
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "before_sha256": "b78f9f4d2c99855532fb2009e1f9c27a8ae1c8b999776ac442db3393a583fb56",
+      "after_sha256": "5b1634c88d37346c1dfb0018298452d527edc77e6c57e7c9bac2126751e6577f"
+    }
+  ],
+  "full_milestone_passed": false,
+  "canonical_promotion": false
+}
