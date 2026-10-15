@@ -1,0 +1,58 @@
+{
+  "status": "source_only_uncompiled_unexecuted_held",
+  "at": "2026-10-15T17:33:04.981519+00:00",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T050"
+  ],
+  "source_baseline": "V108 fdde8eac plus macro-constant4c7e676d then macro-cast0ba614db",
+  "requires_candidate_patch_sha256": "0ba614dbbbf6937076f7aa3c4022b6a7b77e9849ef247571f40aaa3b98ae7f75",
+  "patch_sha256": "5d5de90fb5863400db05276b514815edfc2e4e7f23528c2a8e2d9d91670cbb56",
+  "files": [
+    {
+      "path": "compat/fixtures.toml",
+      "before_sha256": "d4b73841c212ade12e07fc9e6f6ceb47433dc25a7355a90c5ed200fe2a737e2c",
+      "after_sha256": "acacd8d5bcba17becd9e3a467353af55e2b5516373a7b140ebbc3955afe9c616",
+      "bytes": 416341
+    },
+    {
+      "path": "crates/lrr/src/engine/run_byte_macro_literals.rs",
+      "before_sha256": "f8c342e8aa7ce0e405124dbebdf0102779baa82efdf70b4a896a29c70edd2e30",
+      "after_sha256": "b4d85a3de55659b5388f02badd62e2a5a088095c4a1bcf6c0552b7369c27dc4a",
+      "bytes": 8754
+    },
+    {
+      "path": "crates/lrr/src/engine/run_match_local_literal_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "b720c46c7a124268389f71ca4ce5741bcaf2f4774a3bff65274c8ee673a25df4",
+      "bytes": 1653
+    },
+    {
+      "path": "crates/lrr/src/syntax/literal_match.rs",
+      "before_sha256": "2c611043bdd88da1e49a22ba51d6bbe8da3215d33926716ee97567dc48a9e25e",
+      "after_sha256": "524b2c15ef8beb2eae020c1dca4ce549bb4dd093cf94236b7ab4a64e0299ddd2",
+      "bytes": 53379
+    },
+    {
+      "path": "crates/lrr/src/syntax/scalar_match_local_literal.rs",
+      "before_sha256": null,
+      "after_sha256": "ab071d6b36a4b479246f25df037cba20f3a19e473dee3a4c3dd1f6df1c990d52",
+      "bytes": 3202
+    },
+    {
+      "path": "docs/tasks.json",
+      "before_sha256": "0fc6c15243b45f4125352e0b9cd805e93f196a4b5e0ad40317dbd01b34ad8dd2",
+      "after_sha256": "fc874a9d00b8c0e9bfb61b1abcc64bac5163927614bd3d59a6bba6e35724de9b",
+      "bytes": 1432539
+    }
+  ],
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "exact_replay_zero_offset_zero_fuzz": true
+  },
+  "new_host_bodies_pending": 2,
+  "raw_originals_changed": 0,
+  "full_milestone_passed": false,
+  "canonical_promotion": false,
+  "full_fixture_passes_added": 0
+}

@@ -1,0 +1,220 @@
+--- a/compat/fixtures.toml
++++ b/compat/fixtures.toml
+@@ -12256,3 +12256,13 @@
+ id = "T051-MACRO-CHAR-MAIN"
+ path = "crates/lrr/src/engine/run_macro_cast_context_tests.rs"
+ test = "unchanged_u8_character_cast_entire_main_completes_once_all_editions"
++
++[[fixture]]
++id = "T050-LOCAL-LITERAL-MAIN"
++path = "crates/lrr/src/engine/run_match_local_literal_tests.rs"
++test = "unchanged_guarded_char_local_entire_main_takes_second_arm_all_editions"
++
++[[fixture]]
++id = "T050-LOCAL-LITERAL-SOURCE"
++path = "crates/lrr/src/syntax/scalar_match_local_literal.rs"
++test = "intrinsic_local_source_does_not_default_unresolved_numbers_or_follow_effects"
+--- a/crates/lrr/src/engine/run_byte_macro_literals.rs
++++ b/crates/lrr/src/engine/run_byte_macro_literals.rs
+@@ -222,3 +222,7 @@
+ #[cfg(test)]
+ #[path = "run_macro_cast_context_tests.rs"]
+ mod cast_context_tests;
++
++#[cfg(test)]
++#[path = "run_match_local_literal_tests.rs"]
++mod match_local_literal_tests;
+--- /dev/null
++++ b/crates/lrr/src/engine/run_match_local_literal_tests.rs
+@@ -0,0 +1,33 @@
++//! Complete unchanged upstream runtime contract, separate from LRR source controls.
++use super::*;
++const ORIGINAL: &str =
++    include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/match/issue-26251.rs");
++#[test]
++fn unchanged_guarded_char_local_entire_main_takes_second_arm_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, mut run, macros, _) = tests::start_source(ORIGINAL, edition, 10_000);
++        let contexts = macros.contexts().unwrap();
++        let report = match run.poll_with_runtime_macros(&mut db, &contexts) {
++            RunPoll::Completed(report) => report,
++            RunPoll::Fault(error) => panic!("original char local main/{edition}: {error}"),
++            RunPoll::NeedInput(input) => panic!("original char local main/{edition}: {input:?}"),
++            RunPoll::Panicked(report) => panic!("original char local main/{edition}: {report:?}"),
++        };
++        assert!(matches!(report.value, ValueSummary::Unit));
++        assert_eq!(report.opcode_counters.started_by_opcode[26], 1);
++        assert_eq!(report.opcode_counters.started_by_opcode[10], 4);
++        assert_eq!(report.opcode_counters.started_by_opcode[25], 0);
++        assert_eq!(
++            report.opcode_counters.operations_started,
++            report.opcode_counters.operations_completed
++        );
++        assert!(run.frame.active_scopes().is_empty());
++        let inventory = run.store.owner_inventory_for_test();
++        assert!(
++            inventory.objects.is_empty()
++                && inventory.guards.is_empty()
++                && inventory.tickets.is_empty()
++        );
++        db.finish_run().unwrap();
++    }
++}
+--- a/crates/lrr/src/syntax/literal_match.rs
++++ b/crates/lrr/src/syntax/literal_match.rs
+@@ -1,4 +1,6 @@
+ //! Reached closed scalar match phases. No queries, descriptors or guest effects.
++#[path = "scalar_match_local_literal.rs"]
++mod local_literal;
+ #[path = "scalar_match_ranges.rs"]
+ mod ranges;
+ use super::{draft, error, local_binding, parameter_at, primitive_cast_target, return_pc};
+@@ -248,10 +250,18 @@
+                     if binding.ref_token().is_some() || binding.at_token().is_some() {
+                         return Ok(None);
+                     }
+-                    return Ok(
+-                        primitive_cast_target::resolve(parsed, index, statement.ty())?
+-                            .filter(|p| supported(*p)),
+-                    );
++                    return if statement.ty().is_some() {
++                        Ok(
++                            primitive_cast_target::resolve(parsed, index, statement.ty())?
++                                .filter(|p| supported(*p)),
++                        )
++                    } else if let Some(initializer) = statement.initializer() {
++                        // Only an intrinsic literal or explicit suffix establishes
++                        // source type here. Later patterns never type the local.
++                        local_literal::intrinsic_initializer(&initializer, work)
++                    } else {
++                        Ok(None)
++                    };
+                 }
+                 None
+             } else {
+--- /dev/null
++++ b/crates/lrr/src/syntax/scalar_match_local_literal.rs
+@@ -0,0 +1,84 @@
++//! Intrinsic source kind of an already declared local initializer; no values,
++//! descriptors, query work or inference from later pattern expectations.
++use super::*;
++pub(super) fn intrinsic_initializer(
++    expression: &ast::Expr,
++    work: &mut usize,
++) -> Result<Option<PrimitiveType>, Diagnostic> {
++    let mut selected = expression.clone();
++    for _ in 0..256 {
++        charge(work)?;
++        if selected
++            .syntax()
++            .children()
++            .any(|node| ast::Attr::can_cast(node.kind()))
++        {
++            return Ok(None);
++        }
++        match selected {
++            ast::Expr::ParenExpr(group) => {
++                let Some(inner) = group.expr() else {
++                    return Ok(None);
++                };
++                selected = inner;
++            }
++            ast::Expr::Literal(literal) => {
++                return Ok(match literal.token().kind() {
++                    SyntaxKind::TRUE_KW | SyntaxKind::FALSE_KW => Some(PrimitiveType::Bool),
++                    SyntaxKind::CHAR => Some(PrimitiveType::Char),
++                    SyntaxKind::BYTE => Some(PrimitiveType::U8),
++                    SyntaxKind::INT_NUMBER => ast::IntNumber::cast(literal.token())
++                        .and_then(|number| number.suffix().and_then(primitive))
++                        .or_else(|| ranges::floating_context(&literal, None)),
++                    SyntaxKind::FLOAT_NUMBER => {
++                        ast::FloatNumber::cast(literal.token()).and_then(|number| {
++                            number.suffix().and_then(|suffix| match suffix {
++                                "f32" => Some(PrimitiveType::F32),
++                                "f64" => Some(PrimitiveType::F64),
++                                _ => None,
++                            })
++                        })
++                    }
++                    _ => None,
++                });
++            }
++            _ => return Ok(None),
++        }
++    }
++    Err(limit())
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn intrinsic_local_source_does_not_default_unresolved_numbers_or_follow_effects() {
++        for (text, expected) in [
++            ("'a'", Some(PrimitiveType::Char)),
++            ("((b'a'))", Some(PrimitiveType::U8)),
++            ("true", Some(PrimitiveType::Bool)),
++            ("1u16", Some(PrimitiveType::U16)),
++            ("1f32", Some(PrimitiveType::F32)),
++            ("1.0f64", Some(PrimitiveType::F64)),
++            ("1", None),
++            ("1.0", None),
++            ("call()", None),
++            ("named", None),
++            ("1+2", None),
++            ("1 as u8", None),
++            ("{ 'a' }", None),
++        ] {
++            let parsed = ast::Expr::parse(text, ra_ap_syntax::Edition::Edition2024);
++            assert!(parsed.errors().is_empty());
++            let mut work = 0;
++            assert_eq!(
++                intrinsic_initializer(&parsed.tree(), &mut work).unwrap(),
++                expected,
++                "{text}"
++            );
++            assert!(work > 0 && work <= 256);
++        }
++        let parsed = ast::Expr::parse("'a'", ra_ap_syntax::Edition::Edition2024);
++        assert!(intrinsic_initializer(&parsed.tree(), &mut 100_000).is_err());
++    }
++}
+--- a/docs/tasks.json
++++ b/docs/tasks.json
+@@ -5583,7 +5583,9 @@
+         "match_exhaustion_cannot_be_reminted_by_copying_a_phase_slot_or_source_range",
+         "unchanged_original_byte_equality_and_range_have_exact_u8_thunks_all_editions",
+         "unchanged_original_byte_matches_execute_only_their_actual_scoped_components_all_editions",
+-        "byte_range_unknown_or_wrong_family_upper_is_cold_until_lower_matches"
++        "byte_range_unknown_or_wrong_family_upper_is_cold_until_lower_matches",
++        "unchanged_guarded_char_local_entire_main_takes_second_arm_all_editions",
++        "intrinsic_local_source_does_not_default_unresolved_numbers_or_follow_effects"
+       ],
+       "acceptance_contract": "failed arms preserve scrutinee ownership; true arms move once; conflicting moves fault before commit; or-pattern names/modes and binding order validate; overlapping alternatives can rerun false guards without replaying scrutinee evaluation.",
+       "commands": [],
+@@ -5613,7 +5615,9 @@
+         "T050-NEGATIVE-RANGE-CONTROL-16",
+         "T050-BYTE-SCALAR-05",
+         "T050-BYTE-SCALAR-06",
+-        "T050-BYTE-SCALAR-07"
++        "T050-BYTE-SCALAR-07",
++        "T050-LOCAL-LITERAL-MAIN",
++        "T050-LOCAL-LITERAL-SOURCE"
+       ],
+       "artifact_paths": [
+         "artifacts/macos-first/root-match-integration-v1/validation-v6/terminal.json",
+@@ -5634,6 +5638,14 @@
+         "status": "component_integrated_full_milestone_pending",
+         "evidence_path": "worktracks/evidence/2026-10-14-byte-scalar-components.json",
+         "scope": "V48actualrebuilt8controls+strict; actual2unchangedMatchcomponents only,0whole-byte-main/fullfixture passes. Stale artifact/assembly attempts retained."
++      },
++      "current_intrinsic_local_match_candidate": {
++        "status": "source_only_uncompiled_unexecuted_held",
++        "source_candidate": "worktracks/candidates/root-match-local-literal-source-v1/README.md",
++        "scope": "Primitive source kind from intrinsic or explicitly suffixed original local initializer; no numerical fallback, cold value evaluation or descriptor inference",
++        "full_milestone_passed": false,
++        "canonical_promotion": false,
++        "full_fixture_passes_added": 0
+       }
+     },
+     {
