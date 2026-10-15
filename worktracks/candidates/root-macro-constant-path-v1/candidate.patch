@@ -1,0 +1,1889 @@
+--- a/compat/fixtures.toml
++++ b/compat/fixtures.toml
+@@ -12226,3 +12226,23 @@
+ id = "T061-STR-INCLUDE-SEALED"
+ path = "crates/lrr/src/engine/run_string_macro_literal_tests.rs"
+ test = "original_include_string_requires_current_sealed_source_record_and_exact_plan"
++
++[[fixture]]
++id = "T054-MACRO-CONST-MAIN"
++path = "crates/lrr/src/cli/macro_constant_runtime_tests.rs"
++test = "unchanged_nested_const_fn_entire_main_resolves_assertion_constant_all_editions"
++
++[[fixture]]
++id = "T054-MACRO-CONST-SOURCE"
++path = "crates/lrr/src/syntax/runtime_macro_constant_paths.rs"
++test = "unchanged_constant_operand_keeps_original_span_and_rejects_foreign_binding"
++
++[[fixture]]
++id = "T054-MACRO-CONST-SHADOW"
++path = "crates/lrr/src/syntax/runtime_macro_constant_paths.rs"
++test = "local_shadow_remains_a_lexical_read_and_does_not_mint_constant_site"
++
++[[fixture]]
++id = "T054-MACRO-CONST-IR"
++path = "crates/lrr/src/syntax/runtime_macro_constant_paths.rs"
++test = "macro_constant_recipe_requires_closed_site_and_exact_origin_slots_exits_and_query"
+--- /dev/null
++++ b/crates/lrr/src/cli/macro_constant_runtime_tests.rs
+@@ -0,0 +1,110 @@
++//! Whole unchanged upstream runtime witness; no native guest compilation.
++use super::*;
++use crate::{
++    db::{key::QueryKey, poll::QueryPoll},
++    engine::{
++        run::{RunMachine, RunPoll, ValueSummary},
++        standalone_macros::CompletedStandaloneRuntimeMacros,
++    },
++    ir::op::SOURCE_CONSTANT_OPCODE,
++};
++#[test]
++fn unchanged_nested_const_fn_entire_main_resolves_assertion_constant_all_editions() {
++    let path = std::path::Path::new(concat!(
++        env!("CARGO_MANIFEST_DIR"),
++        "/../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs"
++    ));
++    for edition in [2015, 2018, 2021, 2024] {
++        let (prepared, view, sources, mut snapshot) =
++            super::super::capture_standalone_edition(path, false, edition).unwrap();
++        let (compiler, prepared, view, sources) =
++            super::super::compile_inputs::PreparedCompileInputs::prepare(
++                path, prepared, view, sources,
++            )
++            .unwrap();
++        let mut db = Database::default();
++        db.trace.detailed = true;
++        prepared.publish(&mut db).unwrap();
++        db.begin_expansion_epoch(1).unwrap();
++        let constant = view
++            .outline()
++            .items
++            .iter()
++            .find(|item| item.def_key.declared_name == "X")
++            .unwrap()
++            .def_key
++            .fingerprint();
++        let mut discovery = SourceDiscovery::new(
++            sources,
++            view.outline().root_scope.clone(),
++            Namespace::Value,
++            view.selection().outline.crate_key,
++            1,
++        )
++        .unwrap()
++        .with_declarative_compiler(
++            compiler.environment_identity(),
++            crate::expand::source_declarative::engine_version(),
++            compiler.catalog.clone(),
++        )
++        .unwrap();
++        compiler
++            .discover_diagnostic(&mut discovery, &mut db, &mut snapshot)
++            .unwrap();
++        let macros = CompletedStandaloneRuntimeMacros::from_discovery(&view, &discovery).unwrap();
++        let contexts = macros.contexts().unwrap();
++        discovery.publish(&mut db).unwrap();
++        let callable = match discovery.entry_function(&mut db, "main") {
++            QueryPoll::Ready(Ok(crate::frontend::callables::CallSelection::Source(callable))) => {
++                callable
++            }
++            other => panic!("original main selection/{edition}: {other:?}"),
++        };
++        callable.revalidate(&mut db).unwrap();
++        let body = callable.body().unwrap().key();
++        let mut service = ReachedScopes::from_discovery(&discovery).unwrap();
++        let mut run = RunMachine::start_with_discovery(&mut db, body, 10_000, discovery)
++            .into_ready()
++            .unwrap()
++            .unwrap();
++        db.begin_run().unwrap();
++        let report =
++            match run.poll_with_runtime_macros_servicing(&mut db, &contexts, &mut |db, request| {
++                service.fulfill(request, db, &compiler, &mut snapshot)
++            }) {
++                RunPoll::Completed(report) => report,
++                RunPoll::Fault(error) => panic!("original nested constant main/{edition}: {error}"),
++                RunPoll::NeedInput(input) => {
++                    panic!("original nested constant main/{edition}: {input:?}")
++                }
++                RunPoll::Panicked(report) => {
++                    panic!("original nested constant main/{edition}: {report:?}")
++                }
++            };
++        assert!(matches!(report.value, ValueSummary::Unit));
++        assert_eq!(
++            report.opcode_counters.started_by_opcode[usize::from(SOURCE_CONSTANT_OPCODE)],
++            1
++        );
++        assert_eq!(report.opcode_counters.started_by_opcode[26], 1);
++        assert_eq!(
++            report.opcode_counters.operations_started,
++            report.opcode_counters.operations_completed
++        );
++        assert!(db.trace.events.iter().any(
++            |event| matches!(&event.key, QueryKey::Constant(key) if key.definition() == constant)
++        ));
++        assert!(service.fulfilled.iter().any(|key| matches!(
++            key.domain,
++            SealDomain::Scope {
++                namespace: Namespace::Type,
++                ..
++            }
++        )));
++        assert!(matches!(
++            run.poll_with_runtime_macros(&mut db, &contexts),
++            RunPoll::Fault(_)
++        ));
++        db.finish_run().unwrap();
++    }
++}
+--- a/crates/lrr/src/cli/reached_scopes.rs
++++ b/crates/lrr/src/cli/reached_scopes.rs
+@@ -221,3 +221,7 @@
+         );
+     }
+ }
++
++#[cfg(test)]
++#[path = "macro_constant_runtime_tests.rs"]
++mod macro_constant_runtime_tests;
+--- a/crates/lrr/src/engine/constant_array_publication.rs
++++ b/crates/lrr/src/engine/constant_array_publication.rs
+@@ -19,6 +19,7 @@
+     source::changes::PreparedSourceView,
+     syntax::{
+         body_index::{BodyIndex, ExpressionKind, NodeRole},
++        runtime_macro_scalars::RuntimeMacroConstantPath,
+         scalar_range_constant_sites::ScalarRangeConstantSite,
+         spans::BodySpan,
+     },
+@@ -33,6 +34,7 @@
+     SelectedSource {
+         path: &'a ConstantPathSelection,
+         range: Option<&'a ScalarRangeConstantSite>,
++        macro_site: Option<&'a RuntimeMacroConstantPath>,
+         binding: SelectedGuestConstantType<'a, 'a>,
+         caller: &'a PreparedSourceView,
+         views: &'a [&'a PreparedSourceView],
+@@ -64,10 +66,16 @@
+                 caller,
+                 views,
+                 range,
++                macro_site,
+             } => {
+                 binding.revalidate(store)?;
+                 if let Some(site) = range {
+                     site.require_source(caller)?;
++                }
++                if let Some(site) = macro_site {
++                    if site.source() != &caller.selection().outline.parse {
++                        return Err(crate::runtime::arena::stale());
++                    }
+                 }
+                 path.revalidate(binding.construction().database(), caller, views)
+             }
+@@ -89,7 +97,7 @@
+             destination,
+             caller,
+             views,
+-            (path, None),
++            (path, None, None),
+             binding,
+             store,
+         )
+@@ -108,7 +116,26 @@
+             destination,
+             caller,
+             views,
+-            (selected.0, Some(selected.1)),
++            (selected.0, Some(selected.1), None),
++            binding,
++            store,
++        )
++    }
++    pub(crate) fn capture_macro_for_dispatch(
++        frame: &crate::vm::frame::Frame,
++        destination: SlotId,
++        caller: &'a PreparedSourceView,
++        views: &'a [&'a PreparedSourceView],
++        selected: (&'a ConstantPathSelection, &'a RuntimeMacroConstantPath),
++        binding: SelectedGuestConstantType<'a, 'a>,
++        store: &GuestStore,
++    ) -> Result<Self, Diagnostic> {
++        Self::capture_source(
++            frame,
++            destination,
++            caller,
++            views,
++            (selected.0, None, Some(selected.1)),
+             binding,
+             store,
+         )
+@@ -121,11 +148,18 @@
+         selected: (
+             &'a ConstantPathSelection,
+             Option<&'a ScalarRangeConstantSite>,
++            Option<&'a RuntimeMacroConstantPath>,
+         ),
+         binding: SelectedGuestConstantType<'a, 'a>,
+         store: &GuestStore,
+     ) -> Result<Self, Diagnostic> {
+-        let (path, range_site) = selected;
++        let (path, range_site, macro_site) = selected;
++        if range_site.is_some() && macro_site.is_some() {
++            return Err(Diagnostic::new(
++                "LRR-E-CONST-PUBLICATION-SOURCE",
++                "conflicting constant publication sites".into(),
++            ));
++        }
+         use crate::core::digest::StableEncode;
+         frame.require_store(store)?;
+         let construction = binding.construction();
+@@ -157,19 +191,31 @@
+                 "constant publication node absent".into(),
+             )
+         })?;
+-        let span = match range_site {
+-            Some(site) => {
++        let span = match (range_site, macro_site) {
++            (None, Some(site)) => {
++                site.require(&caller.selection().outline.parse, &frame.body, &pc)?;
++                site.span().clone()
++            }
++            (Some(site), None) => {
+                 site.require_source(caller)?;
+                 site.require(&frame.body, &pc)?;
+                 site.span().clone()
+             }
+-            None => frame.body.span(node.id)?,
++            (None, None) => frame.body.span(node.id)?,
++            (Some(_), Some(_)) => {
++                return Err(Diagnostic::new(
++                    "LRR-E-CONST-PUBLICATION-SOURCE",
++                    "conflicting constant publication sites".into(),
++                ));
++            }
+         };
+         let body = path.site().body();
+         let range = path.site().range();
+-        let destination_matches = match range_site {
+-            Some(site) => destination == site.expected() && site.endpoint_range() == range,
+-            None => {
++        let destination_matches = match (range_site, macro_site) {
++            (Some(site), None) => destination == site.expected() && site.endpoint_range() == range,
++            (None, Some(site)) => destination == site.destination(),
++            (Some(_), Some(_)) => false,
++            (None, None) => {
+                 node.value == Some(destination)
+                     && pc.phase == crate::ir::pc::Phase::Entry.code()?
+                     && node.role == NodeRole::Expression(ExpressionKind::Path)
+@@ -204,6 +250,9 @@
+                         .ok()?,
+                 )
+             })
++            .and_then(|n| {
++                n.checked_add(macro_site.map_or(Some(0), RuntimeMacroConstantPath::metadata_bytes)?)
++            })
+             .filter(|n| *n <= 32 << 20)
+             .ok_or_else(crate::runtime::arena::resource)?;
+         let source = construction.source_term().clone();
+@@ -213,6 +262,7 @@
+             _authority: PublicationAuthority::SelectedSource {
+                 path,
+                 range: range_site,
++                macro_site,
+                 binding,
+                 caller,
+                 views,
+@@ -270,6 +320,17 @@
+         }
+         match &self._authority {
+             PublicationAuthority::SelectedSource {
++                range: None,
++                macro_site: Some(site),
++                caller,
++                ..
++            } => {
++                site.require(&caller.selection().outline.parse, body, pc)?;
++                if self.span != *site.span() || self.destination != site.destination() {
++                    return Err(invalid());
++                }
++            }
++            PublicationAuthority::SelectedSource {
+                 range: Some(site),
+                 path,
+                 ..
+@@ -299,17 +360,19 @@
+         &self,
+         instruction: &crate::ir::source_constant::SourceConstantInstruction,
+     ) -> bool {
+-        let (path, binding, range) = match &self._authority {
++        let (path, binding, range, macro_site) = match &self._authority {
+             PublicationAuthority::SelectedSource {
+                 path,
+                 binding,
+                 range,
++                macro_site,
+                 ..
+-            } => (path, binding, *range),
++            } => (path, binding, *range, *macro_site),
+             #[cfg(test)]
+             PublicationAuthority::PhysicalFixtureOnly => return false,
+         };
+         instruction.range_site() == range
++            && instruction.macro_site() == macro_site
+             && self.pc == *instruction.key()
+             && self.span == *instruction.span()
+             && self.body_index == instruction.body_index()
+@@ -324,6 +387,7 @@
+                 path,
+                 binding,
+                 range,
++                macro_site,
+                 ..
+             } => binding
+                 .construction()
+@@ -333,6 +397,9 @@
+                     range
+                         .map_or(Ok(0), ScalarRangeConstantSite::metadata_bytes)
+                         .ok()?,
++                )?
++                .checked_add(
++                    macro_site.map_or(Some(0), RuntimeMacroConstantPath::metadata_bytes)?,
+                 )?,
+             #[cfg(test)]
+             PublicationAuthority::PhysicalFixtureOnly => 0,
+@@ -349,16 +416,18 @@
+     /// Every consumer must separately replay this full opaque proof each chunk.
+     pub(crate) fn source_use_identity(&self) -> Digest {
+         use crate::core::digest::StableEncoder;
+-        let mut e = StableEncoder::new("lrr/v6/constant-use-agreement");
++        let mut e = StableEncoder::new("lrr/v7/constant-use-agreement");
+         match &self._authority {
+             PublicationAuthority::SelectedSource {
+                 path,
+                 binding,
+                 range,
++                macro_site,
+                 ..
+             } => {
+                 e.u8(1);
+                 e.option(range, |e, site| e.record(*site));
++                e.option(macro_site, |e, site| e.record(*site));
+                 e.digest(path.definition());
+                 e.record(path.context());
+                 e.record(&path.body().key());
+--- a/crates/lrr/src/engine/run.rs
++++ b/crates/lrr/src/engine/run.rs
+@@ -1818,8 +1818,23 @@
+                             crate::syntax::body_index::ExpressionKind::Macro,
+                         )
+                 });
++            let prepared_constant = if !self.installed.contains_pc(&pc) {
++                match self.prepare_source_constant_recipe_with_macros(db, contexts) {
++                    QueryPoll::Ready(Ok(recipe)) => recipe,
++                    QueryPoll::Ready(Err(error)) => {
++                        self.terminal = true;
++                        return RunPoll::Fault(error);
++                    }
++                    QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
++                }
++            } else {
++                None
++            };
+             let mut prepared_declarative = None;
+-            let reached_recipe = if reached_macro && !self.installed.contains_pc(&pc) {
++            let reached_recipe = if reached_macro
++                && prepared_constant.is_none()
++                && !self.installed.contains_pc(&pc)
++            {
+                 let mut recipe =
+                     match self
+                         .declarative_runtime
+@@ -1880,18 +1895,6 @@
+                     }
+                 }
+                 recipe
+-            } else {
+-                None
+-            };
+-            let prepared_constant = if !self.installed.contains_pc(&pc) {
+-                match self.prepare_source_constant_recipe(db) {
+-                    QueryPoll::Ready(Ok(recipe)) => recipe,
+-                    QueryPoll::Ready(Err(error)) => {
+-                        self.terminal = true;
+-                        return RunPoll::Fault(error);
+-                    }
+-                    QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+-                }
+             } else {
+                 None
+             };
+--- a/crates/lrr/src/engine/run_source_constants.rs
++++ b/crates/lrr/src/engine/run_source_constants.rs
+@@ -24,13 +24,20 @@
+     source::manifest::{ItemKind, Namespace},
+     syntax::{
+         body_index::{ExpressionKind, NodeRole},
++        runtime_macro_scalars::RuntimeMacroConstantPath,
+         scalar_range_constant_sites::ScalarRangeConstantSite,
+         spans::SourceRange,
+     },
+ };
+ const LIMIT: usize = 32 << 20;
+ enum ReachedConstantPath {
+-    Selected(Box<(ConstantPathSelection, Option<ScalarRangeConstantSite>)>),
++    Selected(
++        Box<(
++            ConstantPathSelection,
++            Option<ScalarRangeConstantSite>,
++            Option<RuntimeMacroConstantPath>,
++        )>,
++    ),
+     NeedScope(Box<InputRequest>),
+ }
+ pub(super) struct SourceConstantPlan {
+@@ -42,6 +49,7 @@
+     outcome: Outcome,
+     recipe: VerifiedRecipe,
+     range: Option<ScalarRangeConstantSite>,
++    macro_site: Option<Box<RuntimeMacroConstantPath>>,
+     bytes: usize,
+ }
+ fn current_value(outcome: &Outcome) -> Result<&ConstantQueryValue, Diagnostic> {
+@@ -105,6 +113,10 @@
+                 _ => None,
+             })
+             .ok_or_else(|| call_fault("constant instruction absent"))?;
++        if let Some(site) = self.macro_site.as_deref() {
++            return crate::engine::constant_array_publication::AdmittedConstantUse::capture_macro_for_dispatch(
++                frame, destination, &sources[self.caller], views, (&self.path, site), binding, store);
++        }
+         match &self.range {
+             Some(site)=>crate::engine::constant_array_publication::AdmittedConstantUse::capture_range_for_dispatch(
+                 frame,destination,&sources[self.caller],views,(&self.path,site),binding,store),
+@@ -214,9 +226,17 @@
+             .is_none()
+             .then_some(InputRequest::Discover { key }))
+     }
++    #[cfg(test)]
+     pub(super) fn prepare_source_constant_recipe(
+         &mut self,
+         db: &mut Database,
++    ) -> QueryPoll<Option<VerifiedRecipe>> {
++        self.prepare_source_constant_recipe_with_macros(db, &[])
++    }
++    pub(super) fn prepare_source_constant_recipe_with_macros(
++        &mut self,
++        db: &mut Database,
++        contexts: &[super::runtime_macros::RuntimeMacroContext<'_>],
+     ) -> QueryPoll<Option<VerifiedRecipe>> {
+         let pc = self.frame.pc().clone();
+         let Some(node) = self.frame.body.nodes().get(pc.node as usize) else {
+@@ -227,8 +247,32 @@
+         let range_candidate = node.role == NodeRole::Pattern
+             && node.scalar_range_phase
+             && matches!(Phase::from_code(pc.phase), Phase::Entry | Phase::Operand(0));
+-        if !ordinary && !range_candidate {
++        let macro_candidate = node.role == NodeRole::Expression(ExpressionKind::Macro)
++            && matches!(Phase::from_code(pc.phase), Phase::Entry | Phase::Operand(_));
++        if !ordinary && !range_candidate && !macro_candidate {
+             return QueryPoll::Ready(Ok(None));
++        }
++        let mut macro_site = None;
++        if macro_candidate {
++            for context in contexts {
++                match context.constant_path_at(
++                    &self.frame.body,
++                    &pc,
++                    self.runtime_no_item_proofs.values(),
++                ) {
++                    Ok(Some(site)) if macro_site.is_none() => macro_site = Some(site),
++                    Ok(Some(_)) => {
++                        return QueryPoll::Ready(Err(call_fault(
++                            "constant macro source is duplicated",
++                        )));
++                    }
++                    Ok(None) => {}
++                    Err(error) => return QueryPoll::Ready(Err(error)),
++                }
++            }
++            if macro_site.is_none() {
++                return QueryPoll::Ready(Ok(None));
++            }
+         }
+         let Some(graph) = self.graph.as_ref() else {
+             return QueryPoll::Ready(Ok(None));
+@@ -271,7 +315,10 @@
+             let range = match &range_site {
+                 Some(site) => site.endpoint_range(),
+                 None => {
+-                    let span = self.frame.body.span(NodeId(pc.node))?;
++                    let span = match &macro_site {
++                        Some(site) => site.span().clone(),
++                        None => self.frame.body.span(NodeId(pc.node))?,
++                    };
+                     SourceRange {
+                         start: body
+                             .range
+@@ -329,16 +376,28 @@
+             }
+             let views = self.sources.iter().collect::<Vec<_>>();
+             match ConstantPathSelection::capture_current(db, source, body, range, &views, LIMIT)? {
+-                ConstantPathOutcome::Selected(path) => Ok(Some(ReachedConstantPath::Selected(
+-                    Box::new((*path, range_site)),
+-                ))),
++                ConstantPathOutcome::Selected(path) => {
++                    if let Some(site) = &macro_site {
++                        site.require(&source.selection().outline.parse, &self.frame.body, &pc)?;
++                        if path.site().member()? != site.spelling() {
++                            return Err(call_fault(
++                                "constant selected source member differs from original operand",
++                            ));
++                        }
++                    }
++                    Ok(Some(ReachedConstantPath::Selected(Box::new((
++                        *path,
++                        range_site,
++                        macro_site.clone(),
++                    )))))
++                }
+                 ConstantPathOutcome::LocalBinding(_) | ConstantPathOutcome::OtherValueMember(_) => {
+                     Ok(None)
+                 }
+                 other => Err(other.prerequisite_error()),
+             }
+         };
+-        let (path, range) = match prepare() {
++        let (path, range, macro_site) = match prepare() {
+             Ok(Some(ReachedConstantPath::Selected(selection))) => *selection,
+             Ok(Some(ReachedConstantPath::NeedScope(request))) => {
+                 return QueryPoll::NeedInput(*request);
+@@ -418,6 +477,12 @@
+                 }
+                 Err(error) => return QueryPoll::Ready(Err(error)),
+             }
++        }
++        if macro_site.is_some() && result.scalar().is_none() {
++            return QueryPoll::Ready(Err(Diagnostic::new(
++                "LRR-E-UNSUPPORTED",
++                "assertion constant operand requires a current scalar source result".into(),
++            )));
+         }
+         let mut child = None;
+         let wire = if let Some(scalar) = result.scalar() {
+@@ -534,8 +599,8 @@
+             dependencies.sort_unstable();
+             dependencies.dedup();
+ 
+-            let instruction = match &range {
+-                Some(site) => SourceConstantInstruction::capture_range_data(
++            let instruction = match (&range, &macro_site) {
++                (None, Some(site)) => SourceConstantInstruction::capture_macro_data(
+                     &self.frame.body,
+                     site,
+                     parent.key(),
+@@ -544,7 +609,17 @@
+                     &value,
+                     dependencies,
+                 )?,
+-                None => SourceConstantInstruction::capture_data(
++                (Some(_), Some(_)) => return Err(call_fault("conflicting constant source sites")),
++                (Some(site), None) => SourceConstantInstruction::capture_range_data(
++                    &self.frame.body,
++                    site,
++                    parent.key(),
++                    path.identity(),
++                    joined.wire(),
++                    &value,
++                    dependencies,
++                )?,
++                (None, None) => SourceConstantInstruction::capture_data(
+                     &self.frame.body,
+                     &pc,
+                     parent.key(),
+@@ -566,14 +641,18 @@
+                         source: site.test(),
+                     });
+                 }
+-            } else if let Some(scope) = node.boolean_scope.or(node.statement_scope) {
++            } else if pc.phase == Phase::Entry.code()?
++                && let Some(scope) = node.boolean_scope.or(node.statement_scope)
++            {
+                 operations.push(Op::ScopeEnter { scope });
+             }
+             operations.push(Op::SourceConstant {
+                 constant: Box::new(instruction),
+                 destination,
+             });
+-            let exits = if let Some(site) = &range {
++            let exits = if let Some(site) = &macro_site {
++                vec![site.exit(&self.frame.body)?]
++            } else if let Some(site) = &range {
+                 operations.push(Op::NumericBinary {
+                     operator: site.comparison(),
+                     left: site.scrutinee(),
+@@ -601,13 +680,19 @@
+                 exits,
+                 dependencies,
+             };
+-            let recipe = match &range {
+-                Some(site) => crate::ir::validate::verify_range_source_constant(
++            let recipe = match (&range, &macro_site) {
++                (None, Some(site)) => crate::ir::validate::verify_runtime_macro_source_constant(
+                     draft,
+                     &self.frame.body,
+                     site,
+                 )?,
+-                None => crate::ir::validate::verify(draft, &self.frame.body)?,
++                (Some(_), Some(_)) => return Err(call_fault("conflicting constant source sites")),
++                (Some(site), None) => crate::ir::validate::verify_range_source_constant(
++                    draft,
++                    &self.frame.body,
++                    site,
++                )?,
++                (None, None) => crate::ir::validate::verify(draft, &self.frame.body)?,
+             };
+             let bytes = path
+                 .metadata_bytes()
+@@ -628,6 +713,13 @@
+                             .checked_add(current_value(o).ok()?.metadata_bytes().ok()?)
+                     })?)
+                 })
++                .and_then(|n| {
++                    n.checked_add(
++                        macro_site
++                            .as_ref()
++                            .map_or(Some(0), RuntimeMacroConstantPath::metadata_bytes)?,
++                    )
++                })
+                 .and_then(|n| n.checked_add(std::mem::size_of::<SourceConstantPlan>() + 256))
+                 .filter(|n| *n <= LIMIT)
+                 .ok_or_else(crate::runtime::arena::resource)?;
+@@ -641,6 +733,7 @@
+                 outcome,
+                 recipe,
+                 range,
++                macro_site: macro_site.map(Box::new),
+                 bytes,
+             })
+         };
+--- a/crates/lrr/src/engine/runtime_macros.rs
++++ b/crates/lrr/src/engine/runtime_macros.rs
+@@ -170,6 +170,68 @@
+         proofs: impl Iterator<Item = &'p crate::frontend::runtime_macro_plan::RuntimeNoItemProof>,
+     ) -> Result<Option<PreparedRuntimeMacro>, Diagnostic> {
+         self.resolve_at(body, pc, proofs, None)
++    }
++    /// Select only the actual compiler assertion's current original operand.
++    /// The returned private site is data; source/query/publication admission follows.
++    pub(crate) fn constant_path_at<'p>(
++        &self,
++        body: &BodyIndex,
++        pc: &PcKey,
++        proofs: impl Iterator<Item = &'p crate::frontend::runtime_macro_plan::RuntimeNoItemProof>,
++    ) -> Result<Option<crate::syntax::runtime_macro_scalars::RuntimeMacroConstantPath>, Diagnostic>
++    {
++        let Some(handle) = self
++            .source
++            .outline()
++            .items
++            .iter()
++            .filter_map(|item| item.body.as_ref())
++            .find(|handle| handle.key() == pc.body)
++        else {
++            return Ok(None);
++        };
++        let node = body
++            .nodes()
++            .get(pc.node as usize)
++            .ok_or_else(|| fault("LRR-E-RUNTIME-MACRO", "reached macro node is absent"))?;
++        let range = SourceRange {
++            start: handle
++                .range
++                .start
++                .checked_add(node.range.start)
++                .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "macro source start overflow"))?,
++            end: handle
++                .range
++                .start
++                .checked_add(node.range.end)
++                .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "macro source end overflow"))?,
++        };
++        let mut entered = self.index.enter_body(self.source.selection(), &pc.body)?;
++        for proof in proofs.filter(|proof| proof.body() == &pc.body) {
++            entered.accept_no_item_proof(self.source.selection(), &pc.body, proof, self.catalog)?;
++        }
++        match entered.prepare_runtime_macro(
++            self.source.selection(),
++            &pc.body,
++            range,
++            self.namespaces,
++            self.catalog,
++        )? {
++            RuntimeMacroPreparation::Intrinsic(plan)
++                if matches!(
++                    plan.arguments().kind(),
++                    RuntimeMacroKind::Assert
++                        | RuntimeMacroKind::AssertEq
++                        | RuntimeMacroKind::AssertNe
++                ) && !(plan.arguments().kind() == RuntimeMacroKind::Assert
++                    && (plan.arguments().literal_predicate().is_some()
++                        || plan.arguments().zero_arg_predicate_call().is_some()
++                        || plan.arguments().binding_predicate().is_some())) =>
++            {
++                plan.scalar_constant_path_witness(self.source, body, pc)
++            }
++            _ => Ok(None),
++        }
+     }
+     pub(crate) fn resolve_at<'p>(
+         &self,
+--- a/crates/lrr/src/frontend/runtime_macro_plan.rs
++++ b/crates/lrr/src/frontend/runtime_macro_plan.rs
+@@ -539,6 +539,7 @@
+                 RuntimeScalarStep::Operation(_)
+                 | RuntimeScalarStep::Continuation
+                 | RuntimeScalarStep::PrimitiveMethod(_)
++                | RuntimeScalarStep::ConstantPath(_)
+                 | RuntimeScalarStep::Fault(_)
+                 | RuntimeScalarStep::Control(_),
+             ) => return Ok(None),
+@@ -557,6 +558,33 @@
+         Ok(Some(std::sync::Arc::clone(call)))
+     }
+ 
++    pub(crate) fn scalar_constant_path_witness(
++        &self,
++        source: &crate::source::changes::PreparedSourceView,
++        body: &crate::syntax::body_index::BodyIndex,
++        key: &crate::ir::pc::PcKey,
++    ) -> Result<Option<crate::syntax::runtime_macro_scalars::RuntimeMacroConstantPath>, Diagnostic>
++    {
++        use crate::{ir::pc::Phase, syntax::runtime_macro_scalars::RuntimeScalarStep};
++        let handle = self.scalar_assertion_body(source, body, key)?;
++        let ordinal = match Phase::from_code(key.phase) {
++            Phase::Entry => 0,
++            Phase::Operand(n) => usize::from(n) + 1,
++            Phase::Commit | Phase::Exit => return Ok(None),
++        };
++        let plan = source.runtime_macro_scalar_plan(handle, body, key, &self.arguments)?;
++        match plan.steps().get(ordinal) {
++            Some(RuntimeScalarStep::ConstantPath(path)) => {
++                path.require(&source.selection().outline.parse, body, key)?;
++                Ok(Some(path.as_ref().clone()))
++            }
++            Some(_) => Ok(None),
++            None => Err(Diagnostic::new(
++                "LRR-E-RUNTIME-MACRO",
++                "constant operand phase outside source plan".into(),
++            )),
++        }
++    }
+     pub(crate) fn scalar_primitive_method_witness(
+         &self,
+         source: &crate::source::changes::PreparedSourceView,
+@@ -669,6 +697,13 @@
+                             ));
+                         }
+                         (vec![], following()?)
++                    }
++                    RuntimeScalarStep::ConstantPath(_) => {
++                        return Err(Diagnostic::new(
++                            "LRR-E-UNSUPPORTED",
++                            "assertion constant path requires current source query preparation"
++                                .into(),
++                        ));
+                     }
+                     RuntimeScalarStep::PrimitiveMethod(method) => {
+                         let admission = admission.ok_or_else(|| {
+--- a/crates/lrr/src/ir/source_constant.rs
++++ b/crates/lrr/src/ir/source_constant.rs
+@@ -11,8 +11,8 @@
+         recipe::{FactDependency, RecipeDraft, RecipeExit},
+     },
+     syntax::{
+-        body_index::BodyIndex, scalar_range_constant_sites::ScalarRangeConstantSite,
+-        spans::BodySpan,
++        body_index::BodyIndex, runtime_macro_scalars::RuntimeMacroConstantPath,
++        scalar_range_constant_sites::ScalarRangeConstantSite, spans::BodySpan,
+     },
+ };
+ #[derive(Debug, Clone, Eq, PartialEq)]
+@@ -29,6 +29,7 @@
+     content: Digest,
+     dependencies: Box<[FactDependency]>,
+     range: Option<ScalarRangeConstantSite>,
++    macro_site: Option<Box<RuntimeMacroConstantPath>>,
+     bytes: usize,
+     identity: Digest,
+ }
+@@ -47,7 +48,15 @@
+         value: &ConstValue,
+         dependencies: Vec<FactDependency>,
+     ) -> Result<Self, Diagnostic> {
+-        Self::capture(body, (key, None), query, path, wire, value, dependencies)
++        Self::capture(
++            body,
++            (key, None, None),
++            query,
++            path,
++            wire,
++            value,
++            dependencies,
++        )
+     }
+     pub(crate) fn capture_range_data(
+         body: &BodyIndex,
+@@ -61,7 +70,7 @@
+         range.require(body, range.key())?;
+         Self::capture(
+             body,
+-            (range.key(), Some(range)),
++            (range.key(), Some(range), None),
+             query,
+             path,
+             wire,
+@@ -69,29 +78,62 @@
+             dependencies,
+         )
+     }
+-    fn capture(
+-        body: &BodyIndex,
+-        site: (&PcKey, Option<&ScalarRangeConstantSite>),
++    pub(crate) fn capture_macro_data(
++        body: &BodyIndex,
++        site: &RuntimeMacroConstantPath,
+         query: &ConstantKey,
+         path: Digest,
+         wire: &ConstantWireType,
+         value: &ConstValue,
+         dependencies: Vec<FactDependency>,
+     ) -> Result<Self, Diagnostic> {
+-        let (key, range) = site;
++        site.require(site.source(), body, site.key()?)?;
++        if !matches!(wire, ConstantWireType::Scalar(_)) {
++            return Err(invalid(
++                "assertion constant operand requires a current scalar type",
++            ));
++        }
++        Self::capture(
++            body,
++            (site.key()?, None, Some(site)),
++            query,
++            path,
++            wire,
++            value,
++            dependencies,
++        )
++    }
++    fn capture(
++        body: &BodyIndex,
++        site: (
++            &PcKey,
++            Option<&ScalarRangeConstantSite>,
++            Option<&RuntimeMacroConstantPath>,
++        ),
++        query: &ConstantKey,
++        path: Digest,
++        wire: &ConstantWireType,
++        value: &ConstValue,
++        dependencies: Vec<FactDependency>,
++    ) -> Result<Self, Diagnostic> {
++        let (key, range, macro_site) = site;
+         query.validate()?;
+         let node = body
+             .nodes()
+             .get(key.node as usize)
+             .ok_or_else(|| invalid("constant instruction node absent"))?;
+-        let destination = match range {
+-            Some(site) => site.expected(),
+-            None => node
++        let destination = match (range, macro_site) {
++            (Some(site), None) => site.expected(),
++            (None, Some(site)) => site.destination(),
++            (Some(_), Some(_)) => {
++                return Err(invalid("constant instruction has conflicting source sites"));
++            }
++            (None, None) => node
+                 .value
+                 .ok_or_else(|| invalid("constant instruction result absent"))?,
+         };
+         if key.body != *body.body()
+-            || (range.is_none() && key.phase != Phase::Entry.code()?)
++            || (range.is_none() && macro_site.is_none() && key.phase != Phase::Entry.code()?)
+             || query.result_type() != wire.fingerprint_checked()?
+             || dependencies.len() > 100_000
+         {
+@@ -102,6 +144,9 @@
+             if !matches!(wire, ConstantWireType::Scalar(_)) {
+                 return Err(invalid("range bound requires a current scalar source type"));
+             }
++        }
++        if let Some(site) = macro_site {
++            site.require(site.source(), body, key)?;
+         }
+         let encoded = crate::ir::constant_data::wire::encode(value, wire, 1 << 20)?;
+         let mut bytes = std::mem::size_of::<Self>()
+@@ -118,18 +163,33 @@
+         bytes = bytes
+             .checked_add(range.map_or(Ok(0), ScalarRangeConstantSite::metadata_bytes)?)
+             .ok_or_else(|| invalid("range constant metadata overflow"))?;
++        bytes = bytes
++            .checked_add(
++                macro_site
++                    .map_or(Some(0), RuntimeMacroConstantPath::metadata_bytes)
++                    .ok_or_else(|| invalid("constant macro site metadata overflow"))?,
++            )
++            .ok_or_else(|| invalid("constant macro metadata overflow"))?;
+         if bytes > 32 << 20 {
+             return Err(invalid("constant instruction metadata limit"));
+         }
+         let mut instruction = Self {
+             key: key.clone(),
+-            next: match range {
+-                Some(site) => site.yes(body)?,
+-                None => body.pc(node.id, Phase::Exit)?,
++            next: match (range, macro_site) {
++                (Some(site), None) => site.yes(body)?,
++                (None, Some(site)) => site.next()?.clone(),
++                (None, None) => body.pc(node.id, Phase::Exit)?,
++                (Some(_), Some(_)) => {
++                    return Err(invalid("constant instruction has conflicting source sites"));
++                }
+             },
+-            span: match range {
+-                Some(site) => site.span().clone(),
+-                None => body.span(node.id)?,
++            span: match (range, macro_site) {
++                (Some(site), None) => site.span().clone(),
++                (None, Some(site)) => site.span().clone(),
++                (None, None) => body.span(node.id)?,
++                (Some(_), Some(_)) => {
++                    return Err(invalid("constant instruction has conflicting source sites"));
++                }
+             },
+             body_index: body.fingerprint(),
+             destination,
+@@ -140,6 +200,7 @@
+             content: Digest::of_bytes(&encoded),
+             dependencies: dependencies.into_boxed_slice(),
+             range: range.cloned(),
++            macro_site: macro_site.cloned().map(Box::new),
+             bytes,
+             identity: Digest([0; 32]),
+         };
+@@ -153,6 +214,7 @@
+         destination: SlotId,
+     ) -> Result<bool, Diagnostic> {
+         Ok(self.range.is_none()
++            && self.macro_site.is_none()
+             && self.key == draft.key
+             && self.next == body.pc(crate::ir::pc::NodeId(draft.key.node), Phase::Exit)?
+             && self.span == draft.origin.span
+@@ -176,6 +238,7 @@
+     ) -> Result<bool, Diagnostic> {
+         site.require(body, &draft.key)?;
+         Ok(self.range.as_ref() == Some(site)
++            && self.macro_site.is_none()
+             && self.key == draft.key
+             && self.next == site.yes(body)?
+             && self.span == draft.origin.span
+@@ -190,6 +253,35 @@
+                     1 << 20,
+                 )?))
+     }
++    pub(crate) fn matches_macro(
++        &self,
++        body: &BodyIndex,
++        draft: &RecipeDraft,
++        destination: SlotId,
++        site: &RuntimeMacroConstantPath,
++    ) -> Result<bool, Diagnostic> {
++        site.require(site.source(), body, &draft.key)?;
++        Ok(self.range.is_none()
++            && self.macro_site.as_deref() == Some(site)
++            && self.key == draft.key
++            && self.next == *site.next()?
++            && self.span == draft.origin.span
++            && self.span == *site.span()
++            && self.body_index == body.fingerprint()
++            && self.destination == destination
++            && destination == site.destination()
++            && draft.exits.as_slice() == [site.exit(body)?]
++            && self.dependencies.as_ref() == draft.dependencies.as_slice()
++            && self.content
++                == Digest::of_bytes(&crate::ir::constant_data::wire::encode(
++                    &self.value,
++                    &self.wire,
++                    1 << 20,
++                )?))
++    }
++    pub(crate) fn macro_site(&self) -> Option<&RuntimeMacroConstantPath> {
++        self.macro_site.as_deref()
++    }
+     pub(crate) fn range_site(&self) -> Option<&ScalarRangeConstantSite> {
+         self.range.as_ref()
+     }
+@@ -234,7 +326,7 @@
+     }
+ }
+ impl StableEncode for SourceConstantInstruction {
+-    const DOMAIN: &'static str = "lrr/v2/source-constant-instruction";
++    const DOMAIN: &'static str = "lrr/v3/source-constant-instruction";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         e.record(&self.key);
+         e.record(&self.next);
+@@ -250,6 +342,7 @@
+         e.digest(self.query.result_type());
+         e.record(&self.value);
+         e.option(&self.range, |e, site| e.record(site));
++        e.option(&self.macro_site, |e, site| e.record(site.as_ref()));
+         e.sequence(&self.dependencies, |e, d| e.record(d));
+     }
+ }
+--- a/crates/lrr/src/ir/validate.rs
++++ b/crates/lrr/src/ir/validate.rs
+@@ -183,7 +183,7 @@
+             .is_some_and(|value| macro_scalar_value(node, SlotId(value)))
+ }
+ pub fn verify(draft: RecipeDraft, body: &BodyIndex) -> Result<VerifiedRecipe, Diagnostic> {
+-    verify_inner(draft, body, None, false, None, None)
++    verify_inner(draft, body, None, false, None, None, None)
+ }
+ /// Closed source-owned range endpoint recipe. Only this private route admits
+ /// compound SourceConstant/comparison recipes; public verification stays strict.
+@@ -251,7 +251,62 @@
+             "range constant dependency keys are not unique/canonical",
+         ));
+     }
+-    verify_inner(draft, body, None, false, Some(site), None)
++    verify_inner(draft, body, None, false, Some(site), None, None)
++}
++/// Only a privately source-selected opaque assertion operand may use this lane.
++/// Public verification continues rejecting SourceConstant at a macro PC.
++pub(crate) fn verify_runtime_macro_source_constant(
++    draft: RecipeDraft,
++    body: &BodyIndex,
++    site: &crate::syntax::runtime_macro_scalars::RuntimeMacroConstantPath,
++) -> Result<VerifiedRecipe, Diagnostic> {
++    site.require(site.source(), body, &draft.key)?;
++    if draft.origin.span != *site.span() || !draft.origin.expansion_ancestry.is_empty() {
++        return Err(invalid("macro constant source origin differs"));
++    }
++    let node = &body.nodes()[draft.key.node as usize];
++    let operations = match draft.operations.as_slice() {
++        [Op::ScopeEnter { scope }, tail @ ..]
++            if draft.key.phase == Phase::Entry.code()?
++                && Some(*scope) == node.boolean_scope.or(node.statement_scope) =>
++        {
++            tail
++        }
++        ops => ops,
++    };
++    let [
++        Op::SourceConstant {
++            constant,
++            destination,
++        },
++    ] = operations
++    else {
++        return Err(invalid("macro constant operation shape differs"));
++    };
++    if !constant.matches_macro(body, &draft, *destination, site)? {
++        return Err(invalid("macro constant instruction/site differs"));
++    }
++    if draft.dependencies.len() > 100_000
++        || draft.dependencies.windows(2).any(|rows| {
++            rows[0] >= rows[1]
++                || match (&rows[0], &rows[1]) {
++                    (
++                        crate::db::dependency::DependencyStamp::Input { key: a, .. },
++                        crate::db::dependency::DependencyStamp::Input { key: b, .. },
++                    ) => a == b,
++                    (
++                        crate::db::dependency::DependencyStamp::Query { key: a, .. },
++                        crate::db::dependency::DependencyStamp::Query { key: b, .. },
++                    ) => a == b,
++                    _ => false,
++                }
++        })
++    {
++        return Err(invalid(
++            "macro constant dependency keys are not unique/canonical",
++        ));
++    }
++    verify_inner(draft, body, None, false, None, None, Some(site))
+ }
+ /// A genuine actual MatchExpr source plan may reach exhaustion at its reserved
+ /// opaque operand PC. This does not authorize general opaque MatchNoArm exits.
+@@ -269,7 +324,7 @@
+             "opaque match exhaustion recipe differs from source proof",
+         ));
+     }
+-    verify_inner(draft, body, None, false, None, Some(proof))
++    verify_inner(draft, body, None, false, None, Some(proof), None)
+ }
+ /// General macro call admission consumes a genuine privately minted source
+ /// witness. The ordinary public verifier never acquires this authority.
+@@ -279,7 +334,7 @@
+     call: &crate::syntax::runtime_macro_scalars::RuntimeMacroCall,
+ ) -> Result<VerifiedRecipe, Diagnostic> {
+     require_runtime_scalar_call(&draft, body, call)?;
+-    verify_inner(draft, body, Some(call), false, None, None)
++    verify_inner(draft, body, Some(call), false, None, None, None)
+ }
+ /// Only a freshly source-replayed scalar plan can admit an opaque argument's
+ /// borrow phases. Public verification retains ordinary indexed borrow rules.
+@@ -368,7 +423,7 @@
+     if !matches {
+         return Err(invalid("scalar borrow source role differs"));
+     }
+-    verify_inner(draft, body, None, true, None, None)
++    verify_inner(draft, body, None, true, None, None, None)
+ }
+ fn require_runtime_scalar_call(
+     draft: &RecipeDraft,
+@@ -514,6 +569,7 @@
+     macro_borrow: bool,
+     source_range: Option<&crate::syntax::scalar_range_constant_sites::ScalarRangeConstantSite>,
+     scalar_match: Option<&crate::syntax::runtime_macro_scalars::RuntimeScalarMatchExhaustion<'_>>,
++    source_macro: Option<&crate::syntax::runtime_macro_scalars::RuntimeMacroConstantPath>,
+ ) -> Result<VerifiedRecipe, Diagnostic> {
+     pc(body, &draft.key)?;
+     span(body, &draft.origin.span)?;
+@@ -957,9 +1013,15 @@
+                     }
+                     ops => ops,
+                 };
+-                let admitted = match source_range {
+-                    Some(site) => constant.matches_range(body, &draft, *destination, site)?,
+-                    None => {
++                let admitted = match (source_range, source_macro) {
++                    (Some(site), None) => {
++                        constant.matches_range(body, &draft, *destination, site)?
++                    }
++                    (None, Some(site)) => {
++                        constant.matches_macro(body, &draft, *destination, site)?
++                    }
++                    (Some(_), Some(_)) => false,
++                    (None, None) => {
+                         draft.key.phase == Phase::Entry.code()?
+                             && node.role == NodeRole::Expression(ExpressionKind::Path)
+                             && node.value == Some(*destination)
+--- a/crates/lrr/src/syntax/constant_paths.rs
++++ b/crates/lrr/src/syntax/constant_paths.rs
+@@ -119,6 +119,69 @@
+     }
+ }
+ impl ParsedFile {
++    /// Route one exact name token inside an original opaque expression macro.
++    /// This recognizes syntax only; it neither selects that macro nor grants
++    /// constant/name/execution authority. The lexical anchor stays original.
++    fn constant_macro_name_path(
++        &self,
++        body: &BodyHandle,
++        selected: SourceRange,
++    ) -> Result<Option<(ast::Path, ra_ap_syntax::SyntaxNode)>, Diagnostic> {
++        let tree = self.parsed.tree();
++        let Some(token) = tree
++            .syntax()
++            .descendants_with_tokens()
++            .take(1_000_001)
++            .filter_map(|element| element.into_token())
++            .find(|token| {
++                token.kind() == ra_ap_syntax::SyntaxKind::IDENT
++                    && range(token.text_range()) == selected
++            })
++        else {
++            return Ok(None);
++        };
++        let Some(anchor) = token
++            .parent()
++            .into_iter()
++            .flat_map(|parent| parent.ancestors())
++            .find_map(ast::MacroExpr::cast)
++        else {
++            return Ok(None);
++        };
++        let invocation = range(anchor.syntax().text_range());
++        if !body.range.contains(invocation) || !invocation.contains(selected) {
++            return Err(fault("constant opaque path caller range differs"));
++        }
++        let edition = match self.token_edition(selected)? {
++            2015 => ra_ap_syntax::Edition::Edition2015,
++            2018 => ra_ap_syntax::Edition::Edition2018,
++            2021 => ra_ap_syntax::Edition::Edition2021,
++            2024 => ra_ap_syntax::Edition::Edition2024,
++            _ => return Err(fault("constant opaque path token edition differs")),
++        };
++        let parsed = ast::Expr::parse(token.text(), edition);
++        if !parsed.errors().is_empty() {
++            return Err(fault("constant opaque name token is not an expression"));
++        }
++        let ast::Expr::PathExpr(expression) = parsed.tree() else {
++            return Ok(None);
++        };
++        let path = expression
++            .path()
++            .ok_or_else(|| fault("constant opaque name path absent"))?;
++        let segment = path
++            .segment()
++            .ok_or_else(|| fault("constant opaque name segment absent"))?;
++        if path.qualifier().is_some()
++            || segment.generic_arg_list().is_some()
++            || segment.coloncolon_token().is_some()
++            || segment.name_ref().is_none()
++            || expression.syntax().text().to_string() != token.text()
++        {
++            return Ok(None);
++        }
++        Ok(Some((path, anchor.syntax().clone())))
++    }
+     pub(crate) fn constant_path_site(
+         &self,
+         view: &PreparedSourceView,
+@@ -168,10 +231,13 @@
+             .filter_map(ast::PathExpr::cast)
+             .find(|path| range(path.syntax().text_range()) == selected)
+             .and_then(|expression| expression.path());
+-        let (mut path, endpoint_name, syntax) = match selected_path {
+-            Some(path) => (Some(path.clone()), None, path.syntax().clone()),
++        let (mut path, endpoint_name, syntax, path_offset) = match selected_path {
++            Some(path) => (Some(path.clone()), None, path.syntax().clone(), 0),
+             None => {
+-                let endpoint = super::scalar_range_constant_sites::endpoint_pattern(
++                if let Some((path, anchor)) = self.constant_macro_name_path(body, selected)? {
++                    (Some(path), None, anchor, selected.start)
++                } else {
++                    let endpoint = super::scalar_range_constant_sites::endpoint_pattern(
+                     self, body, selected,
+                 )?
+                 .ok_or_else(|| {
+@@ -179,14 +245,15 @@
+                         "selected constant site is not an exact expression or range endpoint path",
+                     )
+                 })?;
+-                match endpoint {
+-                    ast::Pat::PathPat(endpoint) => {
+-                        (endpoint.path(), None, endpoint.syntax().clone())
++                    match endpoint {
++                        ast::Pat::PathPat(endpoint) => {
++                            (endpoint.path(), None, endpoint.syntax().clone(), 0)
++                        }
++                        ast::Pat::IdentPat(endpoint) => {
++                            (None, endpoint.name(), endpoint.syntax().clone(), 0)
++                        }
++                        _ => return Err(fault("constant range endpoint source shape differs")),
+                     }
+-                    ast::Pat::IdentPat(endpoint) => {
+-                        (None, endpoint.name(), endpoint.syntax().clone())
+-                    }
+-                    _ => return Err(fault("constant range endpoint source shape differs")),
+                 }
+             }
+         };
+@@ -254,7 +321,18 @@
+                         let spelling = reference.text().to_string();
+                         crate::expand::scopes::MacroName::parse(
+                             &spelling,
+-                            self.token_edition(range(reference.syntax().text_range()))?,
++                            self.token_edition({
++                                let relative = range(reference.syntax().text_range());
++                                SourceRange {
++                                    start: relative.start.checked_add(path_offset).ok_or_else(
++                                        || fault("constant macro path start overflow"),
++                                    )?,
++                                    end: relative
++                                        .end
++                                        .checked_add(path_offset)
++                                        .ok_or_else(|| fault("constant macro path end overflow"))?,
++                                }
++                            })?,
+                         )?;
+                         ImportSegment::Name(spelling)
+                     }
+--- a/crates/lrr/src/syntax/runtime_macro_calls.rs
++++ b/crates/lrr/src/syntax/runtime_macro_calls.rs
+@@ -123,6 +123,7 @@
+     /// Final reached control phase; it never applies another value/type effect.
+     Continuation,
+     PrimitiveMethod(Box<super::RuntimePrimitiveMethod>),
++    ConstantPath(Box<super::RuntimeMacroConstantPath>),
+     CallPrepare(u32),
+     CallAdvance(u32, u32),
+     CallSeal(u32),
+@@ -269,7 +270,18 @@
+         {
+             return Err(invalid("scalar fault lacks exact source origin"));
+         }
++        let step_count = steps.len();
+         for (ordinal, step) in steps.iter_mut().enumerate() {
++            if let RuntimeScalarStep::ConstantPath(path) = step {
++                path.bind(index, key, ordinal, step_count)?;
++                retained_bytes = retained_bytes
++                    .checked_add(
++                        path.metadata_bytes()
++                            .ok_or_else(|| invalid("constant operand metadata overflow"))?,
++                    )
++                    .filter(|bytes| *bytes <= 32 * 1024 * 1024)
++                    .ok_or_else(|| invalid("constant operand metadata limit"))?;
++            }
+             if let RuntimeScalarStep::Operation(Op::SetHint {
+                 hint: HintRecipe::LocalIntegerFallback(proof),
+                 ..
+--- /dev/null
++++ b/crates/lrr/src/syntax/runtime_macro_constant_paths.rs
+@@ -0,0 +1,371 @@
++//! Original opaque-operand path data. This is neither name nor query authority.
++use super::*;
++use crate::{
++    core::digest::{Digest, StableEncode, StableEncoder},
++    ir::{
++        pc::{NodeId, Phase},
++        recipe::RecipeExit,
++    },
++    syntax::parse::ParseKey,
++};
++#[derive(Debug, Clone, Eq, PartialEq)]
++pub(crate) struct RuntimeMacroConstantPath {
++    source: ParseKey,
++    key: Option<PcKey>,
++    body_index: Option<Digest>,
++    span: BodySpan,
++    destination: SlotId,
++    spelling: String,
++    next: Option<PcKey>,
++    last: bool,
++}
++impl RuntimeMacroConstantPath {
++    pub(super) fn new(
++        source: ParseKey,
++        span: BodySpan,
++        destination: SlotId,
++        spelling: &str,
++    ) -> Result<Self, Diagnostic> {
++        crate::expand::scopes::MacroName::parse(spelling, source.profile.edition)?;
++        if spelling.len() > 4096 || span.relative_start >= span.relative_end {
++            return Err(invalid("constant operand spelling/span limit"));
++        }
++        let mut owned = String::new();
++        owned
++            .try_reserve_exact(spelling.len())
++            .map_err(|_| invalid("constant operand allocation"))?;
++        owned.push_str(spelling);
++        Ok(Self {
++            source,
++            key: None,
++            body_index: None,
++            span,
++            destination,
++            spelling: owned,
++            next: None,
++            last: false,
++        })
++    }
++    pub(super) fn bind(
++        &mut self,
++        body: &BodyIndex,
++        base: &PcKey,
++        ordinal: usize,
++        count: usize,
++    ) -> Result<(), Diagnostic> {
++        if self.key.is_some() || count == 0 || ordinal >= count {
++            return Err(invalid("constant operand phase binding differs"));
++        }
++        let phase = if ordinal == 0 {
++            Phase::Entry
++        } else {
++            Phase::Operand(
++                u16::try_from(ordinal - 1)
++                    .map_err(|_| invalid("constant operand phase overflow"))?,
++            )
++        };
++        let pc = body.pc(NodeId(base.node), phase)?;
++        self.last = ordinal.checked_add(1) == Some(count);
++        self.next = Some(body.pc(
++            NodeId(base.node),
++            if self.last {
++                Phase::Exit
++            } else {
++                Phase::Operand(
++                    u16::try_from(ordinal)
++                        .map_err(|_| invalid("constant operand successor overflow"))?,
++                )
++            },
++        )?);
++        self.body_index = Some(body.fingerprint());
++        self.key = Some(pc.clone());
++        self.require(&self.source, body, &pc)
++    }
++    pub(crate) fn require(
++        &self,
++        source: &ParseKey,
++        body: &BodyIndex,
++        pc: &PcKey,
++    ) -> Result<(), Diagnostic> {
++        let node = body
++            .nodes()
++            .get(pc.node as usize)
++            .ok_or_else(|| invalid("constant operand node absent"))?;
++        if &self.source != source
++            || body.profile() != &source.profile
++            || self.body_index != Some(body.fingerprint())
++            || self.key.as_ref() != Some(pc)
++            || body.body() != &pc.body
++            || self.span.body_key != pc.body
++            || node.role != NodeRole::Expression(ExpressionKind::Macro)
++            || self.span.relative_start < node.range.start
++            || self.span.relative_end > node.range.end
++            || self.span.relative_start >= self.span.relative_end
++            || (!node.runtime_scalar_slots.contains(&self.destination)
++                && node.runtime_temporaries[0] != Some(self.destination))
++        {
++            return Err(invalid("constant operand source/body/PC/span/slot differs"));
++        }
++        let next = self
++            .next
++            .as_ref()
++            .ok_or_else(|| invalid("constant operand successor absent"))?;
++        let phase = if self.last {
++            Phase::Exit
++        } else {
++            match Phase::from_code(pc.phase) {
++                Phase::Entry => Phase::Operand(0),
++                Phase::Operand(n) => Phase::Operand(
++                    n.checked_add(1)
++                        .ok_or_else(|| invalid("constant operand successor overflow"))?,
++                ),
++                _ => return Err(invalid("constant operand is not an evaluation phase")),
++            }
++        };
++        if *next != body.pc(node.id, phase)? {
++            return Err(invalid("constant operand retained successor differs"));
++        }
++        Ok(())
++    }
++    pub(crate) fn key(&self) -> Result<&PcKey, Diagnostic> {
++        self.key
++            .as_ref()
++            .ok_or_else(|| invalid("constant operand is unbound"))
++    }
++    pub(crate) fn source(&self) -> &ParseKey {
++        &self.source
++    }
++    pub(crate) fn span(&self) -> &BodySpan {
++        &self.span
++    }
++    pub(crate) fn destination(&self) -> SlotId {
++        self.destination
++    }
++    pub(crate) fn spelling(&self) -> &str {
++        &self.spelling
++    }
++    pub(crate) fn next(&self) -> Result<&PcKey, Diagnostic> {
++        self.next
++            .as_ref()
++            .ok_or_else(|| invalid("constant operand successor is unbound"))
++    }
++    pub(crate) fn exit(&self, body: &BodyIndex) -> Result<RecipeExit, Diagnostic> {
++        let key = self.key()?;
++        self.require(&self.source, body, key)?;
++        if self.last {
++            let node = &body.nodes()[key.node as usize];
++            let condition = node.runtime_temporaries[0]
++                .ok_or_else(|| invalid("constant predicate slot absent"))?;
++            if condition != self.destination {
++                return Err(invalid("terminal constant operand is not its predicate"));
++            }
++            Ok(RecipeExit::Branch {
++                condition,
++                yes: self.next()?.clone(),
++                no: body.pc(node.id, Phase::Commit)?,
++            })
++        } else {
++            Ok(RecipeExit::Next(self.next()?.clone()))
++        }
++    }
++    pub(crate) fn metadata_bytes(&self) -> Option<usize> {
++        std::mem::size_of::<Self>()
++            .checked_add(self.source.profile.semantics.capacity())?
++            .checked_add(self.spelling.capacity())
++    }
++}
++impl StableEncode for RuntimeMacroConstantPath {
++    const DOMAIN: &'static str = "lrr/v1/runtime-macro-constant-path";
++    fn encode_fields(&self, e: &mut StableEncoder) {
++        e.record(&self.source);
++        e.option(&self.key, |e, key| e.record(key));
++        e.option(&self.body_index, |e, body| e.digest(*body));
++        e.record(&self.span.body_key);
++        e.u32(self.span.relative_start);
++        e.u32(self.span.relative_end);
++        e.u32(self.destination.0);
++        e.string(&self.spelling);
++        e.option(&self.next, |e, next| e.record(next));
++        e.bool(self.last);
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    const ORIGINAL: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-nested.rs"
++    );
++    #[test]
++    fn unchanged_constant_operand_keeps_original_span_and_rejects_foreign_binding() {
++        for edition in [2015, 2018, 2021, 2024] {
++            let (parsed, body, index, sites) =
++                super::super::control_tests::entered(ORIGINAL, edition);
++            let [(key, arguments)] = sites.as_slice() else {
++                panic!("one original assertion")
++            };
++            let plan = parsed
++                .runtime_macro_scalar_plan(&body, &index, key, arguments)
++                .unwrap();
++            let paths = plan
++                .steps()
++                .iter()
++                .filter_map(|step| match step {
++                    RuntimeScalarStep::ConstantPath(path) => Some(path.as_ref()),
++                    _ => None,
++                })
++                .collect::<Vec<_>>();
++            let [path] = paths.as_slice() else {
++                panic!("one original constant path")
++            };
++            path.require(&parsed.key(), &index, path.key().unwrap())
++                .unwrap();
++            let span = path.span();
++            assert_eq!(
++                &ORIGINAL[(body.range.start + span.relative_start) as usize
++                    ..(body.range.start + span.relative_end) as usize],
++                "X"
++            );
++            assert_eq!(path.spelling(), "X");
++            assert!(matches!(path.exit(&index).unwrap(), RecipeExit::Next(_)));
++            let mut foreign = parsed.key();
++            foreign.profile.edition = if edition == 2024 { 2021 } else { 2024 };
++            assert!(path.require(&foreign, &index, path.key().unwrap()).is_err());
++            let mut pc = path.key().unwrap().clone();
++            pc.phase = Phase::Commit.code().unwrap();
++            assert!(path.require(&parsed.key(), &index, &pc).is_err());
++            let mut wrong = (*path).clone();
++            wrong.destination = SlotId(u32::MAX);
++            assert!(
++                wrong
++                    .require(&parsed.key(), &index, path.key().unwrap())
++                    .is_err()
++            );
++            let mut wrong = (*path).clone();
++            wrong.span.relative_start = wrong.span.relative_end;
++            assert!(
++                wrong
++                    .require(&parsed.key(), &index, path.key().unwrap())
++                    .is_err()
++            );
++            let mut wrong = (*path).clone();
++            wrong.next = Some(index.pc(NodeId(key.node), Phase::Commit).unwrap());
++            assert!(
++                wrong
++                    .require(&parsed.key(), &index, path.key().unwrap())
++                    .is_err()
++            );
++            assert!(path.metadata_bytes().unwrap() <= 32 << 20);
++        }
++    }
++    #[test]
++    fn local_shadow_remains_a_lexical_read_and_does_not_mint_constant_site() {
++        // LRR-specific authority control, not an upstream fixture claim.
++        let text = "const X:u32=99; fn main(){let X=22_u32; assert_eq!(X,22_u32);}";
++        let (parsed, body, index, sites) = super::super::control_tests::entered(text, 2024);
++        let [(key, arguments)] = sites.as_slice() else {
++            panic!()
++        };
++        let plan = parsed
++            .runtime_macro_scalar_plan(&body, &index, key, arguments)
++            .unwrap();
++        assert!(
++            !plan
++                .steps()
++                .iter()
++                .any(|step| matches!(step, RuntimeScalarStep::ConstantPath(_)))
++        );
++        assert!(
++            plan.steps()
++                .iter()
++                .any(|step| matches!(step, RuntimeScalarStep::Operation(Op::ReadLocal { .. })))
++        );
++    }
++    #[test]
++    fn macro_constant_recipe_requires_closed_site_and_exact_origin_slots_exits_and_query() {
++        use crate::{
++            db::value::QueryValue,
++            frontend::constant_construction::tests::{query, result, world},
++            ir::{
++                recipe::{Origin, RecipeDraft},
++                source_constant::SourceConstantInstruction,
++            },
++        };
++        let (parsed, body, index, sites) = super::super::control_tests::entered(ORIGINAL, 2024);
++        let [(key, arguments)] = sites.as_slice() else {
++            panic!()
++        };
++        let plan = parsed
++            .runtime_macro_scalar_plan(&body, &index, key, arguments)
++            .unwrap();
++        let site = plan
++            .steps()
++            .iter()
++            .find_map(|step| match step {
++                RuntimeScalarStep::ConstantPath(site) => Some(site.as_ref()),
++                _ => None,
++            })
++            .unwrap();
++        let (mut db, view, definition) = world(ORIGINAL, "X", 2024);
++        let result = result(&db, &view, definition);
++        let wire = result.scalar().unwrap().wire_type();
++        let outcome = query(&mut db, &view, result.admission(), &wire);
++        let QueryValue::Constant(current) = outcome.value.as_ref() else {
++            panic!()
++        };
++        let value = current.payload().decode_value().unwrap();
++        let instruction = SourceConstantInstruction::capture_macro_data(
++            &index,
++            site,
++            current.key(),
++            Digest::of_bytes(b"data-only recipe verifier control"),
++            &wire,
++            &value,
++            vec![],
++        )
++        .unwrap();
++        let draft = RecipeDraft {
++            key: site.key().unwrap().clone(),
++            origin: Origin {
++                span: site.span().clone(),
++                expansion_ancestry: vec![],
++            },
++            operations: vec![Op::SourceConstant {
++                constant: Box::new(instruction),
++                destination: site.destination(),
++            }],
++            exits: vec![site.exit(&index).unwrap()],
++            dependencies: vec![],
++        };
++        crate::ir::validate::verify_runtime_macro_source_constant(draft.clone(), &index, site)
++            .unwrap();
++        assert!(crate::ir::validate::verify(draft.clone(), &index).is_err());
++        for mutation in 0..5 {
++            let mut wrong = draft.clone();
++            match mutation {
++                0 => wrong.key.phase = Phase::Commit.code().unwrap(),
++                1 => wrong.origin.span.relative_end -= 1,
++                2 => {
++                    let Op::SourceConstant { destination, .. } = &mut wrong.operations[0] else {
++                        panic!()
++                    };
++                    *destination = index.nodes()[key.node as usize].runtime_temporaries[0].unwrap();
++                }
++                3 => {
++                    wrong.exits = vec![RecipeExit::Next(
++                        index.pc(NodeId(key.node), Phase::Commit).unwrap(),
++                    )]
++                }
++                _ => wrong.operations.push(Op::Unit {
++                    destination: site.destination(),
++                }),
++            }
++            assert!(
++                crate::ir::validate::verify_runtime_macro_source_constant(wrong, &index, site)
++                    .is_err()
++            );
++        }
++        // The closed IR route checks source shape only. No admitted publication
++        // or VM execution permission is created by this component control.
++    }
++}
+--- a/crates/lrr/src/syntax/runtime_macro_scalars.rs
++++ b/crates/lrr/src/syntax/runtime_macro_scalars.rs
+@@ -36,9 +36,12 @@
+ }
+ #[path = "runtime_macro_calls.rs"]
+ mod calls;
++#[path = "runtime_macro_constant_paths.rs"]
++mod constant_paths;
+ #[path = "runtime_macro_primitive_methods.rs"]
+ mod primitive_methods;
+ use calls::{ArgumentBorrowDraft, CallDraft};
++pub(crate) use constant_paths::RuntimeMacroConstantPath;
+ pub(crate) use primitive_methods::{RuntimePrimitiveMethod, RuntimePrimitiveMethodKind};
+ #[cfg(test)]
+ #[path = "runtime_macro_call_tests.rs"]
+@@ -312,6 +315,7 @@
+                         }));
+                     }
+                     ast::Expr::PathExpr(path) => {
++                        let span = original_span(&ast::Expr::PathExpr(path.clone()))?;
+                         let path = path.path().ok_or_else(unsupported)?;
+                         let segment = path.segment().ok_or_else(unsupported)?;
+                         if path.qualifier().is_some()
+@@ -321,13 +325,24 @@
+                             return Err(unsupported());
+                         }
+                         let name = segment.name_ref().ok_or_else(unsupported)?;
+-                        let read = self.runtime_macro_binding_read(
++                        let Some(read) = self.runtime_macro_binding_read_if_local(
+                             body,
+                             index,
+                             key,
+                             name.text(),
+                             destination,
+-                        )?;
++                        )?
++                        else {
++                            stack.push(Work::Step(RuntimeScalarStep::ConstantPath(Box::new(
++                                RuntimeMacroConstantPath::new(
++                                    self.key(),
++                                    span,
++                                    destination,
++                                    name.text(),
++                                )?,
++                            ))));
++                            return Ok(());
++                        };
+                         let fallback = if let Op::ReadLocal { binding, .. } = &read {
+                             super::thunks::local_integer_fallback(
+                                 self,
+--- a/crates/lrr/src/syntax/thunks.rs
++++ b/crates/lrr/src/syntax/thunks.rs
+@@ -1469,6 +1469,24 @@
+         name: &str,
+         destination: crate::ir::pc::SlotId,
+     ) -> Result<Op, Diagnostic> {
++        self.runtime_macro_binding_read_if_local(body, index, key, name, destination)?
++            .ok_or_else(|| {
++                Diagnostic::new(
++                    "LRR-E-UNSUPPORTED",
++                    "assertion non-local binding awaits ordinary namespace resolution".into(),
++                )
++            })
++    }
++    /// An absent lexical local is a typed source-selection frontier, not an
++    /// instruction. The coordinator must independently select a Value member.
++    pub(crate) fn runtime_macro_binding_read_if_local(
++        &self,
++        body: &BodyHandle,
++        index: &BodyIndex,
++        key: &PcKey,
++        name: &str,
++        destination: crate::ir::pc::SlotId,
++    ) -> Result<Option<Op>, Diagnostic> {
+         self.runtime_macro_binding_operation(body, index, key, name, destination, false)
+     }
+     pub(crate) fn runtime_macro_binding_place(
+@@ -1479,7 +1497,13 @@
+         name: &str,
+         destination: crate::ir::pc::SlotId,
+     ) -> Result<Op, Diagnostic> {
+-        self.runtime_macro_binding_operation(body, index, key, name, destination, true)
++        self.runtime_macro_binding_operation(body, index, key, name, destination, true)?
++            .ok_or_else(|| {
++                Diagnostic::new(
++                    "LRR-E-UNSUPPORTED",
++                    "assertion non-local binding awaits ordinary namespace resolution".into(),
++                )
++            })
+     }
+     fn runtime_macro_binding_operation(
+         &self,
+@@ -1489,7 +1513,7 @@
+         name: &str,
+         destination: crate::ir::pc::SlotId,
+         place: bool,
+-    ) -> Result<Op, Diagnostic> {
++    ) -> Result<Option<Op>, Diagnostic> {
+         if body.key() != key.body || *index.body() != key.body {
+             return Err(error("runtime binding operand body differs"));
+         }
+@@ -1544,7 +1568,7 @@
+             .ok_or_else(|| error("runtime binding invocation source differs"))?;
+         let name = MacroName::parse(name, self.edition)?;
+         if let Some(binding) = local_binding_at(self, index, body, expression.syntax(), &name)? {
+-            return Ok(if place {
++            return Ok(Some(if place {
+                 Op::MakePlace {
+                     binding,
+                     destination,
+@@ -1554,10 +1578,10 @@
+                     binding,
+                     destination,
+                 }
+-            });
++            }));
+         }
+         if let Some(ordinal) = parameter_at(self, expression.syntax(), &name)? {
+-            return Ok(if place {
++            return Ok(Some(if place {
+                 Op::ParameterPlace {
+                     ordinal,
+                     destination,
+@@ -1567,12 +1591,9 @@
+                     ordinal,
+                     destination,
+                 }
+-            });
+-        }
+-        Err(Diagnostic::new(
+-            "LRR-E-UNSUPPORTED",
+-            "assertion non-local binding awaits ordinary namespace resolution".into(),
+-        ))
++            }));
++        }
++        Ok(None)
+     }
+     pub(crate) fn runtime_macro_successor(
+         &self,
+--- a/docs/tasks.json
++++ b/docs/tasks.json
+@@ -5783,11 +5783,20 @@
+         "local_context_refuses_a_foreign_ast_and_charges_exact_length_admission",
+         "cold_unresolved_exits_do_not_grant_targets_or_precheck_the_reached_scalar",
+         "unchanged_constant_ranges_complete_through_reached_scopes_all_editions",
+-        "reached_scope_requests_refuse_foreign_world_epoch_scope_and_duplicate_progress"
++        "reached_scope_requests_refuse_foreign_world_epoch_scope_and_duplicate_progress",
++        "unchanged_nested_const_fn_entire_main_resolves_assertion_constant_all_editions",
++        "unchanged_constant_operand_keeps_original_span_and_rejects_foreign_binding",
++        "local_shadow_remains_a_lexical_read_and_does_not_mint_constant_site",
++        "macro_constant_recipe_requires_closed_site_and_exact_origin_slots_exits_and_query"
+       ],
+       "acceptance_contract": "array length constant, recursive bounded const fn, cycle, cold effect branch, reached forbidden effect, and two uses with independently mutable guest arrays. Constant memo contains no guest handles.",
+       "commands": [],
+-      "fixture_ids": [],
++      "fixture_ids": [
++        "T054-MACRO-CONST-MAIN",
++        "T054-MACRO-CONST-SOURCE",
++        "T054-MACRO-CONST-SHADOW",
++        "T054-MACRO-CONST-IR"
++      ],
+       "artifact_paths": [
+         "artifacts/macos-first/sol-pure-constants-v1/HANDOFF.txt",
+         "artifacts/macos-first/root-constant-wire-v1/HANDOFF.md",
+@@ -6382,6 +6391,16 @@
+           "task_complete": false,
+           "full_stock_fixture_passes": 0
+         }
++      },
++      "current_macro_constant_operand_candidate": {
++        "status": "source_only_uncompiled_unexecuted_held",
++        "source_candidate": "worktracks/candidates/root-macro-constant-path-v1/README.md",
++        "baseline": "fdde8eac1bca99ea1e102fd5308e39ccb4c06e0862dbc9459f6b7e8c29b46b25",
++        "scope": "Original unqualified scalar const operands in composed compiler assertions; static, string/array operands and bare assert binding predicate remain unsupported runtime blockers",
++        "pending_test_bodies": 4,
++        "full_milestone_passed": false,
++        "canonical_promotion": false,
++        "full_fixture_passes_added": 0
+       }
+     },
+     {

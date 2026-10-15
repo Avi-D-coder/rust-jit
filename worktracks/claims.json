@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Interpreter-first WT02. V107 source/search/storage scope150distinct passes and all audits green. V108 finalledger/reference/manifest audits green. Actual rebuilt CLI attempts115unchanged plain-run-pass cases once owning2015:46runtime-contract passes/69interpreter failures,0timeouts/harness omissions/unexecuted. All11historical passes reproduced,35newlymeasured passing programs (not35proved new capabilities);782capture refusal controls pass. Fullmilestone gate03 now live asynchronously on frozenfdde8eac, no canonicalpromotion yet. Root next private implementation targets exact7nonlocal assertion constant frontiers using existing source/name/query/publication authority; no guestnative fallback. No full-fixture/task/JIT/Linux completion.",
+      "scope": "Interpreter-first WT02. Current V108 stock115 owning-edition evidence46runtime-contract passes/69failures; fresh fullmilestone remains live on frozenfdde8eac. Root prepared separate16-leaf T032/T054 source/query/publication macro-constant candidate, exact zero-fuzz replay and formatting checked; compilation/four acceptance bodies unexecuted. Original const-fn-nested wholemain/all4 editions is the pending primary witness; static/string/array/qualified/generic/bare-predicate gaps remain. No B/T3 writes, no canonical promotion or full-fixture/task/JIT/Linux completion.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -586,7 +586,9 @@
         "artifacts/macos-first/root-compiler-string-literal-v1/",
         "artifacts/macos-first/root-compiler-string-fixture-v2/",
         "artifacts/macos-first/root-string-search-frame-storage-v1/",
-        "artifacts/macos-first/root-string-search-frame-metadata-v2/"
+        "artifacts/macos-first/root-string-search-frame-metadata-v2/",
+        "artifacts/macos-first/root-macro-constant-path-v1/",
+        "worktracks/candidates/root-macro-constant-path-v1/"
       ],
       "issue": null,
       "pull_request": null,
