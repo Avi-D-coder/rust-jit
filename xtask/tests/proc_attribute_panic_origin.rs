@@ -165,6 +165,17 @@ fn rustc_original_attribute_panic_retains_bound_invocation_and_definition() {
         .prepare_attribute_selection(&mut db, &selection)
         .unwrap();
     let invocation = request.request();
+    // Procedural identity includes attribute arguments, callback sites and
+    // captured source identities. A syntax attachment receipt must preserve
+    // that schema instead of assuming every request hashes only its forest.
+    assert_eq!(
+        lrr::service::macro_session::procedural_input_fingerprint(invocation).unwrap(),
+        request.key().input_tokens
+    );
+    assert_ne!(
+        Digest::of_bytes(&invocation.input.encode().unwrap()),
+        request.key().input_tokens
+    );
     let call = invocation
         .input
         .spans()

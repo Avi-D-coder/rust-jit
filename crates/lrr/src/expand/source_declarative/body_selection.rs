@@ -2,7 +2,6 @@
 //! inference, executable shape checking, expansion or guest mutation occurs here.
 use super::*;
 use crate::{source::manifest::ItemKind, syntax::parse::ParsedFile};
-use ra_ap_syntax::{AstNode, ast};
 
 impl SourceSyntaxAssembly {
     /// Calls in nested functions belong to those functions, including generated
@@ -41,18 +40,7 @@ impl SourceSyntaxAssembly {
             if !range.contains(call_range) {
                 continue;
             }
-            let syntax = parsed
-                .syntax_at(call_range, |node| ast::MacroCall::can_cast(node.kind()))?
-                .ok_or_else(|| fault("selected assembly call syntax attachment absent"))?;
-            let function = syntax
-                .ancestors()
-                .take(4096)
-                .find_map(ast::Fn::cast)
-                .ok_or_else(|| fault("selected assembly call function owner absent"))?;
-            let body = function
-                .body()
-                .ok_or_else(|| fault("selected assembly call function body absent"))?;
-            let owner = crate::syntax::ast_adapter::range(body.syntax().text_range());
+            let owner = parsed.macro_call_function_body(call_range)?;
             if owner != range {
                 continue; // A nested function is independently prepared at entry.
             }

@@ -34,6 +34,26 @@ fn role_matches(node: &SyntaxNode, role: NodeRole) -> bool {
     }
 }
 impl ParsedFile {
+    /// Structural ownership only. The coordinator chooses expansion demand;
+    /// this AST query supplies no name, type, body-entry or producer authority.
+    pub(crate) fn macro_call_function_body(
+        &self,
+        call: SourceRange,
+    ) -> Result<SourceRange, Diagnostic> {
+        let syntax = self
+            .syntax_at(call, |node| ast::MacroCall::can_cast(node.kind()))?
+            .ok_or_else(|| invalid("macro call syntax attachment absent"))?;
+        let function = syntax
+            .ancestors()
+            .take(MAX_DEPTH)
+            .find_map(ast::Fn::cast)
+            .ok_or_else(|| invalid("macro call function owner absent"))?;
+        let body = function
+            .body()
+            .ok_or_else(|| invalid("macro call function body absent"))?;
+        Ok(super::ast_adapter::range(body.syntax().text_range()))
+    }
+
     /// The indexed interval chooses a tree path; the role disambiguates nodes
     /// sharing that interval (e.g. a path, a path expression and its name).
     pub(crate) fn entered_node_syntax(

@@ -377,9 +377,13 @@
     "remaining": "All8 legacy macro routes, standard macro source expansion/common CLI integration, general transactional patterns, full source/type/member goals and scoped cached namespace dependencies remain open."
   },
   "fresh_full_milestone": {
-    "status": "running_no_terminal",
+    "status": "failed_actual_terminal",
+    "release": "artifacts/macos-first/sol-common-selected-body-preparation-validation-v2/GATE-RELEASE.json",
+    "release_sha256": "afa52c46691eb6744e64888b11fd6299a2aaa1791ebc2018f02b0cb42e1e7ece",
     "source_member": "ae254ae5c7093f4ecb169595fe4467cf2bccc0d87e2b88a0ed05b33eb545132a",
-    "argv": [
+    "actual_gate_observation": "dc29e7/1",
+    "collector_observation": "6cabad/0",
+    "gate_argv": [
       "cargo",
       "+1.99.0",
       "run",
@@ -391,9 +395,90 @@
       "gate",
       "03"
     ],
-    "actual_launch": "5c6213 session23908 PID18106",
-    "last_live_observation": "175b0e child cargo test workspace PID22457 / lrr unittest22458",
-    "run_directory": "artifacts/macos-first/sol-common-selected-body-preparation-validation-v2/gate03",
-    "prior_milestone": "AssemblyV3 failed 2833 pass /1 fail /425 unstarted; failure preserved in common-source-assembly receipt"
+    "gate_exit": 1,
+    "host_tests_exit": 101,
+    "elapsed_seconds": 754.6482200419996,
+    "named_reconciliation": {
+      "listed": 3308,
+      "passed": 2634,
+      "failed": 1,
+      "unstarted": 673,
+      "interrupted": 0,
+      "ignored": 0,
+      "unexpected": 0
+    },
+    "named_failure": {
+      "name": "rustc_original_attribute_panic_retains_bound_invocation_and_definition",
+      "path": "xtask/tests/proc_attribute_panic_origin.rs",
+      "line": 205,
+      "code": "LRR-E-EXPANSION-INPUT",
+      "message": "issued syntax request input differs from its key",
+      "kind": "Result::unwrap on Err; no test success inferred"
+    },
+    "architecture_failure": "expand/source_declarative/body_selection.rs: parser import outside syntax (3 diagnostics)",
+    "fresh_reports": {
+      "primary_reports": [
+        {
+          "name": "00.json",
+          "sha256": "7a6317e616afb31b18ec4ae1666eaf61b0c4a53148a0f48e16bb57172bd76a2f",
+          "bytes": 709395,
+          "passed": false
+        },
+        {
+          "name": "01.json",
+          "sha256": "ceb8c3d430fa008fff20d6f73a71899b440a471fdf94207c2a31cdab2af9acb6",
+          "bytes": 62693,
+          "passed": false
+        },
+        {
+          "name": "02.json",
+          "sha256": "a1f7b0695ba0e9a9b22d6ec918aa225044c68467be3fb29c9a955aa04cd1b7b0",
+          "bytes": 1356,
+          "passed": false
+        },
+        {
+          "name": "03.json",
+          "sha256": "9db9058abc753b40926830de360717c1ccc2734dbe6b8b34285b3eb5a1d412d5",
+          "bytes": 1367,
+          "passed": false
+        }
+      ],
+      "extra_reports": [
+        {
+          "name": "m001-components.json",
+          "sha256": "4594fca868f6f92136b56d480d7828dd3b24bb9689d3f8115417c687105b47b0",
+          "bytes": 45408
+        },
+        {
+          "name": "m002-components.json",
+          "sha256": "1e15207a318779874856a70966d55dd4b93bd8e25a522f83e63d34dc88e78b2d",
+          "bytes": 13237
+        },
+        {
+          "name": "m003-components.json",
+          "sha256": "0f0cb5a19a5ed85f207c59c48ed241c24e4685517cceee7f7164f111a665e0a9",
+          "bytes": 5608
+        },
+        {
+          "name": "bootstrap.json",
+          "sha256": "02d9234e3a034e952def1b3189ae700603f77317657abc5d095ac4f7082e9893",
+          "bytes": 47720
+        },
+        {
+          "name": "dependency-licenses.json",
+          "sha256": "fd0c35bbe11ca1a46b7882f3701b39831552aa119a88d88f612349bb4baab419",
+          "bytes": 58093
+        }
+      ]
+    },
+    "required_references": {
+      "fixture_reference_count": 2429,
+      "fixture_references_exactly_listed": 2429,
+      "fixture_references_exactly_passed": 1877,
+      "ledger_reference_rows": 2713,
+      "ledger_rows_exactly_listed": 2709,
+      "ledger_rows_exactly_passed": 2076
+    },
+    "root_repair": "Canonical source-boundaries successor reuses procedural request schema and moves AST owner lookup into syntax; uncompiled/unexecuted when prepared, separately validating. No old failed result replaced with success."
   }
 }

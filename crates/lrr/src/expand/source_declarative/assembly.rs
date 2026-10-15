@@ -307,12 +307,10 @@ impl SourceSyntaxAssembly {
         let before = self.tree.materialize().map_err(adapter)?;
         verify_calls(&self.calls, &before.calls)?;
         let call = &before.calls[position];
-        if call.site != receipt.site
-            || receipt::roots_identity(call.input.roots())? != receipt.roots
-            || call.edition != key.call_edition
-        {
+        if call.site != receipt.site || call.edition != key.call_edition {
             return Err(fault("source syntax issued call tokens/site differ"));
         }
+        receipt.require_call_roots(&call.input)?;
         let tokens = lrr_expand_adapter::token_wire::TokenForest::decode(output.record().wire())
             .map_err(adapter)?;
         let generated = declaration_output::materialize(&tokens, declaration_grammar(key.grammar))

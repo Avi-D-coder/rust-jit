@@ -14,19 +14,75 @@ pub(crate) struct SyntaxRequestReceipt {
     pub(super) key: ExpansionKey,
     pub(super) site: Key,
     pub(super) roots: Digest,
+    input: SyntaxInput,
+}
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum SyntaxInput {
+    DelimitedCall,
+    FunctionArguments,
+    ItemTransform,
 }
 impl SyntaxRequestReceipt {
     pub(crate) fn capture(request: &SourceDeclarativeRequest) -> Result<Self, Diagnostic> {
         request.key().validate()?;
-        if Digest::of_bytes(&request.input.encode().map_err(adapter)?) != request.key().input_tokens
-        {
+        let bytes = request.input.encode().map_err(adapter)?;
+        let (input, identity) = if let Some(procedural) = request.procedural_request() {
+            if bytes != procedural.input.encode().map_err(adapter)?
+                || request.site != procedural.call_site
+            {
+                return Err(fault(
+                    "issued procedural syntax request input or site differs",
+                ));
+            }
+            use lrr_expand_adapter::proc_client::ProcForm;
+            let input = match procedural.form {
+                ProcForm::FunctionLike => SyntaxInput::FunctionArguments,
+                ProcForm::Attribute | ProcForm::Derive => SyntaxInput::ItemTransform,
+            };
+            // The existing procedural schema also binds attribute tokens,
+            // callback sites and captured source identities. A bare forest
+            // digest is deliberately not the identity of this request kind.
+            (
+                input,
+                crate::service::macro_session::procedural_input_fingerprint(procedural)?,
+            )
+        } else {
+            (SyntaxInput::DelimitedCall, Digest::of_bytes(&bytes))
+        };
+        if identity != request.key().input_tokens {
             return Err(fault("issued syntax request input differs from its key"));
         }
         Ok(Self {
             key: request.key().clone(),
             site: request.site,
             roots: roots_identity(request.input.roots())?,
+            input,
         })
+    }
+    pub(super) fn require_call_roots(
+        &self,
+        call: &lrr_expand_adapter::token_wire::TokenForest,
+    ) -> Result<(), Diagnostic> {
+        let roots = match self.input {
+            SyntaxInput::DelimitedCall => call.roots(),
+            SyntaxInput::FunctionArguments => {
+                let [TokenTree::Group { children, .. }] = call.roots() else {
+                    return Err(fault(
+                        "issued function arguments require their actual call group",
+                    ));
+                };
+                children
+            }
+            SyntaxInput::ItemTransform => {
+                return Err(fault(
+                    "issued item transform requires its actual item attachment",
+                ));
+            }
+        };
+        if roots_identity(roots)? != self.roots {
+            return Err(fault("source syntax issued call tokens/site differ"));
+        }
+        Ok(())
     }
     pub(crate) fn key(&self) -> &ExpansionKey {
         &self.key

@@ -95,3 +95,19 @@ excludes immutable parsing-only retained inputs from the conservative namespace
 census; actual namespace/source/seal/epoch dependencies and separate definition
 leases remain checked. This does not repair the global census's hot-path cost.
 [Exact source, review against all eight modes and queued validation](../evidence/2026-10-15-common-lexical-source-context.json).
+
+
+The selected-body V2 milestone later failed: 2,634 passed, one failed and 673
+unstarted of 3,308 listed, plus parser-boundary audit errors. Actual procedural
+attribute identity includes attributes, callback sites and captured source
+identities; the attachment receipt incorrectly treated it as a bare token-forest
+digest. Lexical V1 then passed its four new controls but failed seven other
+library controls (1,152 pass/7 fail) because edition lookup demanded a hygiene
+map even when captured syntax had one recorded owning edition. Root's separate
+eight-file source-boundaries successor preserves both failures and repairs their
+shared contracts. Local binding comparison still requires actual hygiene.
+AST ownership stays inside syntax; expansion receives typed source ranges.
+This successor is validating, with no pass claimed yet. Two additional authorized
+workers now implement shared scalar pattern-test lowering and generated reference
+source authority; their in-progress files are excluded from this frozen source.
+[Exact source/failure/review boundary](../evidence/2026-10-15-common-source-boundaries.json).

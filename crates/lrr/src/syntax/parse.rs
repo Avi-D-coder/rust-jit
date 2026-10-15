@@ -446,6 +446,13 @@ impl ParsedFile {
         Ok(self)
     }
     pub(crate) fn token_edition(&self, range: SourceRange) -> Result<u16, Diagnostic> {
+        // Captured module/argument syntax may carry generated provenance while
+        // retaining one declared owning edition and no mixed-token map. That
+        // is enough for edition selection, never for local-name comparison.
+        // same_local_name_context still requires the actual hygiene attachment.
+        if self.token_contexts.is_none() {
+            return Ok(self.profile.edition);
+        }
         Ok(self
             .token_context(range)?
             .map_or(self.profile.edition, |context| context.edition))

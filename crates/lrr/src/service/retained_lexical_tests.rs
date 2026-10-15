@@ -4,17 +4,12 @@ use super::retained_body_tests::{prepare_expanded_body_source, prepare_expanded_
 use crate::{
     core::digest::StableEncode,
     db::{
-        dependency::{InputKey, InputValue},
-        key::QueryKey,
-        memo::Database,
-        poll::QueryPoll,
-        provider::SyntaxProvider,
-        value::QueryValue,
+        key::QueryKey, memo::Database, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue,
     },
     engine::run::{RunMachine, RunPoll, ValueSummary},
     ir::{op::Op, pc::Phase},
+    syntax::body_index::{ExpressionKind, NodeRole},
 };
-use ra_ap_syntax::{AstNode, ast};
 
 fn ready<T>(poll: QueryPoll<T>) -> T {
     match poll {
@@ -183,27 +178,13 @@ fn missing_definition_site_scope_join_never_captures_a_same_spelled_caller() {
             .fingerprint();
         ready(db.publish_retained_syntax(input.clone()));
         let body = ready(db.publish_retained_body(input.clone(), definition));
-        let parsed = ready(db.fetch(&SyntaxProvider, QueryKey::ParseFile(input.key().clone())));
-        let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
-            panic!("retained parser absent")
-        };
         let indexed = ready(db.fetch(&SyntaxProvider, QueryKey::BodyStructure(body)));
         let QueryValue::BodyStructure(indexed) = indexed.value.as_ref() else {
             panic!("ordinary body index absent")
         };
-        let Some((InputValue::DefinitionBody(handle), _)) =
-            db.published_input(&InputKey::DefinitionBody(definition))
-        else {
-            panic!("actual body handle absent")
-        };
         let mut selected = None;
         for node in indexed.nodes() {
-            if parsed
-                .entered_node_syntax(handle, indexed, node.id)
-                .unwrap()
-                .and_then(ast::PathExpr::cast)
-                .is_some()
-            {
+            if node.role == NodeRole::Expression(ExpressionKind::Path) {
                 assert!(selected.replace(node.id).is_none());
             }
         }

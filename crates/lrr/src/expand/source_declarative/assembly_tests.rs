@@ -513,7 +513,7 @@ fn issued_attachment_receipt_cannot_authorize_other_token_roots_or_sites() {
         "macro_rules! value { () => { 1_i32 + 2_i32 } } fn main() { value!(); }",
         2024,
     );
-    let request = request(&provider, &index);
+    let mut request = request(&provider, &index);
     let output = output(&provider, index.scan(), &request, 1);
     let receipt = SyntaxRequestReceipt::capture(&request).unwrap();
     for alter_site in [false, true] {
@@ -533,6 +533,13 @@ fn issued_attachment_receipt_cannot_authorize_other_token_roots_or_sites() {
         assert_eq!(error.code, "LRR-E-EXPANSION-INPUT");
         assert!(error.message.contains("tokens/site differ"));
     }
+    request.key.input_tokens = Digest([0; 32]);
+    assert!(
+        SyntaxRequestReceipt::capture(&request)
+            .unwrap_err()
+            .message
+            .contains("input differs from its key")
+    );
 }
 
 #[test]

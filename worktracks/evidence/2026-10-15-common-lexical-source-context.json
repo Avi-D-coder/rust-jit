@@ -8,7 +8,7 @@
     "T032",
     "M014"
   ],
-  "state": "uncompiled_unexecuted_source_candidate",
+  "state": "failed_broad_validation_new_controls_passed_architecture_held",
   "source_baseline": "4eb1cda2a38fcede1f3e715a373e59fae1a30700",
   "source_packet": "artifacts/macos-first/common-lexical-source-context-v1/SOURCE.json",
   "source_packet_sha256": "35750aa1b041ea40842c53af01da51336b6df731a911d47977b9b9565e874ffd",
@@ -149,18 +149,158 @@
     "source_change_rule": "Earlier selected-body V2 validation/milestone stays tied to frozen ae254ae5. This successor is not covered by it; exact delta requires its own asynchronous validation."
   },
   "validation": {
-    "state": "queued_after_actual_selected_body_v2_milestone_terminal",
-    "owner": "/root/edition_macro_logic",
-    "target": "artifacts/macos-first/root-constant-next-validation-v1/validation-target",
-    "planned_scopes": [
-      "service::retained_lexical_tests (4)",
-      "service::retained_selected_body_tests (3)",
-      "engine::run::namespace_tests",
-      "syntax::parse tests",
-      "lrr --lib",
-      "strict workspace/all-targets Clippy"
+    "state": "failed_actual_terminal",
+    "release": "artifacts/macos-first/sol-common-lexical-source-context-validation-v1/RELEASE.json",
+    "release_sha256": "71d39420f6f77be3c9796fe378030c17da0bfdafe907fe94dfc70214350e4950",
+    "source_member": "d452d86ae51ab7f1fcb4755e9f67fcf85ca094c44f72043cb6cc3e8d00d51038",
+    "stages": {
+      "lexical": {
+        "actual_tool_observation": "254395/0",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "service::retained_lexical_tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "terminal_sha256": "0b356dd24500063d3dc68a36ccc2aeb7c34a104af6f54e9f3bf04a7f60158268",
+        "elapsed_seconds": 30.837084625003627,
+        "exit": 0,
+        "bodies": 4,
+        "passed": 4,
+        "failed": 0
+      },
+      "selected-body": {
+        "actual_tool_observation": "948bb0 intermediate; final3f7188/1",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "service::retained_selected_body_tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "terminal_sha256": "5198517e2a715f51d10a31cd76ed38a8e06441d8903d331cd53a1f53ba7e0928",
+        "elapsed_seconds": 2.329118292022031,
+        "exit": 0,
+        "bodies": 3,
+        "passed": 3,
+        "failed": 0
+      },
+      "namespace": {
+        "actual_tool_observation": "948bb0 intermediate; final3f7188/1",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "engine::run::namespace_tests",
+          "--",
+          "--test-threads=1"
+        ],
+        "terminal_sha256": "c620df37883474481cafade45d4073e2a6ac3f05a3d07872ad656efc955306fb",
+        "elapsed_seconds": 46.301150874991436,
+        "exit": 0,
+        "bodies": 5,
+        "passed": 5,
+        "failed": 0
+      },
+      "parse": {
+        "actual_tool_observation": "948bb0 intermediate; final3f7188/1",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "syntax::parse",
+          "--",
+          "--test-threads=1"
+        ],
+        "terminal_sha256": "57720262456ea5cd1a13f012704dee39a80d2c764f19d93ec2a4a3c423476220",
+        "elapsed_seconds": 0.5423107079986949,
+        "exit": 0,
+        "bodies": 21,
+        "passed": 21,
+        "failed": 0
+      },
+      "lrr-library": {
+        "actual_tool_observation": "948bb0 intermediate; final3f7188/1",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "--",
+          "--test-threads=1"
+        ],
+        "terminal_sha256": "4600fba865a30520befefe95790d47da1878e1950244247c2b50d4ecbdb3018d",
+        "elapsed_seconds": 218.90254279100918,
+        "exit": 101,
+        "bodies": 1159,
+        "passed": 1152,
+        "failed": 7
+      }
+    },
+    "lrr_library_bodies": 1159,
+    "lrr_library_passes": 1152,
+    "lrr_library_failures": 7,
+    "distinct_passed_bodies": 1152,
+    "distinct_failed_bodies": 7,
+    "body_executions": 1192,
+    "repeated_selected_passes_inside_library": 33,
+    "failed_names": [
+      "expand::argument_declarations::tests::original_argument_captures_preserve_real_call_tokens_and_local_definition",
+      "frontend::declaration_imports::tests::upstream_generated_module_prefix_is_ambiguous_with_less_expanded_glob",
+      "frontend::declaration_imports::tests::upstream_generated_module_prefix_is_ambiguous_with_original_outer_module",
+      "frontend::macro_names::scoped_module_binding_tests::generated_module_attachment_keeps_outer_block_and_generated_parent_unproven",
+      "frontend::macro_names::scoped_module_binding_tests::generated_module_attachment_projects_only_the_matched_root",
+      "frontend::macro_names::scoped_module_binding_tests::module_capture_conversion_requires_exact_original_or_generated_provenance",
+      "syntax::declaration_scan::module_capture_tests::module_physical_identity_is_distinct_from_attachment_kind"
     ],
-    "actual_commands": []
+    "common_diagnostic": {
+      "code": "LRR-E-MACRO-OUTPUT",
+      "message": "generated name crosses or lacks its token context attachment"
+    },
+    "strict_workspace_alltargets": "unexecuted; stopped at first failed command",
+    "full_milestone": "not run on lexical source; prior selected-body V2 milestone failure retained separately",
+    "source_guard": {
+      "source_member": "d452d86ae51ab7f1fcb4755e9f67fcf85ca094c44f72043cb6cc3e8d00d51038",
+      "frozen_files": 4933,
+      "symlinks": 3,
+      "owner_sha256": "8b8007d8b49bd808055fbd21db6290c24bd1c37546f191b82829d7a12ab3edb4",
+      "raw_files": 510,
+      "cases": 324,
+      "manifest_sha256": "6c01f3945f0048e75419efe435e8ba635b7a0e9d10ebbf992f90d0727c5271c8",
+      "licenses": {
+        "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+        "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+      },
+      "free_bytes": 56940670976
+    },
+    "correction": "token_edition returns the recorded owning edition when no mixed-token map exists; actual token_context and same_local_name_context retain strict hygiene requirements. Separate source-boundaries V1 validates correction."
   },
   "acceptance": {
     "new_configured_upstream_runtime_contract_passes": 0,

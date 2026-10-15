@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T23:39:29.796983+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T024",
+    "M014",
+    "M016"
+  ],
+  "state": "uncompiled_unexecuted_when_frozen_now_validating",
+  "source_baseline": "8e4e1c23c8",
+  "source_packet": "artifacts/macos-first/common-source-boundaries-v1/SOURCE.json",
+  "source_packet_sha256": "97d10d92d460d35272db0e37126763b94188366abd37088b2ed8cc5705a3b20a",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "29c07b31bef072517731336d84fa7cf615f6d46710fe0bff33a94d0242ea6b90"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly_tests.rs",
+      "sha256": "fcc9d29942214a90ccfc8813bd5cc9764c13b7c1d0b92dd0878cf8986ccb4fa1"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/body_selection.rs",
+      "sha256": "24ad67c1d9eb9d6d53ceba1c2a67953fcb52374909b8918d792dbdb7e33585f2"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/syntax_receipt.rs",
+      "sha256": "e24faacabbca61da4de5bec5320a07233316c92538d000dabe14c474771e1e25"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_lexical_tests.rs",
+      "sha256": "30dfc95ce9573ac905d74e387cbe3f29c3515525e76238ae3092c3b12150f829"
+    },
+    {
+      "path": "crates/lrr/src/syntax/node_lookup.rs",
+      "sha256": "a8aafb80727e57b94ba25e340ad1c00d1a99416f9d7ad91cfb6ed006dfeff3f6"
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse.rs",
+      "sha256": "ff593f1bad4e69e51597211299bc331edf809270fbf1db3bf4a90c68149ab89e"
+    },
+    {
+      "path": "xtask/tests/proc_attribute_panic_origin.rs",
+      "sha256": "68060ea75dd0b99ac84ce27fafb9a9a5b3cc5165b33666ad70e90b7b67b6463d"
+    }
+  ],
+  "scope": "Eight exact root-owned source corrections, excluding in-progress disjoint workers and thunks module entry. Includes unexecuted request-schema7 changes (canonical procedural input schema, typed roots, syntax-only AST owner lookup, no parser import in service test) plus correction for actual lexical V1 seven regressions: token_edition retains recorded single owning edition when no mixed-token map exists; actual local-name context comparison still requires hygiene and never gains a spelling-only fallback. Preserve actual failed milestone2634/1/673 and lexical1152/7; no retries against old source. All8 common-engine holds remain open.",
+  "actual_prerequisite_failures": [
+    "worktracks/evidence/2026-10-15-common-selected-body-preparation.json",
+    "worktracks/evidence/2026-10-15-common-lexical-source-context.json"
+  ],
+  "architecture_review": {
+    "1_to_5": "No runtime semantics/evaluator/pattern/method inference added. Request forms choose the existing input schema and structural attachment shape only; actual item transforms cannot be attached as call nodes. Exact source/site/edition/record/currentness checks remain.",
+    "6": "Pure bounded fingerprint/receipt capture during explicit coordinator discovery. No helper execution, query-provider effects or installed-operation planning added.",
+    "7": "No change to namespace dependencies in this successor. Existing global census remains held.",
+    "8": "Nearest function owner uses actual direct range lookup and bounded ancestry inside syntax; expansion consumes owned SourceRange only. Single owning-edition selection stays distinct from actual token hygiene proof. No BodyIndex copy.",
+    "reviewed_files": "Eight exact root-owned packet leaves, excluding live pattern/reference worker edits and their module entries.",
+    "validation_plan": "Actual seven library failures, unchanged proc attribute/source panic fixtures, existing assembly/body/lexical/index banks, strict workspace, then fresh unfiltered gate if scoped pass. Only sole validator owns Cargo/target.",
+    "source_publication": "Checkpoint may be source WIP only. No task or all8 repair closure."
+  },
+  "validation": {
+    "state": "running",
+    "run_directory": "artifacts/macos-first/sol-common-source-boundaries-validation-v1",
+    "actual_launch": "f7ea22 session12021 PID33609",
+    "frozen_source_member_prefix": "dca870f7",
+    "source_snapshot_unchanged": true
+  },
+  "acceptance": {
+    "new_configured_upstream_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "task_completed": false,
+    "all_eight_shortcuts_removed": false,
+    "guest_jit_allowed": false
+  }
+}
