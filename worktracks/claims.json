@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V72 full milestone independently running; coherent48 byte prerequisite queued. Source-only22 byte assertions candidate pushed at f3b37a6d4b; five-file follow-on binds fresh physical comparison admission to store/current views and limits numeric hints to scalar descriptors. Two additional controls unexecuted; no new stock passes, task or JIT completion.",
+      "scope": "V72 milestone remains independently running. Byte prerequisite48 then assertions22+admission5 remain queued. New nine-file T022/T024 source-string decoder/verifier schema14 candidate is held behind that queue. Two unchanged Unicode/NUL originals imported canonically; three component controls unexecuted. String VM storage/methods remain pending; no new stock passes or task/JIT completion.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -481,11 +481,13 @@
         "artifacts/macos-first/root-byte-macro-admission-v1/",
         "worktracks/candidates/root-byte-assertions-v1/",
         "artifacts/macos-first/root-byte-comparison-admission-v2/",
-        "worktracks/candidates/root-byte-comparison-admission-v2/"
+        "worktracks/candidates/root-byte-comparison-admission-v2/",
+        "artifacts/macos-first/root-string-literal-ir-v1/",
+        "worktracks/candidates/root-string-literal-ir-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T10:28:56.999665+00:00",
+      "updated_at": "2026-10-15T10:37:01.791076+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

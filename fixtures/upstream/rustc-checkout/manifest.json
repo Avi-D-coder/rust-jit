@@ -2112,6 +2112,12 @@
       "bytes": 3716
     },
     {
+      "path": "tests/ui/parser/unicode-escape-sequences.rs",
+      "git_blob": "8b084866f196e33f5d277e881dfb8f79339fa173",
+      "sha256": "bfe36a9ec10df6e071a6d8c823aaf08ef65522637d87893b5e8d0490b704f2e4",
+      "bytes": 505
+    },
+    {
       "path": "tests/ui/pattern/match-constant-and-byte-literal.rs",
       "git_blob": "7a793478016dfdc82c2adf4221a1ac630bf9a65b",
       "sha256": "f6027de4bd970afc8394582a9aef83c6229d8d1d21d3a3ab76976a6a31aaa97c",
@@ -2626,6 +2632,12 @@
       "git_blob": "fdcb4246a82fc957a5cf5a795d10ac346a8b4d4a",
       "sha256": "f8347c7e72dc88adf6f94a69f5726c214e24e0c57a569d5ddf2f8f9913da66c6",
       "bytes": 445
+    },
+    {
+      "path": "tests/ui/str/nul-char-equivalence.rs",
+      "git_blob": "2d4110de6812b21354d098fca1f0d326da97ffcb",
+      "sha256": "072d9e7415742e411853ec46e123180fb9aceb6e5d2655ffdf46a6a223ed773c",
+      "bytes": 1059
     },
     {
       "path": "tests/ui/str/str-escape.rs",
@@ -4814,6 +4826,14 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/parser/unicode-escape-sequences.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/pattern/match-constant-and-byte-literal.rs",
       "directives": [
         "//@ run-pass"
@@ -5205,6 +5225,14 @@
       "path": "tests/ui/shadowed/primitive-type-shadowing.rs",
       "directives": [
         "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/str/nul-char-equivalence.rs",
+      "directives": [
+        "//@ run-pass"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"
