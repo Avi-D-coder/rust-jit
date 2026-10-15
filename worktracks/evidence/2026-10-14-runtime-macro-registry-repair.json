@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "task_scope": "T034 required-test registry identity; metadata repair only",
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "old_required_name": "runtime_macro_facet_has_four_stable_unit_and_edition_bound_definitions",
+  "actual_required_name": "runtime_macro_facet_has_six_stable_unit_and_edition_bound_definitions",
+  "files_changed": [
+    "compat/fixtures.toml",
+    "docs/tasks.json"
+  ],
+  "rust_or_test_source_changed": false,
+  "fresh_main_host_results": {
+    "source_member": "8287d3ad645974c0b794ed0d4c89fee4df90bafe69a5d037c2f0cbadcc64d2fc",
+    "listed": 2952,
+    "passed": 2952,
+    "failed": 0,
+    "ignored": 0,
+    "unexecuted": 0,
+    "cargo_exit": 0,
+    "milestone_exit": 1,
+    "milestone_failure": "stale required acceptance-test name; original failed gate reports retained"
+  },
+  "metadata_revalidation": {
+    "v1_member": "8287d3ad645974c0b794ed0d4c89fee4df90bafe69a5d037c2f0cbadcc64d2fc",
+    "v2_member": "5e8492cdc9a1068dad7331254739b959401bb78fa1858ae28578bc35c773fc92",
+    "only_changed_files": [
+      "compat/fixtures.toml",
+      "docs/tasks.json"
+    ],
+    "rust_source_changes": 0,
+    "test_source_changes": 0,
+    "required_entries": 2307,
+    "unique_required_names": 2271,
+    "fixture_names_all_unique_exact_matches": true,
+    "actual_previous_host_bodies_ok": 2952,
+    "same_host_source_carryover_only": true,
+    "supplemental_ledger_entries_not_present": 40,
+    "old_failure_evidence_files_unchanged": 33,
+    "old_gate00_to03_untouched": true,
+    "old_gate_stays_failed": true,
+    "new_full_milestone_not_run": true,
+    "actual_direct_audits": {
+      "fixture-reference": {
+        "actual_chunk": "7a1d78",
+        "exit_code": 0
+      },
+      "manifest_ledger": {
+        "actual_chunk": "5cbcfb",
+        "exit_code": 0
+      }
+    },
+    "originals_verified": 470,
+    "source_unchanged_during_audits": true,
+    "T4_inactive": true,
+    "SM_released": true,
+    "no_cargo_rebuild_or_host_rerun": true,
+    "metadata_only_revalidation_passed": true,
+    "full_milestone_pass_not_claimed": true
+  },
+  "handoff_sha256": "74914644afa1f27aed8ddcbdcf22a3eff594b1cfe7345188f2a3bdba0b14db7e",
+  "raw_evidence_local": "artifacts/macos-first/root-main-v69-integration-validation-v1/agent-validation-v2/",
+  "reproduction": [
+    "cargo +1.99.0 run -p xtask --locked --offline -- fixture-reference-audit",
+    "cargo +1.99.0 run -p xtask --locked --offline -- manifest-audit"
+  ],
+  "new_full_stock_cases": 0,
+  "guest_jit_gate": "closed",
+  "linux_acceptance": "unexecuted",
+  "full_milestone_pass_claimed": false
+}

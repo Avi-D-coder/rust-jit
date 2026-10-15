@@ -3573,7 +3573,7 @@ test = "guest_assertion_admission_checks_origin_slots_message_budget_and_stable_
 [[fixture]]
 id = "T034-RUNTIME-MACRO-CATALOG-01"
 path = "xtask/tests/runtime_macros.rs"
-test = "runtime_macro_facet_has_four_stable_unit_and_edition_bound_definitions"
+test = "runtime_macro_facet_has_six_stable_unit_and_edition_bound_definitions"
 
 [[fixture]]
 id = "T034-RUNTIME-MACRO-CATALOG-02"

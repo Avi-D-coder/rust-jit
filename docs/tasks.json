@@ -2649,7 +2649,7 @@
         "guest_assertion_true_returns_unit_and_false_panics_without_consuming_condition",
         "guest_assertion_type_and_fuel_faults_preserve_operand_and_unstarted_opcode",
         "guest_assertion_admission_checks_origin_slots_message_budget_and_stable_identity",
-        "runtime_macro_facet_has_four_stable_unit_and_edition_bound_definitions",
+        "runtime_macro_facet_has_six_stable_unit_and_edition_bound_definitions",
         "runtime_macro_selection_rejects_forged_provenance_and_preserves_user_identity",
         "runtime_macro_source_routes_preserve_aliases_user_names_and_ambiguous_lookup",
         "fixture_contract_parses_normative_disk_shape_and_rejects_unknown_fields_at_every_level",
