@@ -1,0 +1,42 @@
+--- a/crates/lrr/src/engine/run_macro_cast_context_tests.rs
++++ b/crates/lrr/src/engine/run_macro_cast_context_tests.rs
+@@ -6,17 +6,18 @@
+     "../../../../fixtures/upstream/rustc-checkout/tests/ui/cast/u8-to-char-cast-9918.rs"
+ );
+ #[test]
+-fn unchanged_cast_main_executes_seven_assertions_before_its_raw_pointer_frontier_all_editions() {
++fn unchanged_cast_main_executes_seven_assertions_before_its_nested_string_borrow_frontier_all_editions()
++ {
+     for edition in [2015, 2018, 2021, 2024] {
+         let (mut db, mut run, macros, _) = tests::start_source(CASTS, edition, 10_000);
+         let contexts = macros.contexts().unwrap();
+         let RunPoll::Fault(error) = run.poll_with_runtime_macros(&mut db, &contexts) else {
+-            panic!("unchanged cast main raw-pointer frontier was not reached");
++            panic!("unchanged cast main nested string-borrow frontier was not reached");
+         };
+         assert_eq!(error.code, "LRR-E-UNSUPPORTED");
+         assert_eq!(
+             error.message,
+-            "cast target requires symbolic type resolution"
++            "borrowed composite source requires symbolic reference integration"
+         );
+         let pc = run.frame.pc();
+         let span = run.frame.body.span(NodeId(pc.node)).unwrap();
+@@ -30,7 +31,7 @@
+         assert_eq!(
+             &CASTS[(body.range.start + span.relative_start) as usize
+                 ..(body.range.start + span.relative_end) as usize],
+-            "x as *const _"
++            "&\"hello\""
+         );
+         assert_eq!(run.frame.counters().started_by_opcode[26], 7);
+         assert_eq!(run.frame.counters().started_by_opcode[12], 13);
+@@ -40,7 +41,7 @@
+         );
+         db.finish_run().unwrap();
+     }
+-    // Actual unchanged prefix only. Pointer inference/library effects remain required.
++    // Actual unchanged prefix only. Nested references, pointer inference and library effects remain required.
+ }
+ #[test]
+ fn unchanged_u8_character_cast_entire_main_completes_once_all_editions() {

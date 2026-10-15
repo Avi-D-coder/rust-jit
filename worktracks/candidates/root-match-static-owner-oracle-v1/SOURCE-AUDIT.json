@@ -1,0 +1,35 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "at": "2026-10-15T18:18:51.314030+00:00",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T050",
+    "T042"
+  ],
+  "requires_candidate_patch_sha256": "5d5de90fb5863400db05276b514815edfc2e4e7f23528c2a8e2d9d91670cbb56",
+  "patch_sha256": "1b802ac9463b150614d493122833fbed1d34202367a9d4af13e25963b947bb80",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_match_local_literal_tests.rs",
+      "before_sha256": "b720c46c7a124268389f71ca4ce5741bcaf2f4774a3bff65274c8ee673a25df4",
+      "after_sha256": "207187fea42bc92a0938bd4c1f51aafe40fe1de160c19c08a52f19264bc8e127",
+      "bytes": 2286
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_test_owners.rs",
+      "before_sha256": "1c91cc881cb286a29bc57d92933f879e940f3a7b877746cba9e8eb43482c2d6f",
+      "after_sha256": "c69e2a886351389be16f2573deacdcfa7444e9864eb8476806093852e811d3e9",
+      "bytes": 3478
+    }
+  ],
+  "actual_prior_terminal": "339d6b/1",
+  "production_leaves_changed": 0,
+  "new_host_test_bodies": 0,
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "exact_replay_zero_fuzz_zero_offset": true
+  },
+  "all_edition_main_and_terminal_owner_oracle": "pending_actual_revalidation",
+  "canonical_promotion": false,
+  "full_fixture_passes_added": 0
+}

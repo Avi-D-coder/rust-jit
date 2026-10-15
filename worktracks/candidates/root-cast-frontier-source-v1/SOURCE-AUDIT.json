@@ -1,0 +1,30 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "at": "2026-10-15T18:13:07.566358+00:00",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T051"
+  ],
+  "requires_candidate_patch_sha256": "0ba614dbbbf6937076f7aa3c4022b6a7b77e9849ef247571f40aaa3b98ae7f75",
+  "patch_sha256": "05f067ffdde1c1d9f94059f8b8a7b2d991a777c019ac2721b9fb2512d81ece63",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_macro_cast_context_tests.rs",
+      "before_sha256": "10920906335639e9836fdf992dc82311e2178283ed35795fb52736395c60c4da",
+      "after_sha256": "f7fbf80cc92b096fc1c2468f0b7a2650bb423c29d708f4d99f9e4bfb772bba5d",
+      "bytes": 3024
+    }
+  ],
+  "actual_prior_terminal": "b1034a/1",
+  "old_selector": "unchanged_cast_main_executes_seven_assertions_before_its_raw_pointer_frontier_all_editions",
+  "new_selector": "unchanged_cast_main_executes_seven_assertions_before_its_nested_string_borrow_frontier_all_editions",
+  "selector_ledger_follow_on": "held until remaining feature packets, on exact final shared ledger preimages",
+  "production_leaves_changed": 0,
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "exact_replay_zero_fuzz_zero_offset": true
+  },
+  "seven_assertion_thirteen_cast_prefix": "pending_actual_revalidation",
+  "canonical_promotion": false,
+  "full_fixture_passes_added": 0
+}

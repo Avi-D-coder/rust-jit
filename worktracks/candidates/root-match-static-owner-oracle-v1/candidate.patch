@@ -1,0 +1,90 @@
+--- a/crates/lrr/src/engine/run_match_local_literal_tests.rs
++++ b/crates/lrr/src/engine/run_match_local_literal_tests.rs
+@@ -23,10 +23,25 @@
+         );
+         assert!(run.frame.active_scopes().is_empty());
+         let inventory = run.store.owner_inventory_for_test();
++        // String roots intentionally live until the store epoch ends. Only the
++        // selected arm and the reached assertion literal may own such objects.
++        let statics = run.store.static_literal_objects_for_test().unwrap();
++        assert_eq!(
++            statics.len(),
++            2,
++            "actual immutable owners: {statics:?}; {inventory:?}"
++        );
++        assert!(statics.iter().all(|(_, bytes)| bytes.as_slice() == b"two"));
++        assert_eq!(
++            inventory.objects,
++            statics
++                .iter()
++                .map(|(object, _)| *object)
++                .collect::<Vec<_>>()
++        );
+         assert!(
+-            inventory.objects.is_empty()
+-                && inventory.guards.is_empty()
+-                && inventory.tickets.is_empty()
++            inventory.guards.is_empty() && inventory.tickets.is_empty(),
++            "remaining transient owners: {inventory:?}"
+         );
+         db.finish_run().unwrap();
+     }
+--- a/crates/lrr/src/runtime/cell_test_owners.rs
++++ b/crates/lrr/src/runtime/cell_test_owners.rs
+@@ -37,3 +37,56 @@
+         }
+     }
+ }
++
++impl GuestStore {
++    /// Read-only test evidence: each returned object has its actual committed,
++    /// immutable literal root, valid cached leases and exact primitive bytes.
++    pub(crate) fn static_literal_objects_for_test(
++        &self,
++    ) -> Result<Vec<(u64, Vec<u8>)>, Diagnostic> {
++        let mut result = Vec::new();
++        for (key, id) in &self.static_literal_index {
++            let record = self.static_literals.get(*id)?;
++            if &record.key != key {
++                return Err(ownership());
++            }
++            let root = record.root.ok_or_else(ownership)?;
++            self.require_static_root(*id, root)?;
++            let (object, storage) = self.place_object(root)?;
++            let mut bytes = Vec::new();
++            for field in &storage.fields {
++                let value = self.read_scalar(*field)?;
++                value.validate_scalar()?;
++                if value.type_id != 9 || value.payload > u64::from(u8::MAX) {
++                    return Err(ownership());
++                }
++                bytes.push(u8::try_from(value.payload).map_err(|_| ownership())?);
++            }
++            let mut leases = 0usize;
++            for reference in [
++                record.array_reference,
++                record.slice_reference,
++                record.string_reference,
++            ]
++            .into_iter()
++            .flatten()
++            {
++                let reference = self.references.get(reference)?;
++                if reference.root.cell != root {
++                    return Err(ownership());
++                }
++                self.validate_reference_record(reference)?;
++                leases += 1;
++            }
++            if leases == 0 {
++                return Err(ownership());
++            }
++            result.push((object.bits(), bytes));
++        }
++        result.sort_unstable_by_key(|(object, _)| *object);
++        if result.windows(2).any(|pair| pair[0].0 == pair[1].0) {
++            return Err(ownership());
++        }
++        Ok(result)
++    }
++}

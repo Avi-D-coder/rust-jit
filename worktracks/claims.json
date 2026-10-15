@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Interpreter-first WT02. Canonical cumulative promotion held: V108 required milestone3337=3126passes+4failures+207unstarted,0interrupted. V109 real Type setup repair passes32existing assertion-call bodies. V111 scalar const operands in composed assertions pass200distinct scoped controls including unchanged const-fn-nested entiremain/all4; strict passes after two mechanical V110 lints, historicalfailure retained. V112 cast successor now validates asynchronously; local-literal match and run-fail observer queued. Root separate six-leaf T025/T050 opaque-guard/result-context candidate has three pending controls, including unchanged function prefix with actual static frontier. No task/fullmilestone/canonical/JIT/Linux/fullfixture completion; latest stockCLI46pass69fail remains separate.",
+      "scope": "Interpreter-first WT02. Canonical cumulative promotion held by failed V108 milestone3337=3126pass+4fail+207unstarted. V109 actual Type setup passes32existing bodies. V111 macro-constant source/query/publication passes200distinct scoped bodies. V113 cast successor passes9 after exact borrowed-string frontier correction; V112failure and its U8 wholemain pass retained separately. V114 unchanged local-char main completed firstedition but failed blanket objectempty oracle; V115 test-inspector privacy error retained, V116 scoped revalidation nowlive with cfg(test)-only owner inspector in owningmodule. Root heldguard/result packet b45e0333 separates scrutinee/default result context;11source/repair/ledger packets replay30uniqueleaves with11newbodies. Observer/finalledger/fullmilestone stillpending; stockCLI46/69 remains V108only. No canonical/task/JIT/Linux/fullfixture completion.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -599,11 +599,17 @@
         "crates/lrr/src/syntax/numeric_fallback.rs",
         "crates/lrr/src/syntax/runtime_macro_controls.rs",
         "crates/lrr/src/syntax/runtime_macro_control_tests.rs",
-        "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs"
+        "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
+        "worktracks/candidates/root-cast-frontier-source-v1/",
+        "worktracks/candidates/root-match-static-owner-oracle-v1/",
+        "worktracks/candidates/root-static-owner-helper-scope-v1/",
+        "worktracks/candidates/root-held-selector-ledger-v1/",
+        "crates/lrr/src/runtime/cell_test_owners.rs",
+        "crates/lrr/src/runtime/cell_byte_literals.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T18:11:04.215558+00:00",
+      "updated_at": "2026-10-15T18:21:56.118370+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

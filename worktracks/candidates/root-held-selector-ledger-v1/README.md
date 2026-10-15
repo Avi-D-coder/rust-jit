@@ -1,0 +1,5 @@
+# Align final held acceptance selectors with actual source
+
+Apply last, after the guard/result candidate and independent cast-frontier test correction. This two-ledger packet aligns T025's existing Rust-compatible i32 shift fallback and T040's source-observed structural context name with the actual bodies already listed/executed in V108. It also updates T051's renamed nested-string-borrow prefix control after the V112 failure. Both shared fixture/task references then select the actual names. Each old name and the design reason remain in explicit task history; no old selector counts as an executed test.
+
+The complete pinned upstream inventory, task status, implementation history and release flags are preserved. M003's MX003/MX004 prose contract references remain explicit unresolved mapping limitations; they are not erased or converted into passing bodies. Exact replay is checked only. The sole validator must audit final fixture/ledger references and collect the required fresh milestone on the final immutable source. This metadata alignment does not execute tests, integrate a candidate, close a task or add upstream/runtime/full-fixture passes.

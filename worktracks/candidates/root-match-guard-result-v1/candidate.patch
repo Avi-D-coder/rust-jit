@@ -60,7 +60,7 @@
          .unwrap()
          .body
          .as_ref()
-@@ -311,3 +326,98 @@
+@@ -311,3 +326,99 @@
      assert_eq!(actual.started_by_opcode[0], 3);
      assert_eq!(limited.fuel_snapshot().used, used - 1);
  }
@@ -115,6 +115,7 @@
 +        for text in [
 +            "fn guard()->bool{false}fn cold()->bool{loop{}}fn main(){assert_eq!(2,match 1_i32{0_i32 if cold()=>0,1_i32 if guard()=>1,_=>2});}",
 +            "fn guard()->bool{true}fn cold()->bool{loop{}}fn main(){assert_eq!(2,match 1_i32{1_i32 if guard()=>2,_ if cold()=>0,_=>1});}",
++            "fn guard()->bool{true}fn cold()->bool{loop{}}fn main(){assert_eq!(2.0,match 1{1 if guard()=>2.0,_ if cold()=>0.0,_=>1.0});}",
 +        ] {
 +            let (db, machine, outcome) = run(text, edition);
 +            let RunPoll::Completed(report) = outcome else {
@@ -195,7 +196,7 @@
                      if ast::RefExpr::can_cast(nested.kind()) {
                          return Ok(None);
                      }
-@@ -321,12 +327,92 @@
+@@ -321,12 +327,163 @@
      Ok(())
  }
  
@@ -279,6 +280,77 @@
 +    Ok(family)
 +}
 +
++// A literal scrutinee is an independent inference island only when every
++// source pattern is unconstrained numeric syntax (or wildcard). A suffixed or
++// named bound must retain its ordinary source constraint instead of defaulting.
++pub(super) fn match_scrutinee(
++    expression: &ast::MatchExpr,
++) -> Result<Option<PrimitiveType>, Diagnostic> {
++    use ra_ap_syntax::ast::RangeItem;
++    let Some(scrutinee) = expression.expr() else {
++        return Ok(None);
++    };
++    let mut visited = 0usize;
++    let Some(family) = literal_only_with_work(&scrutinee, &mut visited)? else {
++        return Ok(None);
++    };
++    let Some(list) = expression.match_arm_list() else {
++        return Ok(None);
++    };
++    for arm in list.arms() {
++        source_work(&mut visited)?;
++        if arm
++            .syntax()
++            .children()
++            .any(|node| ast::Attr::can_cast(node.kind()))
++        {
++            return Ok(None);
++        }
++        let Some(pattern) = arm.pat() else {
++            return Ok(None);
++        };
++        if pattern
++            .syntax()
++            .children()
++            .any(|node| ast::Attr::can_cast(node.kind()))
++        {
++            return Ok(None);
++        }
++        let endpoints = match pattern {
++            ast::Pat::WildcardPat(_) => continue,
++            ast::Pat::LiteralPat(literal) => [Some(ast::Pat::LiteralPat(literal)), None],
++            ast::Pat::RangePat(range) => [range.start(), range.end()],
++            _ => return Ok(None),
++        };
++        for endpoint in endpoints.into_iter().flatten() {
++            source_work(&mut visited)?;
++            let ast::Pat::LiteralPat(endpoint) = endpoint else {
++                return Ok(None);
++            };
++            let Some(literal) = endpoint.literal() else {
++                return Ok(None);
++            };
++            let compatible = match literal.token().kind() {
++                SyntaxKind::INT_NUMBER => {
++                    family == PrimitiveType::I32
++                        && ast::IntNumber::cast(literal.token())
++                            .is_some_and(|number| number.suffix().is_none())
++                }
++                SyntaxKind::FLOAT_NUMBER => {
++                    family == PrimitiveType::F64
++                        && ast::FloatNumber::cast(literal.token())
++                            .is_some_and(|number| number.suffix().is_none())
++                }
++                _ => false,
++            };
++            if !compatible {
++                return Ok(None);
++            }
++        }
++    }
++    Ok(Some(family))
++}
++
  pub(super) fn pair(
      left: &ast::Expr,
      right: &ast::Expr,
@@ -310,7 +382,7 @@
              "unexpected actual fault source: {written}"
          );
          assert!(
-@@ -310,3 +310,34 @@
+@@ -310,3 +310,51 @@
          assert_ne!(body.key(), otherbody.key());
      }
  }
@@ -344,19 +416,53 @@
 +            "{text}"
 +        );
 +    }
++    for (text, expected) in [
++        ("match 1{1=>1.0,_=>2.0}", Some(PrimitiveType::I32)),
++        ("match 1{1_u8=>1,_=>2}", None),
++        ("match 1{LIMIT=>1,_=>2}", None),
++        ("match 1{_=>2}", Some(PrimitiveType::I32)),
++    ] {
++        let ast::Expr::MatchExpr(expression) =
++            ast::Expr::parse(text, ra_ap_syntax::Edition::Edition2024).tree()
++        else {
++            panic!("match parser object absent")
++        };
++        assert_eq!(
++            super::super::numeric_fallback::match_scrutinee(&expression).unwrap(),
++            expected,
++            "{text}"
++        );
++    }
 +}
 --- a/crates/lrr/src/syntax/runtime_macro_controls.rs
 +++ b/crates/lrr/src/syntax/runtime_macro_controls.rs
-@@ -458,7 +458,7 @@
+@@ -456,12 +456,25 @@
+             arms.push((arm, self.label()?));
+         }
          let end = self.label()?;
++        let guard_work = arms
++            .iter()
++            .filter(|(arm, _)| arm.guard().is_some())
++            .count()
++            .checked_mul(12)
++            .ok_or_else(|| invalid("scalar match guard work overflow"))?;
          let mut sequence = self.sequence(
              arms.len()
--                .checked_mul(32)
-+                .checked_mul(48)
+                 .checked_mul(32)
++                .and_then(|n| n.checked_add(guard_work))
                  .and_then(|n| n.checked_add(4))
                  .ok_or_else(|| invalid("scalar match work overflow"))?,
          )?;
-@@ -473,11 +473,10 @@
++        if let Some(primitive) = super::super::numeric_fallback::match_scrutinee(&expression)? {
++            sequence.push(Work::Operation(Op::SetHint {
++                child: source,
++                hint: HintRecipe::Primitive(primitive),
++            }));
++        }
+         sequence.push(Work::Expression(
+             scrutinee,
+             source,
+@@ -473,11 +486,10 @@
              let yes = self.label()?;
              let no = arms.get(ordinal + 1).map_or(end, |(_, entry)| *entry);
              let pattern = arm.pat().ok_or_else(unsupported)?;
@@ -372,7 +478,7 @@
              self.pattern(
                  Pattern {
                      pattern,
-@@ -492,19 +491,38 @@
+@@ -492,19 +504,38 @@
                  span,
              )?;
              sequence.push(Work::Mark(yes));

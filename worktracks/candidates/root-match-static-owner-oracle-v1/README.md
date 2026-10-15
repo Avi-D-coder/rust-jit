@@ -1,0 +1,7 @@
+# Verify retained static string roots instead of requiring an empty store
+
+The V114 unchanged `issue-26251.rs` main completed in its first selected edition and passed its Assert/comparison/panic counters, balanced operations and empty active-scope checks. Its final blanket empty-object oracle failed before later editions ran. The guest store deliberately retains literal roots and immutable reference leases until epoch reset; this is already exercised by the existing byte-literal root-lifetime regression. The original source reaches two separate "two" literal sites and keeps the other arm literals cold.
+
+This two-leaf test-only follow-on adds a read-only owner helper that follows the actual registered static index, validates each immutable root, object owner, cached reference and byte payload, and returns its object identities. The unchanged-main control requires exactly those two "two" roots, no other objects, and no transient construction guards or transfer tickets. Guest completion, all operation counts and scope checks stay unchanged. No production owner lifetime or cleanup behavior is modified. Diagnostic details are retained if an unexpected owner remains.
+
+Apply after local-literal match source packet on exact preimages. All-edition execution and the stronger explicit ownership oracle remain pending; V114's failure is preserved. Formatting and exact replay are checked, with no new host body or stock/full-fixture/canonical pass claim.

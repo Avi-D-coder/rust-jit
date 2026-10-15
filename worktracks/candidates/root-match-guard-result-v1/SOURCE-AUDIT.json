@@ -1,6 +1,6 @@
 {
   "status": "source_only_uncompiled_unexecuted_held",
-  "at": "2026-10-15T18:08:55.204394+00:00",
+  "at": "2026-10-15T18:19:49.307264+00:00",
   "claim": "LOCAL-024",
   "task_cards": [
     "T025",
@@ -11,7 +11,7 @@
     "6d27be3176bfb2440fdff3bf0cd7f03c362febf3df3f09b6ca3b7342e98c5b3a",
     "489218ad182c4a4827e16a5cf90be4483756afbbca7d518ceab5d98dff4afc75"
   ],
-  "patch_sha256": "9c3c28fc3c6a9031e560f2cfc83e67b788e1016a8f35e46c6159cd9278ec9b25",
+  "patch_sha256": "b45e0333a5c86e383e91afaa7c872d37823bf6dfa369c119217e23eb0e64c538",
   "files": [
     {
       "path": "compat/fixtures.toml",
@@ -22,26 +22,26 @@
     {
       "path": "crates/lrr/src/frontend/runtime_macro_control_recipe_tests.rs",
       "before_sha256": "d616e5c60c52e227fad0a5405b17496b1a5694c4c4167be325cdab7dd0a2e7d5",
-      "after_sha256": "09303b2d6550fa91fcd7a30d20470b00f4727b860ed6910075fef1d9268640a6",
-      "bytes": 16564
+      "after_sha256": "5d215cfd89cc003a4cc5888d9bcb74dc58aa957c0bf7917afc8ca5ab2e219ccd",
+      "bytes": 16703
     },
     {
       "path": "crates/lrr/src/syntax/numeric_fallback.rs",
       "before_sha256": "4ee61ef87eb2fbce1fbe48a6f83c5d7da145d7e710856b791191ba230f9b050c",
-      "after_sha256": "d3e54a2f3f2fad52705ac1e98d889a8780ce43dc48c8a5e1b65c46ac8a6ec3c9",
-      "bytes": 21010
+      "after_sha256": "07013b28bed79b1addd52e74b94d5cd9662333c8ab3a01ff971b3ca3b1771982",
+      "bytes": 23540
     },
     {
       "path": "crates/lrr/src/syntax/runtime_macro_control_tests.rs",
       "before_sha256": "5afaf0be4bdfdc71ca665793655e197485af32d90bc693482b29ee8823518edd",
-      "after_sha256": "e187c0d234e417e86236f56a404202a9a239c516dd2f210cdb7d4c33a6553f7c",
-      "bytes": 13352
+      "after_sha256": "52b9f4bb804c282f4abe04de3b1817b1dd3509e61f6578b5c22a6ce3547e2328",
+      "bytes": 13951
     },
     {
       "path": "crates/lrr/src/syntax/runtime_macro_controls.rs",
       "before_sha256": "15fc2a7edb6b047af0a18595b211c9a4a6bf977fef32ce8ca43f35649dc1e43c",
-      "after_sha256": "2cfe1f5b7db909628d0b90ca7756ce92b6e99164bbfa3cfba279798a00541fb1",
-      "bytes": 39730
+      "after_sha256": "a498829c5d33fe5b630c2b5af02c5166df9d6893759f59e2919c15eec9bd0315",
+      "bytes": 40282
     },
     {
       "path": "docs/tasks.json",

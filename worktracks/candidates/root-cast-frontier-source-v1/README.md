@@ -1,0 +1,7 @@
+# Correct the actual borrowed-string frontier in the stock cast control
+
+V112 strict checks passed, but the new cast prefix control stopped at `LRR-E-UNSUPPORTED: borrowed composite source requires symbolic reference integration`, before its assumed raw-pointer cast diagnostic. The unchanged source constructs `&"hello"` before the pointer cast. Current source-aware borrow preflight rejects that nested reference before executing its Borrow opcode. The failed V112 test asserted its predicted message before it could check source PC or counters, so no seven-assertion/thirteen-cast prefix is claimed from that failure.
+
+This one-leaf successor gives the test an accurate nested-string-borrow name and checks the exact expected original borrow PC, exact diagnostic and the original seven-assertion/thirteen-cast prefix counters. These facts remain pending until actual execution confirms them. No production behavior, upstream original, opcode or unsupported boundary is changed. The complete cast main still needs nested references, pointers and library operations.
+
+Apply after the cast expectation candidate on exact preimages. The renamed selector must be updated in both shared acceptance ledgers after the remaining feature packets; that final ledger follow-on is required before any milestone/promotion. Formatting and exact replay are checked. The actual V112 failure and its separate u8-character whole-main pass remain retained; no full-fixture or canonical acceptance is added here.

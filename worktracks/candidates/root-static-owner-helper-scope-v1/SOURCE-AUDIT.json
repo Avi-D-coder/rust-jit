@@ -1,0 +1,36 @@
+{
+  "status": "source_only_uncompiled",
+  "at": "2026-10-15T18:20:27.161544+00:00",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T050",
+    "T042"
+  ],
+  "requires_candidate_patch_sha256": "1b802ac9463b150614d493122833fbed1d34202367a9d4af13e25963b947bb80",
+  "patch_sha256": "7bf4a19dbe4d1d893d2bd2b23d1131d2af8bd13f19d38790e2f24bbea136ba74",
+  "files": [
+    {
+      "path": "crates/lrr/src/runtime/cell_test_owners.rs",
+      "before_sha256": "c69e2a886351389be16f2573deacdcfa7444e9864eb8476806093852e811d3e9",
+      "after_sha256": "1c91cc881cb286a29bc57d92933f879e940f3a7b877746cba9e8eb43482c2d6f",
+      "bytes": 1467
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_literals.rs",
+      "before_sha256": "372bb6776b3be8fb57e32399ef3bd736b6303c3fcf9088ca31ce90e53780f642",
+      "after_sha256": "2fc786ce867264bb44d0c072218a635eba22209632868db17aa53721dc8e2d2d",
+      "bytes": 24488
+    }
+  ],
+  "actual_prior_terminal": "f71c67/1",
+  "reason": "E0616: helper must live in module owning private StaticLiteralRecord fields",
+  "production_behavior_changed": false,
+  "production_visibility_changed": false,
+  "helper_cfg": "test only",
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "exact_replay_zero_fuzz_zero_offset": true
+  },
+  "test_bodies_executed": 0,
+  "canonical_promotion": false
+}

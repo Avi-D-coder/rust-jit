@@ -1,0 +1,56 @@
+{
+  "status": "source_only_final_ledger_unvalidated",
+  "at": "2026-10-15T18:19:49.467209+00:00",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T025",
+    "T040",
+    "T051"
+  ],
+  "requires_candidate_patch_sha256": "b45e0333a5c86e383e91afaa7c872d37823bf6dfa369c119217e23eb0e64c538",
+  "requires_cast_test_follow_on": "05f067ffdde1c1d9f94059f8b8a7b2d991a777c019ac2721b9fb2512d81ece63",
+  "patch_sha256": "8514ed0353706a436ba43b701fcf90b75638725376bdc99f194966d2e3fa1c54",
+  "files": [
+    {
+      "path": "compat/fixtures.toml",
+      "before_sha256": "530474018c048e9f68ea7fc688e69b29c177235c37be513c856e8badf6296981",
+      "after_sha256": "7082663542d258a9602d5639877a91eb33e4891f5c663073f137386463ff825f",
+      "bytes": 416959
+    },
+    {
+      "path": "docs/tasks.json",
+      "before_sha256": "813d3fe09662a3585d86b69558a2765d779b4fc113a76c7fbf2709d7acc12bef",
+      "after_sha256": "5a45b142088674514a7771564ccd11a63e753490ba945f1307a1425449e5695a",
+      "bytes": 1437114
+    }
+  ],
+  "selector_migrations": [
+    {
+      "task": "T025",
+      "old": "source_shift_counts_use_u32_context_without_reinterpreting_explicit_counts",
+      "new": "source_shift_counts_use_i32_fallback_without_reinterpreting_explicit_counts",
+      "reason": "Rust-compatible independent shift fallback already implemented; current source bank passed in V108"
+    },
+    {
+      "task": "T040",
+      "old": "rustc_structural_dispatch_refuses_missing_or_wrong_context_before_effects",
+      "new": "rustc_structural_dispatch_observes_absent_context_but_refuses_wrong_source_before_effects",
+      "reason": "Reached structural descriptor observation changed the legitimate absent-context behavior; existing renamed body passed in V108"
+    },
+    {
+      "task": "T051",
+      "old": "unchanged_cast_main_executes_seven_assertions_before_its_raw_pointer_frontier_all_editions",
+      "new": "unchanged_cast_main_executes_seven_assertions_before_its_nested_string_borrow_frontier_all_editions",
+      "reason": "V112 observed a source-aware borrowed-string frontier preceding the raw pointer; renamed source oracle requires actual V113 validation"
+    }
+  ],
+  "remaining_prose_contract_references": [
+    "M003/MX003",
+    "M003/MX004"
+  ],
+  "static_exact_replay": true,
+  "task_statuses_changed": false,
+  "test_bodies_executed": 0,
+  "canonical_promotion": false,
+  "full_milestone_passed": false
+}
