@@ -445,7 +445,8 @@
         {
           "id": "WT08-02",
           "title": "Nested producer discovery",
-          "status": "planned"
+          "status": "planned",
+          "notes": "LOCAL-024 E-R5-005 bounded structural attachment candidate, unaccepted; async component validation, source/body publication and statement/item list integration pending. Existing macro-specific runtime paths remain architectural blockers."
         },
         {
           "id": "WT08-03",

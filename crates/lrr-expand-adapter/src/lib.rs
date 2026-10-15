@@ -104,3 +104,5 @@ pub mod generated_attribute;
 pub mod generated_derive;
 
 pub mod runtime_arguments;
+
+pub mod syntax_attachment;

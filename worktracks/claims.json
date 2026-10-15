@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "E-R5-005 architecture correction now owns priority. Source audit confirms8 macro/expression/pattern fragmentation blockers. No promotion of cumulative-v2/positive-local/opaque-or packets, even on green historical V123 gate. Root owns common-engine audit/migration; production repair and route regressions pending. All actual prior scoped/runtime/failure evidence preserved; no JIT/task/fullfixture acceptance.",
+      "scope": "E-R5-005 architecture correction now owns priority. Source audit confirms8 macro/expression/pattern fragmentation blockers. No promotion of cumulative-v2/positive-local/opaque-or packets, even on green historical V123 gate. Root owns common-engine audit/migration; production repair and route regressions pending. All actual prior scoped/runtime/failure evidence preserved; no JIT/task/fullfixture acceptance. Bounded M014/T063 correction slice: opaque pinned SyntaxAttachment retains parsed caller tree and origins, substitutes expression/type/pattern fragments structurally without text replay or runtime semantics. Statement/item attachment and ordinary body publication remain prerequisites; no integration claim. V4 structural adapter component: actual93/93 controls and strict all-targets Clippy pass on frozen exact4 source leaves. Not runtime integration; body/list publication and all8 shortcut removals outstanding.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -619,11 +619,15 @@
         "docs/errata/revision5-common-macro-engine.md",
         "worktracks/candidates/root-positive-or-acceptance-ledger-v1/",
         "AGENTS.md",
-        "lrr_rust2024_macros_traits_implementation_spec.md"
+        "lrr_rust2024_macros_traits_implementation_spec.md",
+        "crates/lrr-expand-adapter/src/syntax_attachment.rs",
+        "crates/lrr-expand-adapter/src/declaration_output.rs",
+        "crates/lrr-expand-adapter/src/lib.rs",
+        "crates/lrr-expand-adapter/tests/syntax_attachment.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T19:03:00.719817+00:00",
+      "updated_at": "2026-10-15T19:30:31.866542+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

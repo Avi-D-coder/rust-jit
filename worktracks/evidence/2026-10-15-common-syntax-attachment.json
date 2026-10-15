@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T19:30:31.866542+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "M014",
+    "T063"
+  ],
+  "architecture_erratum": "E-R5-005",
+  "source_baseline": "fab75feee6",
+  "scope": "Pinned syntax attachment component candidate; not ordinary body publication or runtime dispatch integration. No macro identity selects expression/pattern/runtime semantics.",
+  "implemented_draft": [
+    "Expression/type/pattern node substitution preserving AST grouping and caller scopes",
+    "Retained syntax across successive expansion attachments",
+    "Checked origin interval clipping and per-token origin identities",
+    "Structure/token/origin/owning-grammar fingerprint; display text is not the cache identity",
+    "Cumulative retained-input admission before span-store clone"
+  ],
+  "remaining": [
+    "Statement/item list attachment without synthetic scopes",
+    "Admitted original/generated composite source/epoch publication and complete origin table retention",
+    "Body identities and currentness based on retained structural syntax, not display text alone",
+    "Ordinary lowering and shared pattern transaction engine",
+    "Remove every audited macro-specific evaluator, inference, method/literal/break recipe and verifier/index exception",
+    "Full interpreter/edition/ownership/suspension milestone"
+  ],
+  "validation": [
+    {
+      "version": "v1",
+      "scope": "adapter test build",
+      "command": "cargo +1.99.0 test --offline --locked -p lrr-expand-adapter --test syntax_attachment",
+      "terminal_chunk": "814aea",
+      "outer_exit_code": 1,
+      "cargo_exit_code": 101,
+      "test_bodies_run": 0,
+      "error": "E0599 GreenNodeData has no into_owned; pinned API repair uses to_owned",
+      "raw_root": "artifacts/macos-first/sol-common-syntax-attachment-validation-v1"
+    },
+    {
+      "version": "v2",
+      "raw_root": "artifacts/macos-first/sol-common-syntax-attachment-validation-v2",
+      "scope": "five structural integration controls",
+      "terminal_chunk": "02ad44",
+      "outer_exit_code": 1,
+      "cargo_exit_code": 101,
+      "passed": 1,
+      "failed": 4,
+      "failure": "Rowan replace_with requires equal node kinds; actual assertion panics retained"
+    },
+    {
+      "version": "v2",
+      "raw_root": "artifacts/macos-first/sol-common-syntax-attachment-validation-v2",
+      "scope": "two identity/origin unit controls",
+      "terminal_chunk": "189e46",
+      "outer_exit_code": 0,
+      "cargo_exit_code": 0,
+      "passed": 2,
+      "failed": 0
+    },
+    {
+      "version": "v3",
+      "raw_root": "artifacts/macos-first/sol-common-syntax-attachment-validation-v3",
+      "scope": "full adapter suite",
+      "terminal_chunk": "c8ccb2",
+      "outer_exit_code": 0,
+      "cargo_exit_code": 0,
+      "passed": 93,
+      "failed": 0,
+      "distinct_bodies": 93,
+      "notes": "7 targeted repeats preceded full suite; 100 executions are 93 distinct bodies."
+    },
+    {
+      "version": "v3",
+      "raw_root": "artifacts/macos-first/sol-common-syntax-attachment-validation-v3",
+      "scope": "strict all-targets adapter Clippy, compile only",
+      "terminal_chunk": "fb6d6c",
+      "outer_exit_code": 1,
+      "cargo_exit_code": 101,
+      "failure": "Six needless reborrows in newly factored materialize_root; no test executions"
+    },
+    {
+      "version": "v4",
+      "scope": "full adapter suite and strict all-targets Clippy",
+      "state": "passed_component_scope_only",
+      "packet": "artifacts/macos-first/common-syntax-attachment-v4/SOURCE.json",
+      "source_fingerprint": "6b27ea8332c2f69a3ef859f4ff97f29b9182e4a4ac7983f4ec989434025da010",
+      "results": [
+        {
+          "command": "cargo +1.99.0 test --offline --locked -p lrr-expand-adapter",
+          "terminal_chunk": "6c186e",
+          "outer_exit_code": 0,
+          "cargo_exit_code": 0,
+          "passed": 93,
+          "failed": 0,
+          "distinct_bodies": 93,
+          "targeted_repeats": 0,
+          "elapsed_seconds": 46.17
+        },
+        {
+          "command": "cargo +1.99.0 clippy --offline --locked -p lrr-expand-adapter --all-targets -- -D warnings",
+          "terminal_chunk": "363a4e",
+          "outer_exit_code": 0,
+          "cargo_exit_code": 0,
+          "test_executions": 0,
+          "elapsed_seconds": 2.91
+        }
+      ],
+      "raw_root": "artifacts/macos-first/sol-common-syntax-attachment-validation-v4",
+      "release": {
+        "at": "2026-10-15T19:30:19.869223+00:00",
+        "source_member": "6b27ea8332c2f69a3ef859f4ff97f29b9182e4a4ac7983f4ec989434025da010",
+        "baseline": "fab75feee6b71329b367f0e52b003d850a17eecc",
+        "packet_sha256": "5b8ed8c4e2f890c0073e5d247af6e967b7a90c136e8703442f8117f8d00a29cd",
+        "full_adapter_exit": 0,
+        "strict_exit": 0,
+        "distinct_bodies": 93,
+        "passed": 93,
+        "failed": 0,
+        "duplicate_executions": 0,
+        "strict_bodies": 0,
+        "source_guard": {
+          "source_member": "6b27ea8332c2f69a3ef859f4ff97f29b9182e4a4ac7983f4ec989434025da010",
+          "frozen_files": 4865,
+          "symlinks": 3,
+          "owner_sha256": "cb7255a48466052e1896011db5117345a1d3481eeef29ea54358cdbe0524f334",
+          "raw_files": 504,
+          "cases": 319,
+          "manifest_sha256": "626be79213701306a4b2351ab252c2fcce6d438ff62e7bd6d6e1a819cd84d40b",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 65155616768
+        },
+        "target_inactive": true,
+        "released": true,
+        "scope": "adapter-only structural syntax/hygiene transport; no body/publication/interpreter/runtime acceptance",
+        "architectural_hold": "E-R5-005 remains",
+        "preserved_predecessors": [
+          "v1 compile failure",
+          "v2 structural failures",
+          "v3 strict lints"
+        ],
+        "no_source_repairs_retries_targetcopies_or_clean": true
+      }
+    }
+  ],
+  "prior_gate": {
+    "version": "V123",
+    "scope": "historical shortcut interpreter baseline only",
+    "state": "incomplete_infrastructure_receipt",
+    "exit_code": null,
+    "counts": null,
+    "fresh_reports": 0,
+    "scope_note": "Process absent, no terminal receipt; do not reuse V108 reports or infer a pass/failure/count. E-R5-005 holds independently.",
+    "raw_root": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v123"
+  },
+  "private_receipt_sha256": {
+    "artifacts/macos-first/sol-common-syntax-attachment-validation-v1/HANDOFF.md": "35b884656ddc4905f719f6129110dfd91ef45229f73b8264b03395f41b6c1311",
+    "artifacts/macos-first/sol-common-syntax-attachment-validation-v1/RELEASE.json": "fc34b9cab58ba378d0263b00c7ab6f13328519d3f106aef180e0ad921d34b0b7",
+    "artifacts/macos-first/sol-common-syntax-attachment-validation-v1/syntax-attachment/child-terminal.json": "5bc50a269ca7de4106d578bc74ca21e889deb3cf4a0f9fdb1d43a20536a94c0e",
+    "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v123/HANDOFF.md": "2439e547d483d23b94edd241f4b5ed309ffa7a03f4e421466de60c8692307367",
+    "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v123/INTERRUPTED-GATE-RESULTS.json": "bff6da4e8c4916b5282d2311d7a0990d159034432fd0c1ada6866ec553b2c2d1",
+    "artifacts/macos-first/sol-common-syntax-attachment-validation-v2/HANDOFF.md": "27ad0b3fbcad81c97fa8bc16b3297ef08c284ba612481ab262ff4f5bc0d37198",
+    "artifacts/macos-first/sol-common-syntax-attachment-validation-v2/RELEASE.json": "1beb8c15f14d08d646398476f6dff346a263319c02985376753b238f6ad9ebba",
+    "artifacts/macos-first/sol-common-syntax-attachment-validation-v3/HANDOFF.md": "4c105de4c1bb69e63246ab2c0ea6af039f4c6c16dfbd4e9fdf3c53db8a9d5f35",
+    "artifacts/macos-first/sol-common-syntax-attachment-validation-v3/RELEASE.json": "5d92069779bfb2b146f6ebbc1d049f9d38e536d0ba96121f8b31bddc73ba9836",
+    "artifacts/macos-first/sol-common-syntax-attachment-validation-v4/full-adapter/child-terminal.json": "bebfcdcede4e7f0874d7caf7af464cccbca8e6a2342fe8511d49e590a19bd76e",
+    "artifacts/macos-first/sol-common-syntax-attachment-validation-v4/strict-adapter/child-terminal.json": "6b95a4268e8aba65eee3da80aabb494c26737883b17fa95e5b8506d21700b2b7",
+    "artifacts/macos-first/sol-common-syntax-attachment-validation-v4/HANDOFF.md": "27fe5493ff13aeb0e4f9818906918c48835678e7af3bb91393e24f109a05956f",
+    "artifacts/macos-first/sol-common-syntax-attachment-validation-v4/RELEASE.json": "e97aa8af28393f624c5a41c0925f5b2ffb2e103db43f3abcfe19fc7aeed658d4",
+    "artifacts/macos-first/sol-common-syntax-attachment-validation-v4/EVIDENCE-HASHES.json": "17b272902124a3769a58e44e4a2b59b7e16da5a1139261832aa4ddfae6f85871",
+    "artifacts/macos-first/sol-common-syntax-attachment-validation-v4/full-adapter/command.json": "5ca5951d57a02bd800de93f932a88a5595ed32beb4e64aaaa2a332c435f74450",
+    "artifacts/macos-first/sol-common-syntax-attachment-validation-v4/strict-adapter/command.json": "4d29224469b901ad92a9d0370e8a85a39a563da69951203af08fd96c08d2d521"
+  },
+  "acceptance": {
+    "interpreter_runtime_integration": false,
+    "common_macro_engine": false,
+    "full_fixture_passes_added": 0,
+    "task_completion": false,
+    "jit_prerequisite": false
+  },
+  "candidate_source_files": [
+    {
+      "path": "crates/lrr-expand-adapter/src/declaration_output.rs",
+      "sha256": "d73de51a9f8f5d5883e2e4796ca3551c6248526a09f05b059d73454b9271f4d9"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/syntax_attachment.rs",
+      "sha256": "590ecb6e433c1dd6c60e556330f31d235a57472092374bf79c53ae3015f6454e"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/lib.rs",
+      "sha256": "b6dd26c2cc039e940193b7b475d925a65761670f20c92acee9e75f40c5a35f8e"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/tests/syntax_attachment.rs",
+      "sha256": "36f6b13e6f7555041f63098193ed7c6fca6083ebdbb9d0cfda0ac85aa5b87121"
+    }
+  ],
+  "integration_review": [
+    {
+      "path": "crates/lrr/src/syntax/outline.rs",
+      "symbols": [
+        "BodyHandle::key",
+        "ParsedFile::outline"
+      ],
+      "finding": "Existing body_hash is the digest of display text. Attached AST boundaries require a structural identity at body-source admission before using this component in the interpreter."
+    },
+    {
+      "path": "crates/lrr/src/syntax/body_index.rs",
+      "symbols": [
+        "ParsedFile::entered_body_root"
+      ],
+      "finding": "Entry currently verifies body_hash against text bytes. Replace this with the matching admitted body representation; do not disable source/currentness checks."
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse.rs",
+      "symbols": [
+        "ParsedFile::from_generated_declarations",
+        "ParsedFile::with_generated_token_editions"
+      ],
+      "finding": "Declaration arenas do not alone publish an entered caller body. Retain the complete original/output span-context table closure plus real expansion/seal records, and feed owned syntax events to ordinary indexing. Never reparse display text."
+    }
+  ],
+  "new_controls": {
+    "distinct_bodies": 7,
+    "scope": "5 integration +2 unit structural transport controls; one unchanged upstream diagnostic original used for expansion/tree transport in all four official editions, no guest execution or diagnostic assertion acceptance"
+  },
+  "reproduction": {
+    "platform": "macOS aarch64-apple-darwin",
+    "toolchain": "1.99.0",
+    "environment": {
+      "CARGO_TARGET_DIR": "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target",
+      "CARGO_BUILD_JOBS": "2",
+      "CARGO_INCREMENTAL": "0",
+      "RUST_TEST_THREADS": "1",
+      "RUSTUP_TOOLCHAIN": "1.99.0",
+      "LRR_VALIDATION_SOURCE_ROOT": "/Users/avi/Code/rust-jit/artifacts/macos-first/sol-common-syntax-attachment-validation-v4/source",
+      "LRR_RUSTC_CHECKOUT": "/Users/avi/Code/rust-jit/rustc/rust",
+      "CARGO_PROFILE_DEV_OPT_LEVEL": "0",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_PROFILE_DEV_DEBUG_ASSERTIONS": "true",
+      "CARGO_PROFILE_DEV_INCREMENTAL": "false",
+      "CARGO_PROFILE_TEST_OPT_LEVEL": "0",
+      "CARGO_PROFILE_TEST_DEBUG": "0",
+      "CARGO_PROFILE_TEST_DEBUG_ASSERTIONS": "true",
+      "CARGO_PROFILE_TEST_INCREMENTAL": "false"
+    },
+    "scope_note": "The paths are retained local reproduction locations. Neither frozen source nor target/cache products are included in the source checkpoint."
+  },
+  "unchanged_upstream_witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/span-covering-argument-1.rs",
+    "sha256": "75ef18d3060d881b42588bc67ae460ca6f940434572d2ba53d7dc8c3e726464a",
+    "contract": "diagnostic",
+    "exercised_scope": "actual pinned declarative expansion and normal AST attachment only; no guest execution or diagnostic/full-fixture pass"
+  }
+}

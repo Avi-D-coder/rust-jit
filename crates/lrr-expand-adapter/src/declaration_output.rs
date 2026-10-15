@@ -95,11 +95,20 @@ pub fn materialize(
     input: &TokenForest,
     grammar: DeclarationGrammar,
 ) -> Result<DeclarationSyntax, AdapterError> {
+    let mut store = SpanStore::default();
+    let (root, map) = parse_root(input, grammar, &mut store)?;
+    materialize_root(&root, &map, &store)
+}
+
+pub(crate) fn parse_root(
+    input: &TokenForest,
+    grammar: DeclarationGrammar,
+    store: &mut SpanStore,
+) -> Result<(syntax::SyntaxNode, span::SpanMap), AdapterError> {
     if input.encoded_len()? > 32 * 1024 * 1024 || input.allocated_bytes()? > 64 * 1024 * 1024 {
         return Err(error("declaration output input budget"));
     }
     let entry = grammar.entry_point();
-    let mut store = SpanStore::default();
     let tree = store.import(input)?;
     let (parsed, map) = syntax_bridge::token_tree_to_syntax_node(&tree, entry, &mut |context| {
         context.edition(store.database())
@@ -120,6 +129,17 @@ pub fn materialize(
             "non-associated declaration in associated expansion slot",
         ));
     }
+    Ok((root, map))
+}
+
+/// Shared transport for a pinned parsed tree, including structurally attached
+/// expansions. Do not round-trip an attached tree through text: doing so loses
+/// fragment boundaries (and therefore expression precedence).
+pub(crate) fn materialize_root(
+    root: &syntax::SyntaxNode,
+    map: &span::SpanMap,
+    store: &SpanStore,
+) -> Result<DeclarationSyntax, AdapterError> {
     let length = u32::from(root.text_range().len());
     let count = map.iter().count();
     if length > 32 * 1024 * 1024 || count > 2_000_000 {
@@ -145,7 +165,7 @@ pub fn materialize(
     if start != length {
         return Err(error("declaration origin coverage is incomplete"));
     }
-    let syntax = owned_syntax(&root)?;
+    let syntax = owned_syntax(root)?;
     let mut definitions = Vec::new();
     let mut calls = Vec::new();
     let mut bytes = 0usize;
@@ -168,7 +188,7 @@ pub fn materialize(
                 .token_tree()
                 .ok_or_else(|| error("generated definition body absent"))?;
             let source = map.span_at(keyword.text_range().start());
-            let body = group(body.syntax(), &map, source, &store)?;
+            let body = group(body.syntax(), map, source, store)?;
             bytes = bytes
                 .checked_add(body.allocated_bytes()?)
                 .and_then(|n| n.checked_add(128))
@@ -205,11 +225,11 @@ pub fn materialize(
             let source = map.span_at(path.syntax().text_range().start());
             let path = store.export(&syntax_bridge::syntax_node_to_token_tree(
                 path.syntax(),
-                &map,
+                map,
                 source,
                 syntax_bridge::DocCommentDesugarMode::Mbe,
             ))?;
-            let input = group(input.syntax(), &map, source, &store)?;
+            let input = group(input.syntax(), map, source, store)?;
             let [TokenTree::Group { open, .. }] = input.roots() else {
                 return Err(error("generated call capture root absent"));
             };
