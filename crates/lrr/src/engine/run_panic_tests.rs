@@ -534,3 +534,151 @@ fn rustc_panic_frontier_second_panic_admission_refuses_before_more_cleanup() {
     // Admission-only injection: actual guest destructor second panic and
     // terminal worker/test isolation are pending, never credited by this control.
 }
+
+#[test]
+fn unchanged_crlf_string_tokens_panic_through_real_runtime_macros_all_editions() {
+    use crate::{
+        core::{digest::Digest, profile::ProfileIdentity},
+        db::key::OutlineKey,
+        source::{
+            changes::{
+                PreparedSourceInputs, SourceSelection, SourceSelectionOutcome, SourceUnitInput,
+            },
+            snapshot::{CfgSet, SourceBlob, SourcePath},
+        },
+        syntax::parse::ParseKey,
+    };
+    const CRLF: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs"
+    );
+    // LRR integration adaptations, not whole-original runtime acceptance. The
+    // three token spellings are copied byte-for-byte from the unchanged input;
+    // expected values come from its original adjacent assert_eq! assertions.
+    let tokens = [
+        ("\"string\r\nliteral\"", "string\nliteral"),
+        (
+            "\"literal with \\\r\n             escaped newline\"",
+            "literal with escaped newline",
+        ),
+        ("r\"string\r\nliteral\"", "string\nliteral"),
+    ];
+    for (spelling, expected) in tokens {
+        let offset = CRLF.find(spelling).unwrap();
+        let original_token = &CRLF[offset..offset + spelling.len()];
+        assert_eq!(original_token.as_bytes(), spelling.as_bytes());
+        assert!(original_token.contains("\r\n"));
+        for edition in [2015, 2018, 2021, 2024] {
+            for (prefix, kind, opcode, other_opcode) in [
+                ("panic!(", PanicKind::Explicit, 25, 26),
+                ("assert!(false,", PanicKind::Assertion, 26, 25),
+            ] {
+                let mut text = String::from("fn main(){");
+                let invocation_start = text.len();
+                text.push_str(prefix);
+                let token_start = text.len();
+                text.push_str(original_token);
+                let token_end = text.len();
+                text.push_str(");}");
+                let invocation_end = text.len() - 2;
+                assert_eq!(&text[token_start..token_end], original_token);
+                let profile = ProfileIdentity {
+                    edition,
+                    ..ProfileIdentity::current()
+                };
+                let cfg = CfgSet::guest_default();
+                let blob = SourceBlob::new(text.as_bytes().to_vec()).unwrap();
+                let content = blob.content();
+                let path = SourcePath::new("crlf-panic-token-component.rs").unwrap();
+                let unit = Digest::of_bytes(b"LRR unchanged CRLF token panic component");
+                let selection = SourceSelection {
+                    path: path.clone(),
+                    outline: OutlineKey {
+                        parse: ParseKey {
+                            content,
+                            profile: profile.clone(),
+                        },
+                        crate_key: unit,
+                        module_path: vec![],
+                        cfg: cfg.fingerprint(),
+                    },
+                };
+                // Same real capture/publication/start path as start_stock_body,
+                // with the owning edition explicit rather than fixed to 2024.
+                let prepared = PreparedSourceInputs::refresh(
+                    None,
+                    vec![SourceUnitInput {
+                        path,
+                        crate_key: unit,
+                        module_path: vec![],
+                        profile,
+                        cfg,
+                        blob,
+                    }],
+                    Default::default(),
+                )
+                .unwrap();
+                let mut db = Database::default();
+                prepared.publish(&mut db).unwrap();
+                let SourceSelectionOutcome::Selected(view) = prepared.select(&selection).unwrap()
+                else {
+                    panic!("published CRLF component source is absent")
+                };
+                assert_eq!(view.selection().outline.parse.content, content);
+                assert_eq!(view.selection().outline.parse.profile.edition, edition);
+                let body = view
+                    .outline()
+                    .items
+                    .iter()
+                    .find(|item| item.def_key.declared_name == "main")
+                    .unwrap()
+                    .body
+                    .as_ref()
+                    .unwrap()
+                    .key();
+                db.begin_run().unwrap();
+                let mut run = RunMachine::start_with_sources(
+                    &mut db,
+                    body.clone(),
+                    1_000_000,
+                    vec![view.share()],
+                )
+                .into_ready()
+                .unwrap()
+                .unwrap();
+                let macros =
+                    crate::engine::standalone_macros::StandaloneRuntimeMacros::new(&view).unwrap();
+                let contexts = [macros.context(&view).unwrap()];
+                let report = match run.poll_with_runtime_macros(&mut db, &contexts) {
+                    RunPoll::Panicked(report) => report,
+                    RunPoll::Fault(error) => panic!("CRLF component fault: {error:?}"),
+                    RunPoll::NeedInput(input) => panic!("CRLF component suspended: {input:?}"),
+                    RunPoll::Completed(report) => panic!("CRLF component completed: {report:?}"),
+                };
+                assert_eq!(report.live_edition, edition);
+                assert_eq!(report.panic.pc.body, body);
+                let span = run.frame.body.span(NodeId(report.panic.pc.node)).unwrap();
+                let body_start = original_root_body_start(&run);
+                assert_eq!(
+                    &text[(body_start + span.relative_start) as usize
+                        ..(body_start + span.relative_end) as usize],
+                    &text[invocation_start..invocation_end]
+                );
+                assert_eq!(report.panic.kind, kind);
+                assert_eq!(report.panic.message.as_deref(), Some(expected));
+                assert_eq!(report.panic.description(), expected);
+                assert_eq!(report.opcode_counters.started_by_opcode[opcode], 1);
+                assert_eq!(report.opcode_counters.started_by_opcode[other_opcode], 0);
+                assert!(report.opcode_counters.panic_scopes_cleaned > 0);
+                assert_eq!(run.frame.status(), FrameStatus::PanicCleaned);
+                assert!(run.frame.active_scopes().is_empty());
+                assert!(run.calls.is_empty() && run.pending.is_empty());
+                assert!(run.returning.is_none() && run.unwinding.is_none());
+                assert_eq!(run.call_bytes, 0);
+                assert_eq!(run.pending_bytes, 0);
+                assert_eq!(run.peak_guest_frames, 1);
+                assert!(run.terminal);
+                db.finish_run().unwrap();
+            }
+        }
+    }
+}

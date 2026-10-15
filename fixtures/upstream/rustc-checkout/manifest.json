@@ -1296,10 +1296,34 @@
       "bytes": 1124
     },
     {
+      "path": "tests/ui/lexer/crlf-in-byte-string-literal.rs",
+      "git_blob": "88295018076222663fe588988b07f1d15b36bed6",
+      "sha256": "01787de25f8660b8356312cf7e7deb21641130588697b9b5f99c8a21fa7a3eb0",
+      "bytes": 277
+    },
+    {
       "path": "tests/ui/lexer/ident_normalization.rs",
       "git_blob": "a16c52171106b9367b6adab55ec79c75625b7b3f",
       "sha256": "5542ace1ed207fd2a3c56f5f8ecc47c9af791c9a3c9d4ff3f882d7147a70fdf6",
       "bytes": 516
+    },
+    {
+      "path": "tests/ui/lexer/lex-bare-cr-string-literal-doc-comment.rs",
+      "git_blob": "2be6cd7660d9e2b557ff64d0745b0475afd12a91",
+      "sha256": "60e52984d8459944adf65b6f899eb1417b8c4206a624dc27b199f8323cb42975",
+      "bytes": 818
+    },
+    {
+      "path": "tests/ui/lexer/lex-bare-cr-string-literal-doc-comment.stderr",
+      "git_blob": "841d5236edefa722f010469d584ac277dbc1c5b9",
+      "sha256": "0f2cce077e080cebe7887cf03992269f38bae79444fa6f9ee76d3fd74773c5ab",
+      "bytes": 1569
+    },
+    {
+      "path": "tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs",
+      "git_blob": "2befba829d5c873efdc3deb88f9dc877afd01104",
+      "sha256": "bb03d92b8289726639b7947f900dca05704b3a20ce26ec183a5a233ea6747289",
+      "bytes": 958
     },
     {
       "path": "tests/ui/lifetimes/issue-19707.rs",
@@ -2602,6 +2626,18 @@
       "git_blob": "fdcb4246a82fc957a5cf5a795d10ac346a8b4d4a",
       "sha256": "f8347c7e72dc88adf6f94a69f5726c214e24e0c57a569d5ddf2f8f9913da66c6",
       "bytes": 445
+    },
+    {
+      "path": "tests/ui/str/str-escape.rs",
+      "git_blob": "1c0aee1a98599903f4e27304be606266f838eb27",
+      "sha256": "b79f1d0392c43a5ddb04dacef208b5479429225dc40f9fe1ad11c918a380582f",
+      "bytes": 698
+    },
+    {
+      "path": "tests/ui/str/str-escape.stderr",
+      "git_blob": "4c8ee6bc013efc0863405cfb41b14f2d5d195aeb",
+      "sha256": "998e23957c67014fef00b5cf45105e726aadfa08a6892d6f8570333b0cdc2449",
+      "bytes": 721
     },
     {
       "path": "tests/ui/structs/large-records.rs",
@@ -4035,10 +4071,33 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/lexer/crlf-in-byte-string-literal.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/lexer/ident_normalization.rs",
       "directives": [
         "//@check-pass",
         "//@edition:2021"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lexer/lex-bare-cr-string-literal-doc-comment.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ reference: input.crlf"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"
@@ -5146,6 +5205,15 @@
       "path": "tests/ui/shadowed/primitive-type-shadowing.rs",
       "directives": [
         "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/str/str-escape.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ edition: 2021"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"

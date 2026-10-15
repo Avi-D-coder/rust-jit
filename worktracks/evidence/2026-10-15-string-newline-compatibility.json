@@ -1,0 +1,1037 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    "T012",
+    "T045",
+    "M010",
+    "M015"
+  ],
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "status": "seven scoped-tested leaves integrated; full milestone pending",
+  "upstream": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "imported_cases": 312,
+    "original_files": 496,
+    "import_terminal": "ccd129/0",
+    "full_fixture_pass_delta": 0
+  },
+  "failures": {
+    "v63": {
+      "status": "collected_failed",
+      "receipt_hashes": [
+        {
+          "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v63/HANDOFF.md",
+          "sha256": "6a267c56d622ee3439e320eea4f8efc6290b6f0db7fc49004ff7c99eb4419115",
+          "bytes": 1890
+        },
+        {
+          "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v63/ACTUAL-FAILURE-DETAILS.json",
+          "sha256": "56ec1996583facd3596d5aa2ccb4cbefc339cab10437f044084a2f029b3ef38a",
+          "bytes": 2095
+        },
+        {
+          "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v63/COLLECTED-SCOPES.json",
+          "sha256": "78ce5679d5b66f334810a1212325aa24708572d7f8fa7b49d710159c5d00f864",
+          "bytes": 3693
+        },
+        {
+          "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v63/EVIDENCE-HASHES.json",
+          "sha256": "9317811e2457edbe2b496184d4030c9d09c075cc968b4ae88e91091e349efc11",
+          "bytes": 7391
+        }
+      ],
+      "scopes": {
+        "source_member": "04d5c16b8879d4e6890895d92eeb6e9ecfa1d1de8f3fd6f46b80babc6680ad48",
+        "scopes": {
+          "strict-lrr-tests": {
+            "terminal": {
+              "scope": "strict-lrr-tests",
+              "argv": [
+                "cargo",
+                "+1.99.0",
+                "clippy",
+                "-p",
+                "lrr",
+                "--lib",
+                "--tests",
+                "--locked",
+                "--offline",
+                "--",
+                "-D",
+                "warnings"
+              ],
+              "exit_code": 0,
+              "source_unchanged": true,
+              "matched_test_count": null,
+              "nonempty_test_scope": true,
+              "source_member": "04d5c16b8879d4e6890895d92eeb6e9ecfa1d1de8f3fd6f46b80babc6680ad48",
+              "elapsed_seconds": 19.737996832991485,
+              "started_at": "2026-10-15T07:42:21.907850+00:00",
+              "finished_at": "2026-10-15T07:42:41.646014+00:00",
+              "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "stderr_sha256": "b43afb4b5e05bd07f643c13b5474f382ecf32357e40eb3b115dc326a8b9694f6",
+              "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+            },
+            "names": [],
+            "summaries": [],
+            "named_status_counts": {},
+            "failures": []
+          },
+          "string-newline-four": {
+            "terminal": {
+              "scope": "string-newline-four",
+              "argv": [
+                "cargo",
+                "+1.99.0",
+                "test",
+                "-p",
+                "lrr",
+                "--lib",
+                "string_token_newline_tests",
+                "--locked",
+                "--offline",
+                "--",
+                "--test-threads=1"
+              ],
+              "exit_code": 101,
+              "source_unchanged": true,
+              "matched_test_count": 4,
+              "nonempty_test_scope": true,
+              "source_member": "04d5c16b8879d4e6890895d92eeb6e9ecfa1d1de8f3fd6f46b80babc6680ad48",
+              "elapsed_seconds": 20.61694879201241,
+              "started_at": "2026-10-15T07:43:04.455027+00:00",
+              "finished_at": "2026-10-15T07:43:25.072356+00:00",
+              "stdout_sha256": "3c05225975bfa57c0ff7e80fcbbf6dda6395392a83e17f8f8886d5db39916883",
+              "stderr_sha256": "3f5a320e45463c1caaadf54711952e46a66eb919641ff8f91d0b45602339f240",
+              "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+            },
+            "names": [
+              [
+                "syntax::ast_adapter::string_token_newline_tests::stock_message_tokens_keep_offsets_after_crlf_and_lazy_format_tail",
+                "FAILED"
+              ],
+              [
+                "syntax::ast_adapter::string_token_newline_tests::unchanged_bare_cr_tokens_refuse_and_exact_token_boundary_remains_required",
+                "ok"
+              ],
+              [
+                "syntax::ast_adapter::string_token_newline_tests::unchanged_string_tokens_keep_rust_newline_values_and_original_source_all_editions",
+                "ok"
+              ],
+              [
+                "syntax::ast_adapter::string_token_newline_tests::unchanged_upstream_crlf_macro_arguments_retain_exact_original_operand_ranges",
+                "FAILED"
+              ]
+            ],
+            "summaries": [
+              {
+                "outcome": "FAILED",
+                "passed": 2,
+                "failed": 2,
+                "ignored": 0,
+                "measured": 0,
+                "filtered": 1075
+              }
+            ],
+            "named_status_counts": {
+              "FAILED": 2,
+              "ok": 2
+            },
+            "failures": [
+              "syntax::ast_adapter::string_token_newline_tests::stock_message_tokens_keep_offsets_after_crlf_and_lazy_format_tail",
+              "syntax::ast_adapter::string_token_newline_tests::unchanged_upstream_crlf_macro_arguments_retain_exact_original_operand_ranges"
+            ]
+          }
+        },
+        "originals_verified": 496,
+        "imported_cases": 312,
+        "source_unchanged": true,
+        "no_full_stock_or_JIT_claim": true
+      }
+    },
+    "v64": {
+      "status": "collected_failed",
+      "receipt_hashes": [
+        {
+          "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v64/HANDOFF.md",
+          "sha256": "4592e4b64774c1e9654f62c5cacc2a4629b5db3c91fbeb99cc3a1d0f0b188104",
+          "bytes": 1544
+        },
+        {
+          "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v64/ACTUAL-FAILURE-DETAILS.json",
+          "sha256": "61396db7931102ab9758fd226e251c9562b1219791f840b9d941c69217447f9a",
+          "bytes": 1109
+        },
+        {
+          "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v64/COLLECTED-SCOPES.json",
+          "sha256": "26407f2644ab11c4340a1a1b5ba99b656d7a82fb09911f79c221ecb9067784e3",
+          "bytes": 3726
+        },
+        {
+          "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v64/EVIDENCE-HASHES.json",
+          "sha256": "589d51be44b394d3ee7e9a5274ee646db3b05268d86d3d3c98e9d44b015a4a1e",
+          "bytes": 8856
+        }
+      ],
+      "scopes": {
+        "source_member": "544b000cf39c812c07a7307a1abf2546a769ffb1bf7d4db4b7c9aeaa53e513ef",
+        "scopes": {
+          "strict-lrr-tests": {
+            "terminal": {
+              "scope": "strict-lrr-tests",
+              "argv": [
+                "cargo",
+                "+1.99.0",
+                "clippy",
+                "-p",
+                "lrr",
+                "--lib",
+                "--tests",
+                "--locked",
+                "--offline",
+                "--",
+                "-D",
+                "warnings"
+              ],
+              "exit_code": 0,
+              "source_unchanged": true,
+              "matched_test_count": null,
+              "nonempty_test_scope": true,
+              "source_member": "544b000cf39c812c07a7307a1abf2546a769ffb1bf7d4db4b7c9aeaa53e513ef",
+              "elapsed_seconds": 25.51784354101983,
+              "started_at": "2026-10-15T07:54:47.370601+00:00",
+              "finished_at": "2026-10-15T07:55:12.888444+00:00",
+              "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "stderr_sha256": "f2d22be9280631560368f51a8e1410aa107419c96a838cada91afe6c0588c7ea",
+              "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+            },
+            "names": [],
+            "summaries": [],
+            "named_status_counts": {},
+            "failures": []
+          },
+          "string-newline-five": {
+            "terminal": {
+              "scope": "string-newline-five",
+              "argv": [
+                "cargo",
+                "+1.99.0",
+                "test",
+                "-p",
+                "lrr",
+                "--lib",
+                "string_token_newline_tests",
+                "--locked",
+                "--offline",
+                "--",
+                "--test-threads=1"
+              ],
+              "exit_code": 101,
+              "source_unchanged": true,
+              "matched_test_count": 5,
+              "nonempty_test_scope": true,
+              "source_member": "544b000cf39c812c07a7307a1abf2546a769ffb1bf7d4db4b7c9aeaa53e513ef",
+              "elapsed_seconds": 20.240334583009826,
+              "started_at": "2026-10-15T07:55:29.478459+00:00",
+              "finished_at": "2026-10-15T07:55:49.718844+00:00",
+              "stdout_sha256": "b366559fe6d070a3063dfee8d045f8823f17ec689b0e8427a15248a35e8c84fc",
+              "stderr_sha256": "018c357fd81f6e9e81607b97406b659caeca42de7d0fc1ed09e758023a03bdfb",
+              "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+            },
+            "names": [
+              [
+                "syntax::ast_adapter::string_token_newline_tests::stock_crlf_continuations_do_not_mask_other_original_macro_token_errors",
+                "FAILED"
+              ],
+              [
+                "syntax::ast_adapter::string_token_newline_tests::stock_message_tokens_keep_offsets_after_crlf_and_lazy_format_tail",
+                "ok"
+              ],
+              [
+                "syntax::ast_adapter::string_token_newline_tests::unchanged_bare_cr_tokens_refuse_and_exact_token_boundary_remains_required",
+                "ok"
+              ],
+              [
+                "syntax::ast_adapter::string_token_newline_tests::unchanged_string_tokens_keep_rust_newline_values_and_original_source_all_editions",
+                "ok"
+              ],
+              [
+                "syntax::ast_adapter::string_token_newline_tests::unchanged_upstream_crlf_macro_arguments_retain_exact_original_operand_ranges",
+                "ok"
+              ]
+            ],
+            "summaries": [
+              {
+                "outcome": "FAILED",
+                "passed": 4,
+                "failed": 1,
+                "ignored": 0,
+                "measured": 0,
+                "filtered": 1075
+              }
+            ],
+            "named_status_counts": {
+              "FAILED": 1,
+              "ok": 4
+            },
+            "failures": [
+              "syntax::ast_adapter::string_token_newline_tests::stock_crlf_continuations_do_not_mask_other_original_macro_token_errors"
+            ]
+          }
+        },
+        "originals_verified": 496,
+        "imported_cases": 312,
+        "source_unchanged": true,
+        "no_full_stock_or_JIT_claim": true
+      }
+    }
+  },
+  "implementation": [
+    "Keep original source bytes and source-relative offsets; normalize CRLF only in bounded scratch for string decoding and macro argument parsing.",
+    "Revalidate only the pinned whole-token STRING/BYTE_STRING escape error that matches an actual continuation, with a complete exact same-kind normalized token parse.",
+    "Cache per-token lexical revalidation within one immutable parse to avoid reparsing for each continuation diagnostic.",
+    "V64 negative control was incorrect: Rust skips CR in continuation whitespace. V65 retains this positive case and places an invalid bare CR after ordinary text."
+  ],
+  "queued_source_only": [
+    "artifacts/macos-first/root-vec-token-newlines-v1/HANDOFF.md",
+    "artifacts/macos-first/root-literal-crlf-diagnostics-v1/HANDOFF.md",
+    "artifacts/macos-first/root-large-byte-runtime-v1/HANDOFF.md"
+  ],
+  "acceptance": {
+    "runtime_body": "passed 24 disclosed token adaptations in one real interpreter regression; not original-main execution",
+    "milestone": "required V65 full gate pending; prior V62 ENOSPC remains separately unaccepted",
+    "new_upstream_runtime_passes": 0,
+    "new_full_fixture_passes": 0,
+    "tasks_complete": false,
+    "guest_jit_allowed": false
+  },
+  "v65": {
+    "status": "scoped_pass_collected_integration_hold_released",
+    "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+    "distinct_test_bodies_passed": 31,
+    "new_syntax_test_bodies": 5,
+    "new_runtime_test_bodies": 1,
+    "runtime_cases_in_new_body": 24,
+    "all_editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "scopes": {
+      "architecture": {
+        "terminal": {
+          "scope": "architecture",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "run",
+            "-p",
+            "xtask",
+            "--locked",
+            "--offline",
+            "--",
+            "architecture-audit"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": null,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 7.580969917005859,
+          "started_at": "2026-10-15T08:04:24.405982+00:00",
+          "finished_at": "2026-10-15T08:04:31.987009+00:00",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e5569290196b6d771b9b3b71f6cd7fa46743536d5d842d5a8c3fb9516cf2623e",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        },
+        "names": [],
+        "summaries": [],
+        "named_status_counts": {},
+        "failures": []
+      },
+      "catalog-and-arguments": {
+        "terminal": {
+          "scope": "catalog-and-arguments",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "-p",
+            "xtask",
+            "--test",
+            "test_catalog",
+            "--test",
+            "runtime_macro_arguments",
+            "--locked",
+            "--offline",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": 12,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 21.778995000000577,
+          "started_at": "2026-10-15T08:02:14.177373+00:00",
+          "finished_at": "2026-10-15T08:02:35.956385+00:00",
+          "stdout_sha256": "9dd942fe3567acc83b652b522991fba47e58243d710e20ff64b4c1e8447ff259",
+          "stderr_sha256": "1e8f3b1afc4cfd38a56051d93dad5fd449f8e2fde139776eadbb95e2bba9c3d0",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        },
+        "names": [
+          [
+            "runtime_macro_argument_capture_handles_delimiters_closure_commas_and_empty_panic",
+            "ok"
+          ],
+          [
+            "runtime_macro_argument_capture_is_kind_selected_and_source_stale_safe",
+            "ok"
+          ],
+          [
+            "runtime_macro_argument_capture_preserves_written_operands_and_lazy_format_tail",
+            "ok"
+          ],
+          [
+            "runtime_macro_argument_capture_rejects_missing_malformed_and_oversized_operands",
+            "ok"
+          ],
+          [
+            "generated_test_catalog_retains_actual_nested_producer_ancestry",
+            "ok"
+          ],
+          [
+            "original_test_catalog_filters_without_querying_signatures_or_bodies",
+            "ok"
+          ],
+          [
+            "published_test_catalog_refuses_a_later_expansion_epoch",
+            "ok"
+          ],
+          [
+            "published_test_catalog_refuses_an_edited_source_revision",
+            "ok"
+          ],
+          [
+            "repeated_selected_test_execution_creates_independent_machines_and_finishes_each_run",
+            "ok"
+          ],
+          [
+            "sealed_test_metadata_does_not_query_signatures_or_executable_bodies",
+            "ok"
+          ],
+          [
+            "test_catalog_requires_its_own_completed_and_published_domain",
+            "ok"
+          ],
+          [
+            "unknown_test_producer_prevents_catalog_even_when_every_known_name_is_filtered",
+            "ok"
+          ]
+        ],
+        "summaries": [
+          {
+            "outcome": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0,
+            "measured": 0,
+            "filtered": 0
+          },
+          {
+            "outcome": "ok",
+            "passed": 8,
+            "failed": 0,
+            "ignored": 0,
+            "measured": 0,
+            "filtered": 0
+          }
+        ],
+        "named_status_counts": {
+          "ok": 12
+        },
+        "failures": []
+      },
+      "fixture-reference": {
+        "terminal": {
+          "scope": "fixture-reference",
+          "argv": [
+            "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/xtask",
+            "fixture-reference-audit"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": null,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 0.48758020901004784,
+          "started_at": "2026-10-15T08:05:04.662419+00:00",
+          "finished_at": "2026-10-15T08:05:05.150077+00:00",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        },
+        "names": [],
+        "summaries": [],
+        "named_status_counts": {},
+        "failures": []
+      },
+      "format": {
+        "terminal": {
+          "scope": "format",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "fmt",
+            "--all",
+            "--",
+            "--check"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": null,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 4.769272707984783,
+          "started_at": "2026-10-15T08:03:22.235706+00:00",
+          "finished_at": "2026-10-15T08:03:27.005049+00:00",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        },
+        "names": [],
+        "summaries": [],
+        "named_status_counts": {},
+        "failures": []
+      },
+      "panic-bank": {
+        "terminal": {
+          "scope": "panic-bank",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "-p",
+            "lrr",
+            "--lib",
+            "engine::run::panic_tests::",
+            "--locked",
+            "--offline",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": 14,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 0.6743113329866901,
+          "started_at": "2026-10-15T08:02:04.794283+00:00",
+          "finished_at": "2026-10-15T08:02:05.468705+00:00",
+          "stdout_sha256": "6c939ece9d538ecb706cd733385087e49ca46bff15f17650554cd72c37039a63",
+          "stderr_sha256": "4cee670dc6d7a18399e662fcde754aa0e0a505491c2f8f979ab826c7088c9d5e",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        },
+        "names": [
+          [
+            "engine::run::panic_tests::rustc_original_argument_panic_keeps_println_callee_body_cold",
+            "ok"
+          ],
+          [
+            "engine::run::panic_tests::rustc_original_argument_panic_retires_selected_metadata_after_root_cleanup",
+            "ok"
+          ],
+          [
+            "engine::run::panic_tests::rustc_original_callee_condition_panic_unwinds_caller_without_entering_cold_inner_panics",
+            "ok"
+          ],
+          [
+            "engine::run::panic_tests::rustc_original_default_panic_preserves_message_and_cleans_root",
+            "ok"
+          ],
+          [
+            "engine::run::panic_tests::rustc_original_explicit_panic_program_publishes_only_after_cleanup",
+            "ok"
+          ],
+          [
+            "engine::run::panic_tests::rustc_original_failed_assertion_preserves_assertion_kind_and_cleans_root",
+            "ok"
+          ],
+          [
+            "engine::run::panic_tests::rustc_original_first_panic_keeps_second_panic_recipe_cold",
+            "ok"
+          ],
+          [
+            "engine::run::panic_tests::rustc_original_loop_body_panic_cleans_enclosing_scopes_before_publication",
+            "ok"
+          ],
+          [
+            "engine::run::panic_tests::rustc_original_second_argument_panic_keeps_later_box_hint_and_callee_cold",
+            "ok"
+          ],
+          [
+            "engine::run::panic_tests::rustc_panic_frontier_cancellation_stops_without_expected_panic_publication",
+            "ok"
+          ],
+          [
+            "engine::run::panic_tests::rustc_panic_frontier_retains_first_panic_through_bounded_aggregate_cleanup",
+            "ok"
+          ],
+          [
+            "engine::run::panic_tests::rustc_panic_frontier_second_panic_admission_refuses_before_more_cleanup",
+            "ok"
+          ],
+          [
+            "engine::run::panic_tests::rustc_panic_metadata_admission_counts_pending_source_calls_before_cleanup",
+            "ok"
+          ],
+          [
+            "engine::run::panic_tests::unchanged_crlf_string_tokens_panic_through_real_runtime_macros_all_editions",
+            "ok"
+          ]
+        ],
+        "summaries": [
+          {
+            "outcome": "ok",
+            "passed": 14,
+            "failed": 0,
+            "ignored": 0,
+            "measured": 0,
+            "filtered": 1066
+          }
+        ],
+        "named_status_counts": {
+          "ok": 14
+        },
+        "failures": []
+      },
+      "strict-lrr-tests": {
+        "terminal": {
+          "scope": "strict-lrr-tests",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "clippy",
+            "-p",
+            "lrr",
+            "--lib",
+            "--tests",
+            "--locked",
+            "--offline",
+            "--",
+            "-D",
+            "warnings"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": null,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 9.91135354101425,
+          "started_at": "2026-10-15T07:58:45.851224+00:00",
+          "finished_at": "2026-10-15T07:58:55.762647+00:00",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "85ddb6fbdd52eba1f096869dd6baa78b2cf87413f7757eb847393768d1254a51",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        },
+        "names": [],
+        "summaries": [],
+        "named_status_counts": {},
+        "failures": []
+      },
+      "string-newline-five": {
+        "terminal": {
+          "scope": "string-newline-five",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "-p",
+            "lrr",
+            "--lib",
+            "string_token_newline_tests",
+            "--locked",
+            "--offline",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": 5,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 18.927598957990995,
+          "started_at": "2026-10-15T08:01:25.704431+00:00",
+          "finished_at": "2026-10-15T08:01:44.632046+00:00",
+          "stdout_sha256": "638a5b209f3e06634234b8fba2924d33f89a9bc93d2b8676d3e2ee4a2c0bc3fa",
+          "stderr_sha256": "17555f4c562906efe640312cf658204a1a876d3ea200b8eaa1178c5ead5e46a7",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        },
+        "names": [
+          [
+            "syntax::ast_adapter::string_token_newline_tests::stock_crlf_continuations_do_not_mask_other_original_macro_token_errors",
+            "ok"
+          ],
+          [
+            "syntax::ast_adapter::string_token_newline_tests::stock_message_tokens_keep_offsets_after_crlf_and_lazy_format_tail",
+            "ok"
+          ],
+          [
+            "syntax::ast_adapter::string_token_newline_tests::unchanged_bare_cr_tokens_refuse_and_exact_token_boundary_remains_required",
+            "ok"
+          ],
+          [
+            "syntax::ast_adapter::string_token_newline_tests::unchanged_string_tokens_keep_rust_newline_values_and_original_source_all_editions",
+            "ok"
+          ],
+          [
+            "syntax::ast_adapter::string_token_newline_tests::unchanged_upstream_crlf_macro_arguments_retain_exact_original_operand_ranges",
+            "ok"
+          ]
+        ],
+        "summaries": [
+          {
+            "outcome": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 0,
+            "measured": 0,
+            "filtered": 1075
+          }
+        ],
+        "named_status_counts": {
+          "ok": 5
+        },
+        "failures": []
+      },
+      "string-panic-exact": {
+        "terminal": {
+          "scope": "string-panic-exact",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "-p",
+            "lrr",
+            "--lib",
+            "engine::run::panic_tests::unchanged_crlf_string_tokens_panic_through_real_runtime_macros_all_editions",
+            "--locked",
+            "--offline",
+            "--",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": 1,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 0.5946368330041878,
+          "started_at": "2026-10-15T08:02:00.897654+00:00",
+          "finished_at": "2026-10-15T08:02:01.492379+00:00",
+          "stdout_sha256": "c247113953d6b6235f64382221e4636713e5cc3a142ef6a7d4e54947c2bbcc28",
+          "stderr_sha256": "4cee670dc6d7a18399e662fcde754aa0e0a505491c2f8f979ab826c7088c9d5e",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        },
+        "names": [
+          [
+            "engine::run::panic_tests::unchanged_crlf_string_tokens_panic_through_real_runtime_macros_all_editions",
+            "ok"
+          ]
+        ],
+        "summaries": [
+          {
+            "outcome": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0,
+            "measured": 0,
+            "filtered": 1079
+          }
+        ],
+        "named_status_counts": {
+          "ok": 1
+        },
+        "failures": []
+      }
+    },
+    "actual_tools": {
+      "strict": "28689/bbbc56/0",
+      "syntax5": "15108/698925/0",
+      "runtime_exact1": "0dac81/0",
+      "panic14": "ec2164/0",
+      "catalog_arguments12": "64223/96ef65/0",
+      "fmt": "44615/63648c/0",
+      "architecture": "88235/c65ee9/0",
+      "fixture": "098aba/0",
+      "collector": "662028/0",
+      "terminals": {
+        "catalog-and-arguments": {
+          "scope": "catalog-and-arguments",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "-p",
+            "xtask",
+            "--test",
+            "test_catalog",
+            "--test",
+            "runtime_macro_arguments",
+            "--locked",
+            "--offline",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": 12,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 21.778995000000577,
+          "started_at": "2026-10-15T08:02:14.177373+00:00",
+          "finished_at": "2026-10-15T08:02:35.956385+00:00",
+          "stdout_sha256": "9dd942fe3567acc83b652b522991fba47e58243d710e20ff64b4c1e8447ff259",
+          "stderr_sha256": "1e8f3b1afc4cfd38a56051d93dad5fd449f8e2fde139776eadbb95e2bba9c3d0",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        },
+        "string-newline-five": {
+          "scope": "string-newline-five",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "-p",
+            "lrr",
+            "--lib",
+            "string_token_newline_tests",
+            "--locked",
+            "--offline",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": 5,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 18.927598957990995,
+          "started_at": "2026-10-15T08:01:25.704431+00:00",
+          "finished_at": "2026-10-15T08:01:44.632046+00:00",
+          "stdout_sha256": "638a5b209f3e06634234b8fba2924d33f89a9bc93d2b8676d3e2ee4a2c0bc3fa",
+          "stderr_sha256": "17555f4c562906efe640312cf658204a1a876d3ea200b8eaa1178c5ead5e46a7",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        },
+        "fixture-reference": {
+          "scope": "fixture-reference",
+          "argv": [
+            "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/xtask",
+            "fixture-reference-audit"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": null,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 0.48758020901004784,
+          "started_at": "2026-10-15T08:05:04.662419+00:00",
+          "finished_at": "2026-10-15T08:05:05.150077+00:00",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        },
+        "string-panic-exact": {
+          "scope": "string-panic-exact",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "-p",
+            "lrr",
+            "--lib",
+            "engine::run::panic_tests::unchanged_crlf_string_tokens_panic_through_real_runtime_macros_all_editions",
+            "--locked",
+            "--offline",
+            "--",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": 1,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 0.5946368330041878,
+          "started_at": "2026-10-15T08:02:00.897654+00:00",
+          "finished_at": "2026-10-15T08:02:01.492379+00:00",
+          "stdout_sha256": "c247113953d6b6235f64382221e4636713e5cc3a142ef6a7d4e54947c2bbcc28",
+          "stderr_sha256": "4cee670dc6d7a18399e662fcde754aa0e0a505491c2f8f979ab826c7088c9d5e",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        },
+        "panic-bank": {
+          "scope": "panic-bank",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "test",
+            "-p",
+            "lrr",
+            "--lib",
+            "engine::run::panic_tests::",
+            "--locked",
+            "--offline",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": 14,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 0.6743113329866901,
+          "started_at": "2026-10-15T08:02:04.794283+00:00",
+          "finished_at": "2026-10-15T08:02:05.468705+00:00",
+          "stdout_sha256": "6c939ece9d538ecb706cd733385087e49ca46bff15f17650554cd72c37039a63",
+          "stderr_sha256": "4cee670dc6d7a18399e662fcde754aa0e0a505491c2f8f979ab826c7088c9d5e",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        },
+        "architecture": {
+          "scope": "architecture",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "run",
+            "-p",
+            "xtask",
+            "--locked",
+            "--offline",
+            "--",
+            "architecture-audit"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": null,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 7.580969917005859,
+          "started_at": "2026-10-15T08:04:24.405982+00:00",
+          "finished_at": "2026-10-15T08:04:31.987009+00:00",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e5569290196b6d771b9b3b71f6cd7fa46743536d5d842d5a8c3fb9516cf2623e",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        },
+        "format": {
+          "scope": "format",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "fmt",
+            "--all",
+            "--",
+            "--check"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": null,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 4.769272707984783,
+          "started_at": "2026-10-15T08:03:22.235706+00:00",
+          "finished_at": "2026-10-15T08:03:27.005049+00:00",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        },
+        "strict-lrr-tests": {
+          "scope": "strict-lrr-tests",
+          "argv": [
+            "cargo",
+            "+1.99.0",
+            "clippy",
+            "-p",
+            "lrr",
+            "--lib",
+            "--tests",
+            "--locked",
+            "--offline",
+            "--",
+            "-D",
+            "warnings"
+          ],
+          "exit_code": 0,
+          "source_unchanged": true,
+          "matched_test_count": null,
+          "nonempty_test_scope": true,
+          "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+          "elapsed_seconds": 9.91135354101425,
+          "started_at": "2026-10-15T07:58:45.851224+00:00",
+          "finished_at": "2026-10-15T07:58:55.762647+00:00",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "85ddb6fbdd52eba1f096869dd6baa78b2cf87413f7757eb847393768d1254a51",
+          "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+        }
+      }
+    },
+    "receipt_hashes": [
+      {
+        "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v65/SCOPED-HANDOFF.md",
+        "sha256": "21b5709db6b049ee4af1b2baabfb64ff86ff7b5fe9b2a669fb42bc1a615f1fee"
+      },
+      {
+        "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v65/ACTUAL-TOOL-TERMINALS-SCOPED.json",
+        "sha256": "2fcce0178d792881397968ce4d12b6ff249a6f459458aef1ebb438f9b12acedd"
+      },
+      {
+        "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v65/EVIDENCE-HASHES-SCOPED.json",
+        "sha256": "5d45af62088c425e735c5e7170a44b1e88f0a4f2a1613d2ae449f50efb36d184"
+      },
+      {
+        "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v65/COLLECTED-SCOPES.json",
+        "sha256": "ad052bf9940d75a16c7e0cad6431d61cb0843bb623178cd4bdc93439339accf5"
+      }
+    ]
+  },
+  "integration": {
+    "source_member": "204374a20e5c946972352122fc380468ceaed6d1903fd6b02f3a550584f76a91",
+    "files": [
+      {
+        "path": "crates/lrr/src/engine/run_panic_tests.rs",
+        "sha256": "19f6b3c1ae748d8d7552dd9449ca598542acf372c8b5c9598fede74f970c97bd"
+      },
+      {
+        "path": "crates/lrr/src/syntax/ast_adapter.rs",
+        "sha256": "2c5eb39c503cc84b2d4194f766e9707fb9ae22700c03ac438ebe1761564cb4e8"
+      },
+      {
+        "path": "crates/lrr/src/syntax/parse.rs",
+        "sha256": "f8c14a959a0d0cb0cffd1cc41ab02dc5bffd4630cf9b80b63ad3895cfb6b7305"
+      },
+      {
+        "path": "crates/lrr/src/syntax/parse_crlf.rs",
+        "sha256": "ad6c64924354949a44d8b62da0e6c7e8839bab2feb47e172c335ba3cc1d535a0"
+      },
+      {
+        "path": "crates/lrr/src/syntax/runtime_macro_arguments.rs",
+        "sha256": "314ba62dbfc63a72466bebd52a8b07cc669d425a15b3675774dcc336701779ae"
+      },
+      {
+        "path": "crates/lrr/src/syntax/runtime_macro_newlines.rs",
+        "sha256": "402f6ec3e65c23376a5fce25da7357a08bdef1baf7764562df6a0f423ab594ba"
+      },
+      {
+        "path": "crates/lrr/src/syntax/string_token_newline_tests.rs",
+        "sha256": "455ab4ad48e879888bea06ea7815a52a333ae46295de3a0b3bb0539523fc5c8c"
+      }
+    ],
+    "originals_verified": 496,
+    "cases": 312,
+    "scope": "Seven exact V65 scoped-tested leaves promoted; full milestone remains pending",
+    "actual_terminal": "f8b87b/0",
+    "baseline_commit": "e24f77f586"
+  },
+  "updated_at": "2026-10-15T08:08:47.507407+00:00"
+}

@@ -18,6 +18,8 @@ use ra_ap_syntax::{
     AstNode, Edition, TextRange, TextSize,
     ast::{self, HasArgList, HasGenericArgs},
 };
+#[path = "runtime_macro_newlines.rs"]
+mod newline_input;
 #[path = "runtime_vec_arguments.rs"]
 mod vec_arguments;
 pub use vec_arguments::VecForm;
@@ -199,8 +201,9 @@ impl ParsedFile {
             }
             return vec_arguments::capture(self, selected, inside, token_range);
         }
+        let normalized = newline_input::NormalizedArguments::new(inside)?;
         let prefix = "fn __lrr_capture(){__lrr_arguments(";
-        let wrapped = format!("{prefix}{inside});}}");
+        let wrapped = format!("{prefix}{});}}", normalized.as_str());
         let edition = match self.edition {
             2015 => Edition::Edition2015,
             2018 => Edition::Edition2018,
@@ -302,12 +305,6 @@ impl ParsedFile {
                 crate::expand::scopes::MacroName::parse(name.text(), self.edition)?;
                 binding_predicate = Some(name.text().to_string());
             }
-            if ranges.len() == required {
-                literal_message = super::ast_adapter::string_value(
-                    &argument.syntax().text().to_string(),
-                    self.edition,
-                );
-            }
             let offset = range(argument.syntax().text_range());
             let start = usize::try_from(offset.start)
                 .map_err(|_| fault("runtime argument offset overflow"))?
@@ -316,8 +313,15 @@ impl ParsedFile {
             let end = usize::try_from(offset.end)
                 .map_err(|_| fault("runtime argument offset overflow"))?
                 .checked_sub(prefix.len())
-                .filter(|n| *n <= inside.len())
+                .filter(|n| *n <= normalized.as_str().len())
                 .ok_or_else(|| fault("runtime argument escapes its input"))?;
+            // The scratch parser follows Rust CRLF normalization. All retained
+            // operand/message ranges and literal provenance remain original.
+            let (start, end) = normalized.original_range(start, end)?;
+            if ranges.len() == required {
+                literal_message =
+                    super::ast_adapter::string_value(&inside[start..end], self.edition);
+            }
             let base = token_range
                 .start
                 .checked_add(1)

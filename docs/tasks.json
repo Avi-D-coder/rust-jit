@@ -291,7 +291,20 @@
         "artifacts/macos-first/t015-final-gate01-command.log"
       ],
       "release_complete": false,
-      "validation_scope": "Current macOS source/query component regressions pass Gate 01. Prior revision-3 evidence remains provisional pending generated-source/expansion integration; no Linux support acceptance is claimed."
+      "validation_scope": "Current macOS source/query component regressions pass Gate 01. Prior revision-3 evidence remains provisional pending generated-source/expansion integration; no Linux support acceptance is claimed.",
+      "evidence": [
+        "worktracks/evidence/2026-10-15-string-newline-compatibility.json"
+      ],
+      "current_string_literal_compatibility": {
+        "status": "scoped_tested_source_integrated_milestone_pending",
+        "version": 65,
+        "evidence_path": "worktracks/evidence/2026-10-15-string-newline-compatibility.json",
+        "distinct_host_tests_passed": 31,
+        "new_test_bodies": 6,
+        "new_runtime_cases_in_one_body": 24,
+        "full_fixture_pass_delta": 0,
+        "task_complete": false
+      }
     },
     {
       "id": "T013",
@@ -5470,7 +5483,20 @@
         "Actual selected destructor panic during ordinary unwind: defined double-panic terminal behavior; current direct admission injection is partial.",
         "Full Drop output and fatal/cancel/resource paths with no more user code; retained obligations cannot become should_panic success.",
         "Host panic/crash must terminate only worker process and cannot count as expected guest panic; current direct engine checks do not prove isolation."
-      ]
+      ],
+      "evidence": [
+        "worktracks/evidence/2026-10-15-string-newline-compatibility.json"
+      ],
+      "current_string_literal_compatibility": {
+        "status": "scoped_tested_source_integrated_milestone_pending",
+        "version": 65,
+        "evidence_path": "worktracks/evidence/2026-10-15-string-newline-compatibility.json",
+        "distinct_host_tests_passed": 31,
+        "new_test_bodies": 6,
+        "new_runtime_cases_in_one_body": 24,
+        "full_fixture_pass_delta": 0,
+        "task_complete": false
+      }
     },
     {
       "id": "T050",
@@ -10046,7 +10072,8 @@
         "worktracks/evidence/2026-10-14-declaration-request-reuse.json",
         "worktracks/evidence/2026-10-14-adopted-source-registry.json",
         "worktracks/evidence/2026-10-14-child-macro-runtime-epoch.json",
-        "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
+        "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json",
+        "worktracks/evidence/2026-10-15-string-newline-compatibility.json"
       ],
       "current_runtime_epoch_milestone": {
         "version": 62,
@@ -10058,6 +10085,16 @@
         "nested_gate_exit_code": null,
         "reason": "disk exhaustion; prior V58 reports not reused",
         "evidence_path": "worktracks/evidence/2026-10-14-generated-runtime-epoch-preparation.json"
+      },
+      "current_string_literal_compatibility": {
+        "status": "scoped_tested_source_integrated_milestone_pending",
+        "version": 65,
+        "evidence_path": "worktracks/evidence/2026-10-15-string-newline-compatibility.json",
+        "distinct_host_tests_passed": 31,
+        "new_test_bodies": 6,
+        "new_runtime_cases_in_one_body": 24,
+        "full_fixture_pass_delta": 0,
+        "task_complete": false
       }
     },
     {
@@ -19050,7 +19087,20 @@
           "status": "pending",
           "evidence_paths": []
         }
-      ]
+      ],
+      "evidence": [
+        "worktracks/evidence/2026-10-15-string-newline-compatibility.json"
+      ],
+      "current_string_literal_compatibility": {
+        "status": "scoped_tested_source_integrated_milestone_pending",
+        "version": 65,
+        "evidence_path": "worktracks/evidence/2026-10-15-string-newline-compatibility.json",
+        "distinct_host_tests_passed": 31,
+        "new_test_bodies": 6,
+        "new_runtime_cases_in_one_body": 24,
+        "full_fixture_pass_delta": 0,
+        "task_complete": false
+      }
     },
     {
       "id": "M016",

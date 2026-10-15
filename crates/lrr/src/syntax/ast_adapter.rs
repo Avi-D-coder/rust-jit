@@ -136,7 +136,7 @@ pub(crate) fn semantic_module_path(path: &[String]) -> Option<Vec<String>> {
 
 /// Decode a bounded owned string token using the pinned AST implementation.
 pub(crate) fn string_value(text: &str, edition: u16) -> Option<String> {
-    use ra_ap_syntax::AstToken;
+    use ra_ap_syntax::{AstToken, ast::IsString};
     if text.len() > 128 * 1024 {
         return None;
     }
@@ -147,7 +147,31 @@ pub(crate) fn string_value(text: &str, edition: u16) -> Option<String> {
         2024 => Edition::Edition2024,
         _ => return None,
     };
-    let parsed = ast::SourceFile::parse(&format!("const V:&str={text};"), edition);
+    // Rust normalizes CRLF before lexing, but source blobs and the caller's
+    // spelling/span remain original. This scratch AST returns only text data.
+    let mut normalized = String::new();
+    let text = if text.contains("\r\n") {
+        normalized.try_reserve_exact(text.len()).ok()?;
+        for line in text.split_inclusive('\n') {
+            if let Some(prefix) = line.strip_suffix("\r\n") {
+                normalized.push_str(prefix);
+                normalized.push('\n');
+            } else {
+                normalized.push_str(line);
+            }
+        }
+        normalized.as_str()
+    } else {
+        text
+    };
+    let mut wrapper = String::new();
+    wrapper
+        .try_reserve_exact(text.len().checked_add("const V:&str=;".len())?)
+        .ok()?;
+    wrapper.push_str("const V:&str=");
+    wrapper.push_str(text);
+    wrapper.push(';');
+    let parsed = ast::SourceFile::parse(&wrapper, edition);
     if !parsed.errors().is_empty() {
         return None;
     }
@@ -160,5 +184,23 @@ pub(crate) fn string_value(text: &str, edition: u16) -> Option<String> {
     if token.text() != text {
         return None;
     }
-    Some(token.value().ok()?.into_owned())
+    let range = token.text_range_between_quotes()?;
+    let content = &token.text()[range - token.syntax().text_range().start()];
+    let mut value = String::new();
+    value.try_reserve_exact(content.len()).ok()?;
+    let mut failed = false;
+    let mut emit = |_, item: Result<char, ra_ap_syntax::unescape::EscapeError>| match item {
+        Ok(item) => value.push(item),
+        Err(error) => failed |= error.is_fatal(),
+    };
+    if token.is_raw() {
+        ra_ap_syntax::unescape::check_raw_str(content, &mut emit);
+    } else {
+        ra_ap_syntax::unescape::unescape_str(content, &mut emit);
+    }
+    (!failed).then_some(value)
 }
+
+#[cfg(test)]
+#[path = "string_token_newline_tests.rs"]
+mod string_token_newline_tests;

@@ -10,6 +10,9 @@ use crate::{
 use ra_ap_syntax::{AstNode, Edition, Parse, ast};
 use serde::{Deserialize, Serialize};
 
+#[path = "parse_crlf.rs"]
+mod crlf;
+
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct ParseKey {
     pub content: Digest,
@@ -98,9 +101,19 @@ impl ParsedFile {
         let text = std::str::from_utf8(blob.bytes())
             .map_err(|e| Diagnostic::new("LRR-E-SOURCE-UTF8", e.to_string()))?;
         let parsed = ast::SourceFile::parse(text, edition);
+        let tree = parsed.tree();
+        let mut crlf_errors = crlf::TokenErrors::default();
         let errors: Vec<_> = parsed
             .errors()
             .into_iter()
+            .filter(|error| {
+                !crlf_errors.normalized_literal_error(
+                    tree.syntax(),
+                    error.range(),
+                    &error.to_string(),
+                    edition,
+                )
+            })
             .map(|e| ParseDiagnostic {
                 range: range(e.range()),
                 message: e.to_string(),
