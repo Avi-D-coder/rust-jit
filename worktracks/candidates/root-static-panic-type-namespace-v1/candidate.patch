@@ -1,0 +1,84 @@
+--- a/xtask/tests/static_panic_recipes.rs
++++ b/xtask/tests/static_panic_recipes.rs
+@@ -1182,6 +1182,49 @@
+     );
+ }
+ 
++// Actual call-return admission requires the owning Type namespace. Macro-only
++// routes above deliberately do not grant that authority. Positive call tests
++// publish a genuine, completed Type discovery before beginning guest execution.
++fn publish_assertion_call_type_namespace(
++    db: &mut lrr::db::memo::Database,
++    view: &PreparedSourceView,
++) {
++    use lrr::{
++        expand::{
++            source_declarative,
++            source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++        },
++        frontend::compile_input_catalog::CompileInputCatalog,
++        source::manifest::Namespace,
++    };
++    db.begin_expansion_epoch(1).unwrap();
++    let mut discovery = SourceDiscovery::new(
++        vec![view.share()],
++        view.outline().root_scope.clone(),
++        Namespace::Type,
++        Digest::of_bytes(b"LRR assertion-call test owning Type source world"),
++        1,
++    )
++    .unwrap()
++    .with_declarative_compiler(
++        Digest::of_bytes(b"LRR assertion-call test compiler environment"),
++        source_declarative::engine_version(),
++        std::sync::Arc::new(CompileInputCatalog::standalone(&view.outline().profile).unwrap()),
++    )
++    .unwrap();
++    match discovery.poll().unwrap() {
++        SourceDiscoveryStep::Sealed(_) => {}
++        SourceDiscoveryStep::Incomplete {
++            diagnostic,
++            blocked,
++        } => {
++            panic!("assertion-call owning Type discovery incomplete: {diagnostic}; {blocked:?}")
++        }
++        _ => panic!("assertion-call Type discovery unexpectedly requires expansion authority"),
++    }
++    discovery.publish(db).unwrap();
++}
++
+ #[test]
+ fn source_call_assertion_predicate_returns_to_scoped_slot_once_and_keeps_message_cold() {
+     use lrr::{
+@@ -1207,6 +1250,7 @@
+     let context = RuntimeMacroContext::new(&view, &index, &names, &catalog).unwrap();
+     let mut db = Database::default();
+     inputs.publish(&mut db).unwrap();
++    publish_assertion_call_type_namespace(&mut db, &view);
+     db.begin_run().unwrap();
+     let QueryPoll::Ready(Ok(mut run)) =
+         RunMachine::start_with_sources(&mut db, body.body().clone(), 1000, vec![view.share()])
+@@ -1275,6 +1319,7 @@
+         let context = RuntimeMacroContext::new(&view, &index, &names, &catalog).unwrap();
+         let mut db = Database::default();
+         inputs.publish(&mut db).unwrap();
++        publish_assertion_call_type_namespace(&mut db, &view);
+         db.begin_run().unwrap();
+         let QueryPoll::Ready(Ok(mut run)) =
+             RunMachine::start_with_sources(&mut db, body.body().clone(), 1000, vec![view.share()])
+@@ -1423,6 +1468,7 @@
+     let context = RuntimeMacroContext::new(&view, &index, &names, &catalog).unwrap();
+     let mut db = Database::default();
+     inputs.publish(&mut db).unwrap();
++    publish_assertion_call_type_namespace(&mut db, &view);
+     db.begin_run().unwrap();
+     let QueryPoll::Ready(Ok(mut run)) =
+         RunMachine::start_with_sources(&mut db, body.body().clone(), 1000, vec![view.share()])
+@@ -1469,6 +1515,7 @@
+     let context = RuntimeMacroContext::new(&view, &index, &names, &catalog).unwrap();
+     let mut db = Database::default();
+     inputs.publish(&mut db).unwrap();
++    publish_assertion_call_type_namespace(&mut db, &view);
+     db.begin_run().unwrap();
+     let QueryPoll::Ready(Ok(mut run)) =
+         RunMachine::start_with_sources(&mut db, body.body().clone(), 1000, vec![view.share()])

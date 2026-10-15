@@ -1,0 +1,34 @@
+{
+  "status": "source_only_uncompiled_held",
+  "at": "2026-10-15T18:01:42.724622+00:00",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T032",
+    "T034"
+  ],
+  "baseline": "V108 fdde8eac1bca99ea1e102fd5308e39ccb4c06e0862dbc9459f6b7e8c29b46b25",
+  "patch_sha256": "6d27be3176bfb2440fdff3bf0cd7f03c362febf3df3f09b6ca3b7342e98c5b3a",
+  "files": [
+    {
+      "path": "xtask/tests/static_panic_recipes.rs",
+      "before_sha256": "21f47ca329220f617339c15ecfb3fd30a82d1e094b35de36db7dc7f37ac0e62e",
+      "after_sha256": "cdc4f675d9bb77941921a0de80faef482c4cc55f9f42da40bd200fceb9836d75",
+      "bytes": 65195
+    }
+  ],
+  "unchanged_existing_acceptance_assertions": [
+    "source_call_assertion_predicate_returns_to_scoped_slot_once_and_keeps_message_cold",
+    "source_call_assertion_false_preserves_default_message_and_macro_panic_origin",
+    "assertion_predicate_return_mismatch_refuses_before_callee_body_or_guest_panic",
+    "assertion_predicate_callee_panic_unwinds_once_without_preparing_failure_message"
+  ],
+  "static_checks": {
+    "rustfmt_1_99": true,
+    "exact_replay_zero_fuzz_zero_offset": true
+  },
+  "production_leaves_changed": 0,
+  "raw_originals_changed": 0,
+  "runtime_contract_passes_added": 0,
+  "canonical_promotion": false,
+  "full_milestone_passed": false
+}

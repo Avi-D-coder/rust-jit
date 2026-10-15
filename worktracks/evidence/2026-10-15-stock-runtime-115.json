@@ -1981,9 +1981,13 @@
   "full_suite_compatibility": "incomplete",
   "full_fixture_passes_added": 0,
   "fresh_full_milestone": {
-    "status": "running",
-    "launch_terminal": "dc6418",
-    "session": 36753
+    "status": "failed",
+    "actual_terminal": "6e71a1/1",
+    "evidence": "worktracks/evidence/2026-10-15-v108-interpreter-milestone.json",
+    "host_passed": 3126,
+    "host_failed": 4,
+    "host_unstarted": 207,
+    "host_interrupted": 0
   },
   "canonical_promoted": false,
   "native_guest_compilation": false,
