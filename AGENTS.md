@@ -2,6 +2,76 @@
 
 Specification: [LRR revision 5](lrr_rust2024_macros_traits_implementation_spec.md).
 
+## Architecture statement of work and implementation gates (October 15, 2026)
+
+The required deliverable is one compositional Rust interpreter, followed by the specified JIT tiers after their gates pass. A feature must retain its semantics when moved between ordinary source, a user macro expansion, a macro wrapper and a standard-library macro expansion. Passing selected examples through a second, context-specific implementation is architectural failure, even when the values match. This section incorporates the user's architectural review of `fab75fe`; its eight findings below remain repair obligations until current source and actual evidence establish their removal.
+
+Read [the macro architecture audit](docs/audits/macro-specific-semantics.json), [E-R5-005](docs/errata/revision5-common-macro-engine.md) and the relevant specification sections before changing affected paths. Existing violations are repair debt, never precedent or permission to extend them. Do not promote held macro-specific candidates because their historical tests pass.
+
+### Before changing a language feature
+
+Record the following in the bounded claim, worktrack handoff or PR, using actual files and symbols:
+
+- The T/H/M task, invariant and unchanged upstream witness.
+- The existing ordinary-source route: source identity and hygiene, syntax/index node, name/type constraint service, lowering/verifier, runtime operation and continuation/cleanup owner.
+- Where generated and handwritten syntax join that route, and which existing mechanism the change extends. Identify any duplicate implementation it replaces and the condition for deleting it.
+- The exact preparation demand and cache dependencies, what remains cold, and what execution/currentness work occurs per entry or operation.
+- The acceptance scope and known gaps. Intermediate source components are allowed, but must identify the remaining integration/removal work and cannot close the feature or architecture gate.
+
+If the proposed implementation needs a second parser/evaluator, a context-only rule, a generated-source exclusion for already supported syntax, or repeated source preparation in execution, stop that approach and implement the missing common mechanism. Do not silently narrow the feature to the convenient fixture. An actual specification contradiction requires a minimal witness and a clearly explained design question; routine implementation of the specified common engine does not require another permission request.
+
+### One macro and language execution pipeline
+
+Resolve and expand actual macros through the common hygienic macro system. Attach their actual output to the owning source tree, then use ordinary parsing, indexing, name/type resolution, expression/pattern lowering, verification and interpreter operations. Preserve original and generated member identity, owning editions, token contexts, caller bindings, labels, temporaries and continuations.
+
+Do not implement macro-specific runtime expression, pattern, inference, call, method, ownership or cleanup semantics. In particular:
+
+- No assertion-operand compiler or evaluator, synthetic function/block around macro operands, or reparsing display text to obtain a convenient executable body.
+- No literal-only generated-expression executor, generated-break/scalar-payload executor or opaque macro-only phase/index/verifier namespace. Extend ordinary syntax/control handling instead.
+- No numeric constraints selected by `assert_eq!`, `assert_ne!` or another macro's identity. Infer from the ordinary expanded source constraints and selected member signatures.
+- No method-name whitelist available only inside assertions or another expression context. Ordinary member selection must choose the same source body or explicitly specified runtime intrinsic everywhere.
+- No new `original source only` refusal for syntax already supported by the common engine. If generated syntax lacks required source/scope evidence, implement that evidence join; keep an explicit unsupported result until then. Never bypass hygiene/currentness or count that gap as compatibility acceptance.
+- One transactional pattern engine must serve `match`, `if let`, `while let`, let-chains, `let else` and generated patterns, including non-consuming tests, binding modes, moves/borrows, alternative retry after false guards, commit and cleanup.
+
+A renamed helper, shared opcode, matching final value or source-identity check around an alternate evaluator does not satisfy this requirement. Compiler expansion hooks stay in the pinned adapter; they must not become another runtime Rust interpreter. The separately specified pure constant evaluator is intentional and remains within its specified purity, demand and authority contract. Explicitly specified runtime/library intrinsics remain valid when selected through the common source/member service.
+
+### Lazy preparation, eager reached execution
+
+Preserve lazy parsing/type preparation and ordinary eager execution of reached Rust operations. Declaration discovery and required macro-producer closure may inspect or expand syntax as the specification requires; that is not permission to prepare executable code for every branch or function.
+
+An entered operation must not require all unselected match results or cold branches to have supported executable shapes. Obtain needed facts through the shared demand-driven source/type/member services. A declared callee signature may answer a type goal without lowering or executing its body. Add a witness in which only a never-taken branch changes from a literal to a source call and ensure that this does not cause eager executable preparation or an unrelated unsupported error. Do not implement a borrow checker or full static checker as a workaround; `cargo check` remains separate.
+
+### Prepare once and share immutable results
+
+Use the existing pure query/memo framework for immutable source preparation. Key plans by their real source, scope, edition, expansion epoch and semantic dependencies. Phase selection must select from a retained plan; it must not repeatedly parse/walk the same operands or reconstruct a complete plan for each phase. Installed operation execution must not re-enter source planning. Runtime guards check the relevant runtime facts and prepared dependency versions.
+
+Use relevant sealed namespace buckets and positive/negative lookup dependencies. Do not add full-world namespace-map construction/comparison to dispatch, installed-recipe guards, per-operation checks or ordinary call entry. Unrelated namespace publication must not invalidate a recipe unless it changes a dependency of that recipe. Relevant additions must still invalidate prior absence/ambiguity conclusions. Preserve existing safety refusals until an equally sound dependency mechanism replaces them; a global census is not an acceptable permanent hot-path implementation.
+
+Share immutable parser/body/index structures through retained handles such as `Arc`. Frames own their mutable execution state, slots and continuation; they must not deep-clone immutable `BodyIndex` data during call preparation and again at entry. Resolve indexed nodes through retained direct syntax locations instead of searching the complete parsed file for every node phase. Bound and account new indexes/handles under Section 32.2.
+
+Performance acceptance needs structural evidence that normal dispatch does no source parsing, full-plan reconstruction or global namespace scan, plus representative measurements before making speed/scaling claims. Source inspection alone can establish a suspected cost, not measured release performance.
+
+### Required architecture acceptance and review
+
+Use unchanged official rustc fixtures and their actual directives/auxiliaries as the primary language witnesses. Add LRR-specific route, authority, suspension and exact-once controls outside imported originals. For the changed feature, compare the same operation handwritten, emitted by an arbitrary user macro, emitted through a wrapper and nested in an applicable standard macro. Inspect the actual indexed nodes, verifier route and execution trace/counters; matching outputs alone cannot prove a shared engine.
+
+Cover the affected contracts: blocks with statements, guarded matches and other patterns, ordinary versus macro-nested methods, numeric constraints, generated functions with reference parameters, caller bindings/labels, cold branches, exact-once calls/effects, failure-only formatting, panic/cleanup, suspension/resume and source/epoch invalidation. Reuse upstream cases incrementally; do not create a miniature substitute language suite. Report unsupported and unexecuted matrix entries as gaps. Do not claim the architectural feature complete until the applicable matrix and current milestone pass.
+
+Every language/frontend/runtime contribution must include a source-aware architecture review against all eight recurring failure modes:
+
+1. Separate assertion/expression compiler or evaluator.
+2. Literal/break-only macro-output execution instead of ordinary syntax.
+3. Context-specific method selection or numeric inference.
+4. Generated-source rejection of already supported ordinary semantics.
+5. Duplicated pattern machinery or eager checks of unselected executable arms.
+6. Repeated parsing/planning during phase preparation or installed execution.
+7. Full-world namespace scans or unrelated invalidation on sensitive execution paths.
+8. Deep copies of immutable body structures or repeated whole-file node searches.
+
+Name the actual shared entry points and changed call sites, the removed/remaining alternate routes, relevant asymptotic work and reproducible witnesses. Use an already authorized reviewer/test agent when available; this requirement does not authorize extra agents. Otherwise perform and record a separate source-review pass. Documentation checkboxes and green feature tests do not substitute for reviewing the code path.
+
+If review finds architectural drift, hold integration and feature-completion claims, record the minimal counterexample and make the common-engine repair the next implementation priority. Do not expand a shortcut's vocabulary while promising to remove it later. Do not self-authorize an exception by renaming code, writing an erratum, opening another worktrack or labeling the shortcut temporary. Only an explicit user-approved design change can change the pinned architecture. Preserve failed attempts and prior evidence, and keep component/runtime/full-fixture/diagnostic/tooling outcomes distinct.
+
 ## Parallel contributor work
 
 Use [worktracks/README.md](worktracks/README.md) and [worktracks/registry.json](worktracks/registry.json) to select one of the 12 substantial work streams. These plans divide ownership; the specification and docs/tasks.json still govern task order and acceptance. Read the chosen track, active claims in worktracks/claims.json, and its upstream witness before changing code. Claim a bounded item through the worktrack issue template, record exact files/symbols and API dependencies, and use a separate fork/branch or isolated checkout. Existing local reservations must be coordinated before overlapping work. Contributors may bring their own agents and compute; each contribution needs a human owner, a reviewable PR and reproducible evidence.
@@ -33,7 +103,3 @@ Before guest JIT implementation, require complete interpreter execution of every
 ## All official editions (October 13, 2026)
 
 Support Rust 2015, 2018, 2021 and 2024 for selected roots, dependencies and macro origins. This user-authorized policy supersedes the earlier 2024-only root restriction. Preserve owning editions in parsing, name resolution, preludes, macro spans, patterns, temporary lifetimes and cache/unit identities. Default standalone edition remains 2024 with explicit --edition selection; Cargo targets retain their declared edition. Unknown or unreleased editions must fail explicitly. Drive edition-sensitive implementation with unchanged official rustc fixtures; edition admission is not full compatibility acceptance.
-
-## One macro and language execution pipeline (October 15, 2026)
-
-Do not implement macro-specific runtime expression, pattern, inference, call, method, ownership or cleanup semantics. Resolve and expand macros through the common hygienic macro pipeline, then parse, index, lower and execute their generated Rust with the same machinery as handwritten Rust. This applies to assertions, vec/formatting macros and user macros. Compiler expansion hooks belong to the pinned macro adapter; they must not become a second runtime interpreter. A renamed helper or a shared opcode does not establish shared language lowering. Match, if-let/while-let, let-else and macro-generated patterns must share the generic pattern engine. Read docs/audits/macro-specific-semantics.json and docs/errata/revision5-common-macro-engine.md before touching affected paths. Existing shortcut-based evidence remains historical execution evidence and cannot establish this architectural acceptance. Do not promote the held cumulative macro-specific candidates, even if their old test gate passes; replace the architecture and validate the common path.
