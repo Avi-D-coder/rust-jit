@@ -1,0 +1,464 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    "M010",
+    "M012",
+    "M013",
+    "M017"
+  ],
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "problem": "Original adopted grandchild macro owner had published source rows but no DB prepared-source weak lease; exact generated-parent guard292 failed.",
+  "production_invariant": "Stage only genuine validated module source states. Deduplicate actual allocations, account candidate registry capacity with existing shared parser/blob accounting, check query/parse/source limits before any input/registry commit. Current CapturedSource equality still gates lookup; no world reset, query effect, source recapture or relaxed parent/type/token guard.",
+  "v56_production_scopes": {
+    "architecture": {
+      "scope": "architecture",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "run",
+        "-p",
+        "xtask",
+        "--locked",
+        "--offline",
+        "--",
+        "architecture-audit"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "5b0acea927ea672893ec0251d27975181326c761a90d38a849096b3676cc6a7d",
+      "elapsed_seconds": 21.402782541990746,
+      "started_at": "2026-10-15T06:07:52.742535+00:00",
+      "finished_at": "2026-10-15T06:08:14.145370+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "b9ade4ab94f5247fcfb479bf4620a2bd957f3c95d81de1a3df82554551d24c2d",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "fixture-reference": {
+      "scope": "fixture-reference",
+      "argv": [
+        "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/xtask",
+        "fixture-reference-audit"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "5b0acea927ea672893ec0251d27975181326c761a90d38a849096b3676cc6a7d",
+      "elapsed_seconds": 0.48411254200618714,
+      "started_at": "2026-10-15T06:08:29.511840+00:00",
+      "finished_at": "2026-10-15T06:08:29.996043+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "format": {
+      "scope": "format",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "5b0acea927ea672893ec0251d27975181326c761a90d38a849096b3676cc6a7d",
+      "elapsed_seconds": 4.901844875013921,
+      "started_at": "2026-10-15T06:07:42.187089+00:00",
+      "finished_at": "2026-10-15T06:07:47.089018+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "module-cli-bank": {
+      "scope": "module-cli-bank",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--test",
+        "module_cli",
+        "--locked",
+        "--offline",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 64,
+      "nonempty_test_scope": true,
+      "source_member": "5b0acea927ea672893ec0251d27975181326c761a90d38a849096b3676cc6a7d",
+      "elapsed_seconds": 30.70088879202376,
+      "started_at": "2026-10-15T06:06:19.515063+00:00",
+      "finished_at": "2026-10-15T06:06:50.215987+00:00",
+      "stdout_sha256": "48b5e96035d3afdaef6b891ceeb31e78211f1767bd9dcb2f8cdcf316b38e7907",
+      "stderr_sha256": "0ccc403f1d2313b874c9667579ba65f4eb4ba6b251bb8563ccdd30ed1bf3d7fd",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "module-parent-diagnostic": {
+      "scope": "module-parent-diagnostic",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--test",
+        "module_cli",
+        "--locked",
+        "--offline",
+        "--",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1",
+        "cli_ordinary_adopted_local_macro_shadows_parent_with_generated_child_call"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 1,
+      "nonempty_test_scope": true,
+      "source_member": "5b0acea927ea672893ec0251d27975181326c761a90d38a849096b3676cc6a7d",
+      "elapsed_seconds": 21.915392625000095,
+      "started_at": "2026-10-15T06:05:42.020141+00:00",
+      "finished_at": "2026-10-15T06:06:03.935590+00:00",
+      "stdout_sha256": "fc0caf7e4f636e13b2cec61f4b171c381fca636a1476c97a8e34807dbce3aef8",
+      "stderr_sha256": "ceb4eea796bea344a5ae6ecb8c87d4e24a941d83b44458392482a67db5678905",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "parent-profile-two": {
+      "scope": "parent-profile-two",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--lib",
+        "frontend::call_contracts::generated_result_namespace::parent_profile_tests::",
+        "--locked",
+        "--offline",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 2,
+      "nonempty_test_scope": true,
+      "source_member": "5b0acea927ea672893ec0251d27975181326c761a90d38a849096b3676cc6a7d",
+      "elapsed_seconds": 20.129923375003273,
+      "started_at": "2026-10-15T06:07:09.389356+00:00",
+      "finished_at": "2026-10-15T06:07:29.519337+00:00",
+      "stdout_sha256": "591e01bbf2ae45615323e05c819e8552fcbed1bad9f99e571d6ad90840c6dbac",
+      "stderr_sha256": "ede84fa32bda3525ee3806bf81da756ef39ae4f8d739bc99f85528d90299cb51",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "strict-lrr-tests": {
+      "scope": "strict-lrr-tests",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "clippy",
+        "-p",
+        "lrr",
+        "--lib",
+        "--tests",
+        "--locked",
+        "--offline",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "5b0acea927ea672893ec0251d27975181326c761a90d38a849096b3676cc6a7d",
+      "elapsed_seconds": 16.71586299999035,
+      "started_at": "2026-10-15T06:04:55.383888+00:00",
+      "finished_at": "2026-10-15T06:05:12.099807+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "66665a8148d7ca4d3d6c50b5fe84c0294720d534f334e8f896f9a1a8d1fafdbb",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    }
+  },
+  "v56_distinct_controls": 66,
+  "v56_executions": 67,
+  "v57_test_harness_attempt": {
+    "registry_controls": {
+      "scope": "registry-four",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "test",
+        "-p",
+        "lrr",
+        "--lib",
+        "db::memo::prepared_module_registry_tests::",
+        "--locked",
+        "--offline",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "source_unchanged": true,
+      "matched_test_count": 4,
+      "nonempty_test_scope": true,
+      "source_member": "6095a17b9547c339b7b3eb502e2b00033990ec1cfaa3fd15ac1e8f864989ff1b",
+      "elapsed_seconds": 19.955927709001116,
+      "started_at": "2026-10-15T06:09:52.229219+00:00",
+      "finished_at": "2026-10-15T06:10:12.185205+00:00",
+      "stdout_sha256": "184e55c3179acfa407a606b8a627732c5b3ba0856cbbd49a39894497f6054a2e",
+      "stderr_sha256": "7fbe97234f38745c63ab6ece8ffb14a8929e91f738253ab5c2bfd1c4b870e1de",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "architecture": {
+      "scope": "architecture",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "run",
+        "-p",
+        "xtask",
+        "--locked",
+        "--offline",
+        "--",
+        "architecture-audit"
+      ],
+      "exit_code": 1,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "6095a17b9547c339b7b3eb502e2b00033990ec1cfaa3fd15ac1e8f864989ff1b",
+      "elapsed_seconds": 28.65179437500774,
+      "started_at": "2026-10-15T06:10:42.507795+00:00",
+      "finished_at": "2026-10-15T06:11:11.159641+00:00",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "5243e69f132582e1998c886d3d96ff6abea2a124dab9a91814cbffd0472a1f88",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "status": "failed architecture placement; host capture in DB test child",
+    "fixture_audit": "unexecuted",
+    "full_milestone": "not started"
+  },
+  "v58_architecture_correction": {
+    "status": "scoped passed; integrated",
+    "source_member": "10096cc75a2881fa445e5ad78d677146beefe0d1d791b7ac505754e78845e378",
+    "scopes": {
+      "strict-lrr-tests": {
+        "scope": "strict-lrr-tests",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "clippy",
+          "-p",
+          "lrr",
+          "--lib",
+          "--tests",
+          "--locked",
+          "--offline",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0,
+        "source_unchanged": true,
+        "matched_test_count": null,
+        "nonempty_test_scope": true,
+        "source_member": "10096cc75a2881fa445e5ad78d677146beefe0d1d791b7ac505754e78845e378",
+        "elapsed_seconds": 18.459778666991042,
+        "started_at": "2026-10-15T06:16:26.343796+00:00",
+        "finished_at": "2026-10-15T06:16:44.803694+00:00",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "426f34d97d984c62e52d110c103be9134ef323bccb74582d5e9644b65a9bd3de",
+        "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+      },
+      "service-registry-four": {
+        "scope": "registry-service-four",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "-p",
+          "lrr",
+          "--lib",
+          "service::prepared_module_registry_tests::",
+          "--locked",
+          "--offline",
+          "--",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit_code": 0,
+        "source_unchanged": true,
+        "matched_test_count": 4,
+        "nonempty_test_scope": true,
+        "source_member": "10096cc75a2881fa445e5ad78d677146beefe0d1d791b7ac505754e78845e378",
+        "elapsed_seconds": 21.2639814580034,
+        "started_at": "2026-10-15T06:17:06.154716+00:00",
+        "finished_at": "2026-10-15T06:17:27.418828+00:00",
+        "stdout_sha256": "4c5b4a6fc3f9f8a18d81539de0ccdc0df9c69e48c330ce21bdaf480a25038c75",
+        "stderr_sha256": "128adf7104aa25e52671e37a69e1557a14feb4ffef7bcb8e4326ac2786da762b",
+        "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+      },
+      "format": {
+        "scope": "format",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "exit_code": 0,
+        "source_unchanged": true,
+        "matched_test_count": null,
+        "nonempty_test_scope": true,
+        "source_member": "10096cc75a2881fa445e5ad78d677146beefe0d1d791b7ac505754e78845e378",
+        "elapsed_seconds": 4.992555999982869,
+        "started_at": "2026-10-15T06:17:40.544225+00:00",
+        "finished_at": "2026-10-15T06:17:45.536871+00:00",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+      },
+      "architecture": {
+        "scope": "architecture",
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "run",
+          "-p",
+          "xtask",
+          "--locked",
+          "--offline",
+          "--",
+          "architecture-audit"
+        ],
+        "exit_code": 0,
+        "source_unchanged": true,
+        "matched_test_count": null,
+        "nonempty_test_scope": true,
+        "source_member": "10096cc75a2881fa445e5ad78d677146beefe0d1d791b7ac505754e78845e378",
+        "elapsed_seconds": 22.389605708012823,
+        "started_at": "2026-10-15T06:17:48.949361+00:00",
+        "finished_at": "2026-10-15T06:18:11.339072+00:00",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "eb474ab19b0243a12bd4dbd39854e624dc59873fcc7af5c0e0c8932cc06d8d81",
+        "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+      },
+      "fixture-reference": {
+        "scope": "fixture-reference",
+        "argv": [
+          "/Users/avi/Code/rust-jit/artifacts/macos-first/root-constant-next-validation-v1/validation-target/debug/xtask",
+          "fixture-reference-audit"
+        ],
+        "exit_code": 0,
+        "source_unchanged": true,
+        "matched_test_count": null,
+        "nonempty_test_scope": true,
+        "source_member": "10096cc75a2881fa445e5ad78d677146beefe0d1d791b7ac505754e78845e378",
+        "elapsed_seconds": 0.49822562499321066,
+        "started_at": "2026-10-15T06:18:25.212483+00:00",
+        "finished_at": "2026-10-15T06:18:25.710801+00:00",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+      }
+    },
+    "design": "Service owns authentic capture and test execution; DB provides only cfg(test) opaque read-only state facts. Unchanged architecture audit passes; obsolete DB host-I/O child is absent."
+  },
+  "source_inventory": {
+    "imported_cases": 308,
+    "unchanged_original_files": 490
+  },
+  "receipts": [
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v55/DIAGNOSTIC-RESULT.json",
+      "sha256": "b1c358350b599399a7baba407d9808c64dea0a998e8983107d5caecaa4e4f939"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v56/HANDOFF.md",
+      "sha256": "4d70b0d075899fdbddffdb717c3be108b0c8f6e28df771f368b5ad85d4cabb14"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v56/COLLECTED-SCOPES.json",
+      "sha256": "e26f83ec8700a4c2127071cc97ae993d00f89cd4a114943a775f66ad21910794"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v57/HANDOFF.md",
+      "sha256": "25eb081a08cabba5dd69568e31a8da7020e4d24ecf1ffb20b224ba7a02d70486"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v57/architecture/stderr.log",
+      "sha256": "5243e69f132582e1998c886d3d96ff6abea2a124dab9a91814cbffd0472a1f88"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v58/SCOPED-HANDOFF.md",
+      "sha256": "7d69544690f4f5d033331da03dd57a836f3c1e01d1ee5ffa97c5b63e82d800e9"
+    }
+  ],
+  "acceptance": {
+    "integrated": true,
+    "full_milestone_passed": false,
+    "additional_upstream_runtime_contract_passes_claimed": 0,
+    "configured_full_fixture_passes": 0,
+    "guest_jit_gate": "closed",
+    "release_complete": false,
+    "task_completion_newly_claimed": false
+  },
+  "source_files": [
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "before_sha256": "270e0284df0f3a49f882cfdb80a92864e928a3a193ec4bd5f02f4e8002604a3b",
+      "sha256": "0d2be48055b79fdaed9e65a09fdc1e30d3fb9ef6d3e39fa04a2a8e1ece4c91f8",
+      "bytes": 109015
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_modules.rs",
+      "before_sha256": null,
+      "sha256": "8b7efbfe93e6a0429a76861a449db26e812d420fd7f2f0bc9556664d474f8448",
+      "bytes": 2735
+    },
+    {
+      "path": "crates/lrr/src/source/changes.rs",
+      "before_sha256": "b21d56e79299a3a2b590ca4cd14ff1a19ea5e6967d2cf79e6ecf3619f1bc128c",
+      "sha256": "3f5a315504a6ab61667d6c1321bb7396cbf056fc04d06c862c0fabc6008e69d0",
+      "bytes": 55992
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_module_registry_snapshot.rs",
+      "before_sha256": null,
+      "sha256": "a6d512da65a37e3de14a03f1071594f8be7e41469b5ad4b48497757c8601c003",
+      "bytes": 2137
+    },
+    {
+      "path": "crates/lrr/src/service/mod.rs",
+      "before_sha256": "5167c0fee176e7a4289ce29209dc07dfd8b6f21c1bbc16cdfdf71a73610aced0",
+      "sha256": "83078575a10edc97e68d4ed54b3cca074913d5c171ee340e7381329068c3f91c",
+      "bytes": 458
+    },
+    {
+      "path": "crates/lrr/src/service/prepared_module_registry_tests.rs",
+      "before_sha256": null,
+      "sha256": "18ddf650c9d58bef2c0513fdbd6051128592c32ae6f0bd16d9b797f42bdf040d",
+      "bytes": 13207
+    }
+  ],
+  "full_milestone": {
+    "status": "running",
+    "source_member": "10096cc75a2881fa445e5ad78d677146beefe0d1d791b7ac505754e78845e378",
+    "terminal": null,
+    "actual_session": 80731,
+    "actual_pid": 22174
+  }
+}

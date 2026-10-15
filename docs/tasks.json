@@ -10029,7 +10029,8 @@
       ],
       "evidence": [
         "worktracks/evidence/2026-10-14-macro-preparation-milestone.json",
-        "worktracks/evidence/2026-10-14-declaration-request-reuse.json"
+        "worktracks/evidence/2026-10-14-declaration-request-reuse.json",
+        "worktracks/evidence/2026-10-14-adopted-source-registry.json"
       ]
     },
     {
@@ -10527,7 +10528,8 @@
       ],
       "evidence": [
         "worktracks/evidence/2026-10-14-macro-preparation-milestone.json",
-        "worktracks/evidence/2026-10-14-declaration-request-reuse.json"
+        "worktracks/evidence/2026-10-14-declaration-request-reuse.json",
+        "worktracks/evidence/2026-10-14-adopted-source-registry.json"
       ]
     },
     {
@@ -18150,7 +18152,8 @@
       },
       "evidence": [
         "worktracks/evidence/2026-10-14-include-parent-milestone.json",
-        "worktracks/evidence/2026-10-14-include-parent-repair.json"
+        "worktracks/evidence/2026-10-14-include-parent-repair.json",
+        "worktracks/evidence/2026-10-14-adopted-source-registry.json"
       ]
     },
     {
@@ -19468,7 +19471,8 @@
         "worktracks/evidence/2026-10-14-include-parent-milestone.json",
         "worktracks/evidence/2026-10-14-include-parent-repair.json",
         "worktracks/evidence/2026-10-14-macro-preparation-milestone.json",
-        "worktracks/evidence/2026-10-14-declaration-request-reuse.json"
+        "worktracks/evidence/2026-10-14-declaration-request-reuse.json",
+        "worktracks/evidence/2026-10-14-adopted-source-registry.json"
       ]
     },
     {

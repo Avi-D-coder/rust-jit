@@ -160,6 +160,11 @@ pub struct PreparedSourceView {
     selection: SourceSelection,
 }
 impl PreparedSourceView {
+    /// Share only the identity of this already prepared immutable publication.
+    /// Registration never publishes its inputs or grants current source authority.
+    pub(crate) fn retained_state_weak(&self) -> std::sync::Weak<PreparedSourceState> {
+        std::sync::Arc::downgrade(&self.state)
+    }
     pub(crate) fn from_retained_state(
         state: std::sync::Arc<PreparedSourceState>,
         expected: &SourceSelection,

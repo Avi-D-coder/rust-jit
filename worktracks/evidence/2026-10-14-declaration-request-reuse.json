@@ -216,12 +216,46 @@
   "prior_failure": "V52 full milestone1069 passed/1 publication-entry cumulative deadline failure/2133 unexecuted preserved. No per-stage timing establishes its cause.",
   "timing_limit": "The scoped test timings are not a controlled performance comparison with the full library bank; no speedup or timeout-causation claim.",
   "full_milestone": {
-    "status": "running",
-    "scope": "gate03",
-    "source_member": "c12a79af0cfa7513f658f0c9415ca0b9a38ec54bbfe95d4bfdcf1a9cea252f8d",
-    "actual_session": 75958,
-    "actual_pid": 10998,
-    "terminal": null
+    "status": "failed",
+    "actual_gate": {
+      "scope": "gate03",
+      "argv": [
+        "cargo",
+        "+1.99.0",
+        "run",
+        "--offline",
+        "--locked",
+        "-p",
+        "xtask",
+        "--",
+        "gate",
+        "03"
+      ],
+      "exit_code": 1,
+      "source_unchanged": true,
+      "matched_test_count": null,
+      "nonempty_test_scope": true,
+      "source_member": "c12a79af0cfa7513f658f0c9415ca0b9a38ec54bbfe95d4bfdcf1a9cea252f8d",
+      "elapsed_seconds": 447.24384829201153,
+      "started_at": "2026-10-15T05:48:32.637190+00:00",
+      "finished_at": "2026-10-15T05:55:59.880464+00:00",
+      "stdout_sha256": "405f80ddf28ce1a9140468a6e1751604e9525174a1b73506d01f1ce9ef151b2c",
+      "stderr_sha256": "5843b239b545326304144d500ae4eee46502b8f3b1f57a1fd9c97592de8b07ae",
+      "target_owner_sha256": "e278ab303e3fc653a3a9a82baed7a39986344eb32d1f0897cdb112d3596abb1c"
+    },
+    "listed": 3203,
+    "passed": 1365,
+    "failed": 1,
+    "unexecuted": 1837,
+    "library_passed": 1070,
+    "include_cli_passed": 93,
+    "failure_test": "module_cli::cli_ordinary_adopted_local_macro_shadows_parent_with_generated_child_call",
+    "failure_code": "LRR-E-CALL-CONTEXT",
+    "diagnostic_probe": {
+      "status": "failed as expected; diagnostic only, not acceptance",
+      "guard": "292 original terminal db.prepared_source(source) returned None",
+      "source_member": "62db692c0aa11c40dc18aef2c95ae4a0ec04cba1d6258ed0b00d309eb75a8b96"
+    }
   },
   "receipts": [
     {
@@ -231,6 +265,22 @@
     {
       "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v54/SCOPED-HANDOFF.md",
       "sha256": "8da2bc9fdd1d8c3d7dea86c6a7fbdac59dbda6887e7933f5ebe91839ec1181f1"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v54/HANDOFF.md",
+      "sha256": "492f8a8f70dc64224e18bd27ea44f45a071c08730600b068a515588901413812"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v54/ACTUAL-FAILURE-DETAILS.json",
+      "sha256": "fc2d3db8ba9bfa56ce4745f2e9d8846453429640b052d9167a38ff0de8f45902"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v55/HANDOFF.md",
+      "sha256": "90e8e753a80d4c3a167c549aba221cb6945941090dab1647487ae55903556692"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v55/DIAGNOSTIC-RESULT.json",
+      "sha256": "b1c358350b599399a7baba407d9808c64dea0a998e8983107d5caecaa4e4f939"
     }
   ],
   "acceptance": {
@@ -239,5 +289,6 @@
     "task_complete": false,
     "guest_jit_gate": "closed",
     "release_complete": false
-  }
+  },
+  "next": "Private three-leaf source registry correction stages genuine validated adopted module parser/source weak leases and full prospective cache budgets without replacing current inputs; exact module/authority validation pending."
 }

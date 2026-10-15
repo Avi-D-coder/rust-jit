@@ -23,6 +23,9 @@ mod constant_inputs;
 #[path = "source_view_inputs.rs"]
 mod source_view_inputs;
 
+#[path = "prepared_modules.rs"]
+mod prepared_modules;
+
 #[derive(Debug, Clone)]
 pub struct MemoEntry {
     pub value: Arc<QueryValue>,
@@ -315,6 +318,13 @@ impl Database {
         Ok(())
     }
     pub fn cache_usage(&self) -> Result<crate::engine::telemetry::CacheUsage, Diagnostic> {
+        self.cache_usage_with_prepared(&self.prepared_sources, self.prepared_sources.capacity())
+    }
+    fn cache_usage_with_prepared(
+        &self,
+        prepared_sources: &[std::sync::Weak<crate::source::changes::PreparedSourceState>],
+        prepared_capacity: usize,
+    ) -> Result<crate::engine::telemetry::CacheUsage, Diagnostic> {
         let mut usage = crate::engine::telemetry::CacheUsage::default();
         let mut source_allocations = std::collections::BTreeSet::new();
         let mut map_allocations = std::collections::BTreeSet::new();
@@ -422,8 +432,7 @@ impl Database {
                 usage.pinned_parse_bytes = account_add(usage.pinned_parse_bytes, parse)?;
             }
         }
-        let prepared: Vec<_> = self
-            .prepared_sources
+        let prepared: Vec<_> = prepared_sources
             .iter()
             .filter_map(std::sync::Weak::upgrade)
             .collect();
@@ -566,9 +575,7 @@ impl Database {
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "source pin accounting overflow"))?;
         usage.memo_bytes = account_add(usage.memo_bytes, registry_bytes)?;
         usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, registry_bytes)?;
-        let prepared_registry_bytes = self
-            .prepared_sources
-            .capacity()
+        let prepared_registry_bytes = prepared_capacity
             .checked_mul(std::mem::size_of::<
                 std::sync::Weak<crate::source::changes::PreparedSourceState>,
             >())
@@ -1815,6 +1822,19 @@ impl Database {
                 );
             }
         }
+        let prepared_sources = self.module_prepared_registry(modules, ordinary_modules)?;
+        let usage =
+            self.cache_usage_with_prepared(&prepared_sources, prepared_sources.capacity())?;
+        let budgets = self.run_budgets.unwrap_or_default();
+        if usage.parse_bytes > budgets.parse_bytes
+            || usage.source_input_bytes > budgets.source_input_bytes
+            || usage.memo_bytes > budgets.query_bytes
+        {
+            return Err(fault(
+                "LRR-E-METADATA-LIMIT",
+                "discovery prepared source registry exceeds cache budgets",
+            ));
+        }
         let seal_key = InputKey::DiscoverySeal(input.seal.key());
         let value = InputValue::DiscoverySeal(Box::new(input));
         if let Some(old) = self.inputs.get(&seal_key) {
@@ -1825,6 +1845,9 @@ impl Database {
                 ));
             }
             if extra_bytes == 0 {
+                // The identical publication can still supply a live immutable
+                // module lease after its earlier weak owner was dropped.
+                self.prepared_sources = prepared_sources;
                 return Ok(());
             }
         } else {
@@ -1837,28 +1860,16 @@ impl Database {
                     )
                 })?;
         }
-        let total = self
-            .cache_usage()?
-            .memo_bytes
-            .checked_add(extra_bytes)
-            .ok_or_else(|| {
-                fault(
-                    "LRR-E-METADATA-LIMIT",
-                    "discovery publication metadata overflow",
-                )
-            })?;
+        let total = usage.memo_bytes.checked_add(extra_bytes).ok_or_else(|| {
+            fault(
+                "LRR-E-METADATA-LIMIT",
+                "discovery publication metadata overflow",
+            )
+        })?;
         if total > self.run_budgets.unwrap_or_default().query_bytes {
             return Err(fault(
                 "LRR-E-METADATA-LIMIT",
                 "discovery publication exceeds query metadata cap",
-            ));
-        }
-        if self.cache_usage()?.source_input_bytes
-            > self.run_budgets.unwrap_or_default().source_input_bytes
-        {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "discovery source input cap exceeded",
             ));
         }
         let revision = self
@@ -1888,6 +1899,7 @@ impl Database {
             );
         }
         self.inputs.extend(staged);
+        self.prepared_sources = prepared_sources;
         self.revision = revision;
         Ok(())
     }
@@ -2630,3 +2642,9 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "prepared_module_registry_snapshot.rs"]
+mod prepared_module_registry_snapshot;
+#[cfg(test)]
+pub(crate) use prepared_module_registry_snapshot::PreparedModuleRegistrySnapshot;

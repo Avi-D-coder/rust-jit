@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Two macro preparation leaves integrated after V54 strict/14controls/fmt/architecture; unchanged fullgate03 running, V52failure preserved. Root qualified context source13 now checks parser identity and defers binding admission. Generic coherent named11\u2192Byte12+hint packet frozen/uncompiled.308cases490originals; no new upstream/task/JIT/release acceptance.",
+      "scope": "Integrated6exact registry/runtime/test leaves: V5664module+2parent, V584service/strict/fmt/architecture/reference passed; fullgate03 running80731 unchanged10096cc7, unaccepted. V54failure+V55probe+V57architecture failure preserved. Root qualified13/Byte12/named11 frozen/uncompiled;308cases490originals no new upstream/task/JIT/release acceptance.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -450,11 +450,14 @@
         "artifacts/macos-first/root-named-match-context-source-v1/",
         "artifacts/macos-first/sol-nested-declaration-request-reuse-v1/",
         "artifacts/macos-first/sol-byte-v12-integration-v1/",
-        "artifacts/macos-first/root-declaration-forest-reuse-v1/"
+        "artifacts/macos-first/root-declaration-forest-reuse-v1/",
+        "artifacts/macos-first/root-adopted-source-registry-v2/",
+        "artifacts/macos-first/root-named-match-context-integration-v1/",
+        "artifacts/macos-first/sol-adopted-source-registry-controls-v2/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T05:49:12.981690+00:00",
+      "updated_at": "2026-10-15T06:19:16.358280+00:00",
       "review_after": "2026-10-15T07:16:22.506011+00:00"
     },
     {

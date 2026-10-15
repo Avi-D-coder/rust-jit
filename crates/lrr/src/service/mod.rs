@@ -14,3 +14,6 @@ pub mod derive_declarations;
 mod generated_host_derives;
 pub mod source_attribute_requests;
 pub mod source_derive_requests;
+
+#[cfg(test)]
+mod prepared_module_registry_tests;
