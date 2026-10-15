@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Interpreter-first WT02. V92 combined frozen candidate strict production library and test compilation green;110 selected distinct controls executed once:108passed/2failed. Borrowed-str, suffix-inference18calls, Unicode-underscore and slowparse unchanged main controls all pass all4 editions; this is not configured compiletest full-fixture acceptance. New terminal macro continuation preserves hint-after-storage guard; precise bounds payload/panic/place controls pass. Only2 CRLF byte-view controls remain blocked by explicit NeedExpansion in discovery, plus1 unused test variable warning. Root implemented separate2-test-leaf explicit self-include preparation through existing scoped SourceCapture and coordinator; V93 asynchronous validation assigned. Full milestone, canonical byte/string promotion, task/runtime/full-suite/JIT acceptance remain pending. ~79GB recovered externally; no rejected cache deletion retried.",
+      "scope": "Interpreter-first WT02. V92 combined candidate108/110selected passed,2 CRLF preparation failures preserved. V93 explicit frozen-environment/scoped-source-capture/coordinator helper fixed positive unchangedCRLF as_bytes all4 editions and15otherhelperusers; one missed fuel setup remained. V94 exactoneleaf fuel call-site fix passes strict library+test Clippy702b6d/0 and previouslyfailing negative/fuel control1/1 in2024 actual1dd4e1/0. Allfour unchanged original-main controls pass all4 editions in scoped evidence; bounds/place/panic/wire scopes passed. Required fresh fullmacOS MAIN milestone dispatched asynchronously on frozen72fb4cdd; no fullgate result or canonical byte/string promotion yet. Source-only checkpoint, no full-fixture/task/JIT acceptance. ~78GBfree; no rejected cache deletion retried.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -558,11 +558,14 @@
         "artifacts/macos-first/root-string-control-harness-v1/",
         "worktracks/candidates/root-string-self-include-preparation-v1/",
         "artifacts/macos-first/root-string-self-include-preparation-v1/",
-        "worktracks/evidence/2026-10-15-v92-string-numeric-bounds.json"
+        "worktracks/evidence/2026-10-15-v92-string-numeric-bounds.json",
+        "worktracks/candidates/root-string-self-include-fuel-v1/",
+        "artifacts/macos-first/root-string-self-include-fuel-v1/",
+        "worktracks/evidence/2026-10-15-v94-string-fuel.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T14:18:30.726107+00:00",
+      "updated_at": "2026-10-15T14:24:47.234388+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

@@ -1381,7 +1381,9 @@
         "full_milestone_passed": false,
         "canonical_promotion": false,
         "full_fixture_passes_added": 0,
-        "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete."
+        "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete. V93 positive CRLF/helper controls pass; V94 strict lib/tests and exact negative/fuel control pass in2024. Fresh full milestone dispatched separately; no integrated task acceptance.",
+        "follow_on_evidence": "worktracks/evidence/2026-10-15-v94-string-fuel.json",
+        "fresh_milestone_status": "dispatched_async_not_completed"
       }
     },
     {
@@ -1780,7 +1782,9 @@
         "full_milestone_passed": false,
         "canonical_promotion": false,
         "full_fixture_passes_added": 0,
-        "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete."
+        "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete. V93 positive CRLF/helper controls pass; V94 strict lib/tests and exact negative/fuel control pass in2024. Fresh full milestone dispatched separately; no integrated task acceptance.",
+        "follow_on_evidence": "worktracks/evidence/2026-10-15-v94-string-fuel.json",
+        "fresh_milestone_status": "dispatched_async_not_completed"
       }
     },
     {
@@ -4719,7 +4723,9 @@
         "full_milestone_passed": false,
         "canonical_promotion": false,
         "full_fixture_passes_added": 0,
-        "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete."
+        "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete. V93 positive CRLF/helper controls pass; V94 strict lib/tests and exact negative/fuel control pass in2024. Fresh full milestone dispatched separately; no integrated task acceptance.",
+        "follow_on_evidence": "worktracks/evidence/2026-10-15-v94-string-fuel.json",
+        "fresh_milestone_status": "dispatched_async_not_completed"
       }
     },
     {
@@ -6401,7 +6407,9 @@
         "full_milestone_passed": false,
         "canonical_promotion": false,
         "full_fixture_passes_added": 0,
-        "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete."
+        "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete. V93 positive CRLF/helper controls pass; V94 strict lib/tests and exact negative/fuel control pass in2024. Fresh full milestone dispatched separately; no integrated task acceptance.",
+        "follow_on_evidence": "worktracks/evidence/2026-10-15-v94-string-fuel.json",
+        "fresh_milestone_status": "dispatched_async_not_completed"
       }
     },
     {
@@ -18308,7 +18316,9 @@
         "full_milestone_passed": false,
         "canonical_promotion": false,
         "full_fixture_passes_added": 0,
-        "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete."
+        "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete. V93 positive CRLF/helper controls pass; V94 strict lib/tests and exact negative/fuel control pass in2024. Fresh full milestone dispatched separately; no integrated task acceptance.",
+        "follow_on_evidence": "worktracks/evidence/2026-10-15-v94-string-fuel.json",
+        "fresh_milestone_status": "dispatched_async_not_completed"
       }
     },
     {

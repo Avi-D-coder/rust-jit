@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T14:24:47.234388+00:00",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "source_member": "72fb4cdd82bb17b8ba0d29da28c7d8c4b1cf0cc757ab6f63a50f86f44f00790a",
+  "checks": [
+    {
+      "bank": "strict-library",
+      "actual_terminal": "702b6d/0",
+      "child_exit": 0,
+      "command_sha256": "eaaf85c7c8eb89788024f2eacf1480dd32de6af85107133fad3699bc42bd921e",
+      "terminal_sha256": "7d414878e156b4805e091d9673f6a98c20669d14cc0f525c86751cbaf63f30c6",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "f32e79daf4548d420cb6a4a392849062b5fd2ce50eb63886051f8b881cfad912",
+      "source_guard_sha256": "27fc74f7b71d5ea7a9425244d5b9a0f5056beebaa90528e9736340a9148a9d40"
+    },
+    {
+      "bank": "compile-library-tests",
+      "actual_terminal": "1dd4e1/0",
+      "child_exit": 0,
+      "command_sha256": "09b6df2f66bf27cb6924d7d9182a7923ff102628b54a1aa76d3dbd82a98df8ad",
+      "terminal_sha256": "58886b8b14b785e5d139c2842e7562e64a6ba28b04ea16f1ef605e6ebba6b475",
+      "stdout_sha256": "8dd5528bffc9ab5472d93bf893f39e28f3c90072f1c6906cc4064e75d8eb415a",
+      "stderr_sha256": "8bb4ba9b50cf68dd30d3817ad6c43569cf71af34620bf512454e6008b6f7fc24",
+      "source_guard_sha256": "27fc74f7b71d5ea7a9425244d5b9a0f5056beebaa90528e9736340a9148a9d40"
+    }
+  ],
+  "negative_fuel_control": {
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 1191,
+    "edition": 2024,
+    "name": "engine::run::byte_macro_literals::string_tests::original_as_bytes_member_and_vm_refuse_mutable_receiver_or_wrong_result_source_before_effects"
+  },
+  "previous_positive_crlf_control": "V93 passed all four editions; separate frozen-source receipt",
+  "guarded_extras": 435,
+  "guarded_raw_originals": 507,
+  "scope": "Strict Clippy library and test targets, then exact previously failing negative/fuel body once. No full milestone, canonical promotion, full-fixture or JIT acceptance inferred. Fresh milestone dispatched separately.",
+  "full_milestone": {
+    "status": "running_not_passed",
+    "launch_tool_cell": "08dcdf",
+    "session": 43153,
+    "pid": 70693,
+    "command": [
+      "cargo",
+      "+1.99.0",
+      "run",
+      "--offline",
+      "--locked",
+      "-p",
+      "xtask",
+      "--",
+      "gate",
+      "03"
+    ],
+    "source_member": "72fb4cdd82bb17b8ba0d29da28c7d8c4b1cf0cc757ab6f63a50f86f44f00790a",
+    "previous_reports_archived": 9,
+    "terminal_and_collection_pending": true,
+    "source_frozen": true
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "M013",
+    "T061"
+  ],
+  "prerequisites": [
+    "root-string-self-include-preparation-v1"
+  ],
+  "created_at": "2026-10-15T14:20:33.510035+00:00",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_string_macro_literal_tests.rs",
+      "before_sha256": "c066466f09abbe6711e2ea8a041b34a78c43a445cc888bb35f8e8c0c4de42f04",
+      "after_sha256": "b59875824fd9189a74fee05e7e67d39baf6cf2264a3078ffeed6e23271a27b23"
+    }
+  ],
+  "patch_sha256": "6bf2cadb09a85fbb45694568cd4a33f44e9506ab8e1298fc56a8d360b5148c4f",
+  "patch_bytes": 2752,
+  "static_checks": [
+    "exact V93 preimage",
+    "Rust1.99 formatting",
+    "exact no-fuzz/no-offset replay"
+  ],
+  "new_test_bodies": 0,
+  "stock_runtime_passes_added": 0,
+  "acceptance_pending": [
+    "strict compilation",
+    "original CRLF byte-view refusal/fuel control",
+    "full milestone"
+  ]
+}

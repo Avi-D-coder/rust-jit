@@ -1,0 +1,62 @@
+--- a/crates/lrr/src/engine/run_string_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_string_macro_literal_tests.rs
+@@ -420,6 +420,7 @@
+ );
+ fn start_crlf_source(
+     edition: u16,
++    fuel: u64,
+ ) -> (
+     Database,
+     RunMachine,
+@@ -433,13 +434,13 @@
+         "lexer-crlf-line-endings-string-literal-doc-comment.rs",
+         Some(&directory),
+         edition,
+-        100_000,
++        fuel,
+     )
+ }
+ #[test]
+ fn unchanged_crlf_as_bytes_operand_requires_current_source_and_publishes_once_all_editions() {
+     for edition in [2015, 2018, 2021, 2024] {
+-        let (mut db, mut run, macros, _) = start_crlf_source(edition);
++        let (mut db, mut run, macros, _) = start_crlf_source(edition, 100_000);
+         let contexts = macros.contexts().unwrap();
+         let (id, source, destination) = reach_string_method(&mut db, &mut run, &contexts, 46);
+         let receiver = run.frame.cell(source).unwrap();
+@@ -487,7 +488,7 @@
+ }
+ #[test]
+ fn original_as_bytes_member_and_vm_refuse_mutable_receiver_or_wrong_result_source_before_effects() {
+-    let (mut db, mut run, macros, _) = start_crlf_source(2024);
++    let (mut db, mut run, macros, _) = start_crlf_source(2024, 100_000);
+     let contexts = macros.contexts().unwrap();
+     let (id, source, _) = reach_string_method(&mut db, &mut run, &contexts, 46);
+     let used = run.frame.fuel_snapshot().used;
+@@ -515,7 +516,7 @@
+     assert_eq!(effects(&run), before);
+     db.finish_run().unwrap();
+     // A separate original run avoids reusing a faulted VM frame.
+-    let (mut db, mut run, macros, _) = start_crlf_source(2024);
++    let (mut db, mut run, macros, _) = start_crlf_source(2024, 100_000);
+     let contexts = macros.contexts().unwrap();
+     let (id, _, destination) = reach_string_method(&mut db, &mut run, &contexts, 46);
+     run.frame
+@@ -543,7 +544,7 @@
+     db.finish_run().unwrap();
+     // Poison only the source region; equal physical layout/backing cannot
+     // make an old method receipt authorize a different source borrow.
+-    let (mut db, mut run, macros, _) = start_crlf_source(2024);
++    let (mut db, mut run, macros, _) = start_crlf_source(2024, 100_000);
+     let contexts = macros.contexts().unwrap();
+     let (id, source, _) = reach_string_method(&mut db, &mut run, &contexts, 46);
+     run.frame
+@@ -566,7 +567,7 @@
+     );
+     assert_eq!(effects(&run), before);
+     db.finish_run().unwrap();
+-    let (mut db, mut run, macros, _) = tests::start_source(BYTE_VIEW_CRLF, 2024, used);
++    let (mut db, mut run, macros, _) = start_crlf_source(2024, used);
+     let contexts = macros.contexts().unwrap();
+     let (id, _, _) = reach_string_method(&mut db, &mut run, &contexts, 46);
+     assert_eq!(run.frame.fuel_snapshot().used, used);
