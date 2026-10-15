@@ -1,0 +1,355 @@
+--- a/docs/tasks.json
++++ b/docs/tasks.json
+@@ -4047,6 +4047,25 @@
+         "runtime_contract": "label_break_value whole main/35 assertions in all4 editions",
+         "fresh_integrated_milestone": "failed1274/1/1817;979 library and21 discoveryCLI passed; sole1040-module macro cumulative timeout remains",
+         "release_complete": false
++      },
++      "current_runfail_observation_candidate": {
++        "status": "source_only_unexecuted_held",
++        "source_candidate": "worktracks/candidates/root-runfail-observation-v1/README.md",
++        "scope": "Observe actual expected interpreter panic/message/cleanup for simple run-fail while preserving all literal/regex runtime stderr assertions as incomplete; reject changed source contract metadata",
++        "imported_runfail_inventory": 16,
++        "plain_runfail_observation_candidates": 14,
++        "test_harness_contracts_still_blocked": 2,
++        "new_language_fixtures": 0,
++        "runtime_contract_passes_added": 0,
++        "full_fixture_passes_added": 0,
++        "full_milestone_passed": false,
++        "canonical_promotion": false,
++        "validation_plan": [
++          "Run each eligible unchanged case once in owning edition with actual prebuilt interpreter/digester; retain driver nonzero exit for incomplete output contracts",
++          "Run capture/source-contract mutation verifier against actual captures; preserve raw terminal/source/binary/owner hashes",
++          "Reclassify the prior115 stored captures with no new guest execution; all46 prior runtime passes must remain admissible",
++          "Collect complete milestone only on frozen source and the single Cargo owner"
++        ]
+       }
+     },
+     {
+--- a/tools/check_rustc_runtime_capture.py
++++ b/tools/check_rustc_runtime_capture.py
+@@ -1,6 +1,8 @@
+-"""Refusal controls derived from actual successful interpreter capture packets.
++"""Refusal controls derived from actual admissible interpreter capture packets.
+ 
+-These are harness evidence controls, never additional upstream fixture passes.
++A complete run-pass capture or a run-fail panic observation may supply controls.
++Run-fail stderr assertions remain incomplete. These controls never add upstream
++fixture or runtime-contract passes.
+ Run after rustc_checkout_runtime.py against its unchanged validation workspace.
+ """
+ import argparse
+@@ -23,16 +25,18 @@
+     digests = json.loads((args.report.parent / "source-digests/transport.stdout").read_bytes())["files"]
+     controls = []
+     for ordinal, selected in enumerate(report["selected_cases"]):
+-        if selected["status"] != "runtime_contract_pass":
++        if selected["status"] not in ("runtime_contract_pass", "runtime_failure_observed_output_incomplete"):
+             continue
++        observed_status = selected["status"]
++        expected_panic = selected.get("mode") == "run-fail"
+         raw = (args.report.parent / str(ordinal) / "transport.stdout").read_bytes()
+         if runtime.sha(raw) != selected["observation"]["stdout_sha256"]:
+             raise ValueError("actual capture bytes differ from receipt")
+         packet = json.loads(raw)
+         context = selected["capture_context"]
+         observation = selected["observation"]
+-        if runtime.classify(observation, packet, selected, context, files, digests)["status"] != "runtime_contract_pass":
+-            raise ValueError("actual successful capture is no longer admissible")
++        if runtime.classify(observation, packet, selected, context, files, digests)["status"] != observed_status:
++            raise ValueError("actual observed capture is no longer admissible")
+         mutations = [
+             ("wrong_protocol", ("schema",), "unknown"),
+             ("wrong_request", ("request_context",), "0" * 64),
+@@ -44,11 +48,20 @@
+             ("missing_stream_observation", ("capture", "guest", "stdout"), None),
+             ("zero_dispatch", ("capture", "facts", "vm_dispatches"), 0),
+             ("missing_cleanup", ("capture", "facts", "cleanup_observed"), False),
+-            ("integer_is_not_unit_bool", ("capture", "facts", "terminal", "unit"), 1),
++            (("wrong_retained_panic" if expected_panic else "integer_is_not_unit_bool"),
++             ("capture", "facts", "terminal", "message" if expected_panic else "unit"),
++             "foreign retained panic" if expected_panic else 1),
+             ("unobserved_effect", ("capture", "facts", "effect_recipe_dispatch_attempts"), 1),
+             ("interpreter_fault", ("terminal", "status"), "fault"),
+-            ("unexpected_panic", ("terminal", "status"), "guest_panic"),
++            ("wrong_terminal_kind", ("terminal", "status"),
++             "completed" if expected_panic else "guest_panic"),
+         ]
++        if expected_panic:
++            mutations.extend([
++                ("unknown_panic_kind", ("terminal", "panic", "kind"), "host_crash"),
++                ("missing_panic_source", ("terminal", "panic", "pc", "body"), {}),
++                ("wrong_panic_message", ("terminal", "panic", "message"), "foreign terminal panic"),
++            ])
+         for name, path, value in mutations:
+             changed = copy.deepcopy(packet)
+             node = changed
+@@ -56,17 +69,33 @@
+                 node = node[key]
+             node[path[-1]] = value
+             outcome = runtime.classify(observation, changed, selected, context, files, digests)
+-            if outcome["status"] == "runtime_contract_pass":
++            if outcome["status"] in ("runtime_contract_pass", "runtime_failure_observed_output_incomplete"):
+                 raise ValueError("accepted invalid evidence: " + name)
+             controls.append({"case": selected["case"], "control": name, "status": outcome["status"]})
+-        for key, value in [("timed_out", True), ("output_limited", True), ("exit_code", 9)]:
++        metadata_mutations = [("wrong_selected_mode", "mode", "run-pass" if expected_panic else "run-fail"),
++                              ("wrong_selected_edition", "edition", 0),
++                              ("erased_directives", "directives", [])]
++        if expected_panic:
++            for name, field in [("erased_expected_patterns", "panic_message_patterns"),
++                                ("erased_regex_patterns", "panic_regex_patterns"),
++                                ("erased_stderr_obligations", "runtime_output_obligations")]:
++                if selected.get(field):
++                    metadata_mutations.append((name, field, []))
++        for name, field, value in metadata_mutations:
++            changed = copy.deepcopy(selected)
++            changed[field] = value
++            outcome = runtime.classify(observation, packet, changed, context, files, digests)
++            if outcome["status"] in ("runtime_contract_pass", "runtime_failure_observed_output_incomplete"):
++                raise ValueError("accepted changed original contract: " + name)
++            controls.append({"case": selected["case"], "control": name, "status": outcome["status"]})
++        for key, value in [("timed_out", True), ("output_limited", True), ("exit_code", 0 if expected_panic else 9)]:
+             changed = dict(observation, **{key: value})
+             outcome = runtime.classify(changed, packet, selected, context, files, digests)
+-            if outcome["status"] == "runtime_contract_pass":
++            if outcome["status"] in ("runtime_contract_pass", "runtime_failure_observed_output_incomplete"):
+                 raise ValueError("accepted invalid transport: " + key)
+             controls.append({"case": selected["case"], "control": key, "status": outcome["status"]})
+     if not controls:
+-        raise ValueError("no actual runtime-contract pass available for controls")
++        raise ValueError("no actual admissible interpreter capture available for controls")
+     print(json.dumps({"schema": "lrr/v5/runtime-capture-controls/v1", "controls": controls,
+                       "passed": True, "upstream_fixture_passes_added": 0}, indent=2))
+ 
+--- a/tools/rustc_checkout_runtime.py
++++ b/tools/rustc_checkout_runtime.py
+@@ -1,8 +1,10 @@
+ """Execute unchanged, selected rustc runtime contracts through the LRR CLI.
+ 
+-No native compilation or reference execution occurs. This first adapter supports
+-plain run-pass plus owning-edition directives and the existing closed guest-effect
+-capture. Other contracts/dependencies remain explicit harness blockers, not skips.
++No native compilation or reference execution occurs. Plain run-pass contracts
++use the existing closed guest-effect capture. Plain run-fail can additionally
++observe the actual guest panic/message/cleanup, while its unobserved upstream
++stderr-pattern assertions remain incomplete and cannot produce a contract pass.
++Other contracts/dependencies remain explicit harness blockers, not skips.
+ Selected runtime evidence never completes the entire upstream or diagnostic gates.
+ """
+ import argparse
+@@ -52,12 +54,37 @@
+         raise ValueError("original directive inventory changed")
+     edition = 2015  # Pinned compiletest default; never silently use LRR's 2024 default.
+     blockers = []
+-    if directives.count("//@ run-pass") != 1:
+-        blockers.append("requires a run-pass contract adapter")
++    modes = [mode for mode in ("run-pass", "run-fail")
++             if directives.count("//@ " + mode) == 1]
++    mode = modes[0] if len(modes) == 1 else "unsupported"
++    if mode == "unsupported":
++        blockers.append("requires exactly one plain run-pass or run-fail contract")
++    panic_patterns = []
++    panic_regex_patterns = []
+     editions = []
+     reference_rules = []
+     for directive in directives:
+-        if directive == "//@ run-pass":
++        if directive == "//@ " + mode:
++            continue
++        if mode == "run-fail" and directive == "//@ needs-subprocess":
++            continue  # observe() actually starts a fresh child for each case.
++        pattern = re.fullmatch(r"//@\s*error-pattern:\s*(.+)", directive)
++        if mode == "run-fail" and pattern:
++            text = pattern[1].strip()
++            if not text or len(text.encode("utf-8")) > 4096 or len(panic_patterns) >= 32:
++                blockers.append("panic pattern count/size requires a larger contract adapter")
++            else:
++                panic_patterns.append(text)
++            continue
++        regex_pattern = re.fullmatch(r"//@\s*regex-error-pattern:\s*(.+)", directive)
++        if mode == "run-fail" and regex_pattern:
++            text = regex_pattern[1].strip()
++            if not text or len(text.encode("utf-8")) > 4096 or len(panic_regex_patterns) >= 32:
++                blockers.append("panic regex count/size requires a larger contract adapter")
++            else:
++                # Preserve Rust-regex assertions as data. Do not substitute a
++                # different regex implementation or match protocol JSON.
++                panic_regex_patterns.append(text)
+             continue
+         # Pinned compiletest recognizes `reference` but has no runtime handler
+         # for it (directives/directive_names.rs and directives/handlers.rs).
+@@ -80,8 +107,14 @@
+                 and name != case["path"]]
+     if expected:
+         blockers.append("expected-output/fixed files need their asserted-contract adapter")
+-    return {"mode": "run-pass", "edition": edition, "directives": directives,
+-            "expected_files": expected, "reference_rules": reference_rules, "blockers": blockers}
++    return {"mode": mode, "edition": edition, "directives": directives,
++            "expected_files": expected, "reference_rules": reference_rules,
++            "panic_message_patterns": panic_patterns,
++            "panic_regex_patterns": panic_regex_patterns,
++            "runtime_output_obligations": (
++                (["upstream stderr error-pattern assertions"] if panic_patterns else [])
++                + (["upstream stderr Rust-regex-error-pattern assertions"] if panic_regex_patterns else [])),
++            "blockers": blockers}
+ 
+ 
+ def observe(argv, directory, timeout):
+@@ -148,6 +181,39 @@
+     return type(value) is int and 0 <= value < 2**64
+ 
+ 
++# Stable descriptions from the actual serialized GuestPanic kind protocol.
++# These are agreement checks, never generated guest output or expected results.
++PANIC_DESCRIPTIONS = {
++    "overflow": "arithmetic overflow", "division_by_zero": "division by zero",
++    "invalid_shift": "invalid shift", "explicit": "explicit panic",
++    "assertion": "assertion failed", "index_out_of_bounds": "index out of bounds",
++}
++
++
++def observed_panic_message(terminal, facts):
++    panic = terminal["panic"]
++    if not isinstance(panic, dict) or panic.get("kind") not in PANIC_DESCRIPTIONS:
++        raise ValueError("unknown guest panic kind")
++    message = panic["message"]
++    if message is None:
++        message = PANIC_DESCRIPTIONS[panic["kind"]]
++    if not isinstance(message, str) or len(message.encode("utf-8")) > 65_536:
++        raise ValueError("guest panic message type/size")
++    if facts["terminal"] != {"kind": "guest_panic", "message": message}:
++        raise ValueError("retained panic message differs from actual terminal")
++    pc = panic["pc"]
++    if not isinstance(pc, dict) or not isinstance(pc.get("body"), dict):
++        raise ValueError("guest panic source PC absent")
++    if not all(isinstance(pc["body"].get(key), str)
++               and HEX.fullmatch(pc["body"][key]) is not None
++               for key in ("definition", "exact_body_bytes")):
++        raise ValueError("guest panic source body identity")
++    if not all(type(pc.get(key)) is int and 0 <= pc[key] <= limit
++               for key, limit in (("node", 2**32 - 1), ("phase", 2**16 - 1))):
++        raise ValueError("guest panic node/phase identity")
++    return message
++
++
+ def classify(observation, packet, selected, context, files, digests):
+     """Only a complete live capture can supply a selected runtime-contract pass."""
+     if observation.get("launch_error"):
+@@ -169,15 +235,36 @@
+         return {"status": "invalid_capture_protocol"}
+     if terminal.get("status") in ("fault", "suspended"):
+         return {"status": "interpreter_failure", "terminal": terminal}
+-    if terminal.get("status") == "guest_panic":
++    # Assertion obligations come from checked pinned bytes, not editable report
++    # fields. In particular deleting stderr obligations can never mint a pass.
++    try:
++        original = checked_file(selected["case"], files)
++        directives = [line.strip() for line in original.decode("utf-8").splitlines()
++                      if line.lstrip().startswith("//@")]
++        actual_contract = contract({"path": selected["case"], "directives": directives}, original, files)
++        if actual_contract["blockers"]:
++            return {"status": "unsupported_harness", "blockers": actual_contract["blockers"]}
++        required = ["mode", "edition", "directives", "expected_files", "reference_rules", "blockers"]
++        for field in ("panic_message_patterns", "panic_regex_patterns", "runtime_output_obligations"):
++            if field in selected or actual_contract["mode"] == "run-fail":
++                required.append(field)
++        if any(selected.get(field) != actual_contract[field] for field in required):
++            return {"status": "incomplete_evidence", "reason": "selected contract metadata differs from pinned original"}
++    except (KeyError, TypeError, ValueError, OSError) as error:
++        return {"status": "incomplete_evidence", "reason": str(error)}
++    expected_panic = actual_contract["mode"] == "run-fail"
++    if terminal.get("status") == "guest_panic" and not expected_panic:
+         return {"status": "unexpected_guest_panic", "terminal": terminal}
++    if expected_panic and terminal.get("status") != "guest_panic":
++        return {"status": "missing_expected_guest_panic", "terminal": terminal}
+     try:
+         snapshot = packet["snapshot"]
+         capture = packet["capture"]
+         facts = capture["facts"]
+         streams = capture["guest"]
++        message = observed_panic_message(terminal, facts) if expected_panic else None
+         checks = {
+-            "clean_process_exit": observation["exit_code"] == 0
++            "clean_process_exit": observation["exit_code"] == (1 if expected_panic else 0)
+             and observation["stderr_bytes"] == 0,
+             "protocol_not_guest_output": packet["transport_stdout_role"]
+             == "protocol_json_not_guest_stdout",
+@@ -187,9 +274,11 @@
+             and snapshot["owning_edition"] == selected["edition"]
+             and type(terminal["live_edition"]) is int
+             and terminal["live_edition"] == selected["edition"],
+-            "completed_main": terminal["schema"] == "lrr/v2/development-run"
++            ("expected_guest_panic" if expected_panic else "completed_main"):
++            terminal["schema"] == "lrr/v2/development-run"
+             and terminal["semantics_profile"] == "lrr-2024-v2"
+-            and terminal["status"] == "completed" and terminal["value"] == {"kind": "unit"},
++            and (terminal["status"] == "guest_panic" if expected_panic
++                 else terminal["status"] == "completed" and terminal["value"] == {"kind": "unit"}),
+             "complete_capture": capture["complete"] is True and capture["blocker"] is None
+             and capture["scope"] == "dispatcher_external_effects_only_not_memory_trace",
+             "closed_guest_streams": streams == {
+@@ -198,8 +287,10 @@
+             and facts["vm_dispatches"] > 0
+             and integer(facts["vm_outcomes"])
+             and facts["vm_outcomes"] == facts["vm_dispatches"],
+-            "terminal_and_cleanup": facts["terminal"] == {"kind": "completed", "unit": True}
+-            and facts["terminal"]["unit"] is True
++            "terminal_and_cleanup":
++            (facts["terminal"] == {"kind": "guest_panic", "message": message} if expected_panic
++             else facts["terminal"] == {"kind": "completed", "unit": True}
++             and facts["terminal"]["unit"] is True)
+             and facts["cleanup_observed"] is True and facts["closed_no_external_effects"] is True,
+             "no_unobserved_boundaries": facts["observed_fault"] is False
+             and facts["observed_suspension"] is False
+@@ -229,6 +320,18 @@
+                                         and snapshot["root_source"] in paths)
+     except (KeyError, TypeError, ValueError, OSError) as error:
+         return {"status": "incomplete_evidence", "reason": str(error)}
++    if expected_panic and all(checks.values()) and actual_contract["runtime_output_obligations"]:
++        # Compiletest checks these patterns against stderr (or combined output
++        # with check-stdout), not JSON. Retained panic message evidence cannot
++        # substitute for that unobserved runtime output contract.
++        return {"status": "runtime_failure_observed_output_incomplete", "checks": checks,
++                "panic_message_observed": message,
++                "message_pattern_observations": [
++                    {"pattern": pattern, "in_retained_message": pattern in message}
++                    for pattern in actual_contract["panic_message_patterns"]],
++                "regex_patterns_unassessed": actual_contract["panic_regex_patterns"],
++                "remaining_obligations": actual_contract["runtime_output_obligations"],
++                "runtime_contract_pass": False, "full_fixture_pass": False}
+     return {"status": "runtime_contract_pass" if all(checks.values()) else "incomplete_evidence",
+             "checks": checks}
+ 
+@@ -267,6 +370,7 @@
+         checked_file(name, files)
+     if not {"LICENSE-MIT", "LICENSE-APACHE", "COPYRIGHT"}.issubset(files):
+         parser.error("missing original license inputs")
++    driver_hash = sha(Path(__file__).read_bytes())
+     binary_hash = sha(binary.read_bytes())
+     digester_hash = sha(digester.read_bytes())
+     directory.mkdir(parents=True)
+@@ -274,6 +378,7 @@
+               "platform": "aarch64-apple-darwin", "manifest_sha256": sha(manifest_bytes),
+               "interpreter_binary": str(binary), "interpreter_sha256": binary_hash,
+               "source_digester": str(digester), "source_digester_sha256": digester_hash,
++              "runtime_driver_sha256": driver_hash,
+               "native_execution": False,
+               "selected_cases": [{"case": name, "status": "unexecuted"} for name in args.cases],
+               "complete_inventory": False,
+@@ -336,11 +441,14 @@
+             raise ValueError("interpreter binary changed during batch")
+         if sha(digester.read_bytes()) != digester_hash:
+             raise ValueError("source digest helper changed during batch")
++        if sha(Path(__file__).read_bytes()) != driver_hash:
++            raise ValueError("runtime driver changed during batch")
++        report["runtime_driver_guard"] = "source_unchanged_during_batch"
+         report["input_guard"] = "all_imported_originals_manifest_and_binary_unchanged"
+     except (KeyError, TypeError, ValueError, OSError) as error:
+         report["evidence_error"] = str(error)
+         for row in report["selected_cases"]:
+-            if row["status"] == "runtime_contract_pass":
++            if row["status"] in ("runtime_contract_pass", "runtime_failure_observed_output_incomplete"):
+                 row["status"] = "invalidated_evidence"
+     finally:
+         report["upstream_runtime_acceptance"]["counts"] = dict(Counter(

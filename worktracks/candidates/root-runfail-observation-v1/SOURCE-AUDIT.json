@@ -1,0 +1,43 @@
+{
+  "status": "source_only_unexecuted_held",
+  "at": "2026-10-15T17:55:39.320978+00:00",
+  "claim": "LOCAL-035",
+  "task_cards": [
+    "T003",
+    "T034"
+  ],
+  "source_baseline": "V108 fdde8eac plus three held Rust source candidates; tool preimages unchanged since V108",
+  "requires_candidate_patch_sha256": "5d5de90fb5863400db05276b514815edfc2e4e7f23528c2a8e2d9d91670cbb56",
+  "patch_sha256": "94a52fec324788ab829080a333867818b7b38757f1d66a4d3bf25c66e1448437",
+  "files": [
+    {
+      "path": "docs/tasks.json",
+      "before_sha256": "fc874a9d00b8c0e9bfb61b1abcc64bac5163927614bd3d59a6bba6e35724de9b",
+      "after_sha256": "dd21d322e18ca90eaffefbe6374f9e0739d90f2cda3afd4d43d84ae2c4627cc9",
+      "bytes": 1433857
+    },
+    {
+      "path": "tools/check_rustc_runtime_capture.py",
+      "before_sha256": "399b102b97a19cf939b5e743da7c7b5bb0ed632047d184ab29ba5841a195725e",
+      "after_sha256": "c115aff31cffb3deed5555cf8ded203fe8aa1cad1d58a210ced3495d152e9925",
+      "bytes": 6171
+    },
+    {
+      "path": "tools/rustc_checkout_runtime.py",
+      "before_sha256": "810d0e70431da950fbdb5ac359b1fdf41d01dcbf567bf805d0697e84f1d1024a",
+      "after_sha256": "e2f6206f03ae0dc528bde793c251048eee42fb5540173d812660d34a47d55dc4",
+      "bytes": 25392
+    }
+  ],
+  "static_checks": {
+    "python_ast_parse": true,
+    "exact_replay_zero_offset_zero_fuzz": true
+  },
+  "plain_runfail_observation_candidates_pending": 14,
+  "test_harness_cases_still_blocked": 2,
+  "raw_originals_changed": 0,
+  "runtime_contract_passes_added": 0,
+  "full_milestone_passed": false,
+  "canonical_promotion": false,
+  "full_fixture_passes_added": 0
+}
