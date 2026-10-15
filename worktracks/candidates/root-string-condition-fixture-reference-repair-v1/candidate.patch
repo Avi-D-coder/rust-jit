@@ -1,0 +1,11 @@
+--- a/compat/fixtures.toml
++++ b/compat/fixtures.toml
+@@ -4253,7 +4253,7 @@
+ [[fixture]]
+ id = "H002-CONDITION-BINDING-7"
+ path = "xtask/tests/condition_bindings.rs"
+-test = "owning_condition_source_keeps_typed_value_milestone_refusal"
++test = "string_condition_binding_preserves_supported_literal_and_unentered_else"
+ 
+ [[fixture]]
+ id = "H002-CLAUSE-SCOPE-1"

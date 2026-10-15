@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T14:48:44.045575+00:00",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "V95": {
+    "source_member": "49cd2b0894a247f7b293edb348a8e348f45b00e3f1684fe751f46a508d4db878",
+    "distinct_host_tests_passed": 27,
+    "condition_bank": 7,
+    "physical_and_VM_banks": 20,
+    "actual_terminals": {
+      "strict_lrr_library_and_tests": "1236ae/0",
+      "strict_condition": "85e7ce/0",
+      "format": "084901/0",
+      "architecture": "fa0f5a/0",
+      "condition_bank": "7f6a00/0",
+      "physical_and_VM_banks": "dbfde6/0"
+    },
+    "handoff_sha256": "9aef26aa0c4acd80fd69ca5e6bb58a2b39b85190c0db69dd7a842513195b16f6",
+    "evidence_index_sha256": "6c57b840953690bc884a569d2ddf0164c736b48ddb7fcf67df38ffa6b060bc37"
+  },
+  "V96": {
+    "status": "metadata_fixture_reference_failure",
+    "actual_terminal": "11c153/1",
+    "source_member": "dc2162b079a5df8bcfabd0cda28ee98bc29ca1c88012cad3c2003cc65a0e27a3",
+    "audit_error": "missing named acceptance test for H002-CONDITION-BINDING-7",
+    "remaining_stale_reference": {
+      "path": "compat/fixtures.toml",
+      "line": 4256,
+      "test": "owning_condition_source_keeps_typed_value_milestone_refusal"
+    },
+    "correct_new_name": "string_condition_binding_preserves_supported_literal_and_unentered_else",
+    "docs_tasks_H002_reference_corrected": true,
+    "actual_test_definition": "xtask/tests/condition_bindings.rs:231",
+    "Rust_bytes_equal_V95": true,
+    "V95_scoped_distinct_passes_carried_separately": 27,
+    "V96_test_bodies_executed": 0,
+    "full_gate_launched": false,
+    "prior_reports_unmodified": true,
+    "all_guards_unchanged": true
+  },
+  "root_verified_retained_index_hashes": true,
+  "raw_originals_preserved": 507,
+  "imported_cases_still_pending": 322,
+  "repair_candidate": "worktracks/candidates/root-string-condition-fixture-reference-repair-v1/README.md",
+  "full_milestone_passed": false,
+  "canonical_promotion": false,
+  "stock_full_fixture_passes_added": 0
+}

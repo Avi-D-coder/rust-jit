@@ -1,0 +1,159 @@
+{
+  "status": "source_only_uncompiled_unexecuted_held",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T022",
+    "T024",
+    "T061"
+  ],
+  "prerequisites": [
+    "root-string-syntax-boundary-repair-v1",
+    "root-string-self-include-fuel-v1"
+  ],
+  "created_at": "2026-10-15T14:44:08.812239+00:00",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_capture.rs",
+      "before_sha256": "fd6727065830b4df148c86cc91f0c49d694780056e6564444e09707157f28e4a",
+      "after_sha256": "debffcc6308ba5b0b7a94aaffec1da91c6795c240c360d868bcb3888aa052fd2"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_string_macro_literal_tests.rs",
+      "before_sha256": "b59875824fd9189a74fee05e7e67d39baf6cf2264a3078ffeed6e23271a27b23",
+      "after_sha256": "bad8b328c67eb2e512e49d82b3c96e7513c12bddb84d17051d8ced062fabbfae"
+    },
+    {
+      "path": "crates/lrr/src/facade/string_methods.rs",
+      "before_sha256": "6e3e0a65fe9f7c70e15242db1874d1e131043cf06c5c6046bb06fed53c6d41db",
+      "after_sha256": "23eb8b8b8cb986b9147a04290ae7579db8debc827f59ad400ee073815d3e81e4"
+    },
+    {
+      "path": "crates/lrr/src/frontend/primitive_float_methods.rs",
+      "before_sha256": "7460ae9ff52eff5de406436c82a2a5f5e07e4b78b3414afd95c3a923998eaac2",
+      "after_sha256": "970bcd3a639afcbdcda3309682be5df55eab9c76668256832fd492ccdac2f3ca"
+    },
+    {
+      "path": "crates/lrr/src/frontend/primitive_float_recipe_tests.rs",
+      "before_sha256": "7651bbb4829993f2734542d7f5a591d6f9263879b8840827c362c1db270fd794",
+      "after_sha256": "039ec6cbdba25948f5c3afd61f532e8ce72be2933a620d575f073a04e6fb300a"
+    },
+    {
+      "path": "crates/lrr/src/frontend/runtime_primitive_float_catalog_tests.rs",
+      "before_sha256": "ea8509b493787d1df40e9c2325e718b7dca9d330b421870812f6c4a0cc4a6388",
+      "after_sha256": "70bf5bed4508133b256783a13885e6009a4bebab43484fcb8a6d483f2c00ad68"
+    },
+    {
+      "path": "crates/lrr/src/ir/definition_numeric_wire_tests.rs",
+      "before_sha256": "e162a9e271ceca2055f0828f9c0760faaab123ea6ae1514f681960d97c6611d2",
+      "after_sha256": "5e8336f45c4a088793d058ccaf9d87be64f4dc1104443498446e7338662f2a59"
+    },
+    {
+      "path": "crates/lrr/src/ir/op.rs",
+      "before_sha256": "6537178e77cc3ed12a3b52a1c42d88e15960512b6eb25537cef06b8a366bfb12",
+      "after_sha256": "6d5d1506fcf63d7933f6e2b235d7579b749f5a31b4da20d3dbd13faa4b98efa2"
+    },
+    {
+      "path": "crates/lrr/src/ir/parameter_place_wire_tests.rs",
+      "before_sha256": "33016400f2ace96804d1d950592fe93bdeffa7c3268f2dd2cf7efc16995a81e1",
+      "after_sha256": "3c03b67a7170d6c70d49ccf03c4082ad65e1901edaf6c2c1f7bccad321ecaf2b"
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "before_sha256": "640cb3b96efc11ceddcc6559bdd04c0e8acd3f78f1f5af9948cf256d00f22bc1",
+      "after_sha256": "267d5f742dec96400e1e97192d0c8cd5daf98297fb2b98ceb23c33b53078a8d7"
+    },
+    {
+      "path": "crates/lrr/src/ir/validate.rs",
+      "before_sha256": "37f63557232b1554b1d1ab753db3ea7e9532ab3a474fb29bfeeefb722ab94d70",
+      "after_sha256": "34a618f537c53210b8a69209ad56ccde145288880571daa7978df61ebc5854df"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_primitive_methods.rs",
+      "before_sha256": "b129fdebd6c83ead9026794e4571d862cad23869c8ae6389d1d25b9797a2ac94",
+      "after_sha256": "f8e8e683861aecf3737d38e657855ab5cee3f39a84ee42764c0fe9a03b4e80c6"
+    },
+    {
+      "path": "crates/lrr/src/syntax/runtime_macro_scalars.rs",
+      "before_sha256": "2ea18ef2f21b6753fb18924dcc68163528898c2a374feeda904371a047022dc4",
+      "after_sha256": "e6702d4c66c4b1b458f1bcb9783194b4ea8900e3c99b8e2d9513fe86348a2eb1"
+    },
+    {
+      "path": "crates/lrr/src/syntax/string_fixture_facts.rs",
+      "before_sha256": "f2278276ddfd0c90fb8db4edc2063c7120d02e9ffbe0f7b489188f40db644029",
+      "after_sha256": "04127f000af826016f9448117422335fbf6b4c1dec48318bb227bd65f36ce4cb"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "before_sha256": "2c15c1b920d5fa4a883ec308ac7442fee616c4f97fa628c2bdfc40fbbdd771c2",
+      "after_sha256": "57c98eae80ec2d67a75b94beac699988cd37fc35b13848200167e37607fe56c5"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/manifest.json",
+      "before_sha256": "c71befe1d54102c6484f664ac369240c7de40471d6140feab691992b6787df6a",
+      "after_sha256": "ef111f30109c6067b4b362de4df2feb26f0b7337a6ca136f60b573224705863c"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/strlen.rs",
+      "before_sha256": null,
+      "after_sha256": "cb2616e6a211a8ad38922446ecf41eef08658f42783022d344d266b64f530dc4"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/str/raw-string-literal-unescaped-unicode.rs",
+      "before_sha256": null,
+      "after_sha256": "b677af81df91441b46cfedf791760e4857052a81c1bad869e6379fa44b1c9749"
+    }
+  ],
+  "patch_sha256": "f05ad93082d806caff90f70ffb6b71c0a7b155932a82301dc962e3133bff5c66",
+  "patch_bytes": 28983,
+  "schema": 18,
+  "recipe_domain": "lrr/v18/lrir-recipe",
+  "opcode": 47,
+  "opcode_count": 48,
+  "canonical_member_kind_tag": 2,
+  "string_facet_domain": "lrr/v3/str-method-facet",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "upstream_witnesses": [
+    {
+      "path": "tests/ui/consts/const-eval/strlen.rs",
+      "git_blob": "4ceb3b82ab36c1ef0fb1f21bd727f5ba4c998ae3",
+      "sha256": "cb2616e6a211a8ad38922446ecf41eef08658f42783022d344d266b64f530dc4",
+      "bytes": 695
+    },
+    {
+      "path": "tests/ui/str/raw-string-literal-unescaped-unicode.rs",
+      "git_blob": "c0dc0743a28f7da8789df00c1c26e889c0422890",
+      "sha256": "b677af81df91441b46cfedf791760e4857052a81c1bad869e6379fa44b1c9749",
+      "bytes": 192
+    }
+  ],
+  "stdlib_witness": {
+    "path": "library/core/src/str/mod.rs",
+    "sha256": "37b9707b62fb84c445cf5c6896c9c42c2a5b195b8823913fe2d0ff4422ec8530",
+    "body": "self.len() == 0"
+  },
+  "raw_originals_preserved": 507,
+  "raw_originals_after": 509,
+  "pending_cases_after": 324,
+  "licenses_preserved": [
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
+    "COPYRIGHT"
+  ],
+  "new_test_bodies": 2,
+  "existing_wire_facade_capture_controls_extended": true,
+  "static_checks": [
+    "exact frozen V95 preimages including owned syntax helper",
+    "Rust1.99 formatting",
+    "pinned upstream commit/git blobs/SHA256 import",
+    "exact no-fuzz/no-offset replay"
+  ],
+  "stock_runtime_passes_added": 0,
+  "acceptance_pending": [
+    "prior string/numeric/bounds milestone and canonical integration",
+    "strict library/test lint and real architecture audit",
+    "actual empty/raw-nonempty source-derived component execution all4 editions",
+    "source/result/fuel refusal controls",
+    "wire/canonical member and affected string banks",
+    "fresh integrated milestone"
+  ]
+}

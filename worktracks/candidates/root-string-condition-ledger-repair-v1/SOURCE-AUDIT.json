@@ -1,0 +1,31 @@
+{
+  "status": "source_only_reference_correction",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "H002"
+  ],
+  "prerequisites": [
+    "root-string-syntax-boundary-repair-v1"
+  ],
+  "created_at": "2026-10-15T14:42:11.415427+00:00",
+  "files": [
+    {
+      "path": "docs/tasks.json",
+      "before_sha256": "cf4d3955b7adfa6081d6569e7dd427b90fdfde7955b67e0ff536a95f8aa4766a",
+      "after_sha256": "8fc7c75d3ce99eccc2c8065498734feefe3df284b2a3b9ff64f56409d732c0f0"
+    }
+  ],
+  "patch_sha256": "053022bf39e84f6d09ae8523bbf7f1458bf27fc840049d1ab9c9b0defc391cc2",
+  "patch_bytes": 752,
+  "static_checks": [
+    "exact V95 document preimage",
+    "JSON parse",
+    "exact no-fuzz/no-offset replay"
+  ],
+  "acceptance_pending": [
+    "actual fixture-reference audit",
+    "fresh integrated milestone"
+  ],
+  "tests_rerun_required_for_doc_only_change": false,
+  "task_completion_claimed": false
+}

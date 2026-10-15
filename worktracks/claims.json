@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Interpreter-first WT02. V92 combined candidate108/110selected passed,2 CRLF preparation failures preserved. V93 explicit frozen-environment/scoped-source-capture/coordinator helper fixed positive unchangedCRLF as_bytes all4 editions and15otherhelperusers; one missed fuel setup remained. V94 exactoneleaf fuel call-site fix passes strict library+test Clippy702b6d/0 and previouslyfailing negative/fuel control1/1 in2024 actual1dd4e1/0. Allfour unchanged original-main controls pass all4 editions in scoped evidence; bounds/place/panic/wire scopes passed. Required fresh fullmacOS MAIN milestone dispatched asynchronously on frozen72fb4cdd; no fullgate result or canonical byte/string promotion yet. Source-only checkpoint, no full-fixture/task/JIT acceptance. ~78GBfree; no rejected cache deletion retried.",
+      "scope": "Interpreter-first WT02. V94 full milestone failed:1973 passed/1 failed/1354 unexecuted of3328 host bodies. V95 syntax-boundary/positive-condition repair passed27 distinct controls, strict lint, format and real architecture. V96 metadata audit failed on remaining stale compat selector; exact one-leaf follow-on prepared for real audit and fresh asynchronous full gate. Separate str::is_empty schema18/op47 candidate remains held, uncompiled/unexecuted. No canonical promotion, task, new stock full-fixture or JIT acceptance.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -561,11 +561,20 @@
         "worktracks/evidence/2026-10-15-v92-string-numeric-bounds.json",
         "worktracks/candidates/root-string-self-include-fuel-v1/",
         "artifacts/macos-first/root-string-self-include-fuel-v1/",
-        "worktracks/evidence/2026-10-15-v94-string-fuel.json"
+        "worktracks/evidence/2026-10-15-v94-string-fuel.json",
+        "worktracks/candidates/root-string-syntax-boundary-repair-v1/",
+        "artifacts/macos-first/root-string-syntax-boundary-repair-v1/",
+        "worktracks/candidates/root-string-condition-ledger-repair-v1/",
+        "artifacts/macos-first/root-string-condition-ledger-repair-v1/",
+        "worktracks/candidates/root-string-empty-v1/",
+        "artifacts/macos-first/root-string-empty-v1/",
+        "worktracks/evidence/2026-10-15-v94-full-milestone-failure.json",
+        "worktracks/candidates/root-string-condition-fixture-reference-repair-v1/",
+        "worktracks/evidence/2026-10-15-v95-v96-string-boundary.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T14:24:47.234388+00:00",
+      "updated_at": "2026-10-15T14:45:19.297959+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

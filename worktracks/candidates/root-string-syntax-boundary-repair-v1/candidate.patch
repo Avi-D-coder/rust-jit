@@ -1,0 +1,347 @@
+--- a/crates/lrr/src/runtime/cell_byte_comparison_tests.rs
++++ b/crates/lrr/src/runtime/cell_byte_comparison_tests.rs
+@@ -343,41 +343,11 @@
+ 
+ #[test]
+ fn unchanged_string_operands_as_bytes_share_one_root_and_cached_slice_lease_all_editions() {
+-    use crate::{
+-        core::profile::ProfileIdentity, source::snapshot::SourceBlob, syntax::parse::ParsedFile,
+-    };
+-    use ra_ap_syntax::{AstNode, AstToken, ast};
+     const ORIGINAL: &str = include_str!(
+         "../../../../fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/estr-slice.rs"
+     );
+     for edition in [2015, 2018, 2021, 2024] {
+-        let parsed = ParsedFile::parse(
+-            &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
+-            ProfileIdentity {
+-                edition,
+-                ..ProfileIdentity::current()
+-            },
+-        )
+-        .unwrap();
+-        assert!(parsed.errors.is_empty());
+-        let values: Vec<_> = parsed
+-            .parsed
+-            .tree()
+-            .syntax()
+-            .descendants()
+-            .filter_map(ast::LetStmt::cast)
+-            .filter_map(|binding| {
+-                let ast::Expr::Literal(literal) = binding.initializer()? else {
+-                    return None;
+-                };
+-                Some(
+-                    ast::String::cast(literal.token())?
+-                        .value()
+-                        .unwrap()
+-                        .into_owned(),
+-                )
+-            })
+-            .collect();
++        let values = crate::syntax::string_fixture_facts::let_string_values(ORIGINAL, edition);
+         assert_eq!(values.len(), 8);
+         let mut store = store();
+         for (i, text) in values.iter().enumerate() {
+--- a/crates/lrr/src/runtime/cell_static_utf8_tests.rs
++++ b/crates/lrr/src/runtime/cell_static_utf8_tests.rs
+@@ -1,7 +1,6 @@
+ //! Original-token storage witnesses and LRR lease/cancellation controls.
+ //! These are physical component checks, not execution of the upstream mains.
+ use super::*;
+-use ra_ap_syntax::{AstNode, SyntaxKind};
+ const UNICODE: &str = include_str!(
+     "../../../../fixtures/upstream/rustc-checkout/tests/ui/parser/unicode-escape-sequences.rs"
+ );
+@@ -15,22 +14,7 @@
+     crate::core::digest::Digest::of_bytes(b"physical UTF8 storage witness")
+ }
+ fn source_strings(source: &str, edition: u16) -> Vec<String> {
+-    let ra_edition = match edition {
+-        2015 => ra_ap_syntax::Edition::Edition2015,
+-        2018 => ra_ap_syntax::Edition::Edition2018,
+-        2021 => ra_ap_syntax::Edition::Edition2021,
+-        2024 => ra_ap_syntax::Edition::Edition2024,
+-        _ => unreachable!(),
+-    };
+-    let parsed = ra_ap_syntax::SourceFile::parse(source, ra_edition);
+-    parsed
+-        .tree()
+-        .syntax()
+-        .descendants_with_tokens()
+-        .filter_map(|child| child.into_token())
+-        .filter(|token| token.kind() == SyntaxKind::STRING)
+-        .map(|token| crate::syntax::ast_adapter::string_value(token.text(), edition).unwrap())
+-        .collect()
++    crate::syntax::string_fixture_facts::all_string_tokens(source, edition)
+ }
+ fn stored_bytes(store: &GuestStore, ticket: TicketId) -> Vec<u8> {
+     let value = store.peek_ticket(ticket).unwrap();
+--- a/crates/lrr/src/runtime/cell_string_ordering_tests.rs
++++ b/crates/lrr/src/runtime/cell_string_ordering_tests.rs
+@@ -2,11 +2,7 @@
+ //! These physical controls do not execute the whole fixture or its output.
+ use super::super::tests::{operand, store};
+ use super::*;
+-use crate::{
+-    core::profile::ProfileIdentity, runtime::shape::ByteLiteralTarget,
+-    source::snapshot::SourceBlob, syntax::parse::ParsedFile,
+-};
+-use ra_ap_syntax::{AstNode, AstToken, ast};
++use crate::runtime::shape::ByteLiteralTarget;
+ const ORIGINAL: &str = include_str!(
+     "../../../../fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/estr-slice.rs"
+ );
+@@ -14,29 +10,7 @@
+ #[test]
+ fn unchanged_estr_literals_order_by_actual_utf8_bytes_and_equal_prefix_all_editions() {
+     for edition in [2015, 2018, 2021, 2024] {
+-        let parsed = ParsedFile::parse(
+-            &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
+-            ProfileIdentity {
+-                edition,
+-                ..ProfileIdentity::current()
+-            },
+-        )
+-        .unwrap();
+-        assert!(parsed.errors.is_empty());
+-        let values: Vec<_> = parsed
+-            .parsed
+-            .tree()
+-            .syntax()
+-            .descendants()
+-            .filter_map(ast::LetStmt::cast)
+-            .filter_map(|binding| {
+-                let ast::Expr::Literal(literal) = binding.initializer()? else {
+-                    return None;
+-                };
+-                let token = ast::String::cast(literal.token())?;
+-                Some(token.value().unwrap().into_owned())
+-            })
+-            .collect();
++        let values = crate::syntax::string_fixture_facts::let_string_values(ORIGINAL, edition);
+         assert_eq!(values.len(), 8);
+         let mut store = store();
+         let cells: Vec<_> = values
+--- a/crates/lrr/src/syntax/mod.rs
++++ b/crates/lrr/src/syntax/mod.rs
+@@ -92,3 +92,8 @@
+ pub(crate) mod range_bound_header;
+ 
+ pub mod string_literals;
++
++// Fixture parsers return owned values/recipes; upstream syntax never enters
++// runtime or VM modules, including their tests.
++#[cfg(test)]
++pub(crate) mod string_fixture_facts;
+--- /dev/null
++++ b/crates/lrr/src/syntax/string_fixture_facts.rs
+@@ -0,0 +1,103 @@
++//! Owned stock string facts for storage/VM witnesses. Test-only parser boundary.
++use super::{
++    body_index::{BodyIndex, ExpressionKind, NodeRole},
++    parse::ParsedFile,
++};
++use crate::{
++    core::{digest::Digest, profile::ProfileIdentity},
++    ir::{pc::Phase, recipe::VerifiedRecipe},
++    source::snapshot::{CfgSet, SourceBlob},
++};
++use ra_ap_syntax::{AstNode, SyntaxKind, ast};
++fn parsed(source: &str, edition: u16) -> ParsedFile {
++    let parsed = ParsedFile::parse(
++        &SourceBlob::new(source.as_bytes().to_vec()).unwrap(),
++        ProfileIdentity {
++            edition,
++            ..ProfileIdentity::current()
++        },
++    )
++    .unwrap();
++    assert!(parsed.errors.is_empty());
++    parsed
++}
++pub(crate) fn all_string_tokens(source: &str, edition: u16) -> Vec<String> {
++    parsed(source, edition)
++        .parsed
++        .tree()
++        .syntax()
++        .descendants_with_tokens()
++        .filter_map(|child| child.into_token())
++        .filter(|token| token.kind() == SyntaxKind::STRING)
++        .map(|token| super::ast_adapter::string_value(token.text(), edition).unwrap())
++        .collect()
++}
++pub(crate) fn let_string_values(source: &str, edition: u16) -> Vec<String> {
++    parsed(source, edition)
++        .parsed
++        .tree()
++        .syntax()
++        .descendants()
++        .filter_map(ast::LetStmt::cast)
++        .filter_map(|binding| {
++            let ast::Expr::Literal(literal) = binding.initializer()? else {
++                return None;
++            };
++            let token = literal.token();
++            if token.kind() != SyntaxKind::STRING {
++                return None;
++            }
++            Some(super::ast_adapter::string_value(token.text(), edition).unwrap())
++        })
++        .collect()
++}
++pub(crate) fn main_string_initializer_recipes(
++    original: &str,
++    edition: u16,
++) -> Vec<(BodyIndex, VerifiedRecipe)> {
++    let parsed = parsed(original, edition);
++    let outline = parsed
++        .outline(
++            Digest::of_bytes(b"original UTF8 VM initializer"),
++            vec![],
++            &CfgSet::guest_default(),
++        )
++        .unwrap();
++    let body = outline
++        .items
++        .iter()
++        .find(|item| item.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap();
++    let index = parsed.index_body(body, Default::default()).unwrap();
++    parsed
++        .entered_body_root(body)
++        .unwrap()
++        .descendants()
++        .filter_map(ast::LetStmt::cast)
++        .filter_map(|statement| statement.initializer())
++        .filter_map(|expr| match expr {
++            ast::Expr::Literal(literal) if literal.token().kind() == SyntaxKind::STRING => {
++                Some(literal)
++            }
++            _ => None,
++        })
++        .map(|literal| {
++            let range = literal.syntax().text_range();
++            let node = index
++                .nodes()
++                .iter()
++                .find(|node| {
++                    node.role == NodeRole::Expression(ExpressionKind::Literal)
++                        && node.range.start + body.range.start == u32::from(range.start())
++                        && node.range.end + body.range.start == u32::from(range.end())
++                })
++                .unwrap();
++            let pc = index.pc(node.id, Phase::Entry).unwrap();
++            let recipe = parsed.initial_thunk(body, &index, &pc).unwrap();
++            (index.clone(), recipe)
++        })
++        .collect()
++}
+--- a/crates/lrr/src/vm/step_string_literal_tests.rs
++++ b/crates/lrr/src/vm/step_string_literal_tests.rs
+@@ -8,7 +8,6 @@
+     source::snapshot::{CfgSet, SourceBlob},
+     syntax::{body_index::BodyIndex, parse::ParsedFile},
+ };
+-use ra_ap_syntax::{AstNode, SyntaxKind, ast};
+ const UNICODE: &str = include_str!(
+     "../../../../fixtures/upstream/rustc-checkout/tests/ui/parser/unicode-escape-sequences.rs"
+ );
+@@ -112,58 +111,7 @@
+ }
+ 
+ fn recipes(original: &str, edition: u16) -> Vec<(BodyIndex, VerifiedRecipe)> {
+-    let parsed = ParsedFile::parse(
+-        &SourceBlob::new(original.as_bytes().to_vec()).unwrap(),
+-        ProfileIdentity {
+-            edition,
+-            ..ProfileIdentity::current()
+-        },
+-    )
+-    .unwrap();
+-    let outline = parsed
+-        .outline(
+-            Digest::of_bytes(b"original UTF8 VM initializer"),
+-            vec![],
+-            &CfgSet::guest_default(),
+-        )
+-        .unwrap();
+-    let body = outline
+-        .items
+-        .iter()
+-        .find(|item| item.def_key.declared_name == "main")
+-        .unwrap()
+-        .body
+-        .as_ref()
+-        .unwrap();
+-    let index = parsed.index_body(body, Default::default()).unwrap();
+-    parsed
+-        .entered_body_root(body)
+-        .unwrap()
+-        .descendants()
+-        .filter_map(ast::LetStmt::cast)
+-        .filter_map(|statement| statement.initializer())
+-        .filter_map(|expr| match expr {
+-            ast::Expr::Literal(literal) if literal.token().kind() == SyntaxKind::STRING => {
+-                Some(literal)
+-            }
+-            _ => None,
+-        })
+-        .map(|literal| {
+-            let range = literal.syntax().text_range();
+-            let node = index
+-                .nodes()
+-                .iter()
+-                .find(|node| {
+-                    node.role == NodeRole::Expression(ExpressionKind::Literal)
+-                        && node.range.start + body.range.start == u32::from(range.start())
+-                        && node.range.end + body.range.start == u32::from(range.end())
+-                })
+-                .unwrap();
+-            let pc = index.pc(node.id, Phase::Entry).unwrap();
+-            let recipe = parsed.initial_thunk(body, &index, &pc).unwrap();
+-            (index.clone(), recipe)
+-        })
+-        .collect()
++    crate::syntax::string_fixture_facts::main_string_initializer_recipes(original, edition)
+ }
+ fn frame(index: &BodyIndex, recipe: &VerifiedRecipe) -> (Frame, GuestStore) {
+     let mut store = GuestStore::new(1, 10_000, 16 << 20).unwrap();
+--- a/xtask/tests/condition_bindings.rs
++++ b/xtask/tests/condition_bindings.rs
+@@ -228,15 +228,20 @@
+ }
+ 
+ #[test]
+-fn owning_condition_source_keeps_typed_value_milestone_refusal() {
+-    let lrr::engine::run::RunPoll::Fault(error) =
+-        run("fn case()->i64{if let owned=\"owned\"{3_i64}else{missing()}}")
+-    else {
+-        panic!("unsupported source falsely accepted")
+-    };
+-    assert_eq!(error.code, "LRR-E-UNSUPPORTED");
+-    assert_eq!(
+-        error.message,
+-        "literal kind awaits numeric/source integration"
+-    );
+-}
++fn string_condition_binding_preserves_supported_literal_and_unentered_else() {
++    use lrr::engine::run::{RunPoll, ValueSummary};
++    let result = run("fn case()->i64{if let owned=\"owned\"{3_i64}else{missing()}}");
++    match result {
++        RunPoll::Completed(report) => {
++            assert!(matches!(report.value, ValueSummary::Signed(ref value) if value == "3"));
++            assert_eq!(report.opcode_counters.started_by_opcode[7], 1);
++            assert_eq!(
++                report.opcode_counters.operations_started,
++                report.opcode_counters.operations_completed
++            );
++        }
++        RunPoll::Fault(error) => panic!("supported string condition faulted: {error}"),
++        RunPoll::NeedInput(input) => panic!("cold else caused unexpected demand: {input:?}"),
++        RunPoll::Panicked(report) => panic!("supported string condition panicked: {report:?}"),
++    }
++}

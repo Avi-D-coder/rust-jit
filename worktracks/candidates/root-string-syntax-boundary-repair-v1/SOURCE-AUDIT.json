@@ -1,0 +1,67 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T022",
+    "T024",
+    "T041",
+    "T043"
+  ],
+  "prerequisites": [
+    "root-string-self-include-fuel-v1"
+  ],
+  "created_at": "2026-10-15T14:38:51.654181+00:00",
+  "files": [
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_comparison_tests.rs",
+      "before_sha256": "52e5f5230b5db848b69e322822a324452de0dd7a5b0335f6b8c9443392f682e8",
+      "after_sha256": "6bf38fee46076fd9571218a2dfae92c03d4fa5c5450713949c2d1b920a537782"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_static_utf8_tests.rs",
+      "before_sha256": "9bf80ff752b0ef2ad7b581f603828942723d2e6b6dc367a658279d1a1377f641",
+      "after_sha256": "161e492442761257ad20dad14045d50a76e012b9fb60e917e6daa80d7f406a61"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_string_ordering_tests.rs",
+      "before_sha256": "67547ce04a38ee43273c569c53a775ef2e9bc4ef7c714654cbafc8a785e8abb8",
+      "after_sha256": "e9595c4a38ef69134b14eb8fd8c4f057cdb133421ff9378e634bff665fa93d5a"
+    },
+    {
+      "path": "crates/lrr/src/syntax/mod.rs",
+      "before_sha256": "5e61a6b01f716511ed5c6a3b506ebe56a5dc3726c8eec8c7d26751dcfb5d35e5",
+      "after_sha256": "2230c0503c2c5e04e997bebe78ff45c0ce6fafd995f139e17708c65ffdd43682"
+    },
+    {
+      "path": "crates/lrr/src/syntax/string_fixture_facts.rs",
+      "before_sha256": null,
+      "after_sha256": "f2278276ddfd0c90fb8db4edc2063c7120d02e9ffbe0f7b489188f40db644029"
+    },
+    {
+      "path": "crates/lrr/src/vm/step_string_literal_tests.rs",
+      "before_sha256": "878ad09e33be670360ad78455332cd8f13244a4fbfb0f63ab984cf6d900f3e02",
+      "after_sha256": "92a00ef949f8baab303a6a7be36aa0a0527507e4cfd487870f0dbc19c39b30ee"
+    },
+    {
+      "path": "xtask/tests/condition_bindings.rs",
+      "before_sha256": "6c8b6cf73727e2a8608668885340d4105f1b63b639a50f10f941b6540f70a7d8",
+      "after_sha256": "06a332007003639f75f9a12af735b5e8d619afa17c8c6072aa090af1dfb53037"
+    }
+  ],
+  "patch_sha256": "5f70cf7511a3b890876fda6ecbdec6492970b02e28abea0d0fa9e12054c217ac",
+  "patch_bytes": 13062,
+  "static_checks": [
+    "exact frozen V94 preimages",
+    "Rust1.99 formatting",
+    "exact no-fuzz/no-offset replay"
+  ],
+  "actual_failure": "V94 full milestone e03d1c/1:1973passed/1failed/1354unexecuted,3328listed;1192librarypassed;architecturealsofailedfourparserimports",
+  "new_test_bodies": 0,
+  "stock_runtime_passes_added": 0,
+  "acceptance_pending": [
+    "strict library/test and affected xtask lint",
+    "architecture audit with no exceptions",
+    "moved physical/VM string controls and complete condition_bindings bank",
+    "fresh full milestone"
+  ]
+}

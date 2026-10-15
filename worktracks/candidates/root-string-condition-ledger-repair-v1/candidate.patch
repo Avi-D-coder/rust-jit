@@ -1,0 +1,11 @@
+--- a/docs/tasks.json
++++ b/docs/tasks.json
+@@ -6991,7 +6991,7 @@
+         "wildcard_condition_patterns_evaluate_once_without_binding_or_copying_source",
+         "condition_bindings_do_not_leak_into_else_following_statements_or_own_scrutinee",
+         "irrefutable_condition_test_preserves_scalar_source_until_move_commit",
+-        "owning_condition_source_keeps_typed_value_milestone_refusal",
++        "string_condition_binding_preserves_supported_literal_and_unentered_else",
+         "pattern_clause_scope_metadata_nests_in_written_order_and_preserves_else_ancestry",
+         "failed_clause_prefix_drains_before_else_without_entering_skipped_pattern",
+         "successful_clause_storage_survives_consequent_and_retires_after_result_transfer",

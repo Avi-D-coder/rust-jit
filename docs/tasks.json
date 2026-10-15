@@ -1383,7 +1383,10 @@
         "full_fixture_passes_added": 0,
         "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete. V93 positive CRLF/helper controls pass; V94 strict lib/tests and exact negative/fuel control pass in2024. Fresh full milestone dispatched separately; no integrated task acceptance.",
         "follow_on_evidence": "worktracks/evidence/2026-10-15-v94-string-fuel.json",
-        "fresh_milestone_status": "dispatched_async_not_completed"
+        "fresh_milestone_status": "V94_failed_V95_repair_validation_pending",
+        "full_milestone_failure_evidence": "worktracks/evidence/2026-10-15-v94-full-milestone-failure.json",
+        "latest_scoped_evidence": "worktracks/evidence/2026-10-15-v95-v96-string-boundary.json",
+        "latest_status": "V95 scoped27/27, strict/fmt/architecture passed; V96 stale compat selector audit failed; exact metadata repair and fresh full milestone pending"
       }
     },
     {
@@ -1784,7 +1787,10 @@
         "full_fixture_passes_added": 0,
         "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete. V93 positive CRLF/helper controls pass; V94 strict lib/tests and exact negative/fuel control pass in2024. Fresh full milestone dispatched separately; no integrated task acceptance.",
         "follow_on_evidence": "worktracks/evidence/2026-10-15-v94-string-fuel.json",
-        "fresh_milestone_status": "dispatched_async_not_completed"
+        "fresh_milestone_status": "V94_failed_V95_repair_validation_pending",
+        "full_milestone_failure_evidence": "worktracks/evidence/2026-10-15-v94-full-milestone-failure.json",
+        "latest_scoped_evidence": "worktracks/evidence/2026-10-15-v95-v96-string-boundary.json",
+        "latest_status": "V95 scoped27/27, strict/fmt/architecture passed; V96 stale compat selector audit failed; exact metadata repair and fresh full milestone pending"
       }
     },
     {
@@ -4725,7 +4731,10 @@
         "full_fixture_passes_added": 0,
         "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete. V93 positive CRLF/helper controls pass; V94 strict lib/tests and exact negative/fuel control pass in2024. Fresh full milestone dispatched separately; no integrated task acceptance.",
         "follow_on_evidence": "worktracks/evidence/2026-10-15-v94-string-fuel.json",
-        "fresh_milestone_status": "dispatched_async_not_completed"
+        "fresh_milestone_status": "V94_failed_V95_repair_validation_pending",
+        "full_milestone_failure_evidence": "worktracks/evidence/2026-10-15-v94-full-milestone-failure.json",
+        "latest_scoped_evidence": "worktracks/evidence/2026-10-15-v95-v96-string-boundary.json",
+        "latest_status": "V95 scoped27/27, strict/fmt/architecture passed; V96 stale compat selector audit failed; exact metadata repair and fresh full milestone pending"
       }
     },
     {
@@ -6409,7 +6418,20 @@
         "full_fixture_passes_added": 0,
         "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete. V93 positive CRLF/helper controls pass; V94 strict lib/tests and exact negative/fuel control pass in2024. Fresh full milestone dispatched separately; no integrated task acceptance.",
         "follow_on_evidence": "worktracks/evidence/2026-10-15-v94-string-fuel.json",
-        "fresh_milestone_status": "dispatched_async_not_completed"
+        "fresh_milestone_status": "V94_failed_V95_repair_validation_pending",
+        "full_milestone_failure_evidence": "worktracks/evidence/2026-10-15-v94-full-milestone-failure.json",
+        "latest_scoped_evidence": "worktracks/evidence/2026-10-15-v95-v96-string-boundary.json",
+        "latest_status": "V95 scoped27/27, strict/fmt/architecture passed; V96 stale compat selector audit failed; exact metadata repair and fresh full milestone pending"
+      },
+      "current_string_empty_candidate": {
+        "status": "source_only_uncompiled_unexecuted_held",
+        "source_candidate": "worktracks/candidates/root-string-empty-v1/README.md",
+        "schema": 18,
+        "opcode": 47,
+        "copied_originals": 2,
+        "component_and_refusal_bodies_pending": 2,
+        "full_fixture_passes_added": 0,
+        "canonical_promotion": false
       }
     },
     {
@@ -7505,7 +7527,15 @@
           "evidence_paths": []
         }
       ],
-      "notes": " Updated H002-EXTENSION-8 now requires LRR-E-TEMPORARY-SCOPE for an unproven constructor frontier before cell/reference/fuel publication. The old source snapshot remains historical evidence; no positive constructor execution or shorter lifetime is inferred from the new refusal control."
+      "notes": " Updated H002-EXTENSION-8 now requires LRR-E-TEMPORARY-SCOPE for an unproven constructor frontier before cell/reference/fuel publication. The old source snapshot remains historical evidence; no positive constructor execution or shorter lifetime is inferred from the new refusal control.",
+      "current_string_condition_candidate": {
+        "status": "scoped_candidate_not_integrated",
+        "failure_evidence": "worktracks/evidence/2026-10-15-v94-full-milestone-failure.json",
+        "source_candidate": "worktracks/candidates/root-string-syntax-boundary-repair-v1/README.md",
+        "selector_follow_on": "worktracks/candidates/root-string-condition-ledger-repair-v1/README.md",
+        "canonical_acceptance_list_preserved_until_promotion": true,
+        "fresh_milestone_required": true
+      }
     },
     {
       "id": "H003",
@@ -18318,7 +18348,10 @@
         "full_fixture_passes_added": 0,
         "scope": "Four original main controls execute in all4 editions; bounds/place/panic/wire controls pass. CRLF byte-view controls require explicit compile-input preparation; two-test-leaf follow-on pending. Runtime gate and release remain incomplete. V93 positive CRLF/helper controls pass; V94 strict lib/tests and exact negative/fuel control pass in2024. Fresh full milestone dispatched separately; no integrated task acceptance.",
         "follow_on_evidence": "worktracks/evidence/2026-10-15-v94-string-fuel.json",
-        "fresh_milestone_status": "dispatched_async_not_completed"
+        "fresh_milestone_status": "V94_failed_V95_repair_validation_pending",
+        "full_milestone_failure_evidence": "worktracks/evidence/2026-10-15-v94-full-milestone-failure.json",
+        "latest_scoped_evidence": "worktracks/evidence/2026-10-15-v95-v96-string-boundary.json",
+        "latest_status": "V95 scoped27/27, strict/fmt/architecture passed; V96 stale compat selector audit failed; exact metadata repair and fresh full milestone pending"
       }
     },
     {

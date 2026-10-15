@@ -1,0 +1,745 @@
+--- a/crates/lrr/src/engine/run_capture.rs
++++ b/crates/lrr/src/engine/run_capture.rs
+@@ -78,6 +78,7 @@
+             match op {
+                 Op::StrByteLen { .. }
+                 | Op::StrAsBytes { .. }
++                | Op::StrIsEmpty { .. }
+                 | Op::SourceConstant { .. }
+                 | Op::PrimitiveFloatingConstant { .. }
+                 | Op::ProjectField { .. }
+@@ -262,6 +263,10 @@
+         // Capture-state control only. No guest execution or fixture acceptance
+         // is inferred from this private observer's synthetic observations.
+         for operation in [
++            Op::StrIsEmpty {
++                source: SlotId(0),
++                destination: SlotId(1),
++            },
+             Op::StrByteLen {
+                 source: SlotId(0),
+                 destination: SlotId(1),
+--- a/crates/lrr/src/engine/run_string_macro_literal_tests.rs
++++ b/crates/lrr/src/engine/run_string_macro_literal_tests.rs
+@@ -84,6 +84,10 @@
+                 | Op::StrAsBytes {
+                     source,
+                     destination,
++                }
++                | Op::StrIsEmpty {
++                    source,
++                    destination,
+                 } if op.opcode_tag() == opcode => Some((*source, *destination)),
+                 _ => None,
+             })
+@@ -590,3 +594,127 @@
+     assert_eq!(run.frame.counters().started_by_opcode[46], 0);
+     db.finish_run().unwrap();
+ }
++
++// These are explicitly LRR component adapters, not shortened fixture passes.
++// Each method expression is copied from its exact original AST. The full
++// strlen program's const/iteration/indexing assertions remain outstanding;
++// raw-string-literal-unescaped-unicode is a check-pass compiler contract.
++fn upstream_empty_expression(nonempty_raw: bool) -> String {
++    const LENGTH: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/strlen.rs"
++    );
++    const RAW: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/str/raw-string-literal-unescaped-unicode.rs"
++    );
++    if nonempty_raw {
++        crate::syntax::string_fixture_facts::empty_method_expression(RAW, None)
++    } else {
++        crate::syntax::string_fixture_facts::empty_method_expression(LENGTH, Some("EMPTY"))
++    }
++}
++fn empty_component_adapter(nonempty_raw: bool) -> String {
++    let expression = upstream_empty_expression(nonempty_raw);
++    if nonempty_raw {
++        format!("fn main(){{assert!(!({expression}));}}")
++    } else {
++        format!("fn main(){{assert!({expression});}}")
++    }
++}
++#[test]
++fn upstream_empty_and_raw_nonempty_string_method_components_execute_actual_length_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        for nonempty_raw in [false, true] {
++            let source = empty_component_adapter(nonempty_raw);
++            let (mut db, mut run, macros, _) = tests::start_source(&source, edition, 10_000);
++            let contexts = macros.contexts().unwrap();
++            let report = match run.poll_with_runtime_macros(&mut db, &contexts) {
++                RunPoll::Completed(report) => report,
++                RunPoll::Fault(error) => {
++                    panic!("edition {edition} nonempty={nonempty_raw}: {error}")
++                }
++                RunPoll::NeedInput(input) => {
++                    panic!("edition {edition} nonempty={nonempty_raw}: {input:?}")
++                }
++                RunPoll::Panicked(report) => {
++                    panic!("edition {edition} nonempty={nonempty_raw}: {report:?}")
++                }
++            };
++            assert!(matches!(report.value, ValueSummary::Unit));
++            assert_eq!(report.opcode_counters.started_by_opcode[47], 1);
++            assert_eq!(report.opcode_counters.started_by_opcode[45], 0);
++            assert_eq!(report.opcode_counters.started_by_opcode[26], 1);
++            assert_eq!(
++                report.opcode_counters.operations_started,
++                report.opcode_counters.operations_completed
++            );
++            assert!(run.calls.is_empty() && run.pending.is_empty());
++            assert!(run.frame.active_scopes().is_empty());
++            db.finish_run().unwrap();
++        }
++    }
++}
++#[test]
++fn original_empty_method_source_result_and_fuel_refusals_precede_publication() {
++    let text = empty_component_adapter(false);
++    for mode in 0..3 {
++        let (mut db, mut run, macros, _) = tests::start_source(&text, 2024, 10_000);
++        let contexts = macros.contexts().unwrap();
++        let (id, source, destination) = reach_string_method(&mut db, &mut run, &contexts, 47);
++        let used = run.frame.fuel_snapshot().used;
++        if mode == 2 {
++            db.finish_run().unwrap();
++            let (mut db, mut run, macros, _) = tests::start_source(&text, 2024, used);
++            let contexts = macros.contexts().unwrap();
++            let (id, _, _) = reach_string_method(&mut db, &mut run, &contexts, 47);
++            let before = effects(&run);
++            assert_eq!(
++                step::step(
++                    &mut run.frame,
++                    &mut run.store,
++                    run.installed.get(id).unwrap()
++                )
++                .unwrap_err()
++                .code,
++                "LRR-E-RUNTIME-RESOURCE"
++            );
++            assert_eq!(effects(&run), before);
++            assert_eq!(run.frame.counters().started_by_opcode[47], 0);
++            db.finish_run().unwrap();
++            continue;
++        }
++        if mode == 0 {
++            run.frame
++                .set_source_view(
++                    source,
++                    Some(TyTerm::Ref(RegionTerm::Static, true, Box::new(TyTerm::Str))),
++                )
++                .unwrap();
++            assert!(
++                run.revalidate_primitive_method(&mut db, &contexts, id)
++                    .is_err()
++            );
++        } else {
++            run.frame
++                .set_source_view(destination, Some(TyTerm::Primitive(PrimitiveType::Usize)))
++                .unwrap();
++        }
++        let before = effects(&run);
++        let error = step::step(
++            &mut run.frame,
++            &mut run.store,
++            run.installed.get(id).unwrap(),
++        )
++        .unwrap_err();
++        assert_eq!(
++            error.code,
++            if mode == 0 {
++                "LRR-E-INTERNAL-IR"
++            } else {
++                "LRR-E-GENERIC-BINDING"
++            }
++        );
++        assert_eq!(effects(&run), before);
++        assert_eq!(run.frame.counters().started_by_opcode[47], 0);
++        db.finish_run().unwrap();
++    }
++}
+--- a/crates/lrr/src/facade/string_methods.rs
++++ b/crates/lrr/src/facade/string_methods.rs
+@@ -15,18 +15,21 @@
+ pub(crate) enum StringMethodKind {
+     ByteLen,
+     AsBytes,
++    IsEmpty,
+ }
+ impl StringMethodKind {
+     fn name(self) -> &'static str {
+         match self {
+             Self::ByteLen => "len",
+             Self::AsBytes => "as_bytes",
++            Self::IsEmpty => "is_empty",
+         }
+     }
+     fn tag(self) -> u8 {
+         match self {
+             Self::ByteLen => 0,
+             Self::AsBytes => 1,
++            Self::IsEmpty => 2,
+         }
+     }
+ }
+@@ -62,6 +65,7 @@
+     profile: Arc<ProfileIdentity>,
+     len: StringMethod,
+     as_bytes: StringMethod,
++    is_empty: StringMethod,
+     identity: Digest,
+ }
+ fn member(profile: &Arc<ProfileIdentity>, core: Digest, kind: StringMethodKind) -> StringMethod {
+@@ -75,6 +79,7 @@
+     signature.u8(kind.tag());
+     match kind {
+         StringMethodKind::ByteLen => signature.u32(PrimitiveType::Usize.tag()),
++        StringMethodKind::IsEmpty => signature.u32(PrimitiveType::Bool.tag()),
+         StringMethodKind::AsBytes => {
+             signature.bool(false);
+             signature.string("receiver-borrow");
+@@ -108,15 +113,18 @@
+         let core = super::unit(&profile, "core");
+         let len = member(&profile, core, StringMethodKind::ByteLen);
+         let as_bytes = member(&profile, core, StringMethodKind::AsBytes);
+-        let mut facet = StableEncoder::new("lrr/v2/str-method-facet");
++        let is_empty = member(&profile, core, StringMethodKind::IsEmpty);
++        let mut facet = StableEncoder::new("lrr/v3/str-method-facet");
+         facet.record(profile.as_ref());
+         facet.digest(core);
+         facet.digest(len.identity);
+         facet.digest(as_bytes.identity);
++        facet.digest(is_empty.identity);
+         Ok(Self {
+             profile,
+             len,
+             as_bytes,
++            is_empty,
+             identity: facet.finish(),
+         })
+     }
+@@ -130,6 +138,7 @@
+         match name {
+             "len" => Some(&self.len),
+             "as_bytes" => Some(&self.as_bytes),
++            "is_empty" => Some(&self.is_empty),
+             _ => None,
+         }
+     }
+@@ -148,6 +157,7 @@
+                     .ok_or_else(|| fault("str method metadata overflow"))?,
+             )
+             .and_then(|n| n.checked_add(self.as_bytes.allocated_bytes()?))
++            .and_then(|n| n.checked_add(self.is_empty.allocated_bytes()?))
+             .ok_or_else(|| fault("str method facet metadata overflow"))
+     }
+ }
+@@ -160,6 +170,7 @@
+         for actual in [
+             facet.lookup("len").unwrap(),
+             facet.lookup("as_bytes").unwrap(),
++            facet.lookup("is_empty").unwrap(),
+         ] {
+             for kind in 0..5 {
+                 let mut wrong = actual.clone();
+@@ -176,7 +187,9 @@
+                     _ => {
+                         wrong.kind = match actual.kind {
+                             StringMethodKind::ByteLen => StringMethodKind::AsBytes,
+-                            StringMethodKind::AsBytes => StringMethodKind::ByteLen,
++                            StringMethodKind::AsBytes | StringMethodKind::IsEmpty => {
++                                StringMethodKind::ByteLen
++                            }
+                         }
+                     }
+                 };
+--- a/crates/lrr/src/frontend/primitive_float_methods.rs
++++ b/crates/lrr/src/frontend/primitive_float_methods.rs
+@@ -155,6 +155,16 @@
+                 (
+                     member,
+                     crate::facade::string_methods::StringMethodKind::ByteLen,
++                )
++            }
++            RuntimePrimitiveMethodKind::StrIsEmpty => {
++                let member = catalog
++                    .string_method("is_empty")
++                    .ok_or_else(|| fault("str::is_empty compiler member is unavailable"))?;
++                catalog.require_string_method(member)?;
++                (
++                    member,
++                    crate::facade::string_methods::StringMethodKind::IsEmpty,
+                 )
+             }
+             RuntimePrimitiveMethodKind::StrAsBytes => {
+@@ -208,6 +218,13 @@
+                         destination: written.destination(),
+                     }),
+                     (
++                        RuntimePrimitiveMethodKind::StrIsEmpty,
++                        crate::facade::string_methods::StringMethodKind::IsEmpty,
++                    ) => Ok(Op::StrIsEmpty {
++                        source: written.receiver(),
++                        destination: written.destination(),
++                    }),
++                    (
+                         RuntimePrimitiveMethodKind::StrAsBytes,
+                         crate::facade::string_methods::StringMethodKind::AsBytes,
+                     ) => Ok(Op::StrAsBytes {
+--- a/crates/lrr/src/frontend/primitive_float_recipe_tests.rs
++++ b/crates/lrr/src/frontend/primitive_float_recipe_tests.rs
+@@ -110,7 +110,7 @@
+         assert_eq!(constant.edition(), edition);
+         assert_eq!(constant.hygiene_context(), locals.context());
+         assert_eq!(constant.opcode_tag(), 41);
+-        assert_eq!(OPCODE_COUNT, 47); // tag 42 reserved; source constants43, parameter places44, str byte length45, byte view46
++        assert_eq!(OPCODE_COUNT, 48); // tag42 reserved; constants43, parameters44, str length45/bytes46/empty47
+         let RecipeExit::Next(next) = &recipe.exit else {
+             panic!("missing structural next")
+         };
+--- a/crates/lrr/src/frontend/runtime_primitive_float_catalog_tests.rs
++++ b/crates/lrr/src/frontend/runtime_primitive_float_catalog_tests.rs
+@@ -24,12 +24,21 @@
+         runtime.require_string_method(bytes).unwrap();
+         assert_ne!(bytes, member);
+         assert!(runtime.require_string_len_method(bytes).is_err());
++        let empty = runtime.string_method("is_empty").unwrap();
++        runtime.require_string_method(empty).unwrap();
++        assert_ne!(empty, member);
++        assert_ne!(empty, bytes);
++        assert!(runtime.require_string_len_method(empty).is_err());
+         let raw = RuntimeMacroCatalog::new(crate::facade::unit(&profile, "core"), edition).unwrap();
+         let macro_only = RuntimeMacroCatalog::standard(&profile).unwrap();
+         assert!(raw.string_len_method().is_none());
+         assert!(macro_only.string_len_method().is_none());
+         assert!(raw.require_string_len_method(member).is_err());
+         assert!(macro_only.require_string_len_method(member).is_err());
++        assert!(raw.string_method("is_empty").is_none());
++        assert!(macro_only.string_method("is_empty").is_none());
++        assert!(raw.require_string_method(empty).is_err());
++        assert!(macro_only.require_string_method(empty).is_err());
+         assert!(raw.string_method("as_bytes").is_none());
+         assert!(macro_only.string_method("as_bytes").is_none());
+         assert!(raw.require_string_method(bytes).is_err());
+@@ -44,6 +53,7 @@
+         .unwrap();
+         assert!(other.require_string_len_method(member).is_err());
+         assert!(other.require_string_method(bytes).is_err());
++        assert!(other.require_string_method(empty).is_err());
+     }
+ }
+ #[test]
+--- a/crates/lrr/src/ir/definition_numeric_wire_tests.rs
++++ b/crates/lrr/src/ir/definition_numeric_wire_tests.rs
+@@ -259,8 +259,8 @@
+ }
+ #[test]
+ fn recipe_schema_separates_definition_context_from_prior_cache_world() {
+-    assert_eq!(crate::ir::op::LRIR_RECIPE_SCHEMA, 17);
+-    assert_eq!(Recipe::DOMAIN, "lrr/v17/lrir-recipe");
++    assert_eq!(crate::ir::op::LRIR_RECIPE_SCHEMA, 18);
++    assert_eq!(Recipe::DOMAIN, "lrr/v18/lrir-recipe");
+     let body = body();
+     let recipe = verify(
+         draft(
+@@ -274,7 +274,7 @@
+     )
+     .unwrap();
+     let recipe = recipe.recipe();
+-    let mut expected = StableEncoder::new("lrr/v17/lrir-recipe");
++    let mut expected = StableEncoder::new("lrr/v18/lrir-recipe");
+     expected.record(&recipe.key);
+     expected.record(&recipe.origin.span.body_key);
+     expected.u32(recipe.origin.span.relative_start);
+--- a/crates/lrr/src/ir/op.rs
++++ b/crates/lrr/src/ir/op.rs
+@@ -133,7 +133,7 @@
+     }
+ }
+ /// Explicit recipe/cache compatibility, independent of host enum layout.
+-pub const LRIR_RECIPE_SCHEMA: u32 = 17;
++pub const LRIR_RECIPE_SCHEMA: u32 = 18;
+ pub const DECODED_INTEGER_SCHEMA: u32 = 1;
+ #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+ pub enum IntegerLexicalError {
+@@ -251,7 +251,7 @@
+ /// Stable opcode inventory. Runtime counter storage must use this bound.
+ // Tag42 remains reserved for the separately frozen managed Vec instruction.
+ pub const SOURCE_CONSTANT_OPCODE: u8 = 43;
+-pub const OPCODE_COUNT: usize = 47;
++pub const OPCODE_COUNT: usize = 48;
+ pub type OpcodeCounters = [u64; OPCODE_COUNT];
+ 
+ /// Closed source-bound floating value. Public callers can inspect or clone a
+@@ -419,6 +419,10 @@
+ #[derive(Debug, Clone, Eq, PartialEq)]
+ pub enum Op {
+     /// Byte count of an already evaluated, source-admitted shared str.
++    StrIsEmpty {
++        source: SlotId,
++        destination: SlotId,
++    },
+     StrAsBytes {
+         source: SlotId,
+         destination: SlotId,
+@@ -631,6 +635,7 @@
+         match self {
+             Self::StrByteLen { .. } => 45,
+             Self::StrAsBytes { .. } => 46,
++            Self::StrIsEmpty { .. } => 47,
+             Self::SourceConstant { .. } => SOURCE_CONSTANT_OPCODE,
+             Self::CompoundHint { .. } => 40,
+             Self::ProjectTuple { .. } => 35,
+@@ -692,6 +697,7 @@
+         match self {
+             Self::StrByteLen { .. }
+             | Self::StrAsBytes { .. }
++            | Self::StrIsEmpty { .. }
+             | Self::MakePlace { .. }
+             | Self::ParameterPlace { .. }
+             | Self::ValuePlace { .. }
+--- a/crates/lrr/src/ir/parameter_place_wire_tests.rs
++++ b/crates/lrr/src/ir/parameter_place_wire_tests.rs
+@@ -22,10 +22,10 @@
+ );
+ #[test]
+ fn unchanged_dereference_parameters_address_original_cells_without_owning_read_all_editions() {
+-    assert_eq!(LRIR_RECIPE_SCHEMA, 17);
+-    assert_eq!(Recipe::DOMAIN, "lrr/v17/lrir-recipe");
++    assert_eq!(LRIR_RECIPE_SCHEMA, 18);
++    assert_eq!(Recipe::DOMAIN, "lrr/v18/lrir-recipe");
+     assert_eq!(SOURCE_CONSTANT_OPCODE, 43);
+-    assert_eq!(OPCODE_COUNT, 47);
++    assert_eq!(OPCODE_COUNT, 48);
+     for edition in [2015, 2018, 2021, 2024] {
+         let parsed = ParsedFile::parse(
+             &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
+@@ -128,10 +128,15 @@
+                     .filter_map(|other| other.value)
+                     .find(|other| *other != source)
+                     .unwrap();
+-                for opcode in [45u32, 46] {
++                for opcode in [45u32, 46, 47] {
+                     let operation = |source, destination| {
+                         if opcode == 45 {
+                             Op::StrByteLen {
++                                source,
++                                destination,
++                            }
++                        } else if opcode == 47 {
++                            Op::StrIsEmpty {
+                                 source,
+                                 destination,
+                             }
+@@ -147,7 +152,7 @@
+                     let verified = verify(length.clone(), &body).unwrap();
+                     let recipe = verified.recipe();
+                     assert_eq!(u32::from(recipe.operations[0].opcode_tag()), opcode);
+-                    let mut expected = StableEncoder::new("lrr/v17/lrir-recipe");
++                    let mut expected = StableEncoder::new("lrr/v18/lrir-recipe");
+                     expected.record(&recipe.key);
+                     expected.record(&recipe.origin.span.body_key);
+                     expected.u32(recipe.origin.span.relative_start);
+@@ -164,7 +169,7 @@
+                     expected.record(next);
+                     expected.u64(0);
+                     assert_eq!(recipe.fingerprint(), expected.finish());
+-                    let mut old = StableEncoder::new("lrr/v16/lrir-recipe");
++                    let mut old = StableEncoder::new("lrr/v17/lrir-recipe");
+                     recipe.encode_fields(&mut old);
+                     assert_ne!(recipe.fingerprint(), old.finish());
+                     for invalid_source in [destination, crate::ir::pc::SlotId(u32::MAX)] {
+--- a/crates/lrr/src/ir/recipe.rs
++++ b/crates/lrr/src/ir/recipe.rs
+@@ -229,12 +229,20 @@
+     }
+ }
+ impl StableEncode for Recipe {
+-    const DOMAIN: &'static str = "lrr/v17/lrir-recipe";
++    const DOMAIN: &'static str = "lrr/v18/lrir-recipe";
+     fn encode_fields(&self, e: &mut StableEncoder) {
+         e.record(&self.key);
+         span(e, &self.origin.span);
+         e.sequence(&self.origin.expansion_ancestry, |e, d| e.digest(*d));
+         e.sequence(&self.operations, |e, op| match op {
++            Op::StrIsEmpty {
++                source,
++                destination,
++            } => {
++                e.u32(47);
++                e.u32(source.0);
++                e.u32(destination.0);
++            }
+             Op::StrAsBytes {
+                 source,
+                 destination,
+--- a/crates/lrr/src/ir/validate.rs
++++ b/crates/lrr/src/ir/validate.rs
+@@ -980,6 +980,10 @@
+                 destination,
+             }
+             | Op::StrAsBytes {
++                source,
++                destination,
++            }
++            | Op::StrIsEmpty {
+                 source,
+                 destination,
+             } => {
+--- a/crates/lrr/src/syntax/runtime_macro_primitive_methods.rs
++++ b/crates/lrr/src/syntax/runtime_macro_primitive_methods.rs
+@@ -10,6 +10,7 @@
+     IsNan,
+     StrByteLen,
+     StrAsBytes,
++    StrIsEmpty,
+ }
+ #[derive(Debug, Clone, Eq, PartialEq)]
+ pub(crate) struct RuntimePrimitiveMethod {
+--- a/crates/lrr/src/syntax/runtime_macro_scalars.rs
++++ b/crates/lrr/src/syntax/runtime_macro_scalars.rs
+@@ -679,7 +679,14 @@
+                         let name = call.name_ref().ok_or_else(unsupported)?;
+                         if !matches!(
+                             name.text(),
+-                            "is_nan" | "r#is_nan" | "len" | "r#len" | "as_bytes" | "r#as_bytes"
++                            "is_nan"
++                                | "r#is_nan"
++                                | "len"
++                                | "r#len"
++                                | "as_bytes"
++                                | "r#as_bytes"
++                                | "is_empty"
++                                | "r#is_empty"
+                         ) || call.generic_arg_list().is_some()
+                             || call
+                                 .arg_list()
+@@ -701,6 +708,8 @@
+                             destination,
+                             if matches!(name.text(), "len" | "r#len") {
+                                 RuntimePrimitiveMethodKind::StrByteLen
++                            } else if matches!(name.text(), "is_empty" | "r#is_empty") {
++                                RuntimePrimitiveMethodKind::StrIsEmpty
+                             } else if matches!(name.text(), "as_bytes" | "r#as_bytes") {
+                                 RuntimePrimitiveMethodKind::StrAsBytes
+                             } else {
+--- a/crates/lrr/src/syntax/string_fixture_facts.rs
++++ b/crates/lrr/src/syntax/string_fixture_facts.rs
+@@ -101,3 +101,44 @@
+         })
+         .collect()
+ }
++
++/// Exact source expression for an explicitly labeled LRR component adapter.
++/// This supplies syntax text, never a runtime result or a fixture-pass receipt.
++pub(crate) fn empty_method_expression(source: &str, constant_name: Option<&str>) -> String {
++    use ra_ap_syntax::ast::{HasGenericArgs, HasName};
++    let parsed = parsed(source, 2024);
++    let tree = parsed.parsed.tree();
++    let call = if let Some(name) = constant_name {
++        let constant = tree
++            .syntax()
++            .descendants()
++            .filter_map(ast::Const::cast)
++            .find(|constant| constant.name().is_some_and(|actual| actual.text() == name))
++            .unwrap();
++        let ast::Expr::MethodCallExpr(call) = constant.body().unwrap() else {
++            panic!("original empty initializer is a method call")
++        };
++        call
++    } else {
++        tree.syntax()
++            .descendants()
++            .filter_map(ast::MethodCallExpr::cast)
++            .find(|call| {
++                call.name_ref()
++                    .is_some_and(|name| name.text() == "is_empty")
++            })
++            .unwrap()
++    };
++    assert!(
++        call.name_ref()
++            .is_some_and(|name| name.text() == "is_empty")
++    );
++    assert!(call.generic_arg_list().is_none());
++    let expression = call.syntax().text().to_string();
++    let range = call.syntax().text_range();
++    assert_eq!(
++        &source[u32::from(range.start()) as usize..u32::from(range.end()) as usize],
++        expression
++    );
++    expression
++}
+--- a/crates/lrr/src/vm/step.rs
++++ b/crates/lrr/src/vm/step.rs
+@@ -569,6 +569,32 @@
+     frame.status = FrameStatus::Panicked;
+     StepOutcome::GuestPanic(panic)
+ }
++fn string_is_empty(
++    frame: &Frame,
++    store: &GuestStore,
++    source: crate::ir::pc::SlotId,
++    destination: crate::ir::pc::SlotId,
++) -> Result<bool, Diagnostic> {
++    use crate::traits::term::TyTerm;
++    frame.require_store(store)?;
++    if source == destination
++        || !matches!(frame.source_view_ref(source)?,
++            Some(TyTerm::Ref(_, false, target)) if target.as_ref() == &TyTerm::Str)
++    {
++        return Err(invalid(
++            "str emptiness requires a distinct admitted shared str receiver",
++        ));
++    }
++    let empty = store.static_string_byte_len(frame.cell(source)?)? == 0;
++    frame.preflight_primitive_operator_result(
++        destination,
++        TypeId(2),
++        Some(PrimitiveType::Bool),
++        store,
++    )?;
++    frame.preflight_primitive_operator_capacity(destination, store)?;
++    Ok(empty)
++}
+ fn string_byte_len(
+     frame: &Frame,
+     store: &GuestStore,
+@@ -647,6 +673,10 @@
+ }
+ fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Diagnostic> {
+     match op {
++        Op::StrIsEmpty {
++            source,
++            destination,
++        } => string_is_empty(frame, store, *source, *destination).map(|_| ()),
+         Op::StrAsBytes {
+             source,
+             destination,
+@@ -1163,6 +1193,19 @@
+     byte_hint: Option<crate::runtime::cell::byte_literals::PreparedStaticByteHint>,
+ ) -> Result<(), Diagnostic> {
+     match op {
++        Op::StrIsEmpty {
++            source,
++            destination,
++        } => {
++            let empty = string_is_empty(frame, store, *source, *destination)?;
++            frame.reserve_primitive_operator_result(*destination, store)?;
++            let ticket = store.ticket(ValueRepr::boolean(empty))?;
++            frame.write(*destination, ticket, store)?;
++            frame.set_source_view(
++                *destination,
++                Some(crate::traits::term::TyTerm::Primitive(PrimitiveType::Bool)),
++            )
++        }
+         Op::StrAsBytes {
+             source,
+             destination,
+--- a/fixtures/upstream/rustc-checkout/manifest.json
++++ b/fixtures/upstream/rustc-checkout/manifest.json
+@@ -648,6 +648,12 @@
+       "bytes": 1527
+     },
+     {
++      "path": "tests/ui/consts/const-eval/strlen.rs",
++      "git_blob": "4ceb3b82ab36c1ef0fb1f21bd727f5ba4c998ae3",
++      "sha256": "cb2616e6a211a8ad38922446ecf41eef08658f42783022d344d266b64f530dc4",
++      "bytes": 695
++    },
++    {
+       "path": "tests/ui/consts/const-fn-const-eval.rs",
+       "git_blob": "25abca0fb43d23c23747df8e63b81879c17c71b2",
+       "sha256": "5971a5a80d4f5b5400ed88bba500fed8e77867cc879ed4fc8c5f013d0ba05337",
+@@ -2692,6 +2698,12 @@
+       "git_blob": "2d4110de6812b21354d098fca1f0d326da97ffcb",
+       "sha256": "072d9e7415742e411853ec46e123180fb9aceb6e5d2655ffdf46a6a223ed773c",
+       "bytes": 1059
++    },
++    {
++      "path": "tests/ui/str/raw-string-literal-unescaped-unicode.rs",
++      "git_blob": "c0dc0743a28f7da8789df00c1c26e889c0422890",
++      "sha256": "b677af81df91441b46cfedf791760e4857052a81c1bad869e6379fa44b1c9749",
++      "bytes": 192
+     },
+     {
+       "path": "tests/ui/str/str-escape.rs",
+@@ -3569,6 +3581,14 @@
+       "native_acceptance": "unexecuted"
+     },
+     {
++      "path": "tests/ui/consts/const-eval/strlen.rs",
++      "directives": [
++        "//@ run-pass"
++      ],
++      "lrr_acceptance": "pending",
++      "native_acceptance": "unexecuted"
++    },
++    {
+       "path": "tests/ui/consts/const-fn-const-eval.rs",
+       "directives": [
+         "//@ run-pass"
+@@ -5349,6 +5369,14 @@
+       "path": "tests/ui/str/nul-char-equivalence.rs",
+       "directives": [
+         "//@ run-pass"
++      ],
++      "lrr_acceptance": "pending",
++      "native_acceptance": "unexecuted"
++    },
++    {
++      "path": "tests/ui/str/raw-string-literal-unescaped-unicode.rs",
++      "directives": [
++        "//@ check-pass"
+       ],
+       "lrr_acceptance": "pending",
+       "native_acceptance": "unexecuted"
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/strlen.rs
+@@ -0,0 +1,31 @@
++//@ run-pass
++
++const S: &str = "foo";
++pub const B: &[u8] = S.as_bytes();
++pub const C: usize = B.len();
++pub const D: bool = B.is_empty();
++pub const E: bool = S.is_empty();
++pub const F: usize = S.len();
++
++pub fn foo() -> [u8; S.len()] {
++    let mut buf = [0; S.len()];
++    for (i, &c) in S.as_bytes().iter().enumerate() {
++        buf[i] = c;
++    }
++    buf
++}
++
++fn main() {
++    assert_eq!(&foo()[..], b"foo");
++    assert_eq!(foo().len(), S.len());
++    const LEN: usize = S.len();
++    assert_eq!(LEN, S.len());
++    assert_eq!(B, foo());
++    assert_eq!(B, b"foo");
++    assert_eq!(C, 3);
++    assert_eq!(F, 3);
++    assert!(!D);
++    assert!(!E);
++    const EMPTY: bool = "".is_empty();
++    assert!(EMPTY);
++}
+--- /dev/null
++++ b/fixtures/upstream/rustc-checkout/tests/ui/str/raw-string-literal-unescaped-unicode.rs
+@@ -0,0 +1,10 @@
++//! regression test for <https://github.com/rust-lang/rust/issues/50471>
++//@ check-pass
++
++fn main() {
++    assert!({ false });
++
++    assert!(r"\u{41}" == "A");
++
++    assert!(r"\u{".is_empty());
++}
