@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Float and CRLF prerequisite source pushed at f8f4922539; full V72 milestone runs separately. Named-range/Byte12/context13/byte-CRLF/large-byte stages are now one 48-file source-only candidate. New T041/T062 immutable byte comparison cursor is a four-file uncompiled successor; source PartialEq/VM consumer remains outstanding. No new stock pass, task or JIT completion.",
+      "scope": "Float/CRLF prerequisite pushed at f8f4922539; V72 full milestone remains independently running. Coherent 48-file byte predecessor is queued. New 22-file T041/T062/M017 successor connects macro byte admission, compiler-owned source PartialEq selection and bounded VM comparison/result publication, including prior physical cursor. Exact replay/format only; all Rust build/runtime acceptance pending, zero new stock passes or task/JIT completions.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -477,11 +477,13 @@
         "artifacts/macos-first/root-byte-float-rebase-v1/",
         "artifacts/macos-first/root-byte-comparison-v1/",
         "worktracks/candidates/root-interpreter-bytes-v1/",
-        "worktracks/candidates/root-byte-comparison-v1/"
+        "worktracks/candidates/root-byte-comparison-v1/",
+        "artifacts/macos-first/root-byte-macro-admission-v1/",
+        "worktracks/candidates/root-byte-assertions-v1/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T10:02:05.915083+00:00",
+      "updated_at": "2026-10-15T10:22:56.578193+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

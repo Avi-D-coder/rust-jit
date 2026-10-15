@@ -1,6 +1,8 @@
 # Immutable byte comparison successor
 
-Status: source-only, uncompiled and unexecuted. This four-file delta follows the complete [interpreter byte candidate](../root-interpreter-bytes-v1/README.md); verify its exact before hashes. It is a physical prerequisite for `T041`/`T062`, not a completed library method or passing rustc program. Claim `LOCAL-024` owns the draft.
+Historical status: source-only, uncompiled and unexecuted. The [byte assertions successor](../root-byte-assertions-v1/README.md) now includes this physical delta and adds its source/member and VM consumer; that successor is also uncompiled. Do not apply both patches.
+
+Status at this draft: This four-file delta follows the complete [interpreter byte candidate](../root-interpreter-bytes-v1/README.md); verify its exact before hashes. It is a physical prerequisite for `T041`/`T062`, not a completed library method or passing rustc program. Claim `LOCAL-024` owns the draft.
 
 The run-owned cursor compares genuine readonly byte-literal roots through shared array/slice leases. Each dispatch revalidates store incarnation, epoch, operand cell/value, reference lease, immutable allocation membership and object identity. Each visited field checks its ownership edge and U8 value. Work is capped at 256 pairs per dispatch, charged once per pair, and cancellation is polled even for empty, identical or unequal-length operands. Completed and failed cursors cannot replay. It allocates no guest storage and changes no guest owner.
 

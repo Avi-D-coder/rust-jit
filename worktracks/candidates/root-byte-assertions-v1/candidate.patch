@@ -1,0 +1,2371 @@
+diff --git a/crates/lrr/src/engine/run.rs b/crates/lrr/src/engine/run.rs
+--- a/crates/lrr/src/engine/run.rs
++++ b/crates/lrr/src/engine/run.rs
+@@ -1,9 +1,13 @@
+ //! Dispatcher-owned scalar execution. Queries finish before VM mutation.
++#[path = "run_byte_comparisons.rs"]
++pub(crate) mod byte_comparisons;
+ #[cfg(test)]
+ #[path = "run_byte_literal_tests.rs"]
+ mod byte_literal_tests;
+ #[path = "run_byte_literals.rs"]
+ mod byte_literals;
++#[path = "run_byte_macro_literals.rs"]
++pub(crate) mod byte_macro_literals;
+ #[path = "run_capture.rs"]
+ mod capture;
+ use super::install::InstalledRecipes;
+@@ -2302,6 +2306,20 @@
+                     _ => {}
+                 }
+             }
++            if let Err(error) = self.prepare_macro_byte_literal(db, contexts, id) {
++                if self.frame.has_byte_literal_activation() {
++                    return self.fail_byte_literal(error);
++                }
++                self.terminal = true;
++                return RunPoll::Fault(error);
++            }
++            if let Err(error) = self.prepare_macro_byte_comparison(db, contexts, id) {
++                if self.frame.has_byte_literal_activation() {
++                    return self.fail_byte_literal(error);
++                }
++                self.terminal = true;
++                return RunPoll::Fault(error);
++            }
+             if let Err(error) = self.revalidate_primitive_method(db, contexts, id) {
+                 self.terminal = true;
+                 return RunPoll::Fault(error);
+diff --git a/crates/lrr/src/engine/run_byte_comparisons.rs b/crates/lrr/src/engine/run_byte_comparisons.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/engine/run_byte_comparisons.rs
+@@ -0,0 +1,176 @@
++//! Reached source/member admission for byte equality in resolved runtime macros.
++use super::*;
++use crate::{
++    core::digest::Digest,
++    db::dependency::{InputKey, InputValue},
++    facade::byte_equality::{ByteEqualityMember, is_byte_reference},
++    ir::op::NumericBinary,
++    syntax::{
++        body_index::{ExpressionKind, NodeRole},
++        parse::ParseKey,
++    },
++};
++#[derive(Clone, Eq, PartialEq)]
++pub(crate) struct AdmittedByteComparison {
++    pc: PcKey,
++    source: ParseKey,
++    cfg: Digest,
++    recipe: Digest,
++    member: ByteEqualityMember,
++    operator: NumericBinary,
++    left: SlotId,
++    right: SlotId,
++    destination: SlotId,
++}
++impl AdmittedByteComparison {
++    pub(crate) fn allocated_bytes(&self) -> Option<usize> {
++        std::mem::size_of::<Self>()
++            .checked_add(self.source.profile.semantics.capacity())?
++            .checked_add(self.member.allocated_bytes()?)
++    }
++    pub(crate) fn operands(&self) -> (SlotId, SlotId, SlotId, bool) {
++        (
++            self.left,
++            self.right,
++            self.destination,
++            self.operator == NumericBinary::Ne,
++        )
++    }
++    pub(crate) fn require(
++        &self,
++        frame: &Frame,
++        store: &GuestStore,
++        op: &Op,
++    ) -> Result<(), Diagnostic> {
++        let Op::NumericBinary {
++            operator,
++            left,
++            right,
++            destination,
++        } = op
++        else {
++            return Err(call_fault("byte comparison is not the admitted operator"));
++        };
++        if frame.pc() != &self.pc
++            || frame.body.profile() != &self.source.profile
++            || frame.body.cfg().fingerprint() != self.cfg
++            || (*operator, *left, *right, *destination)
++                != (self.operator, self.left, self.right, self.destination)
++        {
++            return Err(call_fault(
++                "byte PartialEq PC/operator/source binding differs",
++            ));
++        }
++        let left_source = frame
++            .source_view_ref(*left)?
++            .ok_or_else(|| call_fault("byte PartialEq left source absent"))?;
++        let right_source = frame
++            .source_view_ref(*right)?
++            .ok_or_else(|| call_fault("byte PartialEq right source absent"))?;
++        self.member
++            .require(frame.body.profile(), left_source, right_source)?;
++        let (l, r) = self.member.shapes();
++        store.require_static_byte_value(frame.cell(*left)?, l.length())?;
++        store.require_static_byte_value(frame.cell(*right)?, r.length())
++    }
++}
++impl RunMachine {
++    pub(super) fn prepare_macro_byte_comparison(
++        &mut self,
++        db: &mut Database,
++        contexts: &[super::super::runtime_macros::RuntimeMacroContext<'_>],
++        id: super::super::install::RecipeId,
++    ) -> Result<(), Diagnostic> {
++        let key = self.frame.pc();
++        let node = self
++            .frame
++            .body
++            .nodes()
++            .get(key.node as usize)
++            .ok_or_else(|| call_fault("byte comparison node absent"))?;
++        if node.role != NodeRole::Expression(ExpressionKind::Macro) {
++            return self.frame.admit_byte_comparison(None);
++        }
++        let installed = self.installed.get(id)?;
++        let mut selected = None;
++        for op in installed.recipe().operations.iter() {
++            let Op::NumericBinary {
++                operator: operator @ (NumericBinary::Eq | NumericBinary::Ne),
++                left,
++                right,
++                destination,
++            } = op
++            else {
++                continue;
++            };
++            if !is_byte_reference(self.frame.source_view_ref(*left)?)
++                && !is_byte_reference(self.frame.source_view_ref(*right)?)
++            {
++                continue;
++            }
++            if selected
++                .replace((op, *operator, *left, *right, *destination))
++                .is_some()
++            {
++                return Err(call_fault(
++                    "byte comparison phase contains multiple selected operators",
++                ));
++            }
++        }
++        let Some((op, operator, left, right, destination)) = selected else {
++            return self.frame.admit_byte_comparison(None);
++        };
++        let fingerprint = installed.recipe().fingerprint();
++        for context in contexts {
++            let source = context.source();
++            let Some(handle) = source
++                .outline()
++                .items
++                .iter()
++                .filter_map(|item| item.body.as_ref())
++                .find(|handle| handle.key() == key.body)
++            else {
++                continue;
++            };
++            if !matches!(db.input(&InputKey::DefinitionSource(key.body.definition)).as_deref(), Some(InputValue::DefinitionSource(parse)) if parse == &source.selection().outline.parse)
++                || !matches!(db.input(&InputKey::DefinitionBody(key.body.definition)).as_deref(), Some(InputValue::DefinitionBody(body)) if body == handle)
++                || !matches!(db.input(&InputKey::CapturedSource(source.selection().location_identity())).as_deref(), Some(InputValue::CapturedSource(selected)) if selected == source.selection())
++            {
++                return Err(call_fault("byte comparison source publication changed"));
++            }
++            let current = context
++                .resolve_at(
++                    &self.frame.body,
++                    key,
++                    self.runtime_no_item_proofs.values(),
++                    Some((&self.frame, &self.store)),
++                )?
++                .ok_or_else(|| call_fault("byte comparison current intrinsic absent"))?;
++            if current.recipe.recipe().fingerprint() != fingerprint {
++                return Err(call_fault("byte comparison current source recipe differs"));
++            }
++            let member = context.byte_equality_member(
++                self.frame
++                    .source_view_ref(left)?
++                    .ok_or_else(|| call_fault("byte comparison left source absent"))?,
++                self.frame
++                    .source_view_ref(right)?
++                    .ok_or_else(|| call_fault("byte comparison right source absent"))?,
++            )?;
++            let admission = AdmittedByteComparison {
++                pc: key.clone(),
++                source: source.selection().outline.parse.clone(),
++                cfg: source.selection().outline.cfg,
++                recipe: fingerprint,
++                member,
++                operator,
++                left,
++                right,
++                destination,
++            };
++            admission.require(&self.frame, &self.store, op)?;
++            return self.frame.admit_byte_comparison(Some(admission));
++        }
++        Err(call_fault("byte comparison current source context absent"))
++    }
++}
+diff --git a/crates/lrr/src/engine/run_byte_macro_literal_tests.rs b/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/engine/run_byte_macro_literal_tests.rs
+@@ -0,0 +1,478 @@
++//! Original-source admission controls, distinct from the full-main runtime witness.
++use super::*;
++use crate::{
++    core::profile::ProfileIdentity,
++    engine::standalone_macros::CompletedStandaloneRuntimeMacros,
++    expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
++    source::{
++        changes::{PreparedSourceInputs, SourceSelection, SourceSelectionOutcome, SourceUnitInput},
++        manifest::Namespace,
++        snapshot::{CfgSet, SourceBlob, SourcePath},
++    },
++    traits::term::{ConstTerm, RegionTerm, TyTerm},
++};
++const ORIGINAL: &str = include_str!(
++    "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/crlf-in-byte-string-literal.rs"
++);
++fn discovery(view: &PreparedSourceView, graph: Digest) -> SourceDiscovery {
++    let mut d = SourceDiscovery::new(
++        vec![view.share()],
++        view.outline().root_scope.clone(),
++        Namespace::Type,
++        graph,
++        1,
++    )
++    .unwrap()
++    .with_declarative(
++        Digest::of_bytes(b"byte-macro-dispatch-expansions"),
++        Digest::of_bytes(b"byte-macro-dispatch-generations"),
++    )
++    .unwrap()
++    .with_compiler(std::sync::Arc::new(
++        crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
++            &view.selection().outline.parse.profile,
++        )
++        .unwrap(),
++    ))
++    .unwrap();
++    assert!(matches!(d.poll().unwrap(), SourceDiscoveryStep::Sealed(_)));
++    d
++}
++fn start_source(
++    source: &str,
++    edition: u16,
++    fuel: u64,
++) -> (
++    Database,
++    RunMachine,
++    CompletedStandaloneRuntimeMacros,
++    PreparedSourceInputs,
++) {
++    let profile = ProfileIdentity {
++        edition,
++        ..ProfileIdentity::current()
++    };
++    let cfg = CfgSet::guest_default();
++    let blob = SourceBlob::new(source.as_bytes().to_vec()).unwrap();
++    let path = SourcePath::new("crlf-in-byte-string-literal.rs").unwrap();
++    let unit = Digest::of_bytes(b"original-byte-macro-dispatch");
++    let selected = SourceSelection {
++        path: path.clone(),
++        outline: crate::db::key::OutlineKey {
++            parse: ParseKey {
++                content: blob.content(),
++                profile: profile.clone(),
++            },
++            crate_key: unit,
++            module_path: vec![],
++            cfg: cfg.fingerprint(),
++        },
++    };
++    let inputs = PreparedSourceInputs::refresh(
++        None,
++        vec![SourceUnitInput {
++            path,
++            crate_key: unit,
++            module_path: vec![],
++            profile,
++            cfg,
++            blob,
++        }],
++        Default::default(),
++    )
++    .unwrap();
++    let mut db = Database::default();
++    db.trace.detailed = true;
++    inputs.publish(&mut db).unwrap();
++    let SourceSelectionOutcome::Selected(view) = inputs.select(&selected).unwrap() else {
++        panic!("source absent")
++    };
++    let body = view
++        .outline()
++        .items
++        .iter()
++        .find(|item| item.def_key.declared_name == "main")
++        .unwrap()
++        .body
++        .as_ref()
++        .unwrap()
++        .key();
++    let d = discovery(&view, Digest::of_bytes(b"first-sealed-dispatch"));
++    let macros = CompletedStandaloneRuntimeMacros::from_discovery(&view, &d).unwrap();
++    db.begin_run().unwrap();
++    let run = RunMachine::start_with_discovery(&mut db, body, fuel, d)
++        .into_ready()
++        .unwrap()
++        .unwrap();
++    (db, run, macros, inputs)
++}
++
++// Execute actual preceding source recipes; stop before the original first byte
++// literal. No synthesized guest body or successful-error prefix is a stock pass.
++fn reach_literal(
++    db: &mut Database,
++    run: &mut RunMachine,
++    contexts: &[crate::engine::runtime_macros::RuntimeMacroContext<'_>],
++) -> (crate::engine::install::RecipeId, LiteralRecipe, SlotId) {
++    for _ in 0..64 {
++        let key = run.frame.pc().clone();
++        let node = &run.frame.body.nodes()[key.node as usize];
++        let prepared = if node.role == NodeRole::Expression(ExpressionKind::Macro) {
++            contexts.iter().find_map(|context| {
++                context
++                    .resolve_at(
++                        &run.frame.body,
++                        &key,
++                        run.runtime_no_item_proofs.values(),
++                        Some((&run.frame, &run.store)),
++                    )
++                    .unwrap()
++            })
++        } else {
++            None
++        };
++        let id = if let Some(prepared) = prepared {
++            if let Some(proof) = prepared.no_item {
++                run.retain_no_item_proof(proof).unwrap();
++            }
++            assert!(prepared.call.is_none() && prepared.primitive_method.is_none());
++            run.installed
++                .install_prepared(db, key, &prepared.recipe)
++                .unwrap()
++        } else {
++            run.installed
++                .resolve(db, key)
++                .into_ready()
++                .unwrap()
++                .unwrap()
++        };
++        for op in run.installed.get(id).unwrap().recipe().operations.iter() {
++            if let Op::Literal {
++                literal,
++                destination,
++                ..
++            } = op
++            {
++                if literal.kind == LiteralKind::ByteString {
++                    return (id, literal.clone(), *destination);
++                }
++            }
++        }
++        assert!(matches!(
++            step::step(
++                &mut run.frame,
++                &mut run.store,
++                run.installed.get(id).unwrap()
++            )
++            .unwrap(),
++            StepOutcome::Next(_)
++        ));
++    }
++    panic!("original byte literal not reached");
++}
++#[test]
++fn original_byte_operand_requires_actual_macro_admission_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, mut run, macros, _) = start_source(ORIGINAL, edition, 1000);
++        let contexts = macros.contexts().unwrap();
++        let (id, literal, destination) = reach_literal(&mut db, &mut run, &contexts);
++        assert!(
++            run.frame
++                .require_macro_byte_literal(&literal, destination)
++                .is_err()
++        );
++        let before = (run.frame.fuel_snapshot(), run.store.budget().handles());
++        run.prepare_macro_byte_literal(&mut db, &contexts, id)
++            .unwrap();
++        run.frame
++            .require_macro_byte_literal(&literal, destination)
++            .unwrap();
++        assert_eq!(
++            (run.frame.fuel_snapshot(), run.store.budget().handles()),
++            before
++        );
++        assert!(matches!(
++            step::step(
++                &mut run.frame,
++                &mut run.store,
++                run.installed.get(id).unwrap()
++            )
++            .unwrap(),
++            StepOutcome::Next(_)
++        ));
++        run.store
++            .require_static_byte_value(run.frame.cell(destination).unwrap(), Some(0))
++            .unwrap();
++        assert_eq!(
++            run.frame.source_view(destination).unwrap(),
++            Some(TyTerm::Ref(
++                RegionTerm::Static,
++                false,
++                Box::new(TyTerm::Array(
++                    Box::new(TyTerm::Primitive(crate::ir::op::PrimitiveType::U8)),
++                    ConstTerm::Value(0)
++                ))
++            ))
++        );
++        db.finish_run().unwrap();
++    }
++}
++#[test]
++fn macro_byte_admission_cannot_authorize_another_slot_span_phase_or_decode() {
++    let (mut db, mut run, macros, _) = start_source(ORIGINAL, 2024, 1000);
++    let contexts = macros.contexts().unwrap();
++    let (id, literal, destination) = reach_literal(&mut db, &mut run, &contexts);
++    run.prepare_macro_byte_literal(&mut db, &contexts, id)
++        .unwrap();
++    // Frame only exposes validation; the test constructs a receipt here inside
++    // its owning module to exercise changes to its private source bindings.
++    let Some(DecodedLiteral::ByteString(payload)) = &literal.decoded else {
++        panic!("byte payload")
++    };
++    let source = contexts[0].source();
++    let mut proof = AdmittedMacroByteLiteral {
++        pc: run.frame.pc().clone(),
++        source: source.selection().outline.parse.clone(),
++        cfg: source.selection().outline.cfg,
++        recipe: run.installed.get(id).unwrap().recipe().fingerprint(),
++        span: literal.source.clone(),
++        destination,
++        payload: payload.clone(),
++    };
++    proof
++        .require(&run.frame.body, run.frame.pc(), &literal, destination)
++        .unwrap();
++    assert!(
++        proof
++            .require(&run.frame.body, run.frame.pc(), &literal, SlotId(u32::MAX))
++            .is_err()
++    );
++    proof.span.relative_end += 1;
++    assert!(
++        proof
++            .require(&run.frame.body, run.frame.pc(), &literal, destination)
++            .is_err()
++    );
++    proof.span = literal.source.clone();
++    proof.pc.phase += 1;
++    assert!(
++        proof
++            .require(&run.frame.body, run.frame.pc(), &literal, destination)
++            .is_err()
++    );
++    proof.pc = run.frame.pc().clone();
++    proof.source.profile.edition = 2015;
++    assert!(
++        proof
++            .require(&run.frame.body, run.frame.pc(), &literal, destination)
++            .is_err()
++    );
++    proof.source.profile.edition = 2024;
++    // Independently resolving equal source bytes does not produce the installed
++    // decoder allocation bound into this run-owned receipt.
++    let other = contexts[0]
++        .resolve_at(
++            &run.frame.body,
++            run.frame.pc(),
++            run.runtime_no_item_proofs.values(),
++            Some((&run.frame, &run.store)),
++        )
++        .unwrap()
++        .unwrap();
++    let other_literal = other
++        .recipe
++        .recipe()
++        .operations
++        .iter()
++        .find_map(|op| match op {
++            Op::Literal { literal, .. } if literal.kind == LiteralKind::ByteString => Some(literal),
++            _ => None,
++        })
++        .unwrap();
++    assert!(
++        proof
++            .require(&run.frame.body, run.frame.pc(), other_literal, destination)
++            .is_err()
++    );
++    db.finish_run().unwrap();
++}
++#[test]
++fn macro_byte_admission_requires_context_and_current_source_generation_before_effects() {
++    let (mut db, mut run, macros, inputs) = start_source(ORIGINAL, 2024, 1000);
++    let contexts = macros.contexts().unwrap();
++    let (id, _, _) = reach_literal(&mut db, &mut run, &contexts);
++    let before = (run.frame.fuel_snapshot(), run.store.budget().handles());
++    assert!(run.prepare_macro_byte_literal(&mut db, &[], id).is_err());
++    run.prepare_macro_byte_literal(&mut db, &contexts, id)
++        .unwrap();
++    db.finish_run().unwrap();
++    inputs.publish(&mut db).unwrap();
++    db.begin_run().unwrap();
++    assert!(matches!(
++        run.poll_with_runtime_macros(&mut db, &contexts),
++        RunPoll::Fault(Diagnostic {
++            code: "LRR-E-INTERNAL-SNAPSHOT",
++            ..
++        })
++    ));
++    assert_eq!(
++        (run.frame.fuel_snapshot(), run.store.budget().handles()),
++        before
++    );
++    db.finish_run().unwrap();
++}
++
++#[test]
++fn unchanged_crlf_byte_assertions_complete_main_and_both_assertions_all_editions() {
++    for edition in [2015, 2018, 2021, 2024] {
++        let (mut db, mut run, macros, _) = start_source(ORIGINAL, edition, 1000);
++        let contexts = macros.contexts().unwrap();
++        let RunPoll::Completed(report) = run.poll_with_runtime_macros(&mut db, &contexts) else {
++            panic!("unchanged original byte assertions did not complete in edition{edition}");
++        };
++        assert!(matches!(report.value, ValueSummary::Unit));
++        assert_eq!(report.opcode_counters.started_by_opcode[26], 2);
++        assert_eq!(report.opcode_counters.started_by_opcode[10], 2);
++        assert_eq!(
++            report.opcode_counters.operations_started,
++            report.opcode_counters.operations_completed
++        );
++        db.finish_run().unwrap();
++    }
++}
++
++fn reach_comparison(
++    db: &mut Database,
++    run: &mut RunMachine,
++    contexts: &[crate::engine::runtime_macros::RuntimeMacroContext<'_>],
++) -> (crate::engine::install::RecipeId, Op) {
++    let (mut id, _, _) = reach_literal(db, run, contexts);
++    for _ in 0..64 {
++        let operations = &run.installed.get(id).unwrap().recipe().operations;
++        if let Some(op) = operations.iter().find(|op| {
++            matches!(
++                op,
++                Op::NumericBinary {
++                    operator: crate::ir::op::NumericBinary::Eq,
++                    ..
++                }
++            )
++        }) {
++            return (id, op.clone());
++        }
++        run.prepare_macro_byte_literal(db, contexts, id).unwrap();
++        assert!(matches!(
++            step::step(
++                &mut run.frame,
++                &mut run.store,
++                run.installed.get(id).unwrap()
++            )
++            .unwrap(),
++            StepOutcome::Next(_)
++        ));
++        let key = run.frame.pc().clone();
++        let prepared = contexts
++            .iter()
++            .find_map(|context| {
++                context
++                    .resolve_at(
++                        &run.frame.body,
++                        &key,
++                        run.runtime_no_item_proofs.values(),
++                        Some((&run.frame, &run.store)),
++                    )
++                    .unwrap()
++            })
++            .unwrap();
++        if let Some(proof) = prepared.no_item {
++            run.retain_no_item_proof(proof).unwrap();
++        }
++        id = run
++            .installed
++            .install_prepared(db, key, &prepared.recipe)
++            .unwrap();
++    }
++    panic!("original first comparison not reached")
++}
++#[test]
++fn byte_comparison_requires_current_source_and_member_before_operand_or_result_effects() {
++    let (mut db, mut run, macros, _) = start_source(ORIGINAL, 2024, 1000);
++    let contexts = macros.contexts().unwrap();
++    let (id, op) = reach_comparison(&mut db, &mut run, &contexts);
++    let before = (
++        run.frame.fuel_snapshot(),
++        run.store.budget().handles(),
++        serde_json::to_value(&run.frame.counters).unwrap(),
++    );
++    assert!(
++        run.frame
++            .prepare_byte_comparison(&op, &run.store)
++            .unwrap()
++            .is_none()
++    );
++    assert!(run.prepare_macro_byte_comparison(&mut db, &[], id).is_err());
++    run.prepare_macro_byte_comparison(&mut db, &contexts, id)
++        .unwrap();
++    assert!(
++        run.frame
++            .prepare_byte_comparison(&op, &run.store)
++            .unwrap()
++            .is_some()
++    );
++    let Op::NumericBinary {
++        left,
++        right,
++        destination,
++        ..
++    } = op
++    else {
++        panic!("comparison")
++    };
++    let original_source = run.frame.source_view(left).unwrap();
++    run.frame
++        .set_source_view(
++            left,
++            Some(TyTerm::Param(crate::traits::term::ParamKey {
++                definition: run.root_body.definition,
++                ordinal: 0,
++            })),
++        )
++        .unwrap();
++    assert!(
++        run.prepare_macro_byte_comparison(&mut db, &contexts, id)
++            .is_err()
++    );
++    assert!(run.frame.prepare_byte_comparison(&op, &run.store).is_err());
++    run.frame.set_source_view(left, original_source).unwrap();
++    let changed = Op::NumericBinary {
++        operator: crate::ir::op::NumericBinary::Ne,
++        left,
++        right,
++        destination,
++    };
++    assert!(
++        run.frame
++            .prepare_byte_comparison(&changed, &run.store)
++            .is_err()
++    );
++    let changed = Op::NumericBinary {
++        operator: crate::ir::op::NumericBinary::Eq,
++        left,
++        right,
++        destination: left,
++    };
++    assert!(
++        run.frame
++            .prepare_byte_comparison(&changed, &run.store)
++            .is_err()
++    );
++    assert_eq!(
++        (
++            run.frame.fuel_snapshot(),
++            run.store.budget().handles(),
++            serde_json::to_value(&run.frame.counters).unwrap()
++        ),
++        before
++    );
++    db.finish_run().unwrap();
++}
+diff --git a/crates/lrr/src/engine/run_byte_macro_literals.rs b/crates/lrr/src/engine/run_byte_macro_literals.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/engine/run_byte_macro_literals.rs
+@@ -0,0 +1,173 @@
++//! Current compiler-intrinsic source admission for a byte literal in opaque
++//! macro operands. A verified recipe alone cannot grant that source authority.
++use super::*;
++use crate::{
++    core::digest::Digest,
++    db::dependency::{InputKey, InputValue},
++    ir::op::{DecodedLiteral, LiteralKind, LiteralRecipe},
++    syntax::{
++        body_index::{ExpressionKind, NodeRole},
++        byte_string_literals::ByteStringLiteral,
++        parse::ParseKey,
++        spans::BodySpan,
++    },
++};
++
++/// Constructed only after current source/name resolution reproduces the actual
++/// installed operation. It is run-owned, never a cached query or guest value.
++pub(crate) struct AdmittedMacroByteLiteral {
++    pc: PcKey,
++    source: ParseKey,
++    cfg: Digest,
++    recipe: Digest,
++    span: BodySpan,
++    destination: SlotId,
++    payload: ByteStringLiteral,
++}
++impl AdmittedMacroByteLiteral {
++    pub(crate) fn allocated_bytes(&self) -> Option<usize> {
++        std::mem::size_of::<Self>()
++            .checked_add(self.source.profile.semantics.capacity())?
++            .checked_add(self.payload.allocated_bytes()?)
++    }
++    pub(crate) fn same_binding(&self, other: &Self) -> bool {
++        self.pc == other.pc
++            && self.source == other.source
++            && self.cfg == other.cfg
++            && self.recipe == other.recipe
++            && self.span == other.span
++            && self.destination == other.destination
++            && self.payload.same_decoded_payload(&other.payload)
++    }
++    pub(crate) fn require(
++        &self,
++        body: &BodyIndex,
++        pc: &PcKey,
++        literal: &LiteralRecipe,
++        destination: SlotId,
++    ) -> Result<(), Diagnostic> {
++        let node = body
++            .nodes()
++            .get(pc.node as usize)
++            .ok_or_else(|| call_fault("macro byte literal source node missing"))?;
++        let Some(DecodedLiteral::ByteString(payload)) = &literal.decoded else {
++            return Err(call_fault("macro byte literal decoder certificate missing"));
++        };
++        if &self.pc != pc
++            || &pc.body != body.body()
++            || self.source.profile != *body.profile()
++            || self.cfg != body.cfg().fingerprint()
++            || node.role != NodeRole::Expression(ExpressionKind::Macro)
++            || !node.runtime_scalar_slots.contains(&destination)
++            || self.span != literal.source
++            || self.span.body_key != pc.body
++            || self.span.relative_start < node.range.start
++            || self.span.relative_end > node.range.end
++            || self.span.relative_start >= self.span.relative_end
++            || self.destination != destination
++            || literal.kind != LiteralKind::ByteString
++            || !self.payload.same_decoded_payload(payload)
++        {
++            return Err(call_fault(
++                "macro byte literal source/phase/destination differs",
++            ));
++        }
++        Ok(())
++    }
++}
++
++impl RunMachine {
++    pub(super) fn prepare_macro_byte_literal(
++        &mut self,
++        db: &mut Database,
++        contexts: &[super::super::runtime_macros::RuntimeMacroContext<'_>],
++        id: super::super::install::RecipeId,
++    ) -> Result<(), Diagnostic> {
++        let key = self.frame.pc();
++        let node = self
++            .frame
++            .body
++            .nodes()
++            .get(key.node as usize)
++            .ok_or_else(|| call_fault("macro byte literal frame node missing"))?;
++        if node.role != NodeRole::Expression(ExpressionKind::Macro) {
++            return self.frame.admit_macro_byte_literal(None);
++        }
++        let installed = self.installed.get(id)?;
++        let mut literals = installed
++            .recipe()
++            .operations
++            .iter()
++            .filter_map(|op| match op {
++                Op::Literal {
++                    literal,
++                    destination,
++                    ..
++                } if literal.kind == LiteralKind::ByteString => Some((literal, *destination)),
++                _ => None,
++            });
++        let Some((literal, destination)) = literals.next() else {
++            return self.frame.admit_macro_byte_literal(None);
++        };
++        if literals.next().is_some() {
++            return Err(call_fault(
++                "macro byte literal phase contains multiple literals",
++            ));
++        }
++        let fingerprint = installed.recipe().fingerprint();
++        for context in contexts {
++            let source = context.source();
++            let Some(handle) = source
++                .outline()
++                .items
++                .iter()
++                .filter_map(|item| item.body.as_ref())
++                .find(|handle| handle.key() == key.body)
++            else {
++                continue;
++            };
++            if !matches!(db.input(&InputKey::DefinitionSource(key.body.definition)).as_deref(), Some(InputValue::DefinitionSource(parse)) if parse == &source.selection().outline.parse)
++                || !matches!(db.input(&InputKey::DefinitionBody(key.body.definition)).as_deref(), Some(InputValue::DefinitionBody(body)) if body == handle)
++                || !matches!(db.input(&InputKey::CapturedSource(source.selection().location_identity())).as_deref(), Some(InputValue::CapturedSource(selected)) if selected == source.selection())
++            {
++                return Err(call_fault("macro byte literal source publication changed"));
++            }
++            // This redoes real lexical/compiler macro selection, not a spelling
++            // check. A user/shadowed/unresolved macro cannot produce this receipt.
++            let current = context
++                .resolve_at(
++                    &self.frame.body,
++                    key,
++                    self.runtime_no_item_proofs.values(),
++                    Some((&self.frame, &self.store)),
++                )?
++                .ok_or_else(|| call_fault("macro byte literal current intrinsic absent"))?;
++            if current.recipe.recipe().fingerprint() != fingerprint {
++                return Err(call_fault(
++                    "macro byte literal current source recipe differs",
++                ));
++            }
++            let Some(DecodedLiteral::ByteString(payload)) = &literal.decoded else {
++                return Err(call_fault("macro byte literal payload absent"));
++            };
++            let admission = AdmittedMacroByteLiteral {
++                pc: key.clone(),
++                source: source.selection().outline.parse.clone(),
++                cfg: source.selection().outline.cfg,
++                recipe: fingerprint,
++                span: literal.source.clone(),
++                destination,
++                payload: payload.clone(),
++            };
++            admission.require(&self.frame.body, key, literal, destination)?;
++            return self.frame.admit_macro_byte_literal(Some(admission));
++        }
++        Err(call_fault(
++            "macro byte literal current source context absent",
++        ))
++    }
++}
++
++#[cfg(test)]
++#[path = "run_byte_macro_literal_tests.rs"]
++mod tests;
+diff --git a/crates/lrr/src/engine/runtime_macros.rs b/crates/lrr/src/engine/runtime_macros.rs
+--- a/crates/lrr/src/engine/runtime_macros.rs
++++ b/crates/lrr/src/engine/runtime_macros.rs
+@@ -64,6 +64,17 @@
+     }
+     pub(crate) fn source(&self) -> &PreparedSourceView {
+         self.source
++    }
++    pub(crate) fn byte_equality_member(
++        &self,
++        left: &crate::traits::term::TyTerm,
++        right: &crate::traits::term::TyTerm,
++    ) -> Result<crate::facade::byte_equality::ByteEqualityMember, Diagnostic> {
++        self.catalog.byte_equality_member(
++            &self.source.selection().outline.parse.profile,
++            left,
++            right,
++        )
+     }
+     /// Reuse the completed publication and no-item certificates for ordinary
+     /// constructor lookup; this conveys no macro execution authority.
+diff --git a/crates/lrr/src/facade/byte_equality.rs b/crates/lrr/src/facade/byte_equality.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/facade/byte_equality.rs
+@@ -0,0 +1,245 @@
++//! Closed core PartialEq declarations for shared U8 array/slice operands.
++//! Source terms select members; runtime descriptors only check that selection.
++use crate::{
++    core::{
++        diagnostic::Diagnostic,
++        digest::{Digest, StableEncoder},
++        profile::ProfileIdentity,
++    },
++    ir::op::PrimitiveType,
++    traits::term::{ConstTerm, TyTerm},
++};
++use std::sync::Arc;
++fn fault(message: &str) -> Diagnostic {
++    Diagnostic::new("LRR-E-TYPE-CONTEXT", message.into())
++}
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub(crate) enum ByteShape {
++    Array(u32),
++    Slice,
++}
++impl ByteShape {
++    pub(crate) fn length(self) -> Option<u32> {
++        match self {
++            Self::Array(n) => Some(n),
++            Self::Slice => None,
++        }
++    }
++}
++fn shape(source: &TyTerm) -> Option<ByteShape> {
++    let TyTerm::Ref(_, false, pointee) = source else {
++        return None;
++    };
++    match pointee.as_ref() {
++        TyTerm::Array(element, ConstTerm::Value(n))
++            if **element == TyTerm::Primitive(PrimitiveType::U8) =>
++        {
++            u32::try_from(*n).ok().map(ByteShape::Array)
++        }
++        TyTerm::Slice(element) if **element == TyTerm::Primitive(PrimitiveType::U8) => {
++            Some(ByteShape::Slice)
++        }
++        _ => None,
++    }
++}
++pub(crate) fn is_byte_reference(source: Option<&TyTerm>) -> bool {
++    source.and_then(shape).is_some()
++}
++#[derive(Debug, Clone, Eq, PartialEq)]
++pub(crate) struct ByteEqualityMember {
++    profile: Arc<ProfileIdentity>,
++    identity: Digest,
++    left: TyTerm,
++    right: TyTerm,
++    left_shape: ByteShape,
++    right_shape: ByteShape,
++}
++impl ByteEqualityMember {
++    pub(crate) fn require(
++        &self,
++        profile: &ProfileIdentity,
++        left: &TyTerm,
++        right: &TyTerm,
++    ) -> Result<(), Diagnostic> {
++        if profile != self.profile.as_ref() || left != &self.left || right != &self.right {
++            return Err(fault("byte PartialEq source operands/profile changed"));
++        }
++        Ok(())
++    }
++    pub(crate) fn shapes(&self) -> (ByteShape, ByteShape) {
++        (self.left_shape, self.right_shape)
++    }
++    pub(crate) fn allocated_bytes(&self) -> Option<usize> {
++        std::mem::size_of::<Self>()
++            .checked_add(std::mem::size_of::<ProfileIdentity>())?
++            .checked_add(2 * std::mem::size_of::<usize>())?
++            .checked_add(self.profile.semantics.capacity())?
++            .checked_add(self.left.heap_bytes()?)?
++            .checked_add(self.right.heap_bytes()?)
++    }
++}
++#[derive(Debug, Clone)]
++pub(crate) struct ByteEqualityFacet {
++    profile: Arc<ProfileIdentity>,
++    identity: Digest,
++}
++impl ByteEqualityFacet {
++    pub(crate) fn for_profile(profile: &ProfileIdentity) -> Result<Self, Diagnostic> {
++        profile.validate_source()?;
++        let mut e = StableEncoder::new("lrr/v1/core-byte-partial-eq-facet");
++        e.record(profile);
++        e.digest(super::unit(profile, "core"));
++        // Shared-reference forwarding, primitive U8 equality and the four
++        // pinned array/slice implementation families, including equal-N arrays.
++        for contract in [
++            "PartialEq::eq",
++            "&A:&B forwarding",
++            "u8:eq",
++            "[u8;N]:[u8;N]",
++            "[u8;N]:[u8]",
++            "[u8]:[u8;N]",
++            "[u8]:[u8]",
++        ] {
++            e.string(contract);
++        }
++        Ok(Self {
++            profile: Arc::new(profile.clone()),
++            identity: e.finish(),
++        })
++    }
++    pub(crate) fn profile(&self) -> &ProfileIdentity {
++        &self.profile
++    }
++    pub(crate) fn identity(&self) -> Digest {
++        self.identity
++    }
++    pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
++        std::mem::size_of::<Self>()
++            .checked_add(std::mem::size_of::<ProfileIdentity>())
++            .and_then(|n| n.checked_add(2 * std::mem::size_of::<usize>()))
++            .and_then(|n| n.checked_add(self.profile.semantics.capacity()))
++            .ok_or_else(|| fault("byte PartialEq facet metadata overflow"))
++    }
++    pub(crate) fn select(
++        &self,
++        profile: &ProfileIdentity,
++        left: &TyTerm,
++        right: &TyTerm,
++    ) -> Result<ByteEqualityMember, Diagnostic> {
++        if profile != self.profile.as_ref() {
++            return Err(fault("byte PartialEq compiler profile differs"));
++        }
++        let l = shape(left)
++            .ok_or_else(|| fault("byte PartialEq left source is not a closed shared U8 view"))?;
++        let r = shape(right)
++            .ok_or_else(|| fault("byte PartialEq right source is not a closed shared U8 view"))?;
++        if matches!((l, r), (ByteShape::Array(a), ByteShape::Array(b)) if a != b) {
++            return Err(fault("array PartialEq requires equal source const lengths"));
++        }
++        let mut e = StableEncoder::new("lrr/v1/core-byte-partial-eq-instance");
++        e.digest(self.identity);
++        e.record(left);
++        e.record(right);
++        Ok(ByteEqualityMember {
++            profile: self.profile.clone(),
++            identity: e.finish(),
++            left: left.clone(),
++            right: right.clone(),
++            left_shape: l,
++            right_shape: r,
++        })
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::{
++        frontend::{
++            compile_input_catalog::CompileInputCatalog, runtime_macro_catalog::RuntimeMacroCatalog,
++        },
++        traits::term::{ParamKey, RegionTerm},
++    };
++    fn reference(shape: ByteShape) -> TyTerm {
++        let element = Box::new(TyTerm::Primitive(PrimitiveType::U8));
++        TyTerm::Ref(
++            RegionTerm::Static,
++            false,
++            Box::new(match shape {
++                ByteShape::Array(n) => TyTerm::Array(element, ConstTerm::Value(n.into())),
++                ByteShape::Slice => TyTerm::Slice(element),
++            }),
++        )
++    }
++    #[test]
++    fn core_byte_equality_selects_source_impl_and_requires_actual_compiler_inventory() {
++        for edition in [2015, 2018, 2021, 2024] {
++            let profile = ProfileIdentity {
++                edition,
++                ..ProfileIdentity::current()
++            };
++            let actual = CompileInputCatalog::standalone(&profile)
++                .unwrap()
++                .runtime_catalog()
++                .unwrap()
++                .unwrap();
++            let macro_only = RuntimeMacroCatalog::standard(&profile).unwrap();
++            for l in [ByteShape::Array(0), ByteShape::Array(600), ByteShape::Slice] {
++                for r in [ByteShape::Array(0), ByteShape::Array(600), ByteShape::Slice] {
++                    let left = reference(l);
++                    let right = reference(r);
++                    assert!(
++                        macro_only
++                            .byte_equality_member(&profile, &left, &right)
++                            .is_err()
++                    );
++                    let result = actual.byte_equality_member(&profile, &left, &right);
++                    if matches!((l,r), (ByteShape::Array(a),ByteShape::Array(b)) if a!=b) {
++                        assert!(result.is_err());
++                    } else {
++                        let selected = result.unwrap();
++                        selected.require(&profile, &left, &right).unwrap();
++                        assert_eq!(selected.shapes(), (l, r));
++                        assert!(selected.allocated_bytes().unwrap() < 4096);
++                    }
++                }
++            }
++            let array = reference(ByteShape::Array(600));
++            let rigid = TyTerm::Param(ParamKey {
++                definition: Digest([90; 32]),
++                ordinal: 0,
++            });
++            assert!(
++                actual
++                    .byte_equality_member(&profile, &rigid, &array)
++                    .is_err()
++            );
++            assert!(
++                actual
++                    .byte_equality_member(&profile, &array, &rigid)
++                    .is_err()
++            );
++            let mutable = TyTerm::Ref(
++                RegionTerm::Static,
++                true,
++                Box::new(TyTerm::Slice(Box::new(TyTerm::Primitive(
++                    PrimitiveType::U8,
++                )))),
++            );
++            assert!(
++                actual
++                    .byte_equality_member(&profile, &mutable, &array)
++                    .is_err()
++            );
++            let foreign = ProfileIdentity {
++                edition: if edition == 2015 { 2024 } else { 2015 },
++                ..profile.clone()
++            };
++            assert!(
++                actual
++                    .byte_equality_member(&foreign, &array, &array)
++                    .is_err()
++            );
++        }
++    }
++}
+diff --git a/crates/lrr/src/facade/mod.rs b/crates/lrr/src/facade/mod.rs
+--- a/crates/lrr/src/facade/mod.rs
++++ b/crates/lrr/src/facade/mod.rs
+@@ -1,3 +1,4 @@
++pub(crate) mod byte_equality;
+ pub mod macros;
+ 
+ pub mod prelude;
+diff --git a/crates/lrr/src/frontend/compile_input_catalog.rs b/crates/lrr/src/frontend/compile_input_catalog.rs
+--- a/crates/lrr/src/frontend/compile_input_catalog.rs
++++ b/crates/lrr/src/frontend/compile_input_catalog.rs
+@@ -32,6 +32,7 @@
+     definitions: BTreeMap<Digest, (MacroDefinition, CompileInputDescriptor)>,
+     attributes: Option<super::builtin_attributes::BuiltinAttributeCatalog>,
+     value_binding: Option<value_binding::CompilerValueBindingFacet>,
++    byte_equality: Option<std::sync::Arc<crate::facade::byte_equality::ByteEqualityFacet>>,
+     primitive_float_methods:
+         Option<std::sync::Arc<crate::facade::primitive_float_methods::PrimitiveFloatMethods>>,
+ }
+@@ -74,6 +75,7 @@
+             definitions,
+             attributes: None,
+             value_binding: None,
++            byte_equality: None,
+             primitive_float_methods: None,
+         })
+     }
+@@ -130,6 +132,9 @@
+         self.value_binding = Some(value_binding::CompilerValueBindingFacet::for_profile(
+             profile,
+         )?);
++        self.byte_equality = Some(std::sync::Arc::new(
++            crate::facade::byte_equality::ByteEqualityFacet::for_profile(profile)?,
++        ));
+         self.primitive_float_methods = Some(std::sync::Arc::new(
+             crate::facade::primitive_float_methods::PrimitiveFloatMethods::for_profile(profile)?,
+         ));
+@@ -153,7 +158,9 @@
+         } else {
+             runtime
+         };
+-        let runtime = runtime.with_primitive_float_methods(self)?;
++        let runtime = runtime
++            .with_primitive_float_methods(self)?
++            .with_byte_equality(self)?;
+         Ok(Some(runtime))
+     }
+     /// Keep the exact existing foreign Macro inventory, but attach inherent
+@@ -170,7 +177,20 @@
+             facet.profile(),
+             profiles,
+         )?
+-        .with_primitive_float_methods(self)
++        .with_primitive_float_methods(self)?
++        .with_byte_equality(self)
++    }
++    pub(super) fn byte_equality(
++        &self,
++    ) -> Result<Option<&std::sync::Arc<crate::facade::byte_equality::ByteEqualityFacet>>, Diagnostic>
++    {
++        let Some(facet) = &self.byte_equality else {
++            return Ok(None);
++        };
++        if self.canonical_standalone_member(facet.profile())?.is_none() {
++            return Err(fault("byte PartialEq compiler membership differs"));
++        }
++        Ok(Some(facet))
+     }
+     pub(super) fn primitive_float_methods(
+         &self,
+diff --git a/crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs b/crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs
+--- a/crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs
++++ b/crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs
+@@ -3,7 +3,7 @@
+ use crate::core::profile::ProfileIdentity;
+ impl CompileInputCatalog {
+     pub(crate) fn owning_profile_identity(&self) -> Result<Digest, Diagnostic> {
+-        let mut e = StableEncoder::new("lrr/v3/prepared-compiler-facet-membership");
++        let mut e = StableEncoder::new("lrr/v4/prepared-compiler-facet-membership");
+         e.digest(self.unit);
+         e.u16(self.edition);
+         e.map(&self.facades, |e, name, unit| {
+@@ -42,6 +42,7 @@
+             e.bool(false)
+         }
+         e.option(&self.value_binding, |e, facet| e.digest(facet.identity()));
++        e.option(&self.byte_equality, |e, facet| e.digest(facet.identity()));
+         e.option(&self.primitive_float_methods, |e, facet| {
+             e.digest(facet.identity())
+         });
+@@ -104,6 +105,11 @@
+                 .checked_add(facet.metadata_bytes()?)
+                 .ok_or_else(|| fault("primitive method facet metadata overflow"))?;
+         }
++        if let Some(facet) = &self.byte_equality {
++            bytes = bytes
++                .checked_add(facet.metadata_bytes()?)
++                .ok_or_else(|| fault("byte PartialEq facet metadata overflow"))?;
++        }
+         if bytes > 64 * 1024 {
+             return Err(fault("compiler facet retained metadata limit"));
+         }
+diff --git a/crates/lrr/src/frontend/runtime_macro_catalog.rs b/crates/lrr/src/frontend/runtime_macro_catalog.rs
+--- a/crates/lrr/src/frontend/runtime_macro_catalog.rs
++++ b/crates/lrr/src/frontend/runtime_macro_catalog.rs
+@@ -27,10 +27,41 @@
+     // Selection-only standard facets from actual other participating source
+     // profiles. They are never exposed as this catalogue's local exports.
+     foreign_definitions: BTreeMap<Digest, (MacroDefinition, RuntimeMacroKind)>,
++    byte_equality: Option<std::sync::Arc<crate::facade::byte_equality::ByteEqualityFacet>>,
+     primitive_float_methods:
+         Option<std::sync::Arc<crate::facade::primitive_float_methods::PrimitiveFloatMethods>>,
+ }
+ impl RuntimeMacroCatalog {
++    pub(super) fn with_byte_equality(
++        mut self,
++        compiler: &super::compile_input_catalog::CompileInputCatalog,
++    ) -> Result<Self, Diagnostic> {
++        let Some(facet) = compiler.byte_equality()? else {
++            return Ok(self);
++        };
++        if self.byte_equality.is_some()
++            || self.unit != crate::facade::unit(facet.profile(), "core")
++            || self.edition != facet.profile().edition
++            || self.standard != Some(crate::facade::unit(facet.profile(), "std"))
++            || self.allocation != Some(crate::facade::unit(facet.profile(), "alloc"))
++        {
++            return Err(fault("byte PartialEq catalogue owner/profile differs"));
++        }
++        self.byte_equality = Some(facet.clone());
++        Ok(self)
++    }
++    pub(crate) fn byte_equality_member(
++        &self,
++        profile: &crate::core::profile::ProfileIdentity,
++        left: &crate::traits::term::TyTerm,
++        right: &crate::traits::term::TyTerm,
++    ) -> Result<crate::facade::byte_equality::ByteEqualityMember, Diagnostic> {
++        self.byte_equality
++            .as_ref()
++            .ok_or_else(|| fault("byte PartialEq compiler facet absent"))?
++            .select(profile, left, right)
++    }
++
+     /// Only the owning compiler's privately retained canonical standard facet is
+     /// attached. Manual and macro-only catalogues never gain this declaration.
+     pub(super) fn with_primitive_float_methods(
+@@ -88,6 +119,7 @@
+                 e.string(kind.name());
+             }
+         }
++        e.option(&self.byte_equality, |e, facet| e.digest(facet.identity()));
+         e.option(&self.primitive_float_methods, |e, facet| {
+             e.digest(facet.identity())
+         });
+@@ -190,6 +222,7 @@
+             allocation: None,
+             definitions,
+             foreign_definitions: BTreeMap::new(),
++            byte_equality: None,
+             primitive_float_methods: None,
+         })
+     }
+diff --git a/crates/lrr/src/runtime/cell.rs b/crates/lrr/src/runtime/cell.rs
+--- a/crates/lrr/src/runtime/cell.rs
++++ b/crates/lrr/src/runtime/cell.rs
+@@ -6,6 +6,8 @@
+ pub(crate) use test_owners::OwnerInventory;
+ #[path = "cell_aggregate_copy.rs"]
+ pub(crate) mod aggregate_copy;
++#[path = "cell_byte_comparison.rs"]
++pub(crate) mod byte_comparison;
+ #[path = "cell_byte_literals.rs"]
+ pub(crate) mod byte_literals;
+ #[path = "cell_constant_instantiation.rs"]
+diff --git a/crates/lrr/src/runtime/cell_byte_comparison.rs b/crates/lrr/src/runtime/cell_byte_comparison.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_byte_comparison.rs
+@@ -0,0 +1,215 @@
++//! Bounded read-only equality of genuine immutable byte-literal roots.
++//!
++//! This is a physical operation, not trait resolution. Its caller must retain
++//! the source PartialEq/member admission and bind the cursor to the reached
++//! operation, operands and destination. Runtime descriptors cannot supply that
++//! source authority. Ordinary mutable arrays require their own stable read view.
++use super::*;
++use crate::vm::fuel::RunFuel;
++
++const PAIRS_PER_DISPATCH: u32 = 256;
++
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++struct ByteView {
++    operand: CellStamp,
++    value: ValueRepr,
++    root: CellStamp,
++    object: ObjectId,
++    allocation: StaticLiteralId,
++    len: u32,
++}
++
++/// Run-local continuation. It owns no guest value, lease or transfer ticket.
++/// Do not persist it in a query/recipe cache or clone it to replay partial work.
++pub(crate) struct StaticByteComparison {
++    session: StoreSession,
++    epoch: u32,
++    left: ByteView,
++    right: ByteView,
++    next: u32,
++    terminal: bool,
++}
++
++#[derive(Debug, Eq, PartialEq)]
++pub(crate) enum StaticByteComparisonPoll {
++    Dispatch { pairs: u32 },
++    Complete { equal: bool, pairs: u32 },
++}
++
++impl StaticByteComparison {
++    pub(crate) fn require_operands(&self, left: CellId, right: CellId) -> Result<(), Diagnostic> {
++        if self.terminal || self.left.operand.cell != left || self.right.operand.cell != right {
++            return Err(lease_fault());
++        }
++        Ok(())
++    }
++    pub(crate) fn metadata_bytes(&self) -> usize {
++        std::mem::size_of::<Self>()
++    }
++}
++
++impl GuestStore {
++    fn static_comparison_view(&self, operand: CellId) -> Result<ByteView, Diagnostic> {
++        let stamp = self.place_stamp(operand)?;
++        let value = self.admit_move(operand)?;
++        if value.kind != 9 {
++            return Err(ownership());
++        }
++        let reference_id = self.reference_from_cell(operand)?;
++        let reference = self.references.get(reference_id)?;
++        if reference.access != Access::Shared
++            || reference.final_cell != reference.root
++            || !reference.enclosing.is_empty()
++            || !matches!(
++                self.types.descriptor(TypeId(value.type_id))?.key.as_ref(),
++                TypeKey::Ref { mutable: false, target } if *target == reference.target
++            )
++        {
++            return Err(ownership());
++        }
++        let CellOwner::StaticLiteral(allocation) = self.cells.get(reference.root.cell)?.owner
++        else {
++            return Err(ownership());
++        };
++        self.require_static_root(allocation, reference.root.cell)?;
++        let root_type = self.place_type(reference.root.cell)?;
++        let TypeKey::Array { element, len } = self.types.descriptor(root_type)?.key.as_ref() else {
++            return Err(ownership());
++        };
++        if *element != TypeId(9) {
++            return Err(ownership());
++        }
++        let len = *len;
++        match self.types.descriptor(reference.target)?.key.as_ref() {
++            TypeKey::Array {
++                element,
++                len: view_len,
++            } if *element == TypeId(9) && *view_len == len && reference.static_slice.is_none() => {}
++            TypeKey::Slice { element }
++                if *element == TypeId(9) && reference.static_slice == Some(allocation) => {}
++            _ => return Err(ownership()),
++        }
++        let (object, storage) = self.place_object(reference.root.cell)?;
++        if storage.fields.len() != len as usize || !storage.initialized.complete_value() {
++            return Err(ownership());
++        }
++        Ok(ByteView {
++            operand: stamp,
++            value,
++            root: reference.root,
++            object,
++            allocation,
++            len,
++        })
++    }
++
++    /// Captures only private immutable store membership. The caller accounts
++    /// for metadata_bytes in its retained activation budget before retaining it.
++    pub(crate) fn prepare_static_byte_comparison(
++        &self,
++        left: CellId,
++        right: CellId,
++    ) -> Result<StaticByteComparison, Diagnostic> {
++        let left = self.static_comparison_view(left)?;
++        let right = self.static_comparison_view(right)?;
++        Ok(StaticByteComparison {
++            session: self.pattern_binding_session,
++            epoch: self.budget.epoch(),
++            left,
++            right,
++            next: 0,
++            terminal: false,
++        })
++    }
++
++    fn comparison_byte(&self, view: ByteView, offset: u32) -> Result<u8, Diagnostic> {
++        let (object, storage) = self.place_object(view.root.cell)?;
++        if object != view.object || offset >= view.len {
++            return Err(lease_fault());
++        }
++        let field = *storage
++            .fields
++            .get(offset as usize)
++            .ok_or_else(lease_fault)?;
++        if self.cells.get(field)?.owner
++            != (CellOwner::Field {
++                object,
++                index: offset,
++            })
++            || self.cells.get(field)?.writable
++        {
++            return Err(lease_fault());
++        }
++        let value = self.read_scalar(field)?;
++        if value.kind != 5 || value.type_id != 9 {
++            return Err(ownership());
++        }
++        u8::try_from(value.payload).map_err(|_| ownership())
++    }
++
++    /// At most 256 pairs, one fuel charge per pair, no allocation or guest write.
++    /// A length difference needs no element reads. Even empty/equal handles are
++    /// revalidated and cancellation-polled; pointer equality is not a bypass.
++    pub(crate) fn advance_static_byte_comparison(
++        &self,
++        cursor: &mut StaticByteComparison,
++        fuel: &mut RunFuel,
++    ) -> Result<StaticByteComparisonPoll, Diagnostic> {
++        // Mark failure terminal as well as completion. A partially compared
++        // prefix may never be resumed after failed currentness/fuel validation.
++        if cursor.terminal {
++            return Err(lease_fault());
++        }
++        let outcome = self.static_byte_comparison_chunk(cursor, fuel);
++        if !matches!(outcome, Ok(StaticByteComparisonPoll::Dispatch { .. })) {
++            cursor.terminal = true;
++        }
++        outcome
++    }
++
++    fn static_byte_comparison_chunk(
++        &self,
++        cursor: &mut StaticByteComparison,
++        fuel: &mut RunFuel,
++    ) -> Result<StaticByteComparisonPoll, Diagnostic> {
++        if cursor.session != self.pattern_binding_session
++            || cursor.epoch != self.budget.epoch()
++            || self.static_comparison_view(cursor.left.operand.cell)? != cursor.left
++            || self.static_comparison_view(cursor.right.operand.cell)? != cursor.right
++            || cursor.next > cursor.left.len.min(cursor.right.len)
++        {
++            return Err(lease_fault());
++        }
++        fuel.poll()?;
++        if cursor.left.len != cursor.right.len {
++            return Ok(StaticByteComparisonPoll::Complete {
++                equal: false,
++                pairs: 0,
++            });
++        }
++        let mut pairs = 0;
++        while cursor.next < cursor.left.len && pairs < PAIRS_PER_DISPATCH {
++            // Charge before reading, including the first differing element.
++            fuel.charge()?;
++            let left = self.comparison_byte(cursor.left, cursor.next)?;
++            let right = self.comparison_byte(cursor.right, cursor.next)?;
++            cursor.next = cursor.next.checked_add(1).ok_or_else(resource)?;
++            pairs += 1;
++            if left != right {
++                return Ok(StaticByteComparisonPoll::Complete {
++                    equal: false,
++                    pairs,
++                });
++            }
++        }
++        if cursor.next == cursor.left.len {
++            Ok(StaticByteComparisonPoll::Complete { equal: true, pairs })
++        } else {
++            Ok(StaticByteComparisonPoll::Dispatch { pairs })
++        }
++    }
++}
++
++#[cfg(test)]
++#[path = "cell_byte_comparison_tests.rs"]
++mod tests;
+diff --git a/crates/lrr/src/runtime/cell_byte_comparison_tests.rs b/crates/lrr/src/runtime/cell_byte_comparison_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/runtime/cell_byte_comparison_tests.rs
+@@ -0,0 +1,248 @@
++//! Store invariants supplement the unchanged rustc token-pair witness in syntax.
++use super::*;
++use crate::runtime::{cell::byte_literals::StaticByteChunkPoll, shape::ByteLiteralTarget};
++
++fn operand(store: &mut GuestStore, site: &[u8], bytes: &[u8], view: ByteLiteralTarget) -> CellId {
++    let frame = store.new_frame_anchor().unwrap();
++    let plan = store
++        .prepare_static_bytes(
++            crate::core::digest::Digest::of_bytes(site),
++            bytes,
++            view,
++            None,
++            true,
++        )
++        .unwrap();
++    let ty = plan.reference_type();
++    let ticket = if bytes.len() <= 256 {
++        store.instantiate_static_bytes(plan).unwrap()
++    } else {
++        let mut cursor = store.prepare_static_byte_chunks(plan).unwrap();
++        let mut fuel = RunFuel::new(100_000).unwrap();
++        loop {
++            match store.advance_static_byte_chunks(&mut cursor, &mut fuel) {
++                StaticByteChunkPoll::Dispatch { .. } => {}
++                StaticByteChunkPoll::Ready => {
++                    break store.commit_static_byte_chunks(&mut cursor).unwrap();
++                }
++                StaticByteChunkPoll::Failed(error) => panic!("{error:?}"),
++            }
++        }
++    };
++    let cell = store
++        .new_cell(
++            StorageContract::Exact(ty),
++            true,
++            CellOwner::FrameSlot { frame, slot: 0 },
++        )
++        .unwrap();
++    store.initialize(cell, ticket).unwrap();
++    cell
++}
++
++fn store() -> GuestStore {
++    GuestStore::new(1, 20_000, 8 << 20).unwrap()
++}
++
++#[test]
++fn byte_comparison_bounds_work_and_fuel_without_allocating_or_mutating_owners() {
++    for view in [ByteLiteralTarget::Array, ByteLiteralTarget::Slice] {
++        let mut store = store();
++        let left = operand(&mut store, b"left", &[7; 600], view);
++        let right = operand(&mut store, b"right", &[7; 600], view);
++        let before = (
++            store.budget.handles(),
++            store.budget.bytes(),
++            store.state(left).unwrap(),
++        );
++        let mut cursor = store.prepare_static_byte_comparison(left, right).unwrap();
++        assert!(cursor.metadata_bytes() < 1024);
++        let mut fuel = RunFuel::new(600).unwrap();
++        for pairs in [256, 256] {
++            assert_eq!(
++                store
++                    .advance_static_byte_comparison(&mut cursor, &mut fuel)
++                    .unwrap(),
++                StaticByteComparisonPoll::Dispatch { pairs }
++            );
++        }
++        assert_eq!(
++            store
++                .advance_static_byte_comparison(&mut cursor, &mut fuel)
++                .unwrap(),
++            StaticByteComparisonPoll::Complete {
++                equal: true,
++                pairs: 88
++            }
++        );
++        assert_eq!(fuel.snapshot().used, 600);
++        assert!(
++            store
++                .advance_static_byte_comparison(&mut cursor, &mut fuel)
++                .is_err()
++        );
++        assert_eq!(
++            before,
++            (
++                store.budget.handles(),
++                store.budget.bytes(),
++                store.state(left).unwrap()
++            )
++        );
++    }
++}
++
++#[test]
++fn byte_comparison_short_circuits_but_cannot_skip_cancelled_empty_or_identical_operands() {
++    let mut store = store();
++    let left = operand(&mut store, b"left", &[7; 600], ByteLiteralTarget::Array);
++    let mut other = [7; 600];
++    other[511] = 8;
++    let right = operand(&mut store, b"right", &other, ByteLiteralTarget::Slice);
++    let mut cursor = store.prepare_static_byte_comparison(left, right).unwrap();
++    let mut fuel = RunFuel::new(600).unwrap();
++    assert_eq!(
++        store
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .unwrap(),
++        StaticByteComparisonPoll::Dispatch { pairs: 256 }
++    );
++    assert_eq!(
++        store
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .unwrap(),
++        StaticByteComparisonPoll::Complete {
++            equal: false,
++            pairs: 256
++        }
++    );
++    assert_eq!(fuel.snapshot().used, 512);
++    let empty = operand(&mut store, b"empty", b"", ByteLiteralTarget::Array);
++    for (a, b) in [(empty, empty), (left, left), (left, empty)] {
++        let mut cursor = store.prepare_static_byte_comparison(a, b).unwrap();
++        let mut fuel = RunFuel::new(1000).unwrap();
++        fuel.cancellation().cancel();
++        assert!(
++            store
++                .advance_static_byte_comparison(&mut cursor, &mut fuel)
++                .is_err()
++        );
++        assert_eq!(fuel.snapshot().used, 0);
++        assert!(cursor.terminal);
++    }
++    let mut cursor = store.prepare_static_byte_comparison(left, empty).unwrap();
++    let mut fuel = RunFuel::new(1).unwrap();
++    assert_eq!(
++        store
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .unwrap(),
++        StaticByteComparisonPoll::Complete {
++            equal: false,
++            pairs: 0
++        }
++    );
++    assert_eq!(fuel.snapshot().used, 0);
++}
++
++#[test]
++fn byte_comparison_refuses_cross_store_reset_replaced_operand_and_fuel_replay() {
++    let mut first = store();
++    let left = operand(&mut first, b"left", &[7; 600], ByteLiteralTarget::Array);
++    let right = operand(&mut first, b"right", &[7; 600], ByteLiteralTarget::Array);
++    let mut second = store();
++    let other_left = operand(&mut second, b"left", &[7; 600], ByteLiteralTarget::Array);
++    let other_right = operand(&mut second, b"right", &[7; 600], ByteLiteralTarget::Array);
++    assert_eq!(
++        (left.bits(), right.bits()),
++        (other_left.bits(), other_right.bits())
++    );
++    let mut cursor = first.prepare_static_byte_comparison(left, right).unwrap();
++    let mut fuel = RunFuel::new(1000).unwrap();
++    assert!(
++        second
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .is_err()
++    );
++    assert_eq!(fuel.snapshot().used, 0);
++    assert!(
++        first
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .is_err()
++    );
++
++    let mut cursor = first.prepare_static_byte_comparison(left, right).unwrap();
++    let mut short = RunFuel::new(256).unwrap();
++    assert_eq!(
++        first
++            .advance_static_byte_comparison(&mut cursor, &mut short)
++            .unwrap(),
++        StaticByteComparisonPoll::Dispatch { pairs: 256 }
++    );
++    assert!(
++        first
++            .advance_static_byte_comparison(&mut cursor, &mut short)
++            .is_err()
++    );
++    assert_eq!(short.snapshot().used, 256);
++    assert!(
++        first
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .is_err()
++    );
++
++    let mut cursor = first.prepare_static_byte_comparison(left, right).unwrap();
++    let reference = first.reference_from_cell(right).unwrap();
++    let ticket = first.reference_ticket(reference).unwrap();
++    let replaced = first.replace(left, ticket).unwrap();
++    first.discard(replaced).unwrap();
++    assert!(
++        first
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .is_err()
++    );
++    assert_eq!(fuel.snapshot().used, 0);
++
++    let mut cursor = first.prepare_static_byte_comparison(left, right).unwrap();
++    first.reset(2).unwrap();
++    assert!(
++        first
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .is_err()
++    );
++    assert_eq!(fuel.snapshot().used, 0);
++}
++
++#[test]
++fn byte_comparison_rejects_unowned_roots_mutable_leases_and_damaged_field_edges() {
++    let mut store = store();
++    let left = operand(&mut store, b"left", &[7; 600], ByteLiteralTarget::Array);
++    let right = operand(&mut store, b"right", &[7; 600], ByteLiteralTarget::Array);
++    let reference = store.reference_from_cell(left).unwrap();
++    let root = store.references.get(reference).unwrap().root.cell;
++    let owner = store.cells.get(root).unwrap().owner;
++    let frame = store.new_frame_anchor().unwrap();
++    store.cells.get_mut(root).unwrap().owner = CellOwner::FrameSlot { frame, slot: 0 };
++    assert!(store.prepare_static_byte_comparison(left, right).is_err());
++    store.cells.get_mut(root).unwrap().owner = owner;
++    store.references.get_mut(reference).unwrap().access = Access::Mutable;
++    assert!(store.prepare_static_byte_comparison(left, right).is_err());
++    store.references.get_mut(reference).unwrap().access = Access::Shared;
++    let mut cursor = store.prepare_static_byte_comparison(left, right).unwrap();
++    let mut fuel = RunFuel::new(1000).unwrap();
++    assert_eq!(
++        store
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .unwrap(),
++        StaticByteComparisonPoll::Dispatch { pairs: 256 }
++    );
++    let (_, storage) = store.place_object(root).unwrap();
++    let field = storage.fields[256];
++    store.cells.get_mut(field).unwrap().owner = CellOwner::FrameSlot { frame, slot: 0 };
++    assert!(
++        store
++            .advance_static_byte_comparison(&mut cursor, &mut fuel)
++            .is_err()
++    );
++    assert_eq!(fuel.snapshot().used, 257);
++    assert!(cursor.terminal);
++}
+diff --git a/crates/lrr/src/syntax/byte_string_literal_tests.rs b/crates/lrr/src/syntax/byte_string_literal_tests.rs
+--- a/crates/lrr/src/syntax/byte_string_literal_tests.rs
++++ b/crates/lrr/src/syntax/byte_string_literal_tests.rs
+@@ -7,6 +7,110 @@
+ const ORIGINAL: &str = include_str!(
+     "../../../../fixtures/upstream/rustc-checkout/tests/ui/array-slice-vec/byte-literals.rs"
+ );
++#[test]
++fn unchanged_crlf_byte_assertion_tokens_compare_through_checked_immutable_roots_all_editions() {
++    // Component evidence: the exact four original tokens and their pair order.
++    // Complete-main acceptance still needs source PartialEq admission/dispatch.
++    use crate::runtime::{
++        cell::{CellOwner, GuestStore, StorageContract, byte_comparison::StaticByteComparisonPoll},
++        shape::ByteLiteralTarget,
++    };
++    use crate::vm::fuel::RunFuel;
++    const CRLF: &str = include_str!(
++        "../../../../fixtures/upstream/rustc-checkout/tests/ui/lexer/crlf-in-byte-string-literal.rs"
++    );
++    assert!(CRLF.contains("\r\n"));
++    for edition in [2015, 2018, 2021, 2024] {
++        let blob = SourceBlob::new(CRLF.as_bytes().to_vec()).unwrap();
++        let parsed = ParsedFile::parse(
++            &blob,
++            ProfileIdentity {
++                edition,
++                ..ProfileIdentity::current()
++            },
++        )
++        .unwrap();
++        let outline = parsed
++            .outline(
++                Digest::of_bytes(b"unchanged CRLF equality"),
++                vec![],
++                &CfgSet::guest_default(),
++            )
++            .unwrap();
++        let body = outline
++            .items
++            .iter()
++            .find(|item| item.def_key.declared_name == "main")
++            .unwrap()
++            .body
++            .as_ref()
++            .unwrap();
++        let tokens = parsed
++            .entered_body_root(body)
++            .unwrap()
++            .descendants_with_tokens()
++            .filter_map(|item| item.into_token())
++            .filter_map(ast::ByteString::cast)
++            .collect::<Vec<_>>();
++        assert_eq!(tokens.len(), 4);
++        let mut store = GuestStore::new(1, 1000, 1 << 20).unwrap();
++        let frame = store.new_frame_anchor().unwrap();
++        let mut operands = Vec::new();
++        for (ordinal, token) in tokens.iter().enumerate() {
++            let range = token.syntax().text_range();
++            let span = BodySpan {
++                body_key: body.key(),
++                relative_start: u32::from(range.start()) - body.range.start,
++                relative_end: u32::from(range.end()) - body.range.start,
++            };
++            let spelling =
++                &CRLF[u32::from(range.start()) as usize..u32::from(range.end()) as usize];
++            assert_eq!(spelling, token.text());
++            let decoded = decode_token(token, &span).unwrap();
++            decoded.require(spelling, &span).unwrap();
++            let plan = store
++                .prepare_static_bytes(
++                    Digest::of_bytes(format!("original {ordinal}").as_bytes()),
++                    decoded.bytes(),
++                    ByteLiteralTarget::Array,
++                    None,
++                    true,
++                )
++                .unwrap();
++            let ty = plan.reference_type();
++            let ticket = store.instantiate_static_bytes(plan).unwrap();
++            let cell = store
++                .new_cell(
++                    StorageContract::Exact(ty),
++                    false,
++                    CellOwner::FrameSlot {
++                        frame,
++                        slot: ordinal as u32,
++                    },
++                )
++                .unwrap();
++            store.initialize(cell, ticket).unwrap();
++            operands.push(cell);
++        }
++        let mut fuel = RunFuel::new(10).unwrap();
++        for (pair, expected_pairs) in operands.chunks_exact(2).zip([0, 1]) {
++            let mut cursor = store
++                .prepare_static_byte_comparison(pair[0], pair[1])
++                .unwrap();
++            assert_eq!(
++                store
++                    .advance_static_byte_comparison(&mut cursor, &mut fuel)
++                    .unwrap(),
++                StaticByteComparisonPoll::Complete {
++                    equal: true,
++                    pairs: expected_pairs
++                }
++            );
++        }
++        assert_eq!(fuel.snapshot().used, 1);
++        assert_eq!(blob.bytes(), CRLF.as_bytes());
++    }
++}
+ #[test]
+ fn unchanged_original_byte_string_tokens_keep_pinned_decoded_bytes_and_exact_spans_all_editions() {
+     for edition in [2015, 2018, 2021, 2024] {
+diff --git a/crates/lrr/src/vm/frame.rs b/crates/lrr/src/vm/frame.rs
+--- a/crates/lrr/src/vm/frame.rs
++++ b/crates/lrr/src/vm/frame.rs
+@@ -1,8 +1,12 @@
+ //! Physical frame state. Syntax and query providers never mutate it.
+ #[path = "frame_aggregate_copy.rs"]
+ mod aggregate_copy_frame;
++#[path = "frame_byte_comparisons.rs"]
++mod byte_comparison_frame;
+ #[path = "frame_byte_literals.rs"]
+ mod byte_literal_frame;
++#[path = "frame_byte_macro_literals.rs"]
++mod byte_macro_literal_frame;
+ #[cfg(test)]
+ #[path = "frame_call_scope_tests.rs"]
+ mod call_scope_tests;
+@@ -201,6 +205,9 @@
+     projection_bytes: usize,
+     constant_activation: Option<source_constant_frame::BoundSourceConstant>,
+     byte_activation: Option<byte_literal_frame::BoundByteLiteral>,
++    byte_comparison: Option<crate::engine::run::byte_comparisons::AdmittedByteComparison>,
++    byte_comparison_activation: Option<byte_comparison_frame::BoundByteComparison>,
++    macro_byte_literal: Option<crate::engine::run::byte_macro_literals::AdmittedMacroByteLiteral>,
+     copy_activation: Option<aggregate_copy_frame::OpActivation>,
+     cleanup_activation: Option<scope_cleanup_frame::Activation>,
+     call_progress: Vec<(super::call::CallIdentity, (u32, u32))>,
+@@ -273,6 +280,9 @@
+             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<std::sync::Arc<crate::syntax::runtime_macro_scalars::RuntimeMacroCall>>>()))
+             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<source_constant_frame::BoundSourceConstant>>()))
+             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<byte_literal_frame::BoundByteLiteral>>()))
++            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<crate::engine::run::byte_comparisons::AdmittedByteComparison>>()))
++            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<byte_comparison_frame::BoundByteComparison>>()))
++            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<crate::engine::run::byte_macro_literals::AdmittedMacroByteLiteral>>()))
+             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<aggregate_copy_frame::OpActivation>>()))
+             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<scope_cleanup_frame::Activation>>()))
+             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<crate::runtime::cell::StoreSession>()))
+@@ -410,6 +420,9 @@
+             projection_bytes: 0,
+             constant_activation: None,
+             byte_activation: None,
++            byte_comparison: None,
++            byte_comparison_activation: None,
++            macro_byte_literal: None,
+             copy_activation: None,
+             cleanup_activation: None,
+             call_progress: Default::default(),
+diff --git a/crates/lrr/src/vm/frame_aggregate_copy.rs b/crates/lrr/src/vm/frame_aggregate_copy.rs
+--- a/crates/lrr/src/vm/frame_aggregate_copy.rs
++++ b/crates/lrr/src/vm/frame_aggregate_copy.rs
+@@ -31,6 +31,7 @@
+             .as_ref()
+             .map(|_| self.source_constant_operation_index().unwrap_or(0))
+             .or_else(|| self.byte_literal_operation_index())
++            .or_else(|| self.byte_comparison_operation_index())
+             .or_else(|| {
+                 self.copy_activation
+                     .as_ref()
+diff --git a/crates/lrr/src/vm/frame_byte_comparisons.rs b/crates/lrr/src/vm/frame_byte_comparisons.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/vm/frame_byte_comparisons.rs
+@@ -0,0 +1,213 @@
++//! Bounded selected byte PartialEq execution, with one result publication.
++use super::*;
++use crate::{
++    engine::run::byte_comparisons::AdmittedByteComparison,
++    ir::op::{Op, PrimitiveType},
++    runtime::cell::byte_comparison::{StaticByteComparison, StaticByteComparisonPoll},
++    traits::term::TyTerm,
++};
++pub(super) struct BoundByteComparison {
++    pc: PcKey,
++    operation_index: usize,
++    left: CellId,
++    right: CellId,
++    destination: CellId,
++    destination_epoch: u32,
++    scope: ScopeId,
++    prior_source: Option<TyTerm>,
++    physical: StaticByteComparison,
++}
++impl Frame {
++    pub(crate) fn admit_byte_comparison(
++        &mut self,
++        proof: Option<AdmittedByteComparison>,
++    ) -> Result<(), Diagnostic> {
++        if self.byte_comparison_activation.is_some() && self.byte_comparison != proof {
++            return Err(invalid("active byte comparison source admission changed"));
++        }
++        Self::metadata_bytes(&self.body, self.parameter_metadata_count())
++            .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
++            .and_then(|n| n.checked_add(self.projection_bytes))
++            .and_then(|n| n.checked_add(self.source_field_bytes()?))
++            .and_then(|n| n.checked_add(self.macro_byte_literal_bytes()?))
++            .and_then(|n| n.checked_add(self.byte_literal_activation_bytes()?))
++            .and_then(|n| {
++                n.checked_add(
++                    proof
++                        .as_ref()
++                        .map_or(Some(0), AdmittedByteComparison::allocated_bytes)?,
++                )
++            })
++            .and_then(|n| {
++                n.checked_add(
++                    self.byte_comparison_activation
++                        .as_ref()
++                        .map_or(Some(0), |a| {
++                            std::mem::size_of::<BoundByteComparison>()
++                                .checked_add(a.physical.metadata_bytes())?
++                                .checked_add(
++                                    a.prior_source
++                                        .as_ref()
++                                        .map_or(Some(0), TyTerm::heap_bytes)?,
++                                )
++                        })?,
++                )
++            })
++            .filter(|n| *n <= 32 << 20)
++            .ok_or_else(crate::runtime::arena::resource)?;
++        self.byte_comparison = proof;
++        Ok(())
++    }
++    pub(crate) fn has_byte_comparison_activation(&self) -> bool {
++        self.byte_comparison_activation.is_some()
++    }
++    pub(crate) fn byte_comparison_operation_index(&self) -> Option<usize> {
++        self.byte_comparison_activation
++            .as_ref()
++            .map(|a| a.operation_index)
++    }
++    pub(crate) fn prepare_byte_comparison(
++        &self,
++        op: &Op,
++        store: &GuestStore,
++    ) -> Result<Option<StaticByteComparison>, Diagnostic> {
++        if !matches!(op, Op::NumericBinary { .. }) {
++            return Ok(None);
++        }
++        let Some(proof) = &self.byte_comparison else {
++            return Ok(None);
++        };
++        self.require_store(store)?;
++        proof.require(self, store, op)?;
++        let (left, right, destination, _) = proof.operands();
++        self.preflight_source_view(destination, Some(&TyTerm::Primitive(PrimitiveType::Bool)))?;
++        self.preflight_write_type(destination, TypeId(2), store)?;
++        store
++            .prepare_static_byte_comparison(self.cell(left)?, self.cell(right)?)
++            .map(Some)
++    }
++    pub(crate) fn begin_byte_comparison(
++        &mut self,
++        index: usize,
++        op: &Op,
++        physical: StaticByteComparison,
++        store: &mut GuestStore,
++    ) -> Result<(), Diagnostic> {
++        if self.status != FrameStatus::Running
++            || self.byte_comparison_activation.is_some()
++            || self.byte_activation.is_some()
++            || self.copy_activation.is_some()
++            || self.cleanup_activation.is_some()
++            || self.constant_activation.is_some()
++        {
++            return Err(invalid("byte comparison overlaps another activation"));
++        }
++        let proof = self
++            .byte_comparison
++            .as_ref()
++            .ok_or_else(|| invalid("byte comparison source admission absent"))?;
++        proof.require(self, store, op)?;
++        let (left, right, destination, _) = proof.operands();
++        physical.require_operands(self.cell(left)?, self.cell(right)?)?;
++        let prior_source = self.source_view_ref(destination)?.cloned();
++        Self::metadata_bytes(&self.body, self.parameter_metadata_count())
++            .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
++            .and_then(|n| n.checked_add(self.projection_bytes))
++            .and_then(|n| n.checked_add(self.source_field_bytes()?))
++            .and_then(|n| n.checked_add(self.macro_byte_literal_bytes()?))
++            .and_then(|n| n.checked_add(proof.allocated_bytes()?))
++            .and_then(|n| n.checked_add(std::mem::size_of::<BoundByteComparison>()))
++            .and_then(|n| n.checked_add(physical.metadata_bytes()))
++            .and_then(|n| n.checked_add(prior_source.as_ref().map_or(Some(0), TyTerm::heap_bytes)?))
++            .filter(|n| *n <= 32 << 20)
++            .ok_or_else(crate::runtime::arena::resource)?;
++        self.reserve_primitive_operator_result(destination, store)?;
++        let cell = self.prepare_write(destination, store)?;
++        self.byte_comparison_activation = Some(BoundByteComparison {
++            pc: self.pc.clone(),
++            operation_index: index,
++            left: self.cell(left)?,
++            right: self.cell(right)?,
++            destination: cell,
++            destination_epoch: store.location_epoch(cell)?,
++            scope: self.slot(destination)?.scope,
++            prior_source,
++            physical,
++        });
++        Ok(())
++    }
++    pub(crate) fn check_byte_comparison_activation(
++        &self,
++        index: usize,
++        op: &Op,
++        store: &GuestStore,
++    ) -> Result<(SlotId, bool), Diagnostic> {
++        self.require_store(store)?;
++        let proof = self
++            .byte_comparison
++            .as_ref()
++            .ok_or_else(|| invalid("byte comparison source admission disappeared"))?;
++        proof.require(self, store, op)?;
++        let (left, right, destination, negate) = proof.operands();
++        let a = self
++            .byte_comparison_activation
++            .as_ref()
++            .ok_or_else(|| invalid("byte comparison activation absent"))?;
++        if self.status != FrameStatus::Running
++            || self.pc != a.pc
++            || index != a.operation_index
++            || self.cell(left)? != a.left
++            || self.cell(right)? != a.right
++            || self.slot(destination)?.cell != Some(a.destination)
++            || self.slot(destination)?.scope != a.scope
++            || self.source_view_ref(destination)? != a.prior_source.as_ref()
++            || store.location_epoch(a.destination)? != a.destination_epoch
++            || self.byte_activation.is_some()
++            || self.copy_activation.is_some()
++            || self.cleanup_activation.is_some()
++            || self.constant_activation.is_some()
++        {
++            return Err(invalid("byte comparison continuation binding changed"));
++        }
++        a.physical.require_operands(a.left, a.right)?;
++        self.preflight_write_type(destination, TypeId(2), store)?;
++        self.preflight_source_view(destination, Some(&TyTerm::Primitive(PrimitiveType::Bool)))?;
++        Ok((destination, negate))
++    }
++    pub(crate) fn advance_byte_comparison(
++        &mut self,
++        index: usize,
++        op: &Op,
++        store: &mut GuestStore,
++    ) -> Result<bool, Diagnostic> {
++        let (destination, negate) = self.check_byte_comparison_activation(index, op, store)?;
++        let mut a = self
++            .byte_comparison_activation
++            .take()
++            .ok_or_else(|| invalid("byte comparison activation disappeared"))?;
++        let poll = store.advance_static_byte_comparison(&mut a.physical, &mut self.fuel);
++        self.counters.fuel_used = self.fuel.snapshot().used;
++        match poll? {
++            StaticByteComparisonPoll::Dispatch { pairs } => {
++                if pairs > 256 {
++                    return Err(invalid("byte comparison dispatch exceeded pair bound"));
++                }
++                self.byte_comparison_activation = Some(a);
++                Ok(false)
++            }
++            StaticByteComparisonPoll::Complete { equal, pairs } => {
++                if pairs > 256 {
++                    return Err(invalid("byte comparison completion exceeded pair bound"));
++                }
++                self.fuel.poll()?;
++                let ticket = store.ticket(ValueRepr::boolean(equal != negate))?;
++                if let Err(error) = self.write(destination, ticket, store) {
++                    store.discard(ticket)?;
++                    return Err(error);
++                }
++                self.set_source_view(destination, Some(TyTerm::Primitive(PrimitiveType::Bool)))?;
++                Ok(true)
++            }
++        }
++    }
++}
+diff --git a/crates/lrr/src/vm/frame_byte_literals.rs b/crates/lrr/src/vm/frame_byte_literals.rs
+--- a/crates/lrr/src/vm/frame_byte_literals.rs
++++ b/crates/lrr/src/vm/frame_byte_literals.rs
+@@ -25,6 +25,19 @@
+     physical: StaticByteChunkActivation,
+ }
+ impl Frame {
++    pub(super) fn byte_literal_activation_bytes(&self) -> Option<usize> {
++        self.byte_activation.as_ref().map_or(Some(0), |a| {
++            std::mem::size_of::<BoundByteLiteral>()
++                .checked_add(a.physical.metadata_bytes())?
++                .checked_add(a.payload.allocated_bytes()?)?
++                .checked_add(a.source.heap_bytes()?)?
++                .checked_add(
++                    a.prior_source
++                        .as_ref()
++                        .map_or(Some(0), TyTerm::heap_bytes)?,
++                )
++        })
++    }
+     pub(crate) fn has_byte_literal_activation(&self) -> bool {
+         self.byte_activation.is_some()
+     }
+@@ -48,6 +61,7 @@
+         self.require_store(store)?;
+         if self.status != FrameStatus::Running
+             || self.byte_activation.is_some()
++            || self.has_byte_comparison_activation()
+             || self.copy_activation.is_some()
+             || self.cleanup_activation.is_some()
+             || self.constant_activation.is_some()
+@@ -87,6 +101,7 @@
+             .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
+             .and_then(|n| n.checked_add(self.projection_bytes))
+             .and_then(|n| n.checked_add(self.source_field_bytes()?))
++            .and_then(|n| n.checked_add(self.macro_byte_literal_bytes()?))
+             .and_then(|n| n.checked_add(std::mem::size_of::<BoundByteLiteral>()))
+             .and_then(|n| n.checked_add(physical.metadata_bytes()))
+             .and_then(|n| n.checked_add(payload.allocated_bytes()?))
+diff --git a/crates/lrr/src/vm/frame_byte_macro_literals.rs b/crates/lrr/src/vm/frame_byte_macro_literals.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/lrr/src/vm/frame_byte_macro_literals.rs
+@@ -0,0 +1,47 @@
++//! A current source receipt never changes a literal destination's type itself.
++use super::*;
++use crate::{engine::run::byte_macro_literals::AdmittedMacroByteLiteral, ir::op::LiteralRecipe};
++impl Frame {
++    pub(super) fn macro_byte_literal_bytes(&self) -> Option<usize> {
++        self.macro_byte_literal
++            .as_ref()
++            .map_or(Some(0), |proof| proof.allocated_bytes())
++    }
++    pub(crate) fn admit_macro_byte_literal(
++        &mut self,
++        admission: Option<AdmittedMacroByteLiteral>,
++    ) -> Result<(), Diagnostic> {
++        if self.has_byte_literal_activation()
++            && match (&self.macro_byte_literal, &admission) {
++                (None, None) => false,
++                (Some(old), Some(new)) => !old.same_binding(new),
++                _ => true,
++            }
++        {
++            return Err(invalid("active byte literal source receipt changed"));
++        }
++        let extra = admission
++            .as_ref()
++            .map_or(Some(0), |proof| proof.allocated_bytes());
++        Self::metadata_bytes(&self.body, self.parameter_metadata_count())
++            .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
++            .and_then(|n| n.checked_add(self.projection_bytes))
++            .and_then(|n| n.checked_add(self.source_field_bytes()?))
++            .and_then(|n| n.checked_add(self.byte_literal_activation_bytes()?))
++            .and_then(|n| n.checked_add(extra?))
++            .filter(|n| *n <= 32 << 20)
++            .ok_or_else(crate::runtime::arena::resource)?;
++        self.macro_byte_literal = admission;
++        Ok(())
++    }
++    pub(crate) fn require_macro_byte_literal(
++        &self,
++        literal: &LiteralRecipe,
++        destination: SlotId,
++    ) -> Result<(), Diagnostic> {
++        self.macro_byte_literal
++            .as_ref()
++            .ok_or_else(|| invalid("macro byte literal requires current source admission"))?
++            .require(&self.body, self.pc(), literal, destination)
++    }
++}
+diff --git a/crates/lrr/src/vm/step.rs b/crates/lrr/src/vm/step.rs
+--- a/crates/lrr/src/vm/step.rs
++++ b/crates/lrr/src/vm/step.rs
+@@ -1355,6 +1355,13 @@
+                 .ok_or_else(|| invalid("byte literal operation absent from resumed recipe"))?;
+             frame.check_byte_literal_activation(resume, op, store)?;
+         }
++        if frame.has_byte_comparison_activation() {
++            let op = recipe
++                .operations
++                .get(resume)
++                .ok_or_else(|| invalid("byte comparison operation absent from resumed recipe"))?;
++            frame.check_byte_comparison_activation(resume, op, store)?;
++        }
+         if frame.has_copy_activation() {
+             let op = recipe
+                 .operations
+@@ -1396,6 +1403,13 @@
+                 increment(&mut frame.counters.operations_completed)?;
+                 continue;
+             }
++            if frame.has_byte_comparison_activation() {
++                if !frame.advance_byte_comparison(index, op, store)? {
++                    return Ok(StepOutcome::Dispatch);
++                }
++                increment(&mut frame.counters.operations_completed)?;
++                continue;
++            }
+             if frame.has_copy_activation() {
+                 frame.check_copy_activation(index, op)?;
+                 if !frame.advance_aggregate_copy(store)? {
+@@ -1417,7 +1431,12 @@
+             let assertion = assertion_preflight(frame, store, op)?;
+             state_preflight(frame, store, op)?;
+             let byte_hint = byte_literals::prepare_hint(store, op)?;
+-            let numeric_result = numeric_preflight(frame, store, op)?;
++            let byte_comparison = frame.prepare_byte_comparison(op, store)?;
++            let numeric_result = if byte_comparison.is_some() {
++                None
++            } else {
++                numeric_preflight(frame, store, op)?
++            };
+             let (projection, projection_panic) = match frame.prepare_projection(op, store) {
+                 Ok(prepared) => (prepared, None),
+                 Err(crate::runtime::place::PlaceFailure::RuntimeFault(error)) => return Err(error),
+@@ -1458,6 +1477,14 @@
+                 }
+                 other => other,
+             };
++            if let Some(physical) = byte_comparison {
++                frame.begin_byte_comparison(index, op, physical, store)?;
++                if !frame.advance_byte_comparison(index, op, store)? {
++                    return Ok(StepOutcome::Dispatch);
++                }
++                increment(&mut frame.counters.operations_completed)?;
++                continue;
++            }
+             if frame.begin_aggregate_copy(index, op, store)? {
+                 if !frame.advance_aggregate_copy(store)? {
+                     return Ok(StepOutcome::Dispatch);
+diff --git a/crates/lrr/src/vm/step_byte_literals.rs b/crates/lrr/src/vm/step_byte_literals.rs
+--- a/crates/lrr/src/vm/step_byte_literals.rs
++++ b/crates/lrr/src/vm/step_byte_literals.rs
+@@ -39,7 +39,9 @@
+         .nodes()
+         .get(frame.pc().node as usize)
+         .ok_or_else(|| invalid("byte-string indexed node absent"))?;
+-    if node.role != NodeRole::Expression(ExpressionKind::Literal)
++    if node.role == NodeRole::Expression(ExpressionKind::Macro) {
++        frame.require_macro_byte_literal(literal, destination)?;
++    } else if node.role != NodeRole::Expression(ExpressionKind::Literal)
+         || frame.pc().phase != 0
+         || node.value != Some(destination)
+         || frame.body.span(node.id)? != literal.source
+diff --git a/xtask/tests/stock_numeric_edgecases_v1.rs b/xtask/tests/stock_numeric_edgecases_v1.rs
+--- a/xtask/tests/stock_numeric_edgecases_v1.rs
++++ b/xtask/tests/stock_numeric_edgecases_v1.rs
+@@ -311,3 +311,14 @@
+         )),
+     );
+ }
++
++#[test]
++fn original_crlf_byte_assertions() {
++    // Pending full-main acceptance, never satisfied by reaching only a prefix.
++    run_original(
++        include_str!(
++            "../../fixtures/upstream/rustc-checkout/tests/ui/lexer/crlf-in-byte-string-literal.rs"
++        ),
++        "tests/ui/lexer/crlf-in-byte-string-literal.rs",
++    );
++}
