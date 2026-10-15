@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "task_scope": "T025/T032/M017 source-backed primitive reference arguments and original parameter cells",
+  "platform": "aarch64-apple-darwin Rust1.99.0",
+  "canonical_integration": {
+    "paths": 31,
+    "full_milestone": "pending generated-statement routing repair; no task completion"
+  },
+  "upstream_runtime_acceptance": {
+    "complete": false,
+    "newly_demonstrated_runtime_contracts": 1,
+    "case": "tests/ui/regions/regions-infer-call.rs",
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "whole_main_completed": true,
+    "actual_original_assertion": "has_two(&20,&2)==22",
+    "reached_original_bodies": [
+      "main",
+      "has_two",
+      "takes_two"
+    ],
+    "Assert_26": 1,
+    "Borrow_31": 2,
+    "CallSeal_19": 2,
+    "CallPrepare_22": 2,
+    "stock_source_member": "aff6716f60cdc55e47fdff3a518d9a17128e3575127f4ed0c0fd0bcd31d19f3a",
+    "actual_terminal": {
+      "session_id": 80143,
+      "chunk_id": "bde357",
+      "exit_code": 0
+    },
+    "full_compiletest_fixture_pass": false
+  },
+  "scoped_evidence": {
+    "v25": "Whole unchanged upstream main4 passed; controls0 after2test-only API compile errors",
+    "v26": "Controls24passed2failed in caller setup;19 unaffected source/authority controls carried separately",
+    "v27": "All7 affected VM controls passed after preserving actual caller temporary lifetimes; strict library/stock-reference lint, architecture and fmt passed. Production and original-main harness unchanged from V25.",
+    "distinct_new_source_and_authority_controls_accepted": 26,
+    "full_library_on_reference_source": "unexecuted; prior MAIN987 library evidence is separate"
+  },
+  "invariants": [
+    "ParameterPlace44 addresses original initialized owning parameter cell without Copy/move/guest allocation/new lease",
+    "Physical actual-reference proof and current captured source/signature are required before ArgumentPacket seal and delivery",
+    "GenericEnv owns checked source certificates; equal descriptors do not erase symbolic identity",
+    "Macro borrow private verifier replays exact source argument/place/borrow plan",
+    "Explicit LRIRschema10/domainv10, opcode44/count45; SourceConstant43/reserved42 retained"
+  ],
+  "component_scope_limit": "VM component setup retains separately executed callers; original22 and single-caller execution are proved only by unchanged stock main.",
+  "original_inventory": {
+    "cases": 303,
+    "files": 485,
+    "original_license": "MIT OR Apache-2.0; both texts retained"
+  },
+  "diagnostic_compatibility": "incomplete; separate gate",
+  "compiler_tooling_compatibility": "incomplete; separate gate",
+  "full_suite_compatibility": "incomplete",
+  "guest_jit_gate": "closed",
+  "release_complete": false,
+  "linux_acceptance": "unexecuted",
+  "local_receipts": [
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v25/VALIDATION-HANDOFF.json",
+      "sha256": "0e44dd953af99ade9c2ff40a46fd105ccca46251ec9944bfb61146add4eea585"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v26/VALIDATION-HANDOFF.json",
+      "sha256": "1953f544ba22113d2fa8851dd376364a4cf6c44e6650145b9d585894e79c08e6"
+    },
+    {
+      "path": "artifacts/macos-first/root-stock-local-numeric-validation-v1/agent-validation-v27/VALIDATION-HANDOFF.json",
+      "sha256": "085c1151b5c4ee68b2177117fd2898b3198216815c4b7c42a1ce6f097da83896"
+    }
+  ]
+}

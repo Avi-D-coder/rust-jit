@@ -200,7 +200,7 @@ fn hint(e: &mut StableEncoder, h: &HintRecipe) {
     }
 }
 impl StableEncode for Recipe {
-    const DOMAIN: &'static str = "lrr/v9/lrir-recipe";
+    const DOMAIN: &'static str = "lrr/v10/lrir-recipe";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         span(e, &self.origin.span);
@@ -276,6 +276,14 @@ impl StableEncode for Recipe {
                 e.u32(34);
                 e.u32(place.0);
                 e.u32(source.0);
+                e.u32(destination.0);
+            }
+            Op::ParameterPlace {
+                ordinal,
+                destination,
+            } => {
+                e.u32(44);
+                e.u32(*ordinal);
                 e.u32(destination.0);
             }
             Op::MakePlace {

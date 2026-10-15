@@ -390,7 +390,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "Integrated labelled-break runtime+namespace startup components;1040-moduleCLI now returns2939 with unchanged deadlines/row budget. Full milestone pending; previous1274/1/1817 retained. Reference17controls pass but fullmain reaches unsupported parameter place; parameter-place source/VM successor uncompiled. No task/full-fixture/JIT/Linux/release completion.",
+      "scope": "Interpreter source/runtime integration: labelled main and namespace fixes plus source-backed reference/parameter-place source promoted after collected scoped evidence; complete milestone remains failed/pending typed macro routing repair. Range successor has two original mains4editions accepted privately; component checks pending; no full fixture/task/JIT/release claim.",
       "paths": [
         "artifacts/macos-first/root-constant-memo-v1/",
         "artifacts/macos-first/root-constant-query-identity-v1/",
@@ -436,11 +436,13 @@
         "artifacts/macos-first/root-main-namespace-scalability-v5/",
         "artifacts/macos-first/root-main-namespace-scalability-v6/",
         "artifacts/macos-first/root-primitive-result-input-bound-v2/",
-        "artifacts/macos-first/root-parameter-place-source-v1/"
+        "artifacts/macos-first/root-parameter-place-source-v1/",
+        "artifacts/macos-first/root-reference-promotion-plan-v1/",
+        "artifacts/macos-first/root-stock-range-successor-v3/"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-15T02:24:49.342908+00:00",
+      "updated_at": "2026-10-15T02:50:00.576222+00:00",
       "review_after": "2026-10-15T05:55:00.598518+00:00"
     },
     {

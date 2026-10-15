@@ -13,8 +13,9 @@ use crate::{
     },
     frontend::{
         call_contracts::{
-            ArgumentHint, ArgumentHintPreparation, ArgumentType, ContractPreparation,
-            PreparedCallContracts, prepare_argument_hint, prepare_contracts,
+            ArgumentHint, ArgumentHintPreparation, ArgumentType, ClosedReferenceArgument,
+            ContractPreparation, PreparedCallContracts, ReferenceCallArguments,
+            prepare_argument_hint, prepare_contracts, prepare_contracts_with_references,
         },
         callables::{CallResolver, CallSelection, SourceCallable},
         names::NameNamespaces,
@@ -769,10 +770,14 @@ impl RunMachine {
             return QueryPoll::Ready(Err(call_fault("explicit call context size overflow")));
         };
         for hint in &hints {
-            let Some(next) = hint.source.heap_bytes().and_then(|n| bytes.checked_add(n)) else {
-                return QueryPoll::Ready(Err(call_fault("call source context size overflow")));
+            bytes = match argument_hints::retained_hint_bytes(hint).and_then(|heap| {
+                bytes
+                    .checked_add(heap)
+                    .ok_or_else(crate::runtime::arena::resource)
+            }) {
+                Ok(bytes) => bytes,
+                Err(error) => return QueryPoll::Ready(Err(error)),
             };
-            bytes = next;
         }
         if self
             .pending_bytes
@@ -853,16 +858,58 @@ impl RunMachine {
                 QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
             }
         };
+        let mut references = Vec::new();
+        let reference_arguments = arguments
+            .iter()
+            .any(|argument| matches!(argument.source, crate::traits::term::TyTerm::Ref(..)));
+        if reference_arguments {
+            if references.try_reserve_exact(arguments.len()).is_err() {
+                return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
+            }
+            for (ordinal, argument) in arguments.iter().enumerate() {
+                let evidence = if matches!(argument.source, crate::traits::term::TyTerm::Ref(..)) {
+                    let Some(slot) = selected.argument_slots.get(ordinal) else {
+                        return QueryPoll::Ready(Err(call_fault(
+                            "reference source argument slot absent",
+                        )));
+                    };
+                    match ClosedReferenceArgument::capture(&self.frame, *slot, &self.store) {
+                        Ok(evidence) => Some(evidence),
+                        Err(error) => return QueryPoll::Ready(Err(error)),
+                    }
+                } else {
+                    None
+                };
+                references.push(evidence);
+            }
+        }
         let callee = selected.callee;
-        let contracts = match prepare_contracts(
-            db,
-            &callee,
-            graph,
-            &sources,
-            &selected.explicit,
-            result_hint,
-            arguments,
-        ) {
+        let prepared = if reference_arguments {
+            prepare_contracts_with_references(
+                db,
+                &callee,
+                graph,
+                &sources,
+                &selected.explicit,
+                result_hint,
+                ReferenceCallArguments {
+                    store: &self.store,
+                    arguments,
+                    references: &references,
+                },
+            )
+        } else {
+            prepare_contracts(
+                db,
+                &callee,
+                graph,
+                &sources,
+                &selected.explicit,
+                result_hint,
+                arguments,
+            )
+        };
+        let contracts = match prepared {
             QueryPoll::Ready(Ok(ContractPreparation::Ready(c))) => c,
             QueryPoll::Ready(Ok(_)) => {
                 return QueryPoll::Ready(Err(call_fault(
@@ -1959,24 +2006,39 @@ impl RunMachine {
                                 return RunPoll::Fault(error);
                             }
                         };
+                        let call_hints = (|| -> Result<Vec<_>, Diagnostic> {
+                            let mut result = Vec::new();
+                            result
+                                .try_reserve_exact(arguments.len())
+                                .map_err(|_| crate::runtime::arena::resource())?;
+                            for (ordinal, slot) in arguments.iter().enumerate() {
+                                let (descriptor, source) = match selected.hints.get(ordinal) {
+                                    Some(hint) => argument_hints::runtime_hint(
+                                        db,
+                                        &self.frame,
+                                        &mut self.store,
+                                        &selected.callee,
+                                        hint,
+                                        ordinal,
+                                        *slot,
+                                    )?,
+                                    None => (None, None),
+                                };
+                                result.push((*slot, descriptor, source));
+                            }
+                            Ok(result)
+                        })();
+                        let call_hints = match call_hints {
+                            Ok(hints) => hints,
+                            Err(error) => {
+                                self.terminal = true;
+                                return RunPoll::Fault(error);
+                            }
+                        };
                         self.frame.call_start = Some(crate::vm::call::CallStartFacts {
                             ordinary,
                             site: site.0,
-                            hints: arguments
-                                .iter()
-                                .enumerate()
-                                .map(|(n, slot)| {
-                                    (
-                                        *slot,
-                                        selected.hints.get(n).and_then(|hint| hint.descriptor),
-                                        selected
-                                            .hints
-                                            .get(n)
-                                            .filter(|hint| hint.descriptor.is_some())
-                                            .map(|hint| hint.source.clone()),
-                                    )
-                                })
-                                .collect(),
+                            hints: call_hints,
                         });
                     }
                     Op::CallAdvance { site, argument } if call_next.is_some() => {
@@ -2050,10 +2112,10 @@ impl RunMachine {
                                             "call argument requires a reached concrete type".into(),
                                         )
                                     })?;
-                                let mut argument = primitive_argument_type(descriptor)?;
-                                if let Some(source) = self.frame.source_view(slot)? {
-                                    argument.source = source;
-                                }
+                                let argument = match self.frame.source_view(slot)? {
+                                    Some(source) => ArgumentType { source, descriptor },
+                                    None => primitive_argument_type(descriptor)?,
+                                };
                                 Ok((cell, argument))
                             })();
                             match argument {
@@ -2144,6 +2206,13 @@ impl RunMachine {
                             &explicit,
                         ) {
                             QueryPoll::Ready(Ok(call)) => {
+                                if let Some(proof) = &call.contracts.closed_references
+                                    && let Err(error) =
+                                        proof.require_argument_cells(&self.store, &cells, &types)
+                                {
+                                    self.terminal = true;
+                                    return RunPoll::Fault(error);
+                                }
                                 self.frame.call_types =
                                     call.contracts.parameter_descriptors.clone();
                                 self.frame.call_cells = cells;

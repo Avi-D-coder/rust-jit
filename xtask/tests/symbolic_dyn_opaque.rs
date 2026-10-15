@@ -491,6 +491,7 @@ fn original_frame_contracts() -> (
         QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::Constant(_)
     )));
     let contracts = PreparedCallContracts {
+        closed_references: None,
         definition: p.definition,
         source_parameters: vec![TyTerm::Param(p)],
         parameter_descriptors: vec![TypeId(1)],

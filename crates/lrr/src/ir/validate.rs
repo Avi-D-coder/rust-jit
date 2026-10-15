@@ -183,7 +183,7 @@ fn macro_scalar_place(
             .is_some_and(|value| macro_scalar_value(node, SlotId(value)))
 }
 pub fn verify(draft: RecipeDraft, body: &BodyIndex) -> Result<VerifiedRecipe, Diagnostic> {
-    verify_inner(draft, body, None)
+    verify_inner(draft, body, None, false)
 }
 /// General macro call admission consumes a genuine privately minted source
 /// witness. The ordinary public verifier never acquires this authority.
@@ -193,7 +193,96 @@ pub(crate) fn verify_runtime_scalar_call(
     call: &crate::syntax::runtime_macro_scalars::RuntimeMacroCall,
 ) -> Result<VerifiedRecipe, Diagnostic> {
     require_runtime_scalar_call(&draft, body, call)?;
-    verify_inner(draft, body, Some(call))
+    verify_inner(draft, body, Some(call), false)
+}
+/// Only a freshly source-replayed scalar plan can admit an opaque argument's
+/// borrow phases. Public verification retains ordinary indexed borrow rules.
+pub(crate) fn verify_runtime_scalar_borrow(
+    draft: RecipeDraft,
+    body: &BodyIndex,
+    plan: &crate::syntax::runtime_macro_scalars::RuntimeScalarPlan,
+) -> Result<VerifiedRecipe, Diagnostic> {
+    use crate::syntax::runtime_macro_scalars::RuntimeScalarStep;
+    pc(body, &draft.key)?;
+    let node = &body.nodes()[draft.key.node as usize];
+    let (call, borrow) = plan
+        .argument_borrow_at(&draft.key)?
+        .ok_or_else(|| invalid("scalar borrow phase lacks source witness"))?;
+    borrow.require(call, &draft.key.body, borrow.argument_ordinal())?;
+    let ordinal = match Phase::from_code(draft.key.phase) {
+        Phase::Entry => 0,
+        Phase::Operand(n) => usize::from(n) + 1,
+        _ => return Err(invalid("scalar borrow phase differs")),
+    };
+    let Some(RuntimeScalarStep::Operation(expected)) = plan.steps().get(ordinal) else {
+        return Err(invalid("scalar borrow source operation absent"));
+    };
+    let operations = if draft.key.phase == Phase::Entry.code()?
+        && let Some(scope) = node.boolean_scope.or(node.statement_scope)
+        && matches!(draft.operations.first(), Some(Op::ScopeEnter { scope: actual }) if *actual == scope)
+    {
+        &draft.operations[1..]
+    } else {
+        draft.operations.as_slice()
+    };
+    let next = body.pc(
+        node.id,
+        Phase::Operand(
+            u16::try_from(ordinal).map_err(|_| invalid("scalar borrow continuation overflow"))?,
+        ),
+    )?;
+    if borrow.source().profile != *body.profile()
+        || draft.origin.span != body.span(node.id)?
+        || operations != std::slice::from_ref(expected)
+        || !matches!(draft.exits.as_slice(), [RecipeExit::Next(target)] if target == &next)
+        || ordinal
+            .checked_add(1)
+            .is_none_or(|next| next >= plan.steps().len())
+        || !macro_scalar_value(node, borrow.argument_slot())
+        || !macro_scalar_place(node, &draft.key, borrow.place())
+    {
+        return Err(invalid(
+            "scalar borrow exact source operation/continuation differs",
+        ));
+    }
+    let matches = match expected {
+        Op::SetHint {
+            child,
+            hint: super::op::HintRecipe::BorrowTarget { reference },
+        } => {
+            borrow.hint_key() == Some(&draft.key)
+                && borrow.temporary() == Some(*child)
+                && *reference == borrow.argument_slot()
+        }
+        Op::ValuePlace {
+            source,
+            destination,
+        } => {
+            borrow.place_key() == &draft.key
+                && borrow.temporary() == Some(*source)
+                && *destination == borrow.place()
+        }
+        Op::MakePlace { destination, .. } | Op::ParameterPlace { destination, .. } => {
+            borrow.place_key() == &draft.key
+                && borrow.temporary().is_none()
+                && *destination == borrow.place()
+        }
+        Op::Borrow {
+            place,
+            access,
+            destination,
+        } => {
+            borrow.borrow_key() == &draft.key
+                && *place == borrow.place()
+                && *access == borrow.access()
+                && *destination == borrow.argument_slot()
+        }
+        _ => false,
+    };
+    if !matches {
+        return Err(invalid("scalar borrow source role differs"));
+    }
+    verify_inner(draft, body, None, true)
 }
 fn require_runtime_scalar_call(
     draft: &RecipeDraft,
@@ -336,6 +425,7 @@ fn verify_inner(
     mut draft: RecipeDraft,
     body: &BodyIndex,
     macro_call: Option<&crate::syntax::runtime_macro_scalars::RuntimeMacroCall>,
+    macro_borrow: bool,
 ) -> Result<VerifiedRecipe, Diagnostic> {
     pc(body, &draft.key)?;
     span(body, &draft.origin.span)?;
@@ -425,14 +515,15 @@ fn verify_inner(
                 .operands
                 .first()
                 .and_then(|id| body.nodes().get(id.0 as usize));
-            if node.role != NodeRole::Expression(ExpressionKind::Borrow)
-                || draft.key.phase != Phase::Entry.code()?
-                || node.value != Some(*reference)
-                || node.operands.len() != 1
-                || operand.is_none_or(|operand| {
-                    operand.value != Some(child) || operand.parent != Some(node.id)
-                })
-                || *reference == child
+            if !macro_borrow
+                && (node.role != NodeRole::Expression(ExpressionKind::Borrow)
+                    || draft.key.phase != Phase::Entry.code()?
+                    || node.value != Some(*reference)
+                    || node.operands.len() != 1
+                    || operand.is_none_or(|operand| {
+                        operand.value != Some(child) || operand.parent != Some(node.id)
+                    })
+                    || *reference == child)
             {
                 return Err(invalid(
                     "borrow target hint requires its own result and operand",
@@ -580,11 +671,13 @@ fn verify_inner(
             } => {
                 slot(body, *source, SlotKind::Value)?;
                 slot(body, *destination, SlotKind::Place)?;
-                if scalar_binding_copy(body, &draft).is_some_and(
-                    |(actual_source, actual_place, _)| {
-                        actual_source == *source && actual_place == *destination
-                    },
-                ) {
+                if macro_borrow
+                    || scalar_binding_copy(body, &draft).is_some_and(
+                        |(actual_source, actual_place, _)| {
+                            actual_source == *source && actual_place == *destination
+                        },
+                    )
+                {
                     Some(*destination)
                 } else {
                     let own_path = node.role
@@ -640,6 +733,26 @@ fn verify_inner(
                 }
                 Some(*destination)
             }
+            Op::ParameterPlace {
+                ordinal,
+                destination,
+            } => {
+                slot(body, *destination, SlotKind::Place)?;
+                if *ordinal >= 100_000
+                    || (!macro_borrow
+                        && (node.role
+                            != crate::syntax::body_index::NodeRole::Expression(
+                                crate::syntax::body_index::ExpressionKind::Path,
+                            )
+                            || node.place != Some(*destination)
+                            || draft.key.phase != Phase::Entry.code()?))
+                {
+                    return Err(invalid(
+                        "parameter place requires its original path and place slot",
+                    ));
+                }
+                Some(*destination)
+            }
             Op::MakePlace {
                 binding,
                 destination,
@@ -667,7 +780,8 @@ fn verify_inner(
                     initializer.place == Some(*place)
                         && node.runtime_temporaries[0] == Some(*destination)
                 });
-                if !reference_statement
+                if !macro_borrow
+                    && !reference_statement
                     && ((node.place != Some(*place)
                         && node
                             .operands
@@ -1512,5 +1626,119 @@ mod tests {
         let mut n = usize::MAX;
         assert!(charge(&mut n, 1).is_err());
         assert_eq!(n, usize::MAX);
+    }
+    #[test]
+    fn unchanged_reference_macro_borrow_phases_require_exact_source_plan_all_editions() {
+        use crate::{
+            core::{digest::Digest, profile::ProfileIdentity},
+            facade::macros::RuntimeMacroKind,
+            source::snapshot::{CfgSet, SourceBlob},
+            syntax::{
+                parse::ParsedFile, runtime_macro_scalars::RuntimeScalarStep, spans::SourceRange,
+            },
+        };
+        const ORIGINAL: &str = include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/regions/regions-infer-call.rs"
+        );
+        for edition in [2015, 2018, 2021, 2024] {
+            let parsed = ParsedFile::parse(
+                &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),
+                ProfileIdentity {
+                    edition,
+                    ..ProfileIdentity::current()
+                },
+            )
+            .unwrap();
+            let outline = parsed
+                .outline(Digest([191; 32]), vec![], &CfgSet::guest_default())
+                .unwrap();
+            let handle = outline
+                .items
+                .iter()
+                .find(|i| i.def_key.declared_name == "main")
+                .unwrap()
+                .body
+                .as_ref()
+                .unwrap();
+            let index = parsed.index_body(handle, Default::default()).unwrap();
+            let node = index
+                .nodes()
+                .iter()
+                .find(|n| {
+                    n.role
+                        == crate::syntax::body_index::NodeRole::Expression(
+                            crate::syntax::body_index::ExpressionKind::Macro,
+                        )
+                })
+                .unwrap();
+            let entry = index.pc(node.id, Phase::Entry).unwrap();
+            let invocation = parsed
+                .macro_call_at(
+                    SourceRange::checked(
+                        handle.range.start + node.range.start,
+                        handle.range.start + node.range.end,
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+            let arguments = parsed
+                .runtime_macro_arguments(&invocation, RuntimeMacroKind::AssertEq)
+                .unwrap();
+            let plan = parsed
+                .runtime_macro_scalar_plan(handle, &index, &entry, &arguments)
+                .unwrap();
+            let mut count = 0;
+            for (ordinal, step) in plan.steps().iter().enumerate() {
+                let key = if ordinal == 0 {
+                    entry.clone()
+                } else {
+                    index
+                        .pc(node.id, Phase::Operand((ordinal - 1).try_into().unwrap()))
+                        .unwrap()
+                };
+                if plan.argument_borrow_at(&key).unwrap().is_none() {
+                    continue;
+                }
+                let RuntimeScalarStep::Operation(op) = step else {
+                    panic!("source phase is not an operation")
+                };
+                let draft = RecipeDraft {
+                    key: key.clone(),
+                    origin: super::super::recipe::Origin {
+                        span: index.span(node.id).unwrap(),
+                        expansion_ancestry: vec![],
+                    },
+                    operations: vec![op.clone()],
+                    exits: vec![RecipeExit::Next(
+                        index
+                            .pc(node.id, Phase::Operand(ordinal.try_into().unwrap()))
+                            .unwrap(),
+                    )],
+                    dependencies: vec![],
+                };
+                verify_runtime_scalar_borrow(draft.clone(), &index, &plan).unwrap();
+                assert!(verify(draft.clone(), &index).is_err());
+                let mut extra = draft.clone();
+                extra.operations.push(Op::Declaration);
+                assert!(verify_runtime_scalar_borrow(extra, &index, &plan).is_err());
+                let mut wrong_exit = draft.clone();
+                wrong_exit.exits[0] = RecipeExit::Next(entry.clone());
+                assert!(verify_runtime_scalar_borrow(wrong_exit, &index, &plan).is_err());
+                let mut wrong = draft.clone();
+                match &mut wrong.operations[0] {
+                    Op::SetHint {
+                        hint: super::super::op::HintRecipe::BorrowTarget { reference },
+                        ..
+                    } => *reference = SlotId(0),
+                    Op::ValuePlace { destination, .. } | Op::Borrow { destination, .. } => {
+                        *destination = SlotId(0)
+                    }
+                    _ => panic!("original temporary borrow phase differs"),
+                }
+                assert!(verify_runtime_scalar_borrow(wrong, &index, &plan).is_err());
+                count += 1;
+            }
+            assert_eq!(count, 6);
+        }
     }
 }

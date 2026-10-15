@@ -85,6 +85,7 @@ impl RunCapture {
                 | Op::ReadPlace { .. }
                 | Op::AssignPlace { .. }
                 | Op::MakePlace { .. }
+                | Op::ParameterPlace { .. }
                 | Op::ValuePlace { .. }
                 | Op::PlaceTransfer { .. }
                 | Op::Borrow { .. }

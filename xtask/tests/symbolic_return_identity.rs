@@ -146,6 +146,7 @@ fn original_generic_return_rebinding_preserves_source_identity_at_equal_descript
     // This is an LRR packet admission control. Unit is a checked concrete
     // descriptor shared by two distinct rigid source views, not a type proof.
     let mut contracts = PreparedCallContracts {
+        closed_references: None,
         definition: template.definition,
         source_parameters: vec![TyTerm::Param(template)],
         parameter_descriptors: vec![TypeId(1)],

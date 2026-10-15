@@ -14,7 +14,8 @@ use crate::{
     facade::macros::RuntimeMacroKind,
     ir::{
         op::{
-            HintRecipe, LiteralKind, LiteralRecipe, NumericBinary, NumericUnary, Op, PrimitiveType,
+            BorrowAccess, HintRecipe, LiteralKind, LiteralRecipe, NumericBinary, NumericUnary, Op,
+            PrimitiveType,
         },
         pc::{PcKey, SlotId},
     },
@@ -35,10 +36,13 @@ fn unsupported() -> Diagnostic {
 }
 #[path = "runtime_macro_calls.rs"]
 mod calls;
-use calls::CallDraft;
+use calls::{ArgumentBorrowDraft, CallDraft};
 #[cfg(test)]
 #[path = "runtime_macro_call_tests.rs"]
 mod call_tests;
+#[cfg(test)]
+#[path = "runtime_macro_reference_tests.rs"]
+mod reference_tests;
 pub(crate) use calls::{
     RuntimeMacroCall, RuntimeMacroCallPhase, RuntimeScalarPlan, RuntimeScalarStep,
 };
@@ -127,7 +131,7 @@ impl ParsedFile {
         };
         let mut stack = Vec::new();
         let mut operations = Vec::new();
-        let mut calls = Vec::new();
+        let mut calls: Vec<CallDraft> = Vec::new();
         stack
             .try_reserve_exact(usize::from(node.runtime_scalar_phases))
             .map_err(|_| invalid("scalar assertion work allocation"))?;
@@ -248,6 +252,125 @@ impl ParsedFile {
                             name.text(),
                             destination,
                         )?));
+                    }
+                    ast::Expr::RefExpr(reference) => {
+                        if reference.raw_token().is_some() {
+                            return Err(unsupported());
+                        }
+                        let borrow_span = original_span(&ast::Expr::RefExpr(reference.clone()))?;
+                        let written_operand = reference.expr().ok_or_else(unsupported)?;
+                        let operand_span = original_span(&written_operand)?;
+                        let mut operand = written_operand;
+                        while let ast::Expr::ParenExpr(group) = operand {
+                            if group
+                                .syntax()
+                                .children()
+                                .any(|child| ast::Attr::can_cast(child.kind()))
+                            {
+                                return Err(unsupported());
+                            }
+                            operand = group.expr().ok_or_else(unsupported)?;
+                        }
+                        // Only the actual whole call argument can mint a caller
+                        // borrow fact. Nested aggregate/projected places retain
+                        // their typed integration frontier, never a copied value.
+                        let owner = parent
+                            .and_then(|ordinal| calls.get_mut(ordinal as usize))
+                            .ok_or_else(unsupported)?;
+                        let argument = owner
+                            .arguments
+                            .iter()
+                            .position(|slot| *slot == destination)
+                            .ok_or_else(unsupported)?;
+                        if owner.argument_borrows[argument].is_some() {
+                            return Err(unsupported());
+                        }
+                        let access = if reference.mut_token().is_some() {
+                            BorrowAccess::Mutable
+                        } else {
+                            BorrowAccess::Shared
+                        };
+                        let temporary;
+                        let place;
+                        if let ast::Expr::PathExpr(path) = &operand {
+                            let path = path.path().ok_or_else(unsupported)?;
+                            let segment = path.segment().ok_or_else(unsupported)?;
+                            if path.qualifier().is_some()
+                                || segment.generic_arg_list().is_some()
+                                || segment.coloncolon_token().is_some()
+                            {
+                                return Err(unsupported());
+                            }
+                            let name = segment.name_ref().ok_or_else(unsupported)?;
+                            let reserved = allocate()?;
+                            place =
+                                SlotId(reserved.0.checked_add(1).ok_or_else(|| {
+                                    invalid("scalar borrow local place overflow")
+                                })?);
+                            let binding = self.runtime_macro_binding_place(
+                                body,
+                                index,
+                                key,
+                                name.text(),
+                                place,
+                            )?;
+                            temporary = None;
+                            stack.push(Work::Operation(Op::Borrow {
+                                place,
+                                access,
+                                destination,
+                            }));
+                            stack.push(Work::Operation(binding));
+                        } else {
+                            if !matches!(
+                                operand,
+                                ast::Expr::Literal(_)
+                                    | ast::Expr::PrefixExpr(_)
+                                    | ast::Expr::BinExpr(_)
+                                    | ast::Expr::CallExpr(_)
+                                    | ast::Expr::CastExpr(_)
+                            ) {
+                                return Err(unsupported());
+                            }
+                            // A dereference is an existing place, not a fresh
+                            // scalar temporary. Reborrow/projected-place support
+                            // must preserve its actual address and lease.
+                            if matches!(&operand, ast::Expr::PrefixExpr(prefix)
+                                if prefix.op_token().is_some_and(|token| token.text()=="*"))
+                            {
+                                return Err(unsupported());
+                            }
+                            let value = allocate()?;
+                            place = SlotId(value.0.checked_add(1).ok_or_else(|| {
+                                invalid("scalar borrow temporary place overflow")
+                            })?);
+                            temporary = Some(value);
+                            stack.push(Work::Operation(Op::Borrow {
+                                place,
+                                access,
+                                destination,
+                            }));
+                            stack.push(Work::Operation(Op::ValuePlace {
+                                source: value,
+                                destination: place,
+                            }));
+                            stack.push(Work::Expression(operand, value, base, parent));
+                            stack.push(Work::Operation(Op::SetHint {
+                                child: value,
+                                hint: HintRecipe::BorrowTarget {
+                                    reference: destination,
+                                },
+                            }));
+                        }
+                        owner.argument_borrows[argument] = Some(ArgumentBorrowDraft {
+                            argument: u32::try_from(argument)
+                                .map_err(|_| invalid("scalar borrow argument overflow"))?,
+                            borrow_span,
+                            operand_span,
+                            access,
+                            temporary,
+                            place,
+                        });
                     }
                     ast::Expr::ParenExpr(group) => {
                         stack.push(Work::Expression(
@@ -446,12 +569,22 @@ impl ParsedFile {
                             .map_err(|_| invalid("scalar call ordinal overflow"))?;
                         let mut slots = Vec::new();
                         let mut spans = Vec::new();
+                        let mut borrows = Vec::new();
                         slots
                             .try_reserve_exact(written.len())
                             .map_err(|_| invalid("scalar call argument slots allocation"))?;
                         spans
                             .try_reserve_exact(written.len())
                             .map_err(|_| invalid("scalar call argument spans allocation"))?;
+                        written
+                            .len()
+                            .checked_mul(std::mem::size_of::<Option<ArgumentBorrowDraft>>())
+                            .filter(|n| *n <= 32 * 1024 * 1024)
+                            .ok_or_else(|| invalid("scalar borrow draft metadata limit"))?;
+                        borrows
+                            .try_reserve_exact(written.len())
+                            .map_err(|_| invalid("scalar borrow draft allocation"))?;
+                        borrows.resize_with(written.len(), || None);
                         for argument in &written {
                             slots.push(allocate()?);
                             spans.push(original_span(argument)?);
@@ -492,6 +625,7 @@ impl ParsedFile {
                             explicit,
                             arguments: retained_slots,
                             argument_spans: spans,
+                            argument_borrows: borrows,
                             result: destination,
                         });
                         stack.push(Work::Step(RuntimeScalarStep::CallSeal(ordinal)));

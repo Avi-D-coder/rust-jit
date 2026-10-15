@@ -81,3 +81,5 @@ pub(crate) mod constant_paths;
 pub(crate) mod original_inert;
 
 pub(crate) mod scalar_pattern_binding;
+
+pub(crate) mod closed_reference_signatures;

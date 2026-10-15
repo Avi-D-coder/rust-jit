@@ -122,7 +122,7 @@ impl LiteralKind {
     }
 }
 /// Explicit recipe/cache compatibility, independent of host enum layout.
-pub const LRIR_RECIPE_SCHEMA: u32 = 9;
+pub const LRIR_RECIPE_SCHEMA: u32 = 10;
 pub const DECODED_INTEGER_SCHEMA: u32 = 1;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum IntegerLexicalError {
@@ -238,7 +238,7 @@ pub enum BorrowAccess {
 /// Stable opcode inventory. Runtime counter storage must use this bound.
 // Tag42 remains reserved for the separately frozen managed Vec instruction.
 pub const SOURCE_CONSTANT_OPCODE: u8 = 43;
-pub const OPCODE_COUNT: usize = 44;
+pub const OPCODE_COUNT: usize = 45;
 pub type OpcodeCounters = [u64; OPCODE_COUNT];
 
 /// Closed source-bound floating value. Public callers can inspect or clone a
@@ -444,6 +444,12 @@ pub enum Op {
         binding: super::pc::NodeId,
         destination: SlotId,
     },
+    /// Parameter form of MakePlace. Address the original owning argument cell,
+    /// including mutable references, without an owning read or copied value.
+    ParameterPlace {
+        ordinal: u32,
+        destination: SlotId,
+    },
     /// Address the owned value of an already executed receiver. Keep its cell
     /// in the original temporary scope; do not copy or move the receiver.
     ValuePlace {
@@ -610,6 +616,7 @@ impl Op {
             Self::ReadPlace { .. } => 33,
             Self::AssignPlace { .. } => 34,
             Self::MakePlace { .. } => 30,
+            Self::ParameterPlace { .. } => 44,
             Self::ValuePlace { .. } => 38,
             Self::PlaceTransfer { .. } => 39,
             Self::Borrow { .. } => 31,
@@ -660,6 +667,7 @@ impl Op {
     pub fn effect_class(&self) -> EffectClass {
         match self {
             Self::MakePlace { .. }
+            | Self::ParameterPlace { .. }
             | Self::ValuePlace { .. }
             | Self::PlaceTransfer { .. }
             | Self::ProjectTuple { .. }

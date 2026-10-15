@@ -2472,6 +2472,12 @@
       "bytes": 185
     },
     {
+      "path": "tests/ui/regions/regions-infer-call.rs",
+      "git_blob": "ad48f3aa93a3654b4eaa579fb24cead7fa9f6ec0",
+      "sha256": "92dce9e6d86786593d7f073831208a8dab8de6a4beee7a62e1b46fbe4efe981c",
+      "bytes": 207
+    },
+    {
       "path": "tests/ui/regions/regions-outlives-projection-hrtype.rs",
       "git_blob": "0fd634125d51af1448c5de88e2428ddeed7be92c",
       "sha256": "1e390028defc5cc9d965a0e780769e7c2f329cb0ed6c89425acd9e6d9ea108a1",
@@ -4964,6 +4970,14 @@
     },
     {
       "path": "tests/ui/regions/regions-infer-borrow-scope-within-loop-ok.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/regions/regions-infer-call.rs",
       "directives": [
         "//@ run-pass"
       ],

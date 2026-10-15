@@ -489,6 +489,10 @@ fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Dia
             binding,
             destination,
         } => frame.preflight_make_place(*binding, *destination, store),
+        Op::ParameterPlace {
+            ordinal,
+            destination,
+        } => frame.preflight_parameter_place(*ordinal, *destination, store),
         Op::ConstructStart { guard } => frame.preflight_prepared_constructor(*guard),
         Op::ConstructField {
             guard,
@@ -978,6 +982,10 @@ fn execute(
             binding,
             destination,
         } => frame.make_place(*binding, *destination, store),
+        Op::ParameterPlace {
+            ordinal,
+            destination,
+        } => frame.parameter_place(*ordinal, *destination, store),
         Op::ConstructStart { guard } => frame.start_prepared_constructor(*guard, store),
         Op::ConstructField {
             guard,

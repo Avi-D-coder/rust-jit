@@ -572,13 +572,23 @@ impl RuntimeIntrinsicPlan {
             .value
             .ok_or_else(|| invalid("scalar assertion result absent"))?;
         let call_witness = self.scalar_call_witness(source, body, key)?;
+        let scalar_plan = if matches!(
+            Phase::from_code(key.phase),
+            Phase::Entry | Phase::Operand(_)
+        ) {
+            Some(source.runtime_macro_scalar_plan(handle, body, key, &self.arguments)?)
+        } else {
+            None
+        };
         let id = NodeId(key.node);
         let (operations, exit) = match Phase::from_code(key.phase) {
             Phase::Entry | Phase::Operand(_) => {
                 use crate::syntax::runtime_macro_scalars::{
                     RuntimeMacroCallPhase, RuntimeScalarStep,
                 };
-                let plan = source.runtime_macro_scalar_plan(handle, body, key, &self.arguments)?;
+                let plan = scalar_plan
+                    .as_ref()
+                    .ok_or_else(|| invalid("scalar operand plan absent"))?;
                 let ordinal = match Phase::from_code(key.phase) {
                     Phase::Entry => 0,
                     Phase::Operand(ordinal) => usize::from(ordinal) + 1,
@@ -755,7 +765,11 @@ impl RuntimeIntrinsicPlan {
                 dependencies: vec![],
             },
         )?;
-        let recipe = if let Some(call) = &call_witness {
+        let recipe = if let Some(plan) = &scalar_plan
+            && plan.argument_borrow_at(key)?.is_some()
+        {
+            crate::ir::validate::verify_runtime_scalar_borrow(draft, body, plan)?
+        } else if let Some(call) = &call_witness {
             crate::ir::validate::verify_runtime_scalar_call(draft, body, call)?
         } else {
             verify(draft, body)?

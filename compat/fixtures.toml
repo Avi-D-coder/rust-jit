@@ -11659,3 +11659,153 @@ test = "actual_published_type_receipt_and_distinct_immutable_copy_replay_identic
 id = "T025-NAMESPACE-SCALABILITY-8"
 path = "crates/lrr/src/expand/source_discovery/type_scope_receipt_encoding_tests.rs"
 test = "actual_same_publication_row_still_refuses_after_current_epoch_changes"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-01"
+path = "crates/lrr/src/engine/run_reference_local_source_tests.rs"
+test = "actual_primitive_local_with_missing_source_cannot_gain_callee_reference_identity"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-02"
+path = "crates/lrr/src/engine/run_reference_local_source_tests.rs"
+test = "genuine_source_present_local_and_literal_temporary_keep_caller_region_all_editions"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-03"
+path = "crates/lrr/src/frontend/closed_reference_calls.rs"
+test = "copied_reference_certificate_cannot_authorize_an_extra_normalized_ref_slot"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-04"
+path = "crates/lrr/src/frontend/closed_reference_calls.rs"
+test = "genuine_reference_hint_rejects_public_hint_tamper_and_epoch_change"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-05"
+path = "crates/lrr/src/frontend/closed_reference_calls.rs"
+test = "reference_coverage_rejects_hidden_removed_and_mismatched_bound_slots"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-06"
+path = "crates/lrr/src/frontend/closed_reference_calls.rs"
+test = "reference_hint_cannot_use_primitive_spelling_after_current_type_shadow"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-07"
+path = "crates/lrr/src/frontend/closed_reference_calls.rs"
+test = "unchanged_reference_headers_keep_distinct_named_and_elided_region_owners_all_editions"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-08"
+path = "crates/lrr/src/ir/parameter_place_wire_tests.rs"
+test = "unchanged_dereference_parameters_address_original_cells_without_owning_read_all_editions"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-09"
+path = "crates/lrr/src/ir/validate.rs"
+test = "unchanged_reference_macro_borrow_phases_require_exact_source_plan_all_editions"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-10"
+path = "crates/lrr/src/syntax/runtime_macro_reference_tests.rs"
+test = "borrowed_argument_fact_cannot_cross_original_source_or_owning_edition"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-11"
+path = "crates/lrr/src/syntax/runtime_macro_reference_tests.rs"
+test = "local_reference_argument_uses_its_actual_binding_place_without_copy_read"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-12"
+path = "crates/lrr/src/syntax/runtime_macro_reference_tests.rs"
+test = "parameter_borrow_plan_addresses_actual_parameter_cell_without_copy_all_editions"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-13"
+path = "crates/lrr/src/syntax/runtime_macro_reference_tests.rs"
+test = "unchanged_reference_call_arguments_keep_written_borrow_order_and_original_origins_all_editions"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-14"
+path = "crates/lrr/src/syntax/runtime_macro_reference_tests.rs"
+test = "unsupported_borrow_form_is_deferred_after_earlier_argument_call"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-15"
+path = "crates/lrr/src/vm/context_reference_tests.rs"
+test = "actual_current_reference_environment_owns_checked_certificate_all_editions"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-16"
+path = "crates/lrr/src/vm/context_reference_tests.rs"
+test = "current_reference_context_rejects_missing_proof_extra_ref_and_wrong_descriptor"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-17"
+path = "crates/lrr/src/vm/context_reference_tests.rs"
+test = "reference_certificate_does_not_exempt_existing_substitution_or_result_guards"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-18"
+path = "crates/lrr/src/vm/context_reference_tests.rs"
+test = "reference_certificate_refuses_a_distinct_owning_copy_cell_without_transport"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-19"
+path = "crates/lrr/src/vm/context_reference_tests.rs"
+test = "reference_environment_replays_current_source_and_selected_signature"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-20"
+path = "crates/lrr/src/vm/parameter_place_tests.rs"
+test = "missing_wrong_rigid_and_prepared_source_refuse_before_fuel_or_place_effect"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-21"
+path = "crates/lrr/src/vm/parameter_place_tests.rs"
+test = "ordinal_foreign_store_and_metadata_overflow_admission_are_pure"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-22"
+path = "crates/lrr/src/vm/parameter_place_tests.rs"
+test = "original_shared_parameter_path_retains_actual_entry_cell_source_and_lease_all_editions"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-23"
+path = "crates/lrr/src/vm/parameter_place_tests.rs"
+test = "parameter_place_uses_no_guest_handles_or_bytes_even_at_handle_quota"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-24"
+path = "crates/lrr/src/vm/parameter_place_tests.rs"
+test = "repeated_mutable_parameter_dereferences_preserve_unique_owner_and_exact_cell_all_editions"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-25"
+path = "crates/lrr/src/vm/parameter_place_tests.rs"
+test = "retired_uninitialized_foreign_owner_and_inactive_parameters_refuse_without_effect"
+
+[[fixture]]
+id = "T032-CLOSED-REFERENCE-26"
+path = "crates/lrr/src/vm/parameter_place_tests.rs"
+test = "zero_fuel_refuses_before_opcode_entry_and_successful_place_is_not_replayed"
+
+[[fixture]]
+id = "T032-STOCK-REFERENCE-ED2015"
+path = "xtask/tests/stock_reference_call_runtime.rs"
+test = "unchanged_regions_infer_call_main_edition_2015"
+
+[[fixture]]
+id = "T032-STOCK-REFERENCE-ED2018"
+path = "xtask/tests/stock_reference_call_runtime.rs"
+test = "unchanged_regions_infer_call_main_edition_2018"
+
+[[fixture]]
+id = "T032-STOCK-REFERENCE-ED2021"
+path = "xtask/tests/stock_reference_call_runtime.rs"
+test = "unchanged_regions_infer_call_main_edition_2021"
+
+[[fixture]]
+id = "T032-STOCK-REFERENCE-ED2024"
+path = "xtask/tests/stock_reference_call_runtime.rs"
+test = "unchanged_regions_infer_call_main_edition_2024"

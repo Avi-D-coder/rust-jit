@@ -634,6 +634,120 @@ impl Frame {
             _ => Err(invalid("unsupported retained parameter source view")),
         }
     }
+    /// Form an address to an admitted parameter without performing an owning
+    /// read. In particular, a mutable reference remains owned by this cell.
+    pub(crate) fn preflight_parameter_place(
+        &self,
+        ordinal: u32,
+        destination: SlotId,
+        store: &GuestStore,
+    ) -> Result<(), Diagnostic> {
+        use crate::{runtime::place::Place, traits::term::TyTerm};
+        self.require_store(store)?;
+        if self.status != FrameStatus::Running || ordinal >= 100_000 {
+            return Err(invalid(
+                "parameter place requires a running admitted ordinal",
+            ));
+        }
+        let destination_slot = self.place_slot(destination)?;
+        if destination_slot.place.is_some()
+            || destination_slot.source.is_some()
+            || destination_slot.cell.is_some()
+            || destination_slot.hint.is_some()
+            || destination_slot.construction.is_some()
+        {
+            return Err(invalid("parameter place destination already prepared"));
+        }
+        let cell = self.parameter(ordinal)?;
+        let owner_slot = self
+            .body
+            .slot_count()
+            .checked_add(
+                u32::try_from(self.body.nodes().len())
+                    .map_err(|_| crate::runtime::arena::resource())?,
+            )
+            .and_then(|base| base.checked_add(ordinal))
+            .ok_or_else(crate::runtime::arena::resource)?;
+        if store.owner(cell)?
+            != (CellOwner::FrameSlot {
+                frame: self.anchor,
+                slot: owner_slot,
+            })
+        {
+            return Err(invalid(
+                "parameter place differs from its owning entry cell",
+            ));
+        }
+        store.location_epoch(cell)?;
+        let source = self
+            .parameter_sources
+            .get(ordinal as usize)
+            .ok_or_else(|| {
+                Diagnostic::new(
+                    "LRR-E-UNSUPPORTED",
+                    "parameter place requires its retained source identity".into(),
+                )
+            })?;
+        if !Self::supported_source(source) || matches!(source, TyTerm::Param(_)) {
+            return Err(Diagnostic::new(
+                "LRR-E-UNSUPPORTED",
+                "parameter place requires admitted symbolic source integration".into(),
+            ));
+        }
+        let ty = store
+            .live_place_type_id(&Place::cell(cell))
+            .map_err(|error| match error {
+                crate::runtime::place::PlaceFailure::RuntimeFault(error) => error,
+                crate::runtime::place::PlaceFailure::GuestPanic(_) => {
+                    invalid("unprojected parameter location reported a bounds panic")
+                }
+            })?;
+        if store.declared(cell)? != StorageContract::Exact(ty) {
+            return Err(invalid(
+                "parameter place lacks its exact accepted storage contract",
+            ));
+        }
+        match source {
+            TyTerm::Primitive(_) | TyTerm::Ref(..) => {
+                self.preflight_parameter_source(ordinal, ty, store)?;
+            }
+            // These are already understood by source-aware place checks. The
+            // parameter entry producer still decides which such tables exist.
+            TyTerm::Nominal(..) | TyTerm::Array(..) => {
+                Self::require_borrow_source_target(Some(source), ty, store)?;
+            }
+            _ => return Err(invalid("unsupported retained parameter place source")),
+        }
+        if matches!(source, TyTerm::Ref(..)) {
+            // Validate the actual current target lease without Copy, move or a
+            // new reference/ticket; this also covers unique mutable ownership.
+            store.reference_from_cell(cell)?;
+        }
+        self.preflight_source_view(destination, Some(source))?;
+        // Slot/source storage (including supported boxed source nodes) was
+        // reserved by metadata_bytes. Recheck the complete live frame budget
+        // before cloning that source into the already allocated place slot.
+        Self::metadata_bytes(&self.body, self.parameter_metadata_count())
+            .and_then(|bytes| bytes.checked_add(self.constructor_mapping_bytes))
+            .and_then(|bytes| bytes.checked_add(self.projection_bytes))
+            .and_then(|bytes| bytes.checked_add(self.source_field_bytes()?))
+            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+            .ok_or_else(crate::runtime::arena::resource)?;
+        Ok(())
+    }
+    pub(crate) fn parameter_place(
+        &mut self,
+        ordinal: u32,
+        destination: SlotId,
+        store: &GuestStore,
+    ) -> Result<(), Diagnostic> {
+        self.preflight_parameter_place(ordinal, destination, store)?;
+        let cell = self.parameter(ordinal)?;
+        let source = self.parameter_sources[ordinal as usize].clone();
+        self.set_source_view(destination, Some(source))?;
+        self.slots[destination.0 as usize].place = Some(crate::runtime::place::Place::cell(cell));
+        Ok(())
+    }
     pub(crate) fn preflight_parameter(
         &self,
         ordinal: u32,
@@ -4950,6 +5064,7 @@ mod tests {
         // batch, written reference source and concrete descriptor come from the
         // existing original-source ownership helper; no callable is fabricated.
         let contracts = crate::frontend::call_contracts::PreparedCallContracts {
+            closed_references: None,
             definition: signature.definition,
             source_parameters: frame.parameter_sources.clone(),
             parameter_descriptors: vec![ty],
@@ -7185,3 +7300,7 @@ mod tests {
         assert_eq!(frame.active_scopes().last(), Some(&right));
     }
 }
+
+#[cfg(test)]
+#[path = "parameter_place_tests.rs"]
+mod parameter_place_tests;

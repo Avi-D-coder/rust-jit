@@ -25,14 +25,19 @@ use crate::{
     traits::term::{ParamKey, TyTerm},
 };
 use std::collections::BTreeMap;
+#[path = "closed_reference_calls.rs"]
+mod closed_reference_calls;
 #[path = "generated_result_namespace.rs"]
 mod generated_result_namespace;
+pub(crate) use closed_reference_calls::{ClosedReferenceArgument, ReferenceCallArguments};
+pub use closed_reference_calls::{ClosedReferenceContracts, ClosedReferenceParameter};
 #[derive(Debug, Clone)]
 pub struct ArgumentType {
     pub source: TyTerm,
     pub descriptor: TypeId,
 }
 pub struct PreparedCallContracts {
+    pub closed_references: Option<Box<ClosedReferenceContracts>>,
     pub definition: Digest,
     pub source_parameters: Vec<TyTerm>,
     pub parameter_descriptors: Vec<TypeId>,
@@ -257,6 +262,15 @@ impl NormalizedDeferredReturn {
         sources: &[&PreparedSourceView],
         stamps: &BTreeMap<InputKey, Digest>,
     ) -> Result<(), Diagnostic> {
+        Self::require_primitive_name_namespace(db, signature, sources, stamps, None)
+    }
+    fn require_primitive_name_namespace(
+        db: &Database,
+        signature: &crate::syntax::signatures::FunctionSignature,
+        sources: &[&PreparedSourceView],
+        stamps: &BTreeMap<InputKey, Digest>,
+        written_name: Option<&str>,
+    ) -> Result<(), Diagnostic> {
         use crate::{db::seals::SealDomain, source::manifest::Namespace};
         let missing = || {
             fault(
@@ -273,6 +287,12 @@ impl NormalizedDeferredReturn {
             .published_input(&InputKey::GeneratedSyntax(parse.content))
             .is_some()
         {
+            if written_name.is_some() {
+                return Err(fault(
+                    "LRR-E-UNSUPPORTED",
+                    "generated reference parameter Type authority requires its source producer",
+                ));
+            }
             return generated_result_namespace::require(db, signature, parse);
         }
         let mut source = None;
@@ -324,7 +344,14 @@ impl NormalizedDeferredReturn {
             return Err(missing());
         }
         let name = crate::expand::scopes::MacroName::parse(
-            &signature.result[0].text,
+            match written_name {
+                Some(name) => name,
+                None => signature
+                    .result
+                    .first()
+                    .map(|token| token.text.as_str())
+                    .ok_or_else(missing)?,
+            },
             signature.header.profile.edition,
         )?;
         // Prefer actual current Type discovery. Select no arbitrary world when
@@ -935,6 +962,7 @@ impl PreparedCallContracts {
 /// Pre-argument source facts: no actual arguments, substitution, layout or bound solving.
 #[derive(Clone)]
 pub struct ArgumentHint {
+    pub closed_reference: Option<std::sync::Arc<ClosedReferenceParameter>>,
     pub source: TyTerm,
     pub descriptor: Option<TypeId>,
 }
@@ -1017,6 +1045,7 @@ fn argument_hints(
     let normalizer = AliasNormalizer::new(graph, sources)?;
     let mut templates = Vec::new();
     let mut template_bytes = 0usize;
+    let mut reference_hints = BTreeMap::new();
     for (ordinal, parameter) in signature.parameters.iter().enumerate() {
         if index.is_some_and(|selected| selected != ordinal) {
             continue;
@@ -1035,6 +1064,23 @@ fn argument_hints(
                 &mut templates,
                 &mut template_bytes,
                 TyTerm::Primitive(primitive),
+            )?;
+            continue;
+        }
+        if parameter.ty.first().is_some_and(|token| token.text == "&")
+            && let Some(proof) =
+                ClosedReferenceParameter::capture(db, callee, graph, sources, ordinal)?
+        {
+            template_bytes = template_bytes
+                .checked_add(proof.allocated_bytes()?)
+                .and_then(|n| n.checked_add(128))
+                .filter(|n| *n <= 32 * 1024 * 1024)
+                .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "reference hint metadata budget"))?;
+            reference_hints.insert(templates.len(), proof.clone());
+            push_template(
+                &mut templates,
+                &mut template_bytes,
+                proof.source_template().clone(),
             )?;
             continue;
         }
@@ -1078,12 +1124,16 @@ fn argument_hints(
     hints
         .try_reserve_exact(templates.len())
         .map_err(|_| fault("LRR-E-METADATA-LIMIT", "argument hint allocation failed"))?;
-    for source in templates {
+    for (ordinal, source) in templates.into_iter().enumerate() {
         let descriptor = match &source {
             TyTerm::Primitive(p) => Some(primitive_runtime_id(*p)?),
             _ => None,
         };
-        hints.push(ArgumentHint { source, descriptor });
+        hints.push(ArgumentHint {
+            source,
+            descriptor,
+            closed_reference: reference_hints.remove(&ordinal),
+        });
     }
     Ok(QueryPoll::Ready(Ok(ArgumentHintPreparation::Ready(hints))))
 }
@@ -1098,10 +1148,44 @@ pub fn prepare_contracts(
     result_hint: Option<&ArgumentType>,
     arguments: &[ArgumentType],
 ) -> QueryPoll<ContractPreparation> {
-    match prepare(db, callee, graph, sources, explicit, result_hint, arguments) {
+    match prepare(
+        db,
+        callee,
+        graph,
+        sources,
+        explicit,
+        result_hint,
+        EvaluatedArguments::Ordinary(arguments),
+    ) {
         Ok(value) => value,
         Err(error) => QueryPoll::Ready(Err(error)),
     }
+}
+pub(crate) fn prepare_contracts_with_references(
+    db: &mut Database,
+    callee: &SourceCallable,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    explicit: &[(u32, ArgumentType)],
+    result_hint: Option<&ArgumentType>,
+    arguments: ReferenceCallArguments<'_>,
+) -> QueryPoll<ContractPreparation> {
+    match prepare(
+        db,
+        callee,
+        graph,
+        sources,
+        explicit,
+        result_hint,
+        EvaluatedArguments::References(arguments),
+    ) {
+        Ok(poll) => poll,
+        Err(error) => QueryPoll::Ready(Err(error)),
+    }
+}
+enum EvaluatedArguments<'a> {
+    Ordinary(&'a [ArgumentType]),
+    References(ReferenceCallArguments<'a>),
 }
 fn prepare(
     db: &mut Database,
@@ -1110,8 +1194,12 @@ fn prepare(
     sources: &[&PreparedSourceView],
     explicit: &[(u32, ArgumentType)],
     result_hint: Option<&ArgumentType>,
-    arguments: &[ArgumentType],
+    evaluated: EvaluatedArguments<'_>,
 ) -> Result<QueryPoll<ContractPreparation>, Diagnostic> {
+    let arguments = match &evaluated {
+        EvaluatedArguments::Ordinary(arguments) => *arguments,
+        EvaluatedArguments::References(reference) => reference.arguments,
+    };
     callee.revalidate(db)?;
     let signature = callee.signature();
     let definition = signature.definition;
@@ -1164,7 +1252,7 @@ fn prepare(
             ));
         }
     }
-    let hints = match prepare_argument_hints(db, callee, graph, sources) {
+    let mut hints = match prepare_argument_hints(db, callee, graph, sources) {
         QueryPoll::Ready(Ok(ArgumentHintPreparation::Ready(hints))) => hints,
         QueryPoll::Ready(Ok(ArgumentHintPreparation::NeedType { definition, syntax })) => {
             return Ok(QueryPoll::Ready(Ok(ContractPreparation::NeedType {
@@ -1180,6 +1268,28 @@ fn prepare(
         }
         QueryPoll::Ready(Err(error)) => return Err(error),
         QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+    };
+    let closed_references = match &evaluated {
+        EvaluatedArguments::References(reference) => closed_reference_calls::bind_references(
+            db,
+            callee,
+            &mut hints,
+            reference.store,
+            arguments,
+            reference.references,
+        )?,
+        EvaluatedArguments::Ordinary(_) => {
+            if let Some(ordinal) = hints
+                .iter()
+                .position(|hint| hint.closed_reference.is_some())
+            {
+                return Ok(QueryPoll::Ready(Ok(ContractPreparation::NeedType {
+                    definition,
+                    syntax: signature.parameters[ordinal].ty.clone(),
+                })));
+            }
+            None
+        }
     };
     let templates: Vec<_> = hints.into_iter().map(|hint| hint.source).collect();
     // Transaction identity is local metadata and never serialized as VM data.
@@ -1274,6 +1384,14 @@ fn prepare(
                 symbolic.constrain_argument(index, &actual.source)?;
                 descriptors.push(expected);
             }
+            TyTerm::Ref(_, _, _)
+                if closed_references
+                    .as_ref()
+                    .is_some_and(|proof| proof.admits(index)) =>
+            {
+                symbolic.constrain_argument(index, &actual.source)?;
+                descriptors.push(actual.descriptor);
+            }
             _ => {
                 return Ok(QueryPoll::Ready(Ok(ContractPreparation::NeedType {
                     definition,
@@ -1301,6 +1419,7 @@ fn prepare(
     };
     Ok(QueryPoll::Ready(Ok(ContractPreparation::Ready(
         PreparedCallContracts {
+            closed_references,
             definition,
             source_parameters: templates,
             parameter_descriptors: descriptors,

@@ -5,7 +5,10 @@ use crate::{
         digest::{Digest, StableEncode},
     },
     frontend::{
-        call_contracts::{NormalizedDeferredReturn, PreparedCallContracts, primitive_runtime_id},
+        call_contracts::{
+            ClosedReferenceContracts, NormalizedDeferredReturn, PreparedCallContracts,
+            primitive_runtime_id,
+        },
         callables::SourceCallable,
     },
     runtime::shape::TypeId,
@@ -21,6 +24,7 @@ pub struct GenericEnv {
     runtime: Box<[(ParamKey, TypeId)]>,
     bytes: usize,
     normalized_return: Option<Box<NormalizedDeferredReturn>>,
+    closed_references: Option<Box<ClosedReferenceContracts>>,
 }
 fn invalid(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CALL-CONTEXT", message.into())
@@ -83,6 +87,17 @@ impl GenericEnv {
         }
         if let Some(proof) = &contracts.normalized_deferred_return {
             proof.validate_packet(signature, contracts)?;
+        }
+        if let Some(proof) = &contracts.closed_references {
+            proof.validate_packet(signature, contracts)?;
+        } else if contracts
+            .source_parameters
+            .iter()
+            .any(|source| matches!(source, TyTerm::Ref(..)))
+        {
+            return Err(invalid(
+                "closed reference parameter requires its current source certificate",
+            ));
         }
         // The immutable declaration is also copied into the frame. Validate
         // its symbolic views as well as the resolved contract templates before
@@ -178,6 +193,11 @@ impl GenericEnv {
                 )
                 .ok_or_else(|| invalid("normalized return retained size overflow"))?;
         }
+        if let Some(proof) = &contracts.closed_references {
+            bytes = bytes
+                .checked_add(proof.allocated_bytes()?)
+                .ok_or_else(|| invalid("closed reference retained size overflow"))?;
+        }
         if bytes > 32 * 1024 * 1024 {
             return Err(crate::runtime::arena::resource());
         }
@@ -192,6 +212,11 @@ impl GenericEnv {
                 "normalized deferred return requires current source admission",
             ));
         }
+        if contracts.closed_references.is_some() {
+            return Err(invalid(
+                "closed reference parameters require current source admission",
+            ));
+        }
         Self::capture_owned(signature, contracts)
     }
     pub fn capture_current(
@@ -201,6 +226,10 @@ impl GenericEnv {
     ) -> Result<Self, Diagnostic> {
         callee.revalidate(db)?;
         if let Some(proof) = &contracts.normalized_deferred_return {
+            proof.validate_packet(callee.signature(), contracts)?;
+            proof.require_current(db, callee)?;
+        }
+        if let Some(proof) = &contracts.closed_references {
             proof.validate_packet(callee.signature(), contracts)?;
             proof.require_current(db, callee)?;
         }
@@ -218,6 +247,7 @@ impl GenericEnv {
             runtime: own_table(&contracts.runtime_substitution)?,
             bytes,
             normalized_return: contracts.normalized_deferred_return.clone(),
+            closed_references: contracts.closed_references.clone(),
         })
     }
     pub fn definition(&self) -> &FunctionSignature {
@@ -254,6 +284,10 @@ impl GenericEnv {
             .as_ref()
             .map(|proof| proof.resolved_result())
     }
+    /// Readonly retained authority; no mutable table or source constructor.
+    pub fn closed_reference_contracts(&self) -> Option<&ClosedReferenceContracts> {
+        self.closed_references.as_deref()
+    }
     pub fn retained_bytes(&self) -> usize {
         self.bytes
     }
@@ -262,3 +296,7 @@ impl GenericEnv {
 #[cfg(test)]
 #[path = "context_return_tests.rs"]
 mod return_tests;
+
+#[cfg(test)]
+#[path = "context_reference_tests.rs"]
+mod reference_tests;

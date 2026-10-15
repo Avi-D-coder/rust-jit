@@ -1257,10 +1257,17 @@ impl ParsedFile {
                 }
             });
         }
-        if !place && let Some(ordinal) = parameter_at(self, expression.syntax(), &name)? {
-            return Ok(Op::ReadParameter {
-                ordinal,
-                destination,
+        if let Some(ordinal) = parameter_at(self, expression.syntax(), &name)? {
+            return Ok(if place {
+                Op::ParameterPlace {
+                    ordinal,
+                    destination,
+                }
+            } else {
+                Op::ReadParameter {
+                    ordinal,
+                    destination,
+                }
             });
         }
         Err(Diagnostic::new(
@@ -4009,11 +4016,6 @@ impl ParsedFile {
                 let path = ast::PathExpr::cast(syntax).expect("checked path");
                 let binding = local_binding(self, index, body, &path)?;
                 let Some(binding) = binding else {
-                    if place_context(path.syntax()) {
-                        return unsupported(
-                            "non-local receiver requires retained source place resolution",
-                        );
-                    }
                     let name =
                         MacroName::parse(&path.syntax().text().to_string(), self.edition).ok();
                     if let Some(ordinal) = name
@@ -4025,11 +4027,25 @@ impl ParsedFile {
                         return draft(
                             index,
                             key,
-                            vec![Op::ReadParameter {
-                                ordinal,
-                                destination: node.value.expect("parameter path value"),
+                            vec![if place_context(path.syntax()) {
+                                Op::ParameterPlace {
+                                    ordinal,
+                                    destination: node
+                                        .place
+                                        .ok_or_else(|| error("parameter receiver place absent"))?,
+                                }
+                            } else {
+                                Op::ReadParameter {
+                                    ordinal,
+                                    destination: node.value.expect("parameter path value"),
+                                }
                             }],
                             RecipeExit::Next(return_pc(index, body, path.syntax())?),
+                        );
+                    }
+                    if place_context(path.syntax()) {
+                        return unsupported(
+                            "non-local receiver requires retained source place resolution",
                         );
                     }
                     return unsupported("non-local path awaits ordinary namespace resolution");

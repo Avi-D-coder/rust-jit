@@ -114,7 +114,27 @@
     "All namespace fingerprints retained; macro deadlines unchanged"
   ],
   "benchmark_speedup_claim": false,
-  "fresh_integrated_milestone": "pending after seven-path source integration",
+  "fresh_integrated_milestone": {
+    "complete": false,
+    "passed": false,
+    "source_member": "ed759bfb7c9679c9180c4047ffa11f357e8c1152a0f56c3a35638f152b60ba02",
+    "listed": 3100,
+    "passed_checks": 1367,
+    "failed_checks": 1,
+    "unexecuted_checks": 1732,
+    "full_library_passed": 987,
+    "many_modules_case_passed": true,
+    "failure": "standalone_cli::rustc_reached_pending_expression_macros_keep_selected_source_locations",
+    "diagnostic": "LRR-E-UNSUPPORTED: generated statement is not a break; existing pending source-expansion diagnostic lost",
+    "scope": "Pending-operation diagnostic component using unchanged issue-29084.rs; not upstream runtime/full-fixture acceptance",
+    "actual_terminal": {
+      "session_id": 45795,
+      "chunk_id": "45a8fa",
+      "exit_code": 1
+    },
+    "source_unchanged": true,
+    "repair_status": "private source-only typed generated-statement dispatch repair in progress"
+  },
   "new_upstream_full_fixture_passes": 0,
   "runtime_acceptance_complete": false,
   "JIT_gate": "closed",
@@ -131,6 +151,10 @@
     {
       "path": "artifacts/macos-first/root-main-v69-integration-validation-v1/timeout-diagnostic-reproduction-v1/VALIDATION-HANDOFF.json",
       "sha256": "3dda19568490177d5df6f0e14c00af94ef1189945cf4a4d1bd9daf7c2bb80155"
+    },
+    {
+      "path": "artifacts/macos-first/root-main-v69-integration-validation-v1/agent-validation-v7/VALIDATION-HANDOFF.json",
+      "sha256": "842b5e2c931c6c228beb89d51b40f716dbb0bf2f2a9baf3cf008532fe550cb03"
     }
   ]
 }

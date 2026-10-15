@@ -10,7 +10,7 @@ use crate::{
         digest::{Digest, StableEncoder},
     },
     ir::{
-        op::Op,
+        op::{BorrowAccess, HintRecipe, Op},
         pc::{NodeId, PcKey, Phase, SlotId},
     },
     source::manifest::BodyKey,
@@ -146,6 +146,33 @@ impl RuntimeScalarPlan {
             .filter(|call| call.ordinal == ordinal)
             .ok_or_else(|| invalid("scalar call ordinal absent"))
     }
+    /// A freshly replayed source plan selects only its exact borrow operation
+    /// phases. The operand's arbitrary scalar operations gain no new authority.
+    pub(crate) fn argument_borrow_at(
+        &self,
+        key: &PcKey,
+    ) -> Result<Option<(&Arc<RuntimeMacroCall>, &RuntimeMacroArgumentBorrow)>, Diagnostic> {
+        let mut selected = None;
+        let mut work = 0usize;
+        for call in &self.calls {
+            for borrow in call.argument_borrows.iter().flatten() {
+                work = work
+                    .checked_add(1)
+                    .filter(|n| *n <= 1_000_000)
+                    .ok_or_else(|| invalid("scalar borrow lookup work limit"))?;
+                if borrow.hint.as_ref() == Some(key)
+                    || &borrow.place_key == key
+                    || &borrow.borrow_key == key
+                {
+                    borrow.require(call, &key.body, borrow.argument)?;
+                    if selected.replace((call, borrow)).is_some() {
+                        return Err(invalid("scalar borrow phase selection is ambiguous"));
+                    }
+                }
+            }
+        }
+        Ok(selected)
+    }
     pub(super) fn finish(
         steps: Vec<RuntimeScalarStep>,
         drafts: Vec<CallDraft>,
@@ -269,6 +296,129 @@ impl RuntimeScalarPlan {
                     ));
                 }
             }
+            draft
+                .argument_borrows
+                .len()
+                .checked_mul(std::mem::size_of::<Option<RuntimeMacroArgumentBorrow>>())
+                .and_then(|n| {
+                    draft
+                        .argument_borrows
+                        .iter()
+                        .filter(|borrow| borrow.is_some())
+                        .count()
+                        .checked_mul(source.profile.semantics.capacity())
+                        .and_then(|m| n.checked_add(m))
+                })
+                .and_then(|n| n.checked_add(retained_bytes))
+                .filter(|n| *n <= 32 * 1024 * 1024)
+                .ok_or_else(|| invalid("scalar borrow retained metadata limit"))?;
+            let mut borrows = Vec::new();
+            borrows
+                .try_reserve_exact(draft.argument_borrows.len())
+                .map_err(|_| invalid("scalar borrow certificate allocation"))?;
+            for (ordinal, borrow) in draft.argument_borrows.into_iter().enumerate() {
+                let Some(borrow) = borrow else {
+                    borrows.push(None);
+                    continue;
+                };
+                let argument = *draft
+                    .arguments
+                    .get(ordinal)
+                    .ok_or_else(|| invalid("scalar borrow argument absent"))?;
+                let argument_span = draft
+                    .argument_spans
+                    .get(ordinal)
+                    .ok_or_else(|| invalid("scalar borrow argument origin absent"))?;
+                if borrow.argument as usize != ordinal
+                    || argument_span.body_key != borrow.borrow_span.body_key
+                    || borrow.borrow_span.body_key != key.body
+                    || argument_span.relative_start > borrow.borrow_span.relative_start
+                    || argument_span.relative_end < borrow.borrow_span.relative_end
+                    || borrow.operand_span.body_key != key.body
+                    || borrow.borrow_span.relative_start >= borrow.operand_span.relative_start
+                    || borrow.borrow_span.relative_end < borrow.operand_span.relative_end
+                    || borrow.operand_span.relative_start >= borrow.operand_span.relative_end
+                {
+                    return Err(invalid("scalar borrow source containment differs"));
+                }
+                let mut hint = None;
+                let mut place = None;
+                let mut commit = None;
+                for (at, step) in steps.iter().enumerate() {
+                    work = work
+                        .checked_add(1)
+                        .filter(|n| *n <= 1_000_000)
+                        .ok_or_else(|| invalid("scalar borrow phase capture work limit"))?;
+                    if let RuntimeScalarStep::Operation(op) = step {
+                        match op {
+                            Op::SetHint {
+                                child,
+                                hint: HintRecipe::BorrowTarget { reference },
+                            } if Some(*child) == borrow.temporary && *reference == argument => {
+                                record_phase(&mut hint, at, "duplicate scalar borrow hint")?
+                            }
+                            Op::ValuePlace {
+                                source,
+                                destination,
+                            } if Some(*source) == borrow.temporary
+                                && *destination == borrow.place =>
+                            {
+                                record_phase(&mut place, at, "duplicate scalar temporary place")?
+                            }
+                            Op::MakePlace { destination, .. }
+                            | Op::ParameterPlace { destination, .. }
+                                if borrow.temporary.is_none() && *destination == borrow.place =>
+                            {
+                                record_phase(&mut place, at, "duplicate scalar local place")?
+                            }
+                            Op::Borrow {
+                                place: actual,
+                                access,
+                                destination,
+                            } if *actual == borrow.place
+                                && *destination == argument
+                                && *access == borrow.access =>
+                            {
+                                record_phase(&mut commit, at, "duplicate scalar borrow commit")?
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                let place = place.ok_or_else(|| invalid("scalar borrow place phase absent"))?;
+                let commit = commit.ok_or_else(|| invalid("scalar borrow commit phase absent"))?;
+                let begin = hint.unwrap_or(place);
+                if begin <= prepare
+                    || place.checked_add(1) != Some(commit)
+                    || commit >= advances[ordinal]
+                    || (borrow.temporary.is_some() && hint.is_none_or(|at| at >= place))
+                    || (borrow.temporary.is_none() && hint.is_some())
+                {
+                    return Err(invalid("scalar borrow written phase order differs"));
+                }
+                borrows.push(Some(RuntimeMacroArgumentBorrow {
+                    source: source.clone(),
+                    call_ordinal: draft.ordinal,
+                    argument: borrow.argument,
+                    argument_span: argument_span.clone(),
+                    borrow_span: borrow.borrow_span,
+                    operand_span: borrow.operand_span,
+                    access: borrow.access,
+                    argument_slot: argument,
+                    temporary: borrow.temporary,
+                    place: borrow.place,
+                    hint: hint.map(pc).transpose()?,
+                    operand: hint
+                        .map(|at| {
+                            at.checked_add(1)
+                                .ok_or_else(|| invalid("scalar borrow operand phase overflow"))
+                                .and_then(pc)
+                        })
+                        .transpose()?,
+                    place_key: pc(place)?,
+                    borrow_key: pc(commit)?,
+                }));
+            }
             let mut call = RuntimeMacroCall {
                 source: source.clone(),
                 body: key.body.clone(),
@@ -281,6 +431,7 @@ impl RuntimeScalarPlan {
                 explicit: draft.explicit,
                 arguments: draft.arguments,
                 argument_spans: draft.argument_spans,
+                argument_borrows: borrows,
                 result: draft.result,
                 prepare: pc(prepare)?,
                 argument_keys,
@@ -295,7 +446,7 @@ impl RuntimeScalarPlan {
                 .and_then(|n| n.checked_add(2 * std::mem::size_of::<usize>()))
                 .filter(|n| *n <= 32 * 1024 * 1024)
                 .ok_or_else(|| invalid("scalar call retained metadata limit"))?;
-            let mut e = StableEncoder::new("lrr/v1/runtime-macro-source-call");
+            let mut e = StableEncoder::new("lrr/v2/runtime-macro-source-call/argument-borrows");
             e.record(&call.source);
             e.record(&call.body);
             e.u32(call.macro_node);
@@ -311,6 +462,9 @@ impl RuntimeScalarPlan {
             e.sequence(&call.argument_spans, |e, span| {
                 e.u32(span.relative_start);
                 e.u32(span.relative_end);
+            });
+            e.sequence(&call.argument_borrows, |e, borrow| {
+                e.option(borrow, |e, borrow| borrow.encode(e))
             });
             e.u32(call.result.0);
             e.record(&call.prepare);
@@ -333,7 +487,121 @@ pub(super) struct CallDraft {
     pub(super) explicit: Vec<String>,
     pub(super) arguments: Vec<SlotId>,
     pub(super) argument_spans: Vec<BodySpan>,
+    pub(super) argument_borrows: Vec<Option<ArgumentBorrowDraft>>,
     pub(super) result: SlotId,
+}
+pub(super) struct ArgumentBorrowDraft {
+    pub(super) argument: u32,
+    pub(super) borrow_span: BodySpan,
+    pub(super) operand_span: BodySpan,
+    pub(super) access: BorrowAccess,
+    pub(super) temporary: Option<SlotId>,
+    pub(super) place: SlotId,
+}
+/// Original written call argument borrow; no pointee or region type authority.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct RuntimeMacroArgumentBorrow {
+    source: ParseKey,
+    call_ordinal: u32,
+    argument: u32,
+    argument_span: BodySpan,
+    borrow_span: BodySpan,
+    operand_span: BodySpan,
+    access: BorrowAccess,
+    argument_slot: SlotId,
+    temporary: Option<SlotId>,
+    place: SlotId,
+    hint: Option<PcKey>,
+    operand: Option<PcKey>,
+    place_key: PcKey,
+    borrow_key: PcKey,
+}
+impl RuntimeMacroArgumentBorrow {
+    pub(crate) fn source(&self) -> &ParseKey {
+        &self.source
+    }
+    pub(crate) fn argument_ordinal(&self) -> u32 {
+        self.argument
+    }
+    #[cfg(test)]
+    pub(crate) fn argument_span(&self) -> &BodySpan {
+        &self.argument_span
+    }
+    pub(crate) fn borrow_span(&self) -> &BodySpan {
+        &self.borrow_span
+    }
+    #[cfg(test)]
+    pub(crate) fn operand_span(&self) -> &BodySpan {
+        &self.operand_span
+    }
+    pub(crate) fn access(&self) -> BorrowAccess {
+        self.access
+    }
+    pub(crate) fn argument_slot(&self) -> SlotId {
+        self.argument_slot
+    }
+    pub(crate) fn temporary(&self) -> Option<SlotId> {
+        self.temporary
+    }
+    pub(crate) fn place(&self) -> SlotId {
+        self.place
+    }
+    pub(crate) fn hint_key(&self) -> Option<&PcKey> {
+        self.hint.as_ref()
+    }
+    #[cfg(test)]
+    pub(crate) fn operand_key(&self) -> Option<&PcKey> {
+        self.operand.as_ref()
+    }
+    pub(crate) fn place_key(&self) -> &PcKey {
+        &self.place_key
+    }
+    pub(crate) fn borrow_key(&self) -> &PcKey {
+        &self.borrow_key
+    }
+    pub(crate) fn require(
+        &self,
+        call: &RuntimeMacroCall,
+        body: &BodyKey,
+        argument: u32,
+    ) -> Result<(), Diagnostic> {
+        if self.source != call.source
+            || self.call_ordinal != call.ordinal
+            || self.argument != argument
+            || body != &call.body
+            || self.argument_span.body_key != *body
+            || call.arguments.get(argument as usize) != Some(&self.argument_slot)
+            || call
+                .argument_borrows
+                .get(argument as usize)
+                .and_then(Option::as_ref)
+                != Some(self)
+        {
+            return Err(invalid("scalar argument borrow source/call/body differs"));
+        }
+        Ok(())
+    }
+    fn encode(&self, e: &mut StableEncoder) {
+        e.record(&self.source);
+        e.u32(self.call_ordinal);
+        e.u32(self.argument);
+        for span in [&self.argument_span, &self.borrow_span, &self.operand_span] {
+            e.record(&span.body_key);
+            e.u32(span.relative_start);
+            e.u32(span.relative_end);
+        }
+        e.u32(match self.access {
+            BorrowAccess::Shared => 0,
+            BorrowAccess::Mutable => 1,
+        });
+        e.u32(self.argument_slot.0);
+        e.option(&self.temporary, |e, s| e.u32(s.0));
+        e.u32(self.place.0);
+        e.option(&self.hint, |e, k| e.record(k));
+        e.option(&self.operand, |e, k| e.record(k));
+        e.record(&self.place_key);
+        e.record(&self.borrow_key);
+    }
 }
 #[derive(Debug)]
 pub(crate) struct RuntimeMacroCall {
@@ -348,6 +616,7 @@ pub(crate) struct RuntimeMacroCall {
     explicit: Vec<String>,
     arguments: Vec<SlotId>,
     argument_spans: Vec<BodySpan>,
+    argument_borrows: Vec<Option<RuntimeMacroArgumentBorrow>>,
     result: SlotId,
     prepare: PcKey,
     argument_keys: Vec<PcKey>,
@@ -357,6 +626,15 @@ pub(crate) struct RuntimeMacroCall {
     identity: Digest,
 }
 impl RuntimeMacroCall {
+    pub(crate) fn argument_borrow(
+        &self,
+        argument: u32,
+    ) -> Result<Option<&RuntimeMacroArgumentBorrow>, Diagnostic> {
+        self.argument_borrows
+            .get(argument as usize)
+            .map(Option::as_ref)
+            .ok_or_else(|| invalid("scalar borrow argument ordinal absent"))
+    }
     pub(crate) fn ordinal(&self) -> u32 {
         self.ordinal
     }
@@ -440,6 +718,10 @@ impl RuntimeMacroCall {
             (self.explicit.capacity(), std::mem::size_of::<String>()),
             (self.arguments.capacity(), std::mem::size_of::<SlotId>()),
             (
+                self.argument_borrows.capacity(),
+                std::mem::size_of::<Option<RuntimeMacroArgumentBorrow>>(),
+            ),
+            (
                 self.argument_spans.capacity(),
                 std::mem::size_of::<BodySpan>(),
             ),
@@ -453,6 +735,11 @@ impl RuntimeMacroCall {
                         .ok_or_else(|| invalid("scalar call metadata overflow"))?,
                 )
                 .ok_or_else(|| invalid("scalar call metadata overflow"))?;
+        }
+        for borrow in self.argument_borrows.iter().flatten() {
+            bytes = bytes
+                .checked_add(borrow.source.profile.semantics.capacity())
+                .ok_or_else(|| invalid("scalar borrow source metadata overflow"))?;
         }
         for text in &self.explicit {
             bytes = bytes
