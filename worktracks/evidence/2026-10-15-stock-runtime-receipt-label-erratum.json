@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T17:44:04.220943+00:00",
+  "kind": "receipt_metadata_label_erratum",
+  "private_erratum_sha256": "f155d55c755ac4074d17a6d5c42d10e68fd79826d08948c9a3c0c7532b5d9f6e",
+  "cause": "run_characterization.py inherited compile_only labeling from the compile/audit wrapper; it did not control commands or outcome classification",
+  "minimal_witness": "stock-cli-batch-1 argv invokes rustc_checkout_runtime.py with64 --case entries; same terminal records19runtime_contract_pass/45interpreter_failure and no Cargo invocation",
+  "corrections": [
+    {
+      "scope": "stock-cli-batch-1",
+      "terminal_sha256": "499cf36bbf7d86f33ac7f9463aaa519bd9832def99e8181ec63c0d9026a35d61",
+      "original_compile_only": true,
+      "correct_compile_only": false,
+      "actual_child_exit_code": 1,
+      "actual_activity": "selected interpreter CLI execution",
+      "raw_receipt_unchanged": true
+    },
+    {
+      "scope": "stock-cli-batch-2",
+      "terminal_sha256": "59a9b06e276f8d503a2c61b7a13cce82ee9573acd85e9a301c238373f94b9297",
+      "original_compile_only": true,
+      "correct_compile_only": false,
+      "actual_child_exit_code": 1,
+      "actual_activity": "selected interpreter CLI execution",
+      "raw_receipt_unchanged": true
+    },
+    {
+      "scope": "capture-refusals-1",
+      "terminal_sha256": "51babb1c9559a0f2a32b2ef833c0da7808636b887048a9b28512b3640b74118d",
+      "original_compile_only": true,
+      "correct_compile_only": false,
+      "actual_child_exit_code": 0,
+      "actual_activity": "pure data capture refusal verification",
+      "raw_receipt_unchanged": true
+    },
+    {
+      "scope": "capture-refusals-2",
+      "terminal_sha256": "7dad79c8e8b9766b48f166ee093e0b30bfb6d2706d4b00661fa1ea6b341cf95d",
+      "original_compile_only": true,
+      "correct_compile_only": false,
+      "actual_child_exit_code": 0,
+      "actual_activity": "pure data capture refusal verification",
+      "raw_receipt_unchanged": true
+    }
+  ],
+  "actual_source_binary_guards_and_case_outcomes_unchanged": true,
+  "no_rerun_or_source_change": true,
+  "root_rechecked_actual_terminal_hashes_and_commands": [
+    {
+      "scope": "stock-cli-batch-1",
+      "selected_cases": 64,
+      "counts": {
+        "interpreter_failure": 45,
+        "runtime_contract_pass": 19
+      }
+    },
+    {
+      "scope": "stock-cli-batch-2",
+      "selected_cases": 51,
+      "counts": {
+        "runtime_contract_pass": 27,
+        "interpreter_failure": 24
+      }
+    },
+    {
+      "scope": "capture-refusals-1",
+      "activity": "pure_data_refusal_verification_zero_guest_runs"
+    },
+    {
+      "scope": "capture-refusals-2",
+      "activity": "pure_data_refusal_verification_zero_guest_runs"
+    }
+  ],
+  "expected_counts_unchanged": {
+    "runtime_contract_pass": 46,
+    "interpreter_failure": 69,
+    "capture_refusal_controls": 782
+  },
+  "new_executions": 0,
+  "full_fixture_passes_added": 0
+}

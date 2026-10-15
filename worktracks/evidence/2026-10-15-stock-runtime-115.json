@@ -1987,5 +1987,10 @@
   },
   "canonical_promoted": false,
   "native_guest_compilation": false,
-  "guest_jit_allowed": false
+  "guest_jit_allowed": false,
+  "receipt_metadata_erratum": {
+    "path": "worktracks/evidence/2026-10-15-stock-runtime-receipt-label-erratum.json",
+    "scope": "Four raw wrapper receipts incorrectly label actual CLI/puredata activity compile_only:true; actual argv/outcomes/guards retained and independently rechecked",
+    "counts_changed": false
+  }
 }
