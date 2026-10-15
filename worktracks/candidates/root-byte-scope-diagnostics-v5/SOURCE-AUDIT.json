@@ -1,0 +1,28 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T041",
+    "T050",
+    "T054"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_hint_preflight_tests.rs",
+      "before_sha256": "5c4665aa8819da8c72fcb87425b7c5d01ea3f3f4d517b332c15465c96843bc2c",
+      "after_sha256": "c4fad606ff36e1f52cb463d70eeddc563d8ea65535cd7374ce3a3b10ca4fe2cb"
+    },
+    {
+      "path": "crates/lrr/src/syntax/byte_string_runtime_tests.rs",
+      "before_sha256": "f71ba700e9832f04447d409eabdf6dd82f2bd4589d66bc79a4d1f78f0e366386",
+      "after_sha256": "0082ed87879be502c2967dbef237dd4286b81f83945d8eefcdd5b678fda522c4"
+    },
+    {
+      "path": "crates/lrr/src/syntax/scalar_match_context.rs",
+      "before_sha256": "973dda6c1aa3146ba25da7a8c8f6f90daa8f15e9e71a98bde990341195db7db7",
+      "after_sha256": "dd0b0405875bce158272ffece37dab034a62579f8c46c895101e98f814130b54"
+    }
+  ],
+  "patch_sha256": "5fa45a8da532ae28e66d05473bd142c8e4e7d44d84896110147db1b6eacd6afa",
+  "stock_runtime_passes_added": 0
+}

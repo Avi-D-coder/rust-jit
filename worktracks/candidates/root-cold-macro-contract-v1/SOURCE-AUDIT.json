@@ -1,0 +1,17 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T054",
+    "M014"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/current_range_bound_context_tests.rs",
+      "before_sha256": "872211468c3db8e323504df0e9bb01a0d49faa107db9d9022f81fea7983aabce",
+      "after_sha256": "df2ce7706e2b5d1c48514f72c466bbcd868093687d6eb5af3ec67ec2b5352cf3"
+    }
+  ],
+  "patch_sha256": "4126339b0ad8457342d8e6db54d2e34361ef3fbd8be03bcc108d38e92d57bc22",
+  "stock_runtime_passes_added": 0
+}

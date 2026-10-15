@@ -1,0 +1,16 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T041"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/syntax/byte_string_runtime_tests.rs",
+      "before_sha256": "662970edcb622a132e48f717014fdd56f8265c3f2b99f53ab269b10f05ff834a",
+      "after_sha256": "b38e8dccc153f030d862d671bda2e82d854c82e85ba976346351315dd75a5c23"
+    }
+  ],
+  "patch_sha256": "605514802ca16818dd3816a3f5322d99adf78eca16f5baf0241e3b856f5ed7eb",
+  "stock_runtime_passes_added": 0
+}

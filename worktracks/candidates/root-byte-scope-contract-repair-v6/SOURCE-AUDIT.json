@@ -1,0 +1,21 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "claim": "LOCAL-024",
+  "task_cards": [
+    "T041"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/runtime/cell_byte_hint_preflight_tests.rs",
+      "before_sha256": "c4fad606ff36e1f52cb463d70eeddc563d8ea65535cd7374ce3a3b10ca4fe2cb",
+      "after_sha256": "e2854858e2493a358e1dbf705f801dcb39b305f0725f65f0368023176859df51"
+    },
+    {
+      "path": "crates/lrr/src/syntax/byte_string_runtime_tests.rs",
+      "before_sha256": "0082ed87879be502c2967dbef237dd4286b81f83945d8eefcdd5b678fda522c4",
+      "after_sha256": "662970edcb622a132e48f717014fdd56f8265c3f2b99f53ab269b10f05ff834a"
+    }
+  ],
+  "patch_sha256": "a187aa03c945f6bde6eb7d990cd17e52dcc03bf9f57a5c8b3d5c8134240a8c6f",
+  "stock_runtime_passes_added": 0
+}

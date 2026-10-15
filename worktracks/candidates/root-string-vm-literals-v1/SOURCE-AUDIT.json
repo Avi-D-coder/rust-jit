@@ -1,0 +1,92 @@
+{
+  "status": "source_only_uncompiled_unexecuted",
+  "task_cards": [
+    "T022",
+    "T024",
+    "T041"
+  ],
+  "claim": "LOCAL-024",
+  "prerequisites": [
+    "root-byte-assertions-v1",
+    "root-byte-comparison-admission-v2",
+    "root-string-literal-ir-v1",
+    "root-static-utf8-storage-v1"
+  ],
+  "files": [
+    {
+      "path": "crates/lrr/src/syntax/string_literals.rs",
+      "before_sha256": "8bcbba1af52cf61cbe4c5f857c8533e9f884fffbc54a5e5726710d5a024081fb",
+      "after_sha256": "3484b693808d8492607b4f40f1be441054470ec515f706507ce1e798d83c4ca4"
+    },
+    {
+      "path": "crates/lrr/src/traits/term.rs",
+      "before_sha256": "6220bc7e80159d80d70b8848555146e9de4d5734055da14c8400ada0be68e8b1",
+      "after_sha256": "5dbacedab606c538f145876c0e989d3bb5529c26ce1071a1160be8cc78e11682"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "before_sha256": "d19b7c46cf2f7dd7142be6d476f8a4011269ebd1634cbac9a858a474b6d50b55",
+      "after_sha256": "43984237c7bd1f85d5a969eaed81230daa62a9e7b2cc064108f3254af50bee69"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_byte_literals.rs",
+      "before_sha256": "e3faf44f9b9e0e6a1d46a3e00a08386b9a5f4fb5a7c6a54cf02a34bed10b3f9e",
+      "after_sha256": "65bfb3e83e2f88aff67d28e271e8a1c1413cbce2d04b352c31b1ebe7e1f20712"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "before_sha256": "7128a2181edbc4334d1c6fb5d7d4d7e95fa7479d7657dadc79690a6a5afdef8f",
+      "after_sha256": "b9b363950f337e0b932e3f88cc7fa37ab392f002a46898a238c7b48045c6dcb9"
+    },
+    {
+      "path": "crates/lrr/src/vm/step_string_literal_tests.rs",
+      "before_sha256": null,
+      "after_sha256": "6fbf6b0bad20c3368ec8adb40a03274c57115587bcdb17b297f170d15a459fbf"
+    },
+    {
+      "path": "crates/lrr/src/vm/step_string_literals.rs",
+      "before_sha256": null,
+      "after_sha256": "78ae1f2836b3af82ed7df40dee1e834b7a0a2eeabf470ab89a2ee7f05e324114"
+    }
+  ],
+  "patch_sha256": "3cb6ac4c6f4f500bdd64dbea1657d2991da1fcec3e0a6677705c17d85f3935da",
+  "patch_bytes": 25463,
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "upstream_witnesses": [
+    {
+      "path": "tests/ui/parser/unicode-escape-sequences.rs",
+      "sha256": "bfe36a9ec10df6e071a6d8c823aaf08ef65522637d87893b5e8d0490b704f2e4",
+      "bytes": 505
+    },
+    {
+      "path": "tests/ui/str/nul-char-equivalence.rs",
+      "sha256": "072d9e7415742e411853ec46e123180fb9aceb6e5d2655ffdf46a6a223ed773c",
+      "bytes": 1059
+    },
+    {
+      "path": "tests/ui/lexer/lexer-crlf-line-endings-string-literal-doc-comment.rs",
+      "sha256": "bb03d92b8289726639b7947f900dca05704b3a20ce26ec183a5a233ea6747289",
+      "bytes": 958
+    },
+    {
+      "path": "tests/ui/parser/slowparse-string.rs",
+      "sha256": "7632dd3828b2aeb68c85141ba2023d72fbbbe97469f6a6920d4c16c88d369f28",
+      "bytes": 400075
+    }
+  ],
+  "new_test_bodies": 4,
+  "stock_runtime_passes_added": 0,
+  "static_checks": [
+    "pinned Rust 1.99 formatting",
+    "exact seven-leaf patch replay",
+    "four upstream source identities"
+  ],
+  "created_at": "2026-10-15T11:01:48.367311+00:00",
+  "acceptance_pending": [
+    "strict build",
+    "literal VM and source refusal controls",
+    "unchanged slowparse-string main all editions",
+    "byte physical/activation and symbolic identity regression scopes",
+    "required combined milestone"
+  ]
+}

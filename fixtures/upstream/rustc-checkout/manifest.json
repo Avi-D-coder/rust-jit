@@ -2124,6 +2124,12 @@
       "bytes": 3716
     },
     {
+      "path": "tests/ui/parser/slowparse-string.rs",
+      "git_blob": "4e544eea87ca4daa58105eaaab2ca9a54c4d5435",
+      "sha256": "7632dd3828b2aeb68c85141ba2023d72fbbbe97469f6a6920d4c16c88d369f28",
+      "bytes": 400075
+    },
+    {
       "path": "tests/ui/parser/unicode-escape-sequences.rs",
       "git_blob": "8b084866f196e33f5d277e881dfb8f79339fa173",
       "sha256": "bfe36a9ec10df6e071a6d8c823aaf08ef65522637d87893b5e8d0490b704f2e4",
@@ -4839,6 +4845,14 @@
         "//@[e2018] edition:2018",
         "//@[e2021] edition:2021",
         "//@[e2024] edition:2024"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/parser/slowparse-string.rs",
+      "directives": [
+        "//@ run-pass"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"

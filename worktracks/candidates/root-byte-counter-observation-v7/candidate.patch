@@ -1,0 +1,45 @@
+--- a/crates/lrr/src/syntax/byte_string_runtime_tests.rs
++++ b/crates/lrr/src/syntax/byte_string_runtime_tests.rs
+@@ -138,6 +138,8 @@
+                 } => Some((*binding, context.len())),
+                 _ => None,
+             });
++            let before_literals = frame.counters().started_by_opcode[0];
++            let before_bindings = frame.counters().started_by_opcode[7];
+             assert!(matches!(
+                 step(&mut frame, &mut store, &recipe).unwrap_or_else(|error| {
+                     panic!(
+@@ -148,7 +150,13 @@
+                 }),
+                 StepOutcome::Next(_) | StepOutcome::Dispatch
+             ));
+-            if let Some((literal, destination)) = literal {
++            let started_literals = frame.counters().started_by_opcode[0] - before_literals;
++            let started_bindings = frame.counters().started_by_opcode[7] - before_bindings;
++            assert!(started_literals <= 1 && started_bindings <= 1);
++            // Dispatch may resume cleanup later in this same recipe. Presence
++            // of a BindLocal operation is not another executed binding.
++            if started_literals == 1 {
++                let (literal, destination) = literal.expect("executed original literal");
+                 literal_count += 1;
+                 let Some(DecodedLiteral::ByteString(payload)) = &literal.decoded else {
+                     panic!("not original byte-string")
+@@ -170,7 +178,8 @@
+                 let end = body.range.start + literal.source.relative_end;
+                 assert_eq!(&ORIGINAL[start as usize..end as usize], literal.spelling);
+             }
+-            if let Some((binding, len)) = binding {
++            if started_bindings == 1 {
++                let (binding, len) = binding.expect("executed original binding");
+                 binding_count += 1;
+                 store
+                     .require_static_byte_value(frame.binding_cell_for_test(binding).unwrap(), len)
+@@ -179,6 +188,8 @@
+         }
+         assert_eq!(*frame.pc(), stop);
+         assert_eq!((literal_count, binding_count), (2, 2));
++        assert_eq!(frame.counters().started_by_opcode[0], 2);
++        assert_eq!(frame.counters().started_by_opcode[7], 2);
+         // This is the genuine next source PC, before its actual assert macro.
+         let next_node = &index.nodes()[stop.node as usize];
+         let next_start = body.range.start.checked_add(next_node.range.start).unwrap() as usize;

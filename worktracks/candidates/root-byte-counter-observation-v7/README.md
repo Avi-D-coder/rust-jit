@@ -1,0 +1,3 @@
+# Count executed bindings across cleanup dispatch
+
+V80 passed the metadata/fuel control and reached the correct original declaration-prefix endpoint. Its observer counted two literals but fourteen observations of BindLocal because cleanup dispatch resumes the same recipe. Count the actual opcode-start deltas instead of repeated operation presence, require at most one new literal/binding per dispatch, validate its source/storage when it actually executes, and assert final exact counts of two literal and two binding operations. This does not suppress any operation, error or original assertion; the remaining original program remains unexecuted. No production behavior or fixture source change.

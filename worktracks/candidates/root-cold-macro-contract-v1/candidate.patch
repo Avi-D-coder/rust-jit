@@ -1,0 +1,78 @@
+--- a/crates/lrr/src/frontend/current_range_bound_context_tests.rs
++++ b/crates/lrr/src/frontend/current_range_bound_context_tests.rs
+@@ -21,6 +21,14 @@
+ );
+ 
+ fn world(text: &str, edition: u16) -> (Database, PreparedSourceView) {
++    world_with_macro_frontier(text, edition, false)
++}
++fn world_with_macro_frontier(
++    text: &str,
++    edition: u16,
++    expect_unresolved: bool,
++) -> (Database, PreparedSourceView) {
++    let mut blocked_scopes = 0;
+     let profile = ProfileIdentity {
+         edition,
+         ..ProfileIdentity::current()
+@@ -82,17 +90,32 @@
+         )
+         .unwrap();
+         match discovery.poll().unwrap() {
+-            SourceDiscoveryStep::Sealed(_) => {}
++            SourceDiscoveryStep::Sealed(_) if !expect_unresolved => {}
+             SourceDiscoveryStep::Incomplete {
+                 diagnostic,
+                 blocked,
+-            } => panic!("genuine source namespace incomplete: {diagnostic:?} {blocked:?}"),
++            } if expect_unresolved => {
++                assert_eq!(diagnostic.code, "LRR-E-CATALOG-INCOMPLETE");
++                assert!(diagnostic.message.contains("`missing_initializer`"));
++                assert_eq!(blocked.len(), 1);
++                assert!(diagnostic.macro_origin.is_some());
++                blocked_scopes += 1;
++                // Never publish a seal from the incomplete discovery result.
++                continue;
++            }
++            SourceDiscoveryStep::Incomplete {
++                diagnostic,
++                blocked,
++            } => {
++                panic!("genuine source namespace incomplete: {diagnostic:?} {blocked:?}")
++            }
+             _ => panic!(
+                 "header-only source control unexpectedly needs expansion/attribute/procedural authority"
+             ),
+         }
+         discovery.publish(&mut db).unwrap();
+     }
++    assert_eq!(blocked_scopes > 0, expect_unresolved);
+     (db, view)
+ }
+ fn selected(
+@@ -168,7 +191,9 @@
+ fn macro_division_and_unrepresentable_initializer_literals_remain_cold() {
+     // LRR-specific demand control; deliberately not a compiler run-pass source.
+     // Success on an out-of-range literal also rules out eager magnitude decode.
+-    let source = "const MAC:u32=missing_initializer!();const DIV:u32=1/0;const BIG:u32=340282366920938463463374607431768211456;fn main(){let _=MAC;let _=DIV;let _=BIG;}";
++    // The audited panic intrinsic cannot add declarations; unresolved macros
++    // have a separate catalog-incomplete contract, even in cold initializers.
++    let source = "const MAC:u32=panic!();const DIV:u32=1/0;const BIG:u32=340282366920938463463374607431768211456;fn main(){let _=MAC;let _=DIV;let _=BIG;}";
+     for edition in [2015, 2018, 2021, 2024] {
+         let (db, view) = world(source, edition);
+         let before = db.trace.events.len();
+@@ -276,3 +301,14 @@
+     assert_eq!(db.trace.events.len(), before);
+     assert_no_initializer_demand(&db);
+ }
++
++#[test]
++fn unresolved_initializer_macro_blocks_discovery_without_evaluating_any_body() {
++    // Spec 8.5 / 50: unknown expression macros can introduce impls. Cold
++    // evaluation does not authorize a false complete declaration catalogue.
++    const SOURCE: &str = "const MAC:u32=missing_initializer!();fn main(){let _=MAC;}";
++    for edition in [2015, 2018, 2021, 2024] {
++        let (db, _) = world_with_macro_frontier(SOURCE, edition, true);
++        assert_no_initializer_demand(&db);
++    }
++}

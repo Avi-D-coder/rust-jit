@@ -1,0 +1,15 @@
+--- a/crates/lrr/src/runtime/shape_byte_literals.rs
++++ b/crates/lrr/src/runtime/shape_byte_literals.rs
+@@ -266,8 +266,10 @@
+         assert!(current.descriptors.is_empty());
+         // Isolate the absolute count guard with a real complete index. The
+         // enlarged metadata budget is test-only so MAX_TYPES is reached first.
+-        let mut full = TypeRegistry::default();
+-        full.max_metadata_bytes = usize::MAX;
++        let mut full = TypeRegistry {
++            max_metadata_bytes: usize::MAX,
++            ..TypeRegistry::default()
++        };
+         for len in 0..u32::try_from(MAX_TYPES - 1).unwrap() {
+             full.intern(TypeKey::Array {
+                 element: TypeId(9),
