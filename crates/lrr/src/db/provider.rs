@@ -821,28 +821,57 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::EnteredType(key) => {
+                return match crate::frontend::entered_type_goals::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => {
+                        Provided::pure(QueryValue::EnteredType(Box::new(value)))
+                    }
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            QueryKey::PreparedTypePlan(key) => {
+                return match crate::frontend::entered_type_goals::prepare_plan(db, key) {
+                    QueryPoll::Ready(Ok(value)) => {
+                        Provided::pure(QueryValue::PreparedTypePlan(Box::new(value)))
+                    }
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::PreparedBindingPlan(key) => {
                 return match crate::frontend::prepared_binding_plan::prepare(db, key) {
-                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::PreparedBindingPlan(Box::new(value))),
+                    QueryPoll::Ready(Ok(value)) => {
+                        Provided::pure(QueryValue::PreparedBindingPlan(Box::new(value)))
+                    }
                     QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
             QueryKey::BindingConstraints(key) => {
                 return match crate::frontend::binding_constraints::prepare(db, key) {
-                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::BindingConstraints(Box::new(value))),
+                    QueryPoll::Ready(Ok(value)) => {
+                        Provided::pure(QueryValue::BindingConstraints(Box::new(value)))
+                    }
                     QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
             QueryKey::EnteredValue(key) => {
                 if key.phase != 0 {
-                    return Provided::error("LRR-E-QUERY-REQUEST", "entered Value goal requires entry phase");
+                    return Provided::error(
+                        "LRR-E-QUERY-REQUEST",
+                        "entered Value goal requires entry phase",
+                    );
                 }
                 return match crate::frontend::source_value_goals::prepare(
-                    db, &key.body, crate::ir::pc::NodeId(key.node),
+                    db,
+                    &key.body,
+                    crate::ir::pc::NodeId(key.node),
                 ) {
-                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::EnteredValue(Box::new(value))),
+                    QueryPoll::Ready(Ok(value)) => {
+                        Provided::pure(QueryValue::EnteredValue(Box::new(value)))
+                    }
                     QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
@@ -1077,6 +1106,14 @@ impl Provider for SyntaxProvider {
                         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                         QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
                     }
+                    match super::entered_type_thunk::thunk(db, parsed, handle, index, pc) {
+                        QueryPoll::Ready(Ok(Some(provided))) => {
+                            return QueryPoll::Ready(Ok(provided));
+                        }
+                        QueryPoll::Ready(Ok(None)) => {}
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
                     match parsed.retained_primitive_type_name_site(handle, index, pc) {
                         Ok(Some(site)) => {
                             let proof = match crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission::capture(db, parsed, handle, pc, site) {
@@ -1097,7 +1134,9 @@ impl Provider for SyntaxProvider {
                         Err(error) => return QueryPoll::Ready(Err(error)),
                     }
                     match super::binding_constraint_thunk::thunk(db, parsed, handle, index, pc) {
-                        QueryPoll::Ready(Ok(Some(provided))) => return QueryPoll::Ready(Ok(provided)),
+                        QueryPoll::Ready(Ok(Some(provided))) => {
+                            return QueryPoll::Ready(Ok(provided));
+                        }
                         QueryPoll::Ready(Ok(None)) => {}
                         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),

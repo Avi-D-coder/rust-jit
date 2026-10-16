@@ -569,9 +569,6 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
             goal.local = goal.target.as_ref().map(|target| target.identity)
         }
         NameLookup::Defined(selected) => {
-            if goal.target.is_some() {
-                return goal.needs(ValueGoalDemand::BindingClassification(selected.identity));
-            }
             return selected_declaration(db, goal, selected);
         }
         NameLookup::NeedInput(id) => {
@@ -687,6 +684,13 @@ fn selected_declaration(
     } else {
         None
     };
+    if goal.target.is_some() {
+        // A positive Value answer is not automatically a constant. rustc's
+        // late::try_resolve_as_non_binding permits fresh bindings to shadow
+        // Fn/AssocFn, but not constant/constructor/static definitions. Resolve
+        // the actual canonical source kind before admitting this binding.
+        return shadowed_definition_binding(db, goal, selected, source, header, context);
+    }
     checked!(
         source
             .profile
@@ -704,6 +708,140 @@ fn selected_declaration(
         context: context.clone(),
         owner,
     });
+    QueryPoll::Ready(goal.finish())
+}
+
+pub(super) fn shadowed_definition_binding(
+    db: &mut Database,
+    mut goal: EnteredValueGoal,
+    selected: NameDefinition,
+    source: &ParseKey,
+    header: &crate::syntax::outline::HeaderRecipe,
+    context: &DeclarationContext,
+) -> QueryPoll<EnteredValueGoal> {
+    use crate::{expand::source_discovery::SourceScopeOwner, source::manifest::ItemKind};
+    let id = selected.identity;
+    let canonical_kind = if context.scope.owner.is_some() {
+        let Some(row) = goal
+            .plan
+            .context()
+            .facts()
+            .items
+            .iter()
+            .find(|row| row.item.def_key.fingerprint() == id)
+        else {
+            return goal.needs(ValueGoalDemand::DeclarationOccurrence(id));
+        };
+        row.item.def_key.item_kind
+    } else if let Some(input) = db.input(&InputKey::GeneratedSyntax(source.content)) {
+        let InputValue::GeneratedSyntax(unit) = input.as_ref() else {
+            return QueryPoll::Ready(Err(error("binding generated source variant differs")));
+        };
+        let Some(definition) = unit.definitions.get(&id) else {
+            return goal.needs(ValueGoalDemand::DeclarationOccurrence(id));
+        };
+        if unit.key != *source
+            || definition.crate_key != selected.defining_unit
+            || definition.namespace != Namespace::Value
+            || definition.module_path != context.scope.module_path
+            || !unit.items.items().iter().any(|item| {
+                item.key.fingerprint() == id
+                    && item.start == context.range.start
+                    && item.end == context.range.end
+            })
+        {
+            return QueryPoll::Ready(Err(error(
+                "binding generated declaration attachment differs",
+            )));
+        }
+        definition.item_kind
+    } else {
+        let Some(environment) = goal.plan.environment() else {
+            return goal.needs(ValueGoalDemand::ModulePublication);
+        };
+        let environment = environment.macros().source_environment();
+        let SourceScopeOwner::Selected(owner) = environment.scope_owner(&context.scope) else {
+            return goal.needs(ValueGoalDemand::SourceOwner(id));
+        };
+        let outline = polled!(db.fetch(
+            &SyntaxProvider,
+            QueryKey::Outline(owner.selection().outline.clone())
+        ));
+        let QueryValue::Outline(outline) = outline.value.as_ref() else {
+            return QueryPoll::Ready(Err(error("binding declaration outline variant differs")));
+        };
+        let Some(item) = outline
+            .items
+            .iter()
+            .find(|item| item.def_key.fingerprint() == id)
+        else {
+            return goal.needs(ValueGoalDemand::DeclarationOccurrence(id));
+        };
+        if item.scope != context.scope || item.def_key.namespace != Namespace::Value {
+            return QueryPoll::Ready(Err(error("binding canonical declaration scope differs")));
+        }
+        if *source == owner.selection().outline.parse {
+            if item.declaration_span != context.range || item.header != *header {
+                return QueryPoll::Ready(Err(error(
+                    "binding original declaration attachment differs",
+                )));
+            }
+        } else {
+            let input = db.input(&InputKey::RetainedSyntax(source.content));
+            let Some(InputValue::RetainedSyntax(input)) = input.as_deref() else {
+                return goal.needs(ValueGoalDemand::DeclarationOccurrence(id));
+            };
+            polled!(input.require_current(db));
+            let anchor = input
+                .prepared()
+                .original_declarations()
+                .iter()
+                .find(|anchor| anchor.original_definition() == id);
+            if input.key() != source
+                || input.prepared().source() != owner.selection()
+                || !anchor.is_some_and(|anchor| {
+                    anchor.original_range() == item.declaration_span
+                        && anchor.declaration_range() == context.range
+                })
+                || !item.header.same_semantics(header)
+            {
+                return QueryPoll::Ready(Err(error(
+                    "binding retained declaration attachment differs",
+                )));
+            }
+        }
+        item.def_key.item_kind
+    };
+    if canonical_kind != ItemKind::Function {
+        return goal.needs(ValueGoalDemand::BindingClassification(id));
+    }
+    let parsed = polled!(db.fetch(&SyntaxProvider, QueryKey::ParseFile(source.clone())));
+    let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
+        return QueryPoll::Ready(Err(error("binding function source parse variant differs")));
+    };
+    let function = checked!(parsed.syntax_at(context.range, |node| ast::Fn::can_cast(node.kind())))
+        .and_then(ast::Fn::cast);
+    let Some(function) = function else {
+        return QueryPoll::Ready(Err(error(
+            "binding selected function exact source is absent",
+        )));
+    };
+    let excluded = function.body().map(|body| body.syntax().text_range());
+    if parsed.key() != *source
+        || crate::syntax::ast_adapter::tokens(function.syntax(), excluded) != header.tokens
+    {
+        return QueryPoll::Ready(Err(error(
+            "binding selected function header/source differs",
+        )));
+    }
+    let mut reads = StableEncoder::new("lrr/v1/pattern-shadows-source-function");
+    reads.digest(goal.reads);
+    reads.digest(id);
+    reads.record(source);
+    reads.record(header);
+    reads.record(context);
+    goal.reads = reads.finish();
+    goal.local = goal.target.as_ref().map(|target| target.identity);
     QueryPoll::Ready(goal.finish())
 }
 

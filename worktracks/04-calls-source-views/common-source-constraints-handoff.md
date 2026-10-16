@@ -158,3 +158,35 @@ indexed cold traversal and installed relevant-input checks. Reproduce the
 unchanged official complete main through the production CLI before and after;
 any earlier preparation failure remains a gap rather than removing attributes
 or the actual user macro. This record is source reasoning, not execution proof.
+
+Required execution-route successor after the ordinary suffix runtime pass:
+reuse that same complete unchanged upstream program as the payload of an
+arbitrary user macro and a wrapper macro. These are LRR route adaptations
+outside the imported originals, not additional stock fixture passes. Factor the
+existing all-edition whole-main assertions into one helper, retaining all18 call
+and parameter counters, actual nine child plans, exact-once completion and
+cleanup/continuation invariants. Do not substitute a smaller language example.
+The shared entry is the existing real SourceDiscovery expansion -> completed
+source environment -> RunMachine::start_with_discovery -> normal source/query
+and VM pipeline. The macro name selects no runtime behavior.
+
+This test-only change grants no source/expansion/type/call authority. It adds no
+production parser, evaluator, planning/cache/namespace operation or body copies;
+all eight architecture modes remain inspection obligations on the actual route.
+Known original-only lexical call gates and primitive-only selected-callee proofs
+remain named repair debt; a failing generated execution must drive their common
+source-call replacement, never another macro call evaluator. Standard-macro
+nested execution remains a separate gap. New executions are unexecuted until
+the sole validator collects real terminals on frozen source; earlier original
+main evidence is attached only to7406, not this helper refactor.
+
+Pre-execution peer review found uncompiled route-control V1 selected main from
+the original outline, which cannot contain a function emitted by a macro.
+Preserve V1 as a rejected test setup. V2 uses the existing production
+SourceDiscovery::entry_function sealed name/member service and actual
+SourceCallable::revalidate to select the genuine body, then the same existing
+prepare_source_local_plan/start_with_discovery admission. It does not fabricate
+or rewrite the BodyKey. This applies equally to the original helper entry.
+The original positive/wrong-argument controls must therefore be rerun against
+V2 before claiming unchanged harness acceptance. Both new route executions
+remain unexecuted; a setup failure cannot diagnose a runtime call path.

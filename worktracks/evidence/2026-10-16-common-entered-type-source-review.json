@@ -1,0 +1,196 @@
+{
+  "schema": "lrr/source-review/common-entered-types/v1",
+  "at": "2026-10-16T21:43:15.230410+00:00",
+  "head": "403710ae34d074468ea01df7a337dd16e2e6df62",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T032",
+    "M017",
+    "M018"
+  ],
+  "reviewed_manifest_sha256": "437ee48194a77168bfe27ce85d7bcd7dd4073666f665a158bf1250494a43f632",
+  "files": [
+    {
+      "path": "crates/lrr/src/cli/preentry_loader.rs",
+      "before_sha256": "be70cb6c86f4b55286b312ff8c7b4b5400f1e19d46466aabb6a90da8b9e7a2c7",
+      "sha256": "7e7c8e3f0dee823fa56f97017b7ce08aeb3aad3f0cde25d644bd8a124478141a",
+      "bytes": 21484,
+      "origin": "/private/tmp/lrr-entered-type-core-v2/overlay/crates/lrr/src/cli/preentry_loader.rs"
+    },
+    {
+      "path": "crates/lrr/src/db/key.rs",
+      "before_sha256": "8a7d90b749fb86bc1285d12494dc522e11d7e1509dbab22a284a928b1b7a899d",
+      "sha256": "3a10b1ddac1e615d9fc096e33bd091b99b52c82fd11924fe8a5c74ae39822410",
+      "bytes": 11993,
+      "origin": "/private/tmp/lrr-entered-type-core-v2/overlay/crates/lrr/src/db/key.rs"
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "before_sha256": "beaf61cf777f96075b4c9ebf48d6caafb40dec0652100d06fcf15c1662edc0b2",
+      "sha256": "b64123c64b5348061a8acd00e559c6169d9c0a62f8fe16eba3f8828d71e2fcbd",
+      "bytes": 20853,
+      "origin": "/private/tmp/lrr-entered-type-core-v2/overlay/crates/lrr/src/db/value.rs"
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "before_sha256": "8793156b8ca7e624c4c548102ad75c6fb9f52ade2bf90c1c1e0f27a5dc0f6b22",
+      "sha256": "cc2a7aa8c117ff0627ca40826a8132747995be948d1f673116bbfcc8565a1f36",
+      "bytes": 58213,
+      "origin": "/private/tmp/lrr-entered-type-core-v2/overlay/crates/lrr/src/db/provider.rs"
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "before_sha256": "41ae97cde4e201bf56aeeb5176ee664ef73f425cbe9f4ee29b6c32c8e8cea4f8",
+      "sha256": "996c7ab5097f35db8af38c8f2d6f0f4ef763d3bec60cdb5ca408530392cdb3be",
+      "bytes": 139453,
+      "origin": "/private/tmp/lrr-entered-type-core-v2/overlay/crates/lrr/src/db/memo.rs"
+    },
+    {
+      "path": "crates/lrr/src/db/product_retention.rs",
+      "before_sha256": "0b2fab22c2f44b2935f1b5d5f719271e47e96cb7af26504d6baf64c2795b14e2",
+      "sha256": "9ed1a90f93acc30b7acdebeb3dbd4961e8f5448d724c97f7b94bd6a6b595a3d7",
+      "bytes": 17211,
+      "origin": "/private/tmp/lrr-entered-type-core-v2/overlay/crates/lrr/src/db/product_retention.rs"
+    },
+    {
+      "path": "crates/lrr/src/db/mod.rs",
+      "before_sha256": "ef55e3de636eaa0752d5d5f12648364e3ebdb1721be9de04bd6d1fa6928e23b1",
+      "sha256": "5f6dbdab2d03dcde1f0276f36b6ef43c01340e23fb4812d3410fb5f1819d9e4d",
+      "bytes": 530,
+      "origin": "/private/tmp/lrr-entered-type-core-v2/overlay/crates/lrr/src/db/mod.rs"
+    },
+    {
+      "path": "crates/lrr/src/db/entered_type_thunk.rs",
+      "before_sha256": null,
+      "sha256": "f15c7c8f08879a13084840c6f35e07f100b8430ac036a63ece6930acf6371fe1",
+      "bytes": 4369,
+      "origin": "/private/tmp/lrr-entered-type-core-v2/overlay/crates/lrr/src/db/entered_type_thunk.rs"
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_type_goals.rs",
+      "before_sha256": null,
+      "sha256": "a28ce86d31b9754c0743bb71c21530aa684f865a84a8a0ac2c5c07147d0da2d5",
+      "bytes": 7091,
+      "origin": "/private/tmp/lrr-entered-type-core-v2/overlay/crates/lrr/src/frontend/entered_type_goals.rs"
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "before_sha256": "90bafef89a52e890e73dd3613a28b0f180e1f3085d39c571b41faee589ca3b67",
+      "sha256": "fa7f1b11af7b9cb14988a9507dae450e3fd4cb0867cf4c67fae9ad1564dd280d",
+      "bytes": 1924,
+      "origin": "/private/tmp/lrr-entered-type-core-v2/overlay/crates/lrr/src/frontend/mod.rs"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "before_sha256": "5c1d9076f1b7b56ff1a590a975da7ff159911fcf260f4dd843d32e4dc906fa14",
+      "sha256": "cec6872d621673f764379f7f86e335938878755fe5587e223c60debce7f4f11b",
+      "bytes": 37329,
+      "origin": "/private/tmp/lrr-entered-type-core-v2/overlay/crates/lrr/src/frontend/source_local_plan.rs"
+    },
+    {
+      "path": "crates/lrr/src/service/expansion.rs",
+      "before_sha256": "eff8b75630067adc7e41ff1e3d6a0b5a86e9f5a5df3e336fb781cf210ee18fc1",
+      "sha256": "eba6d768ed3256ac8249ae088b4318825a14a26323b2be84dfad8aad8de92911",
+      "bytes": 22753,
+      "origin": "/private/tmp/lrr-entered-type-core-v2/overlay/crates/lrr/src/service/expansion.rs"
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "before_sha256": "a145463c0f06a6544526db75db2f453d197251d2a8817fe12640ac50608d4384",
+      "sha256": "90f50c24094aae3e798d21d826b46ce1d717c03870fd8d0b2ed859de1cd86c45",
+      "bytes": 190163,
+      "origin": "/private/tmp/lrr-entered-type-core-v2/overlay/crates/lrr/src/syntax/thunks.rs"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_types.rs",
+      "before_sha256": "20b61d93aa99d910dd5caa8c995dd189a0cabd4ef24199db5a2de7440d9631bd",
+      "sha256": "5ab37f368be15c091552f9bc7b42b65d20cd0a527ee4adf3c18db817cf51b2be",
+      "bytes": 28477,
+      "origin": "/private/tmp/lrr-entered-type-core-v2/overlay/crates/lrr/src/frontend/declaration_field_types.rs"
+    }
+  ],
+  "status": "bounded source review; uncompiled and unexecuted; required retained occurrence join and controls absent from this packet",
+  "witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-is-contextual.rs",
+    "sha256": "3eae28bc6190bc568227cf1c5437745d2b55920116fe52b2834c39a661352cea",
+    "actual_predecessor": "f538eb04 runtime12902e/1, retainedcast24..32 symbolic target failure"
+  },
+  "shared_route": [
+    "SourceConstraints37 actual cast annotation and canonical indexed Syntax node",
+    "EnteredType42 -> actual SourceLocalPlan and BodyTypeOccurrence -> LocalTypePrefix::prepare_named shared by header and body",
+    "PreparedTypePlan43 retains one relevant PreparedInputGuard",
+    "entered_type_thunk::thunk -> ParsedFile::initial_thunk_with_source_type -> initial_scalar_thunk -> existing SetHint/PrimitiveCast verifier and VM"
+  ],
+  "review": [
+    {
+      "mode": 1,
+      "finding": "No assertion or alternate expression evaluator introduced; actual Cast AST lowered by existing scalar lowerer."
+    },
+    {
+      "mode": 2,
+      "finding": "No literal/break macro executor introduced; source receipts remain prerequisites, not execution vocabulary."
+    },
+    {
+      "mode": 3,
+      "finding": "Shared LocalTypePrefix::prepare_named factors actual existing header name/type selection; primitives only after Complete+Absent Type lookup. Cast result is not operand equality."
+    },
+    {
+      "mode": 4,
+      "finding": "Core deliberately retains NeedRetainedOccurrence. Independent structural-original authority join required before first runtime attempt; generated contexts explicitly unexecuted/held."
+    },
+    {
+      "mode": 5,
+      "finding": "No pattern engine or unselected executable branch preparation changed; declared Type service only."
+    },
+    {
+      "mode": 6,
+      "finding": "Memo42 and43 persist immutable Type+inputguard; phases select same43 plan. Normal installed execution consumes verified recipe. Actual Arc reuse/counters still require controls."
+    },
+    {
+      "mode": 7,
+      "finding": "New consumer makes indexed fact lookup and memo fetch; finalizer uses existing actual LocalTypePrefix/module service. No new global namespace scan. Existing legacy primitive_type_names scan held for unsealed callers."
+    },
+    {
+      "mode": 8,
+      "finding": "Actual SourceLocalPlan/parser/index Arc retained through existing source artifact roots, memo owners and completed-environment accounting. Actual Type via direct indexed ranges, no body deep clone or whole-file search in new consumer."
+    }
+  ],
+  "costs": "One existing bounded structural fact plan per body, one Type/source proof and input closure per actual Type memo. Each cold phase performs bounded indexed lookup and memo selection; installed operation executes normal scalar VM and guard. No measured performance claim. New goal/type/guard bytes checked at32/64MiB and shared plan registered in existing accounting. The cfg admission shares the existing predicate but currently checks attributes twice per cold phase (Type selection and ordinary lowering). Retained-original source authority currently joins twice during first goal preparation (range observation and prefix selection); neither repeats on installed operation execution. These are bounded source costs, not measured performance acceptance.",
+  "reviewed_corrections": [
+    "Source review found stale Parameter earlyreturn: prepare_named now requires retained plan current before anyselection.",
+    "Source review confirmed canonical Type relative range becomes actual absolute AST range only in source occurrence/lowerer; actual cast.ty independently checked.",
+    "baseline declaration_field_types factor excludes unvalidated ordinal performance successor.",
+    "Source review found cfg-disabled cast eagerly demanding Type; V2 checks actual source operation via existing statement_cfg and delegates existing skip/attribute refusal before42/43."
+  ],
+  "legacy_routes_held": [
+    "PrimitiveTypeNameAdmission full namespace capture and original-context profile",
+    "primitive_cast_target::resolve historical scanner in unsealed component entry",
+    "other macro-specific production paths named in E-R5-005 and audit MA001-MA008"
+  ],
+  "unexecuted": [
+    "Cargo compilation",
+    "unchanged auto runtime2015 and other editions",
+    "source Type guard and invalidation controls",
+    "suffix regression and macro wrapper execution controls",
+    "architecture matrix and current milestone"
+  ],
+  "acceptance": "No new runtime pass, task completion, integrated repair, full fixture, milestone, JIT or release claim.",
+  "predecessor_reviewed_manifest_sha256": "e5f25c043f26b07e41d37065fcf8c26f7c6413302a2d59410b300b9bda5d4d26",
+  "retained_occurrence_join_review": {
+    "manifest": "worktracks/evidence/2026-10-16-retained-type-occurrence-join-source.json",
+    "source_fingerprint": "cb1d865fcd1857fd821bd19cb28b39be4ac808afc87c25bc9073b688265000d1",
+    "inspected_symbols": [
+      "EnteredBodyTypeOccurrence::prepare",
+      "retained_original_origin",
+      "PreparedBodyContext::body_type_occurrence"
+    ],
+    "finding": "No concrete authority defect found in bounded source pass: structural Original required before raw spans, current original source lease and root context/edition checked, canonical owning original declaration/body anchor and actual Path/Type AST/token correspondence. Cached immutable row stays pending; returned cold observation contains the joined origin. Generated/Mixed/Pending retain explicit hold.",
+    "unexecuted": true
+  },
+  "validation_update": {
+    "actualCLI": "34f9 unchangedAUTO all4PASS, originalsuffix mainall4PASS",
+    "Typecontrols": "587e all5 query/phase/source/namespace/cfg controls +staleepoch/foreign controlPASS; nextpeerraworiginoraclefails becauseactualRetainedSyntax outputsEmpty; newactualbody expansion witness required. Sevenothercontrols notyetexecuted.",
+    "cfg_control_correction": "Unparenthesized attribute removal rejected by Rust1.99; withdrew proposed attribute AST redistribution before freeze. Test-only validparenowner correction required.",
+    "real_runtime_holds": "0819 user-emitted complete suffix fails ordinaryCall namespace integration. Constantcontrol blocked byactualunretiredmacroproducer receipt."
+  }
+}

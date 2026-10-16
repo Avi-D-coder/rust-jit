@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "component": "source-function-shadow-binding-v2",
+  "status": "source-only/uncompiled/unexecuted",
+  "source_fingerprint": "a2bb7d196fbaf7a414e7953193f62acd02fee25b6433d20938a0d4eabbe57f58",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/source_value_goals.rs",
+      "sha256": "dd5b12e5b4b4a893ef7773059b3d0bab4481b578527adbf9228c060b889b301a",
+      "bytes": 35643
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_value_goal_tests.rs",
+      "sha256": "92626f2eb4783e4667395492784e652dcc24487dccf4909954dd729797a37da8",
+      "bytes": 16605
+    }
+  ],
+  "base_contract": {
+    "goals_before_sha256": "3ee491a13751127b7a5633f36088a2cdce8223fd85a4f1a9b897d38b0e6aa479",
+    "tests_before_sha256": "d834c911f44086bc8b2ce5ff764261b060c24fe900c5fe7b10ac8ddcd858117f",
+    "note": "Exact goals before hash must be checked against actual frozen07608301; prior Value11 3ee491a1 prefix. No ordinal2/perf source included. Tests retain previously corrected exact constant Prefix control."
+  },
+  "actual_failure": "auto-is-contextual production CLI source07608301 terminala6f01e/1 retained LET node9 range8..19 after6dispatch+1call; not pass",
+  "pinned_reference": {
+    "path": "rustc/rust/compiler/rustc_resolve/src/late.rs",
+    "symbol": "try_resolve_as_non_binding",
+    "sha256": "0c8560d97898126597085247c6255a1ba166c35859d9ba9e7a2a03613e5127e9",
+    "contract": "Fn/AssocFn and Local can be shadowed; bare const/const ctor are nonbinding; other ctors/statics retain restrictions. No static/constructor authority added."
+  },
+  "upstream_witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-is-contextual.rs",
+    "sha256": "3eae28bc6190bc568227cf1c5437745d2b55920116fe52b2834c39a661352cea",
+    "unchanged": true
+  },
+  "changes": [
+    "Remove blanket Defined-target Pending branch; same actual selected_declaration authority path handles target or value use",
+    "Source-bound canonical Function kind from actual local row/generated member/original outline/retained anchor; owning source profile/header/context/scope and exact Fn AST validated",
+    "Cold same cached ParseFile/Outline only; body tokens excluded, no signature/body lowering or callable grant",
+    "All other kinds and missing/ambiguous joins remain typed pending; constant Prefix control unchanged",
+    "One external control whole auto fixture all4 x original/retained/user/wrapper, exact binding/use identity+memo reuse+no childcode, wrong source-header seam refusal"
+  ],
+  "required_validation_order": [
+    "unchanged actual auto CLI2015 then2018/2021/2024 ifgreen",
+    "corrected constant control",
+    "new source-function-shadow metadata control",
+    "unchanged suffix full-main regression"
+  ],
+  "review_record": "worktracks/04-calls-source-views/common-entered-value-goals-handoff.md",
+  "limits": [
+    "ExplicitBinding existing fastpath remains separately held for static/constant shadow restrictions",
+    "Associated/foreign source absent actual canonical owner remains pending",
+    "SDK macro closure/other legacy source paths unchanged; no architecture/fullfixture acceptance"
+  ],
+  "predecessor_manifest": "532680045178f382bf2f6c321bf3f15ef42a3d9b5febc40c14d52970b83d3b5a",
+  "source_review_correction": "Production goals unchanged dd5b12e5. Test-only adapter preserves actual crate-inner attributes at crate root via pinned SourceFile AST root Attr ranges, emitting exact remaining item bytes; avoids invalid inner attributes in item-macro output. No attributes deleted, source originals unchanged. Old V1 source-mode control held/unexecuted."
+}

@@ -84,6 +84,8 @@ pub struct Bucket {
 }
 #[derive(Debug, Clone)]
 pub enum QueryValue {
+    EnteredType(Box<crate::frontend::entered_type_goals::EnteredTypeGoal>),
+    PreparedTypePlan(Box<crate::frontend::entered_type_goals::PreparedTypePlan>),
     PreparedBindingPlan(Box<crate::frontend::prepared_binding_plan::PreparedBindingPlan>),
     BindingConstraints(Box<crate::frontend::binding_constraints::PreparedBindingConstraints>),
     EnteredValue(Box<crate::frontend::source_value_goals::EnteredValueGoal>),
@@ -127,6 +129,10 @@ impl QueryValue {
             _ => None,
         };
         let local = match self {
+            Self::EnteredType(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
+            Self::PreparedTypePlan(value) => {
+                Some(SourceArtifactRef::LocalPlan(value.retained_plan()))
+            }
             Self::EnteredValue(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::SourceLocalPlan(plan) => Some(SourceArtifactRef::LocalPlan(plan)),
             Self::QualifiedBodyType(value) => {
@@ -168,7 +174,14 @@ impl QueryValue {
         }
     }
     pub fn matches(&self, key: &QueryKey) -> bool {
-        if let (Self::PreparedBindingPlan(value), QueryKey::PreparedBindingPlan(key)) = (self, key) {
+        if let (Self::EnteredType(value), QueryKey::EnteredType(key)) = (self, key) {
+            return value.key() == key && key.phase == 0;
+        }
+        if let (Self::PreparedTypePlan(value), QueryKey::PreparedTypePlan(key)) = (self, key) {
+            return value.key() == key && key.phase == 0;
+        }
+        if let (Self::PreparedBindingPlan(value), QueryKey::PreparedBindingPlan(key)) = (self, key)
+        {
             return value.constraints().key() == key && key.phase == 0;
         }
         if let (Self::BindingConstraints(value), QueryKey::BindingConstraints(key)) = (self, key) {
@@ -273,8 +286,22 @@ impl QueryValue {
     pub fn fingerprint(&self) -> Digest {
         let mut e = StableEncoder::new("lrr/v2/query-value");
         match self {
-            Self::PreparedBindingPlan(value) => { e.u32(41); e.record(value.as_ref()); }
-            Self::BindingConstraints(value) => { e.u32(40); e.record(value.as_ref()); }
+            Self::EnteredType(value) => {
+                e.u32(42);
+                e.record(value.as_ref());
+            }
+            Self::PreparedTypePlan(value) => {
+                e.u32(43);
+                e.record(value.as_ref());
+            }
+            Self::PreparedBindingPlan(value) => {
+                e.u32(41);
+                e.record(value.as_ref());
+            }
+            Self::BindingConstraints(value) => {
+                e.u32(40);
+                e.record(value.as_ref());
+            }
             Self::EnteredValue(value) => {
                 e.u32(39);
                 e.digest(value.fingerprint());
@@ -407,6 +434,8 @@ impl QueryValue {
     }
     pub fn estimated_bytes(&self) -> usize {
         std::mem::size_of::<Self>().saturating_add(match self {
+            Self::EnteredType(value) => value.metadata_bytes(),
+            Self::PreparedTypePlan(value) => value.metadata_bytes(),
             Self::PreparedBindingPlan(value) => value.metadata_bytes(),
             Self::BindingConstraints(value) => value.metadata_bytes(),
             Self::EnteredValue(value) => value.estimated_bytes(),

@@ -1,0 +1,67 @@
+{
+  "schema": "lrr/source-review/retained-structural-occurrences/v1",
+  "status": "source-only; uncompiled/unexecuted; Type/runtime integration held",
+  "head": "403710ae34d074468ea01df7a337dd16e2e6df62",
+  "source_fingerprint": "b184c177644635ad70b221c566e6036bd82cb7cafb5d283daba6185d0a16a601",
+  "frozen_payload": "/private/tmp/lrr-retained-structural-occurrences-v1",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "37f4719011f6538ab872743f5b9d6cfbaa88161bee3417385934a97657b6d1b0",
+      "bytes": 24592
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/source_occurrences.rs",
+      "sha256": "5971d72d343935b9a6057549a713e07e2e2751208062688587739b992fb5a6a9",
+      "bytes": 12448
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/source_occurrences_tests.rs",
+      "sha256": "c448143ab93b136cc6b11505636fbe2f458799ce48375cb08e8f2c477417c18b",
+      "bytes": 10354
+    },
+    {
+      "path": "worktracks/04-calls-source-views/common-retained-structural-occurrences-handoff.md",
+      "sha256": "08acfe5e84f3e52efe54db444ee6ea02377998bf3073eaa61c8a5ae309a1c912",
+      "bytes": 9883
+    }
+  ],
+  "base_contract": "Only owned assembly.rs and new source_occurrences.rs/tests plus bounded handoff. No root Type/DB/thunk sources included; no edits to imported originals. Overlay exact source leaves over selected coordinator frozen complete baseline, not the moving checkout. Callable component frozen separately.",
+  "architecture_record": "worktracks/04-calls-source-views/common-retained-structural-occurrences-handoff.md",
+  "prior_design_review": "worktracks/evidence/2026-10-16-retained-type-occurrence-authority-review.json",
+  "api": "PreparedSourceSyntax.occurrence(SourceRange)->Result<SourceOccurrence,Diagnostic>, Original{initial_syntax,range} normalized initial coordinates; Generated{record,descriptor,parent_inventory,invocation,attachment,range} actual output-relative coordinates; Mixed/Pending. Source/Type/name/body/macro grants remain separate.",
+  "source_costs": "O(N) initial tree identity; O(I) per actual splice and O(I) memory with100k intervals and32MiB combined old/new staging cap; accumulated O(A squared) possible for A attachments. O(logI) immutable lookup one row, crossing range immediatelyMixed. No performance claim.",
+  "known_gaps": [
+    "caller suffix beyond generated materialized prefix remainsPending until actual suffixreceipt",
+    "root must consume actual provenance and original AST/source/context/edition/epoch/owningbody joins before removing NeedRetainedOccurrence",
+    "generated outputscope/body boundary still needsactual existing authority joins",
+    "runtime/route/milestone and broader MA removals unexecuted/held"
+  ],
+  "commands": [
+    {
+      "command": "rustfmt --edition 2024 crates/lrr/src/expand/source_declarative/assembly.rs crates/lrr/src/expand/source_declarative/source_occurrences.rs crates/lrr/src/expand/source_declarative/source_occurrences_tests.rs",
+      "exit_code": 0,
+      "scope": "formatting only"
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0,
+      "scope": "whitespace only"
+    }
+  ],
+  "tests_added": [
+    "unchanged_auto_type_position_survives_real_item_attachment_in_all_editions",
+    "real_attachment_moves_later_original_position_without_recovering_it_from_token_spans",
+    "copied_original_token_origins_never_restore_original_structural_position",
+    "repeated_copied_calls_and_nested_attachments_keep_distinct_actual_occurrences",
+    "malformed_ranges_and_overflowing_metadata_cannot_mint_occurrence_proof"
+  ],
+  "not_run": [
+    "Cargo",
+    "native compilation",
+    "adapter/source controls",
+    "guest runtime",
+    "strict/milestone",
+    "architecture matrix"
+  ]
+}

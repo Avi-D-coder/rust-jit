@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "component": "cast-non-equating-source-edge-review",
+  "status": "read-only/source-only/no Cargo/no runtime pass",
+  "candidate_manifest_sha256": "d278243bae33b04bd5b6e3d92322342875f99c6ae6736d6bb646bce16e723cb5",
+  "candidate_sha256": "8dbeb584297b8c374a2af1b78ac626b2ea786ebc436c504641a437362e246e9a",
+  "files": [
+    {
+      "path": "/private/tmp/lrr-source-cast-constraint-successor-v1/overlay/crates/lrr/src/frontend/binding_constraints.rs",
+      "sha256": "8dbeb584297b8c374a2af1b78ac626b2ea786ebc436c504641a437362e246e9a",
+      "bytes": 13205
+    },
+    {
+      "path": "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/auto-traits/auto-is-contextual.rs",
+      "sha256": "3eae28bc6190bc568227cf1c5437745d2b55920116fe52b2834c39a661352cea",
+      "bytes": 202
+    },
+    {
+      "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/common-numeric-binding-pipeline-v1/source/crates/lrr/src/syntax/source_constraints.rs",
+      "sha256": "a821db59f8c5a57fd7f3e67e7ab4159d44283cd089b3eadfb7d3654267eab331",
+      "bytes": 17124
+    },
+    {
+      "path": "/Users/avi/Code/rust-jit/crates/lrr/src/syntax/local_numeric_constraints.rs",
+      "sha256": "90af2f387f42f40d7ec39289a28fb8d4b3f7b17c99430a0b090acc06d3ca8a84",
+      "bytes": 17363
+    },
+    {
+      "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/common-numeric-binding-pipeline-v1/source/crates/lrr/src/db/binding_constraint_thunk.rs",
+      "sha256": "e48a98512942edc5979dc241f3e2d1b9b46a072e9266b8348cfdc2d4414d4b00",
+      "bytes": 3284
+    }
+  ],
+  "upstream": {
+    "path": "tests/ui/auto-traits/auto-is-contextual.rs",
+    "bytes": 202,
+    "git_blob": "2183a8c110c6802f4474917322a9add9ec31a1c0",
+    "sha256": "3eae28bc6190bc568227cf1c5437745d2b55920116fe52b2834c39a661352cea",
+    "directives": [
+      "run-pass"
+    ],
+    "auxiliaries": [],
+    "unchanged": true
+  },
+  "findings": [],
+  "observations": [
+    "SourceFact Cast retains operand0 separately from actual Type annotationrange. Skipping only Cast operand0 avoids equating operand to target or any use of the cast result. Parenthesized binding paths reach that sameedge through retained Parenthesis edges.",
+    "Actual hygienic target/use Value goals and canonical binding ID checks precede the skip. The earlier module function auto() sourcepath is a declaration rather than the later localbinding; spelling alone cannot connect it.",
+    "continue affects only this reverse edge. Other uses/call parameter goals stillvisited; cast result is notpushed, so id_i16(auto) plus auto asu8 constrains the binding from the declaration, notcasttarget.",
+    "Discarded bare auto; contributes no typeequatingedge. Candidate stays Unconstrained unless another actualuse resolvesit; helper doesnot mintdefault/guard from that state and returns oldordinary lowering.",
+    "Unconstrained/zeroedges is NOT proof of complete absence of opaque uses. Existing bounded unconstrained_literal fallback still checks all later actual source uses and refuses MacroCall/attributes/unresolved relations. Patch doesnot remove it, bypass Pending, invent a primitive or mark opaque semantics absent.",
+    "Actual cast target Type/member/descriptor authorization and conversion remain owned by entered cast phase; this source branch grants none of those. Invalid/unsupported target is not predeclared valid."
+  ],
+  "all_eight": {
+    "1": "no evaluator or assertion compiler",
+    "2": "same sourcegraph/VM, no generated-only literalroute",
+    "3": "Rust cast operand/result non-equatingrelation in sharedconstraint service, no name/macro whitelist",
+    "4": "no source-origin branch added; existing admitted source/hygienic binding proof retained",
+    "5": "no eager executable child/arm preparation; unknown actual relations remain Pending",
+    "6": "one existing graph edge check, no source parse/reconstruction/additionalguard capture",
+    "7": "no namespace query beyond existing binding/use goal; no new census or weakened dependency",
+    "8": "retained SourceUse ordinal fact, no body/index copy or file scan"
+  },
+  "holds": [
+    "baseline actual unchanged CLI main must run before candidate for failure attribution; neither run claimed here",
+    "negative-closure/default legacy AST fallback remains held architecturaldebt until genuine cached common proof replacesit",
+    "ordinary/generated/wrapper/stdmacro cast matrix and fullcompatibility unexecuted",
+    "other source relations such as Binary/MethodCall/opaque use remain exactpending; patch doesnot certifythem"
+  ]
+}

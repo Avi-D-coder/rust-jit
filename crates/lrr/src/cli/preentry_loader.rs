@@ -355,6 +355,8 @@ impl Packet {
                 | QueryKey::ReferenceHeader(_)
                 | QueryKey::TypeAlias(_) => {}
                 QueryKey::BodyStructure(_)
+                | QueryKey::EnteredType(_)
+                | QueryKey::PreparedTypePlan(_)
                 | QueryKey::PreparedBindingPlan(_)
                 | QueryKey::BindingConstraints(_)
                 | QueryKey::EnteredValue(_)

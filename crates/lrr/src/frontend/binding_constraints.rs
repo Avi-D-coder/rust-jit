@@ -241,6 +241,12 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindi
                     pending.push(use_edge.parent);
                     continue;
                 }
+                // A cast constrains its result, not its numeric operand. Stop
+                // this edge without following the result's expected type;
+                // other uses of the same actual binding still contribute.
+                if parent.kind() == FactKind::Cast && use_edge.ordinal == 0 {
+                    continue;
+                }
                 if parent.kind() != FactKind::Call || use_edge.ordinal == 0 {
                     return result.pending(use_edge.parent, ConstraintDemand::ExpressionRelation);
                 }

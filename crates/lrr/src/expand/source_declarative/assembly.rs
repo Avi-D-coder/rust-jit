@@ -38,6 +38,10 @@ mod macro_anchors;
 pub use macro_anchors::MacroDefinitionAnchor;
 #[path = "body_selection.rs"]
 mod body_selection;
+#[path = "source_occurrences.rs"]
+mod source_occurrences;
+pub use source_occurrences::SourceOccurrence;
+use source_occurrences::SourceOccurrences;
 
 const MAX_CALLS: usize = 100_000;
 const MAX_METADATA: usize = 128 * 1024 * 1024;
@@ -77,6 +81,7 @@ pub struct SourceSyntaxAssembly {
     source: PreparedSourceView,
     epoch: u64,
     tree: SyntaxAttachment,
+    occurrences: SourceOccurrences,
     calls: Vec<CallBinding>,
     outputs: Vec<Arc<GeneratedDeclarations>>,
     originals: Vec<OriginalDeclarationAnchor>,
@@ -90,6 +95,7 @@ pub struct PreparedSourceSyntax {
     source: PreparedSourceView,
     epoch: u64,
     syntax: Arc<SyntaxSnapshot>,
+    occurrences: SourceOccurrences,
     outputs: Vec<Arc<GeneratedDeclarations>>,
     originals: Vec<OriginalDeclarationAnchor>,
     macro_definitions: Vec<MacroDefinitionAnchor>,
@@ -100,6 +106,11 @@ pub struct PreparedSourceSyntax {
     identity: Digest,
 }
 impl PreparedSourceSyntax {
+    /// Structural positions, independent of copied diagnostic token origins.
+    /// This grants no name/type/member/body-entry or macro-execution authority.
+    pub fn occurrence(&self, range: SourceRange) -> Result<SourceOccurrence, Diagnostic> {
+        self.occurrences.occurrence(range)
+    }
     pub fn source(&self) -> &SourceSelection {
         self.source.selection()
     }
@@ -168,6 +179,7 @@ impl PreparedSourceSyntax {
             bytes = charge(bytes, output.metadata_bytes()?)?;
         }
         bytes = charge(bytes, anchors::metadata(&self.originals)?)?;
+        bytes = charge(bytes, self.occurrences.metadata_bytes()?)?;
         bytes = charge(bytes, macro_anchors::metadata(&self.macro_definitions)?)?;
         bytes = charge(bytes, expansion_metadata(self.expansion_definitions.len())?)?;
         Ok(bytes)
@@ -194,6 +206,11 @@ impl SourceSyntaxAssembly {
         let forest = provider.owned_forest()?;
         let tree = SyntaxAttachment::parse(&forest, DeclarationGrammar::Items).map_err(adapter)?;
         let captured = tree.materialize().map_err(adapter)?;
+        let occurrences = SourceOccurrences::new(
+            Digest(tree.syntax_identity().map_err(adapter)?.0),
+            u32::try_from(captured.text.len())
+                .map_err(|_| fault("initial occurrence root length overflow"))?,
+        )?;
         let producers = scan
             .producers()
             .iter()
@@ -249,10 +266,12 @@ impl SourceSyntaxAssembly {
             charge(retained_bytes, macro_anchors::metadata(&macro_definitions)?)?,
             calls.len(),
         )?;
+        let retained_bytes = charge(retained_bytes, occurrences.metadata_bytes()?)?;
         Ok(Self {
             source: source.share(),
             epoch,
             tree,
+            occurrences,
             calls,
             outputs: vec![],
             originals,
@@ -386,6 +405,19 @@ impl SourceSyntaxAssembly {
             }
         }
         .map_err(adapter)?;
+        let prior_occurrence_bytes = self.occurrences.metadata_bytes()?;
+        self.occurrences.splice(
+            edit,
+            &output,
+            u32::try_from(generated.text.len())
+                .map_err(|_| fault("generated occurrence length overflow"))?,
+        )?;
+        let retained_bytes = charge(
+            retained_bytes
+                .checked_sub(prior_occurrence_bytes)
+                .ok_or_else(|| fault("structural occurrence accounting differs"))?,
+            self.occurrences.metadata_bytes()?,
+        )?;
         self.originals = anchors::translate(self.originals, edit)?;
         self.macro_definitions = macro_anchors::translate(self.macro_definitions, edit)?;
         let mut prior = self.calls.into_iter();
@@ -452,13 +484,17 @@ impl SourceSyntaxAssembly {
         // result. Its anchor records pending work; it grants no producer ID.
         pending.extend(self.calls.iter().map(|c| c.invocation.unwrap_or(c.anchor)));
         let syntax = Arc::new(self.tree.snapshot().map_err(adapter)?);
+        self.occurrences.validate(
+            u32::try_from(syntax.syntax().text.len())
+                .map_err(|_| fault("final occurrence root length overflow"))?,
+        )?;
         anchors::validate(&self.source, syntax.clone(), &self.originals)?;
         self.outputs
             .sort_by_key(|output| output.record().key().fingerprint());
         let mut identity = StableEncoder::new(if selected_body.is_some() {
-            "lrr/v5/prepared-source-syntax/selected-body-macro-occurrences"
+            "lrr/v6/prepared-source-syntax/selected-body-structural-occurrences"
         } else {
-            "lrr/v4/prepared-source-syntax/macro-occurrences"
+            "lrr/v5/prepared-source-syntax/structural-occurrences"
         });
         if let Some(definition) = selected_body {
             identity.digest(definition);
@@ -467,6 +503,7 @@ impl SourceSyntaxAssembly {
         identity.record(&self.source.selection().outline);
         identity.u64(self.epoch);
         identity.digest(Digest(syntax.identity().0));
+        self.occurrences.encode(&mut identity);
         identity.u64(self.outputs.len() as u64); // Bounded by the capture/output ledger.
         for output in &self.outputs {
             identity.record(&output.record().descriptor());
@@ -496,6 +533,7 @@ impl SourceSyntaxAssembly {
             source: self.source,
             epoch: self.epoch,
             syntax,
+            occurrences: self.occurrences,
             outputs: self.outputs,
             originals: self.originals,
             macro_definitions: self.macro_definitions,

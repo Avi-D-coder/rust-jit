@@ -1,0 +1,22 @@
+{
+  "schema": "lrr/source-review/suffix-execution-route-controls/v2",
+  "status": "test-only source review; uncompiled/unexecuted, no pass inferred",
+  "component_sha256": "728ec85624cb4521bc32002d017114c6f0c7e1137c12bd41a958c914c5421aed",
+  "leaf_sha256": "721c3a21ead90f70a271ad51ac1839665db45fd66f51f52897bc9a4301c84419",
+  "superseded_v1": "415f89e96522e4d1f916e42875bb143eb3ac9681acbf400708a785e3475b9699 remains unexecuted; original-outline-only entry lookup defect diagnosed before run.",
+  "scope": "Whole unchanged upstream include is byte-preserved and interpolated without edits into item-producing arbitrary usermacro and wrapper; no synthetic function/block or runtime expression evaluator. Additional route controls are LRR adaptations, not additional stock passes.",
+  "api_review": "V2 start obtains genuine SourceDiscovery.entry_function(&mut db,entry), requires CallSelection::Source, SourceCallable.revalidate then actual selectedbody. Existing prepare_source_local_plan and start_with_discovery retain authority; startup remains before begin_run. Same API path exists in current successful source-goal harness. No originalBodyKey rewrite/fallback or origin-specific helper.",
+  "oracle_preservation": "All original18call/9child/27literal/CallSeal+prepare+advance/parameter VM counters, zero legacyAssert, no childcode before entry, source/currentrevision, onechildplan/memo reuse, Arcidentity, fullcleanup/continuation accounting remain exact in sharedhelper. Originaltest selector retained; same helper serves3contexts\u00d74editions. Wrongargumentcontrol shares changed entry helper, so it and original must be freshly validated. Other retention test also uses start and cannot inherit oldpass.",
+  "failure_scope": "Any generated lexicalcall/source Type/body entry failure must remain failure and drive commonroute removal; no catching/skip. No stdmacro matrix claimed. Shared setup wildcard discovery panic still hides an unexpectedstep; needs explicitvariant diagnostics if setupfails, not blanketDebug (enum noDebug).",
+  "eight_mode_review": {
+    "1": "Only Rusttestsource construction; ordinary RunMachine executes actual fullmain, legacyAssert counter mustzero.",
+    "2": "User/wrapper declarations selected from genuine discovery; ordinary indexed call VM required by identicalcounters.",
+    "3": "Same numeric18calls acrossactualorigins, no macroidentity based inference logic added.",
+    "4": "V2 no originaloutline assumption; generated entry must possess realselectedauthority orfail.",
+    "5": "No childindex/thunk/env before runtime; childcodecold assertions preserved.",
+    "6": "One actualchild SourceLocalPlan providerRun assertion+revisionreuse preserved; source test doesnot prove alllegacy planning removed.",
+    "7": "Currentness/sourcepub assertions preserved; legacy SourceCallable.revalidate still uses existingmetadata/census debt, not newproductionguard.",
+    "8": "Arcptr reuse assertions same; actualindexedcallcount, no bodydeepcopy or syntheticindex."
+  },
+  "source_updates": "Reviewer changed no production/testsource, no Cargo/native execution. Rootowns frozen2; validator sole executionowner."
+}

@@ -279,6 +279,8 @@ impl Database {
                     QueryValue::Thunk(_)
                     | QueryValue::SourceLocalPlan(_)
                     | QueryValue::QualifiedBodyType(_)
+                    | QueryValue::EnteredType(_)
+                    | QueryValue::PreparedTypePlan(_)
                     | QueryValue::EnteredValue(_) => {
                         for root in memo.value.source_roots() {
                             product_retention::count_owner(root, &mut inner, &mut products);

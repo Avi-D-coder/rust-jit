@@ -59,10 +59,11 @@ pub(super) fn thunk(
         BindingConstraintState::NoNumericDemand | BindingConstraintState::Unconstrained => {
             return QueryPoll::Ready(Ok(None));
         }
-        BindingConstraintState::Pending { .. } => {
-            return QueryPoll::Ready(Err(fault(
-                "numeric source constraint requires a missing common source goal",
-            )));
+        BindingConstraintState::Pending { node, demand } => {
+            return QueryPoll::Ready(Err(fault(&format!(
+                "numeric source constraint requires a missing common source goal: {demand:?} at source node {}",
+                node.0
+            ))));
         }
         BindingConstraintState::Resolved(_) => {}
     }

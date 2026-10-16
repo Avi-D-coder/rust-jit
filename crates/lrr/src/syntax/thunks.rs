@@ -1615,7 +1615,7 @@ impl ParsedFile {
         index: &BodyIndex,
         key: &PcKey,
     ) -> Result<VerifiedRecipe, Diagnostic> {
-        self.initial_thunk_admission(body, index, key, None, None, None)
+        self.initial_thunk_admission(body, index, key, None, None, None, None)
     }
     pub(crate) fn runtime_macro_numeric_request(
         &self,
@@ -1633,7 +1633,8 @@ impl ParsedFile {
         proof: &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         proof.context(self, body, index, key)?;
-        let recipe = self.initial_thunk_admission(body, index, key, Some(proof), None, None)?;
+        let recipe =
+            self.initial_thunk_admission(body, index, key, Some(proof), None, None, None)?;
         proof.attach(recipe, index)
     }
     pub(crate) fn initial_thunk_with_primitive_name(
@@ -1643,7 +1644,7 @@ impl ParsedFile {
         key: &PcKey,
         proof: &crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission,
     ) -> Result<VerifiedRecipe, Diagnostic> {
-        self.initial_thunk_admission(body, index, key, None, Some(proof), None)
+        self.initial_thunk_admission(body, index, key, None, Some(proof), None, None)
     }
     pub(crate) fn initial_thunk_with_source_constraints(
         &self,
@@ -1653,7 +1654,44 @@ impl ParsedFile {
         proof: &crate::frontend::binding_constraints::PreparedBindingConstraints,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         proof.hint_for(index, key)?;
-        self.initial_thunk_admission(body, index, key, None, None, Some(proof))
+        self.initial_thunk_admission(body, index, key, None, None, Some(proof), None)
+    }
+    /// Source Type demand follows the ordinary cfg/attribute admission. A
+    /// disabled expression executes its existing skip recipe without resolving
+    /// a Type that no reached Rust operation uses.
+    pub(crate) fn entered_cast_requires_type(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+    ) -> Result<bool, Diagnostic> {
+        let syntax = self
+            .entered_node_syntax(body, index, NodeId(key.node))?
+            .filter(|syntax| ast::CastExpr::can_cast(syntax.kind()))
+            .ok_or_else(|| error("source Type consumer is not its actual cast"))?;
+        let (enabled, other_attributes) = statement_cfg(&syntax, index.cfg())?;
+        Ok(enabled && !other_attributes)
+    }
+    pub(crate) fn initial_thunk_with_source_type(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        proof: &crate::frontend::entered_type_goals::EnteredTypeGoal,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        let cast = self
+            .entered_node_syntax(body, index, NodeId(key.node))?
+            .and_then(ast::CastExpr::cast)
+            .ok_or_else(|| error("source Type consumer is not its actual cast"))?;
+        let ty = cast
+            .ty()
+            .ok_or_else(|| error("source Type cast target absent"))?;
+        proof.primitive_for(
+            index,
+            key,
+            crate::syntax::ast_adapter::range(ty.syntax().text_range()),
+        )?;
+        self.initial_thunk_admission(body, index, key, None, None, None, Some(proof))
     }
     fn initial_thunk_admission(
         &self,
@@ -1667,6 +1705,7 @@ impl ParsedFile {
         source_constraints: Option<
             &crate::frontend::binding_constraints::PreparedBindingConstraints,
         >,
+        type_use: Option<&crate::frontend::entered_type_goals::EnteredTypeGoal>,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         if body.key() != *index.body() || key.body != body.key() {
             return Err(error("selected thunk body identity changed"));
@@ -1773,16 +1812,15 @@ impl ParsedFile {
             | SyntaxKind::TRAIT
             | SyntaxKind::MACRO_RULES
             | SyntaxKind::MACRO_DEF => self.initial_declaration_thunk(body, index, key, syntax),
-            SyntaxKind::BLOCK_EXPR | SyntaxKind::LET_STMT | SyntaxKind::EXPR_STMT => {
-                self.initial_scope_thunk(
+            SyntaxKind::BLOCK_EXPR | SyntaxKind::LET_STMT | SyntaxKind::EXPR_STMT => self
+                .initial_scope_thunk(
                     body,
                     index,
                     key,
                     syntax,
                     numeric_admission,
                     source_constraints,
-                )
-            }
+                ),
             SyntaxKind::LET_EXPR => self.initial_let_condition_thunk(body, index, key, syntax),
             SyntaxKind::MATCH_EXPR
             | SyntaxKind::MATCH_ARM
@@ -1811,7 +1849,7 @@ impl ParsedFile {
                 self.initial_binary_thunk(body, index, key, syntax, numeric_admission)
             }
             SyntaxKind::CAST_EXPR | SyntaxKind::LITERAL => {
-                self.initial_scalar_thunk(body, index, key, syntax, type_name)
+                self.initial_scalar_thunk(body, index, key, syntax, type_name, type_use)
             }
             _ => unsupported("entered node phase awaits its ordered lowering task"),
         }
@@ -1874,7 +1912,9 @@ impl ParsedFile {
         numeric_admission: Option<
             &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
         >,
-        source_constraints: Option<&crate::frontend::binding_constraints::PreparedBindingConstraints>,
+        source_constraints: Option<
+            &crate::frontend::binding_constraints::PreparedBindingConstraints,
+        >,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let id = NodeId(key.node);
         let node = &index.nodes()[key.node as usize];
@@ -3462,6 +3502,7 @@ impl ParsedFile {
         key: &PcKey,
         syntax: SyntaxNode,
         type_name: Option<&crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission>,
+        type_use: Option<&crate::frontend::entered_type_goals::EnteredTypeGoal>,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let id = NodeId(key.node);
         let node = &index.nodes()[key.node as usize];
@@ -3475,17 +3516,28 @@ impl ParsedFile {
                 let Some(child) = expression.expr() else {
                     return unsupported("cast operand absent");
                 };
-                // Admit the target in its original lexical source context.
-                // A hoisted local type or generic parameter may shadow a
-                // primitive spelling; it requires later symbolic resolution.
-                let Some(target) = primitive_cast_target::resolve(
-                    self,
-                    index,
-                    expression.ty(),
-                    type_name.map(|proof| (key, proof)),
-                )?
-                else {
-                    return unsupported("cast target requires symbolic type resolution");
+                // The common source Type goal owns currentness/name selection.
+                // The historical unsealed route retains its old safety refusals.
+                let target = if let Some(proof) = type_use {
+                    let ty = expression
+                        .ty()
+                        .ok_or_else(|| error("cast Type syntax absent"))?;
+                    proof.primitive_for(
+                        index,
+                        key,
+                        crate::syntax::ast_adapter::range(ty.syntax().text_range()),
+                    )?
+                } else {
+                    let Some(target) = primitive_cast_target::resolve(
+                        self,
+                        index,
+                        expression.ty(),
+                        type_name.map(|proof| (key, proof)),
+                    )?
+                    else {
+                        return unsupported("cast target requires symbolic type resolution");
+                    };
+                    target
                 };
                 let default = super::numeric_fallback::cast_operand(&child, target)?;
                 let child = id_for(index, body, child.syntax())?;

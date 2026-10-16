@@ -1,0 +1,67 @@
+{
+  "schema": "lrr/source-review/retained-type-occurrence-join/v1",
+  "status": "source-only; uncompiled/unexecuted; runtime/architecture held",
+  "head": "403710ae34d074468ea01df7a337dd16e2e6df62",
+  "source_fingerprint": "cb1d865fcd1857fd821bd19cb28b39be4ac808afc87c25bc9073b688265000d1",
+  "frozen_payload": "/private/tmp/lrr-retained-type-occurrence-join-v1",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "sha256": "eff7f4469cf0a75e5d51b23d2ab3b95a4acc25689fda54c87fc455c7ae62d76d",
+      "bytes": 49594,
+      "head_sha256": "b79bd262f6993c5136c756b71c4673f6dfcfecabd9a4e6ab6ecaa36fcae31735"
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_type_occurrences.rs",
+      "sha256": "6f65e48be0880ab8c02bdac1fa6864d9a899ae00a338558291fa2af922b0202d",
+      "bytes": 37895,
+      "head_sha256": "a00f9adc71e2a365096667f3f7dceaf9933093f1741f3ec6b22270523572950e"
+    },
+    {
+      "path": "crates/lrr/src/frontend/retained_type_occurrence_join_tests.rs",
+      "sha256": "dfd98aedff3420c7ccd5d822d9dde884280a3d056b1d57cc33fefa16729e81cb",
+      "bytes": 4052
+    },
+    {
+      "path": "worktracks/04-calls-source-views/common-retained-type-occurrence-join-handoff.md",
+      "sha256": "a0077eb451fd8de2394f68ab5accb2cb30500b86e42ebc8e1aff3edc477d89f0",
+      "bytes": 7628
+    }
+  ],
+  "base_contract": "Requires structural provenance ledger b184c177 component and root current Type goal42/plan43/finalizer/cast component. Overlay only these2production leaves and new testleaf over selected frozen baseline; source_local_plan.rs and qualified_type_names.rs are intentionally unedited/excluded. Test helper owner must register retained_type_occurrence_join_tests under declaration_field_type_tests.",
+  "architecture_record": "worktracks/04-calls-source-views/common-retained-type-occurrence-join-handoff.md",
+  "api": "body_type_occurrence(db,node) -> QueryPoll<Option<EnteredBodyTypeOccurrence>> borrowed view Deref same immutable row; origin/next_authority_demand from real cold structural+rawsource/AST authority join. No callerboolean or cachedrow mutation.",
+  "proof": [
+    "actual retained source/current lease/epoch from existing require_current",
+    "genuine ledger Original at current source path before token origins",
+    "actual raw original unit/content/path/root context/item normalization/edition",
+    "actual original declaration anchor+owning originalbody+direct AST PathType/recordpath+nontrivia kind/text correspondence",
+    "original ParseFile query; no executable body preparation"
+  ],
+  "known_gaps": [
+    "retained emitted/copied/mixed Type positions remainNeedRetainedOccurrence",
+    "missing actual original nested-local body locator remainsPending",
+    "generated direct source unchanged existingrealGeneratedBodyBoundary required",
+    "old primitive/cast scanner/globalnamespace route held pending root integration/removal"
+  ],
+  "commands": [
+    {
+      "command": "rustfmt --edition 2024 crates/lrr/src/frontend/body_type_occurrences.rs crates/lrr/src/frontend/source_body_context.rs crates/lrr/src/frontend/retained_type_occurrence_join_tests.rs",
+      "exit_code": 0,
+      "scope": "formatting only"
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0,
+      "scope": "whitespace only"
+    }
+  ],
+  "not_run": [
+    "Cargo",
+    "native compilation",
+    "adapter/source tests",
+    "guest runtime",
+    "strict/milestone",
+    "architecture matrix"
+  ]
+}

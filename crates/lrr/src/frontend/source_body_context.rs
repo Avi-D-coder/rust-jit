@@ -787,11 +787,19 @@ impl PreparedBodyContext {
         &self,
         db: &mut Database,
         node: NodeId,
-    ) -> QueryPoll<Option<&type_occurrences::BodyTypeOccurrence>> {
+    ) -> QueryPoll<Option<type_occurrences::EnteredBodyTypeOccurrence<'_>>> {
         match self.require_current(db) {
-            QueryPoll::Ready(Ok(())) => {
-                QueryPoll::Ready(self.body_types.select(&self.source, node))
-            }
+            QueryPoll::Ready(Ok(())) => {}
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let occurrence = match self.body_types.select(&self.source, node) {
+            Ok(Some(occurrence)) => occurrence,
+            Ok(None) => return QueryPoll::Ready(Ok(None)),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        match type_occurrences::EnteredBodyTypeOccurrence::prepare(&self.source, db, occurrence) {
+            QueryPoll::Ready(Ok(occurrence)) => QueryPoll::Ready(Ok(Some(occurrence))),
             QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
         }

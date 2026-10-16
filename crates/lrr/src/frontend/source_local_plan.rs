@@ -823,3 +823,73 @@ impl std::fmt::Debug for PreparedSourceLocalPlan {
             .finish()
     }
 }
+
+// One finalizer for actual header and body Type occurrences. The prefix owns
+// the source spelling/context; callers cannot provide a primitive name.
+impl LocalTypePrefix {
+    pub(crate) fn prepare_named(
+        self,
+        db: &mut Database,
+    ) -> QueryPoll<crate::frontend::source_types::NamedTypePreparation> {
+        use crate::frontend::{
+            current_module_names::ModuleNameCompletion,
+            signature_names::SignatureName,
+            source_types::{NamedTypePreparation, SourceType},
+        };
+        macro_rules! ready {
+            ($value:expr) => {
+                match $value {
+                    QueryPoll::Ready(Ok(value)) => value,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            };
+        }
+        ready!(self.retained_plan().require_current(db));
+        if let LocalTypePrefixSelection::Parameter(parameter) = self.selection() {
+            return QueryPoll::Ready(Ok(NamedTypePreparation::Parameter(*parameter)));
+        }
+        if matches!(self.selection(), LocalTypePrefixSelection::ModuleTail) {
+            if let Some(observation) = ready!(self.module_name(db)) {
+                if observation.completion() == ModuleNameCompletion::Complete
+                    && matches!(observation.lookup(), Some(NameLookup::Absent))
+                {
+                    let Some(name) = self.use_name() else {
+                        return QueryPoll::Ready(Err(error("named Type prefix occurrence absent")));
+                    };
+                    let classified = match crate::frontend::signature_names::classify_completed_type_lookup(
+                        name.name(), name.edition(), NameLookup::Absent,
+                    ) {
+                        Ok(value) => value,
+                        Err(error) => return QueryPoll::Ready(Err(error)),
+                    };
+                    return match classified {
+                        SignatureName::Primitive(primitive) => QueryPoll::Ready(
+                            SourceType::selected_primitive(primitive).map(NamedTypePreparation::Ready),
+                        ),
+                        other => QueryPoll::Ready(Ok(NamedTypePreparation::Name(other))),
+                    };
+                }
+            }
+        }
+        match ready!(type_declarations::prepare(db, self)) {
+            type_declarations::BodyTypeOutcome::Ready(proof) => {
+                QueryPoll::Ready(Ok(NamedTypePreparation::Ready(proof.source_type().clone())))
+            }
+            type_declarations::BodyTypeOutcome::Pending(demand) => QueryPoll::Ready(Err(
+                Diagnostic::new("LRR-E-TYPE-CONTEXT", format!("Type requires actual source authority: {demand:?}")),
+            )),
+        }
+    }
+}
+impl PreparedSourceLocalPlan {
+    pub(crate) fn prepare_named_body_type(
+        self: &Arc<Self>, db: &mut Database, node: crate::ir::pc::NodeId,
+    ) -> QueryPoll<crate::frontend::source_types::NamedTypePreparation> {
+        match self.type_prefix(db, node) {
+            QueryPoll::Ready(Ok(prefix)) => prefix.prepare_named(db),
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
+    }
+}

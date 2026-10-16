@@ -5,8 +5,12 @@ use crate::{
         diagnostic::Diagnostic,
         digest::{Digest, StableEncode},
     },
-    db::dependency::InputValue,
+    db::{
+        dependency::InputValue, key::QueryKey, memo::Database, poll::QueryPoll,
+        provider::SyntaxProvider, value::QueryValue,
+    },
     expand::scopes::MacroName,
+    expand::source_declarative::assembly::SourceOccurrence,
     ir::pc::NodeId,
     source::manifest::BodyKey,
     syntax::{ast_adapter::range, body_index::NodeRole, spans::SourceRange, token_wire::Key},
@@ -108,15 +112,217 @@ impl BodyTypeOccurrence {
     pub(crate) fn shape(&self) -> BodyTypeShape {
         self.shape
     }
+}
+/// Borrowed cold observation over the SAME immutable indexed occurrence. The
+/// retained syntax row is not mutated or upgraded by a caller-supplied flag.
+/// A completed owning query must retain its actual input dependency closure.
+pub(crate) struct EnteredBodyTypeOccurrence<'a> {
+    occurrence: &'a BodyTypeOccurrence,
+    origin: BodyTypeOrigin,
+}
+impl std::fmt::Debug for EnteredBodyTypeOccurrence<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EnteredBodyTypeOccurrence")
+            .field("node", &self.occurrence.node())
+            .field("origin", &self.origin)
+            .finish_non_exhaustive()
+    }
+}
+impl std::ops::Deref for EnteredBodyTypeOccurrence<'_> {
+    type Target = BodyTypeOccurrence;
+    fn deref(&self) -> &Self::Target {
+        self.occurrence
+    }
+}
+impl<'a> EnteredBodyTypeOccurrence<'a> {
+    pub(super) fn prepare(
+        source: &AdmittedBodyContext,
+        db: &mut Database,
+        occurrence: &'a BodyTypeOccurrence,
+    ) -> QueryPoll<Self> {
+        let origin = match retained_original_origin(source, db, occurrence) {
+            QueryPoll::Ready(Ok(origin)) => origin,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        QueryPoll::Ready(Ok(Self { occurrence, origin }))
+    }
+    pub(crate) fn origin(&self) -> BodyTypeOrigin {
+        self.origin
+    }
     pub(crate) fn next_authority_demand(&self) -> BodyTypeAuthorityDemand {
         match self.origin {
             BodyTypeOrigin::NeedGeneratedBoundary => BodyTypeAuthorityDemand::GeneratedBoundary,
             BodyTypeOrigin::NeedRetainedOccurrence => {
                 BodyTypeAuthorityDemand::RetainedExpansionOccurrence
             }
-            _ if self.shape != BodyTypeShape::Named => BodyTypeAuthorityDemand::TypeRecipe,
+            _ if self.shape() != BodyTypeShape::Named => BodyTypeAuthorityDemand::TypeRecipe,
             _ => BodyTypeAuthorityDemand::CachedLocalPrefix,
         }
+    }
+}
+
+/// Pure source/position authority only. Structural survival is checked before
+/// diagnostic spans, which cannot distinguish a copied emitted occurrence.
+fn retained_original_origin(
+    source: &AdmittedBodyContext,
+    db: &mut Database,
+    occurrence: &BodyTypeOccurrence,
+) -> QueryPoll<BodyTypeOrigin> {
+    let missing = || QueryPoll::Ready(Ok(BodyTypeOrigin::NeedRetainedOccurrence));
+    let Some(InputValue::RetainedSyntax(unit)) = source.source_receipt.as_deref() else {
+        // GeneratedSyntax source admission already retains its actual current
+        // GeneratedBodyBoundary, output record, owning edition and hygiene.
+        return QueryPoll::Ready(Ok(occurrence.origin()));
+    };
+    let result = (|| -> Result<Option<(&crate::source::changes::PreparedSourceView, SourceRange)>, Diagnostic> {
+        if unit.key() != &source.parsed().key() || occurrence.owner != source.identity()
+            || occurrence.body() != &source.body().key() || !source.body().range.contains(occurrence.path_range()) {
+            return Err(fault("retained Type occurrence actual source/body differs"));
+        }
+        if !matches!(unit.prepared().occurrence(occurrence.path_range())?, SourceOccurrence::Original {..}) {
+            return Ok(None);
+        }
+        let Some(original) = source.original_source() else { return Ok(None) };
+        if unit.prepared().source() != original.selection() {
+            return Err(fault("retained Type occurrence original source differs"));
+        }
+        original.require_original_hygiene()?;
+        let Some(current) = db.prepared_source(original.selection())? else { return Ok(None) };
+        if !original.same_publication(&current) { return Err(fault("retained Type occurrence original lease differs")) }
+        let Some(origins) = source.parsed().retained_source_spans(occurrence.path_range())? else { return Ok(None) };
+        if origins.is_empty() { return Ok(None) }
+        let selection = original.selection();
+        let Some(hygiene) = source.parsed().hygiene_facts() else { return Ok(None) };
+        let mut raw = SourceRange { start: u32::MAX, end: 0 };
+        for origin in &origins {
+            let context = hygiene.context(origin.context)?;
+            if origin.source.unit.0 != selection.outline.crate_key.0
+                || origin.source.content.0 != selection.outline.parse.content.0
+                || origin.source.path != selection.path.as_str()
+                || context.parent.is_some()
+                || context.defining_unit != origin.source.unit
+                || hygiene.item(origin.context)? != origin.context
+                || super::edition(origin.edition) != selection.outline.parse.profile.edition
+                || super::edition(context.edition) != selection.outline.parse.profile.edition
+                || origin.start >= origin.end {
+                return Ok(None);
+            }
+            raw.start = raw.start.min(origin.start);
+            raw.end = raw.end.max(origin.end);
+        }
+        // These are raw source-span coordinates, independently proved AFTER
+        // structural survival. Never reinterpret initial normalized offsets.
+        Ok(Some((original, SourceRange::checked(raw.start, raw.end)?)))
+    })();
+    let (original, raw) = match result {
+        Ok(Some(value)) => value,
+        Ok(None) => return missing(),
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    let definition = source.body().def_key;
+    let Some(item) = original
+        .outline()
+        .items
+        .iter()
+        .find(|item| item.def_key.fingerprint() == definition)
+    else {
+        // A nested original body's exact original locator is a separate join;
+        // never guess its owner from a token span or a lexical source range.
+        return missing();
+    };
+    let Some(body) = &item.body else {
+        return missing();
+    };
+    let anchors = unit.prepared().original_declarations();
+    let Some(anchor) = anchors
+        .binary_search_by_key(&definition, |anchor| anchor.original_definition())
+        .ok()
+        .map(|index| &anchors[index])
+    else {
+        return missing();
+    };
+    if anchor.original_range() != item.declaration_span
+        || anchor.declaration_range() != source.context().range
+        || anchor.body_range() != Some(source.body().range)
+        || item.scope != source.context().scope
+        || !body.range.contains(raw)
+    {
+        return missing();
+    }
+    let parsed = match db.fetch(
+        &SyntaxProvider,
+        QueryKey::ParseFile(original.selection().outline.parse.clone()),
+    ) {
+        QueryPoll::Ready(Ok(value)) => value,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault(
+            "retained Type occurrence original parser variant differs",
+        )));
+    };
+    let result = (|| -> Result<bool, Diagnostic> {
+        if parsed.key() != original.selection().outline.parse
+            || parsed.token_edition(raw)? != original.selection().outline.parse.profile.edition
+        {
+            return Err(fault(
+                "retained Type occurrence original parse/edition differs",
+            ));
+        }
+        let path = |parsed: &crate::syntax::parse::ParsedFile,
+                    at|
+         -> Result<Option<ra_ap_syntax::SyntaxNode>, Diagnostic> {
+            let Some(path) = parsed.syntax_at(at, |syntax| ast::Path::can_cast(syntax.kind()))?
+            else {
+                return Ok(None);
+            };
+            let valid = path
+                .parent()
+                .is_some_and(|parent| match occurrence.usage() {
+                    BodyTypeUse::TypeSyntax => {
+                        ast::PathType::can_cast(parent.kind()) && range(parent.text_range()) == at
+                    }
+                    BodyTypeUse::RecordConstructor => ast::RecordExpr::cast(parent)
+                        .and_then(|record| record.path())
+                        .is_some_and(|actual| actual.syntax() == &path),
+                });
+            Ok(valid.then_some(path))
+        };
+        let Some(original_path) = path(parsed, raw)? else {
+            return Ok(false);
+        };
+        let Some(current_path) = path(source.parsed(), occurrence.path_range())? else {
+            return Ok(false);
+        };
+        let owner = original_path.ancestors().take(257).find(|node| {
+            ast::Fn::can_cast(node.kind())
+                || ast::Const::can_cast(node.kind())
+                || ast::Static::can_cast(node.kind())
+        });
+        if owner.is_none_or(|owner| range(owner.text_range()) != item.declaration_span) {
+            return Ok(false);
+        }
+        let tokens = |node: &ra_ap_syntax::SyntaxNode| {
+            node.descendants_with_tokens()
+                .filter_map(|element| element.into_token())
+                .filter(|token| !token.kind().is_trivia())
+        };
+        let mut original_tokens = tokens(&original_path);
+        let mut current_tokens = tokens(&current_path);
+        loop {
+            match (original_tokens.next(), current_tokens.next()) {
+                (None, None) => return Ok(true),
+                (Some(a), Some(b)) if a.kind() == b.kind() && a.text() == b.text() => {}
+                _ => return Ok(false),
+            }
+        }
+    })();
+    match result {
+        Ok(true) => QueryPoll::Ready(Ok(BodyTypeOrigin::Original)),
+        Ok(false) => missing(),
+        Err(error) => QueryPoll::Ready(Err(error)),
     }
 }
 pub(crate) struct PreparedBodyTypeOccurrences {

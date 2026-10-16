@@ -6,7 +6,10 @@ mod binding_constraint_tests;
 use super::*;
 use crate::{
     expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
-    frontend::{callables::CallSelection, compile_input_catalog::CompileInputCatalog},
+    frontend::{
+        callables::CallSelection, compile_input_catalog::CompileInputCatalog,
+        source_types::SourceType,
+    },
     source::changes::PreparedSourceView,
     traits::term::TyTerm,
 };
@@ -288,3 +291,9 @@ mod source_parameter_goal_tests;
 
 #[path = "source_value_goal_tests.rs"]
 mod source_value_goal_tests;
+
+#[path = "entered_type_goal_tests.rs"]
+mod entered_type_goal_tests;
+
+#[path = "retained_type_occurrence_join_tests.rs"]
+mod retained_type_occurrence_join_tests;

@@ -1,0 +1,39 @@
+{
+  "schema": "lrr/source-review/function-pattern-classification/v1",
+  "status": "source-only; uncompiled/unexecuted; no runtime pass",
+  "payload_sha256": {
+    "crates/lrr/src/frontend/source_value_goals.rs": "dd5b12e5b4b4a893ef7773059b3d0bab4481b578527adbf9228c060b889b301a",
+    "crates/lrr/src/frontend/source_value_goal_tests.rs": "01834c28848b46ec4d22decf57300d29a4021c96656a225b7bdc72d044e726c8"
+  },
+  "dependencies_sha256": {
+    "crates/lrr/src/db/provider.rs": "8793156b8ca7e624c4c548102ad75c6fb9f52ade2bf90c1c1e0f27a5dc0f6b22",
+    "crates/lrr/src/frontend/declaration_field_type_tests.rs": "7bb627bbb7cdd202ead3a200936cc394c39cec32c02a5d04e13473330efbc6ec",
+    "crates/lrr/src/frontend/source_locals.rs": "050017c60d973d6a1694bdca32ff02f0d58d8c1bed9726280f2ef12c47214f3b",
+    "crates/lrr/src/expand/generated_syntax.rs": "e1665a0dccd7fb0f54e2fd0b1e62d5fbcc8652ed80da5d72ed165d777a36193e",
+    "crates/lrr/src/frontend/local_type_modules.rs": "a420cb36608557061d2afd7f9243d8fb7a9460747b744d7314bada3044ee29a3"
+  },
+  "invariant": "An actually selected Value definition is not itself a constant-pattern proof. Classify canonical source kind with current exact declaration authority before deciding whether a fresh binding can shadow it; same ordinary source service for original/retained/generated.",
+  "actual_failure_link": "CLI auto-is-contextual2015 captured7406 main fault at exact retained LET node9. Actualmessage hides Pending subtype; static prior Binding demand diagnosis plus later Cast edge recorded separately. This component repairs genuine function shadowing classification, not every source constraint relation.",
+  "shared_route": "Existing entered occurrence/canonicalpattern/hygienicprefix\u2192relevant namespace read certification\u2192selected_declaration actual source/header/context\u2192shadowed_definition_binding\u2192actual canonical function kind/AST/header. Value39 memo result retains normal plan+relevant query/input deps. No newcallable resolver or execution lane.",
+  "authority_review": {
+    "local": "selected_declaration verifies actual LocalDeclarationOwner==currentplan BodyKey, exactfactsrow/source/context/header (or current cachedheader stamp). New helper reads same exactrow kind.",
+    "original": "Actual completed environment.scope_owner supplies source selection; fetched actual Outline exactID/scope/namespace/header/range checked against current source/header/context inputs.",
+    "retained": "Same actual original Outlinecanonicalkind plus currentRetainedSyntax receipt, exactsource/key/ownerselection and originalanchor original/translateddeclaration range, HeaderRecipe same_semantics. Final ParseFile demand repeats genuine currentRetainedSyntax gate.",
+    "generated": "GeneratedSyntax actualkey+definitions mapping, unit/item namespace+crate/module+exactmemberrange checked. Final real ParseFile provider fetches actual DiscoverySeal before constructing ParsedFile; exactFn AST/header token check discharges wrongcanonicalkind/header, no arbitrarycallername/type authority.",
+    "kind": "Only ItemKind::Function admits binding, consistent with ordinary function Value shadowing. Nonfunction positive candidates remain typedBindingClassification. This staged implementation does not infer const/variant/static semantics or broaden undefinedcases.",
+    "source_currentness": "All reads occur inside pureValue39 provider. Source/header/context/owner/outline/generated/retained parse deps captured normally; parentplan.require_current already gates original environment. No sourceBodyStructure/Thunk or calleeFunctionSignature needed."
+  },
+  "test_review": "Newcontrol uses entireunchanged AUTO include all4editions \u00d7original/retained/usermacro/wrapper. Existingworld selects main through real discovery.entry_function and currentplan, not originaloutline-only lookup. Checks precedingfn declaration vs freshbinding identity+two uses, reuse, nochildBodyStructure/Thunk, actualcorrupt suppliedheader rejected at privatejoin. These are sourceauthority controls, not runtime/fullfixturepasses.",
+  "eight_mode_review": {
+    "1": "No assertion/compiler/evaluator introduced.",
+    "2": "Same retained/generated parse+source services, no literal-onlyexecution.",
+    "3": "Canonical ItemKindFunction is Rust semantic classification, no auto/name/macro-specificinference.",
+    "4": "Alloriginal/retained/generated handled through actualsource roots; no neworiginrefusal. Missingproof stays typedpending.",
+    "5": "Samepatternoccurrence target, no alternatepatternengine or childcode prep.",
+    "6": "Newclassification in memoizedValue39 coldquery; outlinefind/headerASTtokens remain boundedcoldwork, no installed reentry or perphase rule.",
+    "7": "Relevant module/name/readcertification retained, no globalnamespacecensus added. Existinglegacy graphpreparation outside slice remains held.",
+    "8": "Existingplan/parser/outline/inputArcs shared; noBodyIndexclone. Actual selectedFn resolved via syntax_at exactrange; Outlinecanonicalrow find is coldmetadata lookup."
+  },
+  "remaining": "Need actual classifiercontrols and unchangedCLI terminal with Cast correction; does not establish sourceconstraints or lexical/generatedcall matrix closure. No guestcodegrant or Drop/catalogue claim.",
+  "edits": "No reviewed source edits by reviewer; no Cargo/native tools."
+}

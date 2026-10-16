@@ -98,3 +98,5 @@ pub use source_locals::owned_plan::source_value_goals;
 
 pub(crate) mod binding_constraints;
 pub(crate) mod prepared_binding_plan;
+
+pub mod entered_type_goals;

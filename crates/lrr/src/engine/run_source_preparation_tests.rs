@@ -32,16 +32,14 @@ fn start(text: &str, edition: u16, entry: &str) -> Harness {
     let (mut db, source, discovery) = setup(text, edition);
     db.begin_expansion_epoch(1).unwrap();
     discovery.publish(&mut db).unwrap();
-    let body = source
-        .outline()
-        .items
-        .iter()
-        .find(|item| item.def_key.declared_name == entry)
-        .unwrap()
-        .body
-        .as_ref()
-        .unwrap()
-        .key();
+    // Use the same genuine sealed entry selector as the standalone service.
+    // Generated declarations need not be present in the original outline.
+    let selected = ready(discovery.entry_function(&mut db, entry));
+    let crate::frontend::callables::CallSelection::Source(selected) = selected else {
+        panic!("reached source entry did not select an ordinary function: {selected:?}");
+    };
+    selected.revalidate(&mut db).unwrap();
+    let body = selected.body().expect("selected source entry body").key();
     let parent = ready(db.prepare_source_local_plan(&discovery, &[&source], &body));
     let facts = Arc::clone(parent.context().facts());
     let macros = CompletedStandaloneRuntimeMacros::from_discovery(&source, &discovery).unwrap();
@@ -89,10 +87,9 @@ fn completed(h: &mut Harness) -> RunReport {
         RunPoll::NeedInput(input) => panic!("unchanged local program suspended: {input:?}"),
     }
 }
-#[test]
-fn unchanged_suffix_main_executes_local_calls_and_reuses_one_current_child_plan_all_editions() {
+fn assert_complete_suffix_main(text: &str) {
     for edition in EDITIONS {
-        let mut h = start(ORIGINAL, edition, "main");
+        let mut h = start(text, edition, "main");
         let children = child_bodies(&h);
         assert_eq!(children.len(), 9);
         let calls = h
@@ -177,6 +174,24 @@ fn unchanged_suffix_main_executes_local_calls_and_reuses_one_current_child_plan_
         assert!(h.run.terminal);
         h.db.finish_run().unwrap();
     }
+}
+#[test]
+fn unchanged_suffix_main_executes_local_calls_and_reuses_one_current_child_plan_all_editions() {
+    assert_complete_suffix_main(ORIGINAL);
+}
+#[test]
+fn upstream_suffix_user_macro_output_uses_same_ordinary_calls_all_editions() {
+    // Whole upstream payload, unchanged. Only its source origin differs.
+    let source = format!("macro_rules! emit {{ () => {{ {ORIGINAL} }} }} emit!();");
+    assert_complete_suffix_main(&source);
+}
+#[test]
+fn upstream_suffix_wrapper_macro_output_uses_same_ordinary_calls_all_editions() {
+    let source = format!(
+        "macro_rules! emit {{ () => {{ {ORIGINAL} }} }} \
+         macro_rules! wrapper {{ () => {{ emit!(); }} }} wrapper!();"
+    );
+    assert_complete_suffix_main(&source);
 }
 #[test]
 fn wrong_runtime_argument_type_never_executes_the_selected_local_callee_all_editions() {

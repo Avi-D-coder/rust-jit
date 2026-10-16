@@ -86,6 +86,8 @@ impl StableEncode for CurrentModuleNameKey {
 pub use crate::frontend::constants::query_identity::ConstQueryIdentity as ConstantKey;
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum QueryKey {
+    EnteredType(crate::source::manifest::PcKey),
+    PreparedTypePlan(crate::source::manifest::PcKey),
     PreparedBindingPlan(crate::source::manifest::PcKey),
     BindingConstraints(crate::source::manifest::PcKey),
     EnteredValue(crate::source::manifest::PcKey),
@@ -137,6 +139,8 @@ impl QueryKey {
             }
             Self::ScopeBucket(k) => k.scope.heap_bytes() + k.name.capacity(),
             Self::DeclaredParameterGoal { .. }
+            | Self::EnteredType(_)
+            | Self::PreparedTypePlan(_)
             | Self::PreparedBindingPlan(_)
             | Self::BindingConstraints(_)
             | Self::EnteredValue(_)
@@ -158,6 +162,8 @@ impl QueryKey {
     }
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::EnteredType(_) => "EnteredType",
+            Self::PreparedTypePlan(_) => "PreparedTypePlan",
             Self::PreparedBindingPlan(_) => "PreparedBindingPlan",
             Self::BindingConstraints(_) => "BindingConstraints",
             Self::EnteredValue(_) => "EnteredValue",
@@ -192,8 +198,22 @@ impl StableEncode for QueryKey {
     const DOMAIN: &'static str = "lrr/v2/query-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
-            Self::PreparedBindingPlan(key) => { e.u32(41); e.record(key); }
-            Self::BindingConstraints(key) => { e.u32(40); e.record(key); }
+            Self::EnteredType(key) => {
+                e.u32(42);
+                e.record(key);
+            }
+            Self::PreparedTypePlan(key) => {
+                e.u32(43);
+                e.record(key);
+            }
+            Self::PreparedBindingPlan(key) => {
+                e.u32(41);
+                e.record(key);
+            }
+            Self::BindingConstraints(key) => {
+                e.u32(40);
+                e.record(key);
+            }
             Self::EnteredValue(key) => {
                 e.u32(39);
                 e.record(key);

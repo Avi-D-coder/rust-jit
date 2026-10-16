@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T032",
+    "M017",
+    "M018"
+  ],
+  "status": "Cast relation source correction alone does not resolve actual upstream main; further shared binding classification required",
+  "witness": "tests/ui/auto-traits/auto-is-contextual.rs",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "source_original_sha256": "3eae28bc6190bc568227cf1c5437745d2b55920116fe52b2834c39a661352cea",
+  "before": {
+    "source": "7406d479ceb29e9a8c41cd39ef75290b206722bb3685e0d52d269336146b4384",
+    "compile_cli": "a29d00/0",
+    "execute": "da1343/1",
+    "edition": 2015,
+    "actual_child_exit": 2,
+    "stage": "executor",
+    "diagnostic": "LRR-E-TYPE-CONTEXT: numeric source constraint requires a missing common source goal",
+    "vm_dispatches": 6,
+    "vm_outcomes": 6,
+    "source_call_boundaries": 1,
+    "completed_cleanup": false,
+    "other_editions": "unexecuted",
+    "release_sha256": "6ccae3ee90ee680c52c8d892248119c29b935d9931f2884bda07d7424169a32e"
+  },
+  "candidate": {
+    "component_sha256": "d278243bae33b04bd5b6e3d92322342875f99c6ae6736d6bb646bce16e723cb5",
+    "path": "crates/lrr/src/frontend/binding_constraints.rs",
+    "sha256": "8dbeb584297b8c374a2af1b78ac626b2ea786ebc436c504641a437362e246e9a"
+  },
+  "shared_route": [
+    "SourceConstraintPlan::prepare actual indexed Cast operand0 plus separate annotation",
+    "BindingConstraints::prepare actual Value39 binding identity filters candidate source uses",
+    "PreparedBindingPlan cached real input guard",
+    "binding_constraint_thunk::thunk ordinary initial_scope_thunk SetHint/BindLocal and existing fallback"
+  ],
+  "change": "The actual Cast operand edge does not equate its source numeric type to the result type; stop this edge without propagating the cast result. All other uses are still checked.",
+  "review": {
+    "mode1": "No runtime/assertion/expression evaluator added.",
+    "mode2": "No generated scalar or break execution path.",
+    "mode3": "No macro identity or method-name/type spelling rule; actual hygienic binding check precedes the cast relation.",
+    "mode4": "Same retained/original body graph, no source-origin refusal.",
+    "mode5": "Source relation only; no guest operation, cold thunk or pattern transaction prepared.",
+    "mode6": "One fixed branch per existing cold reverse edge; installed execution does not enter this solver.",
+    "mode7": "No namespace/global scan or authority/input change. Existing relevant dependency guards remain.",
+    "mode8": "No parser/BodyIndex/root allocation/copy.",
+    "peer": "common_reference_sources inspected exact d278/8dbeb584; no blocker found; actual retained fault-node diagnosis pending."
+  },
+  "remaining_holds": [
+    "Unconstrained graph result still delegates to held existing fallback; opaque unexpanded syntax is not proven absent.",
+    "Other unknown source relations remain pending.",
+    "No complete architecture matrix, task/milestone/JIT acceptance."
+  ],
+  "runtime_contract_pass_increment": 0,
+  "full_fixture_pass_increment": 0,
+  "after_cast_only": {
+    "source": "07608301ba4d92f4c8330d37f4d5afb8de91e5bb3d6481d0236f5e95ac0a0c2f",
+    "execute": "a6f01e/1",
+    "child_exit": 2,
+    "stage": "executor",
+    "edition": 2015,
+    "diagnostic": "LRR-E-TYPE-CONTEXT: numeric source constraint requires a missing common source goal",
+    "vm_dispatches": 6,
+    "vm_outcomes": 6,
+    "source_call_boundaries": 1,
+    "cleanup_complete": false,
+    "remaining_editions_and_library_controls": "unexecuted after first failure",
+    "cause_limit": "Generic message does not identify Pending discriminant. Source review finds binding target may be Pending before cast traversal, since a positive module fn auto is not yet distinguished from constants in bare-pattern classification. Do not label Cast as confirmed cause."
+  },
+  "diagnostic_successor": {
+    "component_sha256": "155e2e5df43b8696796822b6bd55aa1826154ae9ddd6578612cfabd6ed57bc9f",
+    "path": "crates/lrr/src/db/binding_constraint_thunk.rs",
+    "sha256": "71725d9ad59e727ca131da3c8de6a3b18ee5bf3fe838a96b0ebac567fd2bac01",
+    "scope": "Show actual typed Pending demand/source node, same refusal and code; uncompiled. Diagnostic evidence cannot count as runtime acceptance."
+  },
+  "function_classification_runtime_successor": {
+    "source_member": "f538eb0487c04b3de9d51236eb300bdb259e42810251800b3f94e1faa861485f",
+    "release_sha256": "e7d7cb4d3e7fc0899c7cc99fa3513fae32012429349f4eb152f7bf3af163bfa9",
+    "cli_build_terminal": "8f168d/0",
+    "runtime_terminal": "12902e/1",
+    "child_exit": 2,
+    "upstream_case": "tests/ui/auto-traits/auto-is-contextual.rs",
+    "owning_edition": 2015,
+    "result": "runtime failure",
+    "actual_failure": "LRR-E-UNSUPPORTED: cast target requires symbolic type resolution",
+    "dispatches": 14,
+    "outcomes": 13,
+    "source_calls": 1,
+    "source_location": "retained Cast range24..32",
+    "source_unchanged": true,
+    "target_released": true,
+    "meaning": "Earlier function-shadow numeric binding refusal no longer reached; complete fixture still fails. General indexed Type goal and genuine retained occurrence authority are next shared prerequisites. No new runtime pass."
+  }
+}

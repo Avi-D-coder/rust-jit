@@ -1,0 +1,22 @@
+{
+  "schema": "lrr/source-review/binding-demand-diagnostic/v1",
+  "status": "source reviewed; uncompiled/unexecuted",
+  "source": "/private/tmp/lrr-binding-demand-diagnostic-v1/overlay/crates/lrr/src/db/binding_constraint_thunk.rs",
+  "source_sha256": "71725d9ad59e727ca131da3c8de6a3b18ee5bf3fe838a96b0ebac567fd2bac01",
+  "component_sha256": "155e2e5df43b8696796822b6bd55aa1826154ae9ddd6578612cfabd6ed57bc9f",
+  "baseline": "sol-common-numeric-binding-pipeline-validation-v3/source binding_constraint_thunk.rs",
+  "exact_delta": "Match existing Pending {node,demand}; preserve LRR-E-TYPE-CONTEXT and refusal; format existing fixed enum Debug label and bounded u32 source NodeId into diagnostic message. All control, query, cacheability, installation, guard, runtime paths otherwise byte-identical.",
+  "api_review": "ConstraintDemand is Debug+Copy; state() returns BindingConstraintState by value; node.0 is u32. No borrow/lifetime mismatch seen. No parser/provider access or caller-provided values added.",
+  "diagnostic_limit": "This reports query40 Pending state, not a Value39 nested pending subtype or guest execution of the pending operation. Numeric pending may still originate earlier than Cast; failure remains failure.",
+  "eight_mode_review": {
+    "1": "No semantic/authority/planning path changed; only existing typed refusal diagnostic is enriched.",
+    "2": "No semantic/authority/planning path changed; only existing typed refusal diagnostic is enriched.",
+    "3": "No semantic/authority/planning path changed; only existing typed refusal diagnostic is enriched.",
+    "4": "No semantic/authority/planning path changed; only existing typed refusal diagnostic is enriched.",
+    "5": "No semantic/authority/planning path changed; only existing typed refusal diagnostic is enriched.",
+    "6": "No semantic/authority/planning path changed; only existing typed refusal diagnostic is enriched.",
+    "7": "No semantic/authority/planning path changed; only existing typed refusal diagnostic is enriched.",
+    "8": "No semantic/authority/planning path changed; only existing typed refusal diagnostic is enriched."
+  },
+  "validation": "No Cargo/native execution; sole validator owns actual terminals."
+}

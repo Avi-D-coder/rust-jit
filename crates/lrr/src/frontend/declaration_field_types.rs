@@ -17,12 +17,10 @@ use crate::{
     },
     expand::scopes::MacroName,
     frontend::{
-        current_module_names::ModuleNameCompletion,
         hygiene::HygieneFacts,
-        names::NameLookup,
         signature_names::SignatureName,
         source_body_context::PreparedBodyContext,
-        source_types::{NamedTypePreparation, SourceType},
+        source_types::NamedTypePreparation,
         types::{FieldRecipe, NominalSchema},
     },
     source::manifest::{ItemKind, Namespace},
@@ -706,44 +704,7 @@ impl PreparedSourceLocalPlan {
         };
         checked!(prefix.exclusive_metadata_bytes());
         prefix.fingerprint = StableEncode::fingerprint(&prefix);
-        if matches!(prefix.selection(), LocalTypePrefixSelection::Parameter(_)) {
-            if let LocalTypePrefixSelection::Parameter(parameter) = prefix.selection() {
-                return QueryPoll::Ready(Ok(NamedTypePreparation::Parameter(*parameter)));
-            }
-        }
-        if matches!(prefix.selection(), LocalTypePrefixSelection::ModuleTail) {
-            let observation = ready!(prefix.module_name(db));
-            if let Some(observation) = observation {
-                if observation.completion() == ModuleNameCompletion::Complete
-                    && matches!(observation.lookup(), Some(NameLookup::Absent))
-                {
-                    let classified = checked!(
-                        crate::frontend::signature_names::classify_completed_type_lookup(
-                            name.name(),
-                            name.edition(),
-                            NameLookup::Absent
-                        )
-                    );
-                    return match classified {
-                        SignatureName::Primitive(p) => QueryPoll::Ready(
-                            SourceType::selected_primitive(p).map(NamedTypePreparation::Ready),
-                        ),
-                        other => QueryPoll::Ready(Ok(NamedTypePreparation::Name(other))),
-                    };
-                }
-            }
-        }
-        match ready!(super::type_declarations::prepare(db, prefix)) {
-            super::type_declarations::BodyTypeOutcome::Ready(proof) => {
-                QueryPoll::Ready(Ok(NamedTypePreparation::Ready(proof.source_type().clone())))
-            }
-            super::type_declarations::BodyTypeOutcome::Pending(demand) => {
-                QueryPoll::Ready(Err(Diagnostic::new(
-                    "LRR-E-TYPE-CONTEXT",
-                    format!("declaration field Type requires actual source authority: {demand:?}"),
-                )))
-            }
-        }
+        prefix.prepare_named(db)
     }
 }
 

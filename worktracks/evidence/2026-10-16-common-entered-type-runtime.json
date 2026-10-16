@@ -1,0 +1,188 @@
+{
+  "schema": "lrr/actual-upstream-runtime-evidence/v1",
+  "at": "2026-10-16T22:01:05.260580+00:00",
+  "source_member": "34f9eacaf806c42197aaff18703fae7144da99d296393d58781aef921e41c579",
+  "claim": "LOCAL-024",
+  "case": "tests/ui/auto-traits/auto-is-contextual.rs",
+  "unchanged_source_sha256": "3eae28bc6190bc568227cf1c5437745d2b55920116fe52b2834c39a661352cea",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "platform": "aarch64-apple-darwin",
+  "interpreter_sha256": "d015dc9d3c5c7b37e283cffd12b56cd96d240f94e1be638865416c141d138aee",
+  "native_execution": false,
+  "runtime_contract_pass": true,
+  "distinct_new_runtime_contracts": 1,
+  "owning_edition": 2015,
+  "supplemental_editions": [
+    2018,
+    2021,
+    2024
+  ],
+  "actual_terminals": {
+    "cli_build": "312cb9/0",
+    "digester_build": "c33745/0",
+    "owning2015": "d6854f/0",
+    "edition_extension": "ac9eb0/0",
+    "original_suffix_main": "6d16f1/0"
+  },
+  "editions": [
+    {
+      "edition": 2015,
+      "result": "runtime_contract_pass",
+      "process_exit": 0,
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      }
+    },
+    {
+      "edition": 2018,
+      "result": "runtime_contract_pass",
+      "process_exit": 0,
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      }
+    },
+    {
+      "edition": 2021,
+      "result": "runtime_contract_pass",
+      "process_exit": 0,
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      }
+    },
+    {
+      "edition": 2024,
+      "result": "runtime_contract_pass",
+      "process_exit": 0,
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      }
+    }
+  ],
+  "runtime_route": "Actual CLI run -> ordinary captured main/body/thunks ->18VMdispatch/outcomes,1sourcecall,cleanuptrue,Unitcompletion,0unsupported. No rustc-produced selected runtime executable used.",
+  "mechanism": "Shared body/header Type finalization, indexed EnteredType42 and PreparedTypePlan43, genuine structural surviving-original occurrence joins and existing scalar cast VM. No macro/assert evaluator introduced.",
+  "evidence": [
+    {
+      "path": "artifacts/macos-first/sol-common-entered-type-validation-v1/runtime-report/report.json",
+      "sha256": "8ccde699259e38d6eb5af770746d68f4b390c7fe31e551fdd71319850f5bee6b"
+    },
+    {
+      "path": "artifacts/macos-first/sol-common-entered-type-validation-v1/edition-extension-report/report.json",
+      "sha256": "b410bb4e561525fabe93ed44dff9c157be379cdeb1256e77f62646b9b3f9813b"
+    },
+    {
+      "path": "artifacts/macos-first/sol-common-entered-type-validation-v1/SOURCE-FROZEN.json",
+      "sha256": "b18a05c33e67e8fa72c8d6fafaac182bad90aa793d1be8c9d5efb10a4bde1d8e"
+    },
+    {
+      "path": "artifacts/macos-first/sol-common-entered-type-validation-v1/OVERLAY-MANIFEST.json",
+      "sha256": "f2ce106f4d80998a9d2fe87f9565ec2bad96ebb499ee9869f579114e0cc3c20a"
+    }
+  ],
+  "remaining": [
+    "library/control regression results pending",
+    "V2generated-refusal source-control oracle held; actual directGenerated source boundary may admit genuine Type proof, tests-only successor underreview",
+    "Retained generated/mixed Type occurrence proof incomplete",
+    "legacy alternate routes named in E-R5-005 remain held",
+    "fullfixture/architecturematrix/milestone notestablished",
+    "all-runtime prerequisite incomplete; no guestJIT"
+  ],
+  "acceptance_scope": "One distinct unchanged upstream runtime contract with owning2015 plus3supplemental execution editions, not4distinctfixtures. No cumulative total inferred from this scoped batch.",
+  "preserved_control_failure": {
+    "terminal": "b6ec5b/1",
+    "scope": "constant authority control pending Prefix expected constDefKey but actual later macro-producer identity",
+    "diagnosis": "Actual runtime fixture still blocked by unresolved real declaration-producer closure; no hash replacement or const-binding grant. SourceGoal42 regression not established."
+  },
+  "sealed_release_sha256": "b2852abf94e861eb3c44b0c1b65ba3742ee50b2254b8ba851aca88d658407c8d",
+  "next_actual_runtime_blocker": {
+    "source_member": "0819b274f84e24617cad192e998e6bdcd274ea674bbaf5fff03827d9836074b3",
+    "terminal": "ad15cf/1",
+    "case": "complete integer-literal-suffix-inference samepayload user macro execution control,2015",
+    "failure": "LRR-E-UNSUPPORTED: lexical item callee requires body namespace integration",
+    "call_range": "generated main relative233..241",
+    "scope": "0 additional upstream passes; wrapper/remainingeditions unexecuted; primarynextfix is common Call source-proof lowering and ordinary call admission, not literal-profile expansion."
+  },
+  "type_controls": {
+    "source_member": "ce23ce333ea1f4734e46599b2fcc0e8177910fd0bacaff8a266c94deea015b18",
+    "result": "4passed,1invalid-source-controlfailed,9unexecuted",
+    "passed": [
+      "query42/43 sharing/ordinary phases/epoch acrossoriginal-retained-directgenerated-wrapper all4editions",
+      "retained generated missingoccurrence authority refusal",
+      "same-spelled nominalType cannotreceiveprimitive authority",
+      "source-inputrevocation readonlyguardrefusal"
+    ],
+    "failed_terminal": "b37de4/1",
+    "diagnosis": "Exact diagnostic source2015/mode0/node29 stores cfg on castleftliteral. Separate Rust1.99 metadata compile b591a4/1 rejects E0658 expressionremoval plusmissing Type E0425. The control was invalidRust, not a new productionType regression.",
+    "withdrawn_attempt": "Root drafted but did notfreeze/commit/test a generic leading-attribute owner change; withdrewit after compilerreference and verified exacttestedproductionthunks restoration c4c008/0.",
+    "next": "Test-only valid parenthesizedcfgowner control; actualinnercast mustremainunentered. No production expansion of cfg meaning."
+  },
+  "latest_type_controls": {
+    "source_member": "587e2bd488acb0ac7f49e27247d63ac58ee9032d19180a7795bae1a538d5e8ba",
+    "production_identical_to_runtime_source34f9": true,
+    "library_compiled": true,
+    "scope_result": "6 passed,1 failed,7unexecuted",
+    "passing": [
+      "all5 Type query/phase/currentness/shadow/cfg controls",
+      "retained epoch and foreign node control"
+    ],
+    "failure_terminal": "9ca188/1",
+    "failure": "Peer immutable-origin control expected NeedRetainedOccurrence but actual retained source has nooutputs and correctly stores Original. Requires witness with actualbody syntax replacement; not evidence to weaken source authority.",
+    "release_sha256": "15f7f93b6f77f705ebe2e05073df51d0a28b4181542476d64fd858606f2e2627",
+    "claim": "Type controls are component evidence; no fullarchitecture matrix/milestone/featurecompletion.",
+    "additional_disjoint_scope": {
+      "terminal": "34fa73/1",
+      "release_sha256": "3950a31db6d13d81ee298a75e5461f7f1034843c33918b79d96a65b85f9b2ca9",
+      "result": "0passed,1failed,6unexecuted",
+      "failure": "copied-origin ledger helper macro declaration_demand notReady before ledger assertions; actual demandvariant notprinted, unobserved",
+      "meaning": "Cannotclaimledgersemanticfailureoracceptance. Keepauthoritychecks; diagnose realproducerclosure setup."
+    },
+    "combined_distinct_scope_result": "6passed,2failed,6unexecuted onexact587e; no casesrerun across two disjoint control batches"
+  }
+}
