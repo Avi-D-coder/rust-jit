@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T05:40:19.366016+00:00",
+  "claim": "LOCAL-024",
+  "status": "source-only-uncompiled-unexecuted",
+  "baseline": "failed frozen184 4fb22370053507753214922278fee0dbeda2dbc20416c8d9ec9f30f13ce913bc",
+  "overlay": "artifacts/macos-first/common-full-core-owning-root-preparation-v2/overlay",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_declarative/sealed_macro_export_view_tests.rs",
+      "bytes": 12393,
+      "sha256": "dbf0bb3baa5cdb26355c47216798c59e33ab27018c965f0dbdd51678cd11d205"
+    }
+  ],
+  "repair": "Required fullcore source control now supplies actual unchanged src/lib.rs source/outline as separate configured root and source receipt; retains macros/mod.rs actual child module_path. Both share actual captured input state. No fabricated root alias or production guard bypass.",
+  "actual_prior_failure": "933322/1 core control SourceDiscovery::new missing actual unitroot outline before compiler/declaration/discovery publication; replay2 source controls passed separately.",
+  "scope": "Source authority/preparation fixture, not actual adoptedSDK/module-parent/runtime contract acceptance. Required fullcore control remains positive-required; next unresolved frontier mustfail.",
+  "source_inputs": [
+    "library/core/src/lib.rs",
+    "library/core/src/macros/mod.rs"
+  ],
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "new_runtime_cases": 0,
+  "holds": [
+    "Real complete module/cfg/import/producer/annotation closure still required.",
+    "Package target/source records constructed control, not fulltoolchain verify_adoption evidence.",
+    "Role Type context / native runtime mapping and parentmodule ancestry remain actual prerequisites.",
+    "No expected-refusal success or source text adaptation."
+  ]
+}

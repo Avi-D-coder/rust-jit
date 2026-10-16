@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "component": "common-nominal-field-storage-api-fix-v2",
+  "status": "uncompiled-unexecuted",
+  "predecessor": "common-nominal-field-storage-v1 572caeeefc43d141f92f5447f10a0f4d3976e045b45a655c8aa3543a2928e18a",
+  "actual_failed_compile": "a6d862/1 zero test bodies",
+  "files": [
+    {
+      "path": "crates/lrr/src/runtime/cell_reference_return.rs",
+      "sha256": "36286f2c8ed63e38de815dc2d7ba74a9c522cbb4f47d8b65ca42c8d6a374f443",
+      "bytes": 5895,
+      "origin": "live exact shared projection update"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_reference_source_tests.rs",
+      "sha256": "31ecca81f9e53d4a5a87c89697309808b6dedc349732dedd8e14d092e662e02f",
+      "bytes": 31589,
+      "origin": "frozen a609 V3 plus single Option assertion update; excludes unrelated live successor controls"
+    }
+  ],
+  "changes": [
+    "Reference-return lease validates the same source-selected field TypeId as ordinary projection; no primitive reconstruction",
+    "Existing generated member test expects Some(Isize); oracle semantics unchanged"
+  ],
+  "remaining_successor_dependency": "peer contextual declaration test1 0b5256c010d47d674ef27e6c0495582bb02023eade1b1561b9d0b0d6c24b1290"
+}

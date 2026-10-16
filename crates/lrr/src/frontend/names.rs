@@ -1,6 +1,9 @@
 //! Namespace-qualified owned lookup over the existing deterministic import engine.
 //! This selects definitions only; it never expands, type-checks or executes a body.
-use super::macro_names::{MacroNamespaces, MacroPath, PathLookup};
+use super::{
+    generated_headers::declared_names::DeclaredItemName,
+    macro_names::{MacroNamespaces, MacroPath, NameBindingClass, PathLookup},
+};
 use crate::{
     core::{
         diagnostic::Diagnostic,
@@ -10,6 +13,7 @@ use crate::{
     source::manifest::Namespace,
     syntax::{outline::ScopeKey, visibility::VisibilityScope},
 };
+use std::sync::Arc;
 pub type NamePath = MacroPath;
 pub(crate) fn owned_name(name: &str, edition: u16) -> Result<MacroName, Diagnostic> {
     MacroName::parse(name, edition).or_else(|_| super::source_macro_routes::semantic(name, edition))
@@ -269,6 +273,8 @@ type GlobModuleEdge = (
 #[derive(Clone, Default)]
 pub struct NameNamespaces {
     ordinary_source_bytes: usize,
+    declared_names: std::collections::BTreeMap<(Namespace, Digest), Arc<DeclaredItemName>>,
+    declared_name_bytes: usize,
     module_frontier_scopes: std::collections::BTreeMap<Digest, ScopeKey>,
     ordinary_definitions: std::collections::BTreeSet<Digest>,
     anonymous: std::collections::BTreeMap<Digest, AnonymousImport>,
@@ -900,18 +906,109 @@ impl NameNamespaces {
         definition: NameDefinition,
         visibility: VisibilityScope,
     ) -> Result<(), Diagnostic> {
+        self.define_in_class(path, definition, visibility, NameBindingClass::Root)
+    }
+    fn define_in_class(
+        &mut self,
+        path: NamePath,
+        definition: NameDefinition,
+        visibility: VisibilityScope,
+        class: NameBindingClass,
+    ) -> Result<(), Diagnostic> {
         let namespace = definition.namespace;
         let identity = definition.identity;
-        self.table_mut(definition.namespace).define_visible(
-            path,
-            MacroDefinition {
-                identity: definition.identity,
-                defining_unit: definition.defining_unit,
-                definition_edition: definition.definition_edition,
-            },
-            visibility.clone(),
-        )?;
+        self.table_mut(definition.namespace)
+            .define_visible_in_class(
+                path,
+                MacroDefinition {
+                    identity: definition.identity,
+                    defining_unit: definition.defining_unit,
+                    definition_edition: definition.definition_edition,
+                },
+                visibility.clone(),
+                None,
+                class,
+            )?;
         self.visibility.insert((namespace, identity), visibility);
+        Ok(())
+    }
+    /// Source facts only. Current use/scope publication is a separate owner.
+    pub(crate) fn declared_item_name(
+        &self,
+        namespace: Namespace,
+        identity: Digest,
+    ) -> Option<&Arc<DeclaredItemName>> {
+        self.declared_names.get(&(namespace, identity))
+    }
+    /// Cold publication inventory only; installed lookup uses its relevant
+    /// class/name bucket rather than traversing the complete graph.
+    pub(crate) fn declared_item_names(&self) -> impl Iterator<Item = &Arc<DeclaredItemName>> {
+        self.declared_names.values()
+    }
+    pub(crate) fn define_declared_item(
+        &mut self,
+        declaration: Arc<DeclaredItemName>,
+        module: bool,
+    ) -> Result<(), Diagnostic> {
+        // ModulePaths currently certifies root-class prefixes. Retaining a
+        // declaration in another class does not certify descendants there.
+        if module && declaration.class() != NameBindingClass::Root {
+            return Err(Diagnostic::new(
+                "LRR-E-NAME-CONTEXT",
+                "declared module requires its actual contextual module-prefix receipt".into(),
+            ));
+        }
+        let key = (
+            declaration.definition().namespace,
+            declaration.definition().identity,
+        );
+        if let Some(old) = self.declared_names.get(&key) {
+            return if old.fingerprint() == declaration.fingerprint() {
+                Ok(())
+            } else {
+                Err(Diagnostic::new(
+                    "LRR-E-EXPANSION-CONFLICT",
+                    "declared name occurrence differs".into(),
+                ))
+            };
+        }
+        let bytes = self
+            .declared_name_bytes
+            .checked_add(declaration.metadata_bytes()?)
+            .and_then(|n| n.checked_add(96))
+            .filter(|n| *n <= 32 * 1024 * 1024)
+            .ok_or_else(crate::runtime::arena::resource)?;
+        if self.declared_names.len() >= 1_000_000 {
+            return Err(crate::runtime::arena::resource());
+        }
+        let scope = declaration.scope();
+        let mut parts = scope
+            .module_path
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        parts.push(declaration.name());
+        let path = Self::path(
+            scope.crate_key,
+            &parts,
+            declaration.definition().definition_edition,
+        )?;
+        if module && declaration.class() == NameBindingClass::Root {
+            self.define_generated_module(
+                path,
+                declaration.definition().clone(),
+                declaration.visibility().clone(),
+            )?;
+        } else {
+            self.define_in_class(
+                path,
+                declaration.definition().clone(),
+                declaration.visibility().clone(),
+                declaration.class(),
+            )?;
+        }
+        self.declared_names.insert(key, declaration);
+        self.declared_name_bytes = bytes;
         Ok(())
     }
     /// Register an admitted inline declaration container with its canonical
@@ -2481,6 +2578,26 @@ impl NameNamespaces {
         edition: u16,
         prelude: Option<&ScopeKey>,
     ) -> Result<NameLookup, Diagnostic> {
+        self.lookup_unqualified_in_class(
+            namespace,
+            name,
+            caller,
+            edition,
+            prelude,
+            NameBindingClass::Root,
+        )
+    }
+    /// Pure class-keyed lookup facts. The caller's actual source occurrence and
+    /// current namespace selection must be proved before using the result.
+    pub(crate) fn lookup_unqualified_in_class(
+        &self,
+        namespace: Namespace,
+        name: &str,
+        caller: &ScopeKey,
+        edition: u16,
+        prelude: Option<&ScopeKey>,
+        class: NameBindingClass,
+    ) -> Result<NameLookup, Diagnostic> {
         let mut parts = caller
             .module_path
             .iter()
@@ -2488,13 +2605,19 @@ impl NameNamespaces {
             .collect::<Vec<_>>();
         parts.push(name);
         let path = Self::path(caller.crate_key, &parts, edition)?;
-        let found = self.lookup(namespace, &path, caller)?;
+        let found = self.lookup_in_class(namespace, &path, caller, class)?;
         if found != NameLookup::Absent {
             return Ok(found);
         }
         let Some(prelude) = prelude else {
             return Ok(NameLookup::Absent);
         };
+        if class != NameBindingClass::Root {
+            return Err(Diagnostic::new(
+                "LRR-E-NAME-CONTEXT",
+                "contextual prelude requires actual name adjustment".into(),
+            ));
+        }
         if prelude.owner.is_some() {
             return Err(Diagnostic::new(
                 "LRR-E-MACRO-SCOPE",
@@ -2507,10 +2630,11 @@ impl NameNamespaces {
             .map(String::as_str)
             .collect::<Vec<_>>();
         parts.push(name);
-        self.lookup(
+        self.lookup_in_class(
             namespace,
             &Self::path(prelude.crate_key, &parts, edition)?,
             caller,
+            class,
         )
     }
     pub fn lookup(
@@ -2518,6 +2642,17 @@ impl NameNamespaces {
         namespace: Namespace,
         path: &NamePath,
         caller: &ScopeKey,
+    ) -> Result<NameLookup, Diagnostic> {
+        self.lookup_in_class(namespace, path, caller, NameBindingClass::Root)
+    }
+    /// Candidate facts only: qualified/context module authority stays with
+    /// the actual source selector and its current query dependencies.
+    pub(crate) fn lookup_in_class(
+        &self,
+        namespace: Namespace,
+        path: &NamePath,
+        caller: &ScopeKey,
+        class: NameBindingClass,
     ) -> Result<NameLookup, Diagnostic> {
         // An unknown producer may add a duplicate item or change module prefixes,
         // so disclosed definitions do not establish completeness either.
@@ -2527,7 +2662,8 @@ impl NameNamespaces {
         if let Some(paths) = self.ambiguous_prefix(path, caller)? {
             return Ok(NameLookup::AmbiguousModules(paths));
         }
-        if namespace == Namespace::Type
+        if class == NameBindingClass::Root
+            && namespace == Namespace::Type
             && let super::macro_names::ModuleLookup::Defined {
                 unit, components, ..
             } = self
@@ -2543,13 +2679,20 @@ impl NameNamespaces {
             defining_unit: d.defining_unit,
             definition_edition: d.definition_edition,
         };
-        Ok(match self.table(namespace).lookup_from(path, caller)? {
-            PathLookup::Defined(d) => NameLookup::Defined(owned(d)),
-            PathLookup::Ambiguous(ds) => NameLookup::Ambiguous(ds.into_iter().map(owned).collect()),
-            PathLookup::Absent => NameLookup::Absent,
-            PathLookup::Inaccessible(paths) => NameLookup::Inaccessible(paths),
-            PathLookup::NeedInput(producer) => NameLookup::NeedInput(producer),
-        })
+        Ok(
+            match self
+                .table(namespace)
+                .lookup_from_in_class(path, caller, class)?
+            {
+                PathLookup::Defined(d) => NameLookup::Defined(owned(d)),
+                PathLookup::Ambiguous(ds) => {
+                    NameLookup::Ambiguous(ds.into_iter().map(owned).collect())
+                }
+                PathLookup::Absent => NameLookup::Absent,
+                PathLookup::Inaccessible(paths) => NameLookup::Inaccessible(paths),
+                PathLookup::NeedInput(producer) => NameLookup::NeedInput(producer),
+            },
+        )
     }
     pub fn path(unit: Digest, components: &[&str], edition: u16) -> Result<NamePath, Diagnostic> {
         NamePath::new(

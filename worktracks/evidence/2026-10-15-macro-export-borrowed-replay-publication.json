@@ -1,0 +1,56 @@
+{
+  "architecture_review": {
+    "handoff": "worktracks/03-control-flow-patterns/macro-export-facet-handoff.md",
+    "modes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "sha256": "0ffd7cd33f7e37cb8e28fe93e6d376f576de7e99965a9beac2872ec5e5267fe0"
+  },
+  "component": "common-macro-export-borrowed-replay-publication-v1",
+  "dependencies": [
+    "Retained replay5 exact component SHA270a8080490511ffb016f49d229a1b40f6c4fbdbac3dcebae009d89c6852fab6 plus borrowed5/hook3/original13 dependency chain.",
+    "Root DB publish_discovery replay_sources slice signature + actual Scope-Macro observation/current outline/epoch/fullseal and typed proof replay selector guards. DB leaves not edited here.",
+    "Root source181 SourceDiscovery staged annotation_plan Arc clone mechanical borrow fix is retained in full live source_discovery leaf.",
+    "Actual pinned compiler metadata classification/pin remains root-owned; known semantic attributes must remain typed unsupported without their handler."
+  ],
+  "files": [
+    {
+      "bytes": 11696,
+      "path": "crates/lrr/src/expand/source_declarative/sealed_macro_export_view_tests.rs",
+      "sha256": "2b4b31784dc92c55c6cdda589a19efc86b1e7ce2d74b3ea267c880b4137d6e1b"
+    },
+    {
+      "bytes": 491652,
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "db0111a60ed2ffc53cba8b1c477bb3d61a98260cc7dcd954a08bdaecf9b68758"
+    }
+  ],
+  "holds": [
+    "No owning facet/provider graph transport or full graph retention accounting.",
+    "No role out-of-line/generated/caller source replay.",
+    "Persistent restored original index reconstruction absent from scalar_pattern_replay.",
+    "Core macros module-only compiler env can expose actual Type receipt owning-root requirement; no suppression/fake root.",
+    "No SDK adoption/member/export/prelude/runtime acceptance; old macro-specific runtime routes remain held."
+  ],
+  "schema": 1,
+  "source_fingerprint": "24645354753dd001c1572b4c234fb72f3f94b61c48deb8c148cbe3d3eed7c36d",
+  "status": "source-only-uncompiled-unexecuted-positive-core-frontier-required",
+  "verification": {
+    "commands_for_sole_validator": [
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::sealed_view_tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::sealed_view_tests::unchanged_full_core_macro_source_requires_real_annotation_closure_and_publication -- --nocapture",
+      "cargo test -p lrr --lib source::compiler_replay::tests -- --nocapture"
+    ],
+    "new_test_bodies": 1,
+    "positive_or_full_fixture_pass_claim": false,
+    "required_new_test": "unchanged_full_core_macro_source_requires_real_annotation_closure_and_publication",
+    "worker": "scoped rustfmt/diff/source review only; no Cargo/Rust/native tests"
+  }
+}

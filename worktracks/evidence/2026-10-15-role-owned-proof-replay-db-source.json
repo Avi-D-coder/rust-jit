@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T05:36:34.652118+00:00",
+  "claim": "LOCAL-024",
+  "task": "M014/T024/T063",
+  "status": "source-only-uncompiled-unexecuted",
+  "baseline": "exact181V3 fb4ee222431689dc079d8160bb5a704fbf24e6d02f19b1967eee5cbe28311ec6",
+  "overlay": "artifacts/macos-first/common-role-owned-proof-replay-db-v1/overlay",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "bytes": 132448,
+      "sha256": "e0f0b6f5fa598202b115e1720832c5fb5ee91ac48a052296b46fd6f28f04c762"
+    }
+  ],
+  "dependencies": [
+    "Retained compiler replay5 exact270a8080490511ffb016f49d229a1b40f6c4fbdbac3dcebae009d89c6852fab6",
+    "Borrowed replay publication2 exact4415a9ef8a9516ed126430687be38dbecd5e50974e68808575579735178b6f58"
+  ],
+  "scope": "Selected actual MacroExport source prepared scans validated against current role input/fullseal/outline and original hygiene. Only nested inert proof publication uses same existing row/compiler revalidation kernel with independently prepared scan; no ordinary source publication.",
+  "bounds": "At most256 borrowed role views/rows; exact selection match, duplicates/unselected/missing current scan refuse. All allocations remain local/preparation-owned; no completed provider graph transported.",
+  "all8_review": "No language evaluator, macro semantic dispatch, numeric/member/pattern edits, generated semantic exemption, phase parse/plan reconstruction, runtime worldscan or immutable body deepclone. Source/namespace/selectedcompiler identity proofs retained. Cold source-outline hashing perselectedsource only.",
+  "holds": [
+    "No whole SDK/module ancestry/adoption from candidate source.",
+    "Other role fragment/argument/module replay paths retain explicit existing source refusals; no extension of legacy RuntimeNoItem/assertion proof path.",
+    "Original namespace replay existing perMeta parse remains separate pending agent repair.",
+    "Owning provider graph transport/persistent restored-index reconstruction pending.",
+    "No stock/runtime/fullfixture/MA/task/JIT closure"
+  ]
+}

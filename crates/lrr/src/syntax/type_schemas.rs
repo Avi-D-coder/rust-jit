@@ -1,6 +1,6 @@
 //! Demand-owned field syntax, using the same original/generated parser boundary.
 use super::{
-    ast_adapter::{range, semantic_name, tokens},
+    ast_adapter::{semantic_name, tokens},
     outline::{DeclarationContext, HeaderRecipe},
     parse::ParsedFile,
     signatures::{DefinitionParameter, capture_generics, lower_type},
@@ -44,27 +44,15 @@ impl ParsedFile {
                 "schema/source profile or header budget mismatch",
             ));
         }
-        let mut selected = None;
-        for item in self
-            .parsed
-            .tree()
-            .syntax()
-            .descendants()
-            .filter_map(ast::Item::cast)
-        {
-            if !matches!(item, ast::Item::Struct(_) | ast::Item::Enum(_))
-                || range(item.syntax().text_range()) != context.range
-                || tokens(item.syntax(), None) != header.tokens
-            {
-                continue;
-            }
-            if selected.replace(item).is_some() {
-                return Err(schema_fault("schema declaration identity is ambiguous"));
-            }
-        }
-        let selected = selected.ok_or_else(|| {
-            schema_fault("schema declaration absent from immutable source context")
-        })?;
+        let selected = self
+            .syntax_at(context.range, |node| {
+                ast::Struct::can_cast(node.kind()) || ast::Enum::can_cast(node.kind())
+            })?
+            .and_then(ast::Item::cast)
+            .filter(|item| tokens(item.syntax(), None) == header.tokens)
+            .ok_or_else(|| {
+                schema_fault("schema declaration absent from immutable source context")
+            })?;
         let (generics, variants) = match selected {
             ast::Item::Struct(item) => {
                 let generics = capture_generics(item.generic_param_list())?;
@@ -558,7 +546,9 @@ mod tests {
             frame.enter(scope).unwrap();
         }
         let handles = store.budget().handles();
-        frame.prepare_nominal_constructor(&plan, bound).unwrap();
+        frame
+            .prepare_nominal_constructor(&plan, bound, &mut store)
+            .unwrap();
         assert_eq!(store.budget().handles(), handles);
         assert!(
             matches!(step(&mut frame, &mut store, &start).unwrap(), StepOutcome::Next(pc) if pc == child)

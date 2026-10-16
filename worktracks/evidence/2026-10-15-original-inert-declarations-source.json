@@ -1,0 +1,129 @@
+{
+  "architecture_review": {
+    "all_source_only": true,
+    "audit_findings_held": [
+      "MA001",
+      "MA002",
+      "MA003",
+      "MA004"
+    ],
+    "handoff": "worktracks/03-control-flow-patterns/macro-export-facet-handoff.md",
+    "modes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "sha256": "f5c52cab4c6bd26e5f885db410024a65ac54938684480909e9770b97c68580e2"
+  },
+  "base_commit": "fefe5e297c0ec95f4d4368ac32497a118985e4ff",
+  "component": "common-original-inert-declarations-v1",
+  "dependency_contract": [
+    "Full source_macros leaf requires released owned source7 Arc/Cow table implementation and root EnteredMacroIndex None .as_ref() mechanical repair. Old raw facet source8 retains independent minimal V2 contract.",
+    "Root full pinned compiler inert inventory fallback and builtin_attributes::compiler_inert_inventory_identity are required by engine revision3; no descriptor inventory proves namespace absence.",
+    "Raw configured MacroExport source8, root original-retained-footprint2, publication bridge6 and current shared SourceDeclarative/Discovery source-scope/body-boundary roots are explicit full-leaf composition dependencies.",
+    "Root db/macro_export_inputs_tests.rs is retained by existing external test module hook. No DB/provider/memo leaf is part of this component."
+  ],
+  "files": [
+    {
+      "bytes": 5552,
+      "path": "crates/lrr/src/expand/nested_inert.rs",
+      "sha256": "bc29fa929faa073ecc8c8ef55fa28021de6f1b6e60c8371d567e5aeda9c41129"
+    },
+    {
+      "bytes": 29521,
+      "path": "crates/lrr/src/expand/scopes.rs",
+      "sha256": "1052631fd33cd8825976f71ef43211d84702a2c465ac4baa88fe030e0bece0af"
+    },
+    {
+      "bytes": 175088,
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "sha256": "4ab0245b37269088af8d95549ace8b554bbb5567f4b62a79bcb5f11a8685a2ee"
+    },
+    {
+      "bytes": 13819,
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports_tests.rs",
+      "sha256": "7b4f9d79c33587ef3a859967f5bf3c98fbc6f40d16d4999d31cfd33399d2fc64"
+    },
+    {
+      "bytes": 7173,
+      "path": "crates/lrr/src/expand/source_declarative/original_annotations.rs",
+      "sha256": "02a5e1c8d02cf3903c31eedc0aa73a33e8ffff4383d37ada1f8ba776ebf67d59"
+    },
+    {
+      "bytes": 7152,
+      "path": "crates/lrr/src/expand/source_declarative/original_annotations_tests.rs",
+      "sha256": "218a36fb7ebce418b29b600eaf48eaf725eec0d47d5a6707c8b50190d46228ee"
+    },
+    {
+      "bytes": 46241,
+      "path": "crates/lrr/src/expand/source_derives.rs",
+      "sha256": "bd089f1d8ecbf7e62e5ae47e39cbf46d92f170921ac87a4d92ccd72bbdddd420"
+    },
+    {
+      "bytes": 488459,
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "52b2ae23fcbc908a22f2db71d7ba5b5518be35524f33ad1dfdfd3b88e76737f6"
+    },
+    {
+      "bytes": 10009,
+      "path": "crates/lrr/src/frontend/macro_scopes.rs",
+      "sha256": "5edfdb399a31a6562f045e239f2a1d399d38c3f11a2e6472c72e77a922b26a0b"
+    },
+    {
+      "bytes": 46544,
+      "path": "crates/lrr/src/frontend/source_macro_routes.rs",
+      "sha256": "158cc39810c1491c37146e2801ef0ac2d9708d76307d5bbc5ae4d289e7ef2fb1"
+    },
+    {
+      "bytes": 101613,
+      "path": "crates/lrr/src/frontend/source_macros.rs",
+      "sha256": "c85346b4281021ac80a1dea3fab3f68f6dab34a0b9bd9abc99b51ba576e5af97"
+    },
+    {
+      "bytes": 54962,
+      "path": "crates/lrr/src/service/source_attribute_requests.rs",
+      "sha256": "7c6fa8ab38b61e4f14d23bc0af5f2886162fe050da7af00feef442874088f3ab"
+    },
+    {
+      "bytes": 56636,
+      "path": "crates/lrr/src/source/changes.rs",
+      "sha256": "12a18d2706956f2bba2ec4fab7bdd94d1580981f45fa36391aa7580cc2d16757"
+    }
+  ],
+  "holds": [
+    "No completed facet minted from the raw MacroExportSource+UnitCompileEnv stamps. Requires actual DiscoverySeal query full relevant dependency closure.",
+    "No macro facet parser/source inserted into ordinary prepared-source/query inputs.",
+    "Completed provider snapshots retain compiler/procedural/generated/module roots; module_snapshot_bytes is not a complete graph-retention account. Owning transport and catalog activation remain held.",
+    "RuntimeMacroKind/synthetic standard macro semantics remain named repair debt; unchanged issue26251 runtime/full-fixture result not claimed."
+  ],
+  "new_tests": [
+    "expand::source_declarative::macro_exports::tests::original_annotation_tests::unchanged_original_inert_macros_restore_exact_declarations_and_routes",
+    "expand::source_declarative::macro_exports::tests::original_annotation_tests::exact_original_meta_proof_waits_for_competing_namespace_and_rejects_other_source"
+  ],
+  "schema": 1,
+  "source_fingerprint": "6f2685e08da00f67fecb7ad1f451541c844bdc010ea1077558619adb532b23be",
+  "source_version": 3,
+  "status": "source-only-uncompiled-unexecuted-production-macroexport-activation-held",
+  "upstream": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "original_unchanged": true,
+    "path": "fixtures/upstream/rustc-checkout/library/core/src/macros/mod.rs",
+    "sha256": "af6f7c1c71eef0923e1f4128729e744e2ca6b6c9954245cc8b87e5c579713f66"
+  },
+  "verification": {
+    "commands_for_sole_validator": [
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::original_annotation_tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_derives -- --nocapture",
+      "cargo test -p lrr --lib expand::source_discovery -- --nocapture",
+      "cargo test -p lrr --lib service::source_attribute_requests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests -- --nocapture"
+    ],
+    "required_followup": "strict workspace/current milestone and actual four-context runtime matrix only after genuine completed source/namespace/export graph/builtin joins",
+    "worker": "scoped rustfmt and git diff --check only; no Cargo/Rust/native test or guest compilation"
+  }
+}

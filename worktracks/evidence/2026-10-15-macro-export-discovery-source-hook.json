@@ -1,0 +1,62 @@
+{
+  "apis": [
+    "SourceDiscovery::with_macro_export_source_publications(self,&mut Database)->Result<Self,Diagnostic>",
+    "Actual original ParseSource attaches existing compiler_inputs once at source ordinal0 to DiscoveryUpdate dependencies."
+  ],
+  "architecture_review": {
+    "handoff": "worktracks/03-control-flow-patterns/macro-export-facet-handoff.md",
+    "modes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "sha256": "d8dc079c0d66039ee7c6b3c16f6e745defcb0c162116d4a4ae80fd4f5b1313d1"
+  },
+  "component": "common-macro-export-discovery-source-hook-v1",
+  "dependencies": [
+    "Exact borrowed5 common-borrowed-sealed-macro-export-v1 SHAb462344c134b48254ce95b62eb0bd40487a4066ac4490a3692ba7a116b776f5e and its exact source13/raw-facet dependencies.",
+    "Root db/macro_export_inputs.rs MacroExportSourceReceipt v2 with configured graph/actual outline plus opaque macro_export_source_observation; root db/provider.rs/memo.rs Scope-Macro full role seal checks. Those DB leaves are not edited/part of this worker3.",
+    "Root pinned compiler metadata classification successor remains separate; this worker does not certify semantic attributes as inert."
+  ],
+  "files": [
+    {
+      "bytes": 7340,
+      "path": "crates/lrr/src/expand/source_declarative/sealed_macro_export_view_tests.rs",
+      "sha256": "14247ebdceccb7d5e8d1967e58287f8194c8edd0b8cf4ca9e76e6d4357c6102c"
+    },
+    {
+      "bytes": 489695,
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "8e0f7a4662b66fb40555fcced6c83ac8f0c5061ff1fedd8f258da5b4ac1ba1e7"
+    },
+    {
+      "bytes": 11327,
+      "path": "crates/lrr/src/expand/source_discovery/macro_export_view.rs",
+      "sha256": "177cc5c562cd45a54850c92980350159006fd73efe71644ad5fe247184a120a4"
+    }
+  ],
+  "holds": [
+    "No out-of-line macro-only module capture support: existing module preflight unchanged.",
+    "Role-owned nested inert/fragment/argument source replay missing; no ordinary SourceBlob/CrateCfg bypass.",
+    "No owning graph transport or full source graph accounting claim.",
+    "No adopted SDK/active module membership/export/prelude/runtime fixture acceptance; old macro-specific runtime routes remain repair debt."
+  ],
+  "schema": 1,
+  "source_fingerprint": "f820bfee91ad0c0e4a35b34abac2329645e81187922eae091a454d694ae4edf5",
+  "status": "source-only-uncompiled-unexecuted-production-activation-held",
+  "test_filter": "expand::source_declarative::macro_exports::tests::sealed_view_tests::genuine_role_source_seal_yields_borrowed_view_without_runtime_source_grants",
+  "verification": {
+    "positive_pass_claim": false,
+    "validator_commands": [
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::sealed_view_tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::publication_tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_discovery -- --nocapture"
+    ],
+    "worker": "scoped rustfmt/source review and git diff --check only; no Cargo/Rust/native tests"
+  }
+}

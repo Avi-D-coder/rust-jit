@@ -157,3 +157,27 @@ Alias5 final fingerprint `12efb1542a1201252dee8808a90b2896fa9efa9d680212826c8f34
 Root-owned shared declaration classifier dependency signature_names.rs SHA256
 `f4d8de877c270ef20b2ea5b36bde5b9954b6bc17034a99c67e23624670060976`. These five worker leaves are frozen pending parent copy;
 no edits until copy confirmation. Old immutable packet evidence is preserved.
+
+## V3 diagnostic successor (before edit)
+
+Actual V3 namespace24 terminal21aa60/1 is23pass1fail: the prior generated
+named-reference failure passes, while the new original/generated alias-to-nominal
+control fails at its generic assertion. Preserve V3 bytes/evidence. Before altering
+production authority, make that external LRR assertion report the edition, actual
+source case and exact typed preparation outcome. The invariant and shared entry
+points above are unchanged; no alternate route or additional demand is introduced.
+This is source-only diagnostic evidence, not a repaired alias or passing witness.
+
+Diagnostic successor leaf SHA256
+`97fc16fdbecdb68aa8e54d2a2a6f650e86c4571c9007cb52f6e8cb789019b954`
+(frontend/generated_reference_source_tests.rs), formatter terminal2ef0e6/0.
+It matches every existing typed QueryPoll and NamedTypePreparation branch and
+prints the actual outcome only on the preexisting failure path. The successful
+proof/no-body-demand/epoch controls are unchanged. All8 separate source review:
+no evaluator/lowering, literal/break special case, context numeric/member rule,
+generated refusal, pattern/cold demand, source planning, namespace dependency or
+body/index-copy code changes (modes1–8). No new runtime or cold preparation work;
+formatting on failure is test-only. Existing alias5 common-route and held-exception
+review still applies to unchanged production bytes. Sole validator execution is
+pending; this leaf remains uncompiled/unexecuted by this worker. Field successor
+is excluded. Actual V3 namespace24 is23pass1fail and is not reclassified.

@@ -1894,7 +1894,7 @@ impl Frame {
             None
         };
         let source = if let Some(member) = member {
-            Some(crate::traits::term::TyTerm::Primitive(member.primitive()))
+            self.clone_source(Some(member.source_type().source()))?
         } else {
             match (op, self.place_slot(base)?.source.as_ref()) {
                 (_, None) => None,
@@ -2679,6 +2679,7 @@ impl Frame {
         &mut self,
         plan: &crate::syntax::constructors::ConstructorPlan,
         bound: crate::frontend::types::BoundNominalConstructor,
+        store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
         let guard = self.admit_constructor_plan(plan)?;
         if bound.mapping().constructor() != crate::core::digest::StableEncode::fingerprint(plan)
@@ -2696,15 +2697,15 @@ impl Frame {
             .try_reserve_exact(fields.len())
             .map_err(|_| crate::runtime::arena::resource())?;
         for (field, ordinal) in fields.iter().zip(bound.mapping().written_to_declaration()) {
-            let primitive = *bound
+            bound
                 .variant()
                 .fields()
                 .get(*ordinal as usize)
                 .ok_or_else(|| invalid("constructor field map outside variant"))?;
-            hints.push((
-                field.operand.value,
-                crate::runtime::shape::PrimitiveIdentity::from_recipe(primitive)?.id(),
-            ));
+            // Validate the complete mapping and frame budget before the store
+            // interns any selected nominal descriptor. Zero is a temporary
+            // accounting placeholder, never an installed operand constraint.
+            hints.push((field.operand.value, TypeId(0)));
         }
         let extra = bound
             .estimated_bytes()
@@ -2720,6 +2721,12 @@ impl Frame {
             })
             .ok_or_else(crate::runtime::arena::resource)?;
         self.admit_constructor_hints(&hints, extra)?;
+        for (hint, ordinal) in hints
+            .iter_mut()
+            .zip(bound.mapping().written_to_declaration())
+        {
+            hint.1 = bound.variant().fields()[*ordinal as usize].materialize(store)?;
+        }
         self.constructor_start = Some(PreparedConstructor {
             pc: self.pc.clone(),
             guard,

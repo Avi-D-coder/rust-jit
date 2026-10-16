@@ -135,13 +135,11 @@ impl GuestStore {
             &source.member,
             self.types.descriptor(origin)?.key.as_ref(),
         )?;
-        if crate::runtime::shape::PrimitiveIdentity::from_recipe(source.member.primitive)?.id()
-            != pointee
-        {
+        if source.member.ty != pointee {
             return Err(ownership());
         }
-        // Current member admission proves primitive fields. Further structural
-        // paths need the same common source-member proof before admission.
+        // The same source-bound field proof selected the exact descriptor at
+        // projection entry. Composed paths still require every enclosing edge.
         Ok(TypeId(value.type_id))
     }
 }

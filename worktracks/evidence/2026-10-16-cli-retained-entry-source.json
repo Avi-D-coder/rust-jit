@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "component": "common-cli-retained-entry3",
+  "status": "source-reviewed-uncompiled-unexecuted",
+  "source_head": "b47383785b8c6e49cf719b4f03e9533821ef3fdd",
+  "files": [
+    {
+      "path": "crates/lrr/src/cli/mod.rs",
+      "bytes": 82511,
+      "sha256": "a247f02f870cf4a291d4b48e30705c79b6324ba01cfcd198a3c93f154e46627c"
+    },
+    {
+      "path": "crates/lrr/src/cli/retained_entry.rs",
+      "bytes": 2934,
+      "sha256": "aa139abed7051b4af4e5cf713f8af53a48c8cd780198a2f90b0cb941a4f436d7"
+    },
+    {
+      "path": "crates/lrr/src/cli/retained_entry_tests.rs",
+      "bytes": 1876,
+      "sha256": "95f882c9d386c594ce54a4a33b0863e80be3f100672e80e700264d6175ad4d15"
+    }
+  ],
+  "source_fingerprint": "6ed142588823fef89ed25328bb04688f96defc4d7aa965fd2ce11120ccf3d7e4",
+  "fingerprint_encoding": "SHA256(canonical JSON sorted keys compact separators of ordered files list)",
+  "handoff": {
+    "path": "worktracks/04-calls-source-views/common-cli-retained-entry-handoff.md",
+    "bytes": 10422,
+    "sha256": "17a1e8d1558eb4d61be70bfdf1eaac02684a800a747169d71786d5f96fa93312"
+  },
+  "witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/hygiene/issue-40847.rs",
+    "bytes": 298,
+    "sha256": "e3f01dcd7b386462ac79b9220b676eb0618d63c0d643ed6ca1e16b8081455be6",
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "git_blob": "c12214be06e1cf7b0f47339155c8f4256ed25c7f",
+    "directives": [
+      "//@ run-pass"
+    ],
+    "auxiliaries": [],
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "execution": "unexecuted"
+  },
+  "production_entry": "cli::standalone_captured -> retained_entry::prepare -> existing exact selected-body source assembly/admission/publication -> ordinary main reselection -> unchanged RunMachine",
+  "tests": [
+    "cli::retained_entry::tests::unchanged_nested_macro_caller_binding_runs_the_whole_main_without_assertion_recipes"
+  ],
+  "holds": [
+    "actual macro/source producer closure for standard assertion and generated nested macro",
+    "shared tuple-of-reference certificate/pattern/deref runtime",
+    "generated selected main lacking original anchor existing route unchanged and held",
+    "current environment/dependency authority remains parent-owned",
+    "no task audit or gate closure"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "component": "common-body-local-type-declaration-source2",
+  "status": "uncompiled-unexecuted; held unchanged for parent copy",
+  "fingerprint": "88cc4cdb09f0bae2e6559def2d46b47dd21ddf6f981658bfd29aa102e7f011da",
+  "fingerprint_encoding": "sha256 compact sorted-key JSON ordered leaf rows",
+  "leaves": [
+    {
+      "path": "crates/lrr/src/frontend/body_type_declarations.rs",
+      "bytes": 22827,
+      "sha256": "33ae1c3fed6a42ac7de80a3ecc2737c64593106b704bc03efa6c690c0b05aa2f"
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_type_declaration_tests.rs",
+      "bytes": 20345,
+      "sha256": "bb3562e735fe61c33f9d07286021b10a4318478b510391bac2e4d41bf1d7d72d"
+    }
+  ],
+  "handoff": {
+    "path": "worktracks/04-calls-source-views/common-body-local-type-declaration-handoff.md",
+    "bytes": 8337,
+    "sha256": "1349b9513f5a5233144c58fb650fbc14308e64868fa608616835b216d665207f"
+  },
+  "dependency": "common-selected-local-declaration-publication-v1/COMPONENT.json SHA9209723121b5354cffd1ce9c20a08b7d64ac218f514d8501bce4d61af2b8f8ec",
+  "holds": [
+    "coordinator current owning-environment publication/query+plan accounting",
+    "retained local positive matrix unexecuted",
+    "no production constructor/runtime consumer",
+    "all new controls uncompiled/unexecuted"
+  ]
+}

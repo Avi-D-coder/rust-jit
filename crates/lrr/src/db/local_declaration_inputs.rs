@@ -1,0 +1,166 @@
+//! Selected declaration headers from an actually admitted entered body.
+//! This publishes source facts, never a name/scope seal or executable body.
+use super::*;
+use crate::{
+    core::digest::StableEncode,
+    frontend::source_body_context::PreparedBodyContext,
+    syntax::{ast_adapter::tokens, outline::DeclarationContext},
+};
+use ra_ap_syntax::{AstNode, TextRange, ast};
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum LocalDeclarationPublication {
+    Published(Digest),
+    NeedsProducer(Digest),
+}
+
+impl Database {
+    /// Cold coordinator preparation. `definition` selects only among the real
+    /// immutable entered facts; it supplies no declaration, name or schema.
+    pub(crate) fn publish_local_declaration(
+        &mut self,
+        context: &PreparedBodyContext,
+        definition: Digest,
+    ) -> QueryPoll<LocalDeclarationPublication> {
+        if let Err(error) = self.require_coordinator() {
+            return QueryPoll::Ready(Err(error));
+        }
+        if self.run_active {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-INTERNAL-SNAPSHOT",
+                "local declaration publication during run",
+            )));
+        }
+        match context.require_current(self) {
+            QueryPoll::Ready(Ok(())) => {}
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
+        QueryPoll::Ready((|| {
+            let invalid = |message| fault("LRR-E-EXPANSION-INPUT", message);
+            let mut selected = context
+                .facts()
+                .items
+                .iter()
+                .filter(|row| row.item.def_key.fingerprint() == definition);
+            let row = selected
+                .next()
+                .ok_or_else(|| invalid("selected local declaration is absent from owning body"))?;
+            if selected.next().is_some() {
+                return Err(invalid("selected local declaration identity is ambiguous"));
+            }
+            if let Some(producer) = row.attribute_input {
+                return Ok(LocalDeclarationPublication::NeedsProducer(producer));
+            }
+            let source = context.source();
+            let item = &row.item;
+            if !source.body().range.contains(item.declaration_span)
+                || item.header.profile != source.parsed().key().profile
+                || item.scope.crate_key != source.scope().crate_key
+                || item.scope.module_path != source.scope().module_path
+                || item.def_key.crate_key != item.scope.crate_key
+                || item.def_key.module_path != item.scope.module_path
+            {
+                return Err(invalid("selected local declaration owning source differs"));
+            }
+            if item.header.estimated_bytes() > 32 * 1024 * 1024 {
+                return Err(fault(
+                    "LRR-E-METADATA-LIMIT",
+                    "local declaration header limit",
+                ));
+            }
+            let syntax = source
+                .parsed()
+                .syntax_at(item.declaration_span, |node| {
+                    ast::Item::can_cast(node.kind())
+                })?
+                .ok_or_else(|| invalid("selected local declaration exact syntax is absent"))?;
+            let excluded = item
+                .body
+                .as_ref()
+                .map(|body| body.range)
+                .or(row.container_range)
+                .map(|range| TextRange::new(range.start.into(), range.end.into()));
+            if tokens(&syntax, excluded) != item.header.tokens {
+                return Err(invalid(
+                    "selected local declaration header attachment differs",
+                ));
+            }
+            let rows = [
+                (
+                    InputKey::DefinitionSource(definition),
+                    InputValue::DefinitionSource(source.parsed().key()),
+                ),
+                (
+                    InputKey::DefinitionHeader(definition),
+                    InputValue::DefinitionHeader(item.header.clone()),
+                ),
+                (
+                    InputKey::DeclarationContext(definition),
+                    InputValue::DeclarationContext(DeclarationContext {
+                        scope: item.scope.clone(),
+                        range: item.declaration_span,
+                    }),
+                ),
+            ];
+            let mut staged = BTreeMap::new();
+            let mut bytes = 0;
+            for (key, value) in rows {
+                if let Some(current) = self.inputs.get(&key) {
+                    // Semantic header hashes deliberately omit attachments.
+                    // Compare the actual rows too; an equal hash cannot attach
+                    // this declaration to another source location or scope.
+                    let identical = match (current.value.as_ref(), &value) {
+                        (InputValue::DefinitionSource(a), InputValue::DefinitionSource(b)) => {
+                            a == b
+                        }
+                        (InputValue::DefinitionHeader(a), InputValue::DefinitionHeader(b)) => {
+                            a == b
+                        }
+                        (InputValue::DeclarationContext(a), InputValue::DeclarationContext(b)) => {
+                            a == b
+                        }
+                        _ => false,
+                    };
+                    if !identical || current.fingerprint != value.fingerprint() {
+                        return Err(fault(
+                            "LRR-E-EXPANSION-CONFLICT",
+                            "selected local declaration publication conflicts with current rows",
+                        ));
+                    }
+                    continue;
+                }
+                bytes = account_add(bytes, input_metadata_bytes(&key, &value)?)?;
+                staged.insert(
+                    key,
+                    InputRecord {
+                        fingerprint: value.fingerprint(),
+                        value: Arc::new(value),
+                    },
+                );
+            }
+            if staged.is_empty() {
+                return Ok(LocalDeclarationPublication::Published(definition));
+            }
+            // Charge all new rows at the peak, before any becomes visible.
+            if account_add(self.cache_usage()?.memo_bytes, bytes)?
+                > self.run_budgets.unwrap_or_default().query_bytes
+            {
+                return Err(fault(
+                    "LRR-E-METADATA-LIMIT",
+                    "local declaration publication exceeds query metadata cap",
+                ));
+            }
+            let revision = self.revision.checked_add(1).ok_or_else(|| {
+                fault("LRR-E-ID-EXHAUSTED", "local declaration revision exhausted")
+            })?;
+            self.inputs.extend(staged);
+            self.revision = revision;
+            Ok(LocalDeclarationPublication::Published(definition))
+        })())
+    }
+}
+
+#[cfg(test)]
+#[path = "local_declaration_inputs_tests.rs"]
+mod tests;

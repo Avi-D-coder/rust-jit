@@ -1,0 +1,136 @@
+{
+  "schema": 1,
+  "status": "source-only staged transport; production publication held; uncompiled/unexecuted",
+  "baseline": "fefe5e297c0ec95f4d4368ac32497a118985e4ff",
+  "source_fingerprint": "c43ae48269a17567f099c86828e0771784abe5fd51baa16da2783517065560cd",
+  "source_leaves": [
+    {
+      "path": "crates/lrr/src/cli/mod.rs",
+      "sha256": "1129e94427c81dc7ab0fbf98cf7d7649ed7c23be2dc3e3f34ca4a08d5e1d29fc"
+    },
+    {
+      "path": "crates/lrr/src/cli/compile_inputs.rs",
+      "sha256": "140d0f32172d363d1aba4360be244e08937dd0aafbbb5ab873365662cac3511b"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "sha256": "83e7e4ea6a1e97b6ebeeb0f22bb1bfaa5b4b8dcb2481ef14c9f6aac209badbd2"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "c3ab5be35f6128b50efb8ba59c0a426a2819538461035665e5c508f8d0efe2b7"
+    },
+    {
+      "path": "crates/lrr/src/frontend/compile_input_catalog.rs",
+      "sha256": "3e689211d9a11d55c33ad97fc59ec1a7e9888352e13861aa98792fc084fb4bca"
+    },
+    {
+      "path": "crates/lrr/src/frontend/compile_input_catalog/owning_profiles.rs",
+      "sha256": "5a66b39660224a1f33f12ddaba2eef21f5fc96bc9caa477961e3f5a6841d08f2"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports.rs",
+      "sha256": "80cba953e54c0719ee1c9b3cf02d7050df12d7013e7f2ae1d54307c8afb0d19d"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports_tests.rs",
+      "sha256": "69e8483295596dd0c567daba3c447d2ac5420b19139e2eb57dfa2d7e09bb33e5"
+    }
+  ],
+  "upstream": {
+    "repository": "https://github.com/rust-lang/rust",
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "license": "MIT OR Apache-2.0; existing LICENSE-MIT and LICENSE-APACHE retained",
+    "files": [
+      {
+        "path": "fixtures/upstream/rustc-checkout/library/core/Cargo.toml",
+        "upstream_path": "library/core/Cargo.toml",
+        "sha256": "f5a8a316d28c1f1f132ff65ec38abd6a55b8078703cf7b5f54058a18a074fc1d",
+        "bytes": 1539,
+        "role": "licensed unchanged source input, not runtime acceptance"
+      },
+      {
+        "path": "fixtures/upstream/rustc-checkout/library/core/src/lib.rs",
+        "upstream_path": "library/core/src/lib.rs",
+        "sha256": "f7da20c347fb8722a6cfc28b6f899fc8359bd99775ba0f2b34f6f86346a0f1f2",
+        "bytes": 13460,
+        "role": "licensed unchanged source input, not runtime acceptance"
+      },
+      {
+        "path": "fixtures/upstream/rustc-checkout/library/core/src/macros/mod.rs",
+        "upstream_path": "library/core/src/macros/mod.rs",
+        "sha256": "af6f7c1c71eef0923e1f4128729e744e2ca6b6c9954245cc8b87e5c579713f66",
+        "bytes": 72969,
+        "role": "licensed unchanged source input, not runtime acceptance"
+      },
+      {
+        "path": "fixtures/upstream/rustc-checkout/library/core/src/macros/panic.md",
+        "upstream_path": "library/core/src/macros/panic.md",
+        "sha256": "bf3c4f4a80494eecbdcd895e81a9c17f4860bb0a9bf22e4af11e03ae9bad7b38",
+        "bytes": 4325,
+        "role": "licensed unchanged source input, not runtime acceptance"
+      },
+      {
+        "path": "fixtures/upstream/rustc-checkout/library/std/Cargo.toml",
+        "upstream_path": "library/std/Cargo.toml",
+        "sha256": "fbb965b5ba747481a0f0ac28acfdf8e40fbb7635fd2a0a0755292d6394d790ea",
+        "bytes": 5649,
+        "role": "licensed unchanged source input, not runtime acceptance"
+      },
+      {
+        "path": "fixtures/upstream/rustc-checkout/library/std/src/macros.rs",
+        "upstream_path": "library/std/src/macros.rs",
+        "sha256": "9b6c83f35166d203cf590b43b184910f7248ca756b86a046851511033a840867",
+        "bytes": 13881,
+        "role": "licensed unchanged source input, not runtime acceptance"
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "path": "crates/lrr/src/source/changes.rs",
+      "sha256": "d4f338cb8ff74d8c45132f34e5c5ebc7af524c0aeded3f4bffabc05d02127589"
+    },
+    {
+      "path": "crates/lrr/src/source/retained_footprint.rs",
+      "sha256": "0d710d4217d984e29dc16c1c5f6976e58f7e4979193f691271a20eaa50b55663"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macros.rs",
+      "sha256": "1ef608ce07ae53af2a3ef72230c8c55c6aefa511e64d867a73ed3c822507d760"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macro_routes.rs",
+      "sha256": "8cc60c91441425ef6fe273ba2ebd775e7e183c28110255331e07296e15131071"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/declarative.rs",
+      "sha256": "a2900a650d93e5de99e4bb660cf2f59ab7f5b1f19666cd52b333adf1d07d6e69"
+    }
+  ],
+  "handoff": {
+    "path": "worktracks/03-control-flow-patterns/macro-export-facet-handoff.md",
+    "sha256": "5205d7102d2b121f7159f9692318b92f677fcd48b17f0196fd727f4b80d429c2"
+  },
+  "tests": {
+    "new_bodies": 3,
+    "executed": 0,
+    "commands": [
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests -- --nocapture"
+    ],
+    "additional": "root retained-footprint controls, existing source-declarative/discovery/compile-input banks, strict workspace and milestone owned by sole validator"
+  },
+  "holds": [
+    "Actual configured SDK unit/export/reexport/module graph selection in standalone CLI",
+    "Compiler annotation no-transform declaration receipts for actual core stable/rustc attributes",
+    "Role-separated facet source currentness/seal and allocation ownership",
+    "Pinned compiler builtin expansion hooks; never declarative placeholder execution",
+    "Common pattern/source/call/member/runtime gaps; no full official fixture claim"
+  ],
+  "existing_generic_annotation_join": [
+    "expand::builtin_attributes::inert_descriptor (pinned inventory)",
+    "SourceDiscovery::poll_nested_declarations + NestedInertProof + actual competing Attribute selection",
+    "SourceDeclarative::replay_scalar_pattern_source",
+    "PreparedSourceView::replay_published_macro_index from actual DiscoveryInput"
+  ]
+}

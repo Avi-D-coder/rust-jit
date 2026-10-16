@@ -173,7 +173,65 @@ pub struct SchemaNames<'a> {
     schema: &'a NominalSchema,
     definition: Cow<'a, crate::source::manifest::DefKey>,
 }
+/// One lookup result and, when available, its source-selected concrete type.
+/// Metadata-only graph callers cannot mint nominal schema authority.
+struct SchemaTypeName {
+    name: super::signature_names::SignatureName,
+    concrete: Option<super::source_types::SourceType>,
+}
+impl SchemaTypeName {
+    fn metadata(name: super::signature_names::SignatureName) -> Result<Self, Diagnostic> {
+        let concrete = if let super::signature_names::SignatureName::Primitive(p) = &name {
+            Some(super::source_types::SourceType::selected_primitive(*p)?)
+        } else {
+            None
+        };
+        Ok(Self { name, concrete })
+    }
+}
 impl<'a> SchemaNames<'a> {
+    fn current_name(
+        &self,
+        db: &mut crate::db::memo::Database,
+        sources: &[&crate::source::changes::PreparedSourceView],
+        name: &str,
+    ) -> crate::db::poll::QueryPoll<SchemaTypeName> {
+        use crate::db::poll::QueryPoll;
+        let selected = match super::type_name_namespace::resolve_declaration_name(
+            db,
+            super::type_name_namespace::SourceTypeOwner {
+                definition: self.schema.definition,
+                scope: &self.schema.scope,
+                header: &self.schema.header,
+            },
+            &self.schema.generics,
+            sources,
+            name,
+        ) {
+            QueryPoll::Ready(Ok(selected)) => selected,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        // This is the same selected-name/alias/schema kernel used by source
+        // parameters and reference pointees. It does not bind child fields.
+        let concrete = match super::source_types::prepare_selected(
+            db,
+            self.graph,
+            sources,
+            selected.clone(),
+        ) {
+            QueryPoll::Ready(Ok(super::source_types::NamedTypePreparation::Ready(proof))) => {
+                Some(proof)
+            }
+            QueryPoll::Ready(Ok(_)) => None,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        QueryPoll::Ready(Ok(SchemaTypeName {
+            name: selected,
+            concrete,
+        }))
+    }
     pub fn from_database(
         db: &mut crate::db::memo::Database,
         graph: &'a super::names::NameNamespaces,
@@ -325,21 +383,47 @@ impl<'a> SchemaNames<'a> {
     /// Alias, generic and compound-field resolution continue through the source
     /// type engine rather than being guessed from a guest descriptor.
     pub fn bind_variant(&self, name: Option<&str>) -> Result<NominalBinding, Diagnostic> {
+        match self.bind_variant_with(name, |name| {
+            crate::db::poll::QueryPoll::Ready(
+                self.unqualified(name, None)
+                    .and_then(SchemaTypeName::metadata),
+            )
+        })? {
+            crate::db::poll::QueryPoll::Ready(result) => result,
+            crate::db::poll::QueryPoll::NeedInput(_) => {
+                Err(schema_fault("graph variant lookup unexpectedly suspended"))
+            }
+        }
+    }
+    fn bind_variant_with(
+        &self,
+        name: Option<&str>,
+        mut lookup: impl FnMut(&str) -> crate::db::poll::QueryPoll<SchemaTypeName>,
+    ) -> Result<crate::db::poll::QueryPoll<NominalBinding>, Diagnostic> {
         use super::signature_names::SignatureName;
         let selected = self.schema.variant(name)?;
-        let own_name = self.unqualified(&self.definition.declared_name, None)?;
-        if !matches!(&own_name, SignatureName::Source(found) if found.identity == self.schema.definition)
+        let own_name = match lookup(&self.definition.declared_name) {
+            crate::db::poll::QueryPoll::Ready(result) => result?,
+            crate::db::poll::QueryPoll::NeedInput(input) => {
+                return Ok(crate::db::poll::QueryPoll::NeedInput(input));
+            }
+        };
+        if !matches!(&own_name.name, SignatureName::Source(found) if found.identity == self.schema.definition)
         {
-            return Ok(NominalBinding::Deferred {
-                field: None,
-                demand: NominalBindingDemand::Name(own_name),
-            });
+            return Ok(crate::db::poll::QueryPoll::Ready(Ok(
+                NominalBinding::Deferred {
+                    field: None,
+                    demand: NominalBindingDemand::Name(own_name.name),
+                },
+            )));
         }
         if !self.schema.generics.is_empty() {
-            return Ok(NominalBinding::Deferred {
-                field: None,
-                demand: NominalBindingDemand::GenericContext,
-            });
+            return Ok(crate::db::poll::QueryPoll::Ready(Ok(
+                NominalBinding::Deferred {
+                    field: None,
+                    demand: NominalBindingDemand::GenericContext,
+                },
+            )));
         }
         let variant = self
             .schema
@@ -352,36 +436,58 @@ impl<'a> SchemaNames<'a> {
         fields
             .try_reserve_exact(selected.fields.len())
             .map_err(|_| schema_limit())?;
+        let mut field_bytes = fields
+            .capacity()
+            .checked_mul(std::mem::size_of::<super::source_types::SourceType>())
+            .filter(|bytes| *bytes <= MAX_SCHEMA_BYTES)
+            .ok_or_else(schema_limit)?;
         for (ordinal, recipe) in selected.fields.iter().enumerate() {
             let field = Some(u32::try_from(ordinal).map_err(|_| schema_limit())?);
             let resolved = if recipe.ty.len() == 1 {
-                self.unqualified(&recipe.ty[0].text, None)?
+                match lookup(&recipe.ty[0].text) {
+                    crate::db::poll::QueryPoll::Ready(result) => result?,
+                    crate::db::poll::QueryPoll::NeedInput(input) => {
+                        return Ok(crate::db::poll::QueryPoll::NeedInput(input));
+                    }
+                }
             } else if matches!(
                 recipe.symbolic,
                 Some(TyTerm::Primitive(crate::ir::op::PrimitiveType::Unit))
             ) {
-                SignatureName::Primitive(crate::ir::op::PrimitiveType::Unit)
+                SchemaTypeName::metadata(SignatureName::Primitive(
+                    crate::ir::op::PrimitiveType::Unit,
+                ))?
             } else {
-                return Ok(NominalBinding::Deferred {
-                    field,
-                    demand: NominalBindingDemand::TypeRecipe,
-                });
+                return Ok(crate::db::poll::QueryPoll::Ready(Ok(
+                    NominalBinding::Deferred {
+                        field,
+                        demand: NominalBindingDemand::TypeRecipe,
+                    },
+                )));
             };
-            let SignatureName::Primitive(primitive) = resolved else {
-                return Ok(NominalBinding::Deferred {
-                    field,
-                    demand: NominalBindingDemand::Name(resolved),
-                });
+            let Some(concrete) = resolved.concrete else {
+                return Ok(crate::db::poll::QueryPoll::Ready(Ok(
+                    NominalBinding::Deferred {
+                        field,
+                        demand: NominalBindingDemand::Name(resolved.name),
+                    },
+                )));
             };
-            fields.push(primitive);
+            field_bytes = field_bytes
+                .checked_add(concrete.heap_bytes()?)
+                .filter(|bytes| *bytes <= MAX_SCHEMA_BYTES)
+                .ok_or_else(schema_limit)?;
+            fields.push(concrete);
         }
-        Ok(NominalBinding::Ready(BoundNominalVariant {
-            identity: self.schema.definition,
-            definition: self.definition.as_ref().clone(),
-            schema: self.schema.fingerprint(),
-            variant,
-            fields,
-        }))
+        Ok(crate::db::poll::QueryPoll::Ready(Ok(
+            NominalBinding::Ready(BoundNominalVariant {
+                identity: self.schema.definition,
+                definition: self.definition.as_ref().clone(),
+                schema: self.schema.fingerprint(),
+                variant,
+                fields,
+            }),
+        )))
     }
     fn field_visibility<'b>(&'b self, declared: &'b Visibility) -> &'b Visibility {
         if self.definition.item_kind == crate::source::manifest::ItemKind::Enum {
@@ -400,7 +506,10 @@ impl<'a> SchemaNames<'a> {
         caller: &ScopeKey,
     ) -> Result<NominalFieldBinding, Diagnostic> {
         match self.bind_named_field_with(variant_name, member, caller, |name| {
-            crate::db::poll::QueryPoll::Ready(self.unqualified(name, None))
+            crate::db::poll::QueryPoll::Ready(
+                self.unqualified(name, None)
+                    .and_then(SchemaTypeName::metadata),
+            )
         })? {
             crate::db::poll::QueryPoll::Ready(result) => result,
             crate::db::poll::QueryPoll::NeedInput(_) => {
@@ -420,17 +529,7 @@ impl<'a> SchemaNames<'a> {
         caller: &ScopeKey,
     ) -> crate::db::poll::QueryPoll<NominalFieldBinding> {
         let outcome = self.bind_named_field_with(variant_name, member, caller, |name| {
-            super::type_name_namespace::resolve_declaration_name(
-                db,
-                super::type_name_namespace::SourceTypeOwner {
-                    definition: self.schema.definition,
-                    scope: &self.schema.scope,
-                    header: &self.schema.header,
-                },
-                &self.schema.generics,
-                sources,
-                name,
-            )
+            self.current_name(db, sources, name)
         });
         match outcome {
             Ok(poll) => poll,
@@ -442,10 +541,7 @@ impl<'a> SchemaNames<'a> {
         variant_name: Option<&str>,
         member: &str,
         caller: &ScopeKey,
-        mut lookup: impl FnMut(
-            &str,
-        )
-            -> crate::db::poll::QueryPoll<super::signature_names::SignatureName>,
+        mut lookup: impl FnMut(&str) -> crate::db::poll::QueryPoll<SchemaTypeName>,
     ) -> Result<crate::db::poll::QueryPoll<NominalFieldBinding>, Diagnostic> {
         use super::signature_names::SignatureName;
         let selected = self.schema.variant(variant_name)?;
@@ -481,12 +577,12 @@ impl<'a> SchemaNames<'a> {
                 return Ok(crate::db::poll::QueryPoll::NeedInput(request));
             }
         };
-        if !matches!(&own_name, SignatureName::Source(found) if found.identity == self.schema.definition)
+        if !matches!(&own_name.name, SignatureName::Source(found) if found.identity == self.schema.definition)
         {
             return Ok(crate::db::poll::QueryPoll::Ready(Ok(
                 NominalFieldBinding::Deferred {
                     field,
-                    demand: NominalBindingDemand::Name(own_name),
+                    demand: NominalBindingDemand::Name(own_name.name),
                 },
             )));
         }
@@ -510,7 +606,7 @@ impl<'a> SchemaNames<'a> {
             recipe.symbolic,
             Some(TyTerm::Primitive(crate::ir::op::PrimitiveType::Unit))
         ) {
-            SignatureName::Primitive(crate::ir::op::PrimitiveType::Unit)
+            SchemaTypeName::metadata(SignatureName::Primitive(crate::ir::op::PrimitiveType::Unit))?
         } else {
             return Ok(crate::db::poll::QueryPoll::Ready(Ok(
                 NominalFieldBinding::Deferred {
@@ -519,11 +615,11 @@ impl<'a> SchemaNames<'a> {
                 },
             )));
         };
-        let SignatureName::Primitive(primitive) = resolved else {
+        let Some(source_type) = resolved.concrete else {
             return Ok(crate::db::poll::QueryPoll::Ready(Ok(
                 NominalFieldBinding::Deferred {
                     field,
-                    demand: NominalBindingDemand::Name(resolved),
+                    demand: NominalBindingDemand::Name(resolved.name),
                 },
             )));
         };
@@ -541,7 +637,7 @@ impl<'a> SchemaNames<'a> {
                 schema: self.schema.fingerprint(),
                 variant,
                 field,
-                primitive,
+                source_type,
             }),
         )))
     }
@@ -554,6 +650,42 @@ impl<'a> SchemaNames<'a> {
         plan: &crate::syntax::constructors::ConstructorPlan,
         caller: &ScopeKey,
     ) -> Result<NominalConstructorBinding, Diagnostic> {
+        match self.bind_record_constructor_with(name, plan, caller, |name| {
+            crate::db::poll::QueryPoll::Ready(
+                self.unqualified(name, None)
+                    .and_then(SchemaTypeName::metadata),
+            )
+        })? {
+            crate::db::poll::QueryPoll::Ready(result) => result,
+            crate::db::poll::QueryPoll::NeedInput(_) => Err(schema_fault(
+                "graph constructor lookup unexpectedly suspended",
+            )),
+        }
+    }
+    /// Same record-shape/privacy/field-order binder; schema field Type names are
+    /// admitted by the shared current declaration service used by ordinary members.
+    pub(crate) fn bind_record_constructor_current(
+        &self,
+        db: &mut crate::db::memo::Database,
+        sources: &[&crate::source::changes::PreparedSourceView],
+        name: Option<&str>,
+        plan: &crate::syntax::constructors::ConstructorPlan,
+        caller: &ScopeKey,
+    ) -> crate::db::poll::QueryPoll<NominalConstructorBinding> {
+        match self.bind_record_constructor_with(name, plan, caller, |name| {
+            self.current_name(db, sources, name)
+        }) {
+            Ok(poll) => poll,
+            Err(error) => crate::db::poll::QueryPoll::Ready(Err(error)),
+        }
+    }
+    fn bind_record_constructor_with(
+        &self,
+        name: Option<&str>,
+        plan: &crate::syntax::constructors::ConstructorPlan,
+        caller: &ScopeKey,
+        lookup: impl FnMut(&str) -> crate::db::poll::QueryPoll<SchemaTypeName>,
+    ) -> Result<crate::db::poll::QueryPoll<NominalConstructorBinding>, Diagnostic> {
         use crate::syntax::constructors::ConstructorKind;
         let ConstructorKind::Record {
             fields, rest: None, ..
@@ -588,19 +720,22 @@ impl<'a> SchemaNames<'a> {
             constructor: plan.fingerprint(),
             written_to_declaration: slots,
         };
-        match self.bind_variant(name)? {
-            NominalBinding::Ready(variant) => {
-                Ok(NominalConstructorBinding::Ready(BoundNominalConstructor {
-                    variant,
-                    mapping,
-                }))
+        let bound = match self.bind_variant_with(name, lookup)? {
+            crate::db::poll::QueryPoll::Ready(result) => result?,
+            crate::db::poll::QueryPoll::NeedInput(input) => {
+                return Ok(crate::db::poll::QueryPoll::NeedInput(input));
             }
-            NominalBinding::Deferred { field, demand } => Ok(NominalConstructorBinding::Deferred {
+        };
+        Ok(crate::db::poll::QueryPoll::Ready(Ok(match bound {
+            NominalBinding::Ready(variant) => {
+                NominalConstructorBinding::Ready(BoundNominalConstructor { variant, mapping })
+            }
+            NominalBinding::Deferred { field, demand } => NominalConstructorBinding::Deferred {
                 mapping,
                 field,
                 demand,
-            }),
-        }
+            },
+        })))
     }
 }
 
@@ -697,7 +832,7 @@ pub struct BoundNominalField {
     schema: Digest,
     variant: u32,
     field: u32,
-    primitive: crate::ir::op::PrimitiveType,
+    source_type: super::source_types::SourceType,
 }
 impl BoundNominalField {
     pub(crate) fn identity(&self) -> Digest {
@@ -715,7 +850,7 @@ impl BoundNominalField {
         for segment in &self.definition.module_path {
             bytes = bytes.checked_add(segment.capacity())?;
         }
-        Some(bytes)
+        bytes.checked_add(self.source_type.heap_bytes().ok()?)
     }
     pub fn definition(&self) -> &crate::source::manifest::DefKey {
         &self.definition
@@ -729,19 +864,22 @@ impl BoundNominalField {
     pub fn field(&self) -> u32 {
         self.field
     }
-    pub fn primitive(&self) -> crate::ir::op::PrimitiveType {
-        self.primitive
+    pub fn primitive(&self) -> Option<crate::ir::op::PrimitiveType> {
+        self.source_type.primitive()
+    }
+    pub(crate) fn source_type(&self) -> &super::source_types::SourceType {
+        &self.source_type
     }
 }
 impl StableEncode for BoundNominalField {
-    const DOMAIN: &'static str = "lrr/v3/bound-nominal-field";
+    const DOMAIN: &'static str = "lrr/v4/bound-nominal-field";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.identity);
         e.record(&self.definition);
         e.digest(self.schema);
         e.u32(self.variant);
         e.u32(self.field);
-        e.u32(self.primitive.tag());
+        e.record(&self.source_type);
     }
 }
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -760,7 +898,7 @@ pub struct BoundNominalVariant {
     definition: crate::source::manifest::DefKey,
     schema: Digest,
     variant: u32,
-    fields: Vec<crate::ir::op::PrimitiveType>,
+    fields: Vec<super::source_types::SourceType>,
 }
 impl BoundNominalVariant {
     pub(crate) fn identity(&self) -> Digest {
@@ -771,7 +909,7 @@ impl BoundNominalVariant {
             .checked_add(
                 self.fields
                     .capacity()
-                    .checked_mul(std::mem::size_of::<crate::ir::op::PrimitiveType>())?,
+                    .checked_mul(std::mem::size_of::<super::source_types::SourceType>())?,
             )?
             .checked_add(
                 self.definition
@@ -782,6 +920,9 @@ impl BoundNominalVariant {
             .checked_add(self.definition.declared_name.capacity())?;
         for segment in &self.definition.module_path {
             bytes = bytes.checked_add(segment.capacity())?;
+        }
+        for field in &self.fields {
+            bytes = bytes.checked_add(field.heap_bytes().ok()?)?;
         }
         Some(bytes)
     }
@@ -794,7 +935,7 @@ impl BoundNominalVariant {
     pub(crate) fn variant(&self) -> u32 {
         self.variant
     }
-    pub(crate) fn fields(&self) -> &[crate::ir::op::PrimitiveType] {
+    pub(crate) fn fields(&self) -> &[super::source_types::SourceType] {
         &self.fields
     }
 }
@@ -842,3 +983,7 @@ impl StableEncode for NominalSchema {
         });
     }
 }
+
+#[cfg(test)]
+#[path = "nominal_field_storage_tests.rs"]
+mod nominal_field_storage_tests;

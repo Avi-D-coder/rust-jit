@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "kind": "public opaque common module name semantic carrier, source-only query prerequisite",
+  "baseline": "2032a7a570dce4b21c49c4502c548d40c18754a7",
+  "owned_delta": [
+    {
+      "path": "crates/lrr/src/frontend/current_module_names.rs",
+      "sha256": "fe7b1a314b16259d85441590fb9ebff5e639185f60940c7ef78d5c201316a744",
+      "bytes": 13155
+    }
+  ],
+  "source_fingerprint": "6342c21ce64f9bea9b280d3e0b3bfa31237d7f262977c8d2b1aff148dc176e8a",
+  "fingerprint_encoding": "sha256(concat(path + NUL + lowercase_sha256 + LF)) in listed order",
+  "required_root_glue": [
+    "frontend/mod.rs pub mod current_module_names",
+    "db/key::CurrentModuleNameKey {source:OutlineKey,path:String,bucket:BucketKey}",
+    "db QueryKey/QueryValue/provider tag33 semantic identity transport and genuine selected source capture",
+    "Database::current_scope_certificate(source,scope,Namespace)",
+    "Actual carrier/input/query Arc ownership, exclusive accounting and weak retirement in memo"
+  ],
+  "api": "CurrentModuleNameObservation::prepare(db,&PreparedSourceView,&ScopeKey,Namespace,&str)->QueryPoll<Arc<Self>>; public matches_request,semantic_identity,exclusive_metadata_bytes,source/scope/namespace/module_edition/name/completion/lookup/request_identity; crate input_roots/query_roots/answer_dependency",
+  "authority": "Genuine current CapturedSource+CrateCfg+scope certificate and SealedName answer only; no caller NameLookup/seal/completeness constructor; not use-site hygiene/local-prefix/prelude/binding/type authority",
+  "semantic_identity": "Actual source selection/scope/namespace/module edition/normalized name request identity + typed completion + actual lookup. Excludes seal/query/candidate-set/evidence identities, which remain retained dependencies/roots.",
+  "checks": {
+    "rustfmt": "exit0 source only",
+    "git_diff_check": "exit0",
+    "compilation": "unexecuted",
+    "tests": "unexecuted; none added",
+    "native": "unexecuted"
+  },
+  "acceptance": "Shared helper plus pending root transport/ownership; no feature or gate closure, runtime/full-fixture or performance claim"
+}

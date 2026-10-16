@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "component": "common-selected-local-declaration-publication-v1",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/local_declaration_inputs.rs",
+      "sha256": "f633e0a582fe5eebee3ebcfc2c67dc1289dd5b408a1167af2c7f82e9d08e032d",
+      "bytes": 7155
+    },
+    {
+      "path": "crates/lrr/src/db/local_declaration_inputs_tests.rs",
+      "sha256": "56d022e7d88711bfeb292e681e799d87101c7bc9d801f0a5df21cd9042513875",
+      "bytes": 9850
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "7545499fe57b900e9e2c8c574bb8307390d61db4cf222b969595b0463644b3e5",
+      "bytes": 132588
+    },
+    {
+      "path": "crates/lrr/src/syntax/type_schemas.rs",
+      "sha256": "672695838b977b6be45b583d8d95fe09765a3b8c7a569f0620310af34ab7520e",
+      "bytes": 47946
+    }
+  ],
+  "status": "uncompiled-unexecuted",
+  "base": "exact bodyType189 source6e8b1f3a096e24a6495af64b935f5b032a2ef69daae7d1a959e626e8925e7753",
+  "memo_delta": "Only3-line module entry relative original187, actual source-only diff a0bfc0/0.",
+  "source_review": "Peer common_reference_sources inspected coordinator/current owner/actual facts/AST+header/row equality/atomic collision+budget guards. Root independently reviewed all8: no executor/inference/pattern/source-origin specialization; source facts only, no name/scope/Body grants. Shared nominal_schema now exact syntax_at instead of whole-file descendants. Cold bounded selected header staging only.",
+  "required_controls": [
+    "new local_declaration_inputs::tests4",
+    "nearest existing TypeSchema named_new_field/enum_field_cap/unused_duplicate_schema3"
+  ],
+  "holds": [
+    "No full local-plan/current-environment authority or production constructor installation.",
+    "No new stock/runtime/full-fixture/architecture task acceptance.",
+    "Body declaration original/retained/generated local canonical successor separate."
+  ],
+  "runtime_contract_pass_increment": 0,
+  "full_fixture_pass_increment": 0
+}

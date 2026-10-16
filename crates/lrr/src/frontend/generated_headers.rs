@@ -5,11 +5,17 @@ use crate::{
         digest::{Digest, StableEncode},
     },
     expand::generated_items::GeneratedItems,
-    frontend::names::{NameDefinition, NameNamespaces},
+    frontend::names::NameNamespaces,
     source::{manifest::ItemKind, snapshot::CfgSet},
-    syntax::{outline::ScopeKey, parse::ParsedFile, token_wire::Key, visibility::VisibilityScope},
+    syntax::{outline::ScopeKey, parse::ParsedFile, token_wire::Key},
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
+#[path = "declared_item_names.rs"]
+pub(crate) mod declared_names;
+use declared_names::DeclaredItemName;
 pub struct GeneratedHeaderPlan {
     scope: ScopeKey,
     routes: Vec<GeneratedRoute>,
@@ -69,10 +75,7 @@ impl GeneratedModuleSource {
     }
 }
 struct GeneratedRoute {
-    scope: ScopeKey,
-    name: String,
-    definition: NameDefinition,
-    visibility: VisibilityScope,
+    declaration: Arc<DeclaredItemName>,
     module: bool,
 }
 fn contained_scope(scope: &ScopeKey, owner: &ScopeKey) -> bool {
@@ -154,7 +157,7 @@ impl GeneratedHeaderPlan {
         plan.routes.retain(|r| {
             catalog
                 .settled_derive_items()
-                .contains(&r.definition.identity)
+                .contains(&r.declaration.definition().identity)
         });
         plan.blocked.clear();
         plan.attributes.clear();
@@ -225,12 +228,14 @@ impl GeneratedHeaderPlan {
         }
         let edition = items.record().key().call_edition;
         let parsed = ParsedFile::from_generated_items(items)?;
+        let source_parse = parsed.key();
         let outline = parsed.outline(scope.crate_key, scope.module_path.clone(), cfg)?;
         let owner_class = items.item_class(if captured_root.is_some() {
             call_context
         } else {
             owner_context
         })?;
+        let declaration_hygiene = items.hygiene_facts();
         let spans = items
             .tokens()
             .spans()
@@ -422,14 +427,18 @@ impl GeneratedHeaderPlan {
                 let span = spans.get(&origin.span.0).ok_or_else(|| {
                     fault("LRR-E-EXPANSION-INPUT", "generated import span absent")
                 })?;
-                if items.item_class(span.context)? != owner_class {
+                if items.item_class(span.context)? != owner_class
+                    || declaration_hygiene.item(span.context)? != owner_context
+                {
                     comparable = false;
                     break;
                 }
             }
             if !comparable {
-                blocked.insert(items.record().key().invocation);
-                continue;
+                return Err(fault(
+                    "LRR-E-NAME-CONTEXT",
+                    "generated import requires actual binding and target name-context occurrences",
+                ));
             }
             let index = items
                 .items()
@@ -485,7 +494,7 @@ impl GeneratedHeaderPlan {
                 blocked.insert(items.record().key().invocation);
                 continue;
             }
-            for ((namespace, name), ids) in &members.candidates {
+            for ((namespace, _name), ids) in &members.candidates {
                 for id in ids {
                     let item = definitions.get(id).ok_or_else(|| {
                         fault(
@@ -509,21 +518,27 @@ impl GeneratedHeaderPlan {
                         })?;
                     let origin = header.name.as_ref().ok_or_else(|| {
                         fault(
-                            "LRR-E-CATALOG-INCOMPLETE",
+                            "LRR-E-EXPANSION-INPUT",
                             "generated named header origin absent",
                         )
                     })?;
                     let span = spans.get(&origin.span.0).copied().ok_or_else(|| {
                         fault("LRR-E-EXPANSION-INPUT", "generated name span absent")
                     })?;
-                    if items.item_class(span.context)? != owner_class {
-                        blocked.insert(header.key.fingerprint());
-                        continue;
-                    }
+                    let visibility = NameNamespaces::item_visibility(item, *namespace, edition)?;
+                    let declaration = Arc::new(DeclaredItemName::capture(
+                        items,
+                        header,
+                        &source_parse,
+                        span,
+                        route_scope,
+                        *namespace,
+                        visibility,
+                        owner,
+                    )?);
                     bytes = bytes
-                        .checked_add(name.len())
-                        .and_then(|n| n.checked_add(route_scope.heap_bytes()))
-                        .and_then(|n| n.checked_add(256))
+                        .checked_add(declaration.metadata_bytes()?)
+                        .and_then(|n| n.checked_add(std::mem::size_of::<GeneratedRoute>() + 96))
                         .filter(|n| *n <= 32 * 1024 * 1024)
                         .ok_or_else(|| {
                             fault("LRR-E-DISCOVERY-LIMIT", "generated route metadata limit")
@@ -534,20 +549,11 @@ impl GeneratedHeaderPlan {
                             "generated route count limit",
                         ));
                     }
-                    let visibility = NameNamespaces::item_visibility(item, *namespace, edition)?;
                     routes.try_reserve(1).map_err(|_| {
                         fault("LRR-E-DISCOVERY-LIMIT", "generated route allocation")
                     })?;
                     routes.push(GeneratedRoute {
-                        scope: route_scope.clone(),
-                        name: name.clone(),
-                        definition: NameDefinition {
-                            namespace: *namespace,
-                            identity: header.key.fingerprint(),
-                            defining_unit: scope.crate_key,
-                            definition_edition: edition,
-                        },
-                        visibility,
+                        declaration,
                         module: item.def_key.item_kind == ItemKind::Module
                             && header.kind
                                 != crate::expand::generated_items::GeneratedHeaderKind::ExternCrate,
@@ -605,30 +611,7 @@ impl GeneratedHeaderPlan {
             }
         }
         for route in self.routes {
-            let mut path = Vec::new();
-            path.try_reserve_exact(
-                route
-                    .scope
-                    .module_path
-                    .len()
-                    .checked_add(1)
-                    .ok_or_else(|| {
-                        fault("LRR-E-DISCOVERY-LIMIT", "generated route path overflow")
-                    })?,
-            )
-            .map_err(|_| fault("LRR-E-DISCOVERY-LIMIT", "generated route path allocation"))?;
-            path.extend(route.scope.module_path.iter().map(String::as_str));
-            path.push(&route.name);
-            let path = NameNamespaces::path(
-                route.scope.crate_key,
-                &path,
-                route.definition.definition_edition,
-            )?;
-            if route.module {
-                graph.define_generated_module(path, route.definition, route.visibility)?;
-            } else {
-                graph.define(path, route.definition, route.visibility)?;
-            }
+            graph.define_declared_item(route.declaration, route.module)?;
         }
         for import in self.imports {
             graph.admit_generated_import(import, self.edition)?;

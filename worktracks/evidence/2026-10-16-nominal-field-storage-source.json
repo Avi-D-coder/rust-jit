@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "component": "common-source-selected-nominal-field-storage-v1",
+  "status": "source-only-uncompiled-unexecuted",
+  "source_fingerprint": "75ab10f89da0a3c87e2e7df9b5368956c5a875a4b0418cd6fb57943123c95a9a",
+  "encoding": "sha256 canonical ordered files JSON",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "bytes": 17756,
+      "sha256": "fadad2111beba00bbe7c3c1c08c21dcef7a84a20db4dc13faeb284e04bf8ce30"
+    },
+    {
+      "path": "crates/lrr/src/frontend/types.rs",
+      "bytes": 38927,
+      "sha256": "7e8c1d386f47fc2515a91aa02d2c6d415dc022a1c1ed302b48e39ec44ca66927"
+    },
+    {
+      "path": "crates/lrr/src/frontend/constructors.rs",
+      "bytes": 32312,
+      "sha256": "ba9ad7c48bb98fcabbc4d04747cf7079923ee3c3fcd0b17ac7e1da51dc351a69"
+    },
+    {
+      "path": "crates/lrr/src/frontend/nominal_field_storage_tests.rs",
+      "bytes": 8586,
+      "sha256": "eee88a412218e60a2e64b853e3688b1a64e22d5181cf6abf0981972cdd4e1caa"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell.rs",
+      "bytes": 205823,
+      "sha256": "f665c4f15ec0b2be2b58ffa29b3a0cdac43babb5e0172ad5b4fa4d673be7968a"
+    },
+    {
+      "path": "crates/lrr/src/runtime/place.rs",
+      "bytes": 7116,
+      "sha256": "88be66e1273b28035d9364d58bb2695efee8d937022d7ccaa83753623dada2c3"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "bytes": 309894,
+      "sha256": "1358ac6ce40a92ed0920daf062761a2331281822c70f2e56715e59c08b5954ee"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_constructors.rs",
+      "bytes": 51125,
+      "sha256": "142a0ed7d367b16112ccdd516ff7202ab0289c70d20e5b4db5a1221cd23f5a8c"
+    },
+    {
+      "path": "crates/lrr/src/syntax/type_schemas.rs",
+      "bytes": 47977,
+      "sha256": "87b3368ab0ebf9c664227fe7ded5e13db702d27704b3a8a7b9c41dbcbbf7db11"
+    },
+    {
+      "path": "crates/lrr/src/syntax/constructors.rs",
+      "bytes": 38048,
+      "sha256": "037bb1cf353e43ea8e1b52a9169bf84720282a825783e6c7bf2ea82f05696ac0"
+    }
+  ],
+  "baseline": "sol-common-selected-local-declaration-validation-v3/source a60940cf",
+  "includes_prior_component": "common-exact-constructor-path-current-schema-core 60073b0a (unchanged syntax/constructors.rs prerequisite; frontend constructor/types shared binders extended here)",
+  "holds": [
+    "owning-body current environment pure-query publication",
+    "local declaration Type-name occurrence joins",
+    "source-selected Drop/no-Drop and full unchanged main",
+    "generated/wrapper/standard macro matrix and milestone"
+  ]
+}

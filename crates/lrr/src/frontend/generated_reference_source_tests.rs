@@ -688,7 +688,7 @@ fn current_named_field_schema_uses_actual_original_and_generated_type_owners() {
                 panic!("current selected field did not use its owning Type receipt")
             };
             assert_eq!(member.identity(), *identity);
-            assert_eq!(member.primitive(), PrimitiveType::Isize);
+            assert_eq!(member.primitive(), Some(PrimitiveType::Isize));
             assert_eq!(member.field(), 0);
             let mut foreign = signature.scope.clone();
             foreign.crate_key = Digest([210; 32]);

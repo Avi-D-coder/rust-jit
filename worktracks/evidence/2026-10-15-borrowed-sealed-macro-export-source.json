@@ -1,0 +1,70 @@
+{
+  "apis": [
+    "SourceMacroExportFacet::unit_graph()->Digest",
+    "SourceDiscovery::completed_macro_export_facet(&self,&mut Database,&SourceMacroExportFacet)->QueryPoll<SealedMacroExportView>",
+    "SealedMacroExportView::{identity,facet,provider,seal,dependencies,exclusive_metadata_bytes,revalidate}"
+  ],
+  "architecture_review": {
+    "handoff": "worktracks/03-control-flow-patterns/macro-export-facet-handoff.md",
+    "modes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "sha256": "f6f63e98fd3743fa7555a144107794190b27c260c726ff85323ea4dc7cde7e4b"
+  },
+  "component": "common-borrowed-sealed-macro-export-v1",
+  "dependencies": [
+    "Exact source13 common-original-inert-declarations-v1 SHA7a4806237737bc6ce6b68c76a47b759ef8abdba47f6ac40491b9ade1643f0912, including its source7/root compiler inventory/publication dependencies.",
+    "Root role-aware DiscoverySeal provider/publication remains a next integration dependency; no ordinary source/parser bypass is introduced."
+  ],
+  "files": [
+    {
+      "bytes": 13105,
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports.rs",
+      "sha256": "3591dc420d061fdf738bd1ca490fde3db3c2507fccfd3e10fecf42085ad9cb5f"
+    },
+    {
+      "bytes": 13888,
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports_tests.rs",
+      "sha256": "613cdc70a197cd81b1b51b403a7840f1a51cc55c37216ac7a661e5600f17850a"
+    },
+    {
+      "bytes": 2740,
+      "path": "crates/lrr/src/expand/source_declarative/sealed_macro_export_view_tests.rs",
+      "sha256": "4dbd6d16dea3c98b8316005c0b56276370b8547e055a3130ebac15ccc0ecabd2"
+    },
+    {
+      "bytes": 488582,
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "04b1a76be9dee9fdfa12666c622d37d281c625dfcc865c03d9d6703bf9de6f48"
+    },
+    {
+      "bytes": 8124,
+      "path": "crates/lrr/src/expand/source_discovery/macro_export_view.rs",
+      "sha256": "adaa5c64a30378da2bdccbea69e51951c99b0925f065f2b788b61ae624f532eb"
+    }
+  ],
+  "holds": [
+    "No owning facet/provider snapshot or retained-graph accounting claim.",
+    "No raw source/runtime parser publication; missing full seal is a real demand.",
+    "Selected preparation stamps alone never grant annotation/import/producer namespace completeness.",
+    "Inherited RuntimeMacroKind assertion/numeric/evaluator routes remain production repair debt."
+  ],
+  "schema": 1,
+  "source_fingerprint": "64d24becae7c68abcf6c5211599853b7a702e3d77c97a7635ff74cee6da3151c",
+  "status": "source-only-uncompiled-unexecuted-owning-transport-and-activation-held",
+  "verification": {
+    "positive_completed_facet": "not established; required after role-aware full-seal publication",
+    "validator_commands": [
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::sealed_view_tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests -- --nocapture"
+    ],
+    "worker": "rustfmt/source review only; no Cargo/Rust/native tests"
+  }
+}

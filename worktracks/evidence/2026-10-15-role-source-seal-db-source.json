@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T05:23:26.158895+00:00",
+  "claim": "LOCAL-024",
+  "task": "M014/T024/T063",
+  "status": "source-only-uncompiled-unexecuted",
+  "baseline": "exact compiled/scoped actionGate171 df8a97b8",
+  "overlay": "artifacts/macos-first/common-role-source-seal-db-v1/overlay",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/macro_export_inputs.rs",
+      "bytes": 13821,
+      "sha256": "914228e529e2dd758fbc3cb0f3a0e934f71f662086b3df97249957123d13c5c9"
+    },
+    {
+      "path": "crates/lrr/src/db/macro_export_inputs_tests.rs",
+      "bytes": 12476,
+      "sha256": "4499bce0d6871fa1587fefea80645cf0ca310eeacc4f3b5966962a1c118fbf86"
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "bytes": 54232,
+      "sha256": "ebc02b84cc533c1b17d1380acc0440745f9810aa1b8baabea6ae4be0e3123e8e"
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "bytes": 129574,
+      "sha256": "b5c3e6a23bf32bf85f4a1a2b94dae23407203362d5098e32afaa300377245d49"
+    }
+  ],
+  "dependencies": [
+    "Borrowed source5 supplies actual unit_graph getter on opaque SourceMacroExportFacet.",
+    "SourceDiscovery pre-poll selected receipt/outline hook must supply both actual input stamps in complete seal, no invented empty seal.",
+    "Original inert13 full leaves need explicit generated catalog097184e6 dependency if composed."
+  ],
+  "scope": "Existing DiscoverySeal source validation consumes exact macro-role receipt + environment + actual outline digest; ordinary parser/body registry remains unavailable.",
+  "new_tests": [
+    "macro_export_source_observation_binds_actual_outline_and_graph_without_runtime_grant"
+  ],
+  "review_all8": "No runtime evaluator/parser/recipe path, macro identity semantics, generated exclusion, pattern arm planning, phase reconstruction, world scan or immutable body clone. Scalar source contribution observation only. Full seal/namespace/producer dependencies remain required.",
+  "holds": [
+    "Role-owned module parent/adoption and complete SDK graph not established.",
+    "Nested inert/fragment/argument proof replay still requires existing ordinary source inputs; new role source adaptation remains subsequent required work.",
+    "Owning completed provider graph transport requires actual full root accounting.",
+    "No stock/runtime/fullfixture/task/MA/JIT closure."
+  ]
+}

@@ -353,78 +353,86 @@ pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<B
     if parsed.key() != *parse || header.profile != parse.profile {
         return QueryPoll::Ready(Err(error("body Type declaration source/profile differs")));
     }
-    let canonical =
-        if let Some(input) = checked!(trace.input(db, InputKey::GeneratedSyntax(parse.content))) {
-            let InputValue::GeneratedSyntax(unit) = input.as_ref() else {
-                return QueryPoll::Ready(Err(error("body Type generated source differs")));
-            };
-            if unit.key != *parse {
-                return QueryPoll::Ready(Err(error("body Type generated parse differs")));
-            }
-            let Some(definition) = unit.definitions.get(&identity) else {
-                return pending(BodyTypeDemand::DeclarationSource(identity));
-            };
-            if context.scope.crate_key != unit.scope.crate_key
-                || !context
-                    .scope
-                    .module_path
-                    .starts_with(&unit.scope.module_path)
-                || !unit.items.items().iter().any(|item| {
-                    item.key.fingerprint() == identity
-                        && item.start == context.range.start
-                        && item.end == context.range.end
-                })
-            {
-                return QueryPoll::Ready(Err(error(
-                    "body Type generated canonical declaration differs",
-                )));
-            }
-            definition.clone()
-        } else if db.input(&InputKey::RetainedSyntax(parse.content)).is_some() {
-            return pending(BodyTypeDemand::RetainedDeclaration(identity));
-        } else if let Some(observation) = &module {
-            if observation.source().outline.parse != *parse {
-                return pending(BodyTypeDemand::BindingOccurrence(identity));
-            }
-            let outlined =
-                polled!(trace.query(db, QueryKey::Outline(observation.source().outline.clone())));
-            let QueryValue::Outline(outline) = outlined.as_ref() else {
-                return QueryPoll::Ready(Err(error("body Type original outline differs")));
-            };
-            let Some(item) = outline
-                .items
-                .iter()
-                .find(|item| item.def_key.fingerprint() == identity)
-            else {
-                return pending(BodyTypeDemand::DeclarationOccurrence(identity));
-            };
-            if item.scope != context.scope
-                || item.declaration_span != context.range
-                || item.header != *header
-            {
-                return QueryPoll::Ready(Err(error("body Type original declaration rows differ")));
-            }
-            item.def_key.clone()
-        } else {
-            let Some(item) = prefix
-                .retained_plan()
-                .context()
-                .facts()
-                .items
-                .iter()
-                .find(|row| row.item.def_key.fingerprint() == identity)
-            else {
-                return pending(BodyTypeDemand::DeclarationOccurrence(identity));
-            };
-            if *parse != prefix.retained_plan().context().source().parsed().key()
-                || item.item.scope != context.scope
-                || item.item.declaration_span != context.range
-                || item.item.header != *header
-            {
-                return QueryPoll::Ready(Err(error("body Type local declaration rows differ")));
-            }
-            item.item.def_key.clone()
+    // The opaque prefix already selected this owning-body declaration. Its
+    // canonical key is the exact admitted local facts row, even when the body
+    // parse also has a module-level GeneratedSyntax/RetainedSyntax publication.
+    // Module maps cannot stand in for function-local declaration authority.
+    let canonical = if module.is_none() {
+        let Some(item) = prefix
+            .retained_plan()
+            .context()
+            .facts()
+            .items
+            .iter()
+            .find(|row| row.item.def_key.fingerprint() == identity)
+        else {
+            return pending(BodyTypeDemand::DeclarationOccurrence(identity));
         };
+        if *parse != prefix.retained_plan().context().source().parsed().key()
+            || item.item.scope != context.scope
+            || item.item.declaration_span != context.range
+            || item.item.header != *header
+        {
+            return QueryPoll::Ready(Err(error("body Type local declaration rows differ")));
+        }
+        item.item.def_key.clone()
+    } else if let Some(input) = checked!(trace.input(db, InputKey::GeneratedSyntax(parse.content)))
+    {
+        let InputValue::GeneratedSyntax(unit) = input.as_ref() else {
+            return QueryPoll::Ready(Err(error("body Type generated source differs")));
+        };
+        if unit.key != *parse {
+            return QueryPoll::Ready(Err(error("body Type generated parse differs")));
+        }
+        let Some(definition) = unit.definitions.get(&identity) else {
+            return pending(BodyTypeDemand::DeclarationSource(identity));
+        };
+        if context.scope.crate_key != unit.scope.crate_key
+            || !context
+                .scope
+                .module_path
+                .starts_with(&unit.scope.module_path)
+            || !unit.items.items().iter().any(|item| {
+                item.key.fingerprint() == identity
+                    && item.start == context.range.start
+                    && item.end == context.range.end
+            })
+        {
+            return QueryPoll::Ready(Err(error(
+                "body Type generated canonical declaration differs",
+            )));
+        }
+        definition.clone()
+    } else if db.input(&InputKey::RetainedSyntax(parse.content)).is_some() {
+        return pending(BodyTypeDemand::RetainedDeclaration(identity));
+    } else if let Some(observation) = &module {
+        if observation.source().outline.parse != *parse {
+            return pending(BodyTypeDemand::BindingOccurrence(identity));
+        }
+        let outlined =
+            polled!(trace.query(db, QueryKey::Outline(observation.source().outline.clone())));
+        let QueryValue::Outline(outline) = outlined.as_ref() else {
+            return QueryPoll::Ready(Err(error("body Type original outline differs")));
+        };
+        let Some(item) = outline
+            .items
+            .iter()
+            .find(|item| item.def_key.fingerprint() == identity)
+        else {
+            return pending(BodyTypeDemand::DeclarationOccurrence(identity));
+        };
+        if item.scope != context.scope
+            || item.declaration_span != context.range
+            || item.header != *header
+        {
+            return QueryPoll::Ready(Err(error("body Type original declaration rows differ")));
+        }
+        item.def_key.clone()
+    } else {
+        return QueryPoll::Ready(Err(error(
+            "body Type module declaration observation absent",
+        )));
+    };
     if canonical.namespace != Namespace::Type
         || selected.namespace != Namespace::Type
         || canonical.crate_key != context.scope.crate_key

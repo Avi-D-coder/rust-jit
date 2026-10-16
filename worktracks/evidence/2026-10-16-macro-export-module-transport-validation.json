@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "release_sha256": "c14e80024a515a982ab14885abe7a271259ca49ea56fbeb845bc994fd720b195",
+  "packet": "sol-common-configured-macro-export-module-transport-validation-v1",
+  "source_fingerprint": "7bae411dea4221ecd6fa528bec3b3916307fd36010843112e5b5951b8fc0e957",
+  "bodies": 4,
+  "passed": 4,
+  "failed": 0,
+  "actual_terminals": {
+    "composition": "eef11c/0",
+    "inactive_before": "1247e3/0",
+    "assembly": {
+      "launch": "54fdfb",
+      "session": 67578,
+      "terminal": "59217b/0"
+    },
+    "compile": {
+      "launch": "4bac40",
+      "session": 62552,
+      "pid": 19610,
+      "terminal": "c02d76/0",
+      "seconds": 27.462316125
+    },
+    "sequence": {
+      "launch": "720065",
+      "session": 67409,
+      "terminal": "0cf502/0"
+    },
+    "inactive_after": "7d7d98/0"
+  },
+  "runtime_contract_pass_increment": 0,
+  "full_fixture_pass_increment": 0,
+  "scope": "Exact module request/adoption transport and missing-parent hold controls; no live production activation/fullseal integration or fullcore execution.",
+  "unexecuted": [
+    "earlier fullcore failed control not rerun",
+    "prior role3 positive controls not repeated",
+    "strict workspace/alltargets",
+    "fullmilestone",
+    "CLI/stock runtime"
+  ],
+  "warnings": 20,
+  "holds": [
+    "actual module/fullseal consumption and complete graph accounting",
+    "unresolved attributed imports for required fullcore",
+    "common contextual namespace integration",
+    "all E-R5-005 architecture removals/interpreter runtime acceptance"
+  ]
+}

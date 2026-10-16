@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "scope": "Shared local scalar source constraint prerequisite; str runtime and full fixture remain open",
+  "source_only": true,
+  "uncompiled": true,
+  "unexecuted": true,
+  "source_fingerprint": "18fcdb39f392febf2815e81f7c8a5735fcf338a21ab00b4ccd75936b1fe94b54",
+  "files": [
+    {
+      "path": "crates/lrr/src/syntax/condition_ranges.rs",
+      "sha256": "79c906bb63bc9d228221249b34fb838d881196a73eb9653a4a28ae157fa67834",
+      "bytes": 11547
+    },
+    {
+      "path": "crates/lrr/src/syntax/literal_match.rs",
+      "sha256": "a2e6f6def5558a55393d3841328aa8f08446bb39b238255ae194f74340f56cf1",
+      "bytes": 48699
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_tests.rs",
+      "sha256": "845162d503ae185dd2fcbd17d286a4d330607fc60796fb2d79c58e55cb3d060f",
+      "bytes": 16638
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_source.rs",
+      "sha256": "94dd55beca2f7372bd99ef50cf33a8208db45faa0534a7e58f03d9982e995c71",
+      "bytes": 8561
+    },
+    {
+      "path": "crates/lrr/src/syntax/scalar_match_ranges_tests.rs",
+      "sha256": "ad3bcc777330475d958394046816dec43eb6c3fb47440a9c95ce52a182544d50",
+      "bytes": 28049
+    }
+  ],
+  "handoff": {
+    "path": "worktracks/03-control-flow-patterns/scalar-local-source-constraints-handoff.md",
+    "sha256": "137ab422173a10856e85d7d2c4b3bb194dc508547b993868494727b19b42e75e"
+  },
+  "dependencies": [
+    "Root current retained PatternSourcePlan/BodyIndex/common source admission packet; no new DB/API join",
+    "Existing ordinary scalar Pattern transaction VM and result transfer"
+  ]
+}

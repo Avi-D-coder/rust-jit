@@ -1,0 +1,109 @@
+{
+  "architecture_review": {
+    "handoff": "worktracks/03-control-flow-patterns/macro-export-facet-handoff.md",
+    "modes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "sha256": "e7153afeb439c4cff7ace1a1bf09b468fa55681bb52bc9c6b50787d6d67626d0"
+  },
+  "component": "common-configured-macro-export-module-transport-v1",
+  "dependencies": [
+    "Exact role12 source manifest cc540259b91e40bb43b1bf2c5b9c07e1f90a9a76ab98b18f83452bf95060d402 plus separately frozen explicit parenthold2 e20a8cd8793b10137ac71d0aa79427fbe2e996178d080e0ca564c5963abaf379.",
+    "Existing SourceModuleDeclaration/capture_request; IncludeAuthorities/ModuleCaptureRequest/CapturedModule; SourceCapture capture and ExpansionCoordinator accept/adopt; SyntaxProvider::module_capture genuine ModuleRecord transport. No DB memo/provider mutation.",
+    "Actual configured Cargo root/source path, CARGO_MANIFEST_DIR, source/env receipt selected2 per facet and genuine scalar observation v2/fullseal predecessor. Observation gains opaque facet/preparation/environment copies, scalar input encoding unchanged.",
+    "Root retains role graph pooling, namespace/import scheduling, actual SDK adoption and fullseal child dependency activation. Reference peer source_macros/hygiene code unchanged."
+  ],
+  "files": [
+    {
+      "bytes": 15795,
+      "path": "crates/lrr/src/db/macro_export_inputs.rs",
+      "sha256": "bf6b21375d511608f18096393d05df03b24a7ccc7871c2005a50d75c19ab5ffd"
+    },
+    {
+      "bytes": 9109,
+      "path": "crates/lrr/src/expand/source_declarative/macro_export_module_tests.rs",
+      "sha256": "fb411080ad0a729bd49c4e4f5fb27d8321fdeeb0ef3aac9e0ad08864b15c52bd"
+    },
+    {
+      "bytes": 10197,
+      "path": "crates/lrr/src/expand/source_declarative/macro_export_role_tests.rs",
+      "sha256": "5e5d650dc6a377cf85c8925f4d9a587f1274aeaf012fc6d8e88af85109187342"
+    },
+    {
+      "bytes": 13953,
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports.rs",
+      "sha256": "3041f4951136ba546f1809e62827a2488ac96ab75e576ab3733b185eb30aea29"
+    },
+    {
+      "bytes": 14011,
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports_tests.rs",
+      "sha256": "16c9010041d70057b714564123e9b9813c0a312273f9af3513b0e17bed8e875b"
+    },
+    {
+      "bytes": 8566,
+      "path": "crates/lrr/src/frontend/source_module_declarations.rs",
+      "sha256": "cc835584c90c163586aeb275f16f6b0f788e371e4726ec38a95483c34b653545"
+    },
+    {
+      "bytes": 17180,
+      "path": "crates/lrr/src/source/macro_export_module.rs",
+      "sha256": "0d162718b57c3523989ec6ab5d75c0b069460cc4c70489635e4db40d2d317464"
+    },
+    {
+      "bytes": 350,
+      "path": "crates/lrr/src/source/mod.rs",
+      "sha256": "0c2eaab771f430b8460351a2f821a2bb2e395ebceb7556fb0cf9d8e766d32b2a"
+    },
+    {
+      "bytes": 14077,
+      "path": "crates/lrr/src/source/module_capture.rs",
+      "sha256": "940943ec2e6fe6cc811237e4c0236bd814b458934ebdfa10219af0bf8ff07e7e"
+    }
+  ],
+  "holds": [
+    "Production configure_captured_modules remains explicitly held for nonroot role children until this exact adopted lease/full ancestor dependency closure is consumed and accounted.",
+    "No complete namespace/export seal, generated/build-output owner inference, ordinary source/parser/body registry grant or runtime authority.",
+    "Root owns genuine pending scope/import/Attribute scheduling: role190 actual source import failure remains required, not suppressed.",
+    "Repeated cold prelude/route policy work remains named debt; no JIT/performance/stock runtime acceptance."
+  ],
+  "schema": 1,
+  "source_fingerprint": "bd8f15bff9339e0519f1d0eec47546ef2b3f231a35db10c5ea77d804d3eb9c8d",
+  "source_fingerprint_encoding": "SHA256(sorted path + NUL + hex file SHA256 + LF)",
+  "status": "source-only-uncompiled-unexecuted",
+  "upstream": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "files": [
+      {
+        "path": "fixtures/upstream/rustc-checkout/library/core/src/lib.rs",
+        "sha256": "f7da20c347fb8722a6cfc28b6f899fc8359bd99775ba0f2b34f6f86346a0f1f2"
+      },
+      {
+        "path": "fixtures/upstream/rustc-checkout/library/core/src/macros/mod.rs",
+        "sha256": "af6f7c1c71eef0923e1f4128729e744e2ca6b6c9954245cc8b87e5c579713f66"
+      },
+      {
+        "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/auxiliary/foreign-crate-macro-pat.rs",
+        "sha256": "87f225051556bb7c8d61b2fe47cfea3e424247b8788322e9979477b9a1360419"
+      }
+    ],
+    "unchanged": true
+  },
+  "verification": {
+    "commands_for_sole_validator": [
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::module_adoption_tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::role_tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::publication_tests -- --nocapture",
+      "cargo test -p lrr --lib service::prepared_module_registry_tests -- --nocapture"
+    ],
+    "new_test_bodies": 3,
+    "test_or_runtime_pass_claim": false,
+    "worker": "scoped rustfmt/diff/hash/source-review only; no Cargo/Rust/native tests"
+  }
+}

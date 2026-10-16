@@ -1,0 +1,60 @@
+{
+  "status": "source-only-uncompiled-unexecuted",
+  "component": "genuine-generated-owning-macro-boundary",
+  "baseline": "owning-context10 copied5c65f0/0",
+  "fingerprint_domain": "sorted path + space + SHA256 + newline",
+  "fingerprint": "392766a2d21e13bfb0836e54cddaa2165e9c15b33f8dcfa5c68caaf067526a90",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/body_macro_boundary.rs",
+      "sha256": "3e12be522363cd27b931c03a674fc666b182ee1b0660bdd93f11040125eb28c4",
+      "bytes": 14251
+    },
+    {
+      "path": "crates/lrr/src/expand/mod.rs",
+      "sha256": "9aa46b6b0660c65fcc76647b7413666948f7dfd452b7d29419785f69e85e1338",
+      "bytes": 1265
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "sha256": "5df439bfe6161740f94f1e105f58f729e2b0fef001a50056d977fdfcb51ec753",
+      "bytes": 174302
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "53d98c1eb08e173dd3104461831dd433a735900dcb3c06540ec70156060c67f8",
+      "bytes": 485427
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_macros.rs",
+      "sha256": "097184e6964424b3d15469f3d3e8e93884864c3146a8d0024f9dd70c7937365b",
+      "bytes": 205830
+    },
+    {
+      "path": "crates/lrr/src/frontend/macro_boundary.rs",
+      "sha256": "151f6368a087066828dda055279b641c2b4cf73edcad5bcbbf4df2eedccf45ff",
+      "bytes": 4357
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "sha256": "b6a28c09541243007c3c1ce13bb8176420c48f1d7732e1253eaeef45e9e01d3a",
+      "bytes": 1558
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macros.rs",
+      "sha256": "5396acfefb894722f87defed439032379e1654797b1dd0bc788436ce6a5e4ba0",
+      "bytes": 85472
+    },
+    {
+      "path": "crates/lrr/src/service/retained_reference_source_tests.rs",
+      "sha256": "76feef1213ee8b382771df31c0d615e1c5c9ca2bb96405561c8782538e1e7b16",
+      "bytes": 29608
+    }
+  ],
+  "holds": [
+    "common pure-query/input transport and owner pins",
+    "body/local lookup consumption and existing macro-parent adapter removal",
+    "constructor production switch",
+    "full upstream Point Box/std main and all-context architecture matrix"
+  ]
+}

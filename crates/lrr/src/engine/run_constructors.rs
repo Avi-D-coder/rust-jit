@@ -226,9 +226,10 @@ impl RunMachine {
             )
         };
         match binding {
-            QueryPoll::Ready(Ok(RecordConstructorBinding::Ready(bound))) => {
-                QueryPoll::Ready(self.frame.prepare_nominal_constructor(plan, *bound))
-            }
+            QueryPoll::Ready(Ok(RecordConstructorBinding::Ready(bound))) => QueryPoll::Ready(
+                self.frame
+                    .prepare_nominal_constructor(plan, *bound, &mut self.store),
+            ),
             QueryPoll::Ready(Ok(RecordConstructorBinding::Deferred(demand))) => {
                 QueryPoll::Ready(Err(unresolved(&demand)))
             }

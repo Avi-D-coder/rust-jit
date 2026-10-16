@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "kind": "staged source-backed occurrence/module observation prerequisite; no final binding authority",
+  "baseline": "4da79b710efaddb99656911bf32f93f2d4425974",
+  "owned_delta": [
+    {
+      "path": "crates/lrr/src/frontend/scalar_pattern_binding.rs",
+      "sha256": "9e2136469bd3f3455b7ff6c110c28676041b1d6739c1601182da7eae5f4d4a21",
+      "bytes": 39729
+    },
+    {
+      "path": "crates/lrr/src/frontend/pattern_binding_occurrences.rs",
+      "sha256": "b3b205b2a265d4533b366c78d87a8cb03b18298659df1a32399c264f9c5c8739",
+      "bytes": 24618
+    }
+  ],
+  "source_fingerprint": "f7fa6b3909ba958c224186062b50aaee91005d39babe22662deea4d0c28df130",
+  "fingerprint_encoding": "sha256(concat(path + NUL + lowercase_sha256 + LF)) in listed order",
+  "unchanged_production": [
+    "ScalarPatternBindingAdmission capture/query capture/require/revalidate",
+    "PatternSourcePlan live owner_for/lower and binding Unsupported staged decision",
+    "DB memo/query/value registration untouched"
+  ],
+  "dependencies": [
+    "Opaque PreparedBodyContext actual source/facts/lease API from common owning-context peer packet",
+    "Parent pure query caching/Arc roots metadata ownership",
+    "Current relevant scope selection and semantic name projection dependencies",
+    "Retained common local-prefix/body imports/frontiers proof",
+    "Genuine retained compiler Value-prelude answer",
+    "Generated/retained hygienic scope proof before module projection"
+  ],
+  "upstream_originals": [
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/or-patterns/search-via-bindings.rs",
+      "sha256": "38723ec8521136188a19a4b465362e979d95f59ed65009a358aff640a23a08b6"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/binding/if-let.rs",
+      "sha256": "267def6c0f6e9e87d3d738bbfa31c02b6fac53f66882d40701dd3109a310e8b6"
+    }
+  ],
+  "upstream_rustc_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "checks": {
+    "rustfmt": "exit0 source only",
+    "compilation": "unexecuted",
+    "tests": "unexecuted; none added",
+    "native": "unexecuted"
+  },
+  "acceptance": "Source component only; not a reusable final binding proof, runtime/full fixture pass, integrated repair or gate closure"
+}

@@ -1,0 +1,131 @@
+{
+  "architecture_review": {
+    "handoff": "worktracks/03-control-flow-patterns/macro-export-facet-handoff.md",
+    "modes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "sha256": "1b06954dc9ec111ab3520d33bf8b7d3516a488440d775d7d923d1e1090aab459"
+  },
+  "component": "common-bound-macro-export-source-role-v1",
+  "dependencies": [
+    "Exact retained-original-prefix5 source SHA fdd76d52f3a90dad67611e23723ce5be31b57c6125312a126d43d1b95ce40651 and original inert13/borrowed5/replay5/publicationjoin2 plus their recorded root role DB/classification dependencies.",
+    "Root genuine macro-export-source observation/publication v2 current receipt graph/outline/environment and selected2/fullseal joins, actual compiler inventory identity and owning-profile compiler metadata.",
+    "Current full SourceDiscovery preserves root annotation_plan Arc borrow repair; current macro_exports_tests preserves root publication_tests child hook; source_declarative/source_macros API dependencies unchanged from recorded predecessor.",
+    "syntax/scalar_pattern_binding.rs changes one consumer to explicit live_macro_prelude_policy to preserve ordinary no_core refusal; no binding namespace/proof semantics changed."
+  ],
+  "files": [
+    {
+      "bytes": 15115,
+      "path": "crates/lrr/src/db/macro_export_inputs.rs",
+      "sha256": "201e0337c7501c2a9169a340e1e807a3b7b165415e779c18215375133456dc73"
+    },
+    {
+      "bytes": 177021,
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "sha256": "1151c78bfc545abf283d4d376f2ce906c23c9d5aa5138f5bd8c06ab1e02cf0f0"
+    },
+    {
+      "bytes": 7636,
+      "path": "crates/lrr/src/expand/source_declarative/macro_export_role_tests.rs",
+      "sha256": "ca42226367b1da1fa4b046f3aefef7e34966a2ef34e9ae75d4e40d4f11104208"
+    },
+    {
+      "bytes": 13343,
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports.rs",
+      "sha256": "6a9a4fdd232cce6d1ddae44dcbc0f36ec39182321cc47e7831f885f8abc4384e"
+    },
+    {
+      "bytes": 13943,
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports_tests.rs",
+      "sha256": "b09501a055084a1f4a01e87e949e70ca1b23bf1c8447dd6e9942289f4a2134d3"
+    },
+    {
+      "bytes": 12861,
+      "path": "crates/lrr/src/expand/source_declarative/sealed_macro_export_view_tests.rs",
+      "sha256": "bfc9835fa076bddac90811ba7923952204c952089a22172f77a03c2ae328662d"
+    },
+    {
+      "bytes": 495687,
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "3383998c2efeccb767b14e64acef064a69736bd203ad6bf74676f20ad26348e7"
+    },
+    {
+      "bytes": 13514,
+      "path": "crates/lrr/src/expand/source_discovery/macro_export_view.rs",
+      "sha256": "0142941fb7a2fd0b9c8590f0c0413f368d35de2ec17c8d9c608696897bdcb7f6"
+    },
+    {
+      "bytes": 3732,
+      "path": "crates/lrr/src/expand/source_discovery/original_inert.rs",
+      "sha256": "f346e48c8a5711eecd7163aa349d9ba24a2d0ed83822b688b8a79eed6357f5fc"
+    },
+    {
+      "bytes": 57529,
+      "path": "crates/lrr/src/source/changes.rs",
+      "sha256": "7a08316b7acc972f8a93329261a95b8d5833726417ba904a44203c40eda3ffac"
+    },
+    {
+      "bytes": 4139,
+      "path": "crates/lrr/src/syntax/macro_prelude.rs",
+      "sha256": "a2c580f78a9113569884829f0126a3e590fa63772671de933e350c7690e5630d"
+    },
+    {
+      "bytes": 11056,
+      "path": "crates/lrr/src/syntax/scalar_pattern_binding.rs",
+      "sha256": "366053e39b41a65f711743abb276abee875d5c0f97e545290afb1ce652327e94"
+    }
+  ],
+  "holds": [
+    "Source component only; no complete SDK adoption, module-parent/role-aware child capture, owning graph transport, full graph accounting or runtime authority.",
+    "Whole unchanged core required positive remains unexecuted and may expose genuine next compiler/producer/type/import frontier.",
+    "Existing route/policy/import cold reconstruction, optional Type scope world preparation and published restored-index replay remain debt.",
+    "Reachable inherited RuntimeMacroKind assertion/numeric alternate production routes are not repaired or promoted."
+  ],
+  "removed_routes": [
+    "MacroExport providers no longer receive synthetic live facade routes/dependency aliases/injected imports/runtime preludes/module facade definitions/compiler injection.",
+    "Source-role legacy runtime intrinsic probes and runtime index/namespace projection are denied; ordinary Live routes remain unchanged.",
+    "The syntax-only no_core refusal is moved to explicit live admission; genuinely role-bound compile-time source can express no-prelude facts."
+  ],
+  "schema": 1,
+  "source_fingerprint": "14c0282fc5b1b187a9160d4a3cb52504e66695add22ba3b4eb7fecd01bf7b00b",
+  "source_fingerprint_encoding": "SHA256(sorted path + NUL + hex file SHA256 + LF)",
+  "status": "source-only-uncompiled-unexecuted",
+  "upstream": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "files": [
+      {
+        "path": "fixtures/upstream/rustc-checkout/library/core/src/lib.rs",
+        "sha256": "f7da20c347fb8722a6cfc28b6f899fc8359bd99775ba0f2b34f6f86346a0f1f2"
+      },
+      {
+        "path": "fixtures/upstream/rustc-checkout/library/core/src/macros/mod.rs",
+        "sha256": "af6f7c1c71eef0923e1f4128729e744e2ca6b6c9954245cc8b87e5c579713f66"
+      },
+      {
+        "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/auxiliary/foreign-crate-macro-pat.rs",
+        "sha256": "87f225051556bb7c8d61b2fe47cfea3e424247b8788322e9979477b9a1360419"
+      }
+    ],
+    "unchanged": true
+  },
+  "verification": {
+    "changed_existing_controls": "AUX/full-core role binding order and explicit runtime projection denial",
+    "commands_for_sole_validator": [
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::role_tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::sealed_view_tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::publication_tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_discovery::original_inert_tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_discovery::compiler_profiles_tests -- --nocapture"
+    ],
+    "new_test_bodies": 3,
+    "test_or_runtime_pass_claim": false,
+    "worker": "scoped rustfmt and git diff --check only; no Cargo/Rust/native tests"
+  }
+}

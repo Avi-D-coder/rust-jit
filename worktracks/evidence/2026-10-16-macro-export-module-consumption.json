@@ -1,0 +1,122 @@
+{
+  "architecture_review": {
+    "handoff": "worktracks/03-control-flow-patterns/macro-export-facet-handoff.md",
+    "modes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "sha256": "918cb73dff47dbbd2d1f6e1454675b73b0c6068ac25e51f1e3ab4104ce4d8f98"
+  },
+  "component": "common-macro-export-module-consumption-v1",
+  "dependencies": [
+    "Frozen transport9 SHA935615f3609edce4f6a559c65146a12e8b728c3166455c2883e3b27880250007 plus exact role12 and parenthold2 predecessors; original copies remain immutable.",
+    "Root-owned db/memo.rs new actual adoption slice after replay_sources/before derived; source inspection hash69b15806f3737ea92c90dbe15551c617940c82a34ce22428e2d6e80ed2583525 includes unique child/complete coverage/current fullseal and staged parent-chain consistency. Root freezes this dependency separately; worker did not edit it.",
+    "Actual source/macro_export_module::validate_discovery API and selected source/env observation v2; no scalar input schema change.",
+    "Root imported module-original provenance in fixtures/upstream/rustc-checkout/manifest.json SHA16c794fcaf3eb8a5a97442b62ef755993ad0ef3e47930e9717641957f47b3608 (333cases/536files pending); required originals listed below must accompany this source.",
+    "Reference peer retains shared source_macros/generated/header/contextual namespace ownership; no changes in those leaves by this component."
+  ],
+  "files": [
+    {
+      "bytes": 181793,
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "sha256": "6fcc09fd5f0a5df540bdae46fbd46390af400461d838bbf2601fb25f8b1b57d5"
+    },
+    {
+      "bytes": 13915,
+      "path": "crates/lrr/src/expand/source_declarative/macro_export_consumption_tests.rs",
+      "sha256": "0b996191069d8d2722ea45bda78196e01cd5815d69ab2db42320ce36e42f0a18"
+    },
+    {
+      "bytes": 9138,
+      "path": "crates/lrr/src/expand/source_declarative/macro_export_module_tests.rs",
+      "sha256": "5f818e8d846abb2b88115a800c98bde7c38cbd3382f1d5dbf23e4e5a48c81931"
+    },
+    {
+      "bytes": 14087,
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports_tests.rs",
+      "sha256": "349f5984e7e0415181cf205e72f82814a72b08138b4d93f3146a26fbf2e878cd"
+    },
+    {
+      "bytes": 13628,
+      "path": "crates/lrr/src/expand/source_declarative/sealed_macro_export_view_tests.rs",
+      "sha256": "d6869addcba20e6d4100c793ea3c35618f834a43a83309bc92b178011b65d39f"
+    },
+    {
+      "bytes": 497637,
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "7418d8f6e93959e6738aa300d993088dedd86f2380e77db3312cabc53efa535e"
+    },
+    {
+      "bytes": 8175,
+      "path": "crates/lrr/src/expand/source_discovery/macro_export_modules.rs",
+      "sha256": "89fe02f2cf80176ceaf91b982f1d1970e5eb0072adaa47b3d44aefaab0aef467"
+    },
+    {
+      "bytes": 13567,
+      "path": "crates/lrr/src/expand/source_discovery/macro_export_view.rs",
+      "sha256": "1ce0ac8c9419daf6d2cc79e66007cac08e937b1368606e6358f4adfb57aa2ea1"
+    },
+    {
+      "bytes": 19589,
+      "path": "crates/lrr/src/source/macro_export_module.rs",
+      "sha256": "562fe968e458a93178f8f3ab8e07d941c88061f7f14e8f35ba7d513df6338ff4"
+    }
+  ],
+  "holds": [
+    "Whole core attributed-import/competing Attribute closure remains required and can fail; no unresolved import is ignored.",
+    "Module empty-main fixture source authority is not assertion/standard-macro execution or full fixture pass.",
+    "Actual SDK graph preparation/adoption/source-owning allocation pool and MacroExport/runtime identity/hook joins remain required.",
+    "Common ordinary standard macro output execution and removal of reachable RuntimeMacroKind alternate runtime routes remains incomplete."
+  ],
+  "removed_routes": [
+    "Role children no longer attach via caller scope/package inventory alone; unconditional hold is replaced only by actual adopted parent/index/declaration checks.",
+    "Staged module adoption is no longer disconnected metadata: actual SourceDecl/Discovery/compiler_inputs/seal/publisher consumes it.",
+    "No legacy runtime macro evaluator is promoted or removed by this authority component; that remaining replacement is tied to actual standard macro execution."
+  ],
+  "schema": 1,
+  "source_fingerprint": "86eb883fdcc7e093b479f53f31980fcf46f6fa5b4e086f9303b46a8d70ce81be",
+  "source_fingerprint_encoding": "SHA256(sorted path + NUL + hex file SHA256 + LF)",
+  "status": "source-only-uncompiled-unexecuted",
+  "upstream": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "new_originals": [
+      {
+        "bytes": 118,
+        "git_blob": "a602b81b319b6c9d3200145d0e0f175f3493bd9e",
+        "path": "fixtures/upstream/rustc-checkout/tests/ui/modules/special_module_name_ignore.rs",
+        "sha256": "625d6e0b5a2afecde7837b523ac24be8613f1776cd970a9667ae6e64bbce240b"
+      },
+      {
+        "bytes": 38,
+        "git_blob": "ef805c1f0203149dd8b7239d099991986638ca75",
+        "path": "fixtures/upstream/rustc-checkout/tests/ui/modules/auxiliary/dummy_lib.rs",
+        "sha256": "a9df76705f5a753027c014becfbda7e74777d7fb0560711f510ef6656eccada7"
+      }
+    ],
+    "unchanged": true
+  },
+  "verification": {
+    "commands_for_sole_validator": [
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::module_consumption_tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::module_adoption_tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::role_tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::sealed_view_tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_discovery::original_inert_tests -- --nocapture"
+    ],
+    "new_test_bodies": 3,
+    "owning_editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "test_or_runtime_pass_claim": false,
+    "worker": "rustfmt/diff/hash/source review only; no Cargo/Rust/native tests"
+  }
+}

@@ -1230,6 +1230,12 @@
       "bytes": 602
     },
     {
+      "path": "tests/ui/hygiene/issue-40847.rs",
+      "git_blob": "c12214be06e1cf7b0f47339155c8f4256ed25c7f",
+      "sha256": "e3f01dcd7b386462ac79b9220b676eb0618d63c0d643ed6ca1e16b8081455be6",
+      "bytes": 298
+    },
+    {
       "path": "tests/ui/hygiene/xcrate.rs",
       "git_blob": "aa221cb5ad2a3e859a0cb6036dd29dd2caa26be0",
       "sha256": "16bf17b4ffb780fe249d47d179c876f9e5605f48abcf7a862dc37898ea88aa24",
@@ -1948,6 +1954,18 @@
       "git_blob": "97b9be716fcdc248186f9d29da8d5a718311b407",
       "sha256": "01fb04de862d02cabd6a933d659786fd9709ee5dbf30946db3179e5548d10c3a",
       "bytes": 2127
+    },
+    {
+      "path": "tests/ui/modules/auxiliary/dummy_lib.rs",
+      "git_blob": "ef805c1f0203149dd8b7239d099991986638ca75",
+      "sha256": "a9df76705f5a753027c014becfbda7e74777d7fb0560711f510ef6656eccada7",
+      "bytes": 38
+    },
+    {
+      "path": "tests/ui/modules/special_module_name_ignore.rs",
+      "git_blob": "a602b81b319b6c9d3200145d0e0f175f3493bd9e",
+      "sha256": "625d6e0b5a2afecde7837b523ac24be8613f1776cd970a9667ae6e64bbce240b",
+      "bytes": 118
     },
     {
       "path": "tests/ui/moves/move-arg.rs",
@@ -4208,6 +4226,14 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/hygiene/issue-40847.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/hygiene/xcrate.rs",
       "directives": [
         "//@ edition:2015",
@@ -4773,6 +4799,14 @@
     {
       "path": "tests/ui/missing/missing-items/missing-const-parameter.rs",
       "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/modules/special_module_name_ignore.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"
     },

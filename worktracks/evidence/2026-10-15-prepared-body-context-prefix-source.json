@@ -1,0 +1,51 @@
+{
+  "status": "source-only-uncompiled-unexecuted",
+  "component": "common-prepared-body-context-and-local-prefix",
+  "baseline": "boundary9 copied fed8ad/0; frozen112v2 failure kept separate",
+  "fingerprint_domain": "sorted path + space + SHA256 + newline",
+  "fingerprint": "d38d5f6a13b165d52fb7be0e88ae9bf789f9a01addde6323c17965665c5a0c57",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "sha256": "21ad8bfc5d34870379b22b33f59a7dd428db56ed450fc44e1da5502890b2ead3",
+      "bytes": 40434
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_body_context_tests.rs",
+      "sha256": "82b8bbcbd580525b66a969eba62756b86f86d53f8f2fe9b7eacb5c12d2171e3c",
+      "bytes": 6797
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_locals.rs",
+      "sha256": "6275d9300920f1b71b6d44c6f94b8c9493d7f68856385deddff35fd6c236577f",
+      "bytes": 77913
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macros.rs",
+      "sha256": "4df796f90eaa8bb12cc905f08f595e96df0f7fbca978be058455bea788953af5",
+      "bytes": 87179
+    },
+    {
+      "path": "crates/lrr/src/service/retained_reference_source_tests.rs",
+      "sha256": "28573529ec3bc633b984bfe3430cf61060614f3cb1c5a011fef72634d40eebb6",
+      "bytes": 32179
+    },
+    {
+      "path": "crates/lrr/src/syntax/macro_calls.rs",
+      "sha256": "c29391d640421059ec44d7e6dfcc6d82e740dada919313af06fbb40b0dceed81",
+      "bytes": 17909
+    }
+  ],
+  "root_dependency": {
+    "path": "crates/lrr/src/syntax/lexical_hygiene.rs",
+    "sha256": "1f4559169f0fe5c2bbc3d527694159510a1dbc3d092e3dccc2df49d2509377d4",
+    "owner": "root; raw context accessor and token interval correction; not worker source"
+  },
+  "holds": [
+    "root BodyContext pure query/input transport, immutable root accounting and memo ownership",
+    "exact prepared macro import target occurrence callback",
+    "retained expanded macro reference structural occurrence origin",
+    "cached local-plan/Type occurrence namespace proof and constructor production switch",
+    "stock Point Box/std main and all-context execution matrix"
+  ]
+}

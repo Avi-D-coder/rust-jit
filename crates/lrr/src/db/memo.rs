@@ -39,6 +39,9 @@ mod prepared_modules;
 #[path = "retained_body_inputs.rs"]
 mod retained_body_inputs;
 pub(crate) use retained_body_inputs::{RetainedOriginalDeclaration, RetainedSourceLease};
+#[path = "local_declaration_inputs.rs"]
+mod local_declaration_inputs;
+pub(crate) use local_declaration_inputs::LocalDeclarationPublication;
 #[path = "retained_syntax_inputs.rs"]
 mod retained_syntax_inputs;
 pub(crate) use body_leases::BodyExecutionLease;

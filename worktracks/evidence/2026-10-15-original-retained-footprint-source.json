@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T04:38:42.201515+00:00",
+  "claim": "LOCAL-024",
+  "status": "source-only-uncompiled-unexecuted",
+  "scope": "Cold conservative original source publication retained-byte admission upper bound; no runtime/DB source registration or authority",
+  "overlay": "/Users/avi/Code/rust-jit/artifacts/macos-first/common-original-retained-footprint-v1/overlay",
+  "files": [
+    {
+      "path": "crates/lrr/src/source/changes.rs",
+      "bytes": 56068,
+      "sha256": "d4f338cb8ff74d8c45132f34e5c5ebc7af524c0aeded3f4bffabc05d02127589"
+    },
+    {
+      "path": "crates/lrr/src/source/retained_footprint.rs",
+      "bytes": 7497,
+      "sha256": "0d710d4217d984e29dc16c1c5f6976e58f7e4979193f691271a20eaa50b55663"
+    }
+  ],
+  "holds": [
+    "MacroExport currentness/seal/role-specific root pool pending",
+    "No macro findings, task, fixture or JIT closure"
+  ]
+}

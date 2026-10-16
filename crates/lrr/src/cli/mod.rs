@@ -13,6 +13,7 @@ mod preentry_loader_tests;
 #[cfg(test)]
 mod ref_pattern_tests;
 mod render;
+mod retained_entry;
 mod runtime_capture;
 #[cfg(test)]
 mod runtime_capture_tests;
@@ -361,6 +362,7 @@ fn standalone_captured(
             ));
         }
     };
+    let callable = retained_entry::prepare(&mut db, &discovery, &view, callable)?;
     callable.revalidate(&mut db)?;
     let body = callable
         .body()

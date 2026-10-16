@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T16:06:26.466182+00:00",
+  "claim": "LOCAL-024",
+  "scope": "macOS aarch64 Rust1.99 interpreter repair; no integrated milestone",
+  "production_baseline": {
+    "source": "a60940cf3ea413fd7fca1a71569ede61fa5a512d299e38f45f6041c184f68478",
+    "fixture": "tests/ui/borrowck/borrowck-assign-to-subfield.rs",
+    "edition": 2024,
+    "terminal": "ce62a3/1",
+    "result": "interpreter_failure",
+    "message": "constructor requires further source member/type binding",
+    "range": [
+      154,
+      198
+    ],
+    "main_complete": false,
+    "cleanup_complete": false,
+    "new_stock_runtime_passes": 0,
+    "release_sha256": "e100530f859c3f9fe5783a94831b62987e588870ade186f40178bcc7aa95b917"
+  },
+  "macro_module_component": {
+    "source": "2f38ca613c95d730b5c7a52fe426b47f64e5e36654afa6e0b5b675644da45d72",
+    "compile": "2b4d68/0",
+    "sequence": "e92668/1",
+    "controls_passed": 3,
+    "required_fullcore_failed": 1,
+    "failure": "source routes have unresolved import demands",
+    "release_sha256": "31d56685bdfeb2dbbce260d90d2b727ad99fecc0bcb8eb0565fc1d05cffe3526",
+    "runtime_pass_claim": false
+  },
+  "kernel_storage_compile_attempt": {
+    "source": "2216a6098dd980c49a52a9da6902657659df4312e4a99eca7f74673887cea87b",
+    "terminal": "a6d862/1",
+    "compile_errors": 3,
+    "test_bodies_executed": 0,
+    "release_sha256": "e4414c745da77f140d3eb4cceec5c7fe362e94b09d4177349f927cdd9db5ac3c",
+    "successor": "854f56cd42526f0114bb7afeacdf6672acfc06557fc41aad8b1566e3586bd543 is asynchronously compiling; no result yet"
+  },
+  "inventory": {
+    "cases": 334,
+    "files": 537,
+    "kind": "imported unchanged source, not passing programs"
+  },
+  "holds": [
+    "All eight recurring architecture repair modes and MA001-MA008 remain open",
+    "Complete main execution, source-selected cleanup, current local environment query and runtime matrix pending",
+    "No guest JIT or Linux acceptance"
+  ],
+  "kernel_storage_successor": {
+    "source": "854f56cd42526f0114bb7afeacdf6672acfc06557fc41aad8b1566e3586bd543",
+    "compile": "342448/0",
+    "warnings": 17,
+    "distinct_controls": 19,
+    "passed": 17,
+    "failed": 2,
+    "positive_terminals": {
+      "opaque_declaration_join": "917cf7/0",
+      "nominal_field_storage": "ee91e9/0",
+      "nearest_storage_regressions_15": "0d8fee/0"
+    },
+    "failed_terminals": {
+      "contextual_name_setup": "05a012/1",
+      "whole_upstream_hygiene_main": "f787c0/1"
+    },
+    "contextual_failure": "assembly helper expects a compiler inert Attribute facet before reaching contextual lookup",
+    "runtime_failure": "edition2015 preentry fixed point retains unresolved import or macro producers; blocked assert_eq",
+    "other_hygiene_editions": "2018/2021/2024 unexecuted because test body fails at2015",
+    "new_stock_runtime_passes": 0,
+    "full_milestone": "unexecuted",
+    "release": {
+      "sha256": "011cd7b6b7c4f7628412d3aad5e6c9957dbee886fd0b99e733e0f52b5bf711e4",
+      "terminal": "e9a72b/0",
+      "source_unchanged": true,
+      "target_inactive": "546452/0"
+    }
+  }
+}

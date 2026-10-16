@@ -1,7 +1,7 @@
 //! Per-walk source candidate tables. SCCs use synchronous updates so cyclic
 //! strong/weak choices never depend on worklist order. No results are persisted.
 use super::{
-    macro_names::{MacroNamespaces, MacroPath, PathLookup},
+    macro_names::{MacroNamespaces, MacroPath, NameBindingClass, PathLookup},
     module_paths::Resolution,
 };
 use crate::{
@@ -54,7 +54,7 @@ struct Edge {
     visibility: VisibilityScope,
 }
 struct Node {
-    key: (MacroPath, Option<ScopeKey>),
+    key: (MacroPath, Option<ScopeKey>, NameBindingClass),
     own: State,
     strong: Vec<Edge>,
     weak: Vec<Edge>,
@@ -143,8 +143,8 @@ fn state_bytes(state: &State) -> Result<usize, Diagnostic> {
     Ok(bytes)
 }
 fn intern(
-    key: (MacroPath, Option<ScopeKey>),
-    ids: &mut BTreeMap<(MacroPath, Option<ScopeKey>), usize>,
+    key: (MacroPath, Option<ScopeKey>, NameBindingClass),
+    ids: &mut BTreeMap<(MacroPath, Option<ScopeKey>, NameBindingClass), usize>,
     nodes: &mut Vec<Node>,
     bytes: &mut usize,
 ) -> Result<usize, Diagnostic> {
@@ -249,6 +249,14 @@ pub(super) fn lookup(
     path: &MacroPath,
     caller: Option<&ScopeKey>,
 ) -> Result<PathLookup, Diagnostic> {
+    lookup_in_class(graph, path, caller, NameBindingClass::Root)
+}
+pub(super) fn lookup_in_class(
+    graph: &MacroNamespaces,
+    path: &MacroPath,
+    caller: Option<&ScopeKey>,
+    class: NameBindingClass,
+) -> Result<PathLookup, Diagnostic> {
     let caller = caller
         .map(|s| {
             Ok(ScopeKey {
@@ -262,10 +270,15 @@ pub(super) fn lookup(
     let mut bytes = 0usize;
     let mut ids = BTreeMap::new();
     let mut nodes = Vec::new();
-    intern((path.clone(), caller), &mut ids, &mut nodes, &mut bytes)?;
+    intern(
+        (path.clone(), caller, class),
+        &mut ids,
+        &mut nodes,
+        &mut bytes,
+    )?;
     let mut next = 0;
     while next < nodes.len() {
-        let (path, caller) = nodes[next].key.clone();
+        let (path, caller, class) = nodes[next].key.clone();
         let mut own = State::default();
         if let Some(raw) = graph.bindings.get(&path) {
             own.pending.extend(raw.pending.iter().copied());
@@ -273,6 +286,12 @@ pub(super) fn lookup(
         let canonical = match graph.module_paths.resolve(&path, caller.as_ref())? {
             Resolution::Known(p) => p,
             Resolution::Absent => {
+                if class != NameBindingClass::Root {
+                    return Err(Diagnostic::new(
+                        "LRR-E-NAME-CONTEXT",
+                        "contextual name requires actual module-prefix authority".into(),
+                    ));
+                }
                 nodes[next].own = own;
                 next += 1;
                 continue;
@@ -287,7 +306,28 @@ pub(super) fn lookup(
         let mut strong = Vec::new();
         let mut weak = Vec::new();
         let scope = origin(&canonical);
-        if let Some(binding) = graph.bindings.get(&canonical) {
+        if let Some(all) = graph.bindings.get(&canonical) {
+            // An unresolved source producer has no proved output name class.
+            own.pending.extend(all.pending.iter().copied());
+        }
+        if class != NameBindingClass::Root
+            && own.pending.is_empty()
+            && graph.bindings.get(&canonical).is_some_and(|all| {
+                all.in_class(class).is_none_or(|selected| {
+                    selected.definitions.is_empty() && selected.reexports.is_empty()
+                }) && (!all.definitions.is_empty() || !all.reexports.is_empty())
+            })
+        {
+            return Err(Diagnostic::new(
+                "LRR-E-NAME-CONTEXT",
+                "actual declaration/import name adjustment is required".into(),
+            ));
+        }
+        if let Some(binding) = graph
+            .bindings
+            .get(&canonical)
+            .and_then(|b| b.in_class(class))
+        {
             own.pending.extend(binding.pending.iter().copied());
             for definition in &binding.definitions {
                 let ranges = binding
@@ -310,6 +350,11 @@ pub(super) fn lookup(
                     own.denied.insert(canonical.clone());
                 }
             }
+            if class != NameBindingClass::Root && !binding.reexports.is_empty() {
+                return Err(error(
+                    "contextual import requires its actual target-name occurrence",
+                ));
+            }
             for target in &binding.reexports {
                 let ranges = binding
                     .reexport_access
@@ -325,7 +370,7 @@ pub(super) fn lookup(
                     {
                         allowed = true;
                         let id = intern(
-                            (target.clone(), Some(scope.clone())),
+                            (target.clone(), Some(scope.clone()), class),
                             &mut ids,
                             &mut nodes,
                             &mut bytes,
@@ -348,7 +393,26 @@ pub(super) fn lookup(
                 }
             }
         }
-        if let Some(targets) = graph.glob_reexports.get(&canonical) {
+        if class != NameBindingClass::Root
+            && own.pending.is_empty()
+            && own.definitions.is_empty()
+            && graph
+                .glob_reexports
+                .get(&canonical)
+                .is_some_and(|targets| !targets.is_empty())
+        {
+            return Err(Diagnostic::new(
+                "LRR-E-NAME-CONTEXT",
+                "actual glob binding name adjustment is required".into(),
+            ));
+        }
+        // Existing glob occurrences are root bindings. Opaque import aliases
+        // remain explicit producer/occurrence demands until their target proof
+        // exists; they must never inherit root edges by written spelling.
+        if let Some(targets) = (class == NameBindingClass::Root)
+            .then(|| graph.glob_reexports.get(&canonical))
+            .flatten()
+        {
             for (target, ranges) in targets {
                 for visibility in ranges {
                     if caller
@@ -358,7 +422,7 @@ pub(super) fn lookup(
                         .unwrap_or(true)
                     {
                         let id = intern(
-                            (target.clone(), Some(scope.clone())),
+                            (target.clone(), Some(scope.clone()), class),
                             &mut ids,
                             &mut nodes,
                             &mut bytes,

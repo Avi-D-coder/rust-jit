@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T05:07:31.714307+00:00",
+  "claim": "LOCAL-024",
+  "status": "source-only-uncompiled-unexecuted",
+  "baseline": "ExactlocalType157 source733df3c9 +allprioractualcomponentholds",
+  "scope": "Complete pinned compiler builtin-name metadata supplement; existing RA descriptor identities preserved, source-engine revision3 includes metadataidentity; no macro-specific runtime logic or namespace completion",
+  "overlay": "artifacts/macos-first/common-pinned-compiler-inert-inventory-v1/overlay",
+  "files": [
+    {
+      "path": "crates/lrr-expand-adapter/src/builtin_attributes.rs",
+      "bytes": 8735,
+      "sha256": "fb307928491d258a7cbd055f9b5b16eb44ffa18e96133cae610450ece2efa4ad"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/compiler_inert_inventory.rs",
+      "bytes": 5495,
+      "sha256": "914d9d5b7d27189cea947a3d69e5ea6833b04bbadff69242135a88c0b6410640"
+    },
+    {
+      "path": "tools/sync_compiler_inert_inventory.py",
+      "bytes": 3029,
+      "sha256": "6820faa642663ba314f892e1a7e599c612eb918b9ec8a8d52ea3b3dea82ec6b1"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/compiler/rustc_feature/src/builtin_attrs.rs",
+      "bytes": 14402,
+      "sha256": "a52761c0d4708b4282a9acc09447f11aa955a65289ace2cadabe1d788131a55c"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/manifest.json",
+      "bytes": 202530,
+      "sha256": "54f065c0883d328b2a9375e1e323c5894417cc1c885aa9a960fdd15d50e73a14"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "bytes": 171354,
+      "sha256": "f81f033746e350ea18eb075fe30816e44e3ce30203734e7015fd4f1f36d2a17b"
+    }
+  ],
+  "source_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "source_sha256": "a52761c0d4708b4282a9acc09447f11aa955a65289ace2cadabe1d788131a55c",
+  "inventory": {
+    "cases": 332,
+    "files": 525,
+    "added_support_inputs": 7,
+    "new_runtime_cases": 0
+  },
+  "test": "builtin_attributes::inventory_tests::complete_pinned_compiler_inventory_matches_actual_static_array",
+  "new_test_bodies": 1,
+  "generator_source_check": "92c277/0",
+  "holds": [
+    "Explicit matched compiler-world compatibility/adoption evidence",
+    "Common competing Attribute/source/definition/namespace proof stillrequired",
+    "Worker completed-facet/inert-source-index integration excluded",
+    "No stock runtime/fullfixture/MA/task/JIT closure"
+  ]
+}

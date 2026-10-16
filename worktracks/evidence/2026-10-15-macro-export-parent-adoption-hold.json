@@ -1,0 +1,24 @@
+{
+  "component": "common-macro-export-parent-adoption-hold-v1",
+  "dependency": "Exact frozen role12 cc540259b91e40bb43b1bf2c5b9c07e1f90a9a76ab98b18f83452bf95060d402; this delta does not alter that immutable source",
+  "files": [
+    {
+      "bytes": 177319,
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "sha256": "6969d58b9975444d1599cf7fa0b5f2dc3e771cb7f9f4bff057bdfe34773c93d5"
+    },
+    {
+      "bytes": 10164,
+      "path": "crates/lrr/src/expand/source_declarative/macro_export_role_tests.rs",
+      "sha256": "e484cb11657243d121839b4cca37a3ae968eff6def668664caabcd619af67c3f"
+    }
+  ],
+  "fullcore": "Required positive remains failing/blocked until actual adopted-parent transport is consumed; refusal is not a runtime-contract pass",
+  "invariant": "Caller module_path and recorded candidate bytes never prove active configured parent/file selection",
+  "new_controls": 1,
+  "next": "Implement exact source module declaration/request/adopted candidate/path/content/profile/cfg and root-to-parent role transport, without ordinary source input grant",
+  "schema": 1,
+  "source_fingerprint": "9f18f0838eea850afa7b9973a0982b3157d05b72570d0d8bee1107995f8e8f6e",
+  "status": "source-only-uncompiled-unexecuted",
+  "verification": "scoped rustfmt only; no Cargo/Rust/native tests"
+}

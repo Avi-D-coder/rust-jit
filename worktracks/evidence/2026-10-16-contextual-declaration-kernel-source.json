@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "component": "common-contextual-declaration-kernel6",
+  "status": "source-reviewed-uncompiled-unexecuted",
+  "source_head": "b47383785b8c6e49cf719b4f03e9533821ef3fdd",
+  "source_fingerprint": "8b67d7d09affa34f64b16b7e85ab32e550b8f0b8bf33822a92bd42ee96152e68",
+  "fingerprint_encoding": "SHA256(canonical JSON sorted keys compact separators of ordered files list)",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/generated_headers.rs",
+      "bytes": 24117,
+      "sha256": "73e6318e2ec2017ee9e9a79c8e1900ee38f31ddd3a4caefe1ce14f3ba38cd94b"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declared_item_names.rs",
+      "bytes": 8930,
+      "sha256": "891c78b6128bbed75c679535c0081a55e742b9b71d86c0777719421180dceeae"
+    },
+    {
+      "path": "crates/lrr/src/frontend/contextual_declaration_tests.rs",
+      "bytes": 8609,
+      "sha256": "2138537c6e891b16b4b65c08a1d26da3fc0bf541cc3c3d902000d03cc8a61737"
+    },
+    {
+      "path": "crates/lrr/src/frontend/names.rs",
+      "bytes": 109989,
+      "sha256": "cbb5d2b7760e05d8caf5c247b411e9a2e06e98012a107487f82d983844e28867"
+    },
+    {
+      "path": "crates/lrr/src/frontend/macro_names.rs",
+      "bytes": 103323,
+      "sha256": "49c24493d5d98fe93024e1d2257b95dd24834c448a1d97fdd056561917d4e6d9"
+    },
+    {
+      "path": "crates/lrr/src/frontend/glob_lookup.rs",
+      "bytes": 20569,
+      "sha256": "114b3c20adca4bcf418c9087e22a95e272893b72a8184f3014dfdd7c0286aa76"
+    }
+  ],
+  "handoff": {
+    "path": "worktracks/04-calls-source-views/common-contextual-declaration-kernel-handoff.md",
+    "bytes": 18614,
+    "sha256": "46cf1249f880587b86728a3b586ca83ad435b4b9892b55b39f738dbf4c6e4b1e"
+  },
+  "confirmed_failure": {
+    "header": "759fb166df1973a80e6241964da13b328c31484e32207bf9203d87534293619c",
+    "record": "eae26afcc2fce5105efff70a20075ca619d40c6c1a1e251f2ba86f21662b9238",
+    "name": "answer",
+    "range": [
+      0,
+      29
+    ],
+    "terminal": "060e08/1",
+    "diagnostic_raw": "73dc10/0",
+    "source": "10f1f7db\u2026",
+    "evidence": "artifacts/macos-first/sol-common-selected-module-producer-diagnostic-validation-v3"
+  },
+  "format_terminal": "866b86/0",
+  "holds": [
+    "private current class/name bucket publication and owning environment/query authority",
+    "opaque module prefix and import binding/target name adjustment receipts",
+    "source/currentness/epoch/record source change controls unexecuted",
+    "ordinary production runtime trace and complete official issue40847 main in all editions unexecuted",
+    "no T/H/M or architecture gate closure"
+  ]
+}

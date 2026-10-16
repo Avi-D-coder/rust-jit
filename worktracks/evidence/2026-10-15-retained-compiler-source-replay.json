@@ -1,0 +1,84 @@
+{
+  "apis": [
+    "CompilerReplaySource::prepare(source,independently_retained_scan)",
+    "CompilerReplaySource::{source,selection,parser,scan,scan_identity,blob,cfg,exclusive_metadata_bytes}",
+    "PreparedSourceView::retained_declaration_parser",
+    "NestedInertProof::revalidate_prepared; existing revalidate(blob,cfg) delegates same revalidate_scan kernel"
+  ],
+  "architecture_review": {
+    "handoff": "worktracks/03-control-flow-patterns/macro-export-facet-handoff.md",
+    "modes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "sha256": "258cfd7513477a00af778778a4fe33e639b465ddcb1dfd31ce776eaa1cf9f094"
+  },
+  "component": "common-retained-compiler-source-replay-v1",
+  "dependencies": [
+    "Exact original13/borrowed5/hook3 source components and root compiler metadata classification remain separate immutable dependencies.",
+    "Actual prepared scan owner supplied by original annotation/source discovery plan. This component never fetches/rebuilds a new scan in prepared replay.",
+    "Root current MacroExportSource receipt/outline/epoch/full DiscoverySeal and existing SourceDiscovery namespace replay remain mandatory joins; no DB/SourceDiscovery callsite modified."
+  ],
+  "files": [
+    {
+      "bytes": 6323,
+      "path": "crates/lrr/src/expand/nested_inert.rs",
+      "sha256": "cd9d8049a72ace55621184fc57e99ea00a0dc29c06856f71014ec86bc8d2ff07"
+    },
+    {
+      "bytes": 57132,
+      "path": "crates/lrr/src/source/changes.rs",
+      "sha256": "4952d64339bf939195a17a0823ecbe4c9130c8f111c890139f6d491b47f1a087"
+    },
+    {
+      "bytes": 3726,
+      "path": "crates/lrr/src/source/compiler_replay.rs",
+      "sha256": "922f8f34eec57d8127d4f7612740d9f28a88acdefda766627e990992fcd4490a"
+    },
+    {
+      "bytes": 4768,
+      "path": "crates/lrr/src/source/compiler_replay_tests.rs",
+      "sha256": "9b10478ebc52bba58311a50692db8020d99f370a72325a698918a59b568fca76"
+    },
+    {
+      "bytes": 320,
+      "path": "crates/lrr/src/source/mod.rs",
+      "sha256": "32fdf29af17ff0d7493794903f763d17362558d2effb5d3f534124adab720fdd"
+    }
+  ],
+  "holds": [
+    "No currentness/namespace/completeness/runtime authority from borrowed view.",
+    "Actual coordinator consumers and role-owned source proof transport remain next integration work; no unused API suppression.",
+    "No owning facet graph/public runtime source registry or full stock fixture acceptance."
+  ],
+  "pre_edit_source_hashes": {
+    "crates/lrr/src/expand/nested_inert.rs": "bc29fa929faa073ecc8c8ef55fa28021de6f1b6e60c8371d567e5aeda9c41129",
+    "crates/lrr/src/source/changes.rs": "12a18d2706956f2bba2ec4fab7bdd94d1580981f45fa36391aa7580cc2d16757",
+    "crates/lrr/src/source/mod.rs": "e623426247b6cad9bfec3110baa3b8cdd5c9c8d3af5eb8db461f11c760dcbaf7"
+  },
+  "schema": 1,
+  "source_fingerprint": "c26b493939dde64701b4d4e8de946bdc09555440943e2d20378560ce7da72890",
+  "status": "source-only-uncompiled-unexecuted-coordinator-integration-held",
+  "upstream": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "path": "fixtures/upstream/rustc-checkout/library/core/src/macros/mod.rs",
+    "sha256": "af6f7c1c71eef0923e1f4128729e744e2ca6b6c9954245cc8b87e5c579713f66",
+    "unchanged": true
+  },
+  "verification": {
+    "commands_for_sole_validator": [
+      "cargo test -p lrr --lib source::compiler_replay::tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_derives -- --nocapture",
+      "cargo test -p lrr --lib expand::source_discovery -- --nocapture"
+    ],
+    "new_test_bodies": 2,
+    "test_or_runtime_pass_claim": false,
+    "worker": "rustfmt/diff/source-review only; no Cargo/Rust/native tests"
+  }
+}

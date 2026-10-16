@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "scope": "Opaque source-selected symbolic unsized Str prerequisite only; no runtime storage/comparison admission",
+  "source_only": true,
+  "uncompiled": true,
+  "unexecuted": true,
+  "source_fingerprint": "54b4871b5870b37b7847885c8f71a992df22ca43067309e03e8e5a0a9cee8cb2",
+  "files": [
+    {
+      "path": "crates/lrr/src/traits/term.rs",
+      "sha256": "9b82b1eba60151e99408cb9c8db4671178636acd8d181912a8799fe8a02741da",
+      "bytes": 28274
+    },
+    {
+      "path": "crates/lrr/src/traits/subst.rs",
+      "sha256": "e0affd0239fbcaf3bfc9a00b1c23cb7d32c7d6a52f39936056312cc025e1fba3",
+      "bytes": 21275
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "sha256": "4d785c62b57a40db623bee771501f36e54da2b83f5771689e8980fc25f6821a6",
+      "bytes": 15947
+    }
+  ],
+  "reviewed_unchanged_dependencies": [
+    {
+      "path": "crates/lrr/src/traits/unify.rs",
+      "sha256": "63f4ee202be8a5c8fb4abf752b6202ff83dc1ae4087755f262675850068e98e6"
+    },
+    {
+      "path": "crates/lrr/src/frontend/signature_names.rs",
+      "sha256": "f4d8de877c270ef20b2ea5b36bde5b9954b6bc17034a99c67e23624670060976"
+    },
+    {
+      "path": "crates/lrr/src/frontend/type_aliases.rs",
+      "sha256": "2921e2598ca33e87049d13561c88dd45ac0f8b66a8610ebe52bfd72854297c68"
+    },
+    {
+      "path": "crates/lrr/src/syntax/closed_reference_signatures.rs",
+      "sha256": "335da58880aadc5a3ca894c319d75507d4cce87d226fecf3e7d4ca3165a81d17"
+    }
+  ],
+  "handoff": {
+    "path": "worktracks/03-control-flow-patterns/symbolic-str-source-prerequisite-handoff.md",
+    "sha256": "f01f7bd2bae126e492b42a78beef17a9d72c6dc8410f8a0894eeb6fb9df08da9"
+  }
+}

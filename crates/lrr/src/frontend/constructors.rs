@@ -185,7 +185,11 @@ fn bind_record_inner(
         body: body.body(),
         at: u64::from(path.at()),
         name: path.name(),
-        context: locals.context(),
+        context: locals.context_at(if path.segments().len() == 1 {
+            path.name_range()
+        } else {
+            path.first_name_range()
+        })?,
         namespace: Namespace::Type,
     };
     let selected = if !path.absolute() && path.segments().len() == 1 {
@@ -228,11 +232,15 @@ fn bind_record_inner(
         QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
     };
     Ok(
-        match names.bind_record_constructor(None, plan, &context.scope)? {
-            NominalConstructorBinding::Ready(bound) => {
+        match names.bind_record_constructor_current(db, sources, None, plan, &context.scope) {
+            QueryPoll::Ready(Ok(NominalConstructorBinding::Ready(bound))) => {
                 QueryPoll::Ready(Ok(RecordConstructorBinding::Ready(Box::new(bound))))
             }
-            pending => deferred(RecordConstructorDemand::Fields(Box::new(pending))),
+            QueryPoll::Ready(Ok(pending)) => {
+                deferred(RecordConstructorDemand::Fields(Box::new(pending)))
+            }
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
         },
     )
 }
@@ -433,8 +441,13 @@ mod tests {
         assert_eq!(bound.mapping().constructor(), plan.fingerprint());
         assert_eq!(bound.mapping().written_to_declaration(), &[0]);
         assert_eq!(
-            bound.variant().fields(),
-            &[crate::ir::op::PrimitiveType::Usize]
+            bound
+                .variant()
+                .fields()
+                .iter()
+                .map(|field| field.primitive())
+                .collect::<Vec<_>>(),
+            [Some(crate::ir::op::PrimitiveType::Usize)]
         );
         assert_eq!(db.trace.counts.get("TypeSchema:ProviderRun"), Some(&1));
         assert!(!db.trace.events.iter().any(|event| matches!(
@@ -444,6 +457,43 @@ mod tests {
                 | QueryKey::Thunk(_)
                 | QueryKey::ExpansionInput(_)
         )));
+        // Same unchanged upstream constructor: exact source path ranges are
+        // parser data, and a foreign caller must fail privacy before Type work.
+        let RecordPathSelection::Named(path) = view.record_constructor_path(&body, plan).unwrap()
+        else {
+            panic!("unchanged upstream record path missing")
+        };
+        assert_eq!(
+            &ORIGINAL[path.name_range().start as usize..path.name_range().end as usize],
+            path.name()
+        );
+        let schema = db
+            .fetch(
+                &SyntaxProvider,
+                QueryKey::TypeSchema(expected.def_key.fingerprint()),
+            )
+            .into_ready()
+            .unwrap()
+            .unwrap();
+        let QueryValue::TypeSchema(schema) = schema.value.as_ref() else {
+            panic!()
+        };
+        let names = SchemaNames::from_current_database(&mut db, &graph, &[&view], schema)
+            .into_ready()
+            .unwrap()
+            .unwrap();
+        let mut foreign_caller = caller.scope.clone();
+        foreign_caller.crate_key = Digest([226; 32]);
+        let before = db.trace.events.len();
+        assert!(
+            matches!(names.bind_record_constructor_current(&mut db, &[&view], None, plan, &foreign_caller),
+            QueryPoll::Ready(Err(error)) if error.code == "LRR-E-TYPE-SCHEMA")
+        );
+        assert_eq!(
+            db.trace.events.len(),
+            before,
+            "privacy must precede current Type lookup"
+        );
         // Actual nominal source/schema witness only. Constant evaluation,
         // nested constants, array lengths and the original main are unexecuted.
     }
@@ -538,8 +588,13 @@ mod tests {
         assert_eq!(bound.mapping().constructor(), plan.fingerprint());
         assert_eq!(bound.mapping().written_to_declaration(), &[0]);
         assert_eq!(
-            bound.variant().fields(),
-            &[crate::ir::op::PrimitiveType::Usize]
+            bound
+                .variant()
+                .fields()
+                .iter()
+                .map(|field| field.primitive())
+                .collect::<Vec<_>>(),
+            [Some(crate::ir::op::PrimitiveType::Usize)]
         );
         assert_eq!(db.trace.counts.get("TypeSchema:ProviderRun"), Some(&1));
         use crate::{
@@ -551,16 +606,19 @@ mod tests {
                 step::{StepOutcome, step},
             },
         };
-        let expected_field = PrimitiveIdentity::from_recipe(bound.variant().fields()[0])
-            .unwrap()
-            .id();
+        let expected_field =
+            PrimitiveIdentity::from_recipe(bound.variant().fields()[0].primitive().unwrap())
+                .unwrap()
+                .id();
         let entry = body.pc(plan.node(), Phase::Entry).unwrap();
         let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
         let mut frame = Frame::new(body.clone(), entry, &mut store).unwrap();
         // Explicit component setup only: the constant evaluator does not enter
         // original initializers yet. Do not hide an implicit scope entry in IR.
         frame.enter(ScopeId(0)).unwrap();
-        frame.prepare_nominal_constructor(plan, *bound).unwrap();
+        frame
+            .prepare_nominal_constructor(plan, *bound, &mut store)
+            .unwrap();
         let mut returned = None;
         for _ in 0..5 {
             let outcome = db
@@ -711,7 +769,7 @@ mod tests {
                 .variant()
                 .fields()
                 .iter()
-                .all(|ty| *ty == crate::ir::op::PrimitiveType::Isize)
+                .all(|ty| ty.primitive() == Some(crate::ir::op::PrimitiveType::Isize))
         );
         let duplicate = bind_record_constructor(
             &mut db,

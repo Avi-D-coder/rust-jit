@@ -50,6 +50,8 @@ pub struct RecordConstructorPath {
     absolute: bool,
     at: u32,
     name: String,
+    name_range: SourceRange,
+    first_name_range: SourceRange,
 }
 impl RecordConstructorPath {
     pub fn segments(&self) -> &[super::imports::ImportSegment] {
@@ -63,6 +65,12 @@ impl RecordConstructorPath {
     }
     pub fn name(&self) -> &str {
         &self.name
+    }
+    pub(crate) fn name_range(&self) -> SourceRange {
+        self.name_range
+    }
+    pub(crate) fn first_name_range(&self) -> SourceRange {
+        self.first_name_range
     }
 }
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -165,20 +173,17 @@ impl ParsedFile {
         cfg: &CfgSet,
     ) -> Result<RecordPathSelection, Diagnostic> {
         use super::imports::ImportSegment;
-        if self
-            .constructor_plan(body, index, plan.node(), cfg)?
-            .as_ref()
-            != Some(plan)
+        if body.key() != *index.body()
+            || plan.origin() != &index.span(plan.node())?
+            || plan.profile() != index.profile()
+            || plan.profile() != &self.profile
+            || plan.cfg() != cfg.fingerprint()
         {
             return Err(fault(
                 "record path differs from exact source constructor plan",
             ));
         }
-        if self.generated_origin.is_some() {
-            // Per-token generated name contexts must come from the adopted
-            // expansion view; an original source root cannot replace them.
-            return Ok(RecordPathSelection::TypeContext);
-        }
+        self.entered_body_root(body)?;
         let ConstructorKind::Record { path: original, .. } = plan.kind() else {
             return Err(fault("record path requested for another constructor kind"));
         };
@@ -188,24 +193,28 @@ impl ParsedFile {
         let last = original
             .last()
             .ok_or_else(|| fault("record path tokens absent"))?;
-        let path = self
-            .parsed
-            .tree()
-            .syntax()
-            .descendants()
-            .filter_map(ast::Path::cast)
-            .find(|path| {
-                range(path.syntax().text_range())
-                    == SourceRange {
-                        start: first.range.start,
-                        end: last.range.end,
-                    }
-            })
+        let expression = self
+            .entered_node_syntax(body, index, plan.node())?
+            .and_then(ast::RecordExpr::cast)
+            .ok_or_else(|| fault("record constructor indexed expression absent"))?;
+        let path = expression
+            .path()
             .ok_or_else(|| fault("record path AST boundary absent"))?;
+        if range(path.syntax().text_range())
+            != (SourceRange {
+                start: first.range.start,
+                end: last.range.end,
+            })
+            || self.constructor_tokens(path.syntax())? != *original
+        {
+            return Err(fault("record path differs from exact source tokens"));
+        }
         let mut suffix = Vec::new();
         let mut current = path;
         let absolute;
         let mut name = None;
+        let mut name_range = None;
+        let mut first_name_range = None;
         loop {
             if suffix.len() >= 256 {
                 return Err(limit());
@@ -222,11 +231,17 @@ impl ParsedFile {
             {
                 ast::PathSegmentKind::Name(reference) => {
                     // Original/raw spelling is retained for the source name engine.
-                    let edition = self.token_edition(range(reference.syntax().text_range()))?;
+                    let actual_range = range(reference.syntax().text_range());
+                    let edition = self.token_edition(actual_range)?;
+                    // Generated and retained names require their actual token
+                    // attachment; None remains the ordinary original context.
+                    self.identifier_context(actual_range)?;
+                    first_name_range = Some(actual_range);
                     crate::expand::scopes::MacroName::parse(reference.text(), edition)?;
                     let text = reference.text().to_string();
                     if name.is_none() {
                         name = Some(text.clone());
+                        name_range = Some(actual_range);
                     }
                     ImportSegment::Name(text)
                 }
@@ -250,6 +265,9 @@ impl ParsedFile {
             absolute,
             at: first.range.start,
             name: name.ok_or_else(|| fault("record path final name absent"))?,
+            name_range: name_range.ok_or_else(|| fault("record final name occurrence absent"))?,
+            first_name_range: first_name_range
+                .ok_or_else(|| fault("record first name occurrence absent"))?,
         }))
     }
     fn constructor_tokens(
@@ -288,7 +306,7 @@ impl ParsedFile {
         if index.body() != &body.key() || index.profile() != &self.profile {
             return Err(fault("constructor body/index mismatch"));
         }
-        let root = self.entered_body_root(body)?;
+        self.entered_body_root(body)?;
         let origin = index.span(node)?;
         let selected = index
             .nodes()
@@ -297,22 +315,8 @@ impl ParsedFile {
         if !matches!(selected.role, NodeRole::Expression(_)) {
             return Ok(None);
         }
-        let start = body
-            .range
-            .start
-            .checked_add(origin.relative_start)
-            .ok_or_else(limit)?;
-        let end = body
-            .range
-            .start
-            .checked_add(origin.relative_end)
-            .ok_or_else(limit)?;
-        let syntax = root
-            .descendants()
-            .find(|syntax| {
-                let r = range(syntax.text_range());
-                r.start == start && r.end == end && ast::Expr::can_cast(syntax.kind())
-            })
+        let syntax = self
+            .entered_node_syntax(body, index, node)?
             .ok_or_else(|| fault("constructor expression boundary absent"))?;
         let expression =
             ast::Expr::cast(syntax).ok_or_else(|| fault("constructor expression absent"))?;
@@ -322,39 +326,28 @@ impl ParsedFile {
         ) {
             return Ok(None);
         }
-        // A sorted temporary index avoids an operand-count times body-size walk.
-        if index.nodes().len() > 100_000 {
-            return Err(limit());
-        }
-        let mut locations = Vec::new();
-        locations
-            .try_reserve_exact(index.nodes().len())
-            .map_err(|_| limit())?;
-        for indexed in index
-            .nodes()
-            .iter()
-            .filter(|n| matches!(n.role, NodeRole::Expression(_)))
-        {
-            locations.push(((indexed.range.start, indexed.range.end), indexed.id));
-        }
-        locations.sort_unstable_by_key(|(r, id)| (*r, id.0));
-        if locations.windows(2).any(|pair| pair[0].0 == pair[1].0) {
-            return Err(fault("constructor operand boundary is ambiguous"));
-        }
         let operand = |expr: ast::Expr| -> Result<ConstructorOperand, Diagnostic> {
             let r = range(expr.syntax().text_range());
-            let relative = (
-                r.start.checked_sub(body.range.start).ok_or_else(limit)?,
-                r.end.checked_sub(body.range.start).ok_or_else(limit)?,
-            );
-            let found = locations
-                .binary_search_by_key(&relative, |(r, _)| *r)
-                .map_err(|_| fault("constructor operand absent from index"))?;
-            let node = locations[found].1;
-            let value = index.nodes()[node.0 as usize]
+            let relative = SourceRange {
+                start: r.start.checked_sub(body.range.start).ok_or_else(limit)?,
+                end: r.end.checked_sub(body.range.start).ok_or_else(limit)?,
+            };
+            let mut found = index
+                .nodes_at_range(relative)
+                .filter(|node| matches!(node.role, NodeRole::Expression(_)));
+            let selected = found
+                .next()
+                .ok_or_else(|| fault("constructor operand absent from index"))?;
+            if found.next().is_some() {
+                return Err(fault("constructor operand boundary is ambiguous"));
+            }
+            let value = selected
                 .value
                 .ok_or_else(|| fault("constructor operand has no value slot"))?;
-            Ok(ConstructorOperand { node, value })
+            Ok(ConstructorOperand {
+                node: selected.id,
+                value,
+            })
         };
         let kind = match expression {
             ast::Expr::TupleExpr(tuple) => {

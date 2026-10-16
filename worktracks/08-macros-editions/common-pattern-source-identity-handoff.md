@@ -115,6 +115,47 @@ actual expression slots. Existing metadata fields/explicit encoding carry the
 slot IDs; checked extra slot count is subject to normal Frame accounting.
 This is a shared prerequisite, not product execution or stock acceptance.
 
+### Ordinary bounded product continuation phases
+
+Root extends `BodyIndex::pc` for actual `NodeRole::Pattern` with ordinary
+`Operand(0..=2)` phases. They reserve one charged traversal component, the first
+scalar/binding decision and a reached upper-bound decision respectively; they
+grant no executable or binding authority. The common product plan and verifier
+must still admit the actual operation. This avoids exceeding the eight-op recipe
+cap with a depth-dependent tuple projection burst. No macro/raw phase admission
+changes. Existing range-marker metadata remains source structural and encoded,
+but no longer exclusively grants pattern operand phase zero. Root also adds the
+new common `PatternNext` exit to diagnostic tagging and capture classification;
+the pattern worker owns its verifier/runtime continuation semantics. Extend the
+existing indexed structural controls, including unchanged upstream fixtures, for
+the exact ordinary phase boundary. These changes are source-only pending the
+sole validator's coherent product snapshot; nominalidentity59 is unchanged.
+
+### Retained semantic structure identity
+
+Root adds `BodyIndex::semantic_identity()`, computed once after final nodes,
+source locations and canonical pattern groups are prepared. It is the existing
+explicit stable encoding's digest, not an allocation key or a new semantic
+encoding. The derived inline Digest is charged under the source-index metadata
+cap and deliberately excluded from its own stable encoding. An index is opaque
+and immutable after construction. Equivalent independent allocations therefore
+compare equal; body/profile equality alone cannot admit changed structural facts.
+Product/Frame guards consume this retained digest rather than re-encode the whole
+index at construction or each transition. Extend the existing unchanged-original
+node lookup oracle to compare retained versus freshly encoded identity and a
+second independently built index. This is source-only until product validation;
+it does not admit any binding, guest operation or source-origin authority.
+
+### Guard-entry continuation split
+
+Product review found that guarded root success cannot share Arm.Commit with the
+post-guard final binding commit/result. Root reserves ordinary MatchArm.Operand(0)
+only for actual indexed arms with guard_scope. Guard-entry, final true commit,
+false-guard retry and exhausted cleanup remain distinct continuations; no guard
+expression or source value is evaluated while reserving metadata. Extend the same
+unchanged-original structural oracle for guarded/unguarded admission. Production
+switch stays held pending the cached binding/ownership joins and actual validation.
+
 The common pattern transaction needs a distinct bounded cleanup continuation so
 retry can retire scratch owners without re-running comparison/binding phases.
 The pattern peer owns the explicit IR `Phase::PatternCleanup` encoding at u16::MAX

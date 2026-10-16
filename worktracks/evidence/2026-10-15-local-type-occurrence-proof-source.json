@@ -1,0 +1,81 @@
+{
+  "status": "source-only-uncompiled-unexecuted",
+  "component": "common-local-type-use-declaration-source-proof",
+  "baseline": "owned-root7 copied be0d63/0; all older frozen evidence unchanged",
+  "fingerprint_domain": "sorted path + space + SHA256 + newline",
+  "fingerprint": "10b106bb281d76b499b26d245d7ef8e435d13194d96fe2d193aff72e6ed10138",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/body_type_occurrences.rs",
+      "sha256": "e20fcef2161845d8d6083a7e817513f568ded7aee7864dbb7523795948c4eb25",
+      "bytes": 28570
+    },
+    {
+      "path": "crates/lrr/src/frontend/local_type_names.rs",
+      "sha256": "b41ca1e498977ede2e2a6e7221711f671ac4902606f4ac2795072c275ce63105",
+      "bytes": 11149
+    },
+    {
+      "path": "crates/lrr/src/frontend/local_type_prefix_tests.rs",
+      "sha256": "4fba8ee364fa4da1e3c71aff950f57eebbbb6bedc4e000a738ef27f88d0c9b42",
+      "bytes": 9813
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "sha256": "7b29886d37e31d08dd5768c49bd6e1aac053be8ff8242d18943fd1f1ad980212",
+      "bytes": 42450
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "sha256": "6c1ba549ef50ad2ee6a3c53920bc9f65e90ee35e102376f6a2ef71ddd30dc755",
+      "bytes": 23970
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_locals.rs",
+      "sha256": "ac80d2c62dae22bfaa7dd2e97a3e7bab2b41dd6e52ddfb715136a7218620af82",
+      "bytes": 87446
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/borrowck/borrowck-assign-to-subfield.rs",
+      "sha256": "aad0ede2f330c1d0c8e4f8bfedeec050ad194511099765ae2eb246c204aff7ae",
+      "bytes": 394
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/box/unit/basic-operations.rs",
+      "sha256": "fdaa73c8af8de7369e755ac1339ce0d21ea438b99784f076cb1a0c732b62a705",
+      "bytes": 1327
+    }
+  ],
+  "predecessor_dependency_manifest": "worktracks/evidence/2026-10-15-owned-local-source-roots.json",
+  "predecessor_dependency_sha256": "9a6069344881f9f1f6de309c969f40ce432e0d50ead2359ef8dda73039a61e41",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "new_unchanged_imports": [
+    {
+      "path": "tests/ui/borrowck/borrowck-assign-to-subfield.rs",
+      "git_blob": "8e5192611ffd9956caf12ae9a4864c7098c07255",
+      "sha256": "aad0ede2f330c1d0c8e4f8bfedeec050ad194511099765ae2eb246c204aff7ae",
+      "bytes": 394
+    },
+    {
+      "path": "tests/ui/box/unit/basic-operations.rs",
+      "git_blob": "516cffb0c6f49c4564902a14a49a34c8ebd9b003",
+      "sha256": "fdaa73c8af8de7369e755ac1339ce0d21ea438b99784f076cb1a0c732b62a705",
+      "bytes": 1327
+    }
+  ],
+  "live_inventory_after_imports": {
+    "cases": 332,
+    "files": 518,
+    "note": "manifest released back to root after terminal8b3e37/0; later unrelated live additions are not part of this fingerprint"
+  },
+  "holds": [
+    "Current private coordinator-owned environment publication/query/accounting remains root integration",
+    "Import callbacks return actual source identity before module tail; relevant current import proof transport remains",
+    "Enclosing owner generic/Self occurrence authority, qualified/generic application and missing actual module membership remain typed",
+    "Mixed retained structural expansion occurrence and selected generated/procedural definition metadata remain genuine prerequisites",
+    "Selected local source identity still needs current canonical declaration/schema/privacy/member join before execution",
+    "Old graph adapter remains historical debt until its common query proof replacement/removal passes context matrix",
+    "No constructor/CLI/runtime production switch; no Cargo/native/strict/milestone/full stock execution",
+    "Basic Box/J case is expected exact pending assert producer; no frontier bypass or full Box/assert main pass"
+  ]
+}

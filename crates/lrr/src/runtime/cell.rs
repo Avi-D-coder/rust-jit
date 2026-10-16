@@ -265,8 +265,8 @@ impl GuestStore {
         fields
             .try_reserve_exact(bound.fields().len())
             .map_err(|_| resource())?;
-        for primitive in bound.fields() {
-            fields.push(super::shape::PrimitiveIdentity::from_recipe(*primitive)?.id());
+        for field in bound.fields() {
+            fields.push(field.materialize(self)?);
         }
         let ty = self.types.intern(TypeKey::Nominal {
             identity: bound.identity(),
@@ -798,8 +798,7 @@ impl GuestStore {
             Self::require_source_projection_parent(&source.member, key)?;
             if link.variant != Some(source.member.variant)
                 || link.field != source.member.field
-                || self.place_type(link.child)?
-                    != super::shape::PrimitiveIdentity::from_recipe(source.member.primitive)?.id()
+                || self.place_type(link.child)? != source.member.ty
             {
                 return Err(lease_fault());
             }
@@ -1067,9 +1066,7 @@ impl GuestStore {
                 return Err(lease_fault().into());
             }
             if let Projection::SourceField(source) = projection {
-                if storage.variant != Some(source.variant)
-                    || self.address_type(child)?
-                        != super::shape::PrimitiveIdentity::from_recipe(source.primitive)?.id()
+                if storage.variant != Some(source.variant) || self.address_type(child)? != source.ty
                 {
                     return Err(ownership().into());
                 }
@@ -1201,7 +1198,7 @@ impl GuestStore {
         bound: &crate::frontend::types::BoundNominalVariant,
         field: u32,
     ) -> Result<Place, PlaceFailure> {
-        let primitive = bound.fields().get(field as usize).copied().ok_or_else(|| {
+        let source_type = bound.fields().get(field as usize).ok_or_else(|| {
             Diagnostic::new("LRR-E-PLACE-FIELD", "source-bound field is absent".into())
         })?;
         self.project_bound_field(
@@ -1211,7 +1208,7 @@ impl GuestStore {
             bound.schema(),
             bound.variant(),
             field,
-            primitive,
+            source_type,
         )
     }
     /// One used field can be admitted without binding an unrelated field type.
@@ -1227,7 +1224,7 @@ impl GuestStore {
             bound.schema(),
             bound.variant(),
             bound.field(),
-            bound.primitive(),
+            bound.source_type(),
         )
     }
     fn project_bound_field(
@@ -1238,7 +1235,7 @@ impl GuestStore {
         schema_witness: crate::core::digest::Digest,
         variant_witness: u32,
         field: u32,
-        primitive: crate::ir::op::PrimitiveType,
+        source_type: &crate::frontend::source_types::SourceType,
     ) -> Result<Place, PlaceFailure> {
         let resolved = self.resolve_place(base)?;
         let TypeKey::Nominal {
@@ -1271,7 +1268,7 @@ impl GuestStore {
         if storage.variant != Some(variant_witness) {
             return Err(lease_fault().into());
         }
-        // Validate exact installed child ownership and source primitive identity
+        // Validate exact installed child ownership and source-selected identity
         // before allocating a projected address or publishing a new lease.
         let child = *storage.fields.get(field as usize).ok_or_else(|| {
             Diagnostic::new("LRR-E-PLACE-FIELD", "active variant field is absent".into())
@@ -1285,8 +1282,8 @@ impl GuestStore {
         {
             return Err(lease_fault().into());
         }
-        let expected = super::shape::PrimitiveIdentity::from_recipe(primitive)?.id();
-        if self.address_type(child)? != expected {
+        let expected = self.address_type(child)?;
+        if source_type.find_descriptor(self) != Some(expected) {
             return Err(Diagnostic::new(
                 "LRR-E-OWNERSHIP",
                 "field source type differs from its installed cell".into(),
@@ -1298,7 +1295,7 @@ impl GuestStore {
             schema: schema_witness,
             variant: variant_witness,
             field,
-            primitive,
+            ty: expected,
         }))?;
         self.resolve_place_for_use(&place, PlaceUse::Address)?;
         Ok(place)
@@ -4067,11 +4064,12 @@ pub(crate) mod tests {
             panic!("original Point schema must bind")
         };
         assert_eq!(
-            bound.fields(),
-            &[
-                crate::ir::op::PrimitiveType::Isize,
-                crate::ir::op::PrimitiveType::Isize
-            ]
+            bound
+                .fields()
+                .iter()
+                .map(|field| field.primitive())
+                .collect::<Vec<_>>(),
+            [Some(crate::ir::op::PrimitiveType::Isize); 2]
         );
         let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
         let frame = store.new_frame_anchor().unwrap();
@@ -4356,7 +4354,10 @@ pub(crate) mod tests {
             panic!("original unit variant must bind")
         };
         assert_ne!(bound.variant(), other.variant());
-        assert_eq!(bound.fields(), [crate::ir::op::PrimitiveType::Bool]);
+        assert_eq!(
+            bound.fields()[0].primitive(),
+            Some(crate::ir::op::PrimitiveType::Bool)
+        );
         let value = ValueRepr::boolean(crate::syntax::place_fixture_facts::first_main_boolean(
             ORIGINAL,
         ));
@@ -4589,7 +4590,7 @@ pub(crate) mod tests {
         let NominalFieldBinding::Ready(field) = selected else {
             panic!("the original isize member must bind independently")
         };
-        assert_eq!(field.primitive(), crate::ir::op::PrimitiveType::Isize);
+        assert_eq!(field.primitive(), Some(crate::ir::op::PrimitiveType::Isize));
         assert_ne!(field.field(), 0);
         assert!(matches!(
             string,
@@ -4710,7 +4711,10 @@ pub(crate) mod tests {
         let NominalFieldBinding::Ready(selected) = selected else {
             panic!("the public enum's original boolean field must be visible")
         };
-        assert_eq!(selected.primitive(), crate::ir::op::PrimitiveType::Bool);
+        assert_eq!(
+            selected.primitive(),
+            Some(crate::ir::op::PrimitiveType::Bool)
+        );
         assert_eq!(
             selected.definition().item_kind,
             crate::source::manifest::ItemKind::Enum

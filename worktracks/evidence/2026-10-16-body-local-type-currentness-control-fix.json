@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "component": "body-local-type-currentness-control-fix1",
+  "status": "uncompiled-unexecuted",
+  "failed_source": "common-body-local-type-declaration-v1 body_type_declaration_tests.rs bb3562e735fe61c33f9d07286021b10a4318478b510391bac2e4d41bf1d7d72d preserved",
+  "leaf": {
+    "path": "crates/lrr/src/frontend/body_type_declaration_tests.rs",
+    "bytes": 21133,
+    "sha256": "c024b5a02be484326ce8368fa93a446f0ed60f49133d99cfaf9b37a8bb8cec29"
+  },
+  "edits": [
+    "require actual ReadyOk original-local proof across unrelated epoch; no global epoch authority added",
+    "genuine source.prepared_inputs base universe republish withdraws actual selected local declaration rows, require exact ReadyErr with unexpected typed outcome printed"
+  ],
+  "generated_epoch_control": "unchanged",
+  "production": "no changes; disjoint namespace kernel is separate unfrozen successor"
+}

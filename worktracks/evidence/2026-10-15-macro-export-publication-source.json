@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T04:53:48.650404+00:00",
+  "status": "source-only-uncompiled-unexecuted",
+  "claim": "LOCAL-024",
+  "scope": "Opaque scalar source-only MacroExport receipt publication/currentness bridge through existing input framework; no facet source/provider/parser graph or runtime input projection",
+  "baseline": "Exact validated MacroExport epoch-onlyV3 +priorrootadmission123",
+  "overlay": "artifacts/macos-first/common-macro-export-publication-v1/overlay",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/dependency.rs",
+      "sha256": "904cc42c258f0012cc90b27afe8da2dc89b7eb1b0d56ca44307c28d6efa0f5a4",
+      "bytes": 16822
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "50bff87cfa49fc3d993bd6170569b03b7751260940ab77d8f6a3b56dd5e1d90e",
+      "bytes": 128266
+    },
+    {
+      "path": "crates/lrr/src/db/mod.rs",
+      "sha256": "96d9fc86d63c3580296e54dc1d8a8e758415efc9953a8304841c4fd90e41999f",
+      "bytes": 325
+    },
+    {
+      "path": "crates/lrr/src/db/macro_export_inputs.rs",
+      "sha256": "d17dec91dd4ef114587937c04739d3a467f37ec9d9f59509b1dd15481717f943",
+      "bytes": 8593
+    },
+    {
+      "path": "crates/lrr/src/db/macro_export_inputs_tests.rs",
+      "sha256": "e830fd728fda086f0af7080fd668fcf21c62f939c79596f089204b8ea7faf114",
+      "bytes": 8475
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports_tests.rs",
+      "sha256": "6746c0e1b721a90ff7dfc76cdb945a8a3b4e539ec6dd1091e043af74215bed42",
+      "bytes": 13746
+    }
+  ],
+  "tests": {
+    "new_bodies": 4,
+    "executed": 0,
+    "primary_unchanged_source": "tests/ui/macros/auxiliary/foreign-crate-macro-pat.rs",
+    "owning_edition": 2018,
+    "scope": "LRR publication/currentness/retention/atomicity, not new Rust language fixtures"
+  },
+  "holds": [
+    "Actual completed source-export index/annotation/builtin discovery integration",
+    "Catalog-owned facet graph accounting separate from scalar receipts",
+    "No runtime-contract/full-fixture/MA/task/JIT closure"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "component": "common-macro-export-module-consumption-borrow-fix-v1",
+  "predecessor": "2026-10-16-macro-export-module-consumption.json SHA486923e9280a4695e4c342c1ae4a60938ae078a4d452541aa339921e74ee22be",
+  "change": "Mechanical E0596 correction only: published requires mutable Database and both callers pass mutable borrow. No production or oracle change. Actual predecessor compilation failed zero test bodies; successor uncompiled/unexecuted.",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_declarative/macro_export_consumption_tests.rs",
+      "sha256": "8f96c847d7761fa3a4b7284f2b926d11a0d85f8d5ae8bd81fa6baba8ea4544ed",
+      "bytes": 13927
+    }
+  ]
+}

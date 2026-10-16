@@ -1,0 +1,45 @@
+{
+  "status": "source-only-uncompiled-unexecuted",
+  "component": "common-exact-body-import-occurrences",
+  "baseline": "context-prefix6 copied c4be5a/0; constructor source3 separate held",
+  "fingerprint_domain": "sorted path + space + SHA256 + newline",
+  "fingerprint": "6c500ea260a522ed3f66d9c84494401e533183aaac6d04d08bd1287c1ecd81ac",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/body_import_occurrences.rs",
+      "sha256": "d5ac739474389b22df8661a08c521de01783abb30844238b4adab7b776b60f80",
+      "bytes": 7676
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_imports.rs",
+      "sha256": "013b432d9c713e6c6ff1935108736c1aa3ccf0dc4a054a9d5223c2f4591584a1",
+      "bytes": 15754
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "sha256": "44405724b861dde903db1c3bee4c2663373bbd598222fca3a4d464fae163fdc7",
+      "bytes": 41197
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_body_context_tests.rs",
+      "sha256": "20271edcd68e2f0aca236cbce6929765b7d5868e82b2854292006f4fa2d963e4",
+      "bytes": 8739
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macros.rs",
+      "sha256": "cf2e574e74ee59fc444af3f4e0864beed1fbbef347d2251ab362514e0df31f0d",
+      "bytes": 87924
+    },
+    {
+      "path": "crates/lrr/src/service/retained_reference_source_tests.rs",
+      "sha256": "efa6fa9df60bbc7208948d8dffe694920e2b22d75dd3fe5a4168077651d75901",
+      "bytes": 33840
+    }
+  ],
+  "holds": [
+    "root BodyContext query/input publication, current source entry, memo ownership and accounting",
+    "retained mixed-expansion structural reference origin and captured parent occurrence transport",
+    "immutable local-prefix/Type body-occurrence namespace proof and constructor production switch",
+    "stock Point/const/enum full fixtures and all-context execution matrix"
+  ]
+}

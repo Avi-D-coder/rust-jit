@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "scope": "Distinct frozen banks; earlier failures preserved; not a summed current-tree suite.",
+  "packets": [
+    {
+      "packet": "sol-common-selected-local-declaration-validation-v1",
+      "release_sha256": "d688db66cd89d19914c26546211ab96810832e9c119c0c4bcefdeee48e575212",
+      "source_fingerprint": "085e9f9cabca9c3dfca9935947e72b4635c2e040bf114ae1b06cf369a05c1d6d",
+      "bodies": 4,
+      "passed": 2,
+      "failed": 2,
+      "actual_terminals": {
+        "compose": "aeb4f4/0",
+        "inactive_before": "fba20b/0",
+        "assembly": "74ed98/0",
+        "prebuild": "b10df6/0",
+        "compile": {
+          "launch": "ece0cf",
+          "session": 81342,
+          "pid": 15086,
+          "terminal": "0ba889/0",
+          "seconds": 245.21987812499998
+        },
+        "sequence": {
+          "launch": "c1635c",
+          "session": 58054,
+          "terminal": "5801fe/1"
+        },
+        "raw_failure": "8f2184/0",
+        "stdout_and_source": "82adbd/0",
+        "source_diagnosis": "4339d5/0",
+        "inactive_after": "94327a/0"
+      },
+      "failure": null,
+      "unexecuted": [
+        "newlocal2",
+        "schema3",
+        "strict/fullmilestone/CLI/stock"
+      ]
+    },
+    {
+      "packet": "sol-common-selected-local-declaration-validation-v2",
+      "release_sha256": "f0ec0a4b5d856ab8fc9635a3be9f6ac111f227b988d57a70fe6668ed8cefcb10",
+      "source_fingerprint": "61dcd524dbdeb3122e2861adcd00b78daa38ba4a2a68c30a5e14b7a8f9656389",
+      "bodies": 3,
+      "passed": 2,
+      "failed": 1,
+      "actual_terminals": {
+        "compose": "ca4144/0",
+        "inactive_fresh": "f5e31e/0",
+        "assembly": "4b9920/0",
+        "compile": {
+          "launch": "73517e",
+          "session": 14787,
+          "pid": 16955,
+          "terminal": "580597/0",
+          "seconds": 23.455338541000003
+        },
+        "sequence": {
+          "launch": "09eb73",
+          "session": 94307,
+          "terminal": "17de1c/1"
+        },
+        "raw_failure": "24ecfd/0",
+        "inactive_after": "9ac73d/0",
+        "source_review": "fca865/0"
+      },
+      "failure": null,
+      "unexecuted": [
+        "generated-local-body-types",
+        "schema-local-header",
+        "schema-enum-cap",
+        "schema-duplicate-cold",
+        "strict/fullmilestone/CLI/stock"
+      ]
+    },
+    {
+      "packet": "sol-common-selected-local-declaration-validation-v3",
+      "release_sha256": "bc5eb85ef4eca2abf03c98f22a09c29ed05fc646b9c5c79115ed7ade7bd098c7",
+      "source_fingerprint": "a60940cf3ea413fd7fca1a71569ede61fa5a512d299e38f45f6041c184f68478",
+      "bodies": 5,
+      "passed": 5,
+      "failed": 0,
+      "actual_terminals": {
+        "composition": "3dfeb5/0",
+        "inactive_before": "2ad112/0",
+        "assembly": {
+          "launch": "48c610",
+          "session": 65975,
+          "terminal": "c0c752/0"
+        },
+        "compile": {
+          "launch": "b5a7f4",
+          "session": 3204,
+          "pid": 17854,
+          "terminal": "6b3e53/0",
+          "seconds": 25.571324417
+        },
+        "sequence": {
+          "launch": "6ed833",
+          "session": 69998,
+          "terminal": "e4964c/0"
+        },
+        "inactive_after": "f02997/0"
+      },
+      "failure": null,
+      "unexecuted": [
+        "strict workspace/alltargets",
+        "full milestone",
+        "CLI/stock runtime"
+      ]
+    },
+    {
+      "packet": "sol-common-selected-module-producer-diagnostic-validation-v3",
+      "release_sha256": "4c5d1295b68c1f058c77685afde1498509954b80bc42b774517041612879ce9d",
+      "source_fingerprint": "10f1f7dbcce7af616bb86a03c94daee879db0efd45bf370055cc0b5971546bec",
+      "bodies": 1,
+      "passed": 0,
+      "failed": 1,
+      "actual_terminals": {
+        "compose": "1c26e4/0",
+        "inactive_before": "0b9619/0",
+        "assembly": "61525e/0",
+        "compile": {
+          "launch": "dbf358",
+          "session": 9074,
+          "pid": 16280,
+          "terminal": "8613b9/0",
+          "seconds": 24.819664416
+        },
+        "capacity_verification": "677120/0 compile-before31,464,312,832B; historicalassembly free430MB snapshot preceded environment gap, no launch guard bypass",
+        "test": {
+          "launch": "cf3c14",
+          "session": 4913,
+          "pid": 16405,
+          "terminal": "060e08/1",
+          "child_exit": 101,
+          "seconds": 0.06208645800000001
+        },
+        "raw_failure": "73dc10/0",
+        "inactive_after": "c790f8/0",
+        "source_chain": "e5a0aa/a0b564/0"
+      },
+      "failure": {
+        "path": "crates/lrr/src/frontend/macro_definition_module_tests.rs",
+        "line": 168,
+        "event": "SourceDiscoveryStep::Incomplete",
+        "code": "LRR-E-CATALOG-INCOMPLETE",
+        "message": "fixed point retains unresolved import or macro producers",
+        "mapping": {
+          "blocked_producer": "759fb166df1973a80e6241964da13b328c31484e32207bf9203d87534293619c",
+          "dependency": "759fb166df1973a80e6241964da13b328c31484e32207bf9203d87534293619c",
+          "dynamic_mapping": "Exact observed_output_headers matches blocked ID to real admitted generated header",
+          "expansion_record_key": "eae26afcc2fce5105efff70a20075ca619d40c6c1a1e251f2ba86f21662b9238",
+          "header_name": "answer",
+          "header_range": [
+            0,
+            29
+          ],
+          "name_range": [
+            2,
+            8
+          ],
+          "original_item_macro_producer": "36dfd180341299ff58ca84db168ac2731ac2a81802554079b37aaf05cc30e1b3",
+          "original_scan_macro_producer": "08d78016eda96eb2f0d8ef7b78f7e959c81dc7298051025732d16ee6e3863e56",
+          "original_feature_attribute_producer": "68b1686d5c267c6ad478c1e6238ef65d8ff05ce34aef97b226c65f3aa42ee79a",
+          "raw_stderr_sha256": "d42767b341fe31f84f5c73c82978c7cec849b18d5570def3fd12ef39182db62e",
+          "raw_tool_terminal": "73dc10/0",
+          "source_inference": {
+            "generated_headers.rs510-521": "context item_class vs owningclass mismatch retains exact header ID; guard must not be removed without common source/name authority",
+            "source_discovery.rs": "opaque IDs become ScanNestedDeclarations jobs; unrecognized IDs absent nested/staged/fragment owner are selfblocked by fallback. This is source-only route explanation, actual branch values were not printed."
+          },
+          "negative_conclusion": "Blocked ID is not the original invocation or feature attribute. Actual admitted declaration header remains unresolved; no language/runtime pass."
+        },
+        "stage": "after actual declaration expansion admitted; before complete publication/module receipt",
+        "child_exit": 101,
+        "edition": "not printed; source loop starts2015, no full4edition completion claimed"
+      },
+      "unexecuted": [
+        "other187threepassingcontrols not repeated",
+        "rootfix192 pending",
+        "strict/fullmilestone/CLI/stock"
+      ]
+    }
+  ],
+  "runtime_contract_pass_increment": 0,
+  "full_fixture_pass_increment": 0,
+  "actual_scope": "Original local headers/schema and attribute barrier pass on V1; conflict/owner barriers pass on V2; original-local/generation-wrapper facts and schema controls pass on V3. V3 has16warnings; no strict or full milestone.",
+  "architecture_hold": "No production current-environment cache grant, complete local-plan ownership, legacy macro-route removal or JIT admission.",
+  "new_pinned_input": "special_module_name_ignore.rs with auxiliary/dummy_lib.rs registered7d7273/0; unexecuted, outside these frozen332/534 banks."
+}

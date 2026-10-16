@@ -1,3 +1,7 @@
+> October 16 current frozen repair: source `854f56cd` compiles and passes **17 of 19 targeted controls**, including the formerly failing opaque-declaration join, source-selected nominal field construction/address checks across all four editions, and 15 nearby constructor/field/reference regressions. Two failures remain: the contextual-name test stops in its attribute setup, and the entire unchanged hygiene issue-40847 test stops before entry in Rust 2015 on unresolved `assert_eq!`; its later editions are unexecuted. **Zero new stock runtime passes.** This is scoped WIP, not an integrated milestone or architecture acceptance. [Exact terminals and separate frontiers](../worktracks/evidence/2026-10-16-production-interpreter-repair-frontiers.json).
+
+> October 16 production interpreter repair: the unchanged `borrowck-assign-to-subfield.rs` main was attempted on macOS in edition 2024 and failed at the outer nested-local-struct constructor, before assignments or complete cleanup. **Zero additional stock runtime passes** are established by this repair batch. Shared nominal field construction/projection support and a production CLI retained-body preparation join are implemented in frozen successors; compilation/validation is asynchronous. The first combined build failed with three compile errors and executed zero tests; its exact corrections are separately retained. Three macro-module authority controls pass on a different source, while required full-core setup still fails on unresolved imports. The inventory is 334 imported cases / 537 originals, not passes. [Exact separate frontiers](../worktracks/evidence/2026-10-16-production-interpreter-repair-frontiers.json), [nominal field source review](../worktracks/04-calls-source-views/common-nominal-field-storage-handoff.md), [CLI source join](../worktracks/evidence/2026-10-16-cli-retained-entry-source.json).
+
 > Latest October 15 scoped repair: **50 distinct targeted controls and strict workspace/all-targets Clippy pass** on frozen `dca870f7`. Its fresh full milestone is running; the previous full result remains 2,634 passed, one failed and 673 unstarted. A separate frozen common-pattern/reference candidate removes duplicate scalar pattern decoding/comparisons and bool-condition lowering, joins generated/retained reference parameters to ordinary source authority, and replaces two binding-declaration scans with exact indexed attachment. That successor is **uncompiled/unexecuted**. Three agents own validation, pattern transactions and reference returns; root owns source integration. No verified increase in configured stock runtime/full-fixture passes or architecture/task closure. [Scoped evidence](../worktracks/evidence/2026-10-15-common-source-boundaries.json), [queued candidate](../worktracks/evidence/2026-10-15-common-pattern-reference.json).
 
 > Latest October 15 evidence: the selected-body V2 **full milestone failed: 2,634 passed, one failed, 673 unstarted of 3,308 listed**, plus parser-boundary audit errors. Lexical V1’s four new controls passed, but its **full library failed: 1,152 passed, seven failed**; strict checks were unexecuted. Root corrected the procedural-input schema, parser module boundary and an overly strict edition lookup in a separate eight-file candidate, now validating asynchronously. Three authorized sub-agents cover validation, shared pattern tests and reference-source authority; root continues implementation. Existing macro-specific routes remain blockers; no new configured stock-suite pass or task/architecture closure. [Milestone](../worktracks/evidence/2026-10-15-common-selected-body-preparation.json), [lexical failures](../worktracks/evidence/2026-10-15-common-lexical-source-context.json), [independent repair](../worktracks/evidence/2026-10-15-common-source-boundaries.json).
@@ -1415,3 +1419,49 @@ Preparing source-only checkpoint from exact validated189 (10 scoped passes,
 three-worker AGENTS rule. Prefix188, macro role190, root192 and current worker
 successors are deliberately excluded from these staged source bytes. This is
 a reproducible WIP source checkpoint, not integrated interpreter acceptance.
+
+
+Actual checkpoint b47383785b8c6e49cf719b4f03e9533821ef3fdd pushed a4ae4d/0 after
+stageea89e1/0, sourceguard9dfa03/0 (46files/2226771bytes/0violations),
+cached diff96d482/0 and plan11e8be/0. Unsigned commit0f34fe/0 as authorized.
+Only exact validated189 and14 explicit documents staged; live roles/module
+adoption/root192/canonical successors preserved. No build snapshots/products.
+
+Actual producer diagnostic187V3 confirms selfblocked759fb166 is the admitted
+generated answer header, not an unexecuted macro invocation/feature attribute.
+Exact one-body failure060e08/1 retained; source comparison implicates nonowner
+item-context route blocking and an orphan nested-declaration job. Contextual
+binding implementation now assigned through the common namespace/import walk;
+no class check is deleted or caller-root declaration leaked.
+
+Root private DB seal publication now has a separate uncompiled adoption-coverage
+join: exact selected parent+child role membership, genuine adoption/fullseal
+validation, bounded unique children, and coverage of every nonroot role source.
+Peer source API/call integration and actual controls are pending; no ordinary
+source/parser graph registration or runtime grant. This source is excluded from
+the pushed189 checkpoint. Corrected local192V2 is compiling separately on exact
+61dcd524; no pass claimed yet. Three agents remain assigned.
+
+
+Corrected local192V3 exact a60940cf compiled6b3e53/0 with16warnings and
+passed5 distinct controls e4964c/0: unchanged original local fact currentness +
+actual selected-publication withdrawal, genuine generated/wrapper local facts,
+three shared schema controls. Earlier DB2 positive/producer barriers and later
+DB2 corrected conflict/owner passes remain on their exact V1/V2 sources, not
+repeated or summed as a current-tree suite. The original-local blanket epoch
+refusal was an overbroad test expectation; no global epoch dependency was added.
+Generated/wrapper facts still require their actual source epoch. Evidence:
+worktracks/evidence/2026-10-16-local-type-publication-validation.json.
+
+Registered unchanged official special_module_name_ignore.rs + auxiliary dummy_lib
+using importer7d7273/0 for genuine module candidate/adoption controls. No runtime
+execution or full-fixture pass; historical validation inventory stays332/534.
+Role194 transport is compiling independently over exact role190+hold2+transport9,
+excluding live DB coverage/production activation and contextual kernel.
+
+Transport194 exact7bae411d compiledc02d76/0 with20warnings and passed4
+new authority controls0cf502/0; sealed/releasede409ed/0. This is request/
+adoption transport evidence only. Live production/fullseal child consumption
+and the new333/536 module input are separate successors. No fullcore repeat,
+stock/runtime/fullfixture/task or architecture closure. Evidence:
+worktracks/evidence/2026-10-16-macro-export-module-transport-validation.json.

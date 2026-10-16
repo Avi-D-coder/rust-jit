@@ -1,0 +1,91 @@
+{
+  "status": "source-only-uncompiled-unexecuted",
+  "component": "common-owned-entered-local-source-roots",
+  "baseline": "bodyType2 copied b11958/0; import6+constructor3 copied 0d8878/0; predecessor sources/evidence preserved",
+  "fingerprint_domain": "sorted path + space + SHA256 + newline",
+  "fingerprint": "007e56a6de7cd726c67bed19d884bd825be2d3dac5ae5e2414c29dffc53583a0",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/body_namespace.rs",
+      "sha256": "4a482090902b2d1e722828bdd0bbd9b192303972f2709fd20e85c54f5fba2e4d",
+      "bytes": 9933
+    },
+    {
+      "path": "crates/lrr/src/frontend/local_scopes.rs",
+      "sha256": "b5eae44024c1384ecb216a5430f7a62563a613c4feba0de943022a944162eba3",
+      "bytes": 18497
+    },
+    {
+      "path": "crates/lrr/src/frontend/macro_scopes.rs",
+      "sha256": "b6447f436d1311eef7a1d929cbe647f0bbd7ab98c78f0f67aebbabcbc7bfd52e",
+      "bytes": 9498
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_body_context_tests.rs",
+      "sha256": "f6870aef7eafad14be8b7c6a574fa7b3cc4288453c3555dec5e5ca90f3e09d20",
+      "bytes": 12513
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "sha256": "007a6744fd78d873007b9df36528a1b48a2399ab3149150416326e8f0ca7923c",
+      "bytes": 12351
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_locals.rs",
+      "sha256": "f0b4a8cbb0ea44e5a9ae33850830326c7c39ecb4700fd7633eb48f7f820be94a",
+      "bytes": 81264
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macros.rs",
+      "sha256": "1ef608ce07ae53af2a3ef72230c8c55c6aefa511e64d867a73ed3c822507d760",
+      "bytes": 97593
+    }
+  ],
+  "required_live_predecessor_dependencies": [
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "sha256": "b7a666f41b9d4f76bfd7c7acdbfae73317fc2ae4d53cbe2efb96ae9369871be8",
+      "bytes": 42439
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_import_occurrences.rs",
+      "sha256": "d5ac739474389b22df8661a08c521de01783abb30844238b4adab7b776b60f80",
+      "bytes": 7676
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_type_occurrences.rs",
+      "sha256": "2df8465519d15fc2a015b3db69c75152ee75c3be40b42881dfaef3a9fcf6227c",
+      "bytes": 19766
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_imports.rs",
+      "sha256": "013b432d9c713e6c6ff1935108736c1aa3ccf0dc4a054a9d5223c2f4591584a1",
+      "bytes": 15754
+    },
+    {
+      "path": "crates/lrr/src/frontend/macro_boundary.rs",
+      "sha256": "151f6368a087066828dda055279b641c2b4cf73edcad5bcbbf4df2eedccf45ff",
+      "bytes": 4357
+    },
+    {
+      "path": "crates/lrr/src/expand/body_macro_boundary.rs",
+      "sha256": "3e12be522363cd27b931c03a674fc666b182ee1b0660bdd93f11040125eb28c4",
+      "bytes": 14251
+    },
+    {
+      "path": "crates/lrr/src/syntax/lexical_hygiene.rs",
+      "sha256": "1f4559169f0fe5c2bbc3d527694159510a1dbc3d092e3dccc2df49d2509377d4",
+      "bytes": 4007
+    }
+  ],
+  "holds": [
+    "No DB/query/private environment publication or weak-root accounting integration in this component",
+    "Metadata observations are not completed current local/Type/generic/module authority",
+    "Actual entered occurrence, Type/generic declaration NameRef and current module semantic dependency joins remain",
+    "Missing generated/procedural selected macro definition metadata remains typed ExpansionDefinition debt",
+    "Mixed retained structural macro occurrence order remains a separate actual receipt prerequisite",
+    "Original borrowed adapters and cold runtime_snapshot deep clones remain named historical debt",
+    "Production constructor/CLI/runtime route unchanged; unchanged Point full-main Box/std gaps remain",
+    "No Cargo/native/strict/milestone/runtime/full-fixture execution by worker"
+  ]
+}

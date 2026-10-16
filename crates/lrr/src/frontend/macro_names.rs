@@ -379,13 +379,65 @@ struct BindingOrigin {
     visibility: VisibilityScope,
     origin: Option<crate::syntax::token_wire::Key>,
 }
+/// A binding occurrence class, never an expansion or execution authority.
+/// `Root` is the historical context-free projection. `Item` is obtained only
+/// from the pinned item-name comparison service for an actual source token.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub(crate) enum NameBindingClass {
+    Root,
+    Item(crate::syntax::token_wire::NameContextKey),
+}
+impl StableEncode for NameBindingClass {
+    const DOMAIN: &'static str = "lrr/v1/name-binding-class";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        match self {
+            Self::Root => e.u32(0),
+            Self::Item(class) => {
+                e.u32(1);
+                e.digest(Digest(class.0.0));
+            }
+        }
+    }
+}
 #[derive(Default, Clone)]
-pub(super) struct Bindings {
+pub(super) struct BindingSet {
     pub(super) definitions: BTreeSet<MacroDefinition>,
     pub(super) reexports: BTreeSet<MacroPath>,
     pub(super) pending: BTreeSet<Digest>,
     pub(super) definition_access: BTreeMap<MacroDefinition, BTreeSet<VisibilityScope>>,
     pub(super) reexport_access: BTreeMap<MacroPath, BTreeSet<VisibilityScope>>,
+}
+/// All classes use the same binding representation and lookup worklist. The
+/// deref adapter preserves existing context-free callers as root projections.
+#[derive(Default, Clone)]
+pub(super) struct Bindings {
+    root: BindingSet,
+    item: BTreeMap<crate::syntax::token_wire::NameContextKey, BindingSet>,
+}
+impl std::ops::Deref for Bindings {
+    type Target = BindingSet;
+    fn deref(&self) -> &Self::Target {
+        &self.root
+    }
+}
+impl std::ops::DerefMut for Bindings {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.root
+    }
+}
+impl Bindings {
+    pub(super) fn in_class(&self, class: NameBindingClass) -> Option<&BindingSet> {
+        match class {
+            NameBindingClass::Root => Some(&self.root),
+            NameBindingClass::Item(key) => self.item.get(&key),
+        }
+    }
+    fn in_class_mut(&mut self, class: NameBindingClass) -> &mut BindingSet {
+        match class {
+            NameBindingClass::Root => &mut self.root,
+            NameBindingClass::Item(key) => self.item.entry(key).or_default(),
+        }
+    }
 }
 #[derive(Clone)]
 struct MacroUseBinding {
@@ -403,6 +455,7 @@ pub struct MacroNamespaces {
     module_binding_bytes: usize,
     binding_origins: BTreeMap<MacroPath, BTreeSet<BindingOrigin>>,
     origin_bytes: usize,
+    item_binding_bytes: usize,
     pub(super) bindings: BTreeMap<MacroPath, Bindings>,
     pub(super) glob_reexports: BTreeMap<MacroPath, BTreeMap<MacroPath, BTreeSet<VisibilityScope>>>,
     pub(crate) module_paths: super::module_paths::ModulePaths,
@@ -1189,11 +1242,22 @@ impl MacroNamespaces {
         visibility: VisibilityScope,
         origin: Option<crate::syntax::token_wire::Key>,
     ) -> Result<(), Diagnostic> {
+        self.define_visible_in_class(path, definition, visibility, origin, NameBindingClass::Root)
+    }
+    pub(super) fn define_visible_in_class(
+        &mut self,
+        path: MacroPath,
+        definition: MacroDefinition,
+        visibility: VisibilityScope,
+        origin: Option<crate::syntax::token_wire::Key>,
+        class: NameBindingClass,
+    ) -> Result<(), Diagnostic> {
         definition.validate()?;
         visibility.validate_for_declaration(&declaration_scope(&path))?;
         let exists = self
             .bindings
             .get(&path)
+            .and_then(|b| b.in_class(class))
             .and_then(|b| b.definition_access.get(&definition))
             .is_some_and(|v| v.contains(&visibility));
         let count = if exists {
@@ -1201,16 +1265,47 @@ impl MacroNamespaces {
         } else {
             admit(self.headers, 1_000_000)?
         };
-        self.record_binding_origin(
-            &path,
-            OriginBindingRef::Definition(&definition),
-            &visibility,
-            origin,
-        )?;
+        let item_bytes = if class != NameBindingClass::Root && !exists {
+            let base = std::mem::size_of::<Bindings>()
+                .checked_add(std::mem::size_of::<BindingSet>())
+                .and_then(|n| n.checked_add(512))
+                .ok_or_else(|| error("item binding metadata overflow"))?;
+            let path_bytes = path
+                .components()
+                .iter()
+                .try_fold(base, |n, name| {
+                    n.checked_add(name.as_str().len())
+                        .and_then(|n| n.checked_add(64))
+                })
+                .ok_or_else(|| error("item binding metadata overflow"))?;
+            let path_bytes = match &visibility {
+                VisibilityScope::Public => path_bytes,
+                VisibilityScope::Within { module_path, .. } => module_path
+                    .iter()
+                    .try_fold(path_bytes, |n, name| {
+                        n.checked_add(name.len()).and_then(|n| n.checked_add(64))
+                    })
+                    .ok_or_else(|| error("item binding visibility metadata overflow"))?,
+            };
+            self.item_binding_bytes
+                .checked_add(path_bytes)
+                .filter(|n| *n <= 32 * 1024 * 1024)
+                .ok_or_else(|| error("item binding metadata limit"))?
+        } else {
+            self.item_binding_bytes
+        };
+        if class == NameBindingClass::Root {
+            self.record_binding_origin(
+                &path,
+                OriginBindingRef::Definition(&definition),
+                &visibility,
+                origin,
+            )?;
+        }
         if exists {
             return Ok(());
         }
-        let binding = self.bindings.entry(path).or_default();
+        let binding = self.bindings.entry(path).or_default().in_class_mut(class);
         binding.definitions.insert(definition.clone());
         binding
             .definition_access
@@ -1218,6 +1313,7 @@ impl MacroNamespaces {
             .or_default()
             .insert(visibility);
         self.headers = count;
+        self.item_binding_bytes = item_bytes;
         Ok(())
     }
     pub fn reexport(&mut self, path: MacroPath, target: MacroPath) -> Result<(), Diagnostic> {
@@ -1730,8 +1826,16 @@ impl MacroNamespaces {
         path: &MacroPath,
         caller: &ScopeKey,
     ) -> Result<PathLookup, Diagnostic> {
+        self.lookup_from_in_class(path, caller, NameBindingClass::Root)
+    }
+    pub(crate) fn lookup_from_in_class(
+        &self,
+        path: &MacroPath,
+        caller: &ScopeKey,
+        class: NameBindingClass,
+    ) -> Result<PathLookup, Diagnostic> {
         if !self.glob_reexports.is_empty() {
-            return super::glob_lookup::lookup(self, path, Some(caller));
+            return super::glob_lookup::lookup_in_class(self, path, Some(caller), class);
         }
         let caller = ScopeKey {
             crate_key: caller.crate_key,
@@ -1739,27 +1843,55 @@ impl MacroNamespaces {
                 .ok_or_else(|| error("invalid macro access caller"))?,
             owner: None,
         };
-        let mut stack = vec![(path.clone(), caller)];
+        let mut stack = vec![(path.clone(), caller, class)];
         let mut visited = BTreeSet::new();
         let mut definitions = BTreeSet::new();
         let mut denied = BTreeSet::new();
         let mut pending = BTreeSet::new();
-        while let Some((path, caller)) = stack.pop() {
+        while let Some((path, caller, class)) = stack.pop() {
             let path = match self.module_paths.resolve(&path, Some(&caller))? {
                 super::module_paths::Resolution::Known(path) => path,
-                super::module_paths::Resolution::Absent => continue,
+                super::module_paths::Resolution::Absent => {
+                    if class != NameBindingClass::Root {
+                        return Err(Diagnostic::new(
+                            "LRR-E-NAME-CONTEXT",
+                            "contextual name requires actual module-prefix authority".into(),
+                        ));
+                    }
+                    continue;
+                }
                 super::module_paths::Resolution::Denied(path) => {
                     denied.insert(path);
                     continue;
                 }
             };
-            if !visited.insert((path.clone(), caller.clone())) {
+            if !visited.insert((path.clone(), caller.clone(), class)) {
                 continue;
             }
             if visited.len() > 1_000_000 {
                 return Err(error("macro access walk limit exceeded"));
             }
-            let Some(bindings) = self.bindings.get(&path) else {
+            if let Some(all) = self.bindings.get(&path) {
+                // Producer output class is unresolved, so this wait applies
+                // even when no binding of the requested class exists yet.
+                pending.extend(all.pending.iter().copied());
+            }
+            let all = self.bindings.get(&path);
+            if class != NameBindingClass::Root
+                && all.is_some_and(|all| {
+                    all.pending.is_empty()
+                        && all.in_class(class).is_none_or(|selected| {
+                            selected.definitions.is_empty() && selected.reexports.is_empty()
+                        })
+                        && (!all.definitions.is_empty() || !all.reexports.is_empty())
+                })
+            {
+                return Err(Diagnostic::new(
+                    "LRR-E-NAME-CONTEXT",
+                    "actual declaration/import name adjustment is required".into(),
+                ));
+            }
+            let Some(bindings) = all.and_then(|b| b.in_class(class)) else {
                 continue;
             };
             pending.extend(bindings.pending.iter().copied());
@@ -1777,6 +1909,11 @@ impl MacroNamespaces {
                 } else {
                     denied.insert(path.clone());
                 }
+            }
+            if class != NameBindingClass::Root && !bindings.reexports.is_empty() {
+                return Err(error(
+                    "contextual import requires its actual target-name occurrence",
+                ));
             }
             for target in &bindings.reexports {
                 let access = bindings
@@ -1800,7 +1937,11 @@ impl MacroNamespaces {
                         continue;
                     }
                 };
-                if let Some(target_binding) = self.bindings.get(&checked_target) {
+                if let Some(target_binding) = self
+                    .bindings
+                    .get(&checked_target)
+                    .and_then(|b| b.in_class(class))
+                {
                     pending.extend(target_binding.pending.iter().copied());
                     let target_ranges = || {
                         target_binding
@@ -1834,7 +1975,7 @@ impl MacroNamespaces {
                 stack
                     .try_reserve(1)
                     .map_err(|_| error("macro access worklist allocation failed"))?;
-                stack.push((target.clone(), origin));
+                stack.push((target.clone(), origin, class));
             }
         }
         if let Some(input) = pending.first() {

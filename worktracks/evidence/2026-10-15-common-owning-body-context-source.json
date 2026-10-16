@@ -1,0 +1,70 @@
+{
+  "status": "source-only-uncompiled-unexecuted",
+  "component": "common-owning-body-context-prerequisite",
+  "fingerprint_domain": "sorted path + space + SHA256 + newline",
+  "fingerprint": "7b24ba351a1f95fbec964286094df2fbfcabe8ca85ef673fa87c81b5c57efded",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run_field_source.rs",
+      "sha256": "3bfaf14433eabd8320d1f243c997e88a36bf4e1079f05bce58f799efacdd3012",
+      "bytes": 1531
+    },
+    {
+      "path": "crates/lrr/src/engine/run_fields.rs",
+      "sha256": "02baaf0885418609fa9c941c68cb8ae96d911a16f4956f46e00806f8c189f68d",
+      "bytes": 35754
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_reference_source_tests.rs",
+      "sha256": "bf2087d75925544f47a948adf97e29ede9fce97b0d28740d4fbc1a730c03a8d6",
+      "bytes": 35072
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "sha256": "6575e59dfe397d9cead4fbaed2d01b76ff3d25b5ffcea7d82205cea3b0b5bb79",
+      "bytes": 1527
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "sha256": "f89ce3bc87db92813fe673e0d9c565decc6429299806fe284e8f19a8499eb5c8",
+      "bytes": 28303
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_body_context_tests.rs",
+      "sha256": "51a11224754933363d021ce7b8d3d41d0d0d089c66ae9cab1f42521de1473a79",
+      "bytes": 6565
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_locals.rs",
+      "sha256": "e2b7eb431b9aa49b48386832d40d0461fb14dcaa0b43ae04be98e83bdaec5bf5",
+      "bytes": 77026
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macros.rs",
+      "sha256": "def34bb46859726f1876c7d133e4986f43f6c0fcce0f03f06f31cb023b558363",
+      "bytes": 83976
+    },
+    {
+      "path": "crates/lrr/src/service/retained_reference_source_tests.rs",
+      "sha256": "fd1cf524f061049b29a1fd64b6a2e102ed27a96c2b54d3d141dee3fb81418ea3",
+      "bytes": 23825
+    },
+    {
+      "path": "crates/lrr/src/syntax/entered_macros.rs",
+      "sha256": "39ea8e25cffb3b6345e89bf141432c604b2a9b691253f532826c8c8cb742288e",
+      "bytes": 34125
+    }
+  ],
+  "root_dependency": {
+    "path": "crates/lrr/src/syntax/lexical_hygiene.rs",
+    "sha256": "567fd8adbbd0b5e6d7a90ed0864233afb80a9d3c26283c271e799fc61e1ca1a2",
+    "bytes": 3668
+  },
+  "holds": [
+    "constructor production switch",
+    "pure-query integration and retained allocation accounting",
+    "genuine generated declaration outer macro-rib insertion receipt",
+    "mixed-origin local Type/import/macro adjustments",
+    "full upstream Box/std main and architecture matrix"
+  ]
+}

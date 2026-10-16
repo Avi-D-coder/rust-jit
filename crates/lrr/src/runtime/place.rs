@@ -42,7 +42,9 @@ pub struct SourceFieldProjection {
     pub(super) schema: crate::core::digest::Digest,
     pub(super) variant: u32,
     pub(super) field: u32,
-    pub(super) primitive: crate::ir::op::PrimitiveType,
+    /// Worker-local exact descriptor admitted from the source field proof.
+    /// It is never a persistent recipe identity or a source lookup result.
+    pub(super) ty: TypeId,
 }
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) struct SourceProjectionStep {

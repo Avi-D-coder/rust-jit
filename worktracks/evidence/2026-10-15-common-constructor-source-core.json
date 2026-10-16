@@ -1,0 +1,30 @@
+{
+  "status": "source-only-uncompiled-unexecuted",
+  "component": "common-exact-constructor-path-current-schema-core",
+  "baseline": "context-prefix6 d38d5f6a separate; owning-body query and occurrence transport held",
+  "fingerprint_domain": "sorted path + space + SHA256 + newline",
+  "fingerprint": "60073b0af3d65a2a82dc4ba67f8885f039f3e198b686de03ab567e8c4861dba7",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/constructors.rs",
+      "sha256": "fd0591d54d7e6361a079988687a41165cfec26680f48b232bfeb3e53ad6b58aa",
+      "bytes": 31920
+    },
+    {
+      "path": "crates/lrr/src/frontend/types.rs",
+      "sha256": "a5d5d6ed266f79696028965b7d35e13c0a4900882b9f7ec7f708b776a6f9ee7b",
+      "bytes": 36299
+    },
+    {
+      "path": "crates/lrr/src/syntax/constructors.rs",
+      "sha256": "037bb1cf353e43ea8e1b52a9169bf84720282a825783e6c7bf2ea82f05696ac0",
+      "bytes": 38048
+    }
+  ],
+  "holds": [
+    "common PreparedBodyContext query publication/retention and exact body Type occurrence authority",
+    "immutable local-prefix plan/query and import occurrence proof",
+    "common constructor production switch and original-only owner adapter removal",
+    "stock Point/enum/const full fixtures and all-context engine traces"
+  ]
+}

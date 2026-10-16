@@ -1,0 +1,26 @@
+{
+  "status": "source-only-uncompiled-unexecuted",
+  "component": "exact-entered-body-record-type-occurrences",
+  "baseline": "import6 and constructor3 copied 0d8878/0; root owned local-plan successor separate",
+  "fingerprint_domain": "sorted path + space + SHA256 + newline",
+  "fingerprint": "730e922936cdd76eb9d3e230f3bed59a56d80d1d3a962d52c6b8bd72a5ac915b",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/body_type_occurrences.rs",
+      "sha256": "2df8465519d15fc2a015b3db69c75152ee75c3be40b42881dfaef3a9fcf6227c",
+      "bytes": 19766
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "sha256": "b7a666f41b9d4f76bfd7c7acdbfae73317fc2ae4d53cbe2efb96ae9369871be8",
+      "bytes": 42439
+    }
+  ],
+  "holds": [
+    "root BodyContext query/input/currentness and retained root accounting integration",
+    "cached owned local/import Type prefix with actual candidate hygiene and producer proof",
+    "generic declaration name occurrence context and retained mixed expansion occurrence order",
+    "module tail projection and common classifier join only after actual prefix authority",
+    "constructor production switch, complete Type body contexts, all-context traces/full stock fixtures"
+  ]
+}

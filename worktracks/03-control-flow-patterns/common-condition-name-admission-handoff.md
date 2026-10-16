@@ -125,3 +125,27 @@ Prepared-index equivalence is implemented in the same SourceLocalIndex builder w
 - `crates/lrr/src/frontend/source_locals.rs`: `9e9cc1da6e8bf73d2129d810febf5bf35d0fb78b7cc18e9442db906513faf287`
 - `crates/lrr/src/syntax/pattern_bindings.rs`: `ecfa2f2ecdd489247637bed79949a2b694930601296050fe9d1e7a5716f6bf33`
 - `crates/lrr/src/syntax/scalar_pattern_binding.rs`: `2bad9d425fa902dd3d129e8eb96bf87c7de79c1744d02fc311660ec7aef2cc11`
+
+Actual independent admission terminal811be0/1 recorded6pass2fail/8: the unchanged
+nested or/@ authority control passed, while conditional x/y and None controls
+failed before namespace/prelude lookup because entered_macro_facts has no LetExpr
+binding collection. Preserve those exact failures. Root extends the existing
+source lexical-facts service with conditional scopes and actual clause binding
+recipes. Share only top-level && clause source decomposition with conditions.rs;
+executable grammar/type admission stays lazy and existing condition-plan checks
+remain at the reached demand. Each condition/consequent scope spans the actual
+condition start through consequent/body end, excludes else and later statements,
+and each binding becomes visible after its own LetExpr (not in its scrutinee).
+Use the same BindingBudget and pattern producer recording, with an explicit new
+stable Condition binding-form tag. Source discovery collects structural names,
+not guest values or executable leaves. Parent scope visibility and bounded
+source traversal/allocation remain checked. Later clauses/body may see earlier
+successful bindings; else/after-loop may not. This is shared source infrastructure
+for handwritten/generated syntax, not condition-specific runtime semantics.
+
+Condition lexical facts source-only successor is implemented, formatted and frozen independently. Source discovery and ordinary condition plans share structural && decomposition; the former does not perform misplaced-let/executable/type admission. New scope excludes else/after, clauses expose names only after their own source range. Exact changed source:
+- `crates/lrr/src/syntax/conditions.rs`: `643a910c666af5adc8eee6b522c696fe7ee6b9c46364e1d4521b9b8fc7a47495`
+- `crates/lrr/src/syntax/local_bindings.rs`: `38b25fe3d063fa504c493c7632332fe51456a09b8ea5ed62ee21e103f77b030f`
+- `crates/lrr/src/syntax/entered_macros.rs`: `fe9dc72ea2a5f400eca6cdcf455629d83165d9e0c15a64ca9c7180e686eb305d`
+
+Eight-mode source review: no evaluator or macro identity; no method/numeric rule; same source lexical service for actual parsed contexts; no guest effect/cold executable preparation; bounded one-time structural source walk/maps; no new namespace census; no immutable index clone or complete-file node lookup. Existing namespace remint and generated Value origin remain required common prerequisites. This is unexecuted source; earlier6pass2fail receipt is preserved, not revised.

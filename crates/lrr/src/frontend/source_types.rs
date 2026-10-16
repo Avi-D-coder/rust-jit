@@ -31,7 +31,7 @@ use crate::{
 /// Selected source type/schema from the current owning Type lookup. Call-boundary
 /// currentness remains a separate proof; this does not authorize an arbitrary
 /// graph or a public runtime descriptor as a source Type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct SourceType {
     source: TyTerm,
     key: TypeKey,
@@ -49,6 +49,22 @@ fn metadata(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-METADATA-LIMIT", message.into())
 }
 impl SourceType {
+    /// Classification has already established the builtin through the ordinary
+    /// owning Type lookup. This is not a spelling-to-runtime-type fallback.
+    pub(super) fn selected_primitive(
+        primitive: crate::ir::op::PrimitiveType,
+    ) -> Result<Self, Diagnostic> {
+        Ok(Self {
+            source: TyTerm::Primitive(primitive),
+            key: TypeKey::Primitive(PrimitiveIdentity::from_recipe(primitive)?),
+        })
+    }
+    pub(crate) fn primitive(&self) -> Option<crate::ir::op::PrimitiveType> {
+        match self.source {
+            TyTerm::Primitive(primitive) => Some(primitive),
+            _ => None,
+        }
+    }
     /// Called only after the ordinary owning Type service selects builtin str
     /// or an alias genuinely normalized to it. Descriptor16 is already unsized
     /// and NotCopy; this proof does not publish a standalone owning value.
@@ -124,6 +140,13 @@ impl SourceType {
             ));
         }
         Ok(bytes)
+    }
+}
+impl StableEncode for SourceType {
+    const DOMAIN: &'static str = "lrr/v1/source-selected-concrete-type";
+    fn encode_fields(&self, e: &mut crate::core::digest::StableEncoder) {
+        e.record(&self.source);
+        e.record(&self.key);
     }
 }
 
@@ -256,23 +279,17 @@ fn resolve_named_at(
 }
 /// Resolve the selected result of the owning source Type lookup above. This
 /// internal helper cannot serve as an alternate public namespace admission.
-fn prepare_selected(
+pub(super) fn prepare_selected(
     db: &mut Database,
     graph: &NameNamespaces,
     sources: &[&PreparedSourceView],
     selected: SignatureName,
 ) -> QueryPoll<NamedTypePreparation> {
     let proof = match selected {
-        SignatureName::Primitive(p) => {
-            let primitive = match PrimitiveIdentity::from_recipe(p) {
-                Ok(p) => p,
-                Err(error) => return QueryPoll::Ready(Err(error)),
-            };
-            SourceType {
-                source: TyTerm::Primitive(p),
-                key: TypeKey::Primitive(primitive),
-            }
-        }
+        SignatureName::Primitive(p) => match SourceType::selected_primitive(p) {
+            Ok(proof) => proof,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        },
         SignatureName::Str => match SourceType::selected_str() {
             Ok(proof) => proof,
             Err(error) => return QueryPoll::Ready(Err(error)),

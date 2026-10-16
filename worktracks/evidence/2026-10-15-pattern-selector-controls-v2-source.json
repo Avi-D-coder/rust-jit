@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "kind": "source-only selector test successor preserving actual Error -> ReadyErr transport",
+  "base": "parent immutable compiled102 plus root selector dependency4",
+  "owned_delta": [
+    {
+      "path": "crates/lrr/src/frontend/scalar_pattern_binding.rs",
+      "freeze_source": "/private/tmp/lrr-pattern-selector-controls-v2/scalar_pattern_binding.rs",
+      "sha256": "d2d7c4a4627b0536fe70c4c039b68f9e62a29bd5583ec2a648610615a5e783da",
+      "bytes": 39751
+    },
+    {
+      "path": "crates/lrr/src/frontend/pattern_binding_selector_tests.rs",
+      "freeze_source": "/Users/avi/Code/rust-jit/crates/lrr/src/frontend/pattern_binding_selector_tests.rs",
+      "sha256": "954557d10e5fd134c5e9275d087d91b331340f63330271100d63ad5790b28e21",
+      "bytes": 11274
+    }
+  ],
+  "source_fingerprint": "f77e9376f26ad6efec783241e35c801728fb33b40a75a5679ff3c37c81b02b60",
+  "fingerprint_encoding": "sha256(concat(path + NUL + lowercase_sha256 + LF)) in listed order",
+  "live_scalar_sha256": "2a840edb810ef85d1822b1e17ef3c2542300af03ad50b5d8124acc713c310d90",
+  "copy_note": "Use freeze_source for scalar_pattern_binding.rs; exact temporary bytes omit occurrence module entry. Live source keeps both modules. Copy new child test file to same frontend directory so include! resolves normally.",
+  "test_bodies": [
+    "frontend::scalar_pattern_binding::tests::current_scope_selector::official_pattern_selector_tracks_relevant_same_epoch_publication_without_unrelated_namespace_invalidation_all_editions",
+    "frontend::scalar_pattern_binding::tests::current_scope_selector::official_nested_scope_missing_selector_becomes_present_and_epoch_reset_or_forged_base_cannot_preserve_authority"
+  ],
+  "upstream_originals": [
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/or-patterns/search-via-bindings.rs",
+      "sha256": "38723ec8521136188a19a4b465362e979d95f59ed65009a358aff640a23a08b6"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/resolve/blind-item-mixed-use-item.rs",
+      "sha256": "05271c0e917ea0f17a2f67c51cce645dfc5aaa75b58a11d2346a2b0af10416fd"
+    }
+  ],
+  "upstream_rustc_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "checks": {
+    "rustfmt": "exit0",
+    "git_diff_check": "exit0",
+    "tests": "unexecuted",
+    "compilation": "unexecuted by worker"
+  },
+  "scope": "External LRR dependency/authority observations only; no guest runtime, full upstream fixture or final binding proof acceptance",
+  "prior_manifest_sha256": "1e85da9d0601cbfbb4c844721a820b374c300b49e95f10081ba474a56970b428",
+  "prior_test_source_preserved": "/private/tmp/lrr-pattern-selector-controls-v1/pattern_binding_selector_tests.rs",
+  "correction": "fetch asserts typed ReadyErr then reads actual MemoEntry fingerprint/dependencies. No successful Outcome is manufactured; production error transport unchanged. Original source-only control had no compile/test execution."
+}

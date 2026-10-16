@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "component": "contextual-declaration-test-mutability-fix1",
+  "status": "uncompiled-unexecuted",
+  "predecessor_manifest_sha256": "aed688d830203af119b34d7c7d1d5ba6fe8c39310df9a1ad7460f70e81969fb7",
+  "failed_source": "combined205 source2216a609, compile a6d862/1 zero test bodies; old immutable capture preserved",
+  "edit": "only let (db, discovery) -> let (mut db, discovery) for existing db.input &mut API; no assertion or production change",
+  "file": {
+    "path": "crates/lrr/src/frontend/contextual_declaration_tests.rs",
+    "bytes": 8613,
+    "sha256": "88db7a351b31c71424cb8f21e7a3d77f8a153da5166d8f5c09a5a4bf188ddefe"
+  }
+}

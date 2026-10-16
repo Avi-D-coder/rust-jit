@@ -576,3 +576,37 @@ All eight recurring architecture modes remain open overall; these changes remove
 no legacy macro evaluator. Required external controls reuse unchanged A/B in all
 four editions, actual schema query and exact publication/revocation/budget/producer
 barriers. Runtime main/full-fixture/architecture acceptance are not claimed.
+
+
+## Macro-source child adoption at the DB seal boundary (root, October 16)
+
+LOCAL-024 / WT08 M014/T024/T063. Existing role receipts prove selected source
+bytes/configuration, not that a child file was actually selected by its parent
+module declaration. Full-seal publication must not accept caller module_path
+as ancestry. Root extends private Database::publish_discovery after replay_sources
+with borrowed actual MacroExportModuleAdoption handles. Peer owns genuine source
+request/adoption and provider/discovery construction. Root validates every opaque
+adoption against actual selected parent+child role sources, full discovery inputs
+and current record, rejects duplicate/unselected child leases, and requires one
+for every nonroot selected macro-role source. Only scalar seal facts are published;
+no ordinary parser/header/body registrations or native/runtime grants.
+
+Work is cold coordinator-only, bounded to256 checked map rows; no world namespace
+scan, deep syntax clone or installed-operation check. Private caller supply is
+not evidence: actual opaque lease validation plus complete coverage is mandatory.
+Relevant selected4+ModuleRecord stamps must already occur in input.compiler_inputs
+and the actual seal; lease currentness checks actual chosen candidate chain.
+Complete provider/source graph ownership and pool admission remain peer/root
+integration prerequisites, not implied by scalar DB publication. Required controls
+reuse unchanged core/module inputs: missing lease, duplicate/unselected child,
+changed parent/candidate record/role receipt, genuine fullseal positive, and no
+ordinary source/body grants. All unexecuted until exact assembled source validates;
+required full-core positive currently fails earlier at unresolved attributed imports.
+No T/H/M, runtime fixture, MA or JIT closure.
+
+DB adoption review follow-up: require every embedded parent adoption identity
+to equal the actual parent entry supplied for this same complete publication;
+root parents require no parent-adoption link. This matches the builder invariant
+and prevents accepting individually current but inconsistently selected chains.
+Source review identified missing defense, not a demonstrated constructible forgery.
+Root memo only; full module/source execution tests remain required.

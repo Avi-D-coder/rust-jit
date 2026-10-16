@@ -1,0 +1,115 @@
+{
+  "component": "common-provisional-compiler-attribute-preparation-v1",
+  "source_fingerprint": "5a691f29384f954a69baea9ec932c13f14755041671d206face044e49587f5a9",
+  "status": "source-only; uncompiled and unexecuted; production assertion/fullcore/issue26251 closure held",
+  "files": [
+    {
+      "path": "crates/lrr-expand-adapter/src/builtin_attributes.rs",
+      "sha256": "cf4d63e1a9a3cb9f1ccb97a1ed29355b534fa6d7b480c2ef3bf884a415dc6dc4",
+      "bytes": 16555
+    },
+    {
+      "path": "crates/lrr/src/expand/builtin_attributes.rs",
+      "sha256": "2e3a40ed06c487115691c51ed9ed005cb1535f0697061fe0055f4645d395b22c",
+      "bytes": 8003
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative.rs",
+      "sha256": "af407080a42e507ab3c6bebd602a8a909da81c55fdbdc694f792dba4fcf6002f",
+      "bytes": 182493
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/compiler_attribute_preparation.rs",
+      "sha256": "fbdfb00930a39790189761c5ae488d9d1e7746ed8023bf2819ad331246dd4e33",
+      "bytes": 9904
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/compiler_attribute_preparation_tests.rs",
+      "sha256": "61f5631dbb264ca2764708a24591ef1b977b45051cc8aea20f8721c7e2b281da",
+      "bytes": 8608
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports_tests.rs",
+      "sha256": "464b01a3c3b8c13f2408e4cafa811465e3e94b67adc5213f1a135baf8155c992",
+      "bytes": 14181
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/original_annotations.rs",
+      "sha256": "e7ce6a017e658a749c37c1319358537f426230308ba86431b428c5244271711a",
+      "bytes": 7516
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "bbbe7a111248fe0b1a3808ad0ff1fa44406dec3b010132583dea30491393b206",
+      "bytes": 498903
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/original_inert.rs",
+      "sha256": "bdddf4b2df082647885353259397d51e23df88cc6a4fe99fc623d1dbea8e64ea",
+      "bytes": 2864
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macro_routes.rs",
+      "sha256": "2425d01ef3accdcae5f0dc552cadcb0be165d4435793ac0cea851844993a7afa",
+      "bytes": 47675
+    }
+  ],
+  "dependencies": [
+    "Exact consumption200 V2 frozen source plus its root memo and source/module role predecessors; new consumption borrow-fix test leaf8f96c847 remains independent, unchanged by this10.",
+    "Existing pinned full compiler inert/diagnostic inventory and canonical compiler facet metadata. No DB, module_aliases, SourceMacroIndex or reference-worker mutation.",
+    "Existing retained OriginalAnnotationPlan/CompilerReplaySource and strict SourceEmptyDeriveProof replay; every provisional candidate requires final proof and retired producer before seal."
+  ],
+  "architecture_review": {
+    "handoff": "worktracks/03-control-flow-patterns/macro-export-facet-handoff.md",
+    "sha256": "e5ce0791cde07a67f071f5dfba8e7f7f75e6d4ff07ce2620353f97e428146694",
+    "modes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ]
+  },
+  "witnesses": [
+    {
+      "path": "rustc/rust/compiler/rustc_expand/src/expand.rs",
+      "sha256": "2cb04ff18db5c8db1026f5cb8fa2ceda75f2d09d08a90e63981d45cd1a36d4d0",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "execution": "unexecuted by this worker"
+    },
+    {
+      "path": "rustc/rust/compiler/rustc_resolve/src/macros.rs",
+      "sha256": "ae8cd7f8db5bb3f63623a37dbb6bea7306ded853d76d5aaceceb193325e679d8",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "execution": "unexecuted by this worker"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/library/core/src/lib.rs",
+      "sha256": "f7da20c347fb8722a6cfc28b6f899fc8359bd99775ba0f2b34f6f86346a0f1f2",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "execution": "unexecuted by this worker"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/library/core/src/macros/mod.rs",
+      "sha256": "af6f7c1c71eef0923e1f4128729e744e2ca6b6c9954245cc8b87e5c579713f66",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "execution": "unexecuted by this worker"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/match/issue-26251.rs",
+      "sha256": "a0993bf1d51fa8bcc9028b10f76a89f62c675097104ed2fce379967e7e8b98be",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "execution": "unexecuted by this worker"
+    }
+  ],
+  "commands_for_sole_validator": [
+    "cargo test -p lrr-expand-adapter builtin_attributes::inventory_tests::preparation_never_turns_a_semantic_handler_into_an_inert_descriptor -- --nocapture",
+    "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::compiler_attribute_preparation_tests -- --nocapture",
+    "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::original_annotation_tests -- --nocapture",
+    "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::sealed_view_tests::unchanged_full_core_macro_source_requires_real_annotation_closure_and_publication -- --exact --nocapture"
+  ],
+  "actual_predecessor": "Consumption200V2 compile0/new3PASS/requiredfullcoreFAIL unresolvedimports, separate frozen bytes; no new execution evidence."
+}

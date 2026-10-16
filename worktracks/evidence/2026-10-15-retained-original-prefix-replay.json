@@ -1,0 +1,83 @@
+{
+  "architecture_review": {
+    "handoff": "worktracks/03-control-flow-patterns/macro-export-facet-handoff.md",
+    "modes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "sha256": "be7d1ec1ab3e154ebfaf92dd7408981caf106bcf5eac9d09b646f8239d640a11"
+  },
+  "component": "common-retained-original-prefix-replay-v1",
+  "dependencies": [
+    "Retained compiler replay5 SHA270a8080490511ffb016f49d229a1b40f6c4fbdbac3dcebae009d89c6852fab6, publicationjoin2 SHA4415a9ef8a9516ed126430687be38dbecd5e50974e68808575579735178b6f58 and their actual root DB/role/classification dependencies.",
+    "Actual independently owned original annotation scans plus once-captured original_prefix_jobs from SourceDiscovery construction.",
+    "Root current source receipts/outline/epoch/fullseal publication remain separate; no DB leaves changed."
+  ],
+  "files": [
+    {
+      "bytes": 493586,
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "1a4dd85b2db1b32edb0fcab0a66a64116ff26889a01aa98cc0bf87baaf980bc9"
+    },
+    {
+      "bytes": 3338,
+      "path": "crates/lrr/src/expand/source_discovery/original_inert.rs",
+      "sha256": "1b2777c31f120a4d4347a0c314e2d62763089b009d726787a7a70e93205f2c6f"
+    },
+    {
+      "bytes": 17060,
+      "path": "crates/lrr/src/expand/source_discovery/original_inert_tests.rs",
+      "sha256": "d5bc32f16c37dcefde170cc1bbb6456304fd61ea7b4cf2406f7e601bfa8118ce"
+    },
+    {
+      "bytes": 4574,
+      "path": "crates/lrr/src/expand/source_discovery/retained_original_inert_tests.rs",
+      "sha256": "9224a72fbee8f8a730abb1e7ac906f9e8cc934235d03b8f1f0fad0912e956f6e"
+    },
+    {
+      "bytes": 4760,
+      "path": "crates/lrr/src/syntax/original_inert.rs",
+      "sha256": "0b44c0c398ffe1d15b825d8af4a0e72628278747612bc9b172ec7c6be567687c"
+    }
+  ],
+  "holds": [
+    "Existing facade-based matched Attribute compiler world is unchanged SDK adoption debt.",
+    "Cold Attribute lookup/import-plan costs and other source preparation paths are not claimed removed.",
+    "No full-core TypeReceipt fix/suppression; unchanged required frontier test remains real.",
+    "No persistent restored-index/owning facet graph transport or SDK/runtime closure; inherited macro-specific runtime routes remain held."
+  ],
+  "pre_edit_hashes": {
+    "crates/lrr/src/expand/source_discovery.rs": "db0111a60ed2ffc53cba8b1c477bb3d61a98260cc7dcd954a08bdaecf9b68758",
+    "crates/lrr/src/expand/source_discovery/original_inert.rs": "22b2bc99491f171463f798c5742a8ed4b011413b7a21afa96d612c1641acba84",
+    "crates/lrr/src/syntax/original_inert.rs": "18a38130bc2999889620044d3da87b9dd51e3c1d56bd8d1d94a3b4e22aae1d1a"
+  },
+  "removed_routes": [
+    "Fresh ParsedFile::parse in syntax::original_inert::capture.",
+    "Per-proof prefix recapture and blob/cfg parse in expand::source_discovery::original_inert::revalidate."
+  ],
+  "schema": 1,
+  "source_fingerprint": "8a4557244c43f909517bb967007d4693029c9c8f3f6dfda4022be588c94aec65",
+  "status": "source-only-uncompiled-unexecuted",
+  "upstream": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const-fn-const-eval.rs",
+    "sha256": "5971a5a80d4f5b5400ed88bba500fed8e77867cc879ed4fc8c5f013d0ba05337",
+    "unchanged": true
+  },
+  "verification": {
+    "commands_for_sole_validator": [
+      "cargo test -p lrr --lib expand::source_discovery::original_inert_tests -- --nocapture",
+      "cargo test -p lrr --lib source::compiler_replay::tests -- --nocapture",
+      "cargo test -p lrr --lib expand::source_declarative::macro_exports::tests::sealed_view_tests -- --nocapture"
+    ],
+    "new_test_bodies": 2,
+    "test_or_runtime_pass_claim": false,
+    "worker": "rustfmt/diff/source-review only; no Cargo/Rust/native tests"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "scope": "Immutable UTF-8 backing and checked shared buffer/range lease component; VM emission/call-result/member/equality held",
+  "source_only": true,
+  "uncompiled": true,
+  "unexecuted": true,
+  "source_fingerprint": "dda0c181c357f719c5758959e8711d1e3e0f0a316d621aff8960acc276838c1e",
+  "files": [
+    {
+      "path": "crates/lrr/src/runtime/arena.rs",
+      "sha256": "0e0f4eea95e0cbec226984ee0cb3607f6247ce5702ef9ec8d8fa2ce44bd7969c",
+      "bytes": 14765
+    },
+    {
+      "path": "crates/lrr/src/runtime/reference.rs",
+      "sha256": "7f3bdd4927bb2fb9d762036c74d3e0b337f5fe66236269c686450d1afbae4810",
+      "bytes": 3733
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell.rs",
+      "sha256": "88715db8a91e5176331f4ee1d091fdbf8f28f7611fb5a7880cca8d2d2e95b2c3",
+      "bytes": 205904
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_reference_return.rs",
+      "sha256": "9dffa58b0c644b1bb1ab3a13ff6a44dfe8e9bb1e9f7081762bb0765d02b0bfa6",
+      "bytes": 5981
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_reference_return_tests.rs",
+      "sha256": "131b6b0a2bccf7928c9b052c0a16422d569c0a9da35aee73491696a4e264d48f",
+      "bytes": 19792
+    },
+    {
+      "path": "crates/lrr/src/runtime/str_storage.rs",
+      "sha256": "7033541eb73f2ebf2bd514a3f9acb507d0312f8faeef5910030d99f7d8066f5b",
+      "bytes": 10558
+    },
+    {
+      "path": "crates/lrr/src/runtime/str_storage_tests.rs",
+      "sha256": "7e09868dee1be7b32ef054b1d66f6b88334f8148f9bf7f6adbd3b42608135a41",
+      "bytes": 12273
+    }
+  ],
+  "new_test_bodies": 7,
+  "new_test_filter": "runtime::cell::str_storage::tests",
+  "handoff": {
+    "path": "worktracks/03-control-flow-patterns/immutable-str-backing-handoff.md",
+    "sha256": "7e025b4f855bc9af963aa6ad4810fe3fcbcc3d93e91ca24104d35a7f8bf80203"
+  },
+  "dependencies": [
+    "Existing root frozen ordinary runtime/session/reference call source baseline",
+    "Symbolic Str3 remains separate; storage does not mint source type/region authority"
+  ]
+}

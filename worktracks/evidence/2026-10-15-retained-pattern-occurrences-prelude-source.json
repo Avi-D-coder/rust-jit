@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "kind": "staged source-occurrence + genuine module/prelude observations; final binding mint held",
+  "baseline": "2032a7a570dce4b21c49c4502c548d40c18754a7",
+  "owned_delta": [
+    {
+      "path": "crates/lrr/src/frontend/scalar_pattern_binding.rs",
+      "sha256": "2a840edb810ef85d1822b1e17ef3c2542300af03ad50b5d8124acc713c310d90",
+      "bytes": 39823
+    },
+    {
+      "path": "crates/lrr/src/frontend/pattern_binding_occurrences.rs",
+      "sha256": "3be5ac5a75e312013853fce578f7fed039ea81f1a809f0f769cd05972737e8ae",
+      "bytes": 31391
+    },
+    {
+      "path": "crates/lrr/src/facade/value_binding_prelude.rs",
+      "sha256": "aa43374276c8f5b7240f5c003ba8815958be14d806c859f9730b9e8df3b57532",
+      "bytes": 5451
+    },
+    {
+      "path": "crates/lrr/src/facade/retained_value_binding_prelude.rs",
+      "sha256": "1a035631b16377ec7080adc5de1f0b4b5bb10fb5293f499b6297883e19e1d75f",
+      "bytes": 4478
+    }
+  ],
+  "source_fingerprint": "38b93167d5a16584a7ad9bc7d71b9e7f624e582b884ad44628af3c4a0bc62610",
+  "fingerprint_encoding": "sha256(concat(path + NUL + lowercase_sha256 + LF)) in listed order",
+  "replaces_unexecuted_draft_manifest": "worktracks/evidence/2026-10-15-retained-pattern-occurrences-source.json",
+  "depends_on_selector_test_v2_manifest_sha256": "045551ceebf9af38be23385e0184542f84715d166c9cdfcabf9a0b60ff13b529",
+  "additional_required_source": [
+    {
+      "path": "crates/lrr/src/frontend/pattern_binding_selector_tests.rs",
+      "sha256": "954557d10e5fd134c5e9275d087d91b331340f63330271100d63ad5790b28e21"
+    }
+  ],
+  "dependencies": [
+    "PreparedBodyContext actual opaque source/facts/lease Arc APIs from peer context packet",
+    "current_lexical_scope_certificate with atomic relevant selector input dependency from root selector104",
+    "Parent common pure query/body-context transport and actual source/table Arc root accounting",
+    "Peer common local-prefix/import/frontier lookup plus opaque prepared answer (not yet consumed)",
+    "Current relevant name semantic projection independent of old whole-seal identity",
+    "Generated/retained hygienic module/prelude scope proofs and actual resolved Value/variant identity for positive candidates"
+  ],
+  "unchanged_production": [
+    "ScalarPatternBindingAdmission capture/require/revalidate",
+    "ValueBindingPrelude::prepare/require_absent and finite selected facade inventory",
+    "Live PatternSourcePlan owner_for/lower and held Binding decision"
+  ],
+  "checks": {
+    "rustfmt": "exit0",
+    "git_diff_check": "exit0",
+    "compilation": "unexecuted",
+    "tests": "unexecuted for these leaves; none added to this scaffold",
+    "native": "unexecuted"
+  },
+  "acceptance": "Immutable source scaffolding only; not final reusable binding authority, integrated pattern route, runtime/full fixture or architecture gate pass"
+}

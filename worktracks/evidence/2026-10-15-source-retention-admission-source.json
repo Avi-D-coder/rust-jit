@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T04:34:20.836465+00:00",
+  "claim": "LOCAL-024",
+  "status": "source-only-uncompiled-unexecuted",
+  "component": "common-source-retention-admission-before-memo-publication",
+  "baseline": "Exact ordinary literal/root122 validator candidate, root4 snapshot103d20/0; no new worker frontend leaves",
+  "overlay": "/Users/avi/Code/rust-jit/artifacts/macos-first/common-source-retention-admission-v1/overlay",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "34208edf02fcd7c39c15f9842b1722396bb76149966b7bc4615a6660ca0a1dec",
+      "bytes": 128086
+    },
+    {
+      "path": "crates/lrr/src/db/product_retention.rs",
+      "sha256": "3b406c5bf895c4ec821918e34eef7e234ef969e6936c2790677764a395c7e4c0",
+      "bytes": 8184
+    },
+    {
+      "path": "crates/lrr/src/db/source_plan_tests.rs",
+      "sha256": "8666a71416e50ce8c40c972b98ea52dd5f0fb21453c5042e59a2475c00628115",
+      "bytes": 26758
+    }
+  ],
+  "scope": "Shared source-plan retirement admission before successful memo publication; test-only reduced real registry count cap; one authority control against unchanged match-borrowed-str.rs",
+  "holds": [
+    "Current literal122 validation belongs only to preceding source",
+    "No stock runtime pass, full-fixture pass, MA/task/milestone closure or guest JIT permission"
+  ]
+}
