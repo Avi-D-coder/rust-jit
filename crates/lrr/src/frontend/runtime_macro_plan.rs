@@ -526,7 +526,7 @@ impl RuntimeIntrinsicPlan {
         let ordinal = match Phase::from_code(key.phase) {
             Phase::Entry => 0,
             Phase::Operand(n) => usize::from(n) + 1,
-            Phase::Commit | Phase::Exit => return Ok(None),
+            Phase::Commit | Phase::Exit | Phase::PatternCleanup => return Ok(None),
         };
         let plan = source.runtime_macro_scalar_plan(handle, body, key, &self.arguments)?;
         let (call, phase) = match plan.steps().get(ordinal) {
@@ -568,7 +568,7 @@ impl RuntimeIntrinsicPlan {
         let ordinal = match Phase::from_code(key.phase) {
             Phase::Entry => 0,
             Phase::Operand(n) => usize::from(n) + 1,
-            Phase::Commit | Phase::Exit => return Ok(None),
+            Phase::Commit | Phase::Exit | Phase::PatternCleanup => return Ok(None),
         };
         let plan = source.runtime_macro_scalar_plan(handle, body, key, &self.arguments)?;
         match plan.steps().get(ordinal) {
@@ -628,6 +628,11 @@ impl RuntimeIntrinsicPlan {
         };
         let id = NodeId(key.node);
         let (operations, exit) = match Phase::from_code(key.phase) {
+            Phase::PatternCleanup => {
+                return Err(invalid(
+                    "pattern cleanup belongs to its ordinary pattern owner",
+                ));
+            }
             Phase::Entry | Phase::Operand(_) => {
                 use crate::syntax::runtime_macro_scalars::{
                     RuntimeMacroCallPhase, RuntimeScalarStep,

@@ -125,7 +125,7 @@ impl LiteralKind {
     }
 }
 /// Explicit recipe/cache compatibility, independent of host enum layout.
-pub const LRIR_RECIPE_SCHEMA: u32 = 11;
+pub const LRIR_RECIPE_SCHEMA: u32 = 12;
 pub const DECODED_INTEGER_SCHEMA: u32 = 1;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum IntegerLexicalError {
@@ -409,7 +409,44 @@ impl crate::core::digest::StableEncode for PrimitiveFloatingConstant {
 /// Prepared ordinary pattern transitions. No guest values, scopes, leases or
 /// source parsing are embedded in a cached transition.
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub enum PatternDecision {
+    Begin {
+        source: SlotId,
+        matched: super::pc::PcKey,
+        unmatched: super::pc::PcKey,
+        unmatched_inactive: super::pc::PcKey,
+    },
+    /// A source receipt for ordinary tests/projections in this node's recipe.
+    Observe,
+    StartSource,
+    SourceStep,
+    EnterAttempt {
+        scope: ScopeId,
+    },
+    CheckTuple {
+        place: SlotId,
+        arity: u32,
+    },
+    Test {
+        result: SlotId,
+        first: bool,
+        upper_pending: bool,
+    },
+    Enter,
+    Success,
+    Fail {
+        node: Option<super::pc::NodeId>,
+    },
+    /// Retire at most one pending source or one exhausted source choice.
+    Cleanup,
+}
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum PatternOperation {
+    Decision {
+        owner: super::pc::NodeId,
+        plan: std::sync::Arc<crate::syntax::pattern_product::PatternProductPlan>,
+        transition: PatternDecision,
+    },
     Begin {
         owner: super::pc::NodeId,
         alternative: super::pc::NodeId,

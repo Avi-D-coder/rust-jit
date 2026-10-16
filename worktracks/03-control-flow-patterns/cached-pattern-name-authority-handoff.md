@@ -137,3 +137,46 @@ when no external owner remains. This replaces the weak-only proposal before
 compilation; it is not an accepted feature/performance claim. Graph/control-block
 and nested-index bytes remain separately accounted, and no semantic authority is
 attached to these retirement leases.
+
+Actual frozen101 compilation failed before tests (89b671/1): wrong nested IR
+module imports and non-exhaustive Phase::PatternCleanup matches. The successor
+corrects only module paths and explicit refusal of a pattern-owned cleanup phase
+by legacy scalar-macro and constructor routes. It does not add macro execution
+semantics or expand the held alternate evaluator. Source review also found a
+retirement-only Product can retain an independently cached Body index; its pin
+must propagate before index allocation deduplication. A separate external
+ownership regression covers that case. Old frozen101 and failure remain intact.
+
+## Relevant certificate-selection dependency
+
+The current cached SealedName input alone cannot observe an added same-epoch
+certificate for the same source/scope. Root adds a coordinator-derived fixed-size
+ScopeCertificateSelection input keyed by the complete source selection, scope,
+namespace and edition. Its candidate-set digest is computed only at genuine cold
+discovery publication and updated atomically with the admitted seal/index. A
+query-safe reader records missing/present selector, epoch and chosen seal inputs;
+it returns the actual admitted certificate, never a caller-supplied absence bit.
+Base publication rejects these derived inputs and resets their locator.
+
+This is a prerequisite dependency, not name authority or final installed binding
+identity. Pure relevant-name projection must still preserve an unchanged answer
+fingerprint across unrelated candidate publication; the local prefix/import and
+compiler-prelude absence proofs remain separate obligations. Legacy census routes
+are held. No full-world map or candidate fingerprint construction enters the new
+reader. Cached-digest retrieval is a bounded BTree lookup; publication computes
+one affected scope candidate digest. Existing cold whole-index cloning cost is
+still documented and not claimed fixed. Acceptance needs actual absent→present,
+same-epoch ambiguity, epoch transition, unrelated-scope reuse and atomic-failure
+controls on unchanged upstream-backed worlds, followed by source and runtime
+matrix evidence. No production pattern switch accompanies this change.
+
+Frozen102 compiled (190234/0). Source-plan bank c9509a/1 executed11 with10pass,
+including external-root, cached-root eviction and pool-only/cached-Body pins.
+Product-only test's extra whole-cache memo==pinned assertion failed by752bytes.
+Independent source review derives exactly6 published-owner-only InputPin rows
+(6x80) and2 dead Signature/ParseFile QueryPin rows (2x136). Those registries are
+legitimately reclaimable, not retained Product payload. The successor removes
+only that unrelated whole-cache equality; graph+index pinned-byte floor, refusal
+below their required budget, delayed final graph/index destruction and exact
+post-eviction accounting remain. Old failure and raw bytes are preserved. This
+is an LRR cache invariant correction, not a changed Rust language oracle.

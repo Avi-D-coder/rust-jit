@@ -1,0 +1,170 @@
+{
+  "schema": 1,
+  "kind": "source-only component; production switch held",
+  "baseline": "d5e9eecd68790b38eb3ae5c1a408729a804cf0da",
+  "branch": "codex/lrr-implementation",
+  "owned_files": [
+    {
+      "path": "crates/lrr/src/ir/definition_numeric_wire_tests.rs",
+      "sha256": "6b5987054542165044276b6e8b6fa55f5215f99456c8cc35a387da0e9d880a4f",
+      "bytes": 16802
+    },
+    {
+      "path": "crates/lrr/src/ir/op.rs",
+      "sha256": "a51588d4f662f7bfa94fc0ef7141876045b23cb9c811f83fdb3e53052ec5130b",
+      "bytes": 24059
+    },
+    {
+      "path": "crates/lrr/src/ir/parameter_place_wire_tests.rs",
+      "sha256": "61ac23c250105ec4b332c30a7f2beb1d29cffa0de65ee65f4cae5fddf1c32569",
+      "bytes": 4922
+    },
+    {
+      "path": "crates/lrr/src/ir/pattern_decision.rs",
+      "sha256": "8be8956fbbdc4bfb51d8c15a96b23e21b145fa7e8c292f6f7c157c148dae3597",
+      "bytes": 8211
+    },
+    {
+      "path": "crates/lrr/src/ir/pattern_decision_tests.rs",
+      "sha256": "ca22dfe0baffa2b6dda6e88896ffec3b28635a482df5af69175b17baa37c49ed",
+      "bytes": 5497
+    },
+    {
+      "path": "crates/lrr/src/ir/pattern_wire_tests.rs",
+      "sha256": "e675a87390d02ae16ac332befb3b79dd0bdc3a3187b668328a5610af19dd9ba5",
+      "bytes": 5544
+    },
+    {
+      "path": "crates/lrr/src/ir/pc.rs",
+      "sha256": "a588216c7b6af6037f526ce7b57171a5228d1db542285bc13e1edeed8921efa1",
+      "bytes": 2137
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "sha256": "a9c321a5d2f393c05c9206fb50e11bc854f4b5b960e458885090f816424bc0d9",
+      "bytes": 25154
+    },
+    {
+      "path": "crates/lrr/src/ir/validate.rs",
+      "sha256": "5d51898661319d3be40e2cc8ebbd15c04c22c9955053b903c5bec3ddf59c5e1a",
+      "bytes": 80989
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_lower.rs",
+      "sha256": "5870b4ff3d16bf05b6517962c3b8b911445bdcb67ed21027259f64e25a4a6703",
+      "bytes": 8118
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_product.rs",
+      "sha256": "073970e0390d45a8bf4ad0e44a89837d71c12ad0e452c885fda33fb673d9b0b7",
+      "bytes": 29331
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_product_tests.rs",
+      "sha256": "3d33db4e6ab5fbae98f4b2e4f77f02f363722cf1a2ccab298d599bfa0aaa3a30",
+      "bytes": 6904
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_tests.rs",
+      "sha256": "275a5f117bce9218b8595b03bd12f79a5e5c90f968e9547a36eab50b875398b5",
+      "bytes": 16531
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "sha256": "60d0211b31c166a2c49f9cfe5649d6ceb0cf938275b141cba8828ad57d521ec4",
+      "bytes": 309290
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_pattern.rs",
+      "sha256": "10ef49c193d1a522b349ddf6dc9bb50204c2654e99907525bb06f18adebd36bb",
+      "bytes": 11863
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_pattern_decision.rs",
+      "sha256": "f0f6be9e81e372f6c0a5e8f93dbe906cb0e86813cb055342cfa5949c2321ca99",
+      "bytes": 21170
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_pattern_decision_tests.rs",
+      "sha256": "bf3c44f94e71966ec045d80ddfeeb4b179667ffb9a3ec2d27911caa67b542266",
+      "bytes": 7783
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_source_types.rs",
+      "sha256": "2774e41635de0658449e9c84467817a43c5741e5e346d9efbff069b33f6fc32b",
+      "bytes": 3965
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_source_types_tests.rs",
+      "sha256": "116cc82c5d6831d6c8d9f01e7cbf10892c840006918934b0efa9ee40645de84f",
+      "bytes": 21824
+    },
+    {
+      "path": "crates/lrr/src/vm/pattern.rs",
+      "sha256": "31b4d871fc160ad0df4e303883bfef39ae5065229be5101038af3f2ea662ea61",
+      "bytes": 15076
+    },
+    {
+      "path": "crates/lrr/src/vm/pattern_decision.rs",
+      "sha256": "1798de5a037f0dd596bab528800e4b1c2d77ec100c701910248288295c3f787f",
+      "bytes": 10773
+    },
+    {
+      "path": "crates/lrr/src/vm/pattern_decision_tests.rs",
+      "sha256": "acea2a2b08c7bc87d122ae18fd831d7cc921caaf172ed5ac578369886a5b72c5",
+      "bytes": 8419
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "sha256": "64ad72eaaf1f00d75ef21ebcf58e5e4bb71aa67dbeb9097a9e98abede173be8f",
+      "bytes": 58720
+    }
+  ],
+  "coordinator_dependencies": [
+    {
+      "path": "crates/lrr/src/engine/failure.rs",
+      "sha256": "2fc86acb57917df14352fb32a850eb56f6fea579dff522a49037a6b07317e79d",
+      "bytes": 18840
+    },
+    {
+      "path": "crates/lrr/src/engine/run_capture.rs",
+      "sha256": "680fe9de3a3569097a4e7b429908d389b715325c776984e34dc1d68fd24c432c",
+      "bytes": 12854
+    },
+    {
+      "path": "crates/lrr/src/syntax/body_index.rs",
+      "sha256": "964211dccd5503fa465f054eb1575e06118b398b1e4b0d9204e2b5a035c009d2",
+      "bytes": 67891
+    },
+    {
+      "path": "crates/lrr/src/syntax/mod.rs",
+      "sha256": "0d3922ecf7f021add6ee50c63acd7529debfc7754696ec882f204e3430dfa7aa",
+      "bytes": 1727
+    },
+    {
+      "path": "crates/lrr/src/syntax/node_lookup.rs",
+      "sha256": "544d467f2f003fce9a46e1f3034983e1ba863e19fac7d9a54382899710029ece",
+      "bytes": 6455
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_bindings.rs",
+      "sha256": "ecfa2f2ecdd489247637bed79949a2b694930601296050fe9d1e7a5716f6bf33",
+      "bytes": 19151
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "sha256": "b6220054b71a679b3d0df9dac4f02a2a9c3a5293a1ad801f53c7b52a5fb77bfe",
+      "bytes": 186041
+    }
+  ],
+  "source_fingerprint": "147f3a776cb4af00de823cf15a45091cc2c055ae43f28b045dfc386e8ce85031",
+  "combined_fingerprint": "4e2f14b2730c8865ba690cb91eccc2390ea662365f90339653d1f1fca311f68e",
+  "new_test_bodies": 12,
+  "validation": "uncompiled/unexecuted; rustfmt and scoped git diff --check exit0 only",
+  "upstream": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/or-patterns/search-via-bindings.rs",
+    "sha256": "38723ec8521136188a19a4b465362e979d95f59ed65009a358aff640a23a08b6"
+  },
+  "handoff": "worktracks/03-control-flow-patterns/structural-pattern-products-handoff.md"
+}

@@ -4,7 +4,11 @@ use super::*;
 use crate::{ir::op::PatternOperation, vm::pattern::PendingBinding};
 
 impl Frame {
-    fn pattern_bool(&self, slot: SlotId, store: &GuestStore) -> Result<bool, Diagnostic> {
+    pub(super) fn pattern_bool(
+        &self,
+        slot: SlotId,
+        store: &GuestStore,
+    ) -> Result<bool, Diagnostic> {
         let value = store.read_scalar(self.cell(slot)?)?;
         if value.kind != 2 || value.type_id != 2 {
             return Err(invalid("pattern result is not a concrete Bool"));
@@ -17,15 +21,17 @@ impl Frame {
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
         let pending = self.patterns.pending(owner)?;
-        for (index, binding) in pending.iter().enumerate() {
+        for binding in pending {
             self.preflight_bind(binding.binding, binding.source, None, store)?;
-            let source = self.cell(binding.source)?;
-            for prior in &pending[..index] {
-                if self.cell(prior.source)? == source {
-                    return Err(invalid(
-                        "pending pattern bindings have conflicting source moves",
-                    ));
-                }
+            if store.owner(self.cell(binding.source)?)?
+                != (CellOwner::FrameSlot {
+                    frame: self.anchor,
+                    slot: binding.source.0,
+                })
+            {
+                return Err(invalid(
+                    "pending pattern source is not its unique frame-slot owner",
+                ));
             }
         }
         store.preflight_pattern_bindings(pending.len())
@@ -37,6 +43,11 @@ impl Frame {
     ) -> Result<(), Diagnostic> {
         self.require_store(store)?;
         match operation {
+            PatternOperation::Decision {
+                owner,
+                plan,
+                transition,
+            } => self.preflight_pattern_decision(*owner, plan, transition, store),
             PatternOperation::Begin {
                 owner,
                 alternative,
@@ -66,6 +77,9 @@ impl Frame {
                 writable,
             } => {
                 let active = self.patterns.current(*owner)?;
+                if active.decision.is_some() {
+                    return Err(Diagnostic::new("LRR-E-UNSUPPORTED", "structural binding publication requires cached occurrence namespace admission".into()));
+                }
                 if active.alternative != *binding {
                     return Err(invalid(
                         "pending binding is not the selected admitted pattern header",
@@ -83,6 +97,16 @@ impl Frame {
             }
             PatternOperation::Preview { owner } => {
                 let active = self.patterns.current(*owner)?;
+                if let Some(decision) = &active.decision
+                    && !decision.state.matched()
+                {
+                    return Err(invalid(
+                        "guard preview requires a completed source decision",
+                    ));
+                }
+                if active.decision.is_some() {
+                    self.require_decision_source(*owner, store)?;
+                }
                 if active.previewed {
                     return Err(invalid("pattern guard preview was already committed"));
                 }
@@ -90,7 +114,11 @@ impl Frame {
                     // The selected match source service already proves the
                     // scalar contract. GuestStore checks actual intrinsic Copy
                     // authority; no owning value is copied to test a pattern.
-                    store.admit_copy(self.cell(active.source)?)?;
+                    if active.decision.is_none() {
+                        store.admit_copy(self.cell(active.source)?)?;
+                    } else {
+                        store.admit_move(self.cell(active.source)?)?;
+                    }
                 }
                 self.preflight_pattern_bindings(*owner, store)?;
                 for pending in self.patterns.pending(*owner)? {
@@ -100,10 +128,21 @@ impl Frame {
             }
             PatternOperation::Finish { owner, matched } => {
                 let active = self.patterns.current(*owner)?;
+                if active.decision.is_some() {
+                    self.require_decision_source(*owner, store)?;
+                }
                 let matched = matched
                     .map(|slot| self.pattern_bool(slot, store))
                     .transpose()?
                     .unwrap_or(true);
+                if let Some(decision) = &active.decision
+                    && ((matched && !decision.state.matched())
+                        || (!matched && !decision.state.unmatched()))
+                {
+                    return Err(invalid(
+                        "pattern finish differs from source decision outcome",
+                    ));
+                }
                 if matched && !active.previewed {
                     self.preflight_pattern_bindings(*owner, store)?;
                 }
@@ -111,6 +150,15 @@ impl Frame {
             }
             PatternOperation::Rollback { owner } => {
                 let active = self.patterns.current(*owner)?;
+                if let Some(decision) = &active.decision {
+                    self.require_decision_source(*owner, store)?;
+                    if !decision.state.unmatched() || !self.patterns.pending(*owner)?.is_empty() {
+                        return Err(invalid(
+                            "decision rollback requires completed attempt cleanup",
+                        ));
+                    }
+                    return Ok(());
+                }
                 if active.previewed
                     || (self.pc.node != owner.0 && self.pc.node != active.alternative.0)
                 {
@@ -182,6 +230,11 @@ impl Frame {
     ) -> Result<(), Diagnostic> {
         self.preflight_pattern(operation, store)?;
         match operation {
+            PatternOperation::Decision {
+                owner,
+                plan,
+                transition,
+            } => self.execute_pattern_decision(*owner, plan, transition, store),
             PatternOperation::Begin {
                 owner,
                 alternative,

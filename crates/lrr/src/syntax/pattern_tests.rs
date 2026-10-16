@@ -240,7 +240,7 @@ fn decode(
 
 /// Exact immutable source locations, with no red nodes or decoded cold values.
 #[derive(Debug)]
-pub(super) enum ScalarTestPlan {
+pub(crate) enum ScalarTestPlan {
     Literal(SourceRange),
     Range {
         lower: Option<SourceRange>,

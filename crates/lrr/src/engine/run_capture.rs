@@ -132,6 +132,7 @@ impl RunCapture {
             | RecipeExit::Call { .. }
             | RecipeExit::Next(_)
             | RecipeExit::PatternRetry { .. }
+            | RecipeExit::PatternNext { .. }
             | RecipeExit::Branch { .. } => {}
             RecipeExit::Control(control) => match control {
                 ControlRecipe::Return { .. }

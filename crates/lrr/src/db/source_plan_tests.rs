@@ -328,9 +328,11 @@ fn retained_pattern_plan_accounts_its_parser_and_index_after_all_wrappers_retire
     let index = Arc::downgrade(plan.index());
     drop(plan);
     assert!(parsed.upgrade().is_none());
-    assert!(index.upgrade().is_none());
+    // Product retirement leases defer final index destruction to this boundary.
+    assert!(index.upgrade().is_some());
     let budget = input_floor_budget(&db);
     let eviction = db.evict_between_runs(budget).unwrap();
+    assert!(index.upgrade().is_none());
     assert!(db.memos.is_empty());
     assert_eq!(eviction.after.memo_entries, 0);
     assert_eq!(eviction.after.memo_bytes, eviction.after.pinned_memo_bytes);
@@ -406,4 +408,122 @@ fn source_plan_values_do_not_authorize_another_definition_owner_or_phase() {
         assert_eq!(key.fingerprint(), decoded.fingerprint());
     }
     assert_ne!(reference.fingerprint(), pattern.fingerprint());
+}
+
+#[test]
+fn externally_retained_product_pins_its_owner_without_cloning_the_index() {
+    let (mut db, plan) = pattern_world();
+    let key = QueryKey::PatternPlan(plan.owner().clone());
+    drop(plan);
+    let value = &db.memos[&key].value;
+    let QueryValue::PatternPlan(plan) = value.as_ref() else {
+        panic!()
+    };
+    let (outer, inner) = db.memo_owners();
+    assert!(!QueryPin::new(value).external(&outer, &inner));
+    let before = Arc::strong_count(plan.index());
+    let product = Arc::clone(plan.products().next().expect("actual source product"));
+    assert_eq!(Arc::strong_count(plan.index()), before);
+    assert!(QueryPin::new(value).external(&outer, &inner));
+    let weak = Arc::downgrade(&product);
+    assert!(
+        db.evict_between_runs(CacheBudgets {
+            query_bytes: 0,
+            parse_bytes: 0,
+            ..CacheBudgets::default()
+        })
+        .is_err()
+    );
+    assert!(db.memos.contains_key(&key));
+    drop(product);
+    // The source-plan memo still retains the exact same allocation.
+    assert!(weak.upgrade().is_some());
+    let value = &db.memos[&key].value;
+    let (outer, inner) = db.memo_owners();
+    assert!(!QueryPin::new(value).external(&outer, &inner));
+}
+
+#[test]
+fn product_only_lease_is_charged_after_outer_plan_and_body_memos_retire() {
+    let (mut db, plan) = pattern_world();
+    let product = Arc::clone(plan.products().next().expect("actual source product"));
+    let product_bytes = product.metadata_bytes() + 2 * std::mem::size_of::<usize>();
+    let index_bytes = product.index().estimated_bytes() + 2 * std::mem::size_of::<usize>();
+    let weak = Arc::downgrade(&product);
+    let index = Arc::downgrade(product.index());
+    drop(plan);
+    db.memos.clear();
+    let usage = db.cache_usage().unwrap();
+    assert!(usage.pinned_memo_bytes >= product_bytes + index_bytes);
+    // Published-owner-only input pins and dead Signature/ParseFile weak rows
+    // remain reclaimable until between-run pruning. Their registry overhead
+    // need not be pinned; the actual retained graph and index must be.
+    assert!(
+        db.evict_between_runs(CacheBudgets {
+            query_bytes: product_bytes + index_bytes - 1,
+            ..CacheBudgets::default()
+        })
+        .is_err()
+    );
+    drop(product);
+    // Retirement lease defers the final graph/index destructor until the
+    // between-run coordinator, even after every source memo was invalidated.
+    assert!(weak.upgrade().is_some());
+    assert!(index.upgrade().is_some());
+    let budget = input_floor_budget(&db);
+    let eviction = db.evict_between_runs(budget).unwrap();
+    assert!(weak.upgrade().is_none());
+    assert!(index.upgrade().is_none());
+    assert_eq!(
+        eviction.after.memo_bytes,
+        db.cache_usage().unwrap().memo_bytes
+    );
+}
+
+#[test]
+fn cached_product_roots_have_no_false_external_index_owner_and_evict_exactly() {
+    let (mut db, plan) = pattern_world();
+    let owner = plan.owner().clone();
+    let products: Vec<_> = plan.products().map(Arc::downgrade).collect();
+    assert!(!products.is_empty());
+    drop(plan);
+    db.memos
+        .retain(|key, _| *key == QueryKey::PatternPlan(owner.clone()));
+    let (outer, inner) = db.memo_owners();
+    assert!(
+        !QueryPin::new(&db.memos[&QueryKey::PatternPlan(owner)].value).external(&outer, &inner)
+    );
+    let budget = input_floor_budget(&db);
+    let eviction = db.evict_between_runs(budget).unwrap();
+    assert!(db.memos.is_empty());
+    assert!(products.iter().all(|product| product.upgrade().is_none()));
+    let actual = db.cache_usage().unwrap();
+    assert_eq!(eviction.after.memo_bytes, actual.memo_bytes);
+    assert_eq!(eviction.after.parse_bytes, actual.parse_bytes);
+    assert_eq!(actual.memo_bytes, actual.pinned_memo_bytes);
+}
+
+#[test]
+fn retirement_only_product_pins_an_independently_cached_body_allocation() {
+    let (mut db, plan) = pattern_world();
+    let key = QueryKey::BodyStructure(plan.index().body().clone());
+    let body_bytes = plan.index().estimated_bytes() + 2 * std::mem::size_of::<usize>();
+    let product_bytes: usize = plan
+        .products()
+        .map(|product| product.metadata_bytes() + 2 * std::mem::size_of::<usize>())
+        .sum();
+    let products: Vec<_> = plan.products().map(Arc::downgrade).collect();
+    drop(plan);
+    db.memos.retain(|candidate, _| *candidate == key);
+    db.query_pins.clear();
+    assert_eq!(db.memos.len(), 1);
+    let usage = db.cache_usage().unwrap();
+    assert!(usage.pinned_memo_bytes >= body_bytes + product_bytes);
+    let budget = input_floor_budget(&db);
+    let eviction = db.evict_between_runs(budget).unwrap();
+    assert!(products.iter().all(|product| product.upgrade().is_none()));
+    assert_eq!(
+        eviction.after.memo_bytes,
+        db.cache_usage().unwrap().memo_bytes
+    );
 }

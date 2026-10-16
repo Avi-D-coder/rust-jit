@@ -106,5 +106,8 @@ impl Frame {
 }
 
 #[cfg(test)]
+#[path = "frame_pattern_decision_tests.rs"]
+mod pattern_decision_tests;
+#[cfg(test)]
 #[path = "frame_source_types_tests.rs"]
 mod tests;

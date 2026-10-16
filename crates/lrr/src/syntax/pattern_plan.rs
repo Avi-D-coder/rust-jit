@@ -1,10 +1,13 @@
 //! One immutable ordinary-source plan per actual match or condition owner.
 //! Query dependencies establish currentness; installed operations never call here.
-use super::{condition_ranges, error, literal_match};
+use super::{
+    condition_ranges, error, literal_match,
+    pattern_product::{PatternProductPlan, ProductRoot},
+};
 use crate::{
     core::{
         diagnostic::Diagnostic,
-        digest::{Digest, StableEncode, StableEncoder},
+        digest::{Digest, StableEncoder},
     },
     frontend::scalar_pattern_binding::ScalarPatternBindingAdmission,
     ir::{
@@ -35,6 +38,7 @@ pub struct PatternSourcePlan {
     index: Arc<BodyIndex>,
     body: BodyHandle,
     prepared: Prepared,
+    staged_products: Result<Vec<ProductRoot>, Diagnostic>,
     fingerprint: Digest,
     bytes: usize,
 }
@@ -53,6 +57,76 @@ impl PatternSourcePlan {
     }
     pub(crate) fn metadata_bytes(&self) -> usize {
         self.bytes
+    }
+
+    /// Actual owned handles, once per retained root. No allocation or clones;
+    /// the memo owner counts each handle and charges distinct Product payloads.
+    /// These source graphs do not select the production lowering route yet.
+    pub(crate) fn products(&self) -> impl Iterator<Item = &Arc<PatternProductPlan>> {
+        self.staged_products
+            .iter()
+            .flat_map(|roots| roots.iter())
+            .filter_map(|root| root.product.as_ref().ok())
+    }
+
+    /// Source preparation may refuse one root without requiring all other arm
+    /// patterns or any cold result body to have an executable shape.
+    pub(crate) fn staged_product(
+        &self,
+        root: NodeId,
+    ) -> Option<Result<&Arc<PatternProductPlan>, &Diagnostic>> {
+        let key = self.index.pc(root, Phase::Entry).ok()?;
+        if Self::staged_owner_for(&self.index, &key).ok()?.as_ref() != Some(&self.owner) {
+            return None;
+        }
+        let roots = match &self.staged_products {
+            Ok(roots) => roots,
+            Err(error) => return Some(Err(error)),
+        };
+        let position = roots.binary_search_by_key(&root, |row| row.root).ok()?;
+        Some(roots[position].product.as_ref())
+    }
+
+    /// Deliberately separate from live owner_for until the complete decision /
+    /// cached binding authority / memo ownership join switches atomically.
+    /// Only pattern descendants can acquire a condition owner through ancestry;
+    /// scrutinee, guard and result expressions keep ordinary expression routing.
+    pub(crate) fn staged_owner_for(
+        index: &BodyIndex,
+        key: &PcKey,
+    ) -> Result<Option<PcKey>, Diagnostic> {
+        if let Some(owner) = Self::owner_for(index, key)? {
+            return Ok(Some(owner));
+        }
+        if &key.body != index.body() {
+            return Err(error("staged pattern body differs"));
+        }
+        let mut node = index
+            .nodes()
+            .get(key.node as usize)
+            .ok_or_else(|| error("staged pattern node absent"))?;
+        if node.role != NodeRole::Pattern {
+            return Ok(None);
+        }
+        for _ in 0..4096 {
+            let Some(parent) = node.parent else {
+                return Ok(None);
+            };
+            node = index
+                .nodes()
+                .get(parent.0 as usize)
+                .ok_or_else(|| error("staged pattern parent absent"))?;
+            match node.role {
+                NodeRole::Expression(ExpressionKind::Other) if node.clause_scope.is_some() => {
+                    return index.pc(node.id, Phase::Entry).map(Some);
+                }
+                NodeRole::Pattern | NodeRole::Syntax => {}
+                _ => return Ok(None),
+            }
+        }
+        Err(error(
+            "staged condition pattern nesting exceeds preparation budget",
+        ))
     }
 
     pub(crate) fn requires_binding_admission(&self, key: &PcKey) -> bool {
@@ -197,7 +271,7 @@ impl ParsedFile {
                 body,
                 expression.syntax(),
             )?)
-        } else if let Some(expression) = ast::LetExpr::cast(syntax) {
+        } else if let Some(expression) = ast::LetExpr::cast(syntax.clone()) {
             Prepared::Condition(condition_ranges::plan(
                 self,
                 body,
@@ -220,21 +294,72 @@ impl ParsedFile {
             // String, AST handle or uncharged external allocation in this arm.
             Prepared::Condition(Ok(_)) | Prepared::Match(None) => 0,
         };
-        let bytes = std::mem::size_of::<PatternSourcePlan>()
+        let base_bytes = std::mem::size_of::<PatternSourcePlan>()
             .checked_add(payload)
             .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(|| error("retained pattern plan metadata budget"))?;
-        let mut encoder = StableEncoder::new("lrr/v1/ordinary-pattern-source-plan");
+        // This is staged source metadata, not a production dispatcher. Retain
+        // deferred source refusals instead of making them executable admission.
+        let staged_products = if enabled && !attributes {
+            PatternProductPlan::prepare_owner(
+                self,
+                body,
+                &index,
+                &syntax,
+                32 * 1024 * 1024 - base_bytes,
+            )
+        } else {
+            Ok(Vec::new())
+        };
+        let staged_bytes = match &staged_products {
+            Ok(roots) => {
+                let mut bytes = roots
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<ProductRoot>())
+                    .ok_or_else(|| error("retained product root metadata overflow"))?;
+                for root in roots {
+                    bytes = bytes
+                        .checked_add(
+                            root.heap_bytes()
+                                .ok_or_else(|| error("retained product error size overflow"))?,
+                        )
+                        .ok_or_else(|| error("retained product root metadata overflow"))?;
+                }
+                bytes
+            }
+            Err(error) => error
+                .heap_bytes()
+                .ok_or_else(|| super::error("retained staged product error size overflow"))?,
+        };
+        // Exclusive allocation accounting. Product allocations/control blocks
+        // and their shared index roots are charged separately by the memo owner.
+        let bytes = base_bytes
+            .checked_add(staged_bytes)
+            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+            .ok_or_else(|| error("retained pattern plan metadata budget"))?;
+        let mut encoder = StableEncoder::new("lrr/v2/ordinary-pattern-source-plan");
         encoder.record(owner);
         encoder.digest(self.content);
         encoder.record(&self.profile);
-        encoder.digest(index.fingerprint());
+        encoder.digest(index.semantic_identity());
+        match &staged_products {
+            Ok(roots) => {
+                encoder.u8(0);
+                encoder.sequence(roots, |e, row| row.encode(e));
+            }
+            Err(error) => {
+                encoder.u8(1);
+                encoder.string(error.code);
+                encoder.string(&error.message);
+            }
+        }
         Ok(PatternSourcePlan {
             owner: owner.clone(),
             parsed: Arc::clone(self),
             index,
             body: body.clone(),
             prepared,
+            staged_products,
             fingerprint: encoder.finish(),
             bytes,
         })

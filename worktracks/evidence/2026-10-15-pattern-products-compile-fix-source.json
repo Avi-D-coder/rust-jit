@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "kind": "source-only mechanical correction after frozen101 Cargo101 zero bodies",
+  "owned_delta": [
+    {
+      "path": "crates/lrr/src/ir/pattern_decision.rs",
+      "sha256": "de2b7578ffc64742ef820dd5bd5b027100bf57350e2d196451f4c4d455bf4dfa",
+      "bytes": 8945
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_plan.rs",
+      "sha256": "7339590a32f31c1e3be4f89d5b68250ee7d18e0421a0feedc4eeadf6f5c710f3",
+      "bytes": 14851
+    }
+  ],
+  "source_fingerprint": "96985ccf2cb05b264fca4f527f348ecbffb145f40a83a8362767c2791bdbe52f",
+  "fingerprint_encoding": "sha256(concat(path + NUL + lowercase_sha256 + LF)) in listed order",
+  "changes": [
+    "ir::validate child pattern_decision imports crate::ir modules rather than siblings under super",
+    "Remove unused StableEncode in PatternSourcePlan; no semantic implementation change"
+  ],
+  "historical_evidence": "Parent reports immutable frozen101 first compile failed E0432; old source/evidence unchanged",
+  "checks": {
+    "rustfmt": "exit0",
+    "compilation": "unexecuted by worker",
+    "tests": "unexecuted by worker"
+  },
+  "scope": "No production switch, binding authority, namespace or VM behavior change"
+}

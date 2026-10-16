@@ -129,7 +129,7 @@ pub struct StructuralNode {
     pub place: Option<SlotId>,
     pub operands: Vec<NodeId>,
     /// Deterministic lazy value slots for runtime macro operands, scalar pattern
-    /// tests and initialized reference bindings.
+    /// tests, structural pattern projections and initialized reference bindings.
     /// These reserve frame metadata only; no argument syntax or cell is prepared.
     pub runtime_temporaries: [Option<SlotId>; 2],
     /// Bounded token-count reservation for reached intrinsic scalar operands.
@@ -181,6 +181,8 @@ pub struct BodyIndex {
     /// source identity. Equal ranges preserve original preorder selection.
     source_order: Vec<NodeId>,
     pattern_bindings: super::pattern_bindings::PatternBindings,
+    /// Derived once from the final immutable explicitly encoded structure.
+    semantic_identity: crate::core::digest::Digest,
     scopes: Vec<LexicalScope>,
     labels: Vec<LabelTarget>,
     constructor_guards: Vec<(SlotId, NodeId)>,
@@ -188,6 +190,9 @@ pub struct BodyIndex {
     estimated_bytes: usize,
 }
 impl BodyIndex {
+    pub(crate) fn semantic_identity(&self) -> crate::core::digest::Digest {
+        self.semantic_identity
+    }
     pub fn body(&self) -> &BodyKey {
         &self.body
     }
@@ -299,12 +304,29 @@ impl BodyIndex {
         if node.role == NodeRole::InitializerReturn && phase != Phase::Entry {
             return Err(fault("initializer return requires its entry phase"));
         }
+        if phase == Phase::PatternCleanup
+            && !matches!(node.role, NodeRole::Pattern | NodeRole::MatchArm)
+            && !(node.role == NodeRole::Expression(ExpressionKind::Other)
+                && node.clause_scope.is_some())
+        {
+            return Err(fault("pattern cleanup requires its indexed pattern owner"));
+        }
+        if let Phase::Operand(n) = phase
+            && node.role == NodeRole::Pattern
+            && n > 2
+        {
+            return Err(fault("pattern continuation operand phase absent"));
+        }
         if let Phase::Operand(n) = phase
             && usize::from(n) >= node.operands.len()
             && !(node.role == NodeRole::Expression(ExpressionKind::Macro)
                 && (n == 0 || n < node.runtime_scalar_phases)
                 && node.runtime_temporaries[0].is_some())
-            && !(node.role == NodeRole::Pattern && node.scalar_range_phase && n == 0)
+            // A retained product walks one projection component per charged
+            // ordinary operation. Reserving its phases grants no source,
+            // binding or executable authority; the verifier checks the plan.
+            && !(node.role == NodeRole::Pattern && n <= 2)
+            && !(node.role == NodeRole::MatchArm && node.guard_scope.is_some() && n == 0)
         {
             return Err(fault("structural operand phase absent"));
         }
@@ -543,6 +565,7 @@ impl ParsedFile {
             nodes: Vec::new(),
             source_order: Vec::new(),
             pattern_bindings: super::pattern_bindings::PatternBindings::empty(),
+            semantic_identity: crate::core::digest::Digest([0; 32]),
             scopes: Vec::new(),
             labels: Vec::new(),
             constructor_guards: Vec::new(),
@@ -552,6 +575,11 @@ impl ParsedFile {
         charge(
             &mut index.estimated_bytes,
             std::mem::size_of::<Vec<NodeId>>(),
+            limits.metadata_bytes,
+        )?;
+        charge(
+            &mut index.estimated_bytes,
+            std::mem::size_of::<crate::core::digest::Digest>(),
             limits.metadata_bytes,
         )?;
         // Non-block initializers need an enclosing lifetime boundary even
@@ -1027,7 +1055,7 @@ impl ParsedFile {
                 index.slots = next;
                 if let Some(parent) = frame.expression {
                     let operands = &mut index.nodes[parent.0 as usize].operands;
-                    if operands.len() >= usize::from(u16::MAX - 2) {
+                    if operands.len() >= usize::from(u16::MAX - 3) {
                         return Err(limit("operand phase budget"));
                     }
                     charge(&mut index.estimated_bytes, 4, limits.metadata_bytes)?;
@@ -1101,6 +1129,18 @@ impl ParsedFile {
                     .checked_add(2)
                     .filter(|n| *n <= limits.slots)
                     .ok_or_else(|| limit("condition pattern temporary slot budget"))?;
+                let slots = [Some(SlotId(index.slots)), None];
+                index.slots = next;
+                slots
+            } else if role == NodeRole::Pattern {
+                // A reached product leaf can borrow/project/test independently
+                // of the owner's expected/test values. Only frame metadata is
+                // reserved here; source admission and leaf execution stay lazy.
+                let next = index
+                    .slots
+                    .checked_add(2)
+                    .filter(|slots| *slots <= limits.slots)
+                    .ok_or_else(|| limit("pattern projection temporary slot budget"))?;
                 let slots = [Some(SlotId(index.slots)), None];
                 index.slots = next;
                 slots
@@ -1385,6 +1425,7 @@ impl ParsedFile {
             limits.metadata_bytes,
         )?;
         index.pattern_bindings = bindings;
+        index.semantic_identity = index.fingerprint();
         Ok(index)
     }
 }
@@ -1492,7 +1533,7 @@ mod tests {
         assert_eq!(bytes, usize::MAX);
     }
     #[test]
-    fn range_phase_is_source_structural_encoded_and_exclusive_to_actual_range_nodes() {
+    fn range_marker_is_encoded_and_pattern_continuation_phases_are_bounded() {
         use crate::source::snapshot::{CfgSet, SourceBlob};
         const SOURCE: &str = "const RET:u8=1;fn chosen(c:u8){match c{0..=4=>(),_=>()}}";
         for edition in [2015, 2018, 2021, 2024] {
@@ -1518,7 +1559,7 @@ mod tests {
             let index = parsed.index_body(body, Default::default()).unwrap();
             assert_eq!(
                 <BodyIndex as StableEncode>::DOMAIN,
-                "lrr/v4/original-body-structure"
+                "lrr/v5/original-body-structure"
             );
             let ranges: Vec<_> = index
                 .nodes()
@@ -1535,15 +1576,20 @@ mod tests {
             );
             assert!(range.operands.is_empty());
             assert_eq!(index.pc(range.id, Phase::Operand(0)).unwrap().phase, 3);
-            assert!(index.pc(range.id, Phase::Operand(1)).is_err());
+            assert!(index.pc(range.id, Phase::Operand(1)).is_ok());
+            assert!(index.pc(range.id, Phase::Operand(2)).is_ok());
+            assert!(index.pc(range.id, Phase::Operand(3)).is_err());
             for node in index.pattern_locations().filter(|node| node.id != range.id) {
                 assert!(!node.scalar_range_phase);
-                assert!(index.pc(node.id, Phase::Operand(0)).is_err());
+                for phase in 0..=2 {
+                    assert!(index.pc(node.id, Phase::Operand(phase)).is_ok());
+                }
+                assert!(index.pc(node.id, Phase::Operand(3)).is_err());
             }
             let mut without_marker = index.clone();
             without_marker.nodes[range.id.0 as usize].scalar_range_phase = false;
             assert_ne!(index.fingerprint(), without_marker.fingerprint());
-            assert!(without_marker.pc(range.id, Phase::Operand(0)).is_err());
+            assert!(without_marker.pc(range.id, Phase::Operand(0)).is_ok());
             let initializer = outline
                 .items
                 .iter()

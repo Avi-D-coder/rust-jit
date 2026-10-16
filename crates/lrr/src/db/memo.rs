@@ -16,6 +16,9 @@ mod lexical_inputs;
 #[path = "scope_certificate_index.rs"]
 mod scope_certificate_index;
 
+#[path = "product_retention.rs"]
+mod product_retention;
+
 #[path = "namespace_witness.rs"]
 mod namespace_witness;
 pub(crate) use namespace_witness::NamespaceWitness;
@@ -145,6 +148,15 @@ impl QueryPin {
                     .get(&(self.pattern_plan.as_ptr() as usize))
                     .copied()
                     .unwrap_or(0)
+            || self.value.upgrade().is_some_and(|value| {
+                value.product_roots().any(|product| {
+                    Arc::strong_count(product)
+                        > inner
+                            .get(&(Arc::as_ptr(product) as usize))
+                            .copied()
+                            .unwrap_or(0)
+                })
+            })
             || self.inventory.strong_count()
                 > inner
                     .get(&(self.inventory.as_ptr() as usize))
@@ -170,6 +182,7 @@ pub struct Database {
     // Allocation addresses are private accounting identities, never semantic keys,
     // serialized output, or eviction-order inputs. Weak owners prevent address reuse.
     query_pins: BTreeMap<usize, QueryPin>,
+    product_pins: product_retention::ProductPins,
     input_pins: BTreeMap<usize, std::sync::Weak<InputValue>>,
     pub trace: Trace,
 }
@@ -191,6 +204,7 @@ impl Default for Database {
             body_leases: vec![],
             prepared_sources: vec![],
             query_pins: BTreeMap::new(),
+            product_pins: Default::default(),
             input_pins: BTreeMap::new(),
             trace: Trace::default(),
         }
@@ -210,6 +224,7 @@ impl Database {
         let mut outer = BTreeMap::new();
         let mut inner = BTreeMap::new();
         let mut plans = std::collections::BTreeSet::new();
+        let mut products = std::collections::BTreeSet::new();
         for memo in self.memos.values() {
             let count = outer.entry(Arc::as_ptr(&memo.value) as usize).or_insert(0);
             *count += 1;
@@ -220,8 +235,17 @@ impl Database {
                         if plans.insert(Arc::as_ptr(v)) {
                             *inner.entry(Arc::as_ptr(v.parsed()) as usize).or_insert(0) += 1;
                             *inner.entry(Arc::as_ptr(v.index()) as usize).or_insert(0) += 1;
+                            for product in v.products() {
+                                product_retention::count_owner(product, &mut inner, &mut products);
+                            }
                         }
                         Some(Arc::as_ptr(v) as usize)
+                    }
+                    QueryValue::Thunk(recipe) => {
+                        for product in recipe.product_roots() {
+                            product_retention::count_owner(product, &mut inner, &mut products);
+                        }
+                        None
                     }
                     QueryValue::BodyStructure(v) => Some(Arc::as_ptr(v) as usize),
                     QueryValue::ParseFile(v) => Some(Arc::as_ptr(v) as usize),
@@ -237,6 +261,7 @@ impl Database {
                 }
             }
         }
+        self.product_pins.count_owners(&mut inner, &mut products);
         // A live input box owns one inner inventory reference, regardless of
         // how many outer Arc handles point to that same box.
         let mut owners = std::collections::BTreeSet::new();
@@ -477,6 +502,22 @@ impl Database {
         let mut cached_pattern_plans = BTreeMap::new();
         let mut cached_plan_parses = BTreeMap::new();
         let (memo_outer, memo_inner) = self.memo_owners();
+        // A retained Product handle does not clone its nested index handle.
+        // Propagate that external ownership before charging cached Body memos.
+        let mut product_bodies = std::collections::BTreeSet::new();
+        // Retirement-only Products may outlive their source-plan/recipe memo
+        // while an independently cached Body memo still owns the same index.
+        // Mark before the Body charge so that deduplication cannot erase its pin.
+        for index in self.product_pins.index_roots() {
+            product_bodies.insert(Arc::as_ptr(index));
+        }
+        for memo in self.memos.values() {
+            if QueryPin::new(&memo.value).external(&memo_outer, &memo_inner) {
+                for product in memo.value.product_roots() {
+                    product_bodies.insert(Arc::as_ptr(product.index()));
+                }
+            }
+        }
         for memo in self.memos.values() {
             if let QueryValue::ParseFile(parsed) = memo.value.as_ref() {
                 parse_allocations.insert(Arc::as_ptr(parsed));
@@ -494,7 +535,8 @@ impl Database {
             let body_bytes = if let QueryValue::BodyStructure(body) = memo.value.as_ref() {
                 let pinned = Arc::strong_count(&memo.value)
                     > memo_outer[&(Arc::as_ptr(&memo.value) as usize)]
-                    || Arc::strong_count(body) > memo_inner[&(Arc::as_ptr(body) as usize)];
+                    || Arc::strong_count(body) > memo_inner[&(Arc::as_ptr(body) as usize)]
+                    || product_bodies.contains(&Arc::as_ptr(body));
                 cached_bodies
                     .entry(Arc::as_ptr(body))
                     .and_modify(|(_, previous): &mut (_, bool)| *previous |= pinned)
@@ -522,7 +564,8 @@ impl Database {
                     // query wrappers were evicted and weak rows pruned.
                     let body = plan.index();
                     let body_pinned = pinned
-                        || Arc::strong_count(body) > memo_inner[&(Arc::as_ptr(body) as usize)];
+                        || Arc::strong_count(body) > memo_inner[&(Arc::as_ptr(body) as usize)]
+                        || product_bodies.contains(&Arc::as_ptr(body));
                     cached_bodies
                         .entry(Arc::as_ptr(body))
                         .and_modify(|(_, previous): &mut (_, bool)| *previous |= body_pinned)
@@ -745,6 +788,7 @@ impl Database {
             usage.memo_bytes = account_add(usage.memo_bytes, bytes)?;
             usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, bytes)?;
         }
+        self.account_products(&mut usage, &memo_outer, &memo_inner, &mut body_allocations)?;
         for pin in self.query_pins.values() {
             let bytes = 64 + std::mem::size_of::<usize>() + std::mem::size_of::<QueryPin>();
             usage.memo_bytes = account_add(usage.memo_bytes, bytes)?;
@@ -814,6 +858,7 @@ impl Database {
         let (memo_outer, memo_inner) = self.memo_owners();
         self.query_pins
             .retain(|_, pin| pin.external(&memo_outer, &memo_inner));
+        self.product_pins.retain_external(&memo_inner)?;
         self.source_pins.retain(|pin| {
             pin.snapshot.strong_count() > 0
                 || pin.parsed.strong_count()
@@ -859,41 +904,10 @@ impl Database {
                 continue;
             }
             let memo = self.memos.remove(&key).expect("selected retained memo");
-            let parse = memo.value.parse_bytes();
-            let shared_body = match memo.value.as_ref() {
-                QueryValue::BodyStructure(body) if Arc::strong_count(body) > 1 => {
-                    account_add(body.estimated_bytes(), 2 * std::mem::size_of::<usize>())?
-                }
-                _ => 0,
-            };
-            let shared_parse = match memo.value.as_ref() {
-                QueryValue::ParseFile(parsed) if Arc::strong_count(parsed) > 1 => parse,
-                _ => 0,
-            };
-            // Last owning cached plan releases its parser/body too. Shared
-            // allocations remain charged until their actual final owner drops.
-            if let QueryValue::PatternPlan(plan) = memo.value.as_ref() {
-                if Arc::strong_count(plan.index()) == 1 {
-                    after.memo_bytes = after.memo_bytes.saturating_sub(account_add(
-                        plan.index().estimated_bytes(),
-                        2 * std::mem::size_of::<usize>(),
-                    )?);
-                }
-                if Arc::strong_count(plan.parsed()) == 1 {
-                    after.parse_bytes = after
-                        .parse_bytes
-                        .saturating_sub(plan.parsed().estimated_bytes());
-                }
-            }
-            after.memo_bytes = after.memo_bytes.saturating_sub(
-                memo.estimated_bytes
-                    .saturating_sub(parse)
-                    .saturating_sub(shared_body),
-            );
-            after.parse_bytes = after
-                .parse_bytes
-                .saturating_sub(parse.saturating_sub(shared_parse));
-            after.memo_entries -= 1;
+            drop(memo);
+            // Transitive Product/index/parser roots may still have other owners.
+            // Between-run eviction can account the real graph after removal.
+            after = self.cache_usage()?;
             self.trace.record(
                 self.revision,
                 key.clone(),
@@ -2501,6 +2515,9 @@ impl Database {
         }
     }
     fn returned(&mut self, key: &QueryKey, outcome: Outcome) -> QueryPoll<Outcome> {
+        if let Err(error) = self.product_pins.register(outcome.value.as_ref()) {
+            return QueryPoll::Ready(Err(error));
+        }
         self.query_pins
             .entry(Arc::as_ptr(&outcome.value) as usize)
             .or_insert_with(|| QueryPin::new(&outcome.value));

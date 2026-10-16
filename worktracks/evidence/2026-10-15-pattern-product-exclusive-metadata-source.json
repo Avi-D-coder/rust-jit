@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "kind": "source-only exclusive recipe accounting API; aggregate verification preserved",
+  "baseline": "d5e9eecd68790b38eb3ae5c1a408729a804cf0da",
+  "base_component_manifest_sha256": "5082b2c62a1bf9ed683f91aeb8853e826f7d669cdc904663ae0c05633139840c",
+  "staged_owner_manifest_sha256": "ce3fba263a200b704b41379214fc3fcc025aa44f34125cf7aca3f5b4553e98e1",
+  "owned_delta": [
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "sha256": "58dae0e308023f58509920936640be5e8eb9d5b05f7a0fdd3a781d750da3d6ae",
+      "bytes": 26374
+    },
+    {
+      "path": "crates/lrr/src/ir/validate.rs",
+      "sha256": "98642e9d900daf6d7fc8729501ccefe3df233beae1fd0ef07bb8d34e95f81ecd",
+      "bytes": 81532
+    }
+  ],
+  "source_fingerprint": "9ef1c515fe9199cd237aeafcd4fb019841870dba53613c0e1c099d2d897cb8e8",
+  "fingerprint_encoding": "sha256(concat(path + NUL + lowercase_sha256 + LF)) in listed order",
+  "checks": {
+    "scoped_rustfmt": "exit0",
+    "scoped_git_diff_check": "exit0",
+    "compilation": "unexecuted",
+    "tests": "unexecuted"
+  },
+  "requires": [
+    "Parent QueryValue::Thunk exclusive estimate selection",
+    "Parent actual Product Arc handle ownership/distinct allocation accounting/weak retention for source plans and recipes"
+  ],
+  "invariant": "metadata_bytes aggregate still bounds full retained products during verification/install; exclusive_metadata_bytes subtracts captured shared admission component once per actual distinct product allocation; op handle storage and later ancestry/namespace charges stay recipe owned",
+  "acceptance": "No integration, runtime, fixture or architecture gate claim"
+}

@@ -30,6 +30,8 @@ mod literal_match;
 mod local_numeric_constraints;
 #[path = "pattern_plan.rs"]
 pub mod pattern_plan;
+#[path = "pattern_product.rs"]
+pub mod pattern_product;
 #[path = "pattern_tests.rs"]
 mod pattern_tests;
 #[path = "primitive_cast_target.rs"]
@@ -1600,8 +1602,8 @@ impl ParsedFile {
                     RecipeExit::Next(return_pc(index, body, &syntax)?),
                 )
             }
-            Phase::Exit => Err(error(
-                "constructor exit is not an executable construction phase",
+            Phase::Exit | Phase::PatternCleanup => Err(error(
+                "constructor exit/cleanup is not an executable construction phase",
             )),
         }
     }

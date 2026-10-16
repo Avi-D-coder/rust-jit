@@ -659,6 +659,7 @@ fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Dia
 }
 fn exit_preflight(frame: &Frame, store: &GuestStore, exit: &RecipeExit) -> Result<(), Diagnostic> {
     match exit {
+        RecipeExit::PatternNext { owner } => frame.preflight_pattern_next(*owner, store),
         RecipeExit::PatternRetry { owner } => frame.preflight_pattern_retry(*owner, store),
         RecipeExit::Call { .. } => {
             if !frame.call_ready || frame.call_arguments.is_none() {
@@ -1417,6 +1418,9 @@ pub(crate) fn step_with_constant(
         exit_preflight(frame, store, &recipe.exit)?;
         frame.charge_fuel()?;
         let outcome = match &recipe.exit {
+            RecipeExit::PatternNext { owner } => {
+                StepOutcome::Next(frame.pattern_next(*owner, store)?)
+            }
             RecipeExit::PatternRetry { owner } => {
                 StepOutcome::Next(frame.pattern_retry(*owner, store)?)
             }

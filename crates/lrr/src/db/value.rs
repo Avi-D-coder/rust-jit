@@ -46,6 +46,23 @@ pub enum QueryValue {
     Error(Diagnostic),
 }
 impl QueryValue {
+    /// Actual handles, without cloning or allocation. Shared allocation
+    /// charging and owner deduplication belong to the coordinator.
+    pub(crate) fn product_roots(
+        &self,
+    ) -> impl Iterator<Item = &Arc<crate::syntax::pattern_product::PatternProductPlan>> {
+        let plan = match self {
+            Self::PatternPlan(plan) => Some(plan),
+            _ => None,
+        };
+        let recipe = match self {
+            Self::Thunk(recipe) => Some(recipe),
+            _ => None,
+        };
+        plan.into_iter()
+            .flat_map(|plan| plan.products())
+            .chain(recipe.into_iter().flat_map(|recipe| recipe.product_roots()))
+    }
     pub fn parse_bytes(&self) -> usize {
         match self {
             Self::ParseFile(v) => v.estimated_bytes(),
@@ -229,7 +246,7 @@ impl QueryValue {
             Self::BodyStructure(value) => value
                 .estimated_bytes()
                 .saturating_add(2 * std::mem::size_of::<usize>()),
-            Self::Thunk(value) => value.metadata_bytes(),
+            Self::Thunk(value) => value.exclusive_metadata_bytes(),
             Self::ParseFile(v) => v.estimated_bytes(),
             Self::Outline(v) => v.estimated_bytes(),
             Self::Signature(v) => v.estimated_bytes(),

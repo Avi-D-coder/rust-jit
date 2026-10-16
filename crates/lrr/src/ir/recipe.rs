@@ -59,6 +59,11 @@ pub enum RecipeExit {
     PatternRetry {
         owner: super::pc::NodeId,
     },
+    /// The checked ordinary transaction selected this continuation from its
+    /// retained source graph. No runtime syntax or type planning occurs here.
+    PatternNext {
+        owner: super::pc::NodeId,
+    },
 }
 impl RecipeExit {
     pub fn requires_dispatch_boundary(&self) -> bool {
@@ -86,6 +91,9 @@ pub struct RecipeDraft {
 pub struct VerifiedRecipe {
     pub(super) recipe: Recipe,
     pub(super) metadata_bytes: usize,
+    // Included in aggregate admission, separately owned/accounted by immutable
+    // Product roots in the memo layer. Never recomputed in installed execution.
+    pub(super) shared_product_admission_bytes: usize,
     pub(super) namespace_witness: Option<std::sync::Arc<crate::db::memo::NamespaceWitness>>,
 }
 impl VerifiedRecipe {
@@ -94,6 +102,26 @@ impl VerifiedRecipe {
     }
     pub fn metadata_bytes(&self) -> usize {
         self.metadata_bytes
+    }
+    /// Conservative metadata owned by this recipe allocation. Inline operation
+    /// Arc handles remain included; shared Product payload/control allocations
+    /// are charged once through product_roots by the query/memo owner instead.
+    /// metadata_bytes retains the aggregate verifier/install admission bound.
+    pub(crate) fn exclusive_metadata_bytes(&self) -> usize {
+        self.metadata_bytes - self.shared_product_admission_bytes
+    }
+    /// Each actual immutable handle owned by the flat recipe operations. Memo
+    /// ownership counts handles; allocation deduplication belongs to its caller.
+    pub(crate) fn product_roots(
+        &self,
+    ) -> impl Iterator<Item = &std::sync::Arc<crate::syntax::pattern_product::PatternProductPlan>>
+    {
+        self.recipe.operations.iter().filter_map(|op| match op {
+            Op::Pattern {
+                operation: super::op::PatternOperation::Decision { plan, .. },
+            } => Some(plan),
+            _ => None,
+        })
     }
     /// Attach only after genuine source admission. Recording currentness does
     /// not authorize a pattern, macro, name lookup or any guest operation.
@@ -206,7 +234,7 @@ fn hint(e: &mut StableEncoder, h: &HintRecipe) {
     }
 }
 impl StableEncode for Recipe {
-    const DOMAIN: &'static str = "lrr/v11/lrir-recipe";
+    const DOMAIN: &'static str = "lrr/v12/lrir-recipe";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         span(e, &self.origin.span);
@@ -216,6 +244,59 @@ impl StableEncode for Recipe {
                 use super::op::PatternOperation;
                 e.u32(45);
                 match operation {
+                    PatternOperation::Decision {
+                        owner,
+                        plan,
+                        transition,
+                    } => {
+                        use super::op::PatternDecision;
+                        e.u32(5);
+                        e.u32(owner.0);
+                        e.digest(plan.identity());
+                        match transition {
+                            PatternDecision::Begin {
+                                source,
+                                matched,
+                                unmatched,
+                                unmatched_inactive,
+                            } => {
+                                e.u32(0);
+                                e.u32(source.0);
+                                e.record(matched);
+                                e.record(unmatched);
+                                e.record(unmatched_inactive);
+                            }
+                            PatternDecision::Observe => e.u32(1),
+                            PatternDecision::Enter => e.u32(2),
+                            PatternDecision::Success => e.u32(3),
+                            PatternDecision::Fail { node } => {
+                                e.u32(4);
+                                e.option(node, |e, node| e.u32(node.0));
+                            }
+                            PatternDecision::Cleanup => e.u32(5),
+                            PatternDecision::CheckTuple { place, arity } => {
+                                e.u32(6);
+                                e.u32(place.0);
+                                e.u32(*arity);
+                            }
+                            PatternDecision::StartSource => e.u32(7),
+                            PatternDecision::SourceStep => e.u32(8),
+                            PatternDecision::EnterAttempt { scope } => {
+                                e.u32(9);
+                                e.u32(scope.0);
+                            }
+                            PatternDecision::Test {
+                                result,
+                                first,
+                                upper_pending,
+                            } => {
+                                e.u32(10);
+                                e.u32(result.0);
+                                e.bool(*first);
+                                e.bool(*upper_pending);
+                            }
+                        }
+                    }
                     PatternOperation::Begin {
                         owner,
                         alternative,
@@ -712,6 +793,10 @@ impl StableEncode for Recipe {
             RecipeExit::MatchNoArm => e.u32(7),
             RecipeExit::PatternRetry { owner } => {
                 e.u32(8);
+                e.u32(owner.0);
+            }
+            RecipeExit::PatternNext { owner } => {
+                e.u32(9);
                 e.u32(owner.0);
             }
         }

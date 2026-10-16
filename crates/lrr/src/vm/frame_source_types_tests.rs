@@ -46,7 +46,7 @@ fn type_for_source(store: &mut GuestStore, source: &TyTerm) -> TypeId {
         _ => panic!("prepared component source outside this control"),
     }
 }
-fn prepared_tuple(store: &mut GuestStore, source: &TyTerm) -> TicketId {
+pub(super) fn prepared_tuple(store: &mut GuestStore, source: &TyTerm) -> TicketId {
     // Dummy values establish a component's storage graph. They are not an
     // execution of the upstream initializer or a stock-fixture receipt.
     let TyTerm::Tuple(members) = source else {
@@ -66,7 +66,7 @@ fn prepared_tuple(store: &mut GuestStore, source: &TyTerm) -> TicketId {
     }
     store.commit_construction(guard, target).unwrap()
 }
-fn original_source() -> (
+pub(super) fn original_source() -> (
     ParsedFile,
     crate::syntax::outline::BodyHandle,
     BodyIndex,
@@ -218,7 +218,7 @@ fn structural_source_unit_and_depth_limits_have_explicit_outcomes() {
     );
 }
 
-fn enter_slot_scopes(frame: &mut Frame, slot: SlotId) {
+pub(super) fn enter_slot_scopes(frame: &mut Frame, slot: SlotId) {
     let mut pending = Vec::new();
     let mut scope = frame.slots[slot.0 as usize].scope;
     while !frame.active_scopes.contains(&scope) {

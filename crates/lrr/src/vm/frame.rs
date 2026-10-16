@@ -18,6 +18,8 @@ pub(crate) use constant_array_frame::{ConstantPublicationActivation, ConstantPub
 #[cfg(test)]
 #[path = "integer_literal_decode_tests.rs"]
 mod integer_literal_decode_tests;
+#[path = "frame_pattern_decision.rs"]
+mod pattern_decision_frame;
 #[path = "frame_pattern.rs"]
 mod pattern_frame;
 #[cfg(test)]
@@ -291,7 +293,7 @@ impl Frame {
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<aggregate_copy_frame::OpActivation>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<scope_cleanup_frame::Activation>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<crate::runtime::cell::StoreSession>()))
-            .and_then(|bytes| super::pattern::Transactions::metadata_bytes(body.nodes().len())
+            .and_then(|bytes| super::pattern::Transactions::metadata_bytes(body.nodes().len(), body.slot_count() as usize)
                 .and_then(|patterns| bytes.checked_add(patterns)))
     }
     pub fn new(
@@ -414,7 +416,8 @@ impl Frame {
             .map_err(|_| crate::runtime::arena::resource())?;
         ordinary_calls.resize(body.nodes().len(), None);
         let ordinary_calls = ordinary_calls.into_boxed_slice();
-        let patterns = super::pattern::Transactions::new(body.nodes().len())?;
+        let patterns =
+            super::pattern::Transactions::new(body.nodes().len(), body.slot_count() as usize)?;
         let anchor = store.new_frame_anchor()?;
         Ok(Self {
             body,
@@ -1779,6 +1782,7 @@ impl Frame {
                     .capacity()
                     .checked_mul(std::mem::size_of::<(super::call::CallIdentity, (u32, u32))>())?,
             )
+            .and_then(|bytes| bytes.checked_add(self.patterns.dynamic_metadata_bytes()))
     }
     pub(crate) fn nominal_place_source(
         &self,
@@ -2127,6 +2131,9 @@ impl Frame {
             .get(self.pc.node as usize)
             .is_some_and(|node| node.role == crate::syntax::body_index::NodeRole::Pattern);
         let retained = self.place_slot(place)?.source.as_ref();
+        if pattern {
+            self.preflight_decision_read_place(place, destination, store)?;
+        }
         if pattern && !matches!(retained, Some(crate::traits::term::TyTerm::Primitive(_))) {
             return Err(Diagnostic::new(
                 "LRR-E-UNSUPPORTED",

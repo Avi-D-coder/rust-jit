@@ -4,6 +4,48 @@ use crate::core::{
     diagnostic::Diagnostic,
     digest::{StableEncode, StableEncoder},
 };
+#[path = "pattern_decision.rs"]
+pub(crate) mod decision;
+#[cfg(test)]
+#[path = "pattern_decision_tests.rs"]
+mod decision_tests;
+use decision::{DecisionState, DecisionTarget};
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct DecisionSource {
+    pub(crate) node: crate::ir::pc::NodeId,
+    pub(crate) depth: usize,
+    pub(crate) place: Option<crate::ir::pc::SlotId>,
+    pub(crate) ready: bool,
+}
+
+#[derive(Debug)]
+pub(crate) struct DecisionTransaction {
+    pub(crate) state: DecisionState,
+    pub(crate) matched: crate::ir::pc::PcKey,
+    pub(crate) unmatched: crate::ir::pc::PcKey,
+    pub(crate) unmatched_inactive: crate::ir::pc::PcKey,
+    pub(crate) next: DecisionTarget,
+    pub(crate) producer: Option<crate::ir::pc::PcKey>,
+    pub(crate) source_cursor: Option<DecisionSource>,
+    pub(crate) source_cell: crate::runtime::cell::CellId,
+    pub(crate) source_epoch: u32,
+}
+impl DecisionTransaction {
+    fn extra_bytes() -> usize {
+        std::mem::size_of::<Self>() - std::mem::size_of::<DecisionState>()
+    }
+    pub(crate) fn required_bytes(
+        plan: &crate::syntax::pattern_product::PatternProductPlan,
+    ) -> Option<usize> {
+        DecisionState::required_bytes(plan)?.checked_add(Self::extra_bytes())
+    }
+    pub(crate) fn metadata_bytes(&self) -> Option<usize> {
+        self.state
+            .metadata_bytes()?
+            .checked_add(Self::extra_bytes())
+    }
+}
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum DefaultBindingMode {
@@ -124,6 +166,8 @@ pub(crate) struct Transaction {
     scope: crate::syntax::body_index::ScopeId,
     pending_start: usize,
     pub(crate) previewed: bool,
+    pub(crate) decision: Option<Box<DecisionTransaction>>,
+    dynamic_before: usize,
 }
 /// One stack per frame, shared by all ordinary pattern owners. Capacity is
 /// reserved/accounted with that frame; reached transitions allocate no vectors.
@@ -131,21 +175,31 @@ pub(crate) struct Transactions {
     active: Vec<Transaction>,
     pending: Vec<PendingBinding>,
     limit: usize,
+    dynamic_bytes: usize,
+    binding_rows: Vec<usize>,
+    source_rows: Vec<usize>,
 }
 fn transaction_error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-PATTERN-TRANSACTION", message.into())
 }
 impl Transactions {
-    pub(crate) fn metadata_bytes(limit: usize) -> Option<usize> {
+    pub(crate) fn metadata_bytes(limit: usize, slots: usize) -> Option<usize> {
         limit
             .checked_mul(
                 std::mem::size_of::<Transaction>()
                     .checked_add(std::mem::size_of::<PendingBinding>())?,
             )?
-            .checked_add(std::mem::size_of::<Self>())
+            .checked_add(std::mem::size_of::<Self>())?
+            .checked_add(
+                limit
+                    .checked_add(slots)?
+                    .checked_mul(std::mem::size_of::<usize>())?,
+            )
     }
-    pub(crate) fn new(limit: usize) -> Result<Self, Diagnostic> {
-        if limit > 100_000 || Self::metadata_bytes(limit).is_none() {
+    pub(crate) fn new(limit: usize, slots: usize) -> Result<Self, Diagnostic> {
+        if limit > 100_000
+            || Self::metadata_bytes(limit, slots).is_none_or(|bytes| bytes > 32 * 1024 * 1024)
+        {
             return Err(crate::runtime::arena::resource());
         }
         let mut active = Vec::new();
@@ -156,10 +210,30 @@ impl Transactions {
         pending
             .try_reserve_exact(limit)
             .map_err(|_| crate::runtime::arena::resource())?;
+        let mut binding_rows = Vec::new();
+        let mut source_rows = Vec::new();
+        binding_rows
+            .try_reserve_exact(limit)
+            .map_err(|_| crate::runtime::arena::resource())?;
+        source_rows
+            .try_reserve_exact(slots)
+            .map_err(|_| crate::runtime::arena::resource())?;
+        if active.capacity() != limit
+            || pending.capacity() != limit
+            || binding_rows.capacity() != limit
+            || source_rows.capacity() != slots
+        {
+            return Err(crate::runtime::arena::resource());
+        }
+        binding_rows.resize(limit, usize::MAX);
+        source_rows.resize(slots, usize::MAX);
         Ok(Self {
             active,
             pending,
             limit,
+            dynamic_bytes: 0,
+            binding_rows,
+            source_rows,
         })
     }
     pub(crate) fn preflight_begin(&self, owner: crate::ir::pc::NodeId) -> Result<(), Diagnostic> {
@@ -188,6 +262,8 @@ impl Transactions {
             scope,
             pending_start: self.pending.len(),
             previewed: false,
+            decision: None,
+            dynamic_before: self.dynamic_bytes,
         });
         Ok(())
     }
@@ -198,6 +274,69 @@ impl Transactions {
             .ok_or_else(|| {
                 transaction_error("pattern continuation does not own the active transaction")
             })
+    }
+    pub(crate) fn top_decision(&self) -> Option<(&Transaction, &DecisionTransaction)> {
+        let active = self.active.last()?;
+        Some((active, active.decision.as_deref()?))
+    }
+    pub(crate) fn dynamic_metadata_bytes(&self) -> usize {
+        self.dynamic_bytes
+    }
+    pub(crate) fn begin_decision(
+        &mut self,
+        owner: crate::ir::pc::NodeId,
+        source: crate::ir::pc::SlotId,
+        scope: crate::syntax::body_index::ScopeId,
+        decision: DecisionTransaction,
+    ) -> Result<(), Diagnostic> {
+        self.preflight_begin(owner)?;
+        let added = decision
+            .metadata_bytes()
+            .ok_or_else(crate::runtime::arena::resource)?;
+        let bytes = self
+            .dynamic_bytes
+            .checked_add(added)
+            .ok_or_else(crate::runtime::arena::resource)?;
+        let alternative = decision.state.plan().root();
+        let retry = decision.unmatched.clone();
+        let retained = Box::new(decision);
+        self.begin(owner, alternative, source, retry, scope)?;
+        self.active
+            .last_mut()
+            .expect("checked transaction")
+            .decision = Some(retained);
+        self.dynamic_bytes = bytes;
+        Ok(())
+    }
+    pub(crate) fn decision(
+        &self,
+        owner: crate::ir::pc::NodeId,
+    ) -> Result<&DecisionTransaction, Diagnostic> {
+        self.current(owner)?
+            .decision
+            .as_deref()
+            .ok_or_else(|| transaction_error("pattern transaction has no prepared decision"))
+    }
+    pub(crate) fn decision_mut(
+        &mut self,
+        owner: crate::ir::pc::NodeId,
+    ) -> Result<&mut DecisionTransaction, Diagnostic> {
+        self.current(owner)?;
+        self.active
+            .last_mut()
+            .and_then(|active| active.decision.as_deref_mut())
+            .ok_or_else(|| transaction_error("pattern transaction has no prepared decision"))
+    }
+    pub(crate) fn pop_pending(
+        &mut self,
+        owner: crate::ir::pc::NodeId,
+    ) -> Result<Option<PendingBinding>, Diagnostic> {
+        let start = self.current(owner)?.pending_start;
+        if self.pending.len() > start {
+            Ok(self.pending.pop())
+        } else {
+            Ok(None)
+        }
     }
     pub(crate) fn pending(
         &self,
@@ -217,9 +356,26 @@ impl Transactions {
                 "pattern binding cannot be staged after preview or beyond frame bound",
             ));
         }
-        if self.pending(owner)?.iter().any(|existing| {
-            existing.binding == binding.binding || existing.source == binding.source
-        }) {
+        let binding_row = *self
+            .binding_rows
+            .get(binding.binding.0 as usize)
+            .ok_or_else(|| transaction_error("binding identity exceeds frame pattern bound"))?;
+        let source_row = *self
+            .source_rows
+            .get(binding.source.0 as usize)
+            .ok_or_else(|| transaction_error("source identity exceeds frame slot bound"))?;
+        // A stale row after truncate/pop has no authority. Reused vector
+        // positions must still contain this exact identity. Thus cleanup needs
+        // no O(binding-count) marker-clearing pass or generation reset.
+        if self
+            .pending
+            .get(binding_row)
+            .is_some_and(|existing| existing.binding == binding.binding)
+            || self
+                .pending
+                .get(source_row)
+                .is_some_and(|existing| existing.source == binding.source)
+        {
             return Err(transaction_error(
                 "conflicting pattern binding or source move",
             ));
@@ -232,6 +388,8 @@ impl Transactions {
         binding: PendingBinding,
     ) -> Result<(), Diagnostic> {
         self.preflight_stage(owner, binding)?;
+        self.binding_rows[binding.binding.0 as usize] = self.pending.len();
+        self.source_rows[binding.source.0 as usize] = self.pending.len();
         self.pending.push(binding);
         Ok(())
     }
@@ -248,14 +406,29 @@ impl Transactions {
             .previewed = true;
         Ok(())
     }
+    pub(crate) fn clear_previewed(
+        &mut self,
+        owner: crate::ir::pc::NodeId,
+    ) -> Result<(), Diagnostic> {
+        self.current(owner)?;
+        self.active
+            .last_mut()
+            .expect("checked transaction")
+            .previewed = false;
+        Ok(())
+    }
     pub(crate) fn finish(&mut self, owner: crate::ir::pc::NodeId) -> Result<(), Diagnostic> {
-        let start = self.current(owner)?.pending_start;
+        let active = self.current(owner)?;
+        let start = active.pending_start;
+        let bytes = active.dynamic_before;
         self.pending.truncate(start);
         self.active.pop();
+        self.dynamic_bytes = bytes;
         Ok(())
     }
     pub(crate) fn retire_scope(&mut self, scope: crate::syntax::body_index::ScopeId) {
         if let Some(index) = self.active.iter().position(|active| active.scope == scope) {
+            self.dynamic_bytes = self.active[index].dynamic_before;
             self.pending.truncate(self.active[index].pending_start);
             self.active.truncate(index);
         }

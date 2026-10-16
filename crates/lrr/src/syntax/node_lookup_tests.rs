@@ -2,7 +2,10 @@
 //! full scan is a test oracle, never production entered-phase lookup.
 use super::*;
 use crate::{
-    core::{digest::Digest, profile::ProfileIdentity},
+    core::{
+        digest::{Digest, StableEncode},
+        profile::ProfileIdentity,
+    },
     source::snapshot::{CfgSet, SourceBlob},
 };
 const ORIGINALS: &[&str] = &[
@@ -38,7 +41,58 @@ fn indexed_role_lookup_matches_source_preorder_on_unchanged_originals_all_editio
             let mut checked = 0;
             for body in outline.items.iter().filter_map(|item| item.body.as_ref()) {
                 let index = parsed.index_body(body, Default::default()).unwrap();
+                assert_eq!(index.semantic_identity(), index.fingerprint());
+                let independent = parsed.index_body(body, Default::default()).unwrap();
+                assert_eq!(index.semantic_identity(), independent.semantic_identity());
+                let mut pattern_slots = std::collections::BTreeSet::new();
                 for node in index.nodes() {
+                    let cleanup_owner = matches!(node.role, NodeRole::Pattern | NodeRole::MatchArm)
+                        || (node.role
+                            == NodeRole::Expression(
+                                crate::syntax::body_index::ExpressionKind::Other,
+                            )
+                            && node.clause_scope.is_some());
+                    assert_eq!(
+                        index
+                            .pc(node.id, crate::ir::pc::Phase::PatternCleanup)
+                            .is_ok(),
+                        cleanup_owner
+                    );
+                    if node.role == NodeRole::MatchArm {
+                        assert_eq!(
+                            index.pc(node.id, crate::ir::pc::Phase::Operand(0)).is_ok(),
+                            node.guard_scope.is_some()
+                        );
+                    }
+                    if node.role == NodeRole::Pattern {
+                        for phase in 0..=2 {
+                            assert!(
+                                index
+                                    .pc(node.id, crate::ir::pc::Phase::Operand(phase))
+                                    .is_ok()
+                            );
+                        }
+                        assert!(index.pc(node.id, crate::ir::pc::Phase::Operand(3)).is_err());
+                        let value = node.runtime_temporaries[0]
+                            .expect("actual pattern projection value slot");
+                        let place = crate::ir::pc::SlotId(value.0.checked_add(1).unwrap());
+                        assert_eq!(
+                            index.slot_kind(value).unwrap(),
+                            crate::ir::pc::SlotKind::Value
+                        );
+                        assert_eq!(
+                            index.slot_kind(place).unwrap(),
+                            crate::ir::pc::SlotKind::Place
+                        );
+                        assert!(pattern_slots.insert(value));
+                        assert!(pattern_slots.insert(place));
+                        assert!(index.nodes().iter().all(|candidate| {
+                            [candidate.value, candidate.place]
+                                .into_iter()
+                                .flatten()
+                                .all(|slot| slot != value && slot != place)
+                        }));
+                    }
                     let expected_ids: Vec<_> = index
                         .nodes()
                         .iter()

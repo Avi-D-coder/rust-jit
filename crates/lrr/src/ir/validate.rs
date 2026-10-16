@@ -9,6 +9,8 @@ use crate::{
     syntax::{body_index::BodyIndex, spans::BodySpan},
 };
 use std::collections::BTreeSet;
+#[path = "pattern_decision.rs"]
+mod pattern_decision;
 fn invalid(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTERNAL-IR", message.into())
 }
@@ -35,12 +37,21 @@ fn pattern_transition(
 ) -> Result<(), Diagnostic> {
     use super::op::PatternOperation;
     use crate::syntax::body_index::{ExpressionKind, NodeRole};
+    if let PatternOperation::Decision {
+        owner,
+        plan,
+        transition,
+    } = operation
+    {
+        return pattern_decision::transition(body, key, *owner, plan, transition);
+    }
     let owner = match operation {
         PatternOperation::Begin { owner, .. }
         | PatternOperation::StageBinding { owner, .. }
         | PatternOperation::Preview { owner }
         | PatternOperation::Finish { owner, .. }
         | PatternOperation::Rollback { owner } => *owner,
+        PatternOperation::Decision { .. } => unreachable!(),
     };
     let selected = body
         .nodes()
@@ -160,6 +171,7 @@ fn pattern_transition(
                 ));
             }
         }
+        PatternOperation::Decision { .. } => unreachable!(),
     }
     Ok(())
 }
@@ -658,6 +670,9 @@ fn verify_inner(
             .ok_or_else(|| invalid("origin size overflow"))?,
     )?;
     let mut outputs = BTreeSet::new();
+    let mut pattern_plans = BTreeSet::new();
+    let mut shared_product_admission_bytes = 0usize;
+    pattern_decision::exits(&draft)?;
     for op in &draft.operations {
         charge(&mut bytes, 256usize.max(std::mem::size_of::<Op>()))?;
         let annotation = match op {
@@ -734,6 +749,21 @@ fn verify_inner(
         let output = match op {
             Op::Pattern { operation } => {
                 pattern_transition(body, &draft.key, operation)?;
+                if let super::op::PatternOperation::Decision { plan, .. } = operation
+                    && pattern_plans.insert(std::sync::Arc::as_ptr(plan))
+                {
+                    let shared = plan
+                        .metadata_bytes()
+                        .checked_add(3 * std::mem::size_of::<usize>())
+                        .ok_or_else(|| invalid("decision plan accounting overflow"))?;
+                    // Admission still bounds the complete retained aggregate,
+                    // even though the memo owner later charges shared payloads
+                    // separately from each recipe's exclusive allocation.
+                    charge(&mut bytes, shared)?;
+                    shared_product_admission_bytes = shared_product_admission_bytes
+                        .checked_add(shared)
+                        .ok_or_else(|| invalid("decision plan accounting overflow"))?;
+                }
                 None
             }
             Op::ProjectTuple {
@@ -815,6 +845,7 @@ fn verify_inner(
                 );
                 if !scalar_macro
                     && !scalar_binding
+                    && !pattern_decision::read_place(body, &draft, *place, *destination)
                     && (node.place != Some(*place) || node.value != Some(*destination))
                 {
                     return Err(invalid(
@@ -1514,6 +1545,9 @@ fn verify_inner(
         }
     }
     let exit = draft.exits.pop().expect("one checked terminal exit");
+    if let RecipeExit::PatternNext { owner } = &exit {
+        pattern_decision::exit(&draft, *owner)?;
+    }
     let seals: Vec<_> = draft
         .operations
         .iter()
@@ -1529,6 +1563,7 @@ fn verify_inner(
         return Err(invalid("call seal requires one matching Call exit"));
     }
     match &exit {
+        RecipeExit::PatternNext { .. } => {}
         RecipeExit::PatternRetry { owner } => {
             use crate::syntax::body_index::{ExpressionKind, NodeRole};
             if draft.key.phase != Phase::Exit.code()?
@@ -1665,6 +1700,7 @@ fn verify_inner(
             dependencies: draft.dependencies.into_boxed_slice(),
         },
         metadata_bytes: bytes,
+        shared_product_admission_bytes,
         namespace_witness: None,
     })
 }
