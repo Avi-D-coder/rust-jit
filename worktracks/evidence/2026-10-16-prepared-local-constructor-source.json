@@ -1,0 +1,73 @@
+{
+  "component": "common-prepared-local-constructor-and-module-demand-v1",
+  "source_fingerprint": "f1403c4d413cede847b7be218ea7c5e7291ed29aac77072519762eec03ee1ae9",
+  "status": "source-only WIP; uncompiled/unexecuted; local field prefix and qualified body type paths held",
+  "baseline_commit": "0de2f3a65e39faf08ba471ccf7f9139ecb8afffb",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/constructors.rs",
+      "sha256": "fb9879bcc55cb014599f90319dfd4f854e79cb1b05e9396021d1757258683e07",
+      "bytes": 35781
+    },
+    {
+      "path": "crates/lrr/src/frontend/types.rs",
+      "sha256": "8baeb75122e789f4823c30df7e7a20f5ebfa1794a73e018e6d3abe633f249fdb",
+      "bytes": 44230
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "sha256": "d1f3c5cd6087e48601c4a48ed319e6a0681dfa3be6f384149726716edaeec2ac",
+      "bytes": 22268
+    },
+    {
+      "path": "crates/lrr/src/syntax/type_schemas.rs",
+      "sha256": "122594a219a7214285d4842c3404ffcc6fc63de847e2eaf69e44ba9d8b4d684e",
+      "bytes": 48155
+    },
+    {
+      "path": "crates/lrr/src/engine/run_constructors.rs",
+      "sha256": "8770ff2a00b931cc939a13ca99b5b6df22d32e0e83c814cc9d10e6bcc396f5fb",
+      "bytes": 52712
+    },
+    {
+      "path": "crates/lrr/src/frontend/module_aliases.rs",
+      "sha256": "e1aa20ca8a1d6bc0911c0c6968a81ca92cdcdbce5fe94d9b96247d062aa2148a",
+      "bytes": 39048
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macro_routes.rs",
+      "sha256": "d26e4182093ccbe792fa68fffe67f1baa4589e2782a0935302d214d3e5c6501f",
+      "bytes": 48240
+    }
+  ],
+  "dependencies": [
+    "peer owning body environment query publication and accounting",
+    "actual selected sealed macro environment",
+    "prior frozen module/scheduling source banks; root routes leaf includes their held preparation integration"
+  ],
+  "handoffs": [
+    "worktracks/04-calls-source-views/prepared-local-record-constructor-handoff.md",
+    "worktracks/08-macros-editions/common-module-preparation-demand-handoff.md"
+  ],
+  "acceptance": {
+    "stock_runtime_passes": 0,
+    "full_fixture_passes": 0,
+    "architecture_complete": false
+  },
+  "immutable_component_sha256": "451a0ac2fe99cd45f8b6c155b2da18ce5d91b7308e7485a44c02f2154efaf259",
+  "review": {
+    "source_manifest": "451a0ac2fe99cd45f8b6c155b2da18ce5d91b7308e7485a44c02f2154efaf259",
+    "reviewer": "/root/edition_macro_logic",
+    "scope": "source only against exact seven frozen files; no compilation or execution",
+    "findings": [
+      "field occurrence threaded and own-type proof excluded for field lookups",
+      "owning local source owner validates actual source/context/header/name edition",
+      "no fallback after published environment errors",
+      "qualified record path pending regression; exact upstream witness imported",
+      "local declaration field prefix integration pending",
+      "source input/currentness/root accounting requires peer query integration",
+      "module missing-demand selection must receive only unresolved declarations; coordinator role-refresh remains held"
+    ],
+    "acceptance": false
+  }
+}

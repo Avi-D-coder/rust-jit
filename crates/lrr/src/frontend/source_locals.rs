@@ -21,7 +21,7 @@ use std::{
 };
 #[path = "source_local_plan.rs"]
 pub(crate) mod owned_plan;
-pub(crate) use owned_plan::PreparedSourceLocalPlan;
+pub use owned_plan::PreparedSourceLocalPlan;
 #[path = "source_local_patterns.rs"]
 mod pattern_equivalence;
 // Per-call memoization is valid only under this immutable source/namespace borrow.

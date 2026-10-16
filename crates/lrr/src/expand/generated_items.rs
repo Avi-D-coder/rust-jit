@@ -554,6 +554,9 @@ impl GeneratedItems {
     pub(crate) fn record_input(&self) -> Arc<ExpansionRecord> {
         self.record.clone()
     }
+    pub(crate) fn record_root(&self) -> &Arc<ExpansionRecord> {
+        &self.record
+    }
     pub fn record(&self) -> &ExpansionRecord {
         &self.record
     }

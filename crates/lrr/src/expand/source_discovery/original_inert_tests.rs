@@ -429,3 +429,12 @@ fn unchanged_user_macro_source_is_not_a_root_attribute_proof() {
             .is_none()
     );
 }
+
+#[path = "retained_original_inert_tests.rs"]
+mod retained_replay_tests;
+
+#[path = "body_macro_environment_tests.rs"]
+mod body_macro_environment_tests;
+
+#[path = "original_module_staging_tests.rs"]
+mod original_module_staging_tests;

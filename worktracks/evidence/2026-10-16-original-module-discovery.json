@@ -1,0 +1,85 @@
+{
+  "component": "common-original-module-discovery-v1",
+  "source_fingerprint": "201e487864af2168e7c6221f25bd01cf526dfb3cdd7b4299df3618309cd1ee55",
+  "status": "source-only, uncompiled/unexecuted; coordinator role-source refresh and actual full-core closure remain held",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "4b85fde098dd36d6d6341754b94e25d51cf46e7b527c480d453b88f89748d68a",
+      "bytes": 502482
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/original_modules.rs",
+      "sha256": "9ba825b9da158b3185256d9a282553c61c644a6842bd05c6c267187b94c41746",
+      "bytes": 9795
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/macro_exports_tests.rs",
+      "sha256": "cbee05c57695a63bc0f542d1b14ae94f29dfb44b0acde180f1c0d10edec50eaa",
+      "bytes": 14265
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/original_module_discovery_tests.rs",
+      "sha256": "3d59695521596a74ecdf301cae3b7e34bf42b8a34a8c26ff981ac4eab1d0986c",
+      "bytes": 4189
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/original_inert_tests.rs",
+      "sha256": "3d63dede1b428b4d1b51ac014a1fc0074d5bceb477ff83ceabd2dc126dfa5374",
+      "bytes": 17220
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/original_module_staging_tests.rs",
+      "sha256": "be0a4edd8ad394fb0e82761ef30cb83650bc412db9b4bb423e28f5a879490832",
+      "bytes": 8156
+    }
+  ],
+  "dependencies": [
+    "Root-frozen scheduling10 manifest0a5355c5/source5a691f29 plus prior actual role/module/adoption/capture dependencies, unchanged.",
+    "Root-copied selectedenv4 manifestfbf3fff0/sourceb1219d18 includes current parent SourceDiscovery and original_inert_tests predecessors; new six-leaf overlay preserves selected environment methods/hooks.",
+    "Root typed SAME module graph preparation and ModulePreparationDemand::declaration API frozen separately with constructor7; this source component does not call strict routes before real capture.",
+    "Existing SourceModuleDeclaration retained_metadata_bytes/source helpers and real source capture/module coordinator APIs; immutable original fixture manifest333cases/536files includes special_module_name_ignore + auxiliary.",
+    "Root coordinator must consume actual NeedModule/declaration before compiler setup and refresh coherent configured sources/roles/adoptions, with no same_publication relaxation; not implemented here."
+  ],
+  "architecture_review": {
+    "handoff": "worktracks/03-control-flow-patterns/original-module-discovery-handoff.md",
+    "sha256": "d93a3cada184983ffe81f12a293c152cd01c282cc8eea411ac2cacb8ba8d0384",
+    "modes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ]
+  },
+  "test_filters": [
+    "expand::source_declarative::macro_exports::tests::original_module_discovery_tests",
+    "expand::source_discovery::original_inert_tests::original_module_staging_tests"
+  ],
+  "test_bodies": 3,
+  "witnesses": [
+    {
+      "path": "fixtures/upstream/rustc-checkout/library/core/src/lib.rs",
+      "sha256": "f7da20c347fb8722a6cfc28b6f899fc8359bd99775ba0f2b34f6f86346a0f1f2",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/modules/special_module_name_ignore.rs",
+      "sha256": "625d6e0b5a2afecde7837b523ac24be8613f1776cd970a9667ae6e64bbce240b",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/modules/auxiliary/dummy_lib.rs",
+      "sha256": "a9df76705f5a753027c014becfbda7e74777d7fb0560711f510ef6656eccada7",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/match/issue-26251.rs",
+      "sha256": "a0993bf1d51fa8bcc9028b10f76a89f62c675097104ed2fce379967e7e8b98be",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18"
+    }
+  ]
+}

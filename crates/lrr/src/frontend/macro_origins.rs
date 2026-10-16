@@ -38,6 +38,20 @@ fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-SCOPE", message.into())
 }
 impl ExpansionAncestry {
+    /// Cold immutable producer-parent encoding; derived depths are not authority.
+    pub(crate) fn semantic_fingerprint(&self) -> Result<Digest, Diagnostic> {
+        if self.metadata_bytes()? > 64 * 1024 * 1024 {
+            return Err(error("expansion ancestry encoding budget"));
+        }
+        let mut e = StableEncoder::new("lrr/v1/expansion-ancestry-environment");
+        e.u64(self.parents.len() as u64);
+        for (key, parent) in &self.parents {
+            e.digest(Digest(key.0));
+            e.option(parent, |e, parent| e.digest(Digest(parent.0)));
+        }
+        Ok(e.finish())
+    }
+
     pub(crate) fn contains(&self, origin: Key) -> bool {
         self.parents.contains_key(&origin)
     }

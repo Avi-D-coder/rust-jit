@@ -355,6 +355,7 @@ impl Packet {
                 | QueryKey::ReferenceHeader(_)
                 | QueryKey::TypeAlias(_) => {}
                 QueryKey::BodyStructure(_)
+                | QueryKey::SourceLocalPlan(_)
                 | QueryKey::PatternPlan(_)
                 | QueryKey::Thunk(_)
                 | QueryKey::CurrentExpansionInput(_)

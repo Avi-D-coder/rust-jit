@@ -1,0 +1,15 @@
+{
+  "component": "original-module-authority-test-pathbuf-fix-v1",
+  "status": "source-only mechanical compile correction, uncompiled/unexecuted",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery/original_module_staging_tests.rs",
+      "sha256": "18db6785e93425463cc75e596221b9626bcbbf75f9a9c9ff73383337d67ce62e",
+      "bytes": 8141
+    }
+  ],
+  "source_fingerprint": "97b83a16e621f1453c110c20e286bbec22d1ffb4a1bde82d8a14c80be424ea7a",
+  "change": "Only IncludeRoot.path constructor String -> directory.to_path_buf(); no production source or oracle change.",
+  "baseline": "Immutable failed combined236 sourcec858687b; compiler E0308, zero test bodies.",
+  "excludes": "TypedCompiler5 and all unrelated live SourceDiscovery/frontend/runtime/DB changes are excluded."
+}

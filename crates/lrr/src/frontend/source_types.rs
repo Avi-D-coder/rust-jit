@@ -441,3 +441,103 @@ pub(super) fn nominal_definition(
         .cloned()
         .ok_or_else(|| fault("selected generated nominal identity absent"))
 }
+
+/// Canonical local declaration ownership after a source consumer selected the
+/// nominal identity. This does not perform a name lookup or derive authority
+/// from a guest descriptor: the exact current owning plan must contain the row.
+pub(super) struct LocalNominalOwner {
+    pub(super) definition: DefKey,
+    pub(super) plan: std::sync::Arc<super::source_locals::PreparedSourceLocalPlan>,
+    pub(super) edition: u16,
+}
+pub(super) fn local_nominal_owner(
+    db: &mut Database,
+    identity: crate::core::digest::Digest,
+) -> QueryPoll<Option<LocalNominalOwner>> {
+    let Some(context) = db.input(&InputKey::DeclarationContext(identity)) else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let InputValue::DeclarationContext(context) = context.as_ref() else {
+        return QueryPoll::Ready(Err(fault("local nominal context variant differs")));
+    };
+    let Some(owner) = context.scope.owner else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let Some(body) = db.input(&InputKey::DefinitionBody(owner)) else {
+        return QueryPoll::Ready(Err(fault("local nominal owning body is absent")));
+    };
+    let InputValue::DefinitionBody(body) = body.as_ref() else {
+        return QueryPoll::Ready(Err(fault("local nominal owning body variant differs")));
+    };
+    let result = match db.fetch(&SyntaxProvider, QueryKey::SourceLocalPlan(body.key())) {
+        QueryPoll::Ready(Ok(value)) => value,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    let QueryValue::SourceLocalPlan(plan) = result.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("local nominal owning plan variant differs")));
+    };
+    if plan.environment().is_none() || plan.context().source().index().body() != &body.key() {
+        return QueryPoll::Ready(Err(fault("local nominal owning environment differs")));
+    }
+    match plan.require_current(db) {
+        QueryPoll::Ready(Ok(())) => {}
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    }
+    let mut rows = plan
+        .context()
+        .facts()
+        .items
+        .iter()
+        .filter(|row| row.item.def_key.fingerprint() == identity);
+    let Some(row) = rows.next() else {
+        return QueryPoll::Ready(Err(fault("local nominal canonical declaration is absent")));
+    };
+    if rows.next().is_some()
+        || row.item.scope != context.scope
+        || row.item.declaration_span != context.range
+        || !matches!(db.input(&InputKey::DefinitionHeader(identity)).as_deref(),
+            Some(InputValue::DefinitionHeader(header)) if header == &row.item.header)
+        || !matches!(db.input(&InputKey::DefinitionSource(identity)).as_deref(),
+            Some(InputValue::DefinitionSource(parse)) if *parse == plan.context().source().parsed().key())
+    {
+        return QueryPoll::Ready(Err(fault("local nominal canonical source rows differ")));
+    }
+    // Read the actual selected declaration name, including its owning token
+    // edition. Header profile alone cannot replace a generated token edition.
+    use ra_ap_syntax::{
+        AstNode,
+        ast::{self, HasName},
+    };
+    let parsed = plan.context().source().parsed();
+    let name = (|| -> Result<_, Diagnostic> {
+        let selected = parsed
+            .syntax_at(context.range, |node| {
+                ast::Struct::can_cast(node.kind()) || ast::Enum::can_cast(node.kind())
+            })?
+            .and_then(ast::Item::cast);
+        let name = match selected {
+            Some(ast::Item::Struct(item)) => item.name(),
+            Some(ast::Item::Enum(item)) => item.name(),
+            _ => None,
+        }
+        .ok_or_else(|| fault("local nominal actual name is absent"))?;
+        let range = crate::syntax::ast_adapter::range(name.syntax().text_range());
+        let edition = parsed.token_edition(range)?;
+        if super::names::owned_name(name.text(), edition)?.as_str()
+            != row.item.def_key.declared_name
+        {
+            return Err(fault("local nominal actual name differs"));
+        }
+        Ok(edition)
+    })();
+    match name {
+        Ok(edition) => QueryPoll::Ready(Ok(Some(LocalNominalOwner {
+            definition: row.item.def_key.clone(),
+            plan: std::sync::Arc::clone(plan),
+            edition,
+        }))),
+        Err(error) => QueryPoll::Ready(Err(error)),
+    }
+}

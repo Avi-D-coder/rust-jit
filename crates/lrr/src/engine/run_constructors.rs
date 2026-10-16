@@ -75,6 +75,39 @@ impl RunMachine {
                 "constructor requires a checked source catalogue",
             )));
         };
+        // Prepared entries retain their genuine owning environment. Consume
+        // that query before any original-only outline owner search. A failed
+        // current lookup must never fall back to the legacy reconstruction.
+        if matches!(plan.kind(), ConstructorKind::Record { rest: None, .. })
+            && db
+                .published_input(&crate::db::dependency::InputKey::BodyEnvironment(
+                    self.frame.body.body().clone(),
+                ))
+                .is_some()
+        {
+            let mut sources = Vec::new();
+            if sources.try_reserve_exact(self.sources.len()).is_err() {
+                return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
+            }
+            sources.extend(self.sources.iter());
+            return match crate::frontend::constructors::bind_prepared_record_constructor(
+                db,
+                graph,
+                &sources,
+                &self.frame.body,
+                plan,
+            ) {
+                QueryPoll::Ready(Ok(RecordConstructorBinding::Ready(bound))) => QueryPoll::Ready(
+                    self.frame
+                        .prepare_nominal_constructor(plan, *bound, &mut self.store),
+                ),
+                QueryPoll::Ready(Ok(RecordConstructorBinding::Deferred(demand))) => {
+                    QueryPoll::Ready(Err(unresolved(&demand)))
+                }
+                QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+            };
+        }
         // This fixed-size identity has no owned syntax or allocation. Retain
         // it independently while the checked closure prepares frame facts.
         let body = self.frame.body.body().clone();

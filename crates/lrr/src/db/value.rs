@@ -15,24 +15,36 @@ use std::sync::Arc;
 /// locators, never a source/name authority or part of a stable key.
 #[derive(Clone, Copy)]
 pub(crate) enum SourceArtifactRef<'a> {
+    LocalPlan(&'a Arc<crate::frontend::source_locals::PreparedSourceLocalPlan>),
+    BodyEnvironment(&'a Arc<super::BodyEnvironmentInput>),
     Pattern(&'a Arc<crate::syntax::pattern_product::PatternProductPlan>),
     StringLiteral(&'a Arc<crate::syntax::string_literal::PreparedStringLiteral>),
 }
 impl<'a> SourceArtifactRef<'a> {
     pub(crate) fn allocation(self) -> usize {
         match self {
+            Self::LocalPlan(value) => Arc::as_ptr(value) as usize,
+            Self::BodyEnvironment(value) => Arc::as_ptr(value) as usize,
             Self::Pattern(value) => Arc::as_ptr(value) as usize,
             Self::StringLiteral(value) => Arc::as_ptr(value) as usize,
         }
     }
     pub(crate) fn strong_count(self) -> usize {
         match self {
+            Self::LocalPlan(value) => Arc::strong_count(value),
+            Self::BodyEnvironment(value) => Arc::strong_count(value),
             Self::Pattern(value) => Arc::strong_count(value),
             Self::StringLiteral(value) => Arc::strong_count(value),
         }
     }
     pub(crate) fn metadata_bytes(self) -> Result<usize, Diagnostic> {
         let bytes = match self {
+            Self::LocalPlan(value) => value
+                .exclusive_metadata_bytes()
+                .checked_add(2 * std::mem::size_of::<usize>()),
+            // The same environment can also be owned transitively by a local
+            // plan. The shared root traversal charges its allocation once.
+            Self::BodyEnvironment(_) => Some(0),
             Self::Pattern(value) => value
                 .metadata_bytes()
                 .checked_add(2 * std::mem::size_of::<usize>()),
@@ -48,7 +60,7 @@ impl<'a> SourceArtifactRef<'a> {
     pub(crate) fn index(self) -> Option<&'a Arc<crate::syntax::body_index::BodyIndex>> {
         match self {
             Self::Pattern(value) => Some(value.index()),
-            Self::StringLiteral(_) => None,
+            Self::StringLiteral(_) | Self::LocalPlan(_) | Self::BodyEnvironment(_) => None,
         }
     }
 }
@@ -60,6 +72,7 @@ pub struct Bucket {
 }
 #[derive(Debug, Clone)]
 pub enum QueryValue {
+    SourceLocalPlan(Arc<crate::frontend::source_locals::PreparedSourceLocalPlan>),
     CurrentModuleName(Arc<crate::frontend::current_module_names::CurrentModuleNameObservation>),
     SealedName {
         key: Box<super::key::SealedNameKey>,
@@ -94,12 +107,19 @@ impl QueryValue {
             Self::Thunk(recipe) => Some(recipe),
             _ => None,
         };
-        self.product_roots().map(SourceArtifactRef::Pattern).chain(
-            recipe
-                .into_iter()
-                .flat_map(|recipe| recipe.string_literal_roots())
-                .map(SourceArtifactRef::StringLiteral),
-        )
+        let local = match self {
+            Self::SourceLocalPlan(plan) => Some(SourceArtifactRef::LocalPlan(plan)),
+            _ => None,
+        };
+        local
+            .into_iter()
+            .chain(self.product_roots().map(SourceArtifactRef::Pattern))
+            .chain(
+                recipe
+                    .into_iter()
+                    .flat_map(|recipe| recipe.string_literal_roots())
+                    .map(SourceArtifactRef::StringLiteral),
+            )
     }
     /// Actual handles, without cloning or allocation. Shared allocation
     /// charging and owner deduplication belong to the coordinator.
@@ -125,6 +145,9 @@ impl QueryValue {
         }
     }
     pub fn matches(&self, key: &QueryKey) -> bool {
+        if let (Self::SourceLocalPlan(plan), QueryKey::SourceLocalPlan(body)) = (self, key) {
+            return plan.context().source().index().body() == body;
+        }
         if let (Self::CurrentModuleName(value), QueryKey::CurrentModuleName(request)) = (self, key)
         {
             return value.matches_request(request);
@@ -197,6 +220,13 @@ impl QueryValue {
     pub fn fingerprint(&self) -> Digest {
         let mut e = StableEncoder::new("lrr/v2/query-value");
         match self {
+            Self::SourceLocalPlan(plan) => {
+                e.u32(34);
+                e.digest(plan.source_identity());
+                e.option(&plan.environment(), |e, environment| {
+                    e.digest(environment.identity())
+                });
+            }
             Self::CurrentModuleName(value) => {
                 e.u32(33);
                 e.digest(value.semantic_identity());
@@ -320,6 +350,8 @@ impl QueryValue {
             Self::Outline(v) => v.estimated_bytes(),
             Self::Signature(v) => v.estimated_bytes(),
             Self::FunctionSignature(v) => v.estimated_bytes(),
+            // Artifact retirement owns and charges the actual inner plan.
+            Self::SourceLocalPlan(_) => 0,
             Self::ReferenceHeader(v) => v
                 .metadata_bytes()
                 .saturating_add(2 * std::mem::size_of::<usize>()),

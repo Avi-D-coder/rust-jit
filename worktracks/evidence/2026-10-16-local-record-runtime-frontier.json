@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T17:23:57.846897+00:00",
+  "claim": "LOCAL-024",
+  "kind": "interpreter-local-record-runtime-frontier",
+  "source": "1c6b1fad7329ff3f8e6b9e7ae54bd2fe53e2a8938df81f451b22b4504b62fb1a",
+  "release_sha256": "75e073f0605ef370a29a998702c42c4fb14c6a66f55e01f67a077ac04d50aa6c",
+  "actual_terminals": {
+    "source_review": "251ee3/0",
+    "compose": "77ad2e/0",
+    "inactive_before": "dba3c5/0",
+    "assembly": {
+      "launch": "226cd5",
+      "session": 13124,
+      "terminal": "a0710a/0"
+    },
+    "compile": {
+      "launch": "c70e90",
+      "session": 21202,
+      "pid": 30284,
+      "terminal": "d23879/0"
+    },
+    "source_controls3": {
+      "launch": "e7954a",
+      "session": 30453,
+      "terminal": "d09532/0"
+    },
+    "host_cli": {
+      "launch": "d0c030",
+      "session": 12812,
+      "pid": 30405,
+      "terminal": "9ceea8/0"
+    },
+    "host_digester": {
+      "launch": "aff49f",
+      "session": 21251,
+      "pid": 30455,
+      "terminal": "78d508/0"
+    },
+    "runtime1": {
+      "launch": "20fda5",
+      "session": 70851,
+      "terminal": "94351b/1",
+      "cli_pid": 30484,
+      "cli_exit": 2
+    },
+    "raw_fault_source": "ee768c/0",
+    "inactive_after": "c0ead7/0"
+  },
+  "compile": {
+    "exit": 0,
+    "warnings": 13
+  },
+  "component_controls": {
+    "passed": 3,
+    "failed": 0,
+    "scope": "normalized declaration attributes and exact original anchors; prior12 controls not repeated"
+  },
+  "runtime": {
+    "case": "tests/ui/borrowck/borrowck-assign-to-subfield.rs",
+    "edition": 2024,
+    "edition_scope": "Explicit2024 supplemental baseline; official default2015 runtime notrun",
+    "code": "LRR-E-UNSUPPORTED",
+    "message": "constructor requires further source member/type binding",
+    "phase": "executor",
+    "guest_pc": "e9b6a441d12d4dd947110d28d9b34de186c7c730c53f16b6287a8e15c08dbaae",
+    "entry_body": {
+      "definition": "723b5e3a9c097fdc422b5c9facb683a0f86e27cfef7796c2ac30e44298e1c29e",
+      "exact_body_bytes": "e104f4e3ae829e34422239aeb5be17c885c8ff48656c77ffe96c1818ca258752"
+    },
+    "retained_span": {
+      "body_key": {
+        "definition": "723b5e3a9c097fdc422b5c9facb683a0f86e27cfef7796c2ac30e44298e1c29e",
+        "exact_body_bytes": "e104f4e3ae829e34422239aeb5be17c885c8ff48656c77ffe96c1818ca258752"
+      },
+      "relative_end": 62,
+      "relative_start": 46
+    },
+    "original_unique_outer_constructor": {
+      "source_path": "/Users/avi/Code/rust-jit/artifacts/macos-first/sol-common-normalized-header-anchors-validation-v1/source/fixtures/upstream/rustc-checkout/tests/ui/borrowck/borrowck-assign-to-subfield.rs",
+      "sha256": "aad0ede2f330c1d0c8e4f8bfedeec050ad194511099765ae2eb246c204aff7ae",
+      "raw_start": 154,
+      "raw_end": 198,
+      "text": "A {\n        a: 1,\n        w: B {a: 1},\n    }"
+    },
+    "mapping_limit": "No guest locations/origin map emitted; normalized relative46..62 is not translated by adding original raw body offset. Original outer constructor mapping is source structural uniqueness.",
+    "capture": {
+      "complete": false,
+      "scope": "dispatcher_external_effects_only_not_memory_trace",
+      "facts": {
+        "classified_operation_candidates": 5,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 4,
+        "vm_outcomes": 4
+      },
+      "guest": {
+        "status": "unobserved",
+        "stdout": null,
+        "stderr": null
+      },
+      "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer"
+    },
+    "executor_progress": "Actual packet now has snapshot/entry/facts and4 VMdispatches+outcomes. Predecessor e4e program failed before observation at original header normalization. Still no complete runtimecontract.",
+    "source_inference": "CLIretained_entry76 only prepares source local plan. prepare_source_local_plan doesnotpublish local declaration inputs; tests selected_local_types manually publishes rows first. BodyTypeDeclaration335 Pending(DeclarationPublication) is erased by root binder to TypeContext. This is source-only likely exact prerequisite, not a hidden observed demand dump. Query providers mustnotpublish sourceinputs."
+  },
+  "runtime_contract_pass_increment": 0,
+  "full_fixture_pass_increment": 0,
+  "inventory": {
+    "cases": 335,
+    "originals": 538
+  },
+  "holds": [
+    "source checkpoint is WIP, not architecture integration",
+    "owning local header publication and declaration field Type prefix not yet in tested source",
+    "actual Type namespace entry not yet in tested source",
+    "qualified path and installed binding remain incomplete",
+    "full milestone, all8 macro removal, editions matrix and cleanup incomplete"
+  ],
+  "successors": {
+    "frozen247": {
+      "source": "7efdd9b2cc56c8ef6b343743f0db06770264e99eddc71ee2ccfdbd98b92e56b8",
+      "status": "compile failed one missing StableEncode import; no test bodies",
+      "release_sha256": "acf916465f749679c7f48f8fcb047a8ef590c686f2c2965af49027593e2a544a"
+    },
+    "local_owner7": {
+      "source": "17f855ff75fc14d19c5e534c01c3dfd32841f2896c29b1c3f7390ca122459660",
+      "status": "uncompiled/unexecuted successor; same missing import corrected and actual owner dependency added"
+    }
+  }
+}

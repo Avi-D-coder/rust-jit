@@ -1,4 +1,4 @@
-//! Owned cfg-aware source policy for synthetic runtime macro preludes.
+//! Pure cfg-aware source prelude facts; the bound world admits live roles.
 use crate::{
     core::diagnostic::Diagnostic,
     expand::scopes::MacroName,
@@ -11,6 +11,7 @@ use ra_ap_syntax::{
 };
 pub(crate) struct MacroPreludePolicy {
     pub standard: bool,
+    pub no_core: bool,
     pub disabled: Vec<Vec<String>>,
 }
 impl ParsedFile {
@@ -30,15 +31,11 @@ impl ParsedFile {
                 .collect())
         };
         let root_flags = flags(root.attrs().collect())?;
-        if root_flags.iter().any(|s| s == "no_core") {
-            return Err(Diagnostic::new(
-                "LRR-E-UNSUPPORTED",
-                "no_core is outside the live runtime profile".into(),
-            ));
-        }
+        let no_core = root_flags.iter().any(|s| s == "no_core");
         let mut policy = MacroPreludePolicy {
-            standard: !root_flags.iter().any(|s| s == "no_std"),
-            disabled: if root_flags.iter().any(|s| s == "no_implicit_prelude") {
+            standard: !no_core && !root_flags.iter().any(|s| s == "no_std"),
+            no_core,
+            disabled: if no_core || root_flags.iter().any(|s| s == "no_implicit_prelude") {
                 vec![vec![]]
             } else {
                 vec![]
@@ -100,6 +97,19 @@ impl ParsedFile {
         }
         policy.disabled.sort();
         policy.disabled.dedup();
+        Ok(policy)
+    }
+    pub(crate) fn live_macro_prelude_policy(
+        &self,
+        cfg: &CfgSet,
+    ) -> Result<MacroPreludePolicy, Diagnostic> {
+        let policy = self.macro_prelude_policy(cfg)?;
+        if policy.no_core {
+            return Err(Diagnostic::new(
+                "LRR-E-UNSUPPORTED",
+                "no_core is outside the live runtime profile".into(),
+            ));
+        }
         Ok(policy)
     }
 }

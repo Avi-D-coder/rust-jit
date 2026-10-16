@@ -149,15 +149,19 @@ impl OriginalAnnotationPlan {
             bytes,
         })
     }
+    pub(super) fn require_source(&self, source: &PreparedSourceView) -> Result<(), Diagnostic> {
+        if source.selection() != &self.source {
+            return Err(fault("original annotation plan source changed"));
+        }
+        Ok(())
+    }
     pub(crate) fn rows<'a>(
         &'a self,
         source: &PreparedSourceView,
         producer: Digest,
         item: Digest,
     ) -> Result<Option<impl Iterator<Item = &'a OriginalAttributeAttachment>>, Diagnostic> {
-        if source.selection() != &self.source {
-            return Err(fault("original annotation plan source changed"));
-        }
+        self.require_source(source)?;
         let Some(row) = self.items.get(&producer) else {
             return Ok(None);
         };
@@ -165,6 +169,11 @@ impl OriginalAnnotationPlan {
             return Err(fault("original annotation plan item changed"));
         }
         Ok(Some(row.rows.iter().map(|index| &self.attributes[*index])))
+    }
+    pub(super) fn items(&self) -> impl Iterator<Item = (Digest, usize)> + '_ {
+        self.items
+            .iter()
+            .map(|(producer, item)| (*producer, item.ordinal))
     }
     pub(crate) fn item_ordinal(&self, producer: Digest) -> Result<usize, Diagnostic> {
         self.items

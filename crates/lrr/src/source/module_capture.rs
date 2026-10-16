@@ -383,4 +383,11 @@ impl AdoptedModuleCapture {
     pub fn record(&self) -> &CapturedModule {
         &self.captured
     }
+    /// Existing immutable allocations retained by this lease; accounting only.
+    pub fn record_root(&self) -> &std::sync::Arc<CapturedModule> {
+        &self.captured
+    }
+    pub fn input_root(&self) -> &std::sync::Arc<crate::db::dependency::InputValue> {
+        &self._input
+    }
 }

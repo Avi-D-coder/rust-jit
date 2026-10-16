@@ -86,16 +86,28 @@ impl SourceDiscovery {
         mut self,
         db: &mut Database,
     ) -> Result<Self, Diagnostic> {
-        if self.started || self.failed.is_some() || self.seal.is_some() {
+        if self.started
+            || self.failed.is_some()
+            || self.seal.is_some()
+            || !self.macro_export_modules.is_empty()
+            || (self.declarative.is_some() && !self.macro_export_sources.is_empty())
+        {
             return Err(fault("macro-export source publication selection is frozen"));
         }
         let mut additions = BTreeMap::new();
-        for source in &self.sources {
+        let mut roles = BTreeMap::new();
+        let mut role_bytes = 0usize;
+        for (ordinal, source) in self.sources.iter().enumerate() {
             let Some(observation) =
                 db.macro_export_source_observation(source.selection(), self.key.unit_graph)?
             else {
                 continue;
             };
+            if self.declarative.is_some() {
+                return Err(fault(
+                    "macro-export role must be selected before compiler route setup",
+                ));
+            }
             if self.namespace != Namespace::Macro
                 || self.key.domain
                     != (SealDomain::Scope {
@@ -106,6 +118,15 @@ impl SourceDiscovery {
             {
                 return Err(fault("macro-export role source scope/outline differs"));
             }
+            observation.require_source(source, self.key.unit_graph)?;
+            if roles.len() >= 256 {
+                return Err(fault("macro-export source role count limit"));
+            }
+            role_bytes = role_bytes
+                .checked_add(observation.metadata_bytes())
+                .and_then(|bytes| bytes.checked_add(128 + 2 * std::mem::size_of::<usize>()))
+                .filter(|bytes| *bytes <= 64 * 1024 * 1024)
+                .ok_or_else(|| fault("macro-export source role metadata limit"))?;
             for stamp in observation.dependencies() {
                 let DependencyStamp::Input { key, fingerprint } = stamp else {
                     return Err(fault(
@@ -132,6 +153,20 @@ impl SourceDiscovery {
                     additions.insert(key.clone(), *fingerprint);
                 }
             }
+            roles.insert(ordinal, std::sync::Arc::new(observation));
+        }
+        let role_units = roles
+            .values()
+            .map(|role| role.source().outline.crate_key)
+            .collect::<std::collections::BTreeSet<_>>();
+        for (ordinal, source) in self.sources.iter().enumerate() {
+            if role_units.contains(&source.selection().outline.crate_key)
+                && !roles.contains_key(&ordinal)
+            {
+                return Err(fault(
+                    "selected macro-export unit source lacks its own role observation",
+                ));
+            }
         }
         // The selected keys are fixed-size scalar receipt/environment keys.
         // Charge both temporary and retained rows before mutating this owner.
@@ -139,13 +174,25 @@ impl SourceDiscovery {
             .checked_add(96)
             .and_then(|bytes| bytes.checked_mul(2))
             .ok_or_else(|| fault("macro-export selected input row overflow"))?;
-        let retained = additions
+        let input_bytes = additions
             .len()
             .checked_mul(row_bytes)
-            .and_then(|bytes| self.retained_record_bytes.checked_add(bytes))
+            .ok_or_else(|| fault("macro-export selected input metadata overflow"))?;
+        self.retained_record_bytes
+            .checked_add(input_bytes)
+            .and_then(|bytes| bytes.checked_add(role_bytes))
+            .filter(|bytes| *bytes <= 320 * 1024 * 1024)
+            .ok_or_else(|| fault("macro-export selected input transient metadata limit"))?;
+        let retained = self
+            .retained_record_bytes
+            .checked_sub(self.macro_export_source_bytes)
+            .and_then(|bytes| bytes.checked_add(role_bytes))
+            .and_then(|bytes| bytes.checked_add(input_bytes))
             .filter(|bytes| *bytes <= 320 * 1024 * 1024)
             .ok_or_else(|| fault("macro-export selected input metadata limit"))?;
         self.compiler_inputs.extend(additions);
+        self.macro_export_sources = roles;
+        self.macro_export_source_bytes = role_bytes;
         self.retained_record_bytes = retained;
         Ok(self)
     }

@@ -106,12 +106,54 @@ impl StableEncode for MacroExportSourceReceipt {
 
 /// Preparation-only source contribution. No source/parser/provider handle is
 /// retained or returned. Construction requires the actual published role row.
-pub(crate) struct MacroExportSourceObservation {
+pub struct MacroExportSourceObservation {
+    source: SourceSelection,
+    graph: Digest,
+    facet: Digest,
+    preparation: Digest,
+    environment: Digest,
+    bytes: usize,
     outline_key: Digest,
     outline: Digest,
     dependencies: [DependencyStamp; 2],
 }
 impl MacroExportSourceObservation {
+    pub(crate) fn source(&self) -> &SourceSelection {
+        &self.source
+    }
+    pub(crate) fn graph(&self) -> Digest {
+        self.graph
+    }
+    pub(crate) fn require_facet(&self, facet: &SourceMacroExportFacet) -> Result<(), Diagnostic> {
+        self.require_source(facet.source(), facet.unit_graph())?;
+        if self.facet != facet.identity()
+            || self.preparation != facet.preparation()
+            || self.environment != facet.environment()
+        {
+            return Err(preparation(
+                "macro-export selected facet preparation differs",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn metadata_bytes(&self) -> usize {
+        self.bytes
+    }
+    pub(crate) fn require_source(
+        &self,
+        source: &crate::source::changes::PreparedSourceView,
+        graph: Digest,
+    ) -> Result<(), Diagnostic> {
+        if source.selection() != &self.source
+            || self.graph() != graph
+            || source.outline().fingerprint() != self.outline
+        {
+            return Err(preparation(
+                "macro-export prepared owner differs from selected role",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn outline_fingerprint(&self) -> Digest {
         self.outline
     }
@@ -215,7 +257,19 @@ impl Database {
             .published_input(&environment_key)
             .expect("read current environment")
             .1;
+        let selected_source = receipt.source().clone();
+        let observation_bytes = std::mem::size_of::<MacroExportSourceObservation>()
+            .checked_add(selected_source.metadata_bytes()?)
+            .and_then(|bytes| bytes.checked_sub(std::mem::size_of::<SourceSelection>()))
+            .filter(|bytes| *bytes <= 1024 * 1024)
+            .ok_or_else(|| preparation("macro-export role observation metadata bound"))?;
         Ok(Some(MacroExportSourceObservation {
+            source: selected_source,
+            graph,
+            facet: receipt.facet_identity(),
+            preparation: receipt.preparation(),
+            environment: receipt.environment(),
+            bytes: observation_bytes,
             outline_key: crate::db::key::QueryKey::Outline(selection.outline.clone()).fingerprint(),
             outline: receipt.outline_fingerprint(),
             dependencies: [

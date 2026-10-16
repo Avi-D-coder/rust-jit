@@ -68,6 +68,14 @@ impl AdmittedBodyContext {
     ) -> Option<&Arc<crate::expand::body_macro_boundary::GeneratedBodyBoundary>> {
         self.generated_boundary.as_ref()
     }
+    pub(crate) fn generated_source(
+        &self,
+    ) -> Option<&Arc<crate::expand::generated_syntax::GeneratedSyntaxInput>> {
+        match self.source_receipt.as_deref() {
+            Some(InputValue::GeneratedSyntax(unit)) => Some(unit),
+            _ => None,
+        }
+    }
     fn refresh_identity(&mut self) {
         let mut e = crate::core::digest::StableEncoder::new("lrr/v1/admitted-owning-body-context");
         e.record(&self.parsed.key());
@@ -166,6 +174,11 @@ impl AdmittedBodyContext {
     }
     pub(crate) fn original_source(&self) -> Option<&PreparedSourceView> {
         self.original.as_ref()
+    }
+    pub(crate) fn module_source(&self) -> Option<&PreparedSourceView> {
+        self.generated_boundary()
+            .and_then(|boundary| boundary.source_roots().first())
+            .or_else(|| self.original_source())
     }
     pub(crate) fn identifier_context(
         &self,
@@ -685,10 +698,7 @@ impl PreparedBodyContext {
         self.macro_ancestry.as_ref()
     }
     pub(crate) fn module_source(&self) -> Option<&PreparedSourceView> {
-        self.source
-            .generated_boundary()
-            .and_then(|boundary| boundary.source_roots().first())
-            .or_else(|| self.source.original_source())
+        self.source.module_source()
     }
     /// Actual expansion order comes from the admitted syntax record, never a
     /// syntax-context mark or a token's diagnostic source origin.
@@ -758,6 +768,59 @@ impl PreparedBodyContext {
     }
 }
 impl AdmittedBodyContext {
+    /// Coordinator reuse test only. A true answer does not grant body/name
+    /// authority: reuse must still consume require_current and the actual seal.
+    pub(crate) fn has_current_inputs(&self, db: &mut Database) -> Result<bool, Diagnostic> {
+        let definition = self.body().def_key;
+        for (ordinal, key) in [
+            InputKey::DefinitionSource(definition),
+            InputKey::DefinitionBody(definition),
+            InputKey::DefinitionHeader(definition),
+            InputKey::DeclarationContext(definition),
+            InputKey::CrateCfg(self.scope().crate_key),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if db.input(&key).is_none()
+                || db
+                    .published_input(&key)
+                    .is_none_or(|(_, stamp)| stamp != self.input_stamps[ordinal])
+            {
+                return Ok(false);
+            }
+        }
+        let receipt_key = match self.source_receipt.as_deref() {
+            Some(InputValue::GeneratedSyntax(unit)) => {
+                Some(InputKey::GeneratedSyntax(unit.key.content))
+            }
+            Some(InputValue::RetainedSyntax(unit)) => {
+                Some(InputKey::RetainedSyntax(unit.key().content))
+            }
+            None => None,
+            _ => return Err(fault("admitted body receipt variant changed")),
+        };
+        if let Some(key) = receipt_key {
+            if db.input(&key).is_none()
+                || db
+                    .published_input(&key)
+                    .is_none_or(|(_, stamp)| stamp != self.input_stamps[5])
+            {
+                return Ok(false);
+            }
+        } else {
+            let owner = self
+                .original_source()
+                .ok_or_else(|| fault("admitted original owner absent"))?;
+            if !db
+                .prepared_source(owner.selection())?
+                .is_some_and(|current| owner.same_publication(&current))
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
     pub(crate) fn require_current(&self, db: &mut Database) -> QueryPoll<()> {
         let definition = self.body().def_key;
         for (ordinal, key) in [

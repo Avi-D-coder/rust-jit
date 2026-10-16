@@ -120,7 +120,7 @@ impl LocalTypePrefix {
         if !matches!(self.selection, LocalTypePrefixSelection::ModuleTail) {
             return QueryPoll::Ready(Ok(None));
         }
-        match self.plan.context.require_current(db) {
+        match self.plan.require_current(db) {
             QueryPoll::Ready(Ok(())) => {}
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
@@ -250,7 +250,7 @@ impl StableEncode for LocalTypePrefix {
         }
     }
 }
-pub(crate) struct PreparedSourceLocalPlan {
+pub struct PreparedSourceLocalPlan {
     entered: EnteredMacroIndex<'static>,
     tables: Arc<SourceLocalTables>,
     context: Arc<PreparedBodyContext>,
@@ -259,6 +259,7 @@ pub(crate) struct PreparedSourceLocalPlan {
     lexical_module: LexicalTypeModule,
     source_identity: Digest,
     exclusive_bytes: usize,
+    environment: Option<Arc<crate::db::BodyEnvironmentInput>>,
 }
 /// Actual immutable roots. Reading them never permits rebinding a plan to a
 /// different environment; the lookup adapter below always borrows its own owner.
@@ -304,6 +305,45 @@ impl SourceLocalPlanRoots<'_> {
     }
 }
 impl PreparedSourceLocalPlan {
+    pub(crate) fn environment(&self) -> Option<&Arc<crate::db::BodyEnvironmentInput>> {
+        self.environment.as_ref()
+    }
+    pub(crate) fn require_current(&self, db: &mut Database) -> QueryPoll<()> {
+        match self.context.require_current(db) {
+            QueryPoll::Ready(Ok(())) => {}
+            other => return other,
+        }
+        let Some(environment) = &self.environment else {
+            return QueryPoll::Ready(Ok(()));
+        };
+        let key = crate::db::dependency::InputKey::BodyEnvironment(environment.body().clone());
+        if !matches!(db.input(&key).as_deref(),Some(InputValue::BodyEnvironment(current)) if current.identity()==environment.identity())
+        {
+            return QueryPoll::Ready(Err(error("published local environment was replaced")));
+        }
+        environment.require_current(db)
+    }
+    /// Pure-query join to an opaque coordinator input. No caller-provided
+    /// digest or equivalent-looking source can install this association.
+    pub(crate) fn attach_environment(
+        self: Arc<Self>,
+        environment: Arc<crate::db::BodyEnvironmentInput>,
+    ) -> Result<Arc<Self>, Diagnostic> {
+        if self.context.source().identity() != environment.source().identity()
+            || self.context.source().index().body() != environment.body()
+        {
+            return Err(error("local plan owning environment differs"));
+        }
+        let mut plan = self;
+        let inner =
+            Arc::get_mut(&mut plan).ok_or_else(|| error("shared local plan cannot be rebound"))?;
+        let mut identity = StableEncoder::new("lrr/v1/published-source-local-plan");
+        identity.digest(inner.source_identity);
+        identity.digest(environment.semantic_identity());
+        inner.source_identity = identity.finish();
+        inner.environment = Some(environment);
+        Ok(plan)
+    }
     /// Cold source Type preparation. Production callers must consume the
     /// retained result through the owning current environment query.
     pub(crate) fn prepare_body_type(
@@ -401,6 +441,7 @@ impl PreparedSourceLocalPlan {
             lexical_module,
             source_identity: identity.finish(),
             exclusive_bytes,
+            environment: None,
         })
     }
     pub(crate) fn type_prefix(
@@ -408,6 +449,11 @@ impl PreparedSourceLocalPlan {
         db: &mut Database,
         node: crate::ir::pc::NodeId,
     ) -> QueryPoll<LocalTypePrefix> {
+        match self.require_current(db) {
+            QueryPoll::Ready(Ok(())) => {}
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
         use crate::frontend::source_body_context::type_occurrences::{
             BodyTypeOrigin, BodyTypeSegment, BodyTypeShape,
         };
@@ -575,7 +621,7 @@ impl PreparedSourceLocalPlan {
         site: OrdinaryNameSite<'_>,
         names: &NameNamespaces,
     ) -> QueryPoll<LocalPrefixMetadata> {
-        match self.context.require_current(db) {
+        match self.require_current(db) {
             QueryPoll::Ready(Ok(())) => {}
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
@@ -679,3 +725,12 @@ fn expansion_definitions(
 #[cfg(test)]
 #[path = "local_type_prefix_tests.rs"]
 mod tests;
+
+impl std::fmt::Debug for PreparedSourceLocalPlan {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PreparedSourceLocalPlan")
+            .field("body", self.context.source().index().body())
+            .field("source_identity", &self.source_identity)
+            .finish()
+    }
+}

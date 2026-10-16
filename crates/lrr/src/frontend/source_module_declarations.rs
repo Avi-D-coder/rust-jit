@@ -154,6 +154,47 @@ impl SourceModuleDeclaration {
     pub fn range(&self) -> SourceRange {
         self.range
     }
+    /// Actual retained row/heap upper bound, excluding the shared immutable
+    /// source-state allocation. It includes both selected/source-location keys.
+    pub fn retained_metadata_bytes(&self) -> Result<usize, Diagnostic> {
+        let mut bytes = std::mem::size_of::<Self>()
+            .checked_add(
+                self.source
+                    .selection()
+                    .metadata_bytes()?
+                    .checked_mul(2)
+                    .ok_or_else(|| fault("source module retained key overflow"))?,
+            )
+            .and_then(|n| n.checked_add(self.definition.declared_name.capacity()))
+            .and_then(|n| n.checked_add(self.request.name.capacity()))
+            .and_then(|n| {
+                n.checked_add(
+                    self.request
+                        .path_override
+                        .as_ref()
+                        .map_or(0, String::capacity),
+                )
+            })
+            .ok_or_else(|| fault("source module retained metadata overflow"))?;
+        for parts in [
+            &self.definition.module_path,
+            &self.scope.module_path,
+            &self.request.module_path,
+            &self.request.directory,
+        ] {
+            bytes = parts
+                .capacity()
+                .checked_mul(std::mem::size_of::<String>())
+                .and_then(|n| bytes.checked_add(n))
+                .ok_or_else(|| fault("source module retained vector overflow"))?;
+            bytes = parts
+                .iter()
+                .try_fold(bytes, |n, part| n.checked_add(part.capacity()))
+                .filter(|n| *n <= 32 * 1024 * 1024)
+                .ok_or_else(|| fault("source module retained metadata limit"))?;
+        }
+        Ok(bytes)
+    }
     pub(crate) fn metadata_bytes(&self) -> usize {
         self.bytes
     }

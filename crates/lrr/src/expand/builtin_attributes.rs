@@ -67,6 +67,21 @@ pub fn inert_descriptor(name: &str) -> Result<Option<InertAttributeDescriptor>, 
         })
 }
 
+/// Preparation does not select a binding. Known handlers remain pending rather
+/// than being eagerly rejected while unrelated source rows are captured.
+pub(crate) fn preparation_inert_descriptor(
+    name: &str,
+) -> Result<Option<InertAttributeDescriptor>, Diagnostic> {
+    lrr_expand_adapter::builtin_attributes::preparation_inert_descriptor(name)
+        .map_err(|e| Diagnostic::new(e.code, e.message))
+        .map(|descriptor| {
+            descriptor.map(|descriptor| InertAttributeDescriptor {
+                name: descriptor.name(),
+                identity: Digest(descriptor.definition_identity().0),
+            })
+        })
+}
+
 /// An unqualified builtin-inert spelling is retained only after its competing
 /// Attribute facet is resolved. A bang-only candidate does not shadow it. The
 /// negative binding identity is part of the seal proof and is replayed at seal.

@@ -160,6 +160,7 @@ fn capture_fields(
                         name: Some(name),
                         visibility: super::outline::visibility(field.syntax()),
                         ty: tokens(ty.syntax(), None),
+                        type_range: super::ast_adapter::range(ty.syntax().text_range()),
                         symbolic: lower_type(&ty, definition, generics, 0)?,
                     },
                 )?;
@@ -187,6 +188,7 @@ fn capture_fields(
                         name: None,
                         visibility: super::outline::visibility(field.syntax()),
                         ty: tokens(ty.syntax(), None),
+                        type_range: super::ast_adapter::range(ty.syntax().text_range()),
                         symbolic: lower_type(&ty, definition, generics, 0)?,
                     },
                 )?;

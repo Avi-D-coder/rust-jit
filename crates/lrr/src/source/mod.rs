@@ -20,3 +20,5 @@ pub mod module_syntax;
 pub mod ordinary_module;
 
 pub(crate) mod compiler_replay;
+
+pub mod macro_export_module;

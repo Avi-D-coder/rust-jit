@@ -246,7 +246,7 @@ impl ParsedFile {
                 "generated Value prelude policy requires actual owning-crate origin",
             ));
         }
-        let policy = self.macro_prelude_policy(cfg)?;
+        let policy = self.live_macro_prelude_policy(cfg)?;
         let mut stack = vec![self.parsed.tree().syntax().clone()];
         let mut work = 0usize;
         while let Some(node) = stack.pop() {

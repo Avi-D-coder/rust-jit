@@ -50,6 +50,83 @@ fn deferred(demand: RecordConstructorDemand) -> QueryPoll<RecordConstructorBindi
     QueryPoll::Ready(Ok(RecordConstructorBinding::Deferred(Box::new(demand))))
 }
 
+/// Reached preparation from the memoized owning source environment. Local
+/// declaration authority is supplied by the same indexed Type occurrence used
+/// by other source type consumers, never by searching module outline rows.
+pub(crate) fn bind_prepared_record_constructor(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    body: &BodyIndex,
+    plan: &ConstructorPlan,
+) -> QueryPoll<RecordConstructorBinding> {
+    use super::source_locals::owned_plan::type_declarations::BodyTypeOutcome;
+    if sources.len() > 100_000
+        || plan.origin().body_key != *body.body()
+        || plan.profile() != body.profile()
+    {
+        return QueryPoll::Ready(Err(fault("constructor plan/owning body differs")));
+    }
+    let outcome = match db.fetch(
+        &SyntaxProvider,
+        QueryKey::SourceLocalPlan(body.body().clone()),
+    ) {
+        QueryPoll::Ready(Ok(value)) => value,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    let QueryValue::SourceLocalPlan(locals) = outcome.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("constructor owning local plan outcome differs")));
+    };
+    if locals.context().source().index().body() != body.body() || locals.environment().is_none() {
+        return QueryPoll::Ready(Err(fault("constructor owning environment differs")));
+    }
+    let selected = match locals.prepare_body_type(db, plan.node()) {
+        QueryPoll::Ready(Ok(BodyTypeOutcome::Ready(selected))) => selected,
+        QueryPoll::Ready(Ok(BodyTypeOutcome::Pending(_))) => {
+            return deferred(RecordConstructorDemand::TypeContext);
+        }
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    let declaration = selected.declaration();
+    if declaration.definition().item_kind != ItemKind::Struct {
+        return deferred(RecordConstructorDemand::TypeContext);
+    }
+    let schema = match db.fetch(
+        &SyntaxProvider,
+        QueryKey::TypeSchema(declaration.definition_identity()),
+    ) {
+        QueryPoll::Ready(Ok(value)) => value,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    let QueryValue::TypeSchema(schema) = schema.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("constructor selected schema outcome differs")));
+    };
+    let names = match SchemaNames::from_body_type(db, graph, schema, &selected) {
+        QueryPoll::Ready(Ok(names)) => names,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    match names.bind_record_constructor_current(
+        db,
+        sources,
+        None,
+        plan,
+        locals.context().source().scope(),
+    ) {
+        QueryPoll::Ready(Ok(NominalConstructorBinding::Ready(bound))) => {
+            QueryPoll::Ready(Ok(RecordConstructorBinding::Ready(Box::new(bound))))
+        }
+        QueryPoll::Ready(Ok(pending)) => {
+            deferred(RecordConstructorDemand::Fields(Box::new(pending)))
+        }
+        QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+    }
+}
+
 /// The supplied entered index must retain the actual published source/hygiene
 /// context. Pending producers/local declarations never fall back to module names.
 pub fn bind_record_constructor(

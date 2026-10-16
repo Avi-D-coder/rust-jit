@@ -13,6 +13,89 @@ use crate::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 type ModuleKey = (Digest, Vec<MacroName>);
+/// A missing resolved scope is preparation work, not evidence of macro absence.
+/// This carries no declaration/capture authority; the preparation owner must
+/// select an actual source module declaration before requesting any input.
+pub(crate) struct ModulePreparationDemand {
+    pub(crate) import: SourceImport,
+    pub(crate) missing: super::module_paths::ModulePath,
+}
+pub(crate) enum ModuleGraphPreparation {
+    Ready(MacroNamespaces),
+    NeedModule(ModulePreparationDemand),
+}
+impl ModuleGraphPreparation {
+    pub(crate) fn require_ready(self) -> Result<MacroNamespaces, Diagnostic> {
+        match self {
+            Self::Ready(graph) => Ok(graph),
+            Self::NeedModule(demand) => Err(demand.diagnostic()),
+        }
+    }
+}
+impl ModulePreparationDemand {
+    /// Join a resolved preparation target to an actual unresolved declaration.
+    /// This is an exact scope-prefix join after module resolution, not another
+    /// path resolver. The caller still validates the selected source lineage
+    /// and prepares its existing CaptureModule request under current authority.
+    pub(crate) fn declaration<'a>(
+        &self,
+        declarations: impl IntoIterator<
+            Item = &'a crate::frontend::source_module_declarations::SourceModuleDeclaration,
+        >,
+    ) -> Result<
+        Option<&'a crate::frontend::source_module_declarations::SourceModuleDeclaration>,
+        Diagnostic,
+    > {
+        let mut selected = None;
+        let mut length = usize::MAX;
+        let mut count = 0usize;
+        for declaration in declarations {
+            count = count
+                .checked_add(1)
+                .filter(|n| *n <= 100_000)
+                .ok_or_else(|| error("module preparation declaration count limit"))?;
+            let scope = declaration.scope();
+            if scope.crate_key != self.missing.unit || scope.owner.is_some() {
+                continue;
+            }
+            let names = module_names(
+                &scope.module_path,
+                declaration
+                    .source()
+                    .selection()
+                    .outline
+                    .parse
+                    .profile
+                    .edition,
+            )?;
+            if names.is_empty() || !self.missing.names.starts_with(&names) {
+                continue;
+            }
+            // An unresolved ancestor must be prepared before its descendants.
+            if names.len() < length {
+                selected = Some(declaration);
+                length = names.len();
+            } else if names.len() == length {
+                return Err(error("module preparation has duplicate declaration owners"));
+            }
+        }
+        Ok(selected)
+    }
+    pub(crate) fn diagnostic(&self) -> Diagnostic {
+        Diagnostic::new(
+            "LRR-E-MACRO-SCOPE",
+            format!(
+                "glob module scope remains unresolved: import {} leaf {} at {}..{}; missing unit {} membership {}",
+                self.import.identity.hex(),
+                self.import.leaf_ordinal,
+                self.import.range.start,
+                self.import.range.end,
+                self.missing.unit.hex(),
+                module_demand_parts(self.missing.unit, &self.missing.names).hex(),
+            ),
+        )
+    }
+}
 type WeakModules =
     BTreeMap<ModuleKey, BTreeMap<ModuleKey, BTreeSet<crate::syntax::visibility::VisibilityScope>>>;
 fn error(message: &str) -> Diagnostic {
@@ -114,9 +197,12 @@ impl Modules {
     }
 }
 fn module_demand(key: &ModuleKey) -> Digest {
+    module_demand_parts(key.0, &key.1)
+}
+fn module_demand_parts(unit: Digest, names: &[MacroName]) -> Digest {
     let mut encoded = StableEncoder::new("lrr/v2/pending-source-module-membership");
-    encoded.digest(key.0);
-    encoded.sequence(&key.1, |encoded, name| encoded.string(name.as_str()));
+    encoded.digest(unit);
+    encoded.sequence(names, |encoded, name| encoded.string(name.as_str()));
     encoded.finish()
 }
 fn reference(
@@ -245,6 +331,13 @@ pub(super) fn graph_with_compiler_imports(
     pending: bool,
     imports: &[super::compile_input_catalog::CompilerInjectedImport],
 ) -> Result<MacroNamespaces, Diagnostic> {
+    prepare_graph_with_compiler_imports(catalogs, pending, imports)?.require_ready()
+}
+pub(super) fn prepare_graph_with_compiler_imports(
+    catalogs: &[&SourceMacroRoutes],
+    pending: bool,
+    imports: &[super::compile_input_catalog::CompilerInjectedImport],
+) -> Result<ModuleGraphPreparation, Diagnostic> {
     if imports.len() > 100_000 {
         return Err(error("compiler import count limit"));
     }
@@ -511,8 +604,23 @@ pub(super) fn graph_with_compiler_imports(
                 .ok_or_else(|| error("source import edge limit exceeded"))?;
             let source = &deferred.source;
             let (unit, parts) = reference(source, catalog, &modules.known)?;
-            if !matches!(modules.resolve(unit, &parts)?, Resolution::Known(_)) {
-                return Err(error("glob module scope remains unresolved"));
+            if let Resolution::Wait(missing) = modules.resolve(unit, &parts)? {
+                modules.budget.key(&missing)?;
+                modules.budget.bytes = modules
+                    .budget
+                    .bytes
+                    .checked_add(crate::syntax::imports::retained_bytes(source)?)
+                    .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+                    .ok_or_else(|| error("module preparation demand metadata limit"))?;
+                return Ok(ModuleGraphPreparation::NeedModule(
+                    ModulePreparationDemand {
+                        import: source.clone(),
+                        missing: super::module_paths::ModulePath {
+                            unit: missing.0,
+                            names: missing.1,
+                        },
+                    },
+                ));
             }
             if !matches!(
                 graph.module_paths.resolve_module(
@@ -561,7 +669,7 @@ pub(super) fn graph_with_compiler_imports(
         }
     }
     graph.validate_macro_use_selectors()?;
-    Ok(graph)
+    Ok(ModuleGraphPreparation::Ready(graph))
 }
 
 fn named_modules(

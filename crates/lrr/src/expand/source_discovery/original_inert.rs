@@ -21,29 +21,21 @@ pub(super) fn matched_attribute_facet<'a>(
             "original inert prefix provider belongs to another source publication",
         ));
     }
-    let Some(compiler) = provider.compiler.as_ref() else {
-        return Ok(None);
-    };
-    let Some(attributes) = compiler.attribute_catalog() else {
-        return Ok(None);
-    };
-    if compiler.runtime_prelude_unit(false)
-        != crate::facade::unit(&source.selection().outline.parse.profile, "core")
-        || compiler.runtime_catalog()?.is_none()
-    {
-        return Err(fault(
-            "original inert prefix compiler Attribute facet/profile differs",
-        ));
-    }
-    Ok(Some(attributes))
+    provider.matched_attribute_facet()
 }
+
 pub(super) fn revalidate(
-    source: &PreparedSourceView,
+    current: &crate::source::compiler_replay::CompilerReplaySource<'_>,
     provider: &super::super::source_declarative::SourceDeclarative,
     proof: &super::super::nested_inert::NestedInertProof,
     namespaces: &crate::frontend::macro_names::MacroNamespaces,
+    prefixes: &std::collections::BTreeSet<crate::core::digest::Digest>,
 ) -> Result<(), Diagnostic> {
-    if !capture(source, proof.scan(), 32 * 1024 * 1024)?.contains(&proof.producer()) {
+    // Establish actual source identity first. A captured producer set alone
+    // cannot validate a proof's source, cfg, origin or compiler descriptor.
+    proof.revalidate_prepared(current)?;
+    let source = current.source();
+    if !prefixes.contains(&proof.producer()) {
         return Err(fault(
             "original inert proof is not attached to this exact root meta",
         ));
@@ -54,10 +46,9 @@ pub(super) fn revalidate(
     let expected = proof
         .attribute_facet()
         .ok_or_else(|| fault("original inert prefix has no selected Attribute-facet proof"))?;
-    proof.revalidate(source.captured_macro_blob()?, source.captured_macro_cfg()?)?;
     let lookup = crate::service::source_attribute_requests::SourceAttributeSelection::cold_lookup(
         source,
-        proof.scan(),
+        current.scan(),
         proof.producer(),
         namespaces,
     )?;

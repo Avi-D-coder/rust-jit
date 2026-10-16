@@ -130,6 +130,20 @@ impl InertAttributeDescriptor {
     }
 }
 pub fn inert_descriptor(name: &str) -> Result<Option<InertAttributeDescriptor>, AdapterError> {
+    inert_descriptor_for_phase(name, true)
+}
+/// Early candidate scheduling only. Known semantic handlers and actions remain
+/// producers; they are not errors merely because another source item is being
+/// prepared. This does not resolve an Attribute binding or change final checks.
+pub fn preparation_inert_descriptor(
+    name: &str,
+) -> Result<Option<InertAttributeDescriptor>, AdapterError> {
+    inert_descriptor_for_phase(name, false)
+}
+fn inert_descriptor_for_phase(
+    name: &str,
+    final_selection: bool,
+) -> Result<Option<InertAttributeDescriptor>, AdapterError> {
     let fault = |message: &str| AdapterError {
         code: "LRR-E-MACRO-SCOPE",
         message: message.into(),
@@ -151,6 +165,9 @@ pub fn inert_descriptor(name: &str) -> Result<Option<InertAttributeDescriptor>, 
                 if compiler_attribute_requirement(name)?
                     != Some(CompilerAttributeRequirement::DiagnosticMetadata)
                 {
+                    if !final_selection {
+                        return Ok(None);
+                    }
                     return Err(AdapterError {
                         code: "LRR-E-MACRO-PROFILE",
                         message: format!(
@@ -200,6 +217,28 @@ mod inventory_tests {
         ast::{self, HasModuleItem, HasName},
     };
 
+    #[test]
+    fn preparation_never_turns_a_semantic_handler_into_an_inert_descriptor() {
+        let mut prepared = 0usize;
+        let mut pending = 0usize;
+        for name in compiler_inventory::NAMES {
+            match preparation_inert_descriptor(name).unwrap() {
+                Some(descriptor) => {
+                    assert_eq!(Some(descriptor), inert_descriptor(name).unwrap());
+                    prepared += 1;
+                }
+                None => {
+                    assert_eq!(
+                        compiler_attribute_requirement(name).unwrap(),
+                        Some(CompilerAttributeRequirement::SemanticHandler)
+                    );
+                    assert!(inert_descriptor(name).is_err());
+                    pending += 1;
+                }
+            }
+        }
+        assert!(prepared > 0 && pending > 0);
+    }
     #[test]
     fn complete_pinned_compiler_inventory_matches_actual_static_array() {
         let source = include_str!(

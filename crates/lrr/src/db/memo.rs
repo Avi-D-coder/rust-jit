@@ -16,6 +16,8 @@ mod lexical_inputs;
 #[path = "scope_certificate_index.rs"]
 mod scope_certificate_index;
 
+#[path = "body_environment_retention.rs"]
+mod body_environment_retention;
 #[path = "product_retention.rs"]
 mod product_retention;
 
@@ -39,9 +41,10 @@ mod prepared_modules;
 #[path = "retained_body_inputs.rs"]
 mod retained_body_inputs;
 pub(crate) use retained_body_inputs::{RetainedOriginalDeclaration, RetainedSourceLease};
+#[path = "body_environment_inputs.rs"]
+pub(crate) mod body_environment_inputs;
 #[path = "local_declaration_inputs.rs"]
 mod local_declaration_inputs;
-pub(crate) use local_declaration_inputs::LocalDeclarationPublication;
 #[path = "retained_syntax_inputs.rs"]
 mod retained_syntax_inputs;
 pub(crate) use body_leases::BodyExecutionLease;
@@ -257,7 +260,7 @@ impl Database {
                         }
                         Some(Arc::as_ptr(v) as usize)
                     }
-                    QueryValue::Thunk(_) => {
+                    QueryValue::Thunk(_) | QueryValue::SourceLocalPlan(_) => {
                         for root in memo.value.source_roots() {
                             product_retention::count_owner(root, &mut inner, &mut products);
                         }
@@ -287,12 +290,18 @@ impl Database {
                 .values()
                 .filter_map(std::sync::Weak::upgrade),
         ) {
-            if owners.insert(Arc::as_ptr(&value) as usize)
-                && let InputValue::DiscoverySeal(input) = value.as_ref()
-            {
-                *inner
-                    .entry(Arc::as_ptr(&input.declaration_inventory) as usize)
-                    .or_insert(0) += 1;
+            if owners.insert(Arc::as_ptr(&value) as usize) {
+                match value.as_ref() {
+                    InputValue::DiscoverySeal(input) => {
+                        *inner
+                            .entry(Arc::as_ptr(&input.declaration_inventory) as usize)
+                            .or_insert(0) += 1
+                    }
+                    InputValue::BodyEnvironment(input) => {
+                        *inner.entry(Arc::as_ptr(input) as usize).or_insert(0) += 1
+                    }
+                    _ => {}
+                }
             }
         }
         (outer, inner)
@@ -848,6 +857,14 @@ impl Database {
             usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, bytes)?;
         }
         self.account_source_artifacts(&mut usage, &memo_outer, &memo_inner, &mut body_allocations)?;
+        let environment_roots = self.body_environment_root_bytes(None)?;
+        usage.memo_bytes = account_add(usage.memo_bytes, environment_roots)?;
+        // Current inputs, external leases and retirement owners pin their real
+        // descendants; cached-only plans remain evictable with their memo.
+        usage.pinned_memo_bytes = account_add(
+            usage.pinned_memo_bytes,
+            self.pinned_body_environment_root_bytes()?,
+        )?;
         for pin in self.query_pins.values() {
             let bytes = 64 + std::mem::size_of::<usize>() + std::mem::size_of::<QueryPin>();
             usage.memo_bytes = account_add(usage.memo_bytes, bytes)?;
@@ -1013,7 +1030,8 @@ impl Database {
         if inputs.values().any(|value| {
             matches!(
                 value,
-                InputValue::ExpansionRecord(_)
+                InputValue::BodyEnvironment(_)
+                    | InputValue::ExpansionRecord(_)
                     | InputValue::ModuleRecord { .. }
                     | InputValue::IncludeRecord { .. }
                     | InputValue::DiscoverySeal(_)
@@ -1098,6 +1116,9 @@ impl Database {
         modules: &[Arc<crate::source::module_syntax::ModuleSyntaxInput>],
         ordinary_modules: &[Arc<crate::source::ordinary_module::OrdinaryModuleSyntaxInput>],
         replay_sources: &[crate::source::compiler_replay::CompilerReplaySource<'_>],
+        macro_export_modules: &[Arc<
+            crate::source::macro_export_module::MacroExportModuleAdoption,
+        >],
         derived: BTreeMap<InputKey, InputValue>,
     ) -> Result<(), Diagnostic> {
         use crate::core::digest::StableEncode;
@@ -1373,6 +1394,85 @@ impl Database {
                     ));
                 }
             }
+        }
+        // A recorded source path and caller-selected module_path prove no
+        // parent/child relationship. Every selected role child requires its
+        // genuine adopted module lease, including the actual chosen candidate
+        // and current record/role stamps in this same complete seal.
+        if macro_export_modules.len() > 256 {
+            return Err(fault(
+                "LRR-E-MACRO-EXPORT-PUBLICATION",
+                "macro-export adopted module count limit",
+            ));
+        }
+        macro_export_modules
+            .len()
+            .checked_mul(std::mem::size_of::<(Digest, Digest)>() + 128)
+            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+            .ok_or_else(|| {
+                fault(
+                    "LRR-E-METADATA-LIMIT",
+                    "macro-export module validation metadata limit",
+                )
+            })?;
+        let mut adopted_children = BTreeMap::new();
+        for adoption in macro_export_modules {
+            let request = adoption.request();
+            let parent = request.parent().source().selection();
+            let child = request.child().source().selection();
+            if child.outline.module_path.is_empty()
+                || !input.sources.contains(parent)
+                || !input.sources.contains(child)
+                || macro_sources
+                    .get(&parent.location_identity())
+                    .is_none_or(|role| role.source() != parent)
+                || macro_sources
+                    .get(&child.location_identity())
+                    .is_none_or(|role| role.source() != child)
+            {
+                return Err(fault(
+                    "LRR-E-MACRO-EXPORT-PUBLICATION",
+                    "adopted macro module has no exact selected parent and child role",
+                ));
+            }
+            adoption.validate_discovery(self, &input)?;
+            if adopted_children
+                .insert(child.location_identity(), adoption.identity())
+                .is_some()
+            {
+                return Err(fault(
+                    "LRR-E-MACRO-EXPORT-PUBLICATION",
+                    "duplicate adopted macro module child",
+                ));
+            }
+        }
+        for adoption in macro_export_modules {
+            let request = adoption.request();
+            let parent = request.parent().source().selection();
+            let selected_parent = adopted_children.get(&parent.location_identity());
+            let embedded_parent = request.parent_adoption().map(|parent| parent.identity());
+            if parent.outline.module_path.is_empty() {
+                if embedded_parent.is_some() {
+                    return Err(fault(
+                        "LRR-E-MACRO-EXPORT-PUBLICATION",
+                        "root macro module has an unexpected parent adoption",
+                    ));
+                }
+            } else if selected_parent.copied() != embedded_parent || selected_parent.is_none() {
+                return Err(fault(
+                    "LRR-E-MACRO-EXPORT-PUBLICATION",
+                    "macro module ancestry differs from the selected parent adoption",
+                ));
+            }
+        }
+        if macro_sources.iter().any(|(location, role)| {
+            !role.source().outline.module_path.is_empty()
+                && !adopted_children.contains_key(location)
+        }) {
+            return Err(fault(
+                "LRR-E-MACRO-EXPORT-PUBLICATION",
+                "selected macro module lacks genuine parent adoption",
+            ));
         }
         // Replay facts remain borrowed from preparation owners for this one
         // coordinator call. They never enter the ordinary runtime input map.

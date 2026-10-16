@@ -70,7 +70,9 @@ fn variant(
     selected(db, source, graph, name, |db, names| {
         let bound = ready(
             names
-                .bind_variant_with(None, |name| names.current_name(db, &[source], name))
+                .bind_variant_with(None, |name, field| {
+                    names.current_name(db, &[source], name, field)
+                })
                 .unwrap(),
         );
         let NominalBinding::Ready(bound) = bound else {

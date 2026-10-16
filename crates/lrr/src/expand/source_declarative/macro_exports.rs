@@ -35,6 +35,7 @@ pub struct SourceMacroExportFacet {
     route_bytes: usize,
     source_admission_bytes: usize,
     recorded_path: String,
+    package_root: String,
     compiler_builtins: Vec<Digest>,
 }
 impl std::fmt::Debug for SourceMacroExportFacet {
@@ -100,6 +101,11 @@ impl SourceMacroExportFacet {
         let relative = std::path::Path::new(recorded_path)
             .strip_prefix(package)
             .map_err(|_| fault("macro-export source is outside its configured package"))?;
+        if selection.outline.module_path.is_empty() && configured.source_path != recorded_path {
+            return Err(fault(
+                "macro-export crate root differs from configured Cargo source root",
+            ));
+        }
         if crate::source::snapshot::SourcePath::new(relative)? != selection.path {
             return Err(fault(
                 "macro-export logical and recorded source paths differ",
@@ -165,11 +171,17 @@ impl SourceMacroExportFacet {
             .try_reserve_exact(recorded_path.len())
             .map_err(|_| fault("macro-export captured path allocation"))?;
         captured_path.push_str(recorded_path);
+        let mut package_root = String::new();
+        package_root
+            .try_reserve_exact(package.len())
+            .map_err(|_| fault("macro-export package root allocation"))?;
+        package_root.push_str(package);
         // Pending producers/imports are retained by the ordinary route object;
         // this receipt does not claim that export discovery has completed.
         let exclusive_bytes = std::mem::size_of::<Self>()
             .checked_add(2 * std::mem::size_of::<usize>())
             .and_then(|n| n.checked_add(captured_path.capacity()))
+            .and_then(|n| n.checked_add(package_root.capacity()))
             .and_then(|n| {
                 n.checked_add(
                     compiler_builtins
@@ -222,6 +234,7 @@ impl SourceMacroExportFacet {
             route_bytes,
             source_admission_bytes,
             recorded_path: captured_path,
+            package_root,
             compiler_builtins,
         })
     }
@@ -263,6 +276,11 @@ impl SourceMacroExportFacet {
     }
     pub fn recorded_path(&self) -> &str {
         &self.recorded_path
+    }
+    /// The actual configured compile-environment package source authority.
+    /// It is not inferred from a child spelling or supplied by a caller.
+    pub(crate) fn package_root(&self) -> &std::path::Path {
+        std::path::Path::new(&self.package_root)
     }
     pub fn identity(&self) -> Digest {
         self.identity

@@ -798,11 +798,20 @@
         "crates/lrr/src/frontend/nominal_field_storage_tests.rs",
         "crates/lrr/src/runtime/place.rs",
         "worktracks/04-calls-source-views/common-nominal-field-storage-handoff.md",
-        "worktracks/evidence/2026-10-16-nominal-field-storage-source.json"
+        "worktracks/evidence/2026-10-16-nominal-field-storage-source.json",
+        "crates/lrr/src/frontend/constructors.rs",
+        "crates/lrr/src/frontend/source_types.rs",
+        "crates/lrr/src/frontend/types.rs",
+        "crates/lrr/src/engine/run_constructors.rs",
+        "crates/lrr/src/frontend/module_aliases.rs",
+        "crates/lrr/src/frontend/source_macro_routes.rs",
+        "worktracks/04-calls-source-views/prepared-local-record-constructor-handoff.md",
+        "worktracks/08-macros-editions/common-module-preparation-demand-handoff.md",
+        "worktracks/evidence/2026-10-16-prepared-local-constructor-source.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-16T15:55:20.526832+00:00",
+      "updated_at": "2026-10-16T16:46:57.446300+00:00",
       "review_after": "2026-10-16T09:02:33.119445+00:00"
     },
     {

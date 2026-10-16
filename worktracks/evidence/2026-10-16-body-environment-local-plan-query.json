@@ -1,0 +1,130 @@
+{
+  "kind": "source-only-body-environment-query-component",
+  "source_fingerprint": "e237a084dedcc360e1af31f26254c5d53ea6d6d20c5d1670511d18b61ed07e51",
+  "status": "uncompiled-unexecuted",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/body_environment_inputs.rs",
+      "bytes": 11020,
+      "sha256": "b6c604bfe85adbf01f4d72ec9287f237a2dd96eaf7b2073ba9e31021b35963ad"
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_inputs_tests.rs",
+      "bytes": 14186,
+      "sha256": "85efa881a1ee13461a4fcc45d4fa60891bb5b8c913b1720b77d31d6042ba3851"
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_provider.rs",
+      "bytes": 2150,
+      "sha256": "c6b494f6dc4f9fb9769b08b80079cdeed49bd14e81e6021f75033c63a20dba42"
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_retention.rs",
+      "bytes": 18511,
+      "sha256": "7b165640b67edaff4f9e9b406b6ba1f96af06a33f3eb591c381cfed2d8d6912f"
+    },
+    {
+      "path": "crates/lrr/src/db/dependency.rs",
+      "bytes": 17425,
+      "sha256": "ce0139ffa3b53687908302b4400461aa7f2bceb8cf3c9a7ebf9dcc712dc6a2f3"
+    },
+    {
+      "path": "crates/lrr/src/db/key.rs",
+      "bytes": 9296,
+      "sha256": "9af7d17196287dc52875e1e63adaef80ef55da21466229df7c2afaa5196dca80"
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "bytes": 137243,
+      "sha256": "4bbe4de1298d15aca1c54ba69afe55cbc0c92f1ad79b9045698a31cfb778ccb2"
+    },
+    {
+      "path": "crates/lrr/src/db/mod.rs",
+      "bytes": 417,
+      "sha256": "929584397a810badafcc5d68dfb7379e61dd57f632c97d9fedd7c56fd60d4f88"
+    },
+    {
+      "path": "crates/lrr/src/db/product_retention.rs",
+      "bytes": 9969,
+      "sha256": "caa3561b105f53462a5f74ea71ed7ee4ba982e13eb46b01c9bd656fbf5b91859"
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "bytes": 54381,
+      "sha256": "0ef5ba294e0b852f07b4b65957425ce892540fb7d3c044838699b990c618cea0"
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "bytes": 15357,
+      "sha256": "e97a803c07b65870826d1bedf3e205ff9028eeab444784f2e1c57f6e20a8567f"
+    },
+    {
+      "path": "crates/lrr/src/cli/retained_entry.rs",
+      "bytes": 3173,
+      "sha256": "4396c2c0e17bbae6cf2ed755b5c3c4d0fb855ec5100dad104e5f153b702e7248"
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_items.rs",
+      "bytes": 28295,
+      "sha256": "379038cfaca9befd94bce7b4969593f34164124a5a5c2f29e6045d90f45440dc"
+    },
+    {
+      "path": "crates/lrr/src/expand/scopes.rs",
+      "bytes": 31307,
+      "sha256": "4fdc9cebb0e4c104c6b65bf083613a978ce74a2f3e95fed8d5e025c870b298e3"
+    },
+    {
+      "path": "crates/lrr/src/frontend/hygiene.rs",
+      "bytes": 10332,
+      "sha256": "4e247dd78d0182665cb5d1d65ea1242387781e385ba89172ad0c5da3d1e3a480"
+    },
+    {
+      "path": "crates/lrr/src/frontend/macro_origins.rs",
+      "bytes": 8009,
+      "sha256": "782f38869e02b96f47ff800647da4c154536e62fe786b597b243a6830c882bd7"
+    },
+    {
+      "path": "crates/lrr/src/frontend/macro_scopes.rs",
+      "bytes": 10850,
+      "sha256": "6fbcebc3f2055f673f1dcbe27bb1d7e731c1db2c07f5cb5882aa6c361fd78712"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macros.rs",
+      "bytes": 111267,
+      "sha256": "a1e6dd79198943dc87cd9f1c86cdf5f06f5bd4eecbb39715615a50a43aba7d1d"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "bytes": 44865,
+      "sha256": "f9bf4f5294b6be48f22746a4769a7b8b6218a56dbb56c29055b0ea80426ef0cc"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_locals.rs",
+      "bytes": 87439,
+      "sha256": "60bea6b96a9b3500de387585e763943f49ae2929ef6482bcdf1f02b8d282c390"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "bytes": 30523,
+      "sha256": "fc00bcbe769c9eacacdd24577cf27f82857fcb1ab81bee2a3eb4f59dceb6ec6d"
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_type_declarations.rs",
+      "bytes": 22817,
+      "sha256": "be3f6b314b02503d9a569a5bf4aec0a0377ff8230e31e706628908f3dae08ecb"
+    }
+  ],
+  "dependencies": [
+    "frozen207 existing source/query/pin/context prerequisites",
+    "selected-body-macro-environment4 b1219d18 (manifest fbf3fff0)",
+    "root prepared-local-record-constructor7 f1403c4d (optional consumer; field prefix held)"
+  ],
+  "validation_owner": "edition_macro_logic only",
+  "holds": [
+    "ordinary declaration-field Type occurrence prefix",
+    "qualified record Type module prefix m::S",
+    "class-keyed current module publication",
+    "actual local A/B whole main; actual issue40847 full main/assert producer closure",
+    "cold runtime_snapshot outer-table deep copies remain; no performance claim"
+  ]
+}

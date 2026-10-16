@@ -46,6 +46,35 @@ fn root(
     Err(error("normalization ancestor depth exceeded"))
 }
 impl HygieneFacts {
+    /// Cold encoding of pinned supplied facts, not an alternate normalization.
+    pub(crate) fn semantic_fingerprint(&self) -> Result<crate::core::digest::Digest, Diagnostic> {
+        use crate::core::digest::{Digest, StableEncoder};
+        if self.metadata_bytes()? > 64 * 1024 * 1024 {
+            return Err(error("hygiene environment encoding budget"));
+        }
+        let mut e = StableEncoder::new("lrr/v1/pinned-hygiene-environment");
+        e.u64(self.contexts.len() as u64);
+        for (key, record) in &self.contexts {
+            e.digest(Digest(key.0));
+            e.digest(Digest(record.key().0));
+        }
+        e.u64(self.normalized.len() as u64);
+        for (key, row) in &self.normalized {
+            e.digest(Digest(key.0));
+            e.digest(Digest(row.original.0));
+            e.digest(Digest(row.item.0));
+            e.digest(Digest(row.local.0));
+        }
+        e.u64(self.names.len() as u64);
+        for (key, row) in &self.names {
+            e.digest(Digest(key.0));
+            e.digest(Digest(row.original.0));
+            e.digest(Digest(row.item.0.0));
+            e.digest(Digest(row.local.0.0));
+        }
+        Ok(e.finish())
+    }
+
     pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
         self.contexts
             .len()

@@ -5,12 +5,11 @@ use crate::{
     source::changes::PreparedSourceView,
     syntax::{
         declaration_scan::{DeclarationProducerKind, DeclarationScan, DeclarationScopeKind},
-        parse::ParsedFile,
         spans::SourceRange,
     },
 };
 use ra_ap_syntax::{AstNode, ast::HasAttrs};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-CATALOG-INCOMPLETE", message.into())
 }
@@ -30,10 +29,12 @@ pub(crate) fn capture(
     }
     source.require_original_hygiene()?;
     source.require_declaration_syntax()?;
+    let parsed = source.retained_declaration_parser()?;
     if scan.parse() != &source.selection().outline.parse
         || scan.path() != &source.selection().path
         || scan.cfg() != source.selection().outline.cfg
         || scan.scope() != &source.outline().root_scope
+        || scan.generated_origin() != parsed.generated_origin
     {
         return Err(fault(
             "original prefix source/scan/profile/cfg/owning scope differs",
@@ -55,10 +56,6 @@ pub(crate) fn capture(
     {
         return Ok(BTreeSet::new());
     }
-    let parsed = ParsedFile::parse(
-        source.captured_macro_blob()?,
-        source.selection().outline.parse.profile.clone(),
-    )?;
     let tree = parsed.parsed.tree();
     let mut metas = Vec::new();
     for attribute in tree.attrs() {
@@ -77,30 +74,54 @@ pub(crate) fn capture(
     if !enabled {
         return Ok(BTreeSet::new());
     }
-    let mut result = BTreeSet::new();
-    let mut bytes = 128usize;
+    let mut bytes = metas
+        .capacity()
+        .checked_mul(std::mem::size_of::<ra_ap_syntax::ast::Meta>())
+        .and_then(|bytes| bytes.checked_add(128))
+        .filter(|bytes| *bytes <= byte_limit)
+        .ok_or_else(limit)?;
+    // Associate actual root Meta ranges once. Replaying each prefix will use
+    // the retained set and independently checked source scan instead.
+    let mut selected = BTreeMap::new();
+    let row_bytes = std::mem::size_of::<(
+        (u32, u32),
+        Option<&crate::syntax::declaration_scan::DeclarationProducer>,
+    )>()
+    .checked_add(128)
+    .ok_or_else(limit)?;
     for meta in metas {
         let range: SourceRange = crate::syntax::ast_adapter::range(meta.syntax().text_range());
-        let mut rows = scan
-            .producers()
-            .iter()
-            .filter(|row| row.kind == DeclarationProducerKind::Attribute && row.range == range);
-        let row = rows
-            .next()
-            .ok_or_else(|| fault("exact original root meta producer absent"))?;
-        if rows.next().is_some()
-            || row.lexical_scope != root.identity
+        bytes = bytes
+            .checked_add(row_bytes)
+            .filter(|bytes| *bytes <= byte_limit)
+            .ok_or_else(limit)?;
+        if selected.insert((range.start, range.end), None).is_some() {
+            return Err(fault("original root meta range is duplicated"));
+        }
+    }
+    for row in scan.producers() {
+        if row.kind != DeclarationProducerKind::Attribute {
+            continue;
+        }
+        if let Some(selected) = selected.get_mut(&(row.range.start, row.range.end))
+            && selected.replace(row).is_some()
+        {
+            return Err(fault("exact original root meta producer is ambiguous"));
+        }
+    }
+    let mut result = BTreeSet::new();
+    for row in selected.into_values() {
+        let row = row.ok_or_else(|| fault("exact original root meta producer absent"))?;
+        if row.lexical_scope != root.identity
             || row.scope != *scan.scope()
             || row.scope.owner.is_some()
             || !row.containers.is_empty()
         {
-            return Err(fault(
-                "original root meta producer ownership is ambiguous or differs",
-            ));
+            return Err(fault("original root meta producer ownership differs"));
         }
         bytes = bytes
             .checked_add(std::mem::size_of::<Digest>() + 128)
-            .filter(|n| *n <= byte_limit)
+            .filter(|bytes| *bytes <= byte_limit)
             .ok_or_else(limit)?;
         if !result.insert(row.identity) {
             return Err(fault("original root meta producer duplicated"));

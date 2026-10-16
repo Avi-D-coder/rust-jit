@@ -1,0 +1,54 @@
+{
+  "component": "common-selected-sealed-body-macro-environment-v1",
+  "source_fingerprint": "b1219d1808a2eee650f1f336b61ffec66f902c343ba2099f3b5c5563cd53ae32",
+  "status": "source-only, uncompiled/unexecuted; owning input/query transport and production route acceptance held",
+  "files": [
+    {
+      "path": "crates/lrr/src/expand/source_discovery.rs",
+      "sha256": "32c6f5be9c6beabe7854566c64f2b6d94ee2ce072737718da092f595b3e3335f",
+      "bytes": 499046
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/body_macro_environment.rs",
+      "sha256": "93f09d9432f67098debae77fb378fc6f5456ef7b4bb2ff559cb6ccc78419acdd",
+      "bytes": 10125
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/body_macro_environment_tests.rs",
+      "sha256": "0f94cd05e871ea33a5e4d266f4d9c8947c6f20c60ad66c91de9f9ac2cb7b0b82",
+      "bytes": 3798
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/original_inert_tests.rs",
+      "sha256": "d8b41d6dbf91504b3119bd432405aae9a192b3cca04b1ef0f63b74147f0c4121",
+      "bytes": 17139
+    }
+  ],
+  "dependencies": [
+    "Root-frozen scheduling10 SHA0a5355c5/source5a691f29 and exact source/module predecessors; immutable old evidence unchanged.",
+    "Reference-owned PublishedMacroIndex::prepare_semantic_identity plus explicit scope/declaration/hygiene/ancestry encoding APIs. Peer freezes exact source separately.",
+    "Reference-owned body-environment envelope publication/pure query must account actual index/source roots and replay exact completion dependency; no caller environment rebinding.",
+    "Existing genuine generated_body_macro_boundary remains separate actual output receipt, no newly invented generated authority."
+  ],
+  "architecture_review": {
+    "handoff": "worktracks/03-control-flow-patterns/selected-body-macro-environment-handoff.md",
+    "sha256": "4f4905c946a0211dd1214118482c7cb9dbe911b51e49da70e0e84d1bfb65772a",
+    "modes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ]
+  },
+  "test_filter": "expand::source_discovery::original_inert_tests::body_macro_environment_tests",
+  "witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/macros/auxiliary/foreign-crate-macro-pat.rs",
+    "sha256": "87f225051556bb7c8d61b2fe47cfea3e424247b8788322e9979477b9a1360419",
+    "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "actual_directive": "edition:2018; all4 edition rows here are additional LRR authority controls, not full fixture claims"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "component": "common-normalized-header-anchors-v1",
+  "source_fingerprint": "ddcd4c6a6b1853104498f2c960f109f0da8e862c76732b84316f2473251392a3",
+  "status": "source-only uncompiled/unexecuted; actual prior whole-main failure retained",
+  "baseline": "e4e4a81ede90c3de0fa6642801e24510c662abc1e0cf4ee1aec504cd52747376",
+  "files": [
+    {
+      "path": "crates/lrr/src/syntax/outline.rs",
+      "sha256": "2aac4453aabef9bf1a87b9368436ca745df3a88124e27a67e71aee965ab62bcc",
+      "bytes": 61332
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly_anchors.rs",
+      "sha256": "5ff2299a65ff4cb00edc9fa373bfd2400ca00fceb015adc4bc118b464762489b",
+      "bytes": 7209
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly_tests.rs",
+      "sha256": "8486ef04f394dba3c9bd0c16e6c237326393abcfb312296e3464e156fd242f33",
+      "bytes": 26061
+    }
+  ],
+  "handoff": "worktracks/08-macros-editions/common-normalized-header-anchors-handoff.md",
+  "test_filter": "expand::source_declarative::assembly::tests::rustc_local_struct_source_preserves_attribute_semantics_across_normalized_anchors",
+  "claims": {
+    "runtime_passes": 0,
+    "full_fixture_passes": 0,
+    "architecture_complete": false
+  },
+  "review": "Root separate source review: semantic comparison enumerates every StableEncode header/attribute field; only source_meta attachments omitted, existing original definition pairing and normalized/source anchors retained. Derived Eq unchanged. Cold bounded existing assembly join only; all8 broader holds persist."
+}

@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum InputKey {
+    BodyEnvironment(crate::source::manifest::BodyKey),
     MacroExportSource(Digest),
     SourceDependencies,
     ScopeCertificateSelection(Digest),
@@ -34,6 +35,7 @@ pub enum InputKey {
 }
 #[derive(Debug, Clone)]
 pub enum InputValue {
+    BodyEnvironment(Arc<super::BodyEnvironmentInput>),
     MacroExportSource(Box<super::MacroExportSourceReceipt>),
     ScopeCertificateSelection {
         selection: Digest,
@@ -103,6 +105,7 @@ impl InputValue {
             Ok::<_, crate::core::diagnostic::Diagnostic>(())
         };
         match self {
+            Self::BodyEnvironment(_) => {} // actual inner allocation is a retained source artifact
             Self::MacroExportSource(receipt) => add(receipt.metadata_bytes())?,
             Self::SourceDependencies(graph) => add(graph.metadata_bytes()?)?,
             Self::GeneratedSyntax(input) => add(input.metadata_bytes()?)?,
@@ -145,6 +148,9 @@ impl InputValue {
         Ok(bytes)
     }
     pub fn matches(&self, k: &InputKey) -> bool {
+        if let (Self::BodyEnvironment(input), InputKey::BodyEnvironment(body)) = (self, k) {
+            return input.body() == body;
+        }
         if let (Self::MacroExportSource(receipt), InputKey::MacroExportSource(location)) = (self, k)
         {
             return receipt.location_identity() == *location;
@@ -207,6 +213,10 @@ impl InputValue {
             _ => "lrr/v2/input-value",
         });
         match self {
+            Self::BodyEnvironment(input) => {
+                e.u32(32);
+                e.digest(input.identity());
+            }
             Self::MacroExportSource(receipt) => {
                 e.u32(31);
                 e.record(receipt.as_ref());
@@ -357,6 +367,10 @@ impl StableEncode for InputKey {
     const DOMAIN: &'static str = "lrr/v2/input-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::BodyEnvironment(body) => {
+                e.u32(32);
+                e.record(body);
+            }
             Self::MacroExportSource(location) => {
                 e.u32(31);
                 e.digest(*location);

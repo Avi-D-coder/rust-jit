@@ -71,6 +71,90 @@ fn edition(value: Edition) -> u16 {
     }
 }
 impl SourceMacroIndex {
+    /// Explicit cold identity of the actual immutable macro environment. Cache
+    /// the result at coordinator receipt mint; never rehash it during dispatch.
+    pub(crate) fn prepare_semantic_identity(&self) -> Result<Digest, Diagnostic> {
+        self.metadata_bytes()?;
+        let mut e = crate::core::digest::StableEncoder::new("lrr/v1/source-macro-environment");
+        e.record(&self.source_key);
+        e.digest(self.cfg);
+        e.record(&self.root);
+        e.digest(Digest(self.context.0));
+        e.digest(self.scopes.semantic_fingerprint()?);
+        e.digest(self.declarations.semantic_fingerprint()?);
+        e.digest(self.facts.semantic_fingerprint()?);
+        e.digest(self.ancestry.semantic_fingerprint()?);
+        e.u64(self.scope_keys.len() as u64);
+        for (source, key) in &self.scope_keys {
+            e.record(source);
+            e.record(key);
+        }
+        e.u64(self.item_attributes.len() as u64);
+        for ((scope, start, end), ranges) in &self.item_attributes {
+            e.record(scope);
+            e.u32(*start);
+            e.u32(*end);
+            e.sequence(ranges, |e, range| {
+                e.u32(range.start);
+                e.u32(range.end);
+            });
+        }
+        e.u64(self.item_invocations.len() as u64);
+        for ((scope, start, end), producer) in &self.item_invocations {
+            e.record(scope);
+            e.u32(*start);
+            e.u32(*end);
+            e.option(producer, |e, p| e.digest(*p));
+        }
+        e.u64(self.attribute_candidates.len() as u64);
+        for ((scope, start, end), range) in &self.attribute_candidates {
+            e.record(scope);
+            e.u32(*start);
+            e.u32(*end);
+            e.u32(range.start);
+            e.u32(range.end);
+        }
+        e.u64(self.definitions.len() as u64);
+        for (id, definition) in &self.definitions {
+            e.digest(*id);
+            e.digest(definition.identity);
+            e.digest(definition.defining_unit);
+            e.u16(definition.definition_edition);
+        }
+        e.u64(self.producers.len() as u64);
+        for (id, kind) in &self.producers {
+            e.digest(*id);
+            e.u8(match kind {
+                ProducerKind::ItemMacro => 0,
+                ProducerKind::Attribute => 1,
+                ProducerKind::ModuleSource => 2,
+            });
+        }
+        e.u64(self.module_inputs.len() as u64);
+        for (id, scope) in &self.module_inputs {
+            e.digest(*id);
+            e.record(scope);
+        }
+        e.u64(self.macro_use_inputs.len() as u64);
+        for id in &self.macro_use_inputs {
+            e.digest(*id);
+        }
+        e.u64(self.imported_definitions.len() as u64);
+        for id in &self.imported_definitions {
+            e.digest(*id);
+        }
+        e.u64(self.restored_original.len() as u64);
+        for (id, (ordinal, dialect)) in &self.restored_original {
+            e.digest(*id);
+            e.u64(*ordinal as u64);
+            e.u8(match dialect {
+                crate::syntax::macro_calls::MacroDefinitionDialect::Rules => 0,
+                crate::syntax::macro_calls::MacroDefinitionDialect::Macro2 => 1,
+            });
+        }
+        Ok(e.finish())
+    }
+
     pub(crate) fn retain_outer(
         &self,
         outer: super::macro_scopes::OuterMacroScope<'_>,
@@ -1251,6 +1335,43 @@ impl Clone for PublishedMacroIndex {
     }
 }
 impl PublishedMacroIndex {
+    pub(crate) fn source_index_root(&self) -> &Arc<SourceMacroIndex> {
+        &self.index
+    }
+    pub(crate) fn runtime_outer_root(&self) -> &Arc<Vec<OwnedRuntimeOuter>> {
+        &self.runtime_outers
+    }
+    pub(crate) fn exclusive_metadata_bytes(&self) -> Result<usize, Diagnostic> {
+        std::mem::size_of::<Self>()
+            .checked_add(
+                self.view
+                    .selection()
+                    .metadata_bytes()?
+                    .checked_mul(2)
+                    .ok_or_else(crate::runtime::arena::resource)?,
+            )
+            .ok_or_else(crate::runtime::arena::resource)
+    }
+    /// Coordinator-only cold encoding of this exact retained parent and outers.
+    /// Source membership alone never substitutes for these actual roots.
+    pub(crate) fn prepare_semantic_identity(&self) -> Result<Digest, Diagnostic> {
+        if self.runtime_outers.len() > 256 || self.runtime_bytes > 64 * 1024 * 1024 {
+            return Err(error("published macro environment encoding budget"));
+        }
+        let mut e = crate::core::digest::StableEncoder::new("lrr/v1/published-macro-environment");
+        e.string(self.source().path.as_str());
+        e.record(&self.source().outline);
+        e.digest(self.index.prepare_semantic_identity()?);
+        e.u64(self.runtime_outers.len() as u64);
+        for outer in self.runtime_outers.iter() {
+            e.record(&outer.scope);
+            e.u64(outer.before);
+            e.digest(outer.scopes.semantic_fingerprint()?);
+            e.digest(outer.declarations.semantic_fingerprint()?);
+        }
+        Ok(e.finish())
+    }
+
     pub(crate) fn from_completed_index(
         view: crate::source::changes::PreparedSourceView,
         index: SourceMacroIndex,

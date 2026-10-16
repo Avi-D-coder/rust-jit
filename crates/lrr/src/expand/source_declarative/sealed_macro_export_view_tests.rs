@@ -115,17 +115,22 @@ fn genuine_role_source_seal_yields_borrowed_view_without_runtime_source_grants()
             1,
         )
         .unwrap()
-        .with_declarative(
-            Digest([194; 32]),
-            crate::expand::source_declarative::engine_version(),
-        )
-        .unwrap()
+    };
+    let configure = |discovery: SourceDiscovery| {
+        discovery
+            .with_declarative(
+                Digest([194; 32]),
+                crate::expand::source_declarative::engine_version(),
+            )
+            .unwrap()
     };
     let mut absent_db = Database::default();
-    let mut unchanged = build(manifest.graph.fingerprint())
-        .with_macro_export_source_publications(&mut absent_db)
-        .unwrap();
-    let mut old_route = build(manifest.graph.fingerprint());
+    let mut unchanged = configure(
+        build(manifest.graph.fingerprint())
+            .with_macro_export_source_publications(&mut absent_db)
+            .unwrap(),
+    );
+    let mut old_route = configure(build(manifest.graph.fingerprint()));
     let SourceDiscoveryStep::Sealed(unchanged_seal) = unchanged.poll().unwrap() else {
         panic!("ordinary source did not complete without a role observation");
     };
@@ -138,9 +143,16 @@ fn genuine_role_source_seal_yields_borrowed_view_without_runtime_source_grants()
             .with_macro_export_source_publications(&mut db)
             .is_err()
     );
-    let mut discovery = build(manifest.graph.fingerprint())
-        .with_macro_export_source_publications(&mut db)
-        .unwrap();
+    assert!(
+        configure(build(manifest.graph.fingerprint()))
+            .with_macro_export_source_publications(&mut db)
+            .is_err()
+    );
+    let mut discovery = configure(
+        build(manifest.graph.fingerprint())
+            .with_macro_export_source_publications(&mut db)
+            .unwrap(),
+    );
     let SourceDiscoveryStep::Sealed(seal) = discovery.poll().unwrap() else {
         panic!("unchanged exported macro discovery did not complete");
     };
@@ -153,6 +165,8 @@ fn genuine_role_source_seal_yields_borrowed_view_without_runtime_source_grants()
     assert_eq!(view.facet().identity(), facet.identity());
     assert_eq!(view.seal().key(), seal.key());
     assert!(view.exclusive_metadata_bytes() < 1024 * 1024);
+    assert!(discovery.completed_runtime_macro_namespace().is_err());
+    assert!(discovery.completed_runtime_macro_indexes().is_err());
     for dependency in &view.dependencies()[..2] {
         let crate::db::dependency::DependencyStamp::Input { key, fingerprint } = dependency else {
             panic!("selected preparation dependency was not an input");
@@ -212,8 +226,27 @@ fn unchanged_full_core_macro_source_requires_real_annotation_closure_and_publica
     let (mut source, mut selection) = input(unit, "src/macros/mod.rs", CORE, 2024);
     source.module_path = vec!["macros".into()];
     selection.outline.module_path = source.module_path.clone();
-    let inputs = PreparedSourceInputs::refresh(None, vec![source], BTreeMap::new()).unwrap();
+    // The configured target's actual root is a separate source. Keeping the
+    // real child module path must not turn macros/mod.rs into a crate root.
+    let (root_input, root_selection) = input(
+        unit,
+        "src/lib.rs",
+        include_bytes!("../../../../../fixtures/upstream/rustc-checkout/library/core/src/lib.rs"),
+        2024,
+    );
+    let inputs =
+        PreparedSourceInputs::refresh(None, vec![root_input, source], BTreeMap::new()).unwrap();
+    let root_source = select(&inputs, &root_selection);
     let source = select(&inputs, &selection);
+    let root_facet = Arc::new(
+        SourceMacroExportFacet::capture(
+            &manifest,
+            unit,
+            package.join("src/lib.rs").to_str().unwrap(),
+            root_source.share(),
+        )
+        .unwrap(),
+    );
     let facet = Arc::new(
         SourceMacroExportFacet::capture(&manifest, unit, path.to_str().unwrap(), source.share())
             .unwrap(),
@@ -234,8 +267,26 @@ fn unchanged_full_core_macro_source_requires_real_annotation_closure_and_publica
     ]))
     .unwrap();
     db.begin_expansion_epoch(1).unwrap();
-    db.publish_macro_export_sources(&[Arc::clone(&facet)])
+    db.publish_macro_export_sources(&[Arc::clone(&root_facet), Arc::clone(&facet)])
         .unwrap();
+    let declaration =
+        crate::frontend::source_module_declarations::SourceModuleDeclaration::from_captured(
+            root_facet.source(),
+        )
+        .unwrap()
+        .into_iter()
+        .find(|declaration| declaration.request().name == "macros")
+        .unwrap();
+    let request = crate::source::macro_export_module::MacroExportModuleRequest::prepare(
+        &mut db,
+        Arc::clone(&root_facet),
+        None,
+        Arc::clone(&facet),
+        declaration,
+        &super::module_adoption_tests::authorities(&root_facet, root_facet.preparation()),
+    )
+    .unwrap();
+    let module = super::module_adoption_tests::adopt(&mut db, &request).unwrap();
     let compiler = Arc::new(
         crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
             &source.selection().outline.parse.profile,
@@ -243,20 +294,22 @@ fn unchanged_full_core_macro_source_requires_real_annotation_closure_and_publica
         .unwrap(),
     );
     let mut discovery = SourceDiscovery::new(
-        vec![source.share()],
+        vec![root_source, source.share()],
         source.outline().root_scope.clone(),
         Namespace::Macro,
         manifest.graph.fingerprint(),
         1,
     )
     .unwrap()
+    .with_macro_export_source_publications(&mut db)
+    .unwrap()
+    .with_macro_export_module_adoptions(&mut db, &[module])
+    .unwrap()
     .with_declarative_compiler(
         environment.fingerprint(),
         crate::expand::source_declarative::engine_version(),
         compiler,
     )
-    .unwrap()
-    .with_macro_export_source_publications(&mut db)
     .unwrap();
     match discovery.poll().unwrap() {
         SourceDiscoveryStep::Sealed(_) => {}

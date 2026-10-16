@@ -75,3 +75,106 @@ plan tests do not prove complete environment/runtime acceptance. Actual kernel20
 old759 passed; contextual official-intercrate setup failed its blanket-inert helper,
 and issue40847 wholeCLI failed2015 before entry on blocked assert_eq. Preserve all
 those terminals; no ordinary or legacy guest counters were reached in that case.
+
+## Source-only freeze, 2026-10-16
+
+Exact22-leaf manifest: `worktracks/evidence/2026-10-16-body-environment-local-plan-query.json`,
+SHA256 `83bbb5440ffd117ac84e09758e0610597bec9bf5e2599451508172e3e881b704`,
+source fingerprint `e237a084dedcc360e1af31f26254c5d53ea6d6d20c5d1670511d18b61ed07e51`.
+All22 leaves held until actual copy acknowledgment. No Cargo/native invocation,
+compile result, runtime result, checkpoint or gate closure by this worker.
+Rustfmt source terminal0f474b/0; prior format terminal568601/0. These are source
+format/hash terminals only. Existing frozen207/203 bytes and their failures remain
+attached to those packets; this source is a successor.
+
+Actual APIs and joins:
+
+- `Database::prepare_source_local_plan(discovery,sources,&BodyKey) ->
+  QueryPoll<Arc<PreparedSourceLocalPlan>>` is coordinator-only, cold-before-entry.
+  It fetches actual BodyStructure, captures the genuine current declaration/source,
+  attaches `SourceDiscovery::generated_body_macro_boundary` for generated syntax,
+  obtains the real selected `sealed_body_macro_environment`, publishes atomically,
+  then fetches the ordinary pure SourceLocalPlan query. Existing current envelopes
+  are reused only under exact source input/lease checks and actual current
+  DiscoverySeal outcome fingerprint; key equality alone does not grant reuse.
+- `InputKey::BodyEnvironment(BodyKey)` tag32/private opaque payload and
+  `QueryKey::SourceLocalPlan(BodyKey)` tag34 use the existing input/query framework.
+  Pure provider `body_environment_provider::source_local_plan` reads and validates
+  that input and calls the existing ONE PreparedBodyContext/local-plan builder.
+  It does no discovery, expansion, publication, interpretation or full world scan.
+- Input semantic identity retains actual admitted source/header/body/context/cfg/
+  boundary plus cold explicit selected macro index/scopes/declarations/hygiene/
+  ancestry/producer encodings. The authority envelope separately retains the real
+  completion key/value and checked coordinator issuance revision. The latter is
+  an opaque publication identity, not a global revision dependency. Query value
+  fingerprints include this envelope so a semantically equal projection cannot
+  preserve an obsolete source/completion lease in a downstream memo.
+- `PreparedSourceLocalPlan::require_current` and
+  `BodyTypeDeclaration::require_current` preserve the attached environment guard;
+  LocalTypePrefix::module_name and inspect_prefix_metadata use it too. Historical
+  direct source-control plans without an environment retain their genuine source
+  dependencies (original-local proof still does not acquire a fictional epoch).
+- Production `cli::retained_entry::prepare` demands the environment query once
+  after actual main reselection (or genuine generated selected body), before
+  ordinary startup. Parent's constructor7 consumes exactly SourceLocalPlan. No
+  engine/constructor operation calls the cold coordinator helper. No legacy
+  assertion route has been promoted or counted as success.
+
+Allocation ownership: the existing SourcePlanPins artifact retirement registry now
+owns real LocalPlan and BodyEnvironment Arc roots. Query/input wrappers, parser,
+BodyIndex and Outline retain existing weak/input/query pin mechanisms; NO second
+Outline registry was added. The adjacent retention helper deduplicates actual
+macro/local/shared roots by allocation only for storage. It splits GeneratedItems
+shared record/hygiene estimates through a readonly record_root accessor. Current
+and externally retained input roots remain charged after registry pruning. Cached-
+only descendants can be reclaimed with their memo; actual source/retirement/inner
+leases remain pinned. Publication and pure-plan admission preflight checked live
+and additional root bytes plus actual collector/memo row estimates. Tests must
+confirm release and cap behavior; source review alone is not accounting acceptance.
+The existing cold completed_runtime_index/runtime_snapshot still copies outer
+macro tables: this is a named sharing/cost debt, not repaired or hidden here.
+
+New unexecuted LRR authority controls use complete unchanged official
+borrowck-assign-to-subfield original and arbitrary generated/wrapper emissions:
+`unchanged_local_types_use_one_current_published_plan_all_editions`,
+`generated_and_wrapper_bodies_use_actual_boundaries_in_the_same_query`,
+`owning_environment_publication_is_atomic_and_retired_inner_roots_stay_charged`,
+`same_body_and_seal_key_remint_after_genuine_source_environment_replacement`,
+`budget_and_pure_query_cannot_publish_a_partial_owning_environment`.
+These are source/currentness/retention controls, not full stock runtime passes.
+Required actual production main attempts remain local A/B, module-qualified S,
+and issue40847 all owning editions once their real producers close. The latter
+previously stopped before entry on actual assert_eq producer closure; do not infer
+its acceptance from this component. Existing tests/direct originals stay unchanged.
+
+Eight recurring failure modes reviewed against exact e237a084 source (separate
+from MA001-MA008 audit numbering):
+
+1. No assertion/expression evaluator added. cli retained_entry -> ordinary
+   discovery/retained admission -> engine startup remains the join. Existing
+   runtime_macro_scalars legacy route is named held debt; no closure claim.
+2. BodyEnvironment accepts actual admitted original/retained/generated syntax,
+   real boundary and selected source index; no literal/break-only execution or
+   synthetic executable wrapper was introduced. Generated positive unexecuted.
+3. One existing source Type/local prefix and final declaration service remains.
+   No method whitelist, macro-name numeric inference, runtime tag or layout grant.
+4. Same query path serves all origins. Missing generated boundary or exact source
+   owner remains typed failure. Existing qualified m::S prefix and field Type
+   occurrence gaps remain explicit, without old-route fallback on errors.
+5. No pattern algorithm/lowering/result-arm inspection changed. Actual body entry
+   prepares source/local facts only. Cold executable branch coverage unexecuted.
+6. Pure memo builds existing context/local tables once per genuine environment.
+   CLI coordinator demand is before startup; installed operations do not call it.
+   Currentness compares cached stamps/seals, not cold semantic encodings.
+7. No full namespace graph construction/census added. Relevant module tails retain
+   CurrentModuleName dependencies. Selected macro root encoding is cold one-source
+   work; per-entry envelope check is constant input stamps plus real seal fetch.
+8. ParsedFile/BodyIndex/Outline are shared Arc handles. Occurrences use existing
+   indexed lookup; no new whole-file search per operation or deep BodyIndex copy.
+   The inherited runtime_snapshot cold outer-map copy is explicitly unresolved.
+
+Closure still requires actual compiler/authority/retirement terminals and full
+ordinary/generated/wrapper/applicable-std runtime route evidence. Parent alone
+will compose root constructor7 + peer selectedenv4 and freeze the validator source.
+Field/header occurrence prefix and qualified shared module path are next genuine
+common resolver prerequisites, not an authority shortcut in this packet.

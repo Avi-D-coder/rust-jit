@@ -39,6 +39,11 @@ pub(super) fn prepare(
         .iter()
         .any(|item| item.def_key.fingerprint() == definition)
     {
+        ready(db.prepare_source_local_plan(
+            discovery,
+            &[source],
+            &callable.body().expect("body checked above").key(),
+        ))?;
         return Ok(callable);
     }
     // Do not infer expansion absence from only ExpressionKind::Macro: source
@@ -68,6 +73,7 @@ pub(super) fn prepare(
         ));
     }
     selected.revalidate(db)?;
+    ready(db.prepare_source_local_plan(discovery, &[source], &body))?;
     Ok(selected)
 }
 

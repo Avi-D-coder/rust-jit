@@ -2,10 +2,20 @@
 //! substitute language suite. Constructed schema4 records exercise admission;
 //! they do not claim a physically adopted SDK/tool preparation or guest run.
 use super::*;
+#[path = "compiler_attribute_preparation_tests.rs"]
+mod compiler_attribute_preparation_tests;
+#[path = "macro_export_module_tests.rs"]
+mod module_adoption_tests;
+#[path = "macro_export_consumption_tests.rs"]
+mod module_consumption_tests;
 #[path = "original_annotations_tests.rs"]
 mod original_annotation_tests;
+#[path = "original_module_discovery_tests.rs"]
+mod original_module_discovery_tests;
 #[path = "../../db/macro_export_inputs_tests.rs"]
 mod publication_tests;
+#[path = "macro_export_role_tests.rs"]
+mod role_tests;
 #[path = "sealed_macro_export_view_tests.rs"]
 mod sealed_view_tests;
 use crate::{

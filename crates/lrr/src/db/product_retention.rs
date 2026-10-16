@@ -22,18 +22,24 @@ const ROW_BYTES: usize = 64 + std::mem::size_of::<(usize, RetainedSourceArtifact
 const ARC_HEADER: usize = 2 * std::mem::size_of::<usize>();
 
 enum RetainedSourceArtifact {
+    LocalPlan(Arc<crate::frontend::source_locals::PreparedSourceLocalPlan>),
+    BodyEnvironment(Arc<super::super::BodyEnvironmentInput>),
     Pattern(Arc<PatternProductPlan>),
     StringLiteral(Arc<crate::syntax::string_literal::PreparedStringLiteral>),
 }
 impl RetainedSourceArtifact {
     fn retain(root: SourceArtifactRef<'_>) -> Self {
         match root {
+            SourceArtifactRef::LocalPlan(value) => Self::LocalPlan(Arc::clone(value)),
+            SourceArtifactRef::BodyEnvironment(value) => Self::BodyEnvironment(Arc::clone(value)),
             SourceArtifactRef::Pattern(value) => Self::Pattern(Arc::clone(value)),
             SourceArtifactRef::StringLiteral(value) => Self::StringLiteral(Arc::clone(value)),
         }
     }
     fn root(&self) -> SourceArtifactRef<'_> {
         match self {
+            Self::LocalPlan(value) => SourceArtifactRef::LocalPlan(value),
+            Self::BodyEnvironment(value) => SourceArtifactRef::BodyEnvironment(value),
             Self::Pattern(value) => SourceArtifactRef::Pattern(value),
             Self::StringLiteral(value) => SourceArtifactRef::StringLiteral(value),
         }
@@ -57,6 +63,34 @@ impl SourcePlanPins {
         self.roots.len()
     }
     pub(super) fn register(&mut self, value: &QueryValue) -> Result<(), Diagnostic> {
+        self.register_roots(|| value.source_roots())
+    }
+    pub(super) fn roots(&self) -> impl Iterator<Item = SourceArtifactRef<'_>> {
+        self.roots.values().map(RetainedSourceArtifact::root)
+    }
+    pub(super) fn input_extra_bytes(
+        &self,
+        input: &Arc<super::super::BodyEnvironmentInput>,
+    ) -> Result<usize, Diagnostic> {
+        self.extra_bytes(SourceArtifactRef::BodyEnvironment(input))
+    }
+    pub(super) fn extra_bytes(&self, root: SourceArtifactRef<'_>) -> Result<usize, Diagnostic> {
+        if self.roots.contains_key(&root.allocation()) {
+            Ok(0)
+        } else {
+            account_add(ROW_BYTES, root.metadata_bytes()?)
+        }
+    }
+    pub(super) fn register_input(
+        &mut self,
+        input: &Arc<super::super::BodyEnvironmentInput>,
+    ) -> Result<(), Diagnostic> {
+        self.register_roots(|| std::iter::once(SourceArtifactRef::BodyEnvironment(input)))
+    }
+    fn register_roots<'a, I: Iterator<Item = SourceArtifactRef<'a>>>(
+        &mut self,
+        roots: impl Fn() -> I,
+    ) -> Result<(), Diagnostic> {
         let maximum = MAX_ARTIFACTS;
         #[cfg(test)]
         let maximum = self.artifact_count_limit.unwrap_or(maximum);
@@ -64,7 +98,7 @@ impl SourcePlanPins {
         // one recipe do not allocate repeated registry rows.
         let mut new = BTreeSet::new();
         let mut additional = 0usize;
-        for root in value.source_roots() {
+        for root in roots() {
             let allocation = root.allocation();
             if !self.roots.contains_key(&allocation) {
                 if new.insert(allocation) {
@@ -85,7 +119,7 @@ impl SourcePlanPins {
             }
         }
         let retained_bytes = account_add(self.retained_bytes, additional)?;
-        for root in value.source_roots() {
+        for root in roots() {
             self.roots
                 .entry(root.allocation())
                 .or_insert_with(|| RetainedSourceArtifact::retain(root));
@@ -144,10 +178,15 @@ pub(super) fn count_owner(
 ) {
     let allocation = root.allocation();
     *inner.entry(allocation).or_insert(0) += 1;
-    if allocations.insert(allocation)
-        && let Some(index) = root.index()
-    {
-        *inner.entry(Arc::as_ptr(index) as usize).or_insert(0) += 1;
+    if allocations.insert(allocation) {
+        if let Some(index) = root.index() {
+            *inner.entry(Arc::as_ptr(index) as usize).or_insert(0) += 1;
+        }
+        if let SourceArtifactRef::LocalPlan(plan) = root {
+            if let Some(environment) = plan.environment() {
+                *inner.entry(Arc::as_ptr(environment) as usize).or_insert(0) += 1;
+            }
+        }
     }
 }
 

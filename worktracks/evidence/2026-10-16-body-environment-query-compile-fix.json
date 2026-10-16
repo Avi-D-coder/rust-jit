@@ -1,0 +1,34 @@
+{
+  "kind": "body-environment-query-compile-correction",
+  "status": "uncompiled-unexecuted",
+  "predecessor": "83bbb5440ffd117ac84e09758e0610597bec9bf5e2599451508172e3e881b704",
+  "source_fingerprint": "c370c8192fe7f395e2c41adb55f5438ef20ce77ac9c0918a5f814c4b1036fc71",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/body_environment_inputs_tests.rs",
+      "bytes": 14225,
+      "sha256": "6903a53404aef3ed318a008cceaa30d7094d2bb7391e2c6f50d0c44aec6cb8a6"
+    },
+    {
+      "path": "crates/lrr/src/cli/preentry_loader.rs",
+      "bytes": 21039,
+      "sha256": "f85c664339d323619c6d0950349e0740bdb1eecf6fda170918aad2d6cd7af8c8"
+    },
+    {
+      "path": "crates/lrr/src/service/expansion.rs",
+      "bytes": 22380,
+      "sha256": "f7239b2bc964ff681c5e915c84cf9ebe39c2cea13eda6e1c0c69a92aac52298f"
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "bytes": 137173,
+      "sha256": "941d61e7eacf895a9e131344f17f160fa92900560f2e8dcc75f9b25fc9d19aee"
+    }
+  ],
+  "changes": [
+    "test StableEncode import",
+    "SourceLocalPlan forbidden in independent metadata preentry, same BodyStructure classification",
+    "SourceLocalPlan fixed-size BodyKey query demand accounting",
+    "remove unused LocalDeclarationPublication reexport; private original module/tests retain enum"
+  ]
+}

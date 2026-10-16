@@ -3,6 +3,8 @@ use super::discovery::{
     Discovery, DiscoveryJob, DiscoveryKind, DiscoveryLimits, DiscoveryStep, DiscoveryUpdate,
     JobTicket,
 };
+#[path = "source_discovery/macro_export_modules.rs"]
+mod macro_export_modules;
 #[path = "source_discovery/macro_export_view.rs"]
 mod macro_export_view;
 use crate::{
@@ -17,8 +19,14 @@ use crate::{
 };
 pub use macro_export_view::SealedMacroExportView;
 use std::collections::{BTreeMap, BTreeSet};
+#[path = "source_discovery/body_macro_environment.rs"]
+mod body_macro_environment;
+pub use body_macro_environment::SealedBodyMacroEnvironment;
 #[path = "source_discovery/compiler_profiles.rs"]
 mod compiler_profiles;
+#[path = "source_discovery/original_modules.rs"]
+mod original_modules;
+use original_modules::{OrdinaryModuleOwner, OriginalModuleDeclaration};
 #[path = "source_discovery/original_inert.rs"]
 mod original_inert;
 #[path = "source_discovery/source_syntax.rs"]
@@ -347,7 +355,7 @@ enum StagedModuleSyntax {
     Generated(std::sync::Arc<crate::source::module_syntax::ModuleSyntaxInput>),
     Ordinary {
         syntax: std::sync::Arc<crate::source::ordinary_module::OrdinaryModuleSyntaxInput>,
-        parent: Digest,
+        parent: OrdinaryModuleOwner,
     },
 }
 impl StagedModuleSyntax {
@@ -432,6 +440,7 @@ pub struct SourceDiscovery {
     graph: NameNamespaces,
     work: Discovery,
     source_jobs: BTreeMap<Digest, usize>,
+    original_modules: BTreeMap<Digest, OriginalModuleDeclaration>,
     imports: ImportResolution,
     producers: BTreeSet<Digest>,
     seal: Option<Seal>,
@@ -548,6 +557,16 @@ pub struct SourceDiscovery {
         BTreeMap<Digest, super::body_macro_boundary::CompletedEmptyBoundary>,
     generated_source_modules: BTreeMap<Digest, Digest>,
     compiler_inputs: BTreeMap<crate::db::dependency::InputKey, Digest>,
+    macro_export_sources: BTreeMap<
+        usize,
+        std::sync::Arc<crate::db::memo::macro_export_inputs::MacroExportSourceObservation>,
+    >,
+    macro_export_source_bytes: usize,
+    macro_export_modules: BTreeMap<
+        usize,
+        std::sync::Arc<crate::source::macro_export_module::MacroExportModuleAdoption>,
+    >,
+    macro_export_module_bytes: usize,
     admitting_compiler: bool,
     module_sources: BTreeMap<Digest, crate::frontend::generated_headers::GeneratedModuleSource>,
     module_source_bytes: usize,
@@ -966,6 +985,8 @@ impl SourceDiscovery {
             }
             nested_sources.insert(ordinal, std::sync::Arc::new(index));
         }
+        let original_modules =
+            original_modules::capture_original_modules(&sources, &mut nested_bytes)?;
         let expansion_budget = super::budget::SharedExpansionBudget::new(
             key.fingerprint(),
             key.unit_graph,
@@ -981,6 +1002,7 @@ impl SourceDiscovery {
             graph,
             work,
             source_jobs,
+            original_modules,
             imports,
             producers,
             seal: None,
@@ -1045,6 +1067,10 @@ impl SourceDiscovery {
             completed_empty_boundaries: BTreeMap::new(),
             generated_source_modules: BTreeMap::new(),
             compiler_inputs: BTreeMap::new(),
+            macro_export_sources: BTreeMap::new(),
+            macro_export_source_bytes: 0,
+            macro_export_modules: BTreeMap::new(),
+            macro_export_module_bytes: 0,
             admitting_compiler: false,
             module_sources: BTreeMap::new(),
             module_source_bytes: 0,
@@ -1232,6 +1258,18 @@ impl SourceDiscovery {
             .iter()
             .map(|s| super::source_declarative::SourceDeclarative::new(s.share()))
             .collect::<Result<Vec<_>, _>>()?;
+        for (ordinal, role) in &self.macro_export_sources {
+            providers
+                .get_mut(*ordinal)
+                .ok_or_else(|| fault("macro-export source owner is absent"))?
+                .bind_macro_export_source(role.clone(), self.key.unit_graph)?;
+        }
+        for (ordinal, module) in &self.macro_export_modules {
+            providers
+                .get_mut(*ordinal)
+                .ok_or_else(|| fault("macro-export adopted module owner is absent"))?
+                .bind_macro_export_module(module.clone())?;
+        }
         if let Some(catalog) = procedural {
             if catalog.graph() != self.key.unit_graph
                 || catalog.epoch() != self.epoch
@@ -1270,6 +1308,16 @@ impl SourceDiscovery {
             self.compiler_profiles = Some(prepared);
         }
         super::source_declarative::SourceDeclarative::configure_captured_modules(&mut providers)?;
+        for (ordinal, provider) in providers.iter_mut().enumerate() {
+            if let Some(plan) = self.original_annotation_plans.get(&ordinal) {
+                let bytes = provider.prepare_compiler_attributes(plan)?;
+                self.nested_bytes = self
+                    .nested_bytes
+                    .checked_add(bytes)
+                    .filter(|n| *n <= 512 * 1024 * 1024)
+                    .ok_or_else(|| fault("compiler attribute preparation metadata limit"))?;
+            }
+        }
         Self::install_macro_routes_with_modules(
             &mut self.graph,
             &providers,
@@ -1313,6 +1361,16 @@ impl SourceDiscovery {
         prepared.install(providers)?;
         self.nested_bytes = retained;
         self.compiler_profiles = Some(prepared);
+        for (ordinal, provider) in providers.iter_mut().enumerate() {
+            if let Some(plan) = self.original_annotation_plans.get(&ordinal) {
+                let bytes = provider.prepare_compiler_attributes(plan)?;
+                self.nested_bytes = self
+                    .nested_bytes
+                    .checked_add(bytes)
+                    .filter(|n| *n <= 512 * 1024 * 1024)
+                    .ok_or_else(|| fault("compiler attribute preparation metadata limit"))?;
+            }
+        }
         Self::install_macro_routes_with_modules(
             &mut self.graph,
             providers,
@@ -3823,6 +3881,9 @@ impl SourceDiscovery {
         }
         let mut compiler_catalogues = BTreeSet::new();
         for provider in providers {
+            if provider.macro_export_source_role().is_some() {
+                continue;
+            }
             let Some(catalog) = &provider.compiler else {
                 continue;
             };
@@ -3859,6 +3920,9 @@ impl SourceDiscovery {
     ) -> Result<crate::frontend::macro_names::MacroNamespaces, Diagnostic> {
         let mut imports = Vec::new();
         for provider in providers {
+            if provider.macro_export_source_role().is_some() {
+                continue;
+            }
             if let Some(catalog) = &provider.compiler
                 && let Some(import) = catalog.injected_import(provider.module_source())?
             {
@@ -3883,9 +3947,14 @@ impl SourceDiscovery {
             let Some(catalog) = provider.compiler.as_ref() else {
                 continue;
             };
-            catalog.install_injected_import(namespaces, provider.module_source())?;
-            let unit = catalog
-                .runtime_prelude_unit(provider.module_source().macro_prelude_policy()?.standard);
+            let runtime_unit = if provider.macro_export_source_role().is_some() {
+                None
+            } else {
+                catalog.install_injected_import(namespaces, provider.module_source())?;
+                Some(catalog.runtime_prelude_unit(
+                    provider.module_source().macro_prelude_policy()?.standard,
+                ))
+            };
             let identity = catalog.owning_profile_identity()?;
             let globals = catalog.compiler_globals()?;
             for scope in provider
@@ -3913,7 +3982,9 @@ impl SourceDiscovery {
                         definition.clone(),
                     )?;
                 }
-                namespaces.set_prelude(scope.clone(), unit)?;
+                if let Some(unit) = runtime_unit {
+                    namespaces.set_prelude(scope.clone(), unit)?;
+                }
             }
         }
         Ok(())
@@ -3935,6 +4006,12 @@ impl SourceDiscovery {
             .as_ref()
             .ok_or_else(|| fault("runtime declarative providers absent"))?
             .2;
+        if providers
+            .iter()
+            .any(|provider| provider.macro_export_source_role().is_some())
+        {
+            return Err(fault("macro-only source cannot supply a runtime namespace"));
+        }
         let routes = Self::completed_macro_routes(providers, &self.module_routes)?;
         let mut namespaces = Self::compiler_import_graph(&routes, providers)?;
 
@@ -3966,6 +4043,12 @@ impl SourceDiscovery {
             .as_ref()
             .ok_or_else(|| fault("runtime declarative providers absent"))?
             .2;
+        if providers
+            .iter()
+            .any(|provider| provider.macro_export_source_role().is_some())
+        {
+            return Err(fault("macro-only source cannot supply runtime indexes"));
+        }
         let mut count = 0usize;
         for source in providers
             .iter()
@@ -4095,6 +4178,9 @@ impl SourceDiscovery {
             }
         }
         for provider in providers {
+            if provider.macro_export_source_role().is_some() {
+                continue;
+            }
             if let Some(catalog) = &provider.compiler {
                 catalog.install_ordinary_module_facets(graph)?;
             }
@@ -4125,6 +4211,9 @@ impl SourceDiscovery {
         }
 
         for provider in providers {
+            if provider.macro_export_source_role().is_some() {
+                continue;
+            }
             if let Some(catalog) = &provider.compiler {
                 graph.install_compiler_injection(catalog, provider.module_source())?;
             }
@@ -4743,9 +4832,14 @@ impl SourceDiscovery {
         &self,
     ) -> impl Iterator<Item = &crate::frontend::source_module_declarations::SourceModuleDeclaration>
     {
-        self.staged_modules
+        self.original_modules
             .values()
-            .flat_map(|module| module.ordinary_modules.iter())
+            .map(|row| &row.declaration)
+            .chain(
+                self.staged_modules
+                    .values()
+                    .flat_map(|module| module.ordinary_modules.iter()),
+            )
             .filter(|declaration| self.producers.contains(&declaration.producer()))
     }
     fn ordinary_module_binding(
@@ -4753,7 +4847,7 @@ impl SourceDiscovery {
         producer: Digest,
     ) -> Result<
         (
-            &StagedModule,
+            OrdinaryModuleOwner,
             &crate::frontend::source_module_declarations::SourceModuleDeclaration,
         ),
         Diagnostic,
@@ -4761,13 +4855,19 @@ impl SourceDiscovery {
         if self.seal.is_some() || self.failed.is_some() {
             return Err(fault("ordinary module discovery is sealed or failed"));
         }
-        let mut matches = self.staged_modules.values().flat_map(|module| {
-            module
-                .ordinary_modules
-                .iter()
-                .filter(move |declaration| declaration.producer() == producer)
-                .map(move |declaration| (module, declaration))
-        });
+        let original = self
+            .original_modules
+            .get(&producer)
+            .map(|row| (OrdinaryModuleOwner::Original(row.ordinal), &row.declaration));
+        let mut matches = original
+            .into_iter()
+            .chain(self.staged_modules.iter().flat_map(|(parent, module)| {
+                module
+                    .ordinary_modules
+                    .iter()
+                    .filter(move |declaration| declaration.producer() == producer)
+                    .map(move |declaration| (OrdinaryModuleOwner::Staged(*parent), declaration))
+            }));
         let binding = matches
             .next()
             .ok_or_else(|| fault("ordinary module declaration absent"))?;
@@ -4797,11 +4897,18 @@ impl SourceDiscovery {
             .as_ref()
             .ok_or_else(|| fault("ordinary module compile environment absent"))?
             .0;
-        declaration.capture_request(
-            authorities,
-            parent.syntax.capture().record().directory(),
-            environment,
-        )
+        let directory = match parent {
+            OrdinaryModuleOwner::Original(_) => self.original_module_directory(producer)?,
+            OrdinaryModuleOwner::Staged(parent) => self
+                .staged_modules
+                .get(&parent)
+                .ok_or_else(|| fault("ordinary module staged parent absent"))?
+                .syntax
+                .capture()
+                .record()
+                .directory(),
+        };
+        declaration.capture_request(authorities, directory, environment)
     }
     pub(crate) fn ordinary_module_capture_caller(
         &self,
@@ -4831,6 +4938,10 @@ impl SourceDiscovery {
                 return Err(fault("ordinary module requires capture input"));
             };
             let (parent, declaration) = self.ordinary_module_binding(request.producer())?;
+            if matches!(parent, OrdinaryModuleOwner::Original(ordinal) if self.macro_export_sources.contains_key(&ordinal))
+            {
+                return Err(Diagnostic::new("LRR-E-MACRO-EXPORT-PUBLICATION", "macro-export child requires role-only source adoption, not ordinary module syntax".into()));
+            }
             let expected = self
                 .declarative
                 .as_ref()
@@ -4839,14 +4950,26 @@ impl SourceDiscovery {
             if *compile_environment != expected {
                 return Err(fault("ordinary module compile environment changed"));
             }
-            let capture = parent.syntax.capture();
-            let published = db
-                .input(&InputKey::ModuleRecord(capture.input_identity()))
-                .ok_or_else(|| fault("ordinary module parent capture absent"))?;
-            if !matches!(published.as_ref(), InputValue::ModuleRecord {captured,..} if captured.identity() == capture.record().identity())
-                || declaration.source().selection() != parent.syntax.prepared_source().selection()
-            {
-                return Err(fault("ordinary module parent source changed"));
+            match parent {
+                OrdinaryModuleOwner::Original(_) => {
+                    self.require_original_module_source(db, request.producer())?;
+                }
+                OrdinaryModuleOwner::Staged(parent) => {
+                    let parent = self
+                        .staged_modules
+                        .get(&parent)
+                        .ok_or_else(|| fault("ordinary module parent capture owner absent"))?;
+                    let capture = parent.syntax.capture();
+                    let published = db
+                        .input(&InputKey::ModuleRecord(capture.input_identity()))
+                        .ok_or_else(|| fault("ordinary module parent capture absent"))?;
+                    if !matches!(published.as_ref(), InputValue::ModuleRecord {captured,..} if captured.identity() == capture.record().identity())
+                        || declaration.source().selection()
+                            != parent.syntax.prepared_source().selection()
+                    {
+                        return Err(fault("ordinary module parent source changed"));
+                    }
+                }
             }
             Ok((declaration, expected))
         })();
@@ -5217,18 +5340,15 @@ impl SourceDiscovery {
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
         let producer = syntax.origin().declaration().producer();
-        let mut parents = self.staged_modules.iter().filter(|(_, module)| {
-            module.ordinary_modules.iter().any(|declaration| {
-                declaration.producer() == producer
-                    && declaration.fingerprint() == syntax.origin().declaration().fingerprint()
-            })
-        });
-        let Some((&parent, _)) = parents.next() else {
-            return QueryPoll::Ready(Err(fault("ordinary module staged parent absent")));
+        let parent = match self.ordinary_module_binding(producer) {
+            Ok((parent, declaration))
+                if declaration.fingerprint() == syntax.origin().declaration().fingerprint() =>
+            {
+                parent
+            }
+            Ok(_) => return QueryPoll::Ready(Err(fault("ordinary staged declaration changed"))),
+            Err(error) => return QueryPoll::Ready(Err(error)),
         };
-        if parents.next().is_some() {
-            return QueryPoll::Ready(Err(fault("ordinary module staged parent ambiguous")));
-        }
         match self.stage_module_projection(
             db,
             input,
@@ -5283,11 +5403,19 @@ impl SourceDiscovery {
             )?
             .inherited_for_module(syntax.origin().producer()),
             StagedModuleSyntax::Ordinary { syntax, parent } => {
-                let parent = modules
-                    .get(parent)
-                    .ok_or_else(|| fault("ordinary module inherited parent absent"))?;
+                let provider = match parent {
+                    OrdinaryModuleOwner::Original(ordinal) => providers
+                        .get(*ordinal)
+                        .ok_or_else(|| fault("ordinary module inherited original parent absent"))?,
+                    OrdinaryModuleOwner::Staged(parent) => {
+                        &modules
+                            .get(parent)
+                            .ok_or_else(|| fault("ordinary module inherited staged parent absent"))?
+                            .provider
+                    }
+                };
                 let context = super::source_declarative::CapturedMacroContext {
-                    provider: &parent.provider,
+                    provider,
                     owners: providers,
                     before: 0,
                     inherited: None,
@@ -5297,13 +5425,18 @@ impl SourceDiscovery {
                         syntax.origin().declaration().producer(),
                         context,
                     )?;
-                inherited.extend_context(&Self::projection_inherited_in(
-                    fragments,
-                    providers,
-                    modules,
-                    &parent.syntax,
-                    depth + 1,
-                )?)?;
+                if let OrdinaryModuleOwner::Staged(parent) = parent {
+                    inherited.extend_context(&Self::projection_inherited_in(
+                        fragments,
+                        providers,
+                        modules,
+                        &modules
+                            .get(parent)
+                            .ok_or_else(|| fault("ordinary module inherited parent absent"))?
+                            .syntax,
+                        depth + 1,
+                    )?)?;
+                }
                 Ok(inherited)
             }
         }
@@ -5467,12 +5600,15 @@ impl SourceDiscovery {
                         .ok_or_else(|| fault("staged module source parent order absent"))?
                         .0
                 }
-                StagedModuleSyntax::Ordinary { parent, .. } => {
-                    self.staged_modules
-                        .get(parent)
-                        .ok_or_else(|| fault("ordinary module source parent order absent"))?
-                        .ordinal
-                }
+                StagedModuleSyntax::Ordinary { parent, .. } => match parent {
+                    OrdinaryModuleOwner::Original(ordinal) => *ordinal,
+                    OrdinaryModuleOwner::Staged(parent) => {
+                        self.staged_modules
+                            .get(parent)
+                            .ok_or_else(|| fault("ordinary module source parent order absent"))?
+                            .ordinal
+                    }
+                },
             };
             let order =
                 u32::try_from(ordinal).map_err(|_| fault("module source order overflow"))?;
@@ -5544,14 +5680,25 @@ impl SourceDiscovery {
                 }
                 stamps.insert(key, fingerprint);
             }
-            let mut provider = super::source_declarative::SourceDeclarative::new(
-                syntax.prepared_source().share(),
-            )?;
             let providers = &self
                 .declarative
                 .as_ref()
                 .ok_or_else(|| fault("staged module providers absent"))?
                 .2;
+            if providers
+                .get(ordinal)
+                .ok_or_else(|| fault("staged module source owner absent"))?
+                .macro_export_source_role()
+                .is_some()
+            {
+                return Err(Diagnostic::new(
+                    "LRR-E-MACRO-EXPORT-PUBLICATION",
+                    "macro-export child module requires its own role-aware source adoption".into(),
+                ));
+            }
+            let mut provider = super::source_declarative::SourceDeclarative::new(
+                syntax.prepared_source().share(),
+            )?;
             if let Some(catalog) = &providers
                 .get(ordinal)
                 .ok_or_else(|| fault("staged module procedural owner absent"))?
@@ -6580,11 +6727,24 @@ impl SourceDiscovery {
             }
             self.work.preflight_namespace_change()?;
             let applied = (|| {
-                self.staged_modules
-                    .get_mut(&parent)
-                    .ok_or_else(|| fault("ordinary parent source absent"))?
-                    .provider
-                    .complete_ordinary_module(producer, child.clone())?;
+                match parent {
+                    OrdinaryModuleOwner::Original(parent) => {
+                        self.declarative
+                            .as_mut()
+                            .ok_or_else(|| fault("ordinary original parent absent"))?
+                            .2
+                            .get_mut(parent)
+                            .ok_or_else(|| fault("ordinary original parent ordinal absent"))?
+                            .complete_ordinary_module(producer, child.clone())?;
+                    }
+                    OrdinaryModuleOwner::Staged(parent) => {
+                        self.staged_modules
+                            .get_mut(&parent)
+                            .ok_or_else(|| fault("ordinary parent source absent"))?
+                            .provider
+                            .complete_ordinary_module(producer, child.clone())?;
+                    }
+                }
                 self.declarative
                     .as_mut()
                     .ok_or_else(|| fault("ordinary completion original owner absent"))?
@@ -7764,6 +7924,29 @@ impl SourceDiscovery {
         if seal.key() != self.key {
             return Err(fault("discovery certificate context differs"));
         }
+        if let Some((_, _, providers)) = &self.declarative {
+            super::source_declarative::SourceDeclarative::revalidate_captured_role_parents(
+                providers,
+            )?;
+        }
+        let mut macro_export_modules = Vec::new();
+        if self.macro_export_modules.len() > 256 {
+            return Err(fault("macro-export module publication count limit"));
+        }
+        macro_export_modules
+            .try_reserve_exact(self.macro_export_modules.len())
+            .map_err(|_| fault("macro-export module publication allocation"))?;
+        macro_export_modules.extend(self.macro_export_modules.values().cloned());
+        for module in &macro_export_modules {
+            module.revalidate(db)?;
+        }
+        let module_handle_bytes = macro_export_modules
+            .capacity()
+            .checked_mul(std::mem::size_of::<
+                std::sync::Arc<crate::source::macro_export_module::MacroExportModuleAdoption>,
+            >())
+            .filter(|bytes| *bytes <= 1024 * 1024)
+            .ok_or_else(|| fault("macro-export module publication handle limit"))?;
         let mut replay_sources = Vec::new();
         for (ordinal, source) in self.sources.iter().enumerate() {
             if db
@@ -7815,6 +7998,7 @@ impl SourceDiscovery {
         let mut bytes = seal
             .metadata_bytes()?
             .checked_add(replay_bytes)
+            .and_then(|bytes| bytes.checked_add(module_handle_bytes))
             .ok_or_else(|| fault("macro-export replay publication metadata overflow"))?;
         if let Some(scope) = &scope {
             bytes = bytes
@@ -8052,6 +8236,7 @@ impl SourceDiscovery {
             &modules,
             &ordinary_modules,
             &replay_sources,
+            &macro_export_modules,
             derived,
         )
     }
@@ -10004,6 +10189,7 @@ impl SourceDiscovery {
         if let Some(prepared) = &self.compiler_profiles {
             prepared.revalidate(providers)?;
         }
+        super::source_declarative::SourceDeclarative::revalidate_captured_role_parents(providers)?;
         let mut records = Vec::new();
         self.calls
             .len()
@@ -10120,6 +10306,9 @@ impl SourceDiscovery {
             }
         }
         for provider in providers {
+            // Candidate routes cannot stand in for final Attribute selection.
+            // The completion loop above reselects every stored proof strictly.
+            provider.require_final_compiler_attributes(&self.source_empty_derives)?;
             provider.revalidate_generated_selections(providers)?;
         }
         let mut module_records = BTreeMap::new();
@@ -10211,17 +10400,54 @@ impl SourceDiscovery {
                 return Err(fault("cold compiler Test facet changed before sealing"));
             }
         }
+        let mut original_replays = BTreeMap::new();
         for (identity, proof) in &self.nested_inert_proofs {
             if self.original_prefix_jobs.contains(identity) {
                 let ordinal = *self
                     .nested_jobs
                     .get(identity)
                     .ok_or_else(|| fault("original inert prefix source owner absent"))?;
+                let replay_count = original_replays.len();
+                if let std::collections::btree_map::Entry::Vacant(entry) =
+                    original_replays.entry(ordinal)
+                {
+                    replay_count
+                        .checked_add(1)
+                        .filter(|count| *count <= self.sources.len() && *count <= 100_000)
+                        .and_then(|count| {
+                            count.checked_mul(
+                                std::mem::size_of::<
+                                    crate::source::compiler_replay::CompilerReplaySource<'_>,
+                                >()
+                                .checked_add(128)?,
+                            )
+                        })
+                        .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+                        .ok_or_else(|| fault("original prefix replay temporary metadata limit"))?;
+                    let source = self
+                        .sources
+                        .get(ordinal)
+                        .ok_or_else(|| fault("original prefix replay source is absent"))?;
+                    let plan = self
+                        .original_annotation_plans
+                        .get(&ordinal)
+                        .ok_or_else(|| fault("original prefix replay source plan is absent"))?;
+                    let current = crate::source::compiler_replay::CompilerReplaySource::prepare(
+                        source,
+                        plan.scan(),
+                    )?;
+                    entry.insert(current);
+                }
                 original_inert::revalidate(
-                    &self.sources[ordinal],
-                    &providers[ordinal],
+                    original_replays
+                        .get(&ordinal)
+                        .ok_or_else(|| fault("original prefix replay source is absent"))?,
+                    providers
+                        .get(ordinal)
+                        .ok_or_else(|| fault("original prefix replay provider is absent"))?,
                     proof,
                     namespaces,
+                    &self.original_prefix_jobs,
                 )?;
                 continue;
             }

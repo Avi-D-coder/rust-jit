@@ -563,7 +563,15 @@ impl PreparedSourceView {
         else {
             return Err(publication_fault("macro prelude cfg missing"));
         };
-        file.parsed.macro_prelude_policy(cfg)
+        file.parsed.live_macro_prelude_policy(cfg)
+    }
+    /// Syntax facts only. The caller must bind an actual preparation role;
+    /// these flags grant no runtime or compiler namespace authority.
+    pub(crate) fn macro_prelude_facts(
+        &self,
+    ) -> Result<crate::syntax::macro_prelude::MacroPreludePolicy, Diagnostic> {
+        self.retained_declaration_parser()?
+            .macro_prelude_policy(self.captured_macro_cfg()?)
     }
     pub(crate) fn require_module_predicate_call(
         &self,

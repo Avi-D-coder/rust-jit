@@ -28,6 +28,8 @@ pub struct FieldRecipe {
     pub name: Option<String>,
     pub visibility: Visibility,
     pub ty: Vec<TokenRecipe>,
+    /// Exact current parser Type occurrence, not part of nominal semantic identity.
+    pub(crate) type_range: crate::syntax::spans::SourceRange,
     /// Captured syntax terms only: no name resolution, predicate or layout demand.
     pub symbolic: Option<TyTerm>,
 }
@@ -172,6 +174,8 @@ pub struct SchemaNames<'a> {
     graph: &'a super::names::NameNamespaces,
     schema: &'a NominalSchema,
     definition: Cow<'a, crate::source::manifest::DefKey>,
+    body_type: Option<&'a super::source_locals::owned_plan::type_declarations::PreparedBodyType>,
+    body_owner: Option<super::source_types::LocalNominalOwner>,
 }
 /// One lookup result and, when available, its source-selected concrete type.
 /// Metadata-only graph callers cannot mint nominal schema authority.
@@ -195,8 +199,57 @@ impl<'a> SchemaNames<'a> {
         db: &mut crate::db::memo::Database,
         sources: &[&crate::source::changes::PreparedSourceView],
         name: &str,
+        field: Option<&FieldRecipe>,
     ) -> crate::db::poll::QueryPoll<SchemaTypeName> {
         use crate::db::poll::QueryPoll;
+        if let Some(body_type) = self.body_type
+            && field.is_none()
+            && name == self.definition.declared_name
+        {
+            let declaration = body_type.declaration();
+            return QueryPoll::Ready(Ok(SchemaTypeName {
+                name: super::signature_names::SignatureName::Source(super::names::NameDefinition {
+                    namespace: crate::source::manifest::Namespace::Type,
+                    identity: declaration.definition_identity(),
+                    defining_unit: declaration.definition().crate_key,
+                    definition_edition: declaration.token_edition(),
+                }),
+                concrete: Some(body_type.source_type().clone()),
+            }));
+        }
+        if self.body_type.is_some() && field.is_some() && self.schema.scope.owner.is_some() {
+            // The actual field occurrence must enter the same owning-prefix
+            // service. A module lookup cannot stand in for a local header use.
+            return QueryPoll::Ready(Ok(SchemaTypeName {
+                name: super::signature_names::SignatureName::NeedOwnerContext(
+                    self.schema.scope.clone(),
+                ),
+                concrete: None,
+            }));
+        }
+        if let Some(owner) = &self.body_owner {
+            if field.is_none() && name == self.definition.declared_name {
+                return QueryPoll::Ready(Ok(SchemaTypeName {
+                    name: super::signature_names::SignatureName::Source(
+                        super::names::NameDefinition {
+                            namespace: crate::source::manifest::Namespace::Type,
+                            identity: self.schema.definition,
+                            defining_unit: owner.definition.crate_key,
+                            definition_edition: owner.edition,
+                        },
+                    ),
+                    concrete: None,
+                }));
+            }
+            if field.is_some() {
+                return QueryPoll::Ready(Ok(SchemaTypeName {
+                    name: super::signature_names::SignatureName::NeedOwnerContext(
+                        self.schema.scope.clone(),
+                    ),
+                    concrete: None,
+                }));
+            }
+        }
         let selected = match super::type_name_namespace::resolve_declaration_name(
             db,
             super::type_name_namespace::SourceTypeOwner {
@@ -281,12 +334,69 @@ impl<'a> SchemaNames<'a> {
                 return QueryPoll::Ready(Err(error));
             }
         }
+        let local = match super::source_types::local_nominal_owner(db, schema.definition) {
+            QueryPoll::Ready(Ok(owner)) => owner,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        if let Some(owner) = local {
+            return match Self::from_definition(
+                db,
+                graph,
+                schema,
+                Cow::Owned(owner.definition.clone()),
+            ) {
+                QueryPoll::Ready(Ok(mut names)) => {
+                    names.body_owner = Some(owner);
+                    QueryPoll::Ready(Ok(names))
+                }
+                other => other,
+            };
+        }
         let definition =
             match super::source_types::nominal_definition(db, sources, schema.definition) {
                 Ok(definition) => definition,
                 Err(error) => return QueryPoll::Ready(Err(error)),
             };
         Self::from_definition(db, graph, schema, Cow::Owned(definition))
+    }
+    /// Same schema binder after the actual entered Type occurrence selected its
+    /// local or module declaration. Module outlines are not local-item authority.
+    pub(crate) fn from_body_type(
+        db: &mut crate::db::memo::Database,
+        graph: &'a super::names::NameNamespaces,
+        schema: &'a NominalSchema,
+        body_type: &'a super::source_locals::owned_plan::type_declarations::PreparedBodyType,
+    ) -> crate::db::poll::QueryPoll<Self> {
+        use crate::db::poll::QueryPoll;
+        let declaration = body_type.declaration();
+        match declaration.retained_plan().require_current(db) {
+            QueryPoll::Ready(Ok(())) => {}
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
+        match declaration.require_current(db) {
+            QueryPoll::Ready(Ok(())) => {}
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
+        if declaration.definition_identity() != schema.definition {
+            return QueryPoll::Ready(Err(schema_fault(
+                "entered Type declaration differs from selected field schema",
+            )));
+        }
+        match Self::from_definition(
+            db,
+            graph,
+            schema,
+            Cow::Owned(declaration.definition().clone()),
+        ) {
+            QueryPoll::Ready(Ok(mut names)) => {
+                names.body_type = Some(body_type);
+                QueryPoll::Ready(Ok(names))
+            }
+            other => other,
+        }
     }
     fn from_definition(
         db: &mut crate::db::memo::Database,
@@ -338,6 +448,8 @@ impl<'a> SchemaNames<'a> {
             graph,
             schema,
             definition,
+            body_type: None,
+            body_owner: None,
         }))
     }
     pub(crate) fn definition(&self) -> &crate::source::manifest::DefKey {
@@ -383,7 +495,7 @@ impl<'a> SchemaNames<'a> {
     /// Alias, generic and compound-field resolution continue through the source
     /// type engine rather than being guessed from a guest descriptor.
     pub fn bind_variant(&self, name: Option<&str>) -> Result<NominalBinding, Diagnostic> {
-        match self.bind_variant_with(name, |name| {
+        match self.bind_variant_with(name, |name, _field| {
             crate::db::poll::QueryPoll::Ready(
                 self.unqualified(name, None)
                     .and_then(SchemaTypeName::metadata),
@@ -398,11 +510,11 @@ impl<'a> SchemaNames<'a> {
     fn bind_variant_with(
         &self,
         name: Option<&str>,
-        mut lookup: impl FnMut(&str) -> crate::db::poll::QueryPoll<SchemaTypeName>,
+        mut lookup: impl FnMut(&str, Option<&FieldRecipe>) -> crate::db::poll::QueryPoll<SchemaTypeName>,
     ) -> Result<crate::db::poll::QueryPoll<NominalBinding>, Diagnostic> {
         use super::signature_names::SignatureName;
         let selected = self.schema.variant(name)?;
-        let own_name = match lookup(&self.definition.declared_name) {
+        let own_name = match lookup(&self.definition.declared_name, None) {
             crate::db::poll::QueryPoll::Ready(result) => result?,
             crate::db::poll::QueryPoll::NeedInput(input) => {
                 return Ok(crate::db::poll::QueryPoll::NeedInput(input));
@@ -444,7 +556,7 @@ impl<'a> SchemaNames<'a> {
         for (ordinal, recipe) in selected.fields.iter().enumerate() {
             let field = Some(u32::try_from(ordinal).map_err(|_| schema_limit())?);
             let resolved = if recipe.ty.len() == 1 {
-                match lookup(&recipe.ty[0].text) {
+                match lookup(&recipe.ty[0].text, Some(recipe)) {
                     crate::db::poll::QueryPoll::Ready(result) => result?,
                     crate::db::poll::QueryPoll::NeedInput(input) => {
                         return Ok(crate::db::poll::QueryPoll::NeedInput(input));
@@ -505,7 +617,7 @@ impl<'a> SchemaNames<'a> {
         member: &str,
         caller: &ScopeKey,
     ) -> Result<NominalFieldBinding, Diagnostic> {
-        match self.bind_named_field_with(variant_name, member, caller, |name| {
+        match self.bind_named_field_with(variant_name, member, caller, |name, _field| {
             crate::db::poll::QueryPoll::Ready(
                 self.unqualified(name, None)
                     .and_then(SchemaTypeName::metadata),
@@ -528,8 +640,8 @@ impl<'a> SchemaNames<'a> {
         member: &str,
         caller: &ScopeKey,
     ) -> crate::db::poll::QueryPoll<NominalFieldBinding> {
-        let outcome = self.bind_named_field_with(variant_name, member, caller, |name| {
-            self.current_name(db, sources, name)
+        let outcome = self.bind_named_field_with(variant_name, member, caller, |name, field| {
+            self.current_name(db, sources, name, field)
         });
         match outcome {
             Ok(poll) => poll,
@@ -541,7 +653,7 @@ impl<'a> SchemaNames<'a> {
         variant_name: Option<&str>,
         member: &str,
         caller: &ScopeKey,
-        mut lookup: impl FnMut(&str) -> crate::db::poll::QueryPoll<SchemaTypeName>,
+        mut lookup: impl FnMut(&str, Option<&FieldRecipe>) -> crate::db::poll::QueryPoll<SchemaTypeName>,
     ) -> Result<crate::db::poll::QueryPoll<NominalFieldBinding>, Diagnostic> {
         use super::signature_names::SignatureName;
         let selected = self.schema.variant(variant_name)?;
@@ -570,7 +682,7 @@ impl<'a> SchemaNames<'a> {
         {
             return Err(schema_fault("reached source field is inaccessible"));
         }
-        let own_name = match lookup(&self.definition.declared_name) {
+        let own_name = match lookup(&self.definition.declared_name, None) {
             crate::db::poll::QueryPoll::Ready(Ok(selected)) => selected,
             crate::db::poll::QueryPoll::Ready(Err(error)) => return Err(error),
             crate::db::poll::QueryPoll::NeedInput(request) => {
@@ -595,7 +707,7 @@ impl<'a> SchemaNames<'a> {
             )));
         }
         let resolved = if recipe.ty.len() == 1 {
-            match lookup(&recipe.ty[0].text) {
+            match lookup(&recipe.ty[0].text, Some(recipe)) {
                 crate::db::poll::QueryPoll::Ready(Ok(selected)) => selected,
                 crate::db::poll::QueryPoll::Ready(Err(error)) => return Err(error),
                 crate::db::poll::QueryPoll::NeedInput(request) => {
@@ -650,7 +762,7 @@ impl<'a> SchemaNames<'a> {
         plan: &crate::syntax::constructors::ConstructorPlan,
         caller: &ScopeKey,
     ) -> Result<NominalConstructorBinding, Diagnostic> {
-        match self.bind_record_constructor_with(name, plan, caller, |name| {
+        match self.bind_record_constructor_with(name, plan, caller, |name, _field| {
             crate::db::poll::QueryPoll::Ready(
                 self.unqualified(name, None)
                     .and_then(SchemaTypeName::metadata),
@@ -672,8 +784,8 @@ impl<'a> SchemaNames<'a> {
         plan: &crate::syntax::constructors::ConstructorPlan,
         caller: &ScopeKey,
     ) -> crate::db::poll::QueryPoll<NominalConstructorBinding> {
-        match self.bind_record_constructor_with(name, plan, caller, |name| {
-            self.current_name(db, sources, name)
+        match self.bind_record_constructor_with(name, plan, caller, |name, field| {
+            self.current_name(db, sources, name, field)
         }) {
             Ok(poll) => poll,
             Err(error) => crate::db::poll::QueryPoll::Ready(Err(error)),
@@ -684,7 +796,7 @@ impl<'a> SchemaNames<'a> {
         name: Option<&str>,
         plan: &crate::syntax::constructors::ConstructorPlan,
         caller: &ScopeKey,
-        lookup: impl FnMut(&str) -> crate::db::poll::QueryPoll<SchemaTypeName>,
+        lookup: impl FnMut(&str, Option<&FieldRecipe>) -> crate::db::poll::QueryPoll<SchemaTypeName>,
     ) -> Result<crate::db::poll::QueryPoll<NominalConstructorBinding>, Diagnostic> {
         use crate::syntax::constructors::ConstructorKind;
         let ConstructorKind::Record {

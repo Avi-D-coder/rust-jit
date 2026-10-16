@@ -174,7 +174,7 @@ impl BodyTypeDeclaration {
     /// Cold query proof validation only. Installed operations consume retained
     /// relevant versions; they must not call source preparation here.
     pub(crate) fn require_current(&self, db: &mut Database) -> QueryPoll<()> {
-        polled!(self.plan.context().require_current(db));
+        polled!(self.plan.require_current(db));
         for dependency in &self.dependencies {
             match dependency {
                 DependencyStamp::Input { key, fingerprint } => {

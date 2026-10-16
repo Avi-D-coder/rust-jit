@@ -1,5 +1,6 @@
 //! Original source contributions to path lookup. Membership seals and visibility
 //! checks remain the caller's responsibility; these are not a complete namespace.
+pub(crate) use super::module_aliases::ModuleGraphPreparation;
 use super::{
     hygiene::HygieneFacts,
     macro_names::{MacroNamespaces, MacroPath},
@@ -356,6 +357,30 @@ impl SourceMacroRoutes {
         definition: impl Fn(Digest) -> Option<MacroDefinition>,
         lookup: impl Fn(&[String], u64, &str) -> Result<HygienicLookup, Diagnostic>,
     ) -> Result<Self, Diagnostic> {
+        Self::from_lookup_preparing(
+            outline,
+            dependencies,
+            available,
+            disabled,
+            definition,
+            lookup,
+            None,
+        )
+    }
+    /// Unsealed discovery may inspect unchanged compiler-attribute candidate
+    /// syntax. Final source/Attribute receipts are still required before seal.
+    pub(crate) fn from_lookup_preparing(
+        outline: &Outline,
+        dependencies: &BTreeMap<MacroName, Digest>,
+        available: &BTreeMap<MacroName, Digest>,
+        disabled: &[ScopeKey],
+        definition: impl Fn(Digest) -> Option<MacroDefinition>,
+        lookup: impl Fn(&[String], u64, &str) -> Result<HygienicLookup, Diagnostic>,
+        preparation: Option<&crate::expand::source_declarative::compiler_attribute_preparation::CompilerAttributePreparation>,
+    ) -> Result<Self, Diagnostic> {
+        if let Some(prepared) = preparation {
+            prepared.require_outline(outline)?;
+        }
         if disabled.len() > 100_000
             || disabled
                 .iter()
@@ -490,7 +515,8 @@ impl SourceMacroRoutes {
                     attribute.class,
                     AttributeClass::TransformUnsupported | AttributeClass::Derive
                 )
-            }) {
+            }) && !preparation.is_some_and(|prepared| prepared.permits(item))
+            {
                 continue;
             }
             if row.macro_use.is_some()
@@ -635,7 +661,8 @@ impl SourceMacroRoutes {
                     a.class,
                     AttributeClass::TransformUnsupported | AttributeClass::Derive
                 )
-            }) {
+            }) && !preparation.is_some_and(|prepared| prepared.permits(item))
+            {
                 Some(DeferredImportReason::AttributeProducer)
             } else if import.kind == ImportKind::Glob {
                 Some(DeferredImportReason::Glob)
@@ -1027,6 +1054,14 @@ impl SourceMacroRoutes {
         catalogs: &[std::sync::Arc<Self>],
         imports: &[super::compile_input_catalog::CompilerInjectedImport],
     ) -> Result<MacroNamespaces, Diagnostic> {
+        Self::prepare_discovery_graph_with_compiler_imports(catalogs, imports)?.require_ready()
+    }
+    /// The same route worklist, retaining an unresolved physical-module demand
+    /// for the preparation coordinator. No partial namespace graph escapes.
+    pub(crate) fn prepare_discovery_graph_with_compiler_imports(
+        catalogs: &[std::sync::Arc<Self>],
+        imports: &[super::compile_input_catalog::CompilerInjectedImport],
+    ) -> Result<ModuleGraphPreparation, Diagnostic> {
         if catalogs.len() > 100_000 {
             return Err(error("source catalog count exceeded"));
         }
@@ -1035,7 +1070,7 @@ impl SourceMacroRoutes {
             .try_reserve_exact(catalogs.len())
             .map_err(|_| error("source catalogue borrow allocation failed"))?;
         borrowed.extend(catalogs.iter().map(|catalog| catalog.as_ref()));
-        super::module_aliases::graph_with_compiler_imports(&borrowed, true, imports)
+        super::module_aliases::prepare_graph_with_compiler_imports(&borrowed, true, imports)
     }
     /// Partial candidate graph retains exact textual producer demands as pending buckets.
     pub(crate) fn discovery_graph(

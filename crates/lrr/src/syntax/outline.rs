@@ -130,6 +130,25 @@ impl StableEncode for HeaderRecipe {
     }
 }
 impl HeaderRecipe {
+    /// Semantic equality across an explicitly admitted source-coordinate
+    /// transformation. Attribute source locations remain separate attachments;
+    /// ordinary equality still checks them for exact current-source consumers.
+    pub(crate) fn same_semantics(&self, other: &Self) -> bool {
+        self.profile == other.profile
+            && self.tokens == other.tokens
+            && self.context == other.context
+            && self.visibility == other.visibility
+            && self.attributes.len() == other.attributes.len()
+            && self
+                .attributes
+                .iter()
+                .zip(&other.attributes)
+                .all(|(left, right)| {
+                    left.name == right.name
+                        && left.class == right.class
+                        && left.tokens == right.tokens
+                })
+    }
     pub fn estimated_bytes(&self) -> usize {
         std::mem::size_of::<Self>()
             + (self.tokens.capacity() + self.context.capacity())

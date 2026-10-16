@@ -106,6 +106,51 @@ fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-SCOPE", message.into())
 }
 impl TextualScopes {
+    /// Cold immutable environment encoding; never name resolution or a hot guard.
+    pub(crate) fn semantic_fingerprint(&self) -> Result<Digest, Diagnostic> {
+        if self.metadata_bytes()? > 64 * 1024 * 1024 {
+            return Err(error("textual environment encoding budget"));
+        }
+        let mut e = StableEncoder::new("lrr/v1/textual-scope-environment");
+        e.u64(self.scopes.len() as u64);
+        for (key, scope) in &self.scopes {
+            e.record(key);
+            e.option(&scope.parent, |e, (parent, before)| {
+                e.record(parent);
+                e.u64(*before);
+            });
+            e.u64(scope.definitions.len() as u64);
+            for (name, positions) in &scope.definitions {
+                e.string(name.as_str());
+                e.u64(positions.len() as u64);
+                for (at, definitions) in positions {
+                    e.u64(*at);
+                    e.u64(definitions.len() as u64);
+                    for definition in definitions {
+                        e.digest(definition.identity);
+                        e.digest(definition.defining_unit);
+                        e.u16(definition.definition_edition);
+                    }
+                }
+            }
+            e.u64(scope.pending.len() as u64);
+            for (at, producer) in &scope.pending {
+                e.u64(*at);
+                e.digest(*producer);
+            }
+            e.u64(scope.exports.len() as u64);
+            for (at, child) in &scope.exports {
+                e.u64(*at);
+                e.record(child);
+            }
+            e.u64(scope.exported_children.len() as u64);
+            for child in &scope.exported_children {
+                e.record(child);
+            }
+        }
+        Ok(e.finish())
+    }
+
     pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
         let mut bytes = std::mem::size_of::<Self>();
         let mut add = |n: usize| -> Result<(), Diagnostic> {

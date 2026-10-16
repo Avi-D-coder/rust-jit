@@ -23,6 +23,8 @@ use std::collections::BTreeMap;
 type DependencyRoutes = BTreeMap<crate::expand::scopes::MacroName, Digest>;
 type RouteDependencySets = (DependencyRoutes, DependencyRoutes);
 pub mod assembly;
+#[path = "source_declarative/compiler_attribute_preparation.rs"]
+pub(crate) mod compiler_attribute_preparation;
 #[path = "source_declarative/macro_exports.rs"]
 pub mod macro_exports;
 #[path = "source_declarative/original_annotations.rs"]
@@ -31,6 +33,12 @@ pub(crate) mod original_annotations;
 mod scalar_pattern_replay;
 pub struct SourceDeclarative {
     source: PreparedSourceView,
+    compiler_attribute_preparation:
+        Option<std::sync::Arc<compiler_attribute_preparation::CompilerAttributePreparation>>,
+    macro_export_role:
+        Option<std::sync::Arc<crate::db::memo::macro_export_inputs::MacroExportSourceObservation>>,
+    macro_export_module:
+        Option<std::sync::Arc<crate::source::macro_export_module::MacroExportModuleAdoption>>,
     pub(crate) compiler:
         Option<std::sync::Arc<crate::frontend::compile_input_catalog::CompileInputCatalog>>,
     index: SourceMacroIndex,
@@ -448,7 +456,7 @@ pub fn engine_version() -> Digest {
     e.digest(Digest(
         lrr_expand_adapter::builtin_attributes::compiler_inert_inventory_identity().0,
     ));
-    e.u32(3); // Original declarations plus pinned compiler annotation inventory.
+    e.u32(6); // Candidate attribute scheduling remains distinct from final selection.
     e.finish()
 }
 fn fault(code: &'static str, message: &str) -> Diagnostic {
@@ -726,6 +734,9 @@ impl SourceDeclarative {
         )?;
         Ok(Self {
             source,
+            macro_export_role: None,
+            macro_export_module: None,
+            compiler_attribute_preparation: None,
             compiler: None,
             index,
             procedural: None,
@@ -748,6 +759,16 @@ impl SourceDeclarative {
         let mut total = 0usize;
         for child in providers.iter() {
             let mut scope = child.source.outline().root_scope.clone();
+            if child.macro_export_source_role().is_some()
+                && !scope.module_path.is_empty()
+                && child.macro_export_module.is_none()
+            {
+                return Err(fault(
+                    "LRR-E-MACRO-EXPORT-PUBLICATION",
+                    "macro-export child requires adopted source-parent selection",
+                ));
+            }
+            let mut owner = child;
             let mut chain = Vec::new();
             while !scope.module_path.is_empty() {
                 let mut candidates =
@@ -794,7 +815,9 @@ impl SourceDeclarative {
                         "captured external module hierarchy or depth mismatch",
                     ));
                 }
+                owner.require_captured_role_parent(parent, input)?;
                 parent.index.module_outer(input)?;
+                owner = parent;
                 total = total
                     .checked_add(64)
                     .filter(|n| *n <= 64 * 1024 * 1024)
@@ -1110,23 +1133,45 @@ impl SourceDeclarative {
         Ok(())
     }
     pub(crate) fn module_snapshot_bytes(&self) -> Result<usize, Diagnostic> {
+        let rows = self
+            .catalogs
+            .len()
+            .checked_add(self.generated.len())
+            .and_then(|count| count.checked_add(self.source_modules.len()))
+            .and_then(|count| count.checked_add(self.derive_prefixes.len()))
+            .and_then(|count| count.checked_mul(128))
+            .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "module owner index overflow"))?;
         self.module_index_bytes()?
             .checked_add(
-                self.catalogs
-                    .len()
-                    .checked_add(self.generated.len())
-                    .and_then(|n| n.checked_add(self.source_modules.len()))
-                    .and_then(|n| n.checked_add(self.derive_prefixes.len()))
-                    .and_then(|n| n.checked_mul(128))
-                    .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "module owner index overflow"))?,
+                self.macro_export_role
+                    .as_ref()
+                    .map_or(0, |role| role.metadata_bytes()),
             )
-            .filter(|n| *n <= 64 * 1024 * 1024)
+            .and_then(|bytes| {
+                bytes.checked_add(
+                    self.macro_export_module
+                        .as_ref()
+                        .map_or(0, |module| module.retained_admission_bytes()),
+                )
+            })
+            .and_then(|bytes| {
+                bytes.checked_add(
+                    self.compiler_attribute_preparation
+                        .as_ref()
+                        .map_or(0, |plan| plan.metadata_bytes()),
+                )
+            })
+            .and_then(|bytes| bytes.checked_add(rows))
+            .filter(|bytes| *bytes <= 64 * 1024 * 1024)
             .ok_or_else(|| fault("LRR-E-METADATA-LIMIT", "module owner snapshot limit"))
     }
     pub(crate) fn module_snapshot(&self) -> Result<std::sync::Arc<Self>, Diagnostic> {
         self.module_snapshot_bytes()?;
         Ok(std::sync::Arc::new(Self {
             source: self.source.share(),
+            macro_export_role: self.macro_export_role.clone(),
+            macro_export_module: self.macro_export_module.clone(),
+            compiler_attribute_preparation: self.compiler_attribute_preparation.clone(),
             compiler: self.compiler.clone(),
             procedural: self.procedural.clone(),
             index: self.index.snapshot_clone()?,
@@ -1137,6 +1182,128 @@ impl SourceDeclarative {
             source_modules: self.source_modules.clone(),
             generated: self.generated.clone(),
         }))
+    }
+    pub(crate) fn bind_macro_export_source(
+        &mut self,
+        role: std::sync::Arc<crate::db::memo::macro_export_inputs::MacroExportSourceObservation>,
+        graph: Digest,
+    ) -> Result<(), Diagnostic> {
+        role.require_source(&self.source, graph)?;
+        if self.compiler.is_some() || self.macro_export_role.is_some() {
+            return Err(fault(
+                "LRR-E-MACRO-EXPORT-PUBLICATION",
+                "macro source role must precede compiler routes",
+            ));
+        }
+        self.macro_export_role = Some(role);
+        Ok(())
+    }
+    pub(crate) fn macro_export_source_role(
+        &self,
+    ) -> Option<&std::sync::Arc<crate::db::memo::macro_export_inputs::MacroExportSourceObservation>>
+    {
+        self.macro_export_role.as_ref()
+    }
+    pub(crate) fn bind_macro_export_module(
+        &mut self,
+        module: std::sync::Arc<crate::source::macro_export_module::MacroExportModuleAdoption>,
+    ) -> Result<(), Diagnostic> {
+        if self.compiler.is_some() || self.macro_export_module.is_some() {
+            return Err(fault(
+                "LRR-E-MACRO-EXPORT-PUBLICATION",
+                "macro-export module must precede compiler routes",
+            ));
+        }
+        let role = self.macro_export_role.as_ref().ok_or_else(|| {
+            fault(
+                "LRR-E-MACRO-EXPORT-PUBLICATION",
+                "macro-export module source role is absent",
+            )
+        })?;
+        module.require_child(&self.source, role)?;
+        self.macro_export_module = Some(module);
+        Ok(())
+    }
+    /// Actual retained adoption allocation, for source-owner accounting.
+    pub fn macro_export_module_adoption(
+        &self,
+    ) -> Option<&std::sync::Arc<crate::source::macro_export_module::MacroExportModuleAdoption>>
+    {
+        self.macro_export_module.as_ref()
+    }
+    fn require_captured_role_parent(&self, parent: &Self, input: Digest) -> Result<(), Diagnostic> {
+        let Some(role) = &self.macro_export_role else {
+            return Ok(());
+        };
+        let module = self.macro_export_module.as_ref().ok_or_else(|| {
+            fault(
+                "LRR-E-MACRO-EXPORT-PUBLICATION",
+                "macro-export child requires adopted source-parent selection",
+            )
+        })?;
+        module.require_child(&self.source, role)?;
+        let request = module.request();
+        let parent_role = parent.macro_export_role.as_ref().ok_or_else(|| {
+            fault(
+                "LRR-E-MACRO-EXPORT-PUBLICATION",
+                "macro-export adopted parent source role is absent",
+            )
+        })?;
+        parent_role.require_facet(request.parent())?;
+        if request.parent().source().selection() != parent.source.selection()
+            || !request.parent().source().same_publication(&parent.source)
+            || request.declaration().producer() != input
+            || request.declaration().scope() != &self.source.outline().root_scope
+            || parent
+                .index
+                .module_input_for(&self.source.outline().root_scope)
+                != Some(input)
+            || parent
+                .macro_export_module
+                .as_ref()
+                .map(|module| module.identity())
+                != request.parent_adoption().map(|module| module.identity())
+        {
+            return Err(fault(
+                "LRR-E-MACRO-EXPORT-PUBLICATION",
+                "macro-export adopted source-parent attachment differs",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn revalidate_captured_role_parents(providers: &[Self]) -> Result<(), Diagnostic> {
+        for child in providers {
+            let mut owner = child;
+            for (ordinal, input) in &child.parents {
+                let parent = providers.get(*ordinal).ok_or_else(|| {
+                    fault(
+                        "LRR-E-MACRO-EXPORT-PUBLICATION",
+                        "macro-export captured ancestor is absent",
+                    )
+                })?;
+                owner.require_captured_role_parent(parent, *input)?;
+                owner = parent;
+            }
+            if child.macro_export_role.is_some()
+                && !child.source.outline().root_scope.module_path.is_empty()
+                && child.parents.is_empty()
+            {
+                return Err(fault(
+                    "LRR-E-MACRO-EXPORT-PUBLICATION",
+                    "macro-export child requires adopted source-parent selection",
+                ));
+            }
+        }
+        Ok(())
+    }
+    fn source_prelude_policy(
+        &self,
+    ) -> Result<crate::syntax::macro_prelude::MacroPreludePolicy, Diagnostic> {
+        if self.macro_export_role.is_some() {
+            self.source.macro_prelude_facts()
+        } else {
+            self.source.macro_prelude_policy()
+        }
     }
     pub(crate) fn module_source(&self) -> &PreparedSourceView {
         &self.source
@@ -1285,6 +1452,12 @@ impl SourceDeclarative {
         inherited: Option<&InheritedMacroContext<'_>>,
         budget: usize,
     ) -> Result<crate::frontend::source_macros::PublishedMacroIndex, Diagnostic> {
+        if self.macro_export_role.is_some() {
+            return Err(fault(
+                "LRR-E-MACRO-EXPORT-PUBLICATION",
+                "macro-only source cannot publish a runtime index",
+            ));
+        }
         let mut facts = self.index.hygiene_facts().clone();
         let mut ancestry = self.index.expansion_ancestry().clone();
         let count = self
@@ -2026,6 +2199,9 @@ impl SourceDeclarative {
         {
             return Ok(None);
         }
+        if self.macro_export_role.is_some() {
+            return Ok(None);
+        }
         let Some(compiler) = &self.compiler else {
             return Ok(None);
         };
@@ -2699,6 +2875,9 @@ impl SourceDeclarative {
         )>,
         Diagnostic,
     > {
+        if self.macro_export_role.is_some() {
+            return Ok(None);
+        }
         let Some(definition) = self.generated_macro_definition(index, invocation, namespaces)?
         else {
             return Ok(None);
@@ -2985,7 +3164,7 @@ impl SourceDeclarative {
     /// Captured Cargo aliases plus the installed owned compiler facets. This
     /// is pure route metadata and grants no expansion or runtime authority.
     pub(crate) fn route_dependency_sets(&self) -> Result<RouteDependencySets, Diagnostic> {
-        self.route_dependency_sets_for_standard(self.source.macro_prelude_policy()?.standard)
+        self.route_dependency_sets_for_standard(self.source_prelude_policy()?.standard)
     }
     fn route_dependency_sets_for_standard(
         &self,
@@ -2993,7 +3172,9 @@ impl SourceDeclarative {
     ) -> Result<RouteDependencySets, Diagnostic> {
         let mut available = (*self.dependencies).clone();
         let mut dependencies = available.clone();
-        if let Some(catalog) = &self.compiler {
+        if self.macro_export_role.is_none()
+            && let Some(catalog) = &self.compiler
+        {
             for (alias, unit) in catalog.facade_aliases() {
                 let name = crate::expand::scopes::MacroName::parse(
                     alias,
@@ -3035,7 +3216,7 @@ impl SourceDeclarative {
                 })?,
             )
             .map_err(|_| fault("LRR-E-METADATA-LIMIT", "route catalogue allocation failed"))?;
-        let policy = self.source.macro_prelude_policy()?;
+        let policy = self.source_prelude_policy()?;
         let (dependencies, available) = self.route_dependency_sets_for_standard(policy.standard)?;
         let disabled = policy
             .disabled
@@ -3047,7 +3228,7 @@ impl SourceDeclarative {
             })
             .collect::<Vec<_>>();
         let mut original =
-            crate::frontend::source_macro_routes::SourceMacroRoutes::from_lookup_with_available(
+            crate::frontend::source_macro_routes::SourceMacroRoutes::from_lookup_preparing(
                 self.source.outline(),
                 &dependencies,
                 &available,
@@ -3071,6 +3252,7 @@ impl SourceDeclarative {
                         self.lookup_with_parents(module, at, name, owners)
                     }
                 },
+                self.compiler_attribute_preparation.as_deref(),
             )?;
         original.export_pending = self.index.pending_producers().collect();
         original.include_restored_original_macros(self.source.outline(), &self.index)?;

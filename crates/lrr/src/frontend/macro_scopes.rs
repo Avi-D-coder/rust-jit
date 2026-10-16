@@ -43,6 +43,24 @@ fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-SCOPE", message.into())
 }
 impl MacroDeclarations {
+    /// Encode retained declaration facts without recomputing hygiene normal forms.
+    pub(crate) fn semantic_fingerprint(&self) -> Result<Digest, Diagnostic> {
+        if self.metadata_bytes()? > 64 * 1024 * 1024 {
+            return Err(error("macro declaration encoding budget"));
+        }
+        let mut e = crate::core::digest::StableEncoder::new("lrr/v1/macro-declaration-environment");
+        e.u64(self.declarations.len() as u64);
+        for (identity, row) in &self.declarations {
+            e.digest(*identity);
+            e.digest(row.definition.identity);
+            e.digest(row.definition.defining_unit);
+            e.u16(row.definition.definition_edition);
+            e.digest(Digest(row.context.0));
+            e.option(&row.origin, |e, origin| e.digest(Digest(origin.0)));
+        }
+        Ok(e.finish())
+    }
+
     pub(crate) fn definition_by_identity(&self, identity: Digest) -> Option<&MacroDefinition> {
         self.declarations.get(&identity).map(|row| &row.definition)
     }

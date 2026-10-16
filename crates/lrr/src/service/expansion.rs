@@ -184,6 +184,7 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
         }
         QueryKey::DiscoverySeal(_) | QueryKey::ScopeDeclarationInventory(_) => {}
         QueryKey::ConstructorPlan(_)
+        | QueryKey::SourceLocalPlan(_)
         | QueryKey::TypeSchema(_)
         | QueryKey::TypeAlias(_)
         | QueryKey::FunctionSignature(_)

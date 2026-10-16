@@ -845,6 +845,9 @@ impl Provider for SyntaxProvider {
             QueryKey::ReferenceHeader(definition) => {
                 return super::source_plan_provider::reference_header(self, db, *definition);
             }
+            QueryKey::SourceLocalPlan(body) => {
+                return super::body_environment_provider::source_local_plan(db, body);
+            }
             QueryKey::PatternPlan(owner) => {
                 return super::source_plan_provider::pattern_plan(self, db, owner);
             }

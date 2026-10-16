@@ -86,6 +86,7 @@ impl StableEncode for CurrentModuleNameKey {
 pub use crate::frontend::constants::query_identity::ConstQueryIdentity as ConstantKey;
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum QueryKey {
+    SourceLocalPlan(crate::source::manifest::BodyKey),
     CurrentModuleName(Box<CurrentModuleNameKey>),
     SealedName(Box<SealedNameKey>),
     DiscoverySeal(super::seals::SealKey),
@@ -128,7 +129,8 @@ impl QueryKey {
                     + k.module_path.iter().map(String::capacity).sum::<usize>()
             }
             Self::ScopeBucket(k) => k.scope.heap_bytes() + k.name.capacity(),
-            Self::ConstructorPlan(_)
+            Self::SourceLocalPlan(_)
+            | Self::ConstructorPlan(_)
             | Self::TypeSchema(_)
             | Self::TypeAlias(_)
             | Self::FunctionSignature(_)
@@ -142,6 +144,7 @@ impl QueryKey {
     }
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::SourceLocalPlan(_) => "SourceLocalPlan",
             Self::CurrentModuleName(_) => "CurrentModuleName",
             Self::SealedName(_) => "SealedName",
             Self::DiscoverySeal(_) => "DiscoverySeal",
@@ -168,6 +171,10 @@ impl StableEncode for QueryKey {
     const DOMAIN: &'static str = "lrr/v2/query-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::SourceLocalPlan(key) => {
+                e.u32(34);
+                e.record(key);
+            }
             Self::CurrentModuleName(key) => {
                 e.u32(33);
                 e.record(key.as_ref());

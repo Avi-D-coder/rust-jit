@@ -91,7 +91,9 @@ pub(super) fn capture(
         let selected = source_items
             .remove(&definition)
             .ok_or_else(|| fault("original declaration normalization identity differs"))?;
-        if item.header != selected.header || item.body.is_some() != selected.body.is_some() {
+        if !item.header.same_semantics(&selected.header)
+            || item.body.is_some() != selected.body.is_some()
+        {
             return Err(fault(
                 "original declaration normalization header/body differs",
             ));

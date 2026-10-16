@@ -162,6 +162,66 @@ const FORWARDED: &str =
     include_str!("../../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-stmt-2.rs");
 
 #[test]
+fn rustc_local_struct_source_preserves_attribute_semantics_across_normalized_anchors() {
+    const ORIGINAL: &str = include_str!(
+        "../../../../../fixtures/upstream/rustc-checkout/tests/ui/borrowck/borrowck-assign-to-subfield.rs"
+    );
+    for edition in [2015, 2018, 2021, 2024] {
+        let (provider, index) = provider(ORIGINAL, edition);
+        let original = provider
+            .module_source()
+            .outline()
+            .items
+            .iter()
+            .find(|item| item.def_key.declared_name == "main")
+            .unwrap();
+        let prepared = SourceSyntaxAssembly::new(&provider, &index, 1)
+            .unwrap()
+            .finish()
+            .unwrap();
+        let parsed =
+            ParsedFile::from_syntax_snapshot(prepared.syntax().clone(), provider.profile().clone())
+                .unwrap();
+        let normalized = parsed
+            .outline(
+                original.def_key.crate_key,
+                vec![],
+                provider.module_source().captured_macro_cfg().unwrap(),
+            )
+            .unwrap();
+        let actual = normalized
+            .items
+            .iter()
+            .find(|item| item.def_key.fingerprint() == original.def_key.fingerprint())
+            .unwrap();
+        assert_eq!(original.header.attributes.len(), 1);
+        assert_ne!(
+            original.header.attributes[0].source_meta, actual.header.attributes[0].source_meta,
+            "this unchanged fixture must exercise coordinate normalization"
+        );
+        assert!(original.header.same_semantics(&actual.header));
+        assert_eq!(original.header.fingerprint(), actual.header.fingerprint());
+        let anchor = prepared
+            .original_declarations()
+            .iter()
+            .find(|anchor| anchor.original_definition() == original.def_key.fingerprint())
+            .unwrap();
+        assert_eq!(anchor.original_range(), original.declaration_span);
+        assert_eq!(anchor.declaration_range(), actual.declaration_span);
+        assert_eq!(
+            anchor.body_range(),
+            actual.body.as_ref().map(|body| body.range)
+        );
+        let mut changed = actual.header.clone();
+        changed.attributes[0].name.push_str("_different");
+        assert!(!original.header.same_semantics(&changed));
+        let mut changed = actual.header.clone();
+        changed.attributes[0].tokens[0].text.push_str("_different");
+        assert!(!original.header.same_semantics(&changed));
+    }
+}
+
+#[test]
 fn original_declaration_anchor_survives_a_copied_header_before_it() {
     let (provider, index) = provider(
         "macro_rules! emit{($item:item)=>{$item};}emit!(fn original(){});fn original(){}",
