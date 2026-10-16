@@ -34,3 +34,19 @@ validation belongs solely to the asynchronous validator. No test pass, stock
 contract, full-fixture, task, architecture closure or JIT readiness claimed.
 
 Frozen packet `artifacts/macos-first/common-source-plans-v2/SOURCE.json`, SHA-256 `57189be565b3a74adc18f4a90b9f81ccc51576849db33971d0e7b33b3337137e`.
+
+
+Later actual validation: V6 header/input bank7pass, pattern-query1pass2fail;
+V7 indexed-wrapper correction makes range-owner control pass, but condition
+control reaches a real verifier source mismatch (2pass1fail, actual9c3752/1).
+The verifier used flattened operands.first(), which can be an expression
+inside a literal range pattern. V8 selects the unique indexed direct expression
+child of the ordinary match/condition owner, rejects missing/ambiguous children,
+and retains all source slot/phase/alternative/retry checks. This is a common
+structural relationship, without a macro or fixture-name case. Verification
+walks only the existing bounded owner operand list at recipe preparation; no
+source parse, plan reconstruction or installed operation work is added.
+The unchanged condition observer covers this regression. Actual V7 failure
+remains sealed; V8 is unexecuted until its validator terminal arrives.
+
+Frozen V8 packet SHA-256 `d3806a2ff128308faa48567566f7ef2aa18c5dfc32a7b2370bdc82e2daab4707`.

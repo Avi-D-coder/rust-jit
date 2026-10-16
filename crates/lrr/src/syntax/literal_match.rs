@@ -981,7 +981,7 @@ pub(super) fn prepare_inner(
             Err(error) if error.code == "LRR-E-UNSUPPORTED" => {
                 return unsupported(&error.message);
             }
-            Err(error) => return Err(error),
+            Err(error) => return Err(error.clone()),
         }
     } else {
         None

@@ -1,0 +1,907 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T01:12:45.528104+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T014",
+    "T024",
+    "T032",
+    "T050",
+    "T051",
+    "M014"
+  ],
+  "state": "v8_failed_sealed_shared_type_lookup_successor_in_progress",
+  "source_baseline": "fa071ee4d381e88645a837b23574534e1aeeaf80",
+  "source_packet": "artifacts/macos-first/common-source-plans-v8/SOURCE.json",
+  "source_packet_sha256": "d3806a2ff128308faa48567566f7ef2aa18c5dfc32a7b2370bdc82e2daab4707",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/cli/preentry_loader.rs",
+      "sha256": "dce92f16af852eaf1ce337cb9270f8f22256c9c56100b27db6dda34c01eed0de",
+      "bytes": 20943
+    },
+    {
+      "path": "crates/lrr/src/db/dependency.rs",
+      "sha256": "fb41c56f9552c71c299b65642adc9007278f40a1b2efa77f2f493ba916dea7b2",
+      "bytes": 15445
+    },
+    {
+      "path": "crates/lrr/src/db/key.rs",
+      "sha256": "5ef7a31b2992fbca24038c16fadc7622a2c1ecadf20d5bcb5ffb6bc06d23b70b",
+      "bytes": 7366
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "79c8ada4bde89ea9634ff1a52ed604810b491f5784ee5cf96597b60c07d209f3",
+      "bytes": 120936
+    },
+    {
+      "path": "crates/lrr/src/db/mod.rs",
+      "sha256": "f086eae89e4a9f50eb4f798036ca3414372ddd07583402c9d9ea4c72e32cfdc6",
+      "bytes": 264
+    },
+    {
+      "path": "crates/lrr/src/db/pattern_plan_provider.rs",
+      "sha256": "de504eaab15d374f234b9a9ca1bd81f03a0a5679597d310957ecfd7580c774b7",
+      "bytes": 2842
+    },
+    {
+      "path": "crates/lrr/src/db/pattern_plan_provider_tests.rs",
+      "sha256": "2995746847183c7c6f914469bc13b6df9a9bdd753fa8fe60b79e84936a35ebb9",
+      "bytes": 12533
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "0da2dc900408be08d5ba7df156fc205e20e0d15e2f98e545f578d998e1026ee9",
+      "bytes": 50944
+    },
+    {
+      "path": "crates/lrr/src/db/source_plan_provider.rs",
+      "sha256": "6f6cf12b04b4c73102be97d459d5817445f23e9abd01e17cd825864911f5c999",
+      "bytes": 4541
+    },
+    {
+      "path": "crates/lrr/src/db/source_plan_tests.rs",
+      "sha256": "c3e49608a5d5c5ce64aa1ba4cebbebeb72a2bd7035c8805c440f8781191fed51",
+      "bytes": 15870
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "sha256": "f2f1e1463b8f8634dd63db9360358fe9ea6ad72fd60472864fa1e4b859e6cf1b",
+      "bytes": 10235
+    },
+    {
+      "path": "crates/lrr/src/engine/failure.rs",
+      "sha256": "9ff7d890b70cfed110d55539d79dbafc6502342d2f59addf23965c285cfd6e87",
+      "bytes": 18782
+    },
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "5c82cf47ca60edebc3ff0f39993b0629b323b5df16b80f1dd5baaca296a8b343",
+      "bytes": 110142
+    },
+    {
+      "path": "crates/lrr/src/engine/run_capture.rs",
+      "sha256": "7d47cfc30191b04e99e92ad7efda7ab04c66f374ec7ee5115899ebe4b9e78727",
+      "bytes": 12809
+    },
+    {
+      "path": "crates/lrr/src/engine/run_reference_result_tests.rs",
+      "sha256": "79a8551c052715d0bec309ba7e4a4c2c703a6014267adfd1d8c7f325d527dd85",
+      "bytes": 3523
+    },
+    {
+      "path": "crates/lrr/src/engine/run_return.rs",
+      "sha256": "387c696431a195bf55e2c1fbdb9e10a28d46501c7388cb184815eaa76fb51f7c",
+      "bytes": 10740
+    },
+    {
+      "path": "crates/lrr/src/expand/generated_declarations.rs",
+      "sha256": "acbb98694b7b40b193e1102a0cdd9015d7c0a676b6f6d9cc270c2ede874d49a9",
+      "bytes": 35556
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "d378901a7d9c98396710f9c7ab6d123f5c227a81a21010c212895410d70c79e8",
+      "bytes": 23069
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly_tests.rs",
+      "sha256": "8e0191f8da4555322c43c76aa4d77155b55acfcad5207791befe9e0c11557e85",
+      "bytes": 23569
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/macro_anchors.rs",
+      "sha256": "08c6f8be99091d51e4eaa998a80708adbb5e325e71c65aaa9fa1f16f3d5eb64d",
+      "bytes": 8786
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/syntax_receipt.rs",
+      "sha256": "d3c32e10fd2f82a8a312a2bc79b81dfd61ef431bd812fdc913aeceb66e5b8053",
+      "bytes": 7351
+    },
+    {
+      "path": "crates/lrr/src/expand/source_hygiene.rs",
+      "sha256": "ad504faae9276fc4b45a3bcdae5c3fd6f5532e448869aaf34cb15f63e95b2989",
+      "bytes": 5243
+    },
+    {
+      "path": "crates/lrr/src/frontend/call_contracts.rs",
+      "sha256": "7ec9dc15fe0b245aee52e670751a5b7aba60932188b96c9f5c2106600fec071c",
+      "bytes": 56708
+    },
+    {
+      "path": "crates/lrr/src/frontend/closed_reference_calls.rs",
+      "sha256": "c3abc45af2a3a0558fb50c4e47eaff19c3a4829f5e475ab65678e3b07c68b624",
+      "bytes": 45112
+    },
+    {
+      "path": "crates/lrr/src/frontend/closed_reference_results.rs",
+      "sha256": "d5f1e267cc178221b3aa688a9a791b63ba081272259370b2efbe5484c855732e",
+      "bytes": 11733
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_reference_source_tests.rs",
+      "sha256": "d9693fccc9659a0295e097c523c0c39559880b390137731c4486e9a1edea4a17",
+      "bytes": 7339
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_result_namespace.rs",
+      "sha256": "67a3fd59780db7961d5f0f5a1bd03728a1300b7f64076b6bc442c716955d2058",
+      "bytes": 28742
+    },
+    {
+      "path": "crates/lrr/src/frontend/impl_index.rs",
+      "sha256": "b68da8e748bc676f1dc99af3c9c1c8bca91d241ef388d169362a453a35f2a5ea",
+      "bytes": 72238
+    },
+    {
+      "path": "crates/lrr/src/ir/definition_numeric_wire_tests.rs",
+      "sha256": "2bc736292734f0b421a749f5644957045dfd44ad6f158b79e160c801f39c3045",
+      "bytes": 16802
+    },
+    {
+      "path": "crates/lrr/src/ir/op.rs",
+      "sha256": "f0941ed96b3e2ba6dcca2c501681c5e0fb8e6e7f4d098d8da48c1c680fd93b4c",
+      "bytes": 23151
+    },
+    {
+      "path": "crates/lrr/src/ir/parameter_place_wire_tests.rs",
+      "sha256": "cb25dca84227173f7ff9a1d20d346c72161c6bd5baa51db3558d07800608fb69",
+      "bytes": 4922
+    },
+    {
+      "path": "crates/lrr/src/ir/pattern_wire_tests.rs",
+      "sha256": "66da776e99cda4403a9c2e533e41fb9393d46b810928ce13e2f6c8ce2e5cc3ce",
+      "bytes": 5544
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "sha256": "8e1d22765ebebf7e2665cc9d462bad83d7e134c8326b6fc0e3da87ab00bccbc6",
+      "bytes": 22333
+    },
+    {
+      "path": "crates/lrr/src/ir/validate.rs",
+      "sha256": "b03d0559c5cf63a78fecdb574d66db665e3fa7ebca376b9b77c1033e826a4555",
+      "bytes": 79802
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell.rs",
+      "sha256": "910b8562f69851e9542f1ffdd678a7577b7229e37b38b39f5c164a48127c2657",
+      "bytes": 200403
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_reference_return.rs",
+      "sha256": "96c56aac234807d7a9e54321c28b8a68245eca9c0e71ea8da1a94581f1fcb882",
+      "bytes": 3245
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell_reference_return_tests.rs",
+      "sha256": "a8aa7a1ea13993bc582ceb7d299228f9024896f2d58421be6d9b167a310e5876",
+      "bytes": 8159
+    },
+    {
+      "path": "crates/lrr/src/service/common_pattern_route_tests.rs",
+      "sha256": "1c2aed6d50f8fe87fed48eec081b5b1f0220b7675a2c6094c49e28776de8b0ea",
+      "bytes": 10135
+    },
+    {
+      "path": "crates/lrr/src/service/expansion.rs",
+      "sha256": "1ed97f69273b302fdf95f26a0840da077ed11386ccde0f31fd03e1fd0f71ade2",
+      "bytes": 22056
+    },
+    {
+      "path": "crates/lrr/src/service/retained_reference_source_tests.rs",
+      "sha256": "656cb8ac3cd7fd77d7df29190d81d218644086446d82a00a2a9db5cc621bc0ab",
+      "bytes": 9529
+    },
+    {
+      "path": "crates/lrr/src/service/source_attribute_requests.rs",
+      "sha256": "fce85d6c9b9adfa3ef999bfa1b0c015513216112d9986b1dd13f50255aaa80f2",
+      "bytes": 55125
+    },
+    {
+      "path": "crates/lrr/src/syntax/body_index.rs",
+      "sha256": "583ca8a98bbbcea054bb603ea39a23cbff481a1bce3a356ba53486ed17e0fe8a",
+      "bytes": 64369
+    },
+    {
+      "path": "crates/lrr/src/syntax/closed_reference_signatures.rs",
+      "sha256": "335da58880aadc5a3ca894c319d75507d4cce87d226fecf3e7d4ca3165a81d17",
+      "bytes": 6551
+    },
+    {
+      "path": "crates/lrr/src/syntax/condition_ranges.rs",
+      "sha256": "cc3cea67803e9cf9d997e3d9fd7ea83baaca4531031b206882daaaf7dc11275b",
+      "bytes": 18477
+    },
+    {
+      "path": "crates/lrr/src/syntax/condition_ranges_tests.rs",
+      "sha256": "9c3e189ae715eb096a88700d6d6f4b83116a1ce1dea4716e637c375d88bf6b2d",
+      "bytes": 16857
+    },
+    {
+      "path": "crates/lrr/src/syntax/generated_item_editions.rs",
+      "sha256": "bda66590b45eac5221786e19159036c759d7b08e5566cc9da54fdf4b298b54f7",
+      "bytes": 3625
+    },
+    {
+      "path": "crates/lrr/src/syntax/lexical_hygiene.rs",
+      "sha256": "2f560b17c37f1966fc0ef450b6c44eaa1f47bad138500f54d922e13b272000a7",
+      "bytes": 2244
+    },
+    {
+      "path": "crates/lrr/src/syntax/literal_match.rs",
+      "sha256": "d8665cf92ed1283e67c9c1b37db4825efd48e1cc0dece0cb4dd413e6c858a838",
+      "bytes": 48356
+    },
+    {
+      "path": "crates/lrr/src/syntax/mod.rs",
+      "sha256": "601f866c25ad493f85d6c4516c0741b8093e2935a14eee346599bdec1192c868",
+      "bytes": 1661
+    },
+    {
+      "path": "crates/lrr/src/syntax/node_lookup_tests.rs",
+      "sha256": "1b03c7fe7a2c8bb6963c4b0351ef6b776a05fcca0c1337bd261b7c879bf29720",
+      "bytes": 5820
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse.rs",
+      "sha256": "214b369295fcffe27d5d3cded75aa48ae89f5d4ecfc3656de6a8026c9938b6f4",
+      "bytes": 27362
+    },
+    {
+      "path": "crates/lrr/src/syntax/parse_retained.rs",
+      "sha256": "5c44f8229aa6a526290d7dc90069c44dd3a5928649a0109d1031c706366cf310",
+      "bytes": 14727
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_plan.rs",
+      "sha256": "df5eee480496bc6010d26c549d236d122339ebe8528a861e440cc23c9cfaed23",
+      "bytes": 9808
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_tests.rs",
+      "sha256": "1e389785672995fccea1ca86abff3b423fc6403302440811320d5015b432aea8",
+      "bytes": 16531
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_tests_tests.rs",
+      "sha256": "b7265c83aab62f5871ca8b180010ed79452528bc2902a427192e1f271318ff63",
+      "bytes": 9506
+    },
+    {
+      "path": "crates/lrr/src/syntax/reference_header_plan.rs",
+      "sha256": "c2acd80a774e01e625d180b00e9cb4b3a38e622d88aaeb361cf58d0676575792",
+      "bytes": 7489
+    },
+    {
+      "path": "crates/lrr/src/syntax/scalar_match_ranges_tests.rs",
+      "sha256": "fc16e47c712eb6d598df3589f0b92643431c34906b99df9d36722d8f191ed6e7",
+      "bytes": 24562
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "sha256": "3357dda8b5edff9a04073b2bb42abe72bdd180c96cb379b42774124231cf3f49",
+      "bytes": 185863
+    },
+    {
+      "path": "crates/lrr/src/vm/context.rs",
+      "sha256": "9e79c6acde06a5ffee7c6cae04954eef09939b7f34da4007c141b902da41d2a4",
+      "bytes": 13031
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "sha256": "2894fca15d242669cb65afb9969e55443497b7bcfe5ddc661cb2b8e1757ec332",
+      "bytes": 299016
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_pattern.rs",
+      "sha256": "1212c3d68ba4cc2b0788eb59722c400e095bb46ce19bcf145b1e20a63e017263",
+      "bytes": 9984
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_pattern_tests.rs",
+      "sha256": "f0f4dbfb19e8c600ce1be1d87c3d55714e74ce7267787a427dd76b2ae8651e0f",
+      "bytes": 5906
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_scope_cleanup.rs",
+      "sha256": "5fdb0b2c2a8d41bb671926e426746aa114455df9208104d451dba8be1cf3215f",
+      "bytes": 29730
+    },
+    {
+      "path": "crates/lrr/src/vm/pattern.rs",
+      "sha256": "0d6e1ab1c6f45413fa9b54dda9f68dddb1b8e5b422f7ade8aca16fddb28666ab",
+      "bytes": 9064
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "sha256": "d480cba7c56d652a8143d0e27d6c8183f974ca9a04272985db2551b80f32586d",
+      "bytes": 58498
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/manifest.json",
+      "sha256": "4e049d5f5e8a2fa2f49605a201575d715e5444dbdec9efc9d06d96f3bde037f4",
+      "bytes": 198200
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/or-patterns/search-via-bindings.rs",
+      "sha256": "38723ec8521136188a19a4b465362e979d95f59ed65009a358aff640a23a08b6",
+      "bytes": 2823
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/regions/regions-addr-of-ret.rs",
+      "sha256": "9082b9f9faea5db67c36136721ef4153951027cda2fc4d80eb78e34f3c1dc914",
+      "bytes": 129
+    },
+    {
+      "path": "xtask/tests/clause_scopes.rs",
+      "sha256": "183ed5a27dc2604c0c6b23cda08468d29bb836d20f440b376036993d3ee9ad85",
+      "bytes": 9908
+    },
+    {
+      "path": "xtask/tests/condition_bindings.rs",
+      "sha256": "c842ae13c8835ca2007f28b5de74006d6fe1a8bdde16b31e2c3fcc8a57d2dc87",
+      "bytes": 8680
+    },
+    {
+      "path": "xtask/tests/scalar_match_guards.rs",
+      "sha256": "eca5ee2fd50ea6997aea2098982d89f02175f08cec7d1f90db1699d6262c6d8d",
+      "bytes": 17217
+    },
+    {
+      "path": "xtask/tests/scalar_or_patterns.rs",
+      "sha256": "2b55946b341e0626d27a665d1ca3d539b26d5bd7ef1d9478e59b8843b0324487",
+      "bytes": 21273
+    }
+  ],
+  "attempts": [
+    {
+      "attempt": 2,
+      "release": "artifacts/macos-first/sol-common-source-plans-validation-v2/RELEASE.json",
+      "release_sha256": "8a9a6a0faea02d139775d5bc4e6de7b19d2c3a620fbb37624fbd937a99b652cf",
+      "facts": {
+        "source_member": "bd86af536dc2c2a92738b9c67e4c514b68c922903d654dd7d0aa92a5be89d3ab",
+        "packet": "common-source-plans-v2/SOURCE.json",
+        "packet_sha256": "57189be565b3a74adc18f4a90b9f81ccc51576849db33971d0e7b33b3337137e",
+        "actual_terminal": "27da40/1",
+        "cargo_exit": 101,
+        "compilation_failed": true,
+        "bodies_executed": 0,
+        "source_guard": {
+          "source_member": "bd86af536dc2c2a92738b9c67e4c514b68c922903d654dd7d0aa92a5be89d3ab",
+          "frozen_files": 4963,
+          "symlinks": 3,
+          "owner_sha256": "ab80acc75a3ec43598dc98414ad0a05fec1997120b72d577cd1acde4870e1108",
+          "raw_files": 512,
+          "cases": 326,
+          "manifest_sha256": "4e049d5f5e8a2fa2f49605a201575d715e5444dbdec9efc9d06d96f3bde037f4",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 56499683328
+        },
+        "target_inactive": true,
+        "released": true
+      }
+    },
+    {
+      "attempt": 3,
+      "release": "artifacts/macos-first/sol-common-source-plans-validation-v3/RELEASE.json",
+      "release_sha256": "73dd2314e8cf572acb54b5e1d152626737a4f604683eff843a0257cae63c144a",
+      "facts": {
+        "source_member": "fd54240ceea1ed768e4b7325acd01800393976afc3921baa18726049ec925233",
+        "packet": "common-source-plans-v3/SOURCE.json",
+        "packet_sha256": "636a64e7eb4a18ae7c738a3bc9a69d5773bcd87ad3bfcce5594fbd57c45d7a38",
+        "actual_terminal": "9b04c9/1",
+        "cargo_exit": 101,
+        "compilation_succeeded": true,
+        "bodies_executed": 7,
+        "passed_bodies": 2,
+        "failed_bodies": 5,
+        "source_guard": {
+          "source_member": "fd54240ceea1ed768e4b7325acd01800393976afc3921baa18726049ec925233",
+          "frozen_files": 4963,
+          "symlinks": 3,
+          "owner_sha256": "5f77206476d73f4539fbfa4a9b5a69cc2d12631fbc314582c4825fe35ae0c50f",
+          "raw_files": 512,
+          "cases": 326,
+          "manifest_sha256": "4e049d5f5e8a2fa2f49605a201575d715e5444dbdec9efc9d06d96f3bde037f4",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 56341807104
+        },
+        "target_inactive": true,
+        "released": true,
+        "exact_v2_delta": {
+          "baseline": "fa071ee4d381e88645a837b23574534e1aeeaf80",
+          "prior_member": "bd86af536dc2c2a92738b9c67e4c514b68c922903d654dd7d0aa92a5be89d3ab",
+          "new_member": "fd54240ceea1ed768e4b7325acd01800393976afc3921baa18726049ec925233",
+          "exact_frozen_delta": [
+            "crates/lrr/src/syntax/literal_match.rs"
+          ],
+          "old_raw_count": 512,
+          "new_raw_count": 512,
+          "manifest_equal": true,
+          "owner": "5f77206476d73f4539fbfa4a9b5a69cc2d12631fbc314582c4825fe35ae0c50f"
+        }
+      }
+    },
+    {
+      "attempt": 4,
+      "release": "artifacts/macos-first/sol-common-source-plans-validation-v4/RELEASE.json",
+      "release_sha256": "65d4ba70585ab6e52a1cc5f619dfc463cd177119766c45a1654b73d1ef313d29",
+      "facts": {
+        "source_member": "bfc785906758b1e7921dd08cc8d660a22c97ab97dbbf98299ec2a62f07316af3",
+        "packet": "common-source-plans-v4/SOURCE.json",
+        "packet_sha256": "57d5259c2854dd62232fa18fe13091f0e621ef8b755b149d01a23b4de3a69cdc",
+        "actual_terminal": "c1c87d/1",
+        "cargo_exit": 101,
+        "compilation_succeeded": true,
+        "bodies_executed": 7,
+        "passed_bodies": 6,
+        "failed_bodies": 1,
+        "source_guard": {
+          "source_member": "bfc785906758b1e7921dd08cc8d660a22c97ab97dbbf98299ec2a62f07316af3",
+          "frozen_files": 4963,
+          "symlinks": 3,
+          "owner_sha256": "a40eeb642bbc7de55af69b3c362937a654a2f2607cfc8ccc53b41ec7ed9c6d9d",
+          "raw_files": 512,
+          "cases": 326,
+          "manifest_sha256": "4e049d5f5e8a2fa2f49605a201575d715e5444dbdec9efc9d06d96f3bde037f4",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 56145498112
+        },
+        "target_inactive": true,
+        "released": true,
+        "exact_v3_delta": {
+          "baseline": "fa071ee4d381e88645a837b23574534e1aeeaf80",
+          "prior_member": "fd54240ceea1ed768e4b7325acd01800393976afc3921baa18726049ec925233",
+          "new_member": "bfc785906758b1e7921dd08cc8d660a22c97ab97dbbf98299ec2a62f07316af3",
+          "exact_frozen_delta": [
+            "crates/lrr/src/db/source_plan_tests.rs"
+          ],
+          "raw_manifest_equal": true,
+          "owner": "a40eeb642bbc7de55af69b3c362937a654a2f2607cfc8ccc53b41ec7ed9c6d9d"
+        }
+      }
+    },
+    {
+      "attempt": 5,
+      "release": "artifacts/macos-first/sol-common-source-plans-validation-v5/RELEASE.json",
+      "release_sha256": "1e6b7160396d680b270a8e7ae011339cc0d9e9e3ca195348047a3ce0b1356f97",
+      "facts": {
+        "source_member": "59323e2bcda5028955f0fe48cc045a2b0ebaf7f0971a2b268f79d3b86282451c",
+        "packet": "common-source-plans-v5/SOURCE.json",
+        "packet_sha256": "2948199e3838276979183f55957c5d97462148f60821375443f7125040a9481c",
+        "actual_terminal": "32e1c6/1",
+        "cargo_exit": 101,
+        "compilation_succeeded": true,
+        "bodies_executed": 7,
+        "passed_bodies": 6,
+        "failed_bodies": 1,
+        "source_guard": {
+          "source_member": "59323e2bcda5028955f0fe48cc045a2b0ebaf7f0971a2b268f79d3b86282451c",
+          "frozen_files": 4963,
+          "symlinks": 3,
+          "owner_sha256": "63e86305f930a2d1d66a85329925431ecfd8f2b1c512ac32de4cc175e397e48f",
+          "raw_files": 512,
+          "cases": 326,
+          "manifest_sha256": "4e049d5f5e8a2fa2f49605a201575d715e5444dbdec9efc9d06d96f3bde037f4",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 55993876480
+        },
+        "target_inactive": true,
+        "released": true
+      }
+    },
+    {
+      "attempt": 6,
+      "release": "artifacts/macos-first/sol-common-source-plans-validation-v6/RELEASE.json",
+      "release_sha256": "22c740d08abf2b07aca3f8670e5cc856be1766ea53dd774b8320516b5c700a39",
+      "facts": {
+        "source_member": "47c23d47c707ccc1d1c8984d3e9ad70616bd65d417bb6a3fef9767eb7de69ab5",
+        "packet": "common-source-plans-v6/SOURCE.json",
+        "packet_sha256": "a19471379f321530df6c4adefcf526eef5cc2e6965bb21f26614486f13f0b116",
+        "compilation_succeeded": true,
+        "source_guard": {
+          "source_member": "47c23d47c707ccc1d1c8984d3e9ad70616bd65d417bb6a3fef9767eb7de69ab5",
+          "frozen_files": 4963,
+          "symlinks": 3,
+          "owner_sha256": "e028e3c125973466b15130945c5ab4baff480b56faf5286cb71bf6579ed6e00d",
+          "raw_files": 512,
+          "cases": 326,
+          "manifest_sha256": "4e049d5f5e8a2fa2f49605a201575d715e5444dbdec9efc9d06d96f3bde037f4",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 55824117760
+        },
+        "target_inactive": true,
+        "released": true
+      }
+    },
+    {
+      "attempt": 7,
+      "release": "artifacts/macos-first/sol-common-source-plans-validation-v7/RELEASE.json",
+      "release_sha256": "392434a8df0e900a31bb162828b874bcdcb65e5c9656c949b098a3cb2c58802b",
+      "facts": {
+        "source_member": "cd09f3b26848e87d03285f3daeac34c202d667b1af8beb6cc9a906c411089468",
+        "actual_terminal": "9c3752/1",
+        "cargo_exit": 101,
+        "target_inactive": true,
+        "released": true
+      }
+    },
+    {
+      "attempt": 8,
+      "release": "artifacts/macos-first/sol-common-source-plans-validation-v8/RELEASE.json",
+      "release_sha256": "9080e43a8dbcd49731b79c95e59ab44a88c8053a463408958bee2f6885096ea9",
+      "facts": {
+        "at": "2026-10-16T01:04:29.639996+00:00",
+        "source_member": "d9b8f4cf86b056e5473eb3e5e579f74c491b5a133c309cee6f4ef9fa022ec015",
+        "packet": "common-source-plans-v8/SOURCE.json",
+        "packet_sha256": "d3806a2ff128308faa48567566f7ef2aa18c5dfc32a7b2370bdc82e2daab4707",
+        "baseline": "fa071ee4d381e88645a837b23574534e1aeeaf80",
+        "overlays": 72,
+        "exact_v7_delta": {
+          "baseline": "fa071ee4d381e88645a837b23574534e1aeeaf80",
+          "prior_member": "cd09f3b26848e87d03285f3daeac34c202d667b1af8beb6cc9a906c411089468",
+          "new_member": "d9b8f4cf86b056e5473eb3e5e579f74c491b5a133c309cee6f4ef9fa022ec015",
+          "exact_frozen_delta": [
+            "crates/lrr/src/ir/validate.rs"
+          ],
+          "raw_manifest_equal": true,
+          "owner": "af4203f96091c0407349ea618a67f11e1233c1e573ddddba7bcefc846d10af5b",
+          "sourceplan7_prior_evidence": "V6 cec7c4/0 retained separately"
+        },
+        "actual_terminals": [
+          "c520f7/0",
+          "919d35 intermediate",
+          "9d5cdb/1"
+        ],
+        "stages": {
+          "pattern-query": {
+            "argv": [
+              "cargo",
+              "+1.99.0",
+              "test",
+              "--offline",
+              "--locked",
+              "-p",
+              "lrr",
+              "--lib",
+              "db::pattern_plan_provider::tests",
+              "--",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "bodies": 3,
+            "passed": 3,
+            "failed": 0,
+            "elapsed_seconds": 20.89772087498568,
+            "stdout_sha256": "ea130ef7e089937c751b15c3c98032b7400ced161097c213fc554b6ba860b9b6",
+            "stderr_sha256": "a41e9340cb0256cc4829c186b02f27bb9447d4587034f9d4bf24058d19830b5e",
+            "terminal_sha256": "516e81036966c5b1767bdbe4a49eb53317a2444e01fc52eb0cadcf84f9487450"
+          },
+          "reference-results": {
+            "argv": [
+              "cargo",
+              "+1.99.0",
+              "test",
+              "--offline",
+              "--locked",
+              "-p",
+              "lrr",
+              "--lib",
+              "engine::run::returning::reference_result_tests",
+              "--",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "bodies": 3,
+            "passed": 3,
+            "failed": 0,
+            "elapsed_seconds": 0.12452166696311906,
+            "stdout_sha256": "b8a0f36188a69d662e9d8ffb1625c07d04488148eb786146dec8596c436acd82",
+            "stderr_sha256": "5374d21bb12443df46515f0f295390c669ab96c2ee2cad64635e5ba608c5cd15",
+            "terminal_sha256": "2d292636239098a4ad0a03ed85fa6b402a22dc8fa921303eef6aa66e48778eb3"
+          },
+          "reference-cell": {
+            "argv": [
+              "cargo",
+              "+1.99.0",
+              "test",
+              "--offline",
+              "--locked",
+              "-p",
+              "lrr",
+              "--lib",
+              "runtime::cell::reference_return::tests",
+              "--",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "bodies": 5,
+            "passed": 5,
+            "failed": 0,
+            "elapsed_seconds": 0.10030108405044302,
+            "stdout_sha256": "d44714817242a854c21910b2fdb1f9d2bf492f5b01f3537e35cebf8b73408d88",
+            "stderr_sha256": "4cee670dc6d7a18399e662fcde754aa0e0a505491c2f8f979ab826c7088c9d5e",
+            "terminal_sha256": "22f09bca99dae6ba3358be350bb6b50b274751d36a43b755f82b8243474345e8"
+          },
+          "generated-namespace": {
+            "argv": [
+              "cargo",
+              "+1.99.0",
+              "test",
+              "--offline",
+              "--locked",
+              "-p",
+              "lrr",
+              "--lib",
+              "frontend::call_contracts::generated_result_namespace",
+              "--",
+              "--test-threads=1"
+            ],
+            "exit": 101,
+            "bodies": 18,
+            "passed": 16,
+            "failed": 2,
+            "elapsed_seconds": 3.0134557919809595,
+            "stdout_sha256": "8d1bb71f4ac502a547a99a735adc6befa5449399b3bef0e9565fc56140e798ea",
+            "stderr_sha256": "4f95114b0a660e3ad3bd9b9146e2aa4699c89489222393da3d587f4c48e887ee",
+            "terminal_sha256": "559744869550230ade558b774c416ac65c90b7747fb95da82d33f070843e0610"
+          }
+        },
+        "compilation_succeeded": true,
+        "executed_bodies": 29,
+        "distinct_passed_bodies": 27,
+        "distinct_failed_bodies": 2,
+        "actual_tests": [
+          {
+            "name": "db::pattern_plan_provider::tests::condition_range_uses_same_retained_source_plan_and_owner_body_authority_all_editions",
+            "result": "ok"
+          },
+          {
+            "name": "db::pattern_plan_provider::tests::retained_pattern_replays_relevant_dependencies_and_accepts_equivalent_index_allocation",
+            "result": "ok"
+          },
+          {
+            "name": "db::pattern_plan_provider::tests::unchanged_range_owners_reuse_query_plan_and_decode_only_selected_endpoint_all_editions",
+            "result": "ok"
+          },
+          {
+            "name": "engine::run::returning::reference_result_tests::ambiguous_elided_reference_result_never_selects_an_arbitrary_input",
+            "result": "ok"
+          },
+          {
+            "name": "engine::run::returning::reference_result_tests::reference_result_cannot_escape_an_equal_typed_callee_local_before_cleanup",
+            "result": "ok"
+          },
+          {
+            "name": "engine::run::returning::reference_result_tests::unchanged_stock_reference_result_body_reborrows_and_resumes_the_actual_caller",
+            "result": "ok"
+          },
+          {
+            "name": "runtime::cell::reference_return::tests::checked_reference_result_accepts_new_reborrow_lease_and_preserves_actual_target",
+            "result": "ok"
+          },
+          {
+            "name": "runtime::cell::reference_return::tests::equal_layout_and_value_do_not_authorize_a_different_return_target",
+            "result": "ok"
+          },
+          {
+            "name": "runtime::cell::reference_return::tests::reference_result_checks_live_target_access_and_real_mutable_ticket_owner",
+            "result": "ok"
+          },
+          {
+            "name": "runtime::cell::reference_return::tests::reference_result_receipt_refuses_cross_store_even_with_matching_handle_bits",
+            "result": "ok"
+          },
+          {
+            "name": "runtime::cell::reference_return::tests::reference_result_replays_original_enclosing_chain_even_when_endpoints_match",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::cross_source_tests::actual_renamed_dependency_root_template_has_both_current_type_namespaces",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::cross_source_tests::either_actual_scope_shadow_is_required_blocker_not_primitive_permission",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::cross_source_tests::expired_original_source_lease_does_not_become_namespace_authority",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::cross_source_tests::genuine_foreign_origin_still_requires_actual_published_epoch",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::cross_source_tests::genuine_source_universe_replacement_removes_old_generated_authority",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::parent_profile_tests::actual_mixed_edition_nested_dependency_retains_each_observed_scope_profile",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::parent_profile_tests::genuine_generated_export_retains_actual_parent_record_and_original_tokens",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_foreign_template_checks_the_actual_definer_type_scope",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_shadow_and_epoch_keep_their_type_authority_refusals",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_static_region_remains_an_explicit_source_prerequisite",
+            "result": "FAILED"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::reference_source_tests::generated_reference_uses_its_parameter_name_without_a_primitive_result_all_editions",
+            "result": "FAILED"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::tests::actual_new_compile_world_invalidates_old_receipt_without_changing_source_or_header",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::tests::exact_receipt_rejects_missing_record_foreign_scope_and_changed_epoch",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::tests::generated_primitive_spelling_shadow_is_not_primitive_authority",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::tests::genuine_cli_prepared_unused_compile_environment_is_bound_without_claiming_consumption_all_editions",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::tests::original_check_uses_actual_nested_type_receipt_with_generated_answer_all_editions",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::tests::real_value_publication_carries_exact_generated_type_receipt_all_editions",
+            "result": "ok"
+          },
+          {
+            "name": "frontend::call_contracts::generated_result_namespace::tests::real_value_publication_without_epoch_row_is_a_precise_preparation_prerequisite",
+            "result": "ok"
+          }
+        ],
+        "failures": [
+          {
+            "name": "generated_reference_static_region_remains_an_explicit_source_prerequisite",
+            "path": "crates/lrr/src/frontend/generated_reference_source_tests.rs",
+            "line": 139,
+            "detail": "Result::unwrap_err on Ok(None)"
+          },
+          {
+            "name": "generated_reference_uses_its_parameter_name_without_a_primitive_result_all_editions",
+            "path": "crates/lrr/src/frontend/generated_reference_source_tests.rs",
+            "line": 65,
+            "detail": "Option::unwrap on None"
+          }
+        ],
+        "sourceplan7": "prior V6 cec7c4/0 evidence separate; not freshly executed on V8",
+        "remaining_selected_lrr_bodies_unexecuted": 89,
+        "later_scopes": "remainingretained/closed-reference/transaction/pattern/hygiene/index/scalar_or_patterns/format/strict/milestone unexecuted",
+        "source_guard": {
+          "source_member": "d9b8f4cf86b056e5473eb3e5e579f74c491b5a133c309cee6f4ef9fa022ec015",
+          "frozen_files": 4963,
+          "symlinks": 3,
+          "owner_sha256": "af4203f96091c0407349ea618a67f11e1233c1e573ddddba7bcefc846d10af5b",
+          "raw_files": 512,
+          "cases": 326,
+          "manifest_sha256": "4e049d5f5e8a2fa2f49605a201575d715e5444dbdec9efc9d06d96f3bde037f4",
+          "licenses": {
+            "LICENSE-MIT": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+            "LICENSE-APACHE": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          "free_bytes": 55532179456
+        },
+        "target_inactive": true,
+        "inactivity_observation": "c10ed3/0",
+        "released": true,
+        "no_source_edits_retries_copies_clean_new_targets": true,
+        "prior_failed_sources_preserved": true,
+        "architectural_hold": "E-R5-005/all8 architecture holds remain; no task/runtime-fullfixture/JIT acceptance"
+      }
+    }
+  ],
+  "actual_component_evidence": {
+    "V6_source_plan_bank": {
+      "actual_terminal": "cec7c4/0",
+      "passed": 7,
+      "failed": 0,
+      "scope": "source-only query reuse, cold headers, retained allocation/currentness and both body-location endpoint invalidations; host component evidence only"
+    },
+    "V6_next_pattern_bank": {
+      "actual_terminal": "6a5424/1",
+      "passed": 1,
+      "failed": 2,
+      "result": "stopped remaining scopes, strict and full milestone; preserved"
+    },
+    "V8_scopes": {
+      "actual_terminals": [
+        "c520f7/0",
+        "919d35 intermediate",
+        "9d5cdb/1"
+      ],
+      "executed": 29,
+      "passed": 27,
+      "failed": 2,
+      "sourceplan7_evidence": "V6 separate; not repeated on V8",
+      "unexecuted_selected_lrr_bodies": 89,
+      "strict_and_milestone": "unexecuted after stop on first failed bank"
+    }
+  },
+  "corrections": {
+    "borrowed_error": "Clone owned Diagnostic from retained error reference; V2 compiler failure preserved.",
+    "source_publication_protocol": "External test republishes logical ScopeMembers without auto-generated granular duplicate rows, mutates actual owning members for unrelated publication.",
+    "mandatory_input_floor": "Reclamation test retains mandatory pinned source metadata; requires all query memos/parser bytes reclaimed and weak roots dead, not an impossible zero input budget.",
+    "typed_refusal": "Negative check accepts only exact CALL-SIGNATURE error via either standard query error channel and rejects an actual returned plan. This exposed the real body-locator bug, not masked it.",
+    "body_locator_currentness": "Actual V5 changed-input3 reused old source-locator plan. Shared DefinitionBody InputValue fingerprint now explicitly includes both offsets in v3 domain; semantic BodyHandle and all other input variant hashes unchanged. Both offsets reject correctly in V6.",
+    "indexed_pattern_owner": "V6 owner walk missed actual Syntax MatchArmList wrapper; V7 crosses structural wrappers only after original Pattern/MatchArm entry admission. Cold result expressions remain unrelated.",
+    "condition_observer_source": "V6 observer chose first structural operand, which can be a pattern endpoint. V7 selects actual LetExpr.expr source range, preserving lower/upper decode-once assertions.",
+    "indexed_verifier_source": "V7 actual2pass1fail exposed verifier also assuming flattened operand0. V8 selects unique actual direct expression child for ordinary match/condition; missing/ambiguous source still rejects. All original alternative/owner/phase/retry checks retained.",
+    "current_type_lookup_successor": "Read-only source review finds original NameNamespaces graph still has producer frontier before actual current generated Type receipt is consulted. Preserve all authority; repair shared source lookup/classifier, never map unresolved builtin spellings to primitives. Successor uncompiled/unexecuted."
+  },
+  "architecture_review": {
+    "scope": "Shared input currentness and indexed source identities; test-only setup corrections preserve authority/cold/exact diagnostic checks. No new macro/runtime/type context engine, no hardcoded expected output or skipped selected case.",
+    "cold_cost": "Body input digest adds fixed u32 endpoints; owner walk remains bounded indexed ancestry; actual source plans remain existing pure memo results.",
+    "remaining": "Legacy macro evaluator/census and full common-language matrix remain open. Later live canonical groups/tuple source accounting/nominal proofs excluded from this frozen source."
+  },
+  "publication": {
+    "checkpoint": "70c18c1833",
+    "commit_terminal": "73cd09/0",
+    "push_terminal": "843672/0",
+    "staged_guard": "91 source/document files2924196bytes0violations",
+    "claim": "Source WIP only; newer body fingerprint/observer corrections not yet included in that checkpoint."
+  },
+  "acceptance": {
+    "new_configured_upstream_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "task_completed": false,
+    "all_eight_shortcuts_removed": false,
+    "guest_jit_allowed": false
+  }
+}

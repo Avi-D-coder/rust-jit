@@ -423,5 +423,12 @@
       "unexpected": 0
     },
     "all_nine_reports_retained": true
+  },
+  "validation_result": {
+    "state": "historical_compile_failed_superseded",
+    "actual_terminal": "27da40/1",
+    "bodies_executed": 0,
+    "error": "E0308 borrowed Diagnostic in literal_match; preserved",
+    "latest_receipt": "worktracks/evidence/2026-10-15-common-source-plan-validation.json"
   }
 }

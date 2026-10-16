@@ -215,7 +215,7 @@ fn condition_range_uses_same_retained_source_plan_and_owner_body_authority_all_e
         .unwrap();
     let source = format!("fn main(){{if let {} = 1 {{}}}}", range.syntax().text());
     for edition in [2015, 2018, 2021, 2024] {
-        let (mut db, _, _, index, _) = published(&source, edition);
+        let (mut db, body, parsed, index, _) = published(&source, edition);
         let owner_node = index
             .nodes()
             .iter()
@@ -226,7 +226,24 @@ fn condition_range_uses_same_retained_source_plan_and_owner_body_authority_all_e
         // The reached source hint may decode the scrutinee literal once; neither
         // pattern endpoint is decoded by structural preparation.
         assert_eq!(decodes.attempts, 1);
-        let source_node = owner_node.operands[0];
+        let scrutinee = parsed
+            .entered_node_syntax(&body, &index, owner_node.id)
+            .unwrap()
+            .and_then(ast::LetExpr::cast)
+            .and_then(|expression| expression.expr())
+            .unwrap();
+        let source_range = crate::syntax::spans::SourceRange {
+            start: u32::from(scrutinee.syntax().text_range().start()) - body.range.start,
+            end: u32::from(scrutinee.syntax().text_range().end()) - body.range.start,
+        };
+        // Written pattern endpoints may occupy earlier structural operand
+        // ordinals. Select the actual source expression, as ordinary source
+        // attachment requires, rather than assuming operand zero.
+        let source_node = index
+            .nodes_at_range(source_range)
+            .find(|node| matches!(node.role, NodeRole::Expression(_)))
+            .unwrap()
+            .id;
         assert!(
             PatternSourcePlan::owner_for(&index, &index.pc(source_node, Phase::Entry).unwrap())
                 .unwrap()

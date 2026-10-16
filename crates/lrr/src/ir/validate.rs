@@ -54,12 +54,27 @@ fn pattern_transition(
             "pattern transition is outside its indexed ordinary owner",
         ));
     }
-    let scrutinee = selected
-        .operands
-        .first()
-        .and_then(|id| body.nodes().get(id.0 as usize))
-        .and_then(|node| node.value)
-        .ok_or_else(|| invalid("pattern source operand absent"))?;
+    // Both ordinary pattern owners have exactly one direct expression child.
+    // Pattern-bound expressions can appear earlier in the flattened operand
+    // list; they are descendants of their pattern, not the owning scrutinee.
+    let mut scrutinee = None;
+    for operand in &selected.operands {
+        let node = body
+            .nodes()
+            .get(operand.0 as usize)
+            .ok_or_else(|| invalid("pattern owner operand absent"))?;
+        if node.parent == Some(owner) && matches!(node.role, NodeRole::Expression(_)) {
+            let value = node
+                .value
+                .ok_or_else(|| invalid("pattern source value absent"))?;
+            if scrutinee.replace(value).is_some() {
+                return Err(invalid(
+                    "pattern owner has ambiguous direct source operands",
+                ));
+            }
+        }
+    }
+    let scrutinee = scrutinee.ok_or_else(|| invalid("pattern source operand absent"))?;
     match operation {
         PatternOperation::Begin {
             alternative,

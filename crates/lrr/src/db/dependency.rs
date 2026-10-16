@@ -180,7 +180,13 @@ impl InputValue {
         )
     }
     pub fn fingerprint(&self) -> Digest {
-        let mut e = StableEncoder::new("lrr/v2/input-value");
+        // A body handle has position-independent semantic identity. This input
+        // also supplies its actual locator to source-dependent queries, so
+        // changing either endpoint must invalidate those queries.
+        let mut e = StableEncoder::new(match self {
+            Self::DefinitionBody(_) => "lrr/v3/body-location-input-value",
+            _ => "lrr/v2/input-value",
+        });
         match self {
             Self::RetainedSyntax(input) => {
                 e.u32(29);
@@ -245,6 +251,8 @@ impl InputValue {
             Self::DefinitionBody(v) => {
                 e.u32(3);
                 e.record(v);
+                e.u32(v.range.start);
+                e.u32(v.range.end);
             }
             Self::ScopeMembers(v) => {
                 e.u32(4);

@@ -66,8 +66,29 @@ fn header(db: &mut Database, definition: Digest) -> Arc<ReferenceHeaderPlan> {
 fn universe(db: &Database) -> BTreeMap<InputKey, InputValue> {
     db.inputs
         .iter()
+        // publish_inputs expands ScopeMembers into its granular rows. Its
+        // complete input protocol must not receive those rows a second time.
+        .filter(|(key, _)| match key {
+            InputKey::NameCandidates(bucket) => !db
+                .inputs
+                .contains_key(&InputKey::ScopeMembers(bucket.scope.clone())),
+            InputKey::ScopeBlockers(scope) => !db
+                .inputs
+                .contains_key(&InputKey::ScopeMembers(scope.clone())),
+            _ => true,
+        })
         .map(|(key, record)| (key.clone(), record.value.as_ref().clone()))
         .collect()
+}
+
+fn input_floor_budget(db: &Database) -> CacheBudgets {
+    CacheBudgets {
+        // Published source inputs are mandatory pins. A zero query cap cannot
+        // retain this world, even after its last query result is reclaimed.
+        query_bytes: db.cache_usage().unwrap().pinned_memo_bytes,
+        parse_bytes: 0,
+        ..CacheBudgets::default()
+    }
 }
 #[test]
 fn unchanged_reference_headers_share_one_source_plan_without_entering_any_body() {
@@ -95,13 +116,17 @@ fn unchanged_reference_headers_share_one_source_plan_without_entering_any_body()
                 InputValue::DeclarationContext(context) => context.scope.clone(),
                 _ => panic!(),
             };
-            inputs.insert(
-                InputKey::NameCandidates(crate::db::key::BucketKey {
-                    scope,
-                    namespace: crate::source::manifest::Namespace::Type,
-                    name: "unrelated_type".into(),
-                }),
-                InputValue::NameCandidates(vec![Digest([192; 32])]),
+            let InputValue::ScopeMembers(members) =
+                inputs.get_mut(&InputKey::ScopeMembers(scope)).unwrap()
+            else {
+                panic!("owning scope members absent")
+            };
+            members.candidates.insert(
+                (
+                    crate::source::manifest::Namespace::Type,
+                    "unrelated_type".into(),
+                ),
+                vec![Digest([192; 32])],
             );
             db.publish_inputs(inputs).unwrap();
             assert!(Arc::ptr_eq(&one, &header(&mut db, definition)));
@@ -135,7 +160,7 @@ fn unchanged_reference_headers_share_one_source_plan_without_entering_any_body()
 }
 #[test]
 fn changed_source_header_context_and_body_cannot_replay_a_cached_reference_header() {
-    for changed in 0..4 {
+    for changed in 0..5 {
         let (mut db, definition) = world(RESULT, "f", 2024);
         let retained = header(&mut db, definition);
         let before = universe(&db);
@@ -150,18 +175,30 @@ fn changed_source_header_context_and_body_cannot_replay_a_cached_reference_heade
             InputValue::DefinitionSource(source) => source.profile.edition = 2018,
             InputValue::DefinitionHeader(header) => header.profile.edition = 2018,
             InputValue::DeclarationContext(context) => context.range.start += 1,
-            InputValue::DefinitionBody(body) => body.range.start += 1,
+            InputValue::DefinitionBody(body) if changed == 3 => body.range.start += 1,
+            InputValue::DefinitionBody(body) => body.range.end -= 1,
             _ => panic!(),
         }
         db.publish_inputs(next).unwrap();
-        assert!(
-            db.fetch(
+        let rejected = db
+            .fetch(
                 &super::super::provider::SyntaxProvider,
-                QueryKey::ReferenceHeader(definition)
+                QueryKey::ReferenceHeader(definition),
             )
             .into_ready()
-            .unwrap()
-            .is_err()
+            .unwrap();
+        // A pure query may retain its typed diagnostic as QueryValue::Error.
+        // Neither that representation nor a transport diagnostic is a plan.
+        let diagnostic = match rejected {
+            Err(error) => error,
+            Ok(outcome) => match outcome.value.as_ref() {
+                QueryValue::Error(error) => error.clone(),
+                other => panic!("changed input {changed} unexpectedly admitted {other:?}"),
+            },
+        };
+        assert_eq!(
+            diagnostic.code, "LRR-E-CALL-SIGNATURE",
+            "changed input {changed}"
         );
         db.publish_inputs(before).unwrap();
         let restored = header(&mut db, definition);
@@ -208,13 +245,13 @@ fn retained_reference_plan_remains_charged_after_memo_retirement() {
     let weak = Arc::downgrade(&plan);
     drop(plan);
     assert!(weak.upgrade().is_none());
-    db.evict_between_runs(CacheBudgets {
-        query_bytes: 0,
-        parse_bytes: 0,
-        ..CacheBudgets::default()
-    })
-    .unwrap();
-    assert_eq!(db.cache_usage().unwrap().memo_bytes, 0);
+    let budget = input_floor_budget(&db);
+    db.evict_between_runs(budget).unwrap();
+    let after = db.cache_usage().unwrap();
+    assert!(db.memos.is_empty());
+    assert_eq!(after.memo_entries, 0);
+    assert_eq!(after.memo_bytes, after.pinned_memo_bytes);
+    assert_eq!(after.parse_bytes, 0);
 }
 
 fn pattern_world() -> (
@@ -292,14 +329,11 @@ fn retained_pattern_plan_accounts_its_parser_and_index_after_all_wrappers_retire
     drop(plan);
     assert!(parsed.upgrade().is_none());
     assert!(index.upgrade().is_none());
-    let eviction = db
-        .evict_between_runs(CacheBudgets {
-            query_bytes: 0,
-            parse_bytes: 0,
-            ..CacheBudgets::default()
-        })
-        .unwrap();
-    assert_eq!(eviction.after.memo_bytes, 0);
+    let budget = input_floor_budget(&db);
+    let eviction = db.evict_between_runs(budget).unwrap();
+    assert!(db.memos.is_empty());
+    assert_eq!(eviction.after.memo_entries, 0);
+    assert_eq!(eviction.after.memo_bytes, eviction.after.pinned_memo_bytes);
     assert_eq!(eviction.after.parse_bytes, 0);
 }
 #[test]
@@ -319,16 +353,14 @@ fn cached_pattern_plan_accounts_nested_roots_without_dependency_wrappers_or_weak
     assert!(usage.memo_bytes >= plan_bytes + body_bytes);
     assert!(usage.parse_bytes >= parse_bytes);
     assert_eq!(usage.pinned_parse_bytes, 0);
-    let eviction = db
-        .evict_between_runs(CacheBudgets {
-            query_bytes: 0,
-            parse_bytes: 0,
-            ..CacheBudgets::default()
-        })
-        .unwrap();
-    assert_eq!(eviction.after.memo_bytes, 0);
+    let budget = input_floor_budget(&db);
+    let eviction = db.evict_between_runs(budget).unwrap();
+    assert!(db.memos.is_empty());
+    assert_eq!(eviction.after.memo_entries, 0);
+    assert_eq!(eviction.after.memo_bytes, eviction.after.pinned_memo_bytes);
     assert_eq!(eviction.after.parse_bytes, 0);
-    assert_eq!(db.cache_usage().unwrap().memo_bytes, 0);
+    let after = db.cache_usage().unwrap();
+    assert_eq!(after.memo_bytes, after.pinned_memo_bytes);
     assert_eq!(db.cache_usage().unwrap().parse_bytes, 0);
 }
 

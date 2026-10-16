@@ -91,7 +91,10 @@ impl PatternSourcePlan {
                 NodeRole::Expression(ExpressionKind::Match) => {
                     return index.pc(node.id, Phase::Entry).map(Some);
                 }
-                NodeRole::Pattern | NodeRole::MatchArm => {}
+                // MatchArmList and other real syntax wrappers are indexed too.
+                // The initial role check above keeps result/source expressions
+                // from acquiring pattern ownership through this ancestry walk.
+                NodeRole::Pattern | NodeRole::MatchArm | NodeRole::Syntax => {}
                 _ => return Ok(None),
             }
         }
