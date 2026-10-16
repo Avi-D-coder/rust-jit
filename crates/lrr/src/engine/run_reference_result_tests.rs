@@ -4,6 +4,15 @@ const ORIGINAL: &str = include_str!(
     "../../../../fixtures/upstream/rustc-checkout/tests/ui/regions/regions-addr-of-ret.rs"
 );
 
+fn require_completed(outcome: RunPoll, case: &str) -> RunReport {
+    match outcome {
+        RunPoll::Completed(report) => report,
+        RunPoll::Fault(error) => panic!("{case} faulted: {error:?}"),
+        RunPoll::NeedInput(input) => panic!("{case} suspended: {input:?}"),
+        RunPoll::Panicked(report) => panic!("{case} panicked: {report:?}"),
+    }
+}
+
 #[test]
 fn unchanged_stock_reference_result_body_reborrows_and_resumes_the_actual_caller() {
     // Keep stock main (including println) intact and cold. This supplemental
@@ -97,9 +106,10 @@ fn named_source_reference_identity_returns_the_actual_target_then_cleans_the_cal
         .filter(|item| matches!(item.def_key.declared_name.as_str(), "main" | "x_coord"))
         .filter_map(|item| item.body.as_ref().map(|body| body.key()))
         .collect();
-    let RunPoll::Completed(report) = run.poll(&mut db) else {
-        panic!("source-certified nominal reference identity did not complete")
-    };
+    let report = require_completed(
+        run.poll(&mut db),
+        "source-certified nominal reference identity",
+    );
     assert!(matches!(report.value,ValueSummary::Signed(ref value) if value=="3"));
     assert!(run.calls.is_empty());
     assert!(run.returning.is_none());
@@ -126,10 +136,10 @@ fn nominal_reference_result_cannot_return_an_equal_schema_callee_local() {
     let RunPoll::Fault(error) = run.poll(&mut db) else {
         panic!("callee-local nominal target escaped")
     };
-    assert!(matches!(
-        error.code,
-        "LRR-E-OWNERSHIP" | "LRR-E-CALL-CONTEXT"
-    ));
+    assert!(
+        matches!(error.code, "LRR-E-OWNERSHIP" | "LRR-E-CALL-CONTEXT"),
+        "{error:?}"
+    );
     assert_eq!(run.calls.len(), 1);
     assert!(run.returning.is_none());
     assert_eq!(run.frame.status, crate::vm::frame::FrameStatus::Faulted);
@@ -160,9 +170,10 @@ fn unchanged_point_interior_return_keeps_source_projection_and_caller_region() {
         .as_ref()
         .unwrap()
         .key();
-    let RunPoll::Completed(report) = run.poll(&mut db) else {
-        panic!("unchanged source-certified interior-result body did not complete")
-    };
+    let report = require_completed(
+        run.poll(&mut db),
+        "unchanged source-certified interior result",
+    );
     assert!(matches!(report.value, ValueSummary::Signed(ref value) if value=="3"));
     assert!(run.calls.is_empty());
     assert!(run.returning.is_none());
@@ -200,10 +211,10 @@ fn derived_reference_result_cannot_escape_a_callee_local_field() {
     let RunPoll::Fault(error) = run.poll(&mut db) else {
         panic!("callee-local selected field escaped")
     };
-    assert!(matches!(
-        error.code,
-        "LRR-E-OWNERSHIP" | "LRR-E-CALL-CONTEXT"
-    ));
+    assert!(
+        matches!(error.code, "LRR-E-OWNERSHIP" | "LRR-E-CALL-CONTEXT"),
+        "{error:?}"
+    );
     assert_eq!(run.calls.len(), 1);
     assert!(run.returning.is_none());
     assert_eq!(run.frame.counters.return_scopes_cleaned, 0);
@@ -215,9 +226,7 @@ fn named_declared_lifetime_uses_the_same_source_selected_projection_return() {
         "{NAMED_ORIGINAL}\nfn lrr_named<'a>(p:&'a Point)->&'a isize{{&p.x}}\nfn lrr_probe()->isize{{let p=Point{{x:3_isize,y:4_isize}};*lrr_named(&p)}}"
     );
     let (mut db, mut run) = super::super::borrows::tests::start_stock_body(&source, "lrr_probe");
-    let RunPoll::Completed(report) = run.poll(&mut db) else {
-        panic!("named lifetime selected-field return did not complete")
-    };
+    let report = require_completed(run.poll(&mut db), "named lifetime selected-field return");
     assert!(matches!(report.value,ValueSummary::Signed(ref value) if value=="3"));
     assert!(run.calls.is_empty());
     assert!(run.returning.is_none());

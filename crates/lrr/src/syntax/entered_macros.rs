@@ -185,11 +185,77 @@ impl ParsedFile {
         let mut import_scope = containing.clone();
         import_scope.owner = Some(body.def_key);
         let mut visited = 0usize;
+        let mut condition_bytes = 0usize;
         while let Some((node, mut scope, mut depth)) = stack.pop() {
             visited = visited
                 .checked_add(1)
                 .filter(|n| *n <= 1_000_000)
                 .ok_or_else(|| error("entered macro syntax limit exceeded"))?;
+            let conditional = if let Some(expression) = ast::IfExpr::cast(node.clone()) {
+                expression.condition().zip(expression.then_branch())
+            } else if let Some(expression) = ast::WhileExpr::cast(node.clone()) {
+                expression.condition().zip(expression.loop_body())
+            } else {
+                None
+            };
+            let mut conditional_scope = None;
+            if let Some((condition, consequent)) = conditional {
+                let clauses = super::conditions::source_clauses(
+                    condition.clone(),
+                    Default::default(),
+                    &mut condition_bytes,
+                )?;
+                if clauses
+                    .iter()
+                    .any(|clause| matches!(clause, ast::Expr::LetExpr(_)))
+                {
+                    let nested_depth = depth
+                        .checked_add(1)
+                        .filter(|depth| *depth <= 256)
+                        .ok_or_else(|| error("body macro scope depth exceeded"))?;
+                    let ordinal = u32::try_from(facts.scopes.len())
+                        .map_err(|_| error("body macro scope ordinal overflow"))?;
+                    let range = SourceRange::checked(
+                        u32::from(condition.syntax().text_range().start()),
+                        u32::from(consequent.syntax().text_range().end()),
+                    )?;
+                    facts
+                        .scopes
+                        .try_reserve(1)
+                        .map_err(|_| error("body macro scope allocation failed"))?;
+                    facts.scopes.push(BodyMacroScope {
+                        ordinal,
+                        parent: Some(scope),
+                        range,
+                    });
+                    for clause in clauses {
+                        let ast::Expr::LetExpr(clause) = clause else {
+                            continue;
+                        };
+                        let pattern = clause
+                            .pat()
+                            .ok_or_else(|| error("condition pattern boundary missing"))?;
+                        let visible_from = u64::from(u32::from(clause.syntax().text_range().end()));
+                        binding_budget.collect(
+                            &pattern,
+                            body,
+                            ordinal,
+                            visible_from,
+                            super::local_bindings::BindingForm::Condition,
+                            &mut facts.bindings,
+                        )?;
+                        pattern_producers(
+                            &mut facts,
+                            &mut producers,
+                            body,
+                            ordinal,
+                            &pattern,
+                            visible_from,
+                        )?;
+                    }
+                    conditional_scope = Some((range, ordinal, nested_depth));
+                }
+            }
             if let Some(statement) = ast::LetStmt::cast(node.clone()) {
                 if !super::local_bindings::cfg_enabled(statement.attrs(), cfg)? {
                     continue;
@@ -493,6 +559,14 @@ impl ParsedFile {
                 }
             }
             let mut children = children(&node, scope, depth)?;
+            if let Some((condition_range, condition_scope, condition_depth)) = conditional_scope {
+                for (child, scope, depth) in &mut children {
+                    if condition_range.contains(range(child.text_range())) {
+                        *scope = condition_scope;
+                        *depth = condition_depth;
+                    }
+                }
+            }
             stack
                 .len()
                 .checked_add(children.len())

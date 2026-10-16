@@ -209,9 +209,13 @@ fn prepare_source_scope(
                             .fingerprint();
                         discovery
                             .prepare_body_syntax(source.selection(), definition)
-                            .unwrap()
+                            .unwrap_or_else(|error| panic!(
+                                "selected source syntax preparation failed: edition={edition}, function={name}, source={text:?}, error={error:?}"
+                            ))
                     }
-                    None => discovery.prepare_source_syntax(source.selection()).unwrap(),
+                    None => discovery.prepare_source_syntax(source.selection()).unwrap_or_else(|error| panic!(
+                        "source syntax preparation failed: edition={edition}, source={text:?}, error={error:?}"
+                    )),
                 };
                 discovery.publish(db).unwrap();
                 let input = ready(RetainedSyntaxInput::prepare(

@@ -68,19 +68,41 @@ impl Database {
         scope: &crate::syntax::outline::ScopeKey,
     ) -> Result<Option<Arc<InputValue>>, Diagnostic> {
         let mut selected = None;
-        for row in self.inputs.values() {
+        for key in self.scope_certificates.candidates(
+            source,
+            scope,
+            crate::source::manifest::Namespace::Value,
+        ) {
+            let row = self
+                .inputs
+                .get(&InputKey::DiscoverySeal(key.clone()))
+                .ok_or_else(|| {
+                    fault(
+                        "LRR-E-INTERNAL-SNAPSHOT",
+                        "indexed scope certificate input absent",
+                    )
+                })?;
             let InputValue::DiscoverySeal(input) = row.value.as_ref() else {
-                continue;
+                return Err(fault(
+                    "LRR-E-INTERNAL-SNAPSHOT",
+                    "indexed scope certificate variant differs",
+                ));
             };
-            let Some(certified) = &input.scope else {
-                continue;
-            };
+            let certified = input.scope.as_ref().ok_or_else(|| {
+                fault(
+                    "LRR-E-INTERNAL-SNAPSHOT",
+                    "indexed scope certificate owner absent",
+                )
+            })?;
             if certified.scope != *scope
                 || certified.namespace != crate::source::manifest::Namespace::Value
                 || certified.edition != source.outline.parse.profile.edition
                 || !input.sources.contains(source)
             {
-                continue;
+                return Err(fault(
+                    "LRR-E-INTERNAL-SNAPSHOT",
+                    "indexed scope certificate source/owner differs",
+                ));
             }
             if !matches!(input.seal.domain(), crate::db::seals::SealDomain::Scope { id, namespace } if *id == scope.fingerprint() && *namespace == certified.namespace)
             {

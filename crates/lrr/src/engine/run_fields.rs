@@ -1,16 +1,36 @@
 //! Reached field selection from retained source identity, before guest mutation.
 use super::*;
 use crate::{
-    db::dependency::{InputKey, InputValue},
     frontend::types::{NominalFieldBinding, SchemaNames},
     source::manifest::ItemKind,
 };
+
+#[path = "run_field_source.rs"]
+mod source;
 
 fn field_fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-TYPE-SCHEMA", message.into())
 }
 
 impl RunMachine {
+    #[cfg(test)]
+    pub(crate) fn current_field_source_for_test(
+        db: &mut Database,
+        sources: &[PreparedSourceView],
+        index: &crate::syntax::body_index::BodyIndex,
+        pc: &PcKey,
+    ) -> QueryPoll<(String, crate::syntax::outline::ScopeKey)> {
+        match source::capture(db, sources, index, pc) {
+            QueryPoll::Ready(Ok(proof)) => QueryPoll::Ready(
+                proof
+                    .scope()
+                    .map(|scope| (proof.member().to_owned(), scope.clone())),
+            ),
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
+    }
+
     pub(super) fn prepare_field(
         &mut self,
         db: &mut Database,
@@ -39,45 +59,11 @@ impl RunMachine {
         for view in &self.sources {
             graph.require_source(view.selection(), view.outline())?;
         }
-        let body = self.frame.body.body();
-        let mut callers = self.sources.iter().filter(|source| {
-            source.outline().items.iter().any(|item| {
-                item.body
-                    .as_ref()
-                    .is_some_and(|handle| &handle.key() == body)
-            })
-        });
-        let caller = callers
-            .next()
-            .ok_or_else(|| field_fault("field caller source owner absent"))?;
-        if callers.next().is_some() {
-            return Err(field_fault("field caller source owner duplicated"));
-        }
-        let declaration = caller
-            .outline()
-            .items
-            .iter()
-            .find(|item| item.def_key.fingerprint() == body.definition)
-            .ok_or_else(|| field_fault("field caller declaration absent"))?;
-        if !matches!(db.input(&InputKey::DefinitionSource(body.definition)).as_deref(),
-            Some(InputValue::DefinitionSource(parse)) if parse == &caller.selection().outline.parse)
-            || !matches!(db.input(&InputKey::DefinitionBody(body.definition)).as_deref(),
-                Some(InputValue::DefinitionBody(handle)) if &handle.key() == body)
-            || !matches!(db.input(&InputKey::DefinitionHeader(body.definition)).as_deref(),
-                Some(InputValue::DefinitionHeader(header)) if header == &declaration.header)
-            || !matches!(db.input(&InputKey::DeclarationContext(body.definition)).as_deref(),
-                Some(InputValue::DeclarationContext(context)) if context.scope == declaration.scope && context.range == declaration.declaration_span)
-            || !matches!(db.input(&InputKey::CrateCfg(caller.selection().outline.crate_key)).as_deref(),
-                Some(InputValue::CrateCfg(cfg)) if cfg.fingerprint() == caller.selection().outline.cfg)
-        {
-            return Err(field_fault(
-                "field caller source revision differs from database",
-            ));
-        }
-        // Generated selectors need their emitted token name contexts; do not
-        // fabricate an original-source context for them.
-        caller.require_original_hygiene()?;
-        let member = caller.named_field_member(&self.frame.body, NodeId(self.frame.pc().node))?;
+        let caller = match source::capture(db, &self.sources, &self.frame.body, self.frame.pc()) {
+            QueryPoll::Ready(Ok(caller)) => caller,
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(request) => return Ok(QueryPoll::NeedInput(request)),
+        };
         let captured = match db.fetch(&SyntaxProvider, QueryKey::TypeSchema(definition)) {
             QueryPoll::Ready(Ok(captured)) => captured,
             QueryPoll::Ready(Err(error)) => return Err(error),
@@ -86,45 +72,38 @@ impl RunMachine {
         let QueryValue::TypeSchema(schema) = captured.value.as_ref() else {
             return Err(field_fault("selected field schema query outcome differs"));
         };
-        let mut owners = self.sources.iter().filter(|source| {
-            source
-                .outline()
-                .items
-                .iter()
-                .any(|item| item.def_key.fingerprint() == definition)
-        });
-        let owner = owners
-            .next()
-            .ok_or_else(|| field_fault("field type source owner absent"))?;
-        if owners.next().is_some() {
-            return Err(field_fault("field type source owner duplicated"));
-        }
-        let item = owner
-            .outline()
-            .items
-            .iter()
-            .find(|item| item.def_key.fingerprint() == definition)
-            .ok_or_else(|| field_fault("field type declaration absent"))?;
-        if item.def_key.item_kind != ItemKind::Struct {
+        self.sources
+            .len()
+            .checked_mul(std::mem::size_of::<&PreparedSourceView>())
+            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+            .ok_or_else(crate::runtime::arena::resource)?;
+        let mut sources = Vec::new();
+        sources
+            .try_reserve_exact(self.sources.len())
+            .map_err(|_| crate::runtime::arena::resource())?;
+        sources.extend(self.sources.iter());
+        let names = match SchemaNames::from_current_database(db, graph, &sources, schema) {
+            QueryPoll::Ready(Ok(names)) => names,
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(request) => return Ok(QueryPoll::NeedInput(request)),
+        };
+        if names.definition().item_kind != ItemKind::Struct {
             return Err(Diagnostic::new(
                 "LRR-E-UNSUPPORTED",
                 "field expression requires an entered enum variant or other source member view"
                     .into(),
             ));
         }
-        let names = match SchemaNames::from_database(db, graph, owner, schema) {
-            QueryPoll::Ready(Ok(names)) => names,
-            QueryPoll::Ready(Err(error)) => return Err(error),
-            QueryPoll::NeedInput(request) => return Ok(QueryPoll::NeedInput(request)),
-        };
-        match names.bind_named_field(None, &member, &declaration.scope)? {
-            NominalFieldBinding::Ready(binding) => Ok(QueryPoll::Ready(
+        match names.bind_named_field_current(db, &sources, None, caller.member(), caller.scope()?) {
+            QueryPoll::Ready(Ok(NominalFieldBinding::Ready(binding))) => Ok(QueryPoll::Ready(
                 self.frame.prepare_source_field(base, destination, binding),
             )),
-            NominalFieldBinding::Deferred { .. } => Err(Diagnostic::new(
+            QueryPoll::Ready(Ok(NominalFieldBinding::Deferred { .. })) => Err(Diagnostic::new(
                 "LRR-E-UNSUPPORTED",
                 "field expression requires further selected source type or generic binding".into(),
             )),
+            QueryPoll::Ready(Err(error)) => Err(error),
+            QueryPoll::NeedInput(request) => Ok(QueryPoll::NeedInput(request)),
         }
     }
 }
@@ -133,7 +112,10 @@ impl RunMachine {
 mod tests {
     use super::*;
     use crate::{
-        core::digest::Digest, ir::op::PrimitiveType, syntax::place_fixture_facts,
+        core::digest::Digest,
+        db::dependency::{InputKey, InputValue},
+        ir::op::PrimitiveType,
+        syntax::place_fixture_facts,
         traits::term::TyTerm,
     };
     const STOCK: &str = include_str!(

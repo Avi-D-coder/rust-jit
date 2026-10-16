@@ -46,6 +46,19 @@ impl RunMachine {
                         "return literal requires reached concrete type".into(),
                     )
                 })?;
+                // Some generic results become concrete only on return. The
+                // caller's physical expectation remains a constraint even
+                // when it could not supply a symbolic source hint at entry.
+                if suspended
+                    .caller
+                    .hint(suspended.result)?
+                    .is_some_and(|expected| expected != actual)
+                {
+                    return Err(Diagnostic::new(
+                        "LRR-E-CALL-RETURN-TYPE",
+                        "returned descriptor differs from the reached caller result context".into(),
+                    ));
+                }
                 if let (
                     Some(crate::traits::term::TyTerm::Param(expected)),
                     Some(crate::traits::term::TyTerm::Param(found)),
@@ -79,7 +92,6 @@ impl RunMachine {
                         Some(crate::traits::term::TyTerm::Param(_))
                     )
                 {
-                    let mut returned = primitive_argument_type(actual)?;
                     let source = match self.frame.return_source.as_ref() {
                         Some(crate::traits::term::TyTerm::Param(key))
                             if suspended.call.contracts.source_result.as_ref()
@@ -92,9 +104,7 @@ impl RunMachine {
                         }
                         source => source,
                     };
-                    if let Some(source) = source {
-                        returned.source = source.clone();
-                    }
+                    let returned = reached_argument_type(actual, source.cloned())?;
                     suspended.call.contracts.bind_return_parameter(&returned)?;
                 }
                 self.check_source_return(db, &suspended.call, actual)?;

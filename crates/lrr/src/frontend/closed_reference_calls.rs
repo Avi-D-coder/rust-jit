@@ -354,7 +354,7 @@ fn validate_value(
         (
             TyTerm::Nominal(identity, args),
             TypeKey::Nominal {
-                definition,
+                identity: actual,
                 args: runtime_args,
                 const_args,
                 ..
@@ -363,7 +363,7 @@ fn validate_value(
             args.is_empty()
                 && runtime_args.is_empty()
                 && const_args.is_empty()
-                && definition.fingerprint() == *identity
+                && actual == identity
         }
         _ => false,
     };

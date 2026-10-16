@@ -17,6 +17,16 @@ impl SourceDiscovery {
         request: &super::super::source_declarative::SourceDeclarativeRequest,
     ) -> Result<(), Diagnostic> {
         let receipt = SyntaxRequestReceipt::capture(request)?;
+        self.remember_syntax_receipt(receipt)
+    }
+    pub(super) fn remember_generated_syntax_request(
+        &mut self,
+        request: &super::super::generated_call_request::GeneratedCallRequest,
+    ) -> Result<(), Diagnostic> {
+        let receipt = SyntaxRequestReceipt::capture_generated(request)?;
+        self.remember_syntax_receipt(receipt)
+    }
+    fn remember_syntax_receipt(&mut self, receipt: SyntaxRequestReceipt) -> Result<(), Diagnostic> {
         let key = receipt.key().fingerprint();
         if let Some(actual) = self.syntax_requests.get(&key) {
             if actual != &receipt {
@@ -96,7 +106,9 @@ impl SourceDiscovery {
             .nested_sources
             .get(&ordinal)
             .ok_or_else(|| fault("source syntax declaration inventory absent"))?;
-        let mut outputs = BTreeMap::<Digest, Arc<GeneratedDeclarations>>::new();
+        // The issued expansion key and the declaration producer are distinct
+        // identities. The admitted output binds the exact edge between them.
+        let mut outputs = BTreeMap::<(Digest, Digest), Arc<GeneratedDeclarations>>::new();
         let mut collect = |output: &Arc<GeneratedDeclarations>| -> Result<(), Diagnostic> {
             let key = output.record().key();
             if output.epoch() != self.epoch
@@ -112,10 +124,11 @@ impl SourceDiscovery {
                     "source syntax output lacks its actual sealed record dependency",
                 ));
             }
-            if let Some(prior) = outputs.get(&key.invocation) {
+            let parent = (output.parent_inventory(), output.parent_invocation());
+            if let Some(prior) = outputs.get(&parent) {
                 if prior.fingerprint() != output.fingerprint() {
                     return Err(fault(
-                        "source syntax invocation has conflicting admitted outputs",
+                        "source syntax producer has conflicting admitted outputs",
                     ));
                 }
                 return Ok(());
@@ -123,7 +136,17 @@ impl SourceDiscovery {
             if outputs.len() >= 100_000 {
                 return Err(fault("source syntax output handle count budget"));
             }
-            outputs.insert(key.invocation, output.clone());
+            outputs
+                .len()
+                .checked_add(1)
+                .and_then(|count| {
+                    count.checked_mul(
+                        128 + std::mem::size_of::<((Digest, Digest), Arc<GeneratedDeclarations>)>(),
+                    )
+                })
+                .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+                .ok_or_else(|| fault("source syntax output index metadata budget"))?;
+            outputs.insert(parent, output.clone());
             Ok(())
         };
         for output in self
@@ -151,22 +174,17 @@ impl SourceDiscovery {
                 Some(definition) => assembly.next_body_invocation(definition)?,
                 None => assembly.next_pending_invocation()?,
             };
-            let Some((invocation, alias)) = pending else {
+            let Some((parent, invocation)) = pending else {
                 break;
             };
-            let direct = outputs.remove(&invocation);
-            let alternate = alias.and_then(|alias| outputs.remove(&alias));
-            let output = match (direct, alternate) {
-                (Some(_), Some(_)) => {
-                    return Err(fault(
-                        "source syntax original call has two issued output identities",
-                    ));
-                }
-                (Some(output), None) | (None, Some(output)) => output,
-                (None, None) => {
-                    return Err(fault(
-                        "source syntax call requires an actual expansion output",
-                    ));
+            let output = match outputs.remove(&(parent, invocation)) {
+                Some(output) => output,
+                None => {
+                    return Err(fault(&format!(
+                        "source syntax call requires an actual expansion output: producer={invocation}, parent={parent}, remaining_outputs={}, inventory={}",
+                        outputs.len(),
+                        index.scan().fingerprint(),
+                    )));
                 }
             };
             let receipt = self

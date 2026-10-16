@@ -366,18 +366,56 @@ fn nominal_and_alias_normalization_use_the_actual_completed_declaration_type_sco
             let graph = NameNamespaces::from_outlines(&[owner.outline()]).unwrap();
             let views = [&owner];
             let normalizer = AliasNormalizer::new(&graph, &views).unwrap();
-            let QueryPoll::Ready(Ok(crate::frontend::source_types::NamedTypePreparation::Ready(
-                source,
-            ))) = crate::frontend::source_types::prepare_named(
+            use crate::frontend::source_types::NamedTypePreparation;
+            let source = match crate::frontend::source_types::prepare_named(
                 &mut db, &graph, &views, &signature, "Chosen",
-            )
-            else {
-                panic!("actual current alias-to-nominal source proof failed")
+            ) {
+                QueryPoll::Ready(Ok(NamedTypePreparation::Ready(source))) => source,
+                QueryPoll::Ready(Ok(NamedTypePreparation::Parameter(parameter))) => {
+                    panic!("edition {edition}, {text:?}: unexpected parameter {parameter:?}")
+                }
+                QueryPoll::Ready(Ok(NamedTypePreparation::Alias(alias))) => {
+                    panic!("edition {edition}, {text:?}: alias outcome {alias:?}")
+                }
+                QueryPoll::Ready(Ok(NamedTypePreparation::Name(name))) => {
+                    panic!("edition {edition}, {text:?}: name outcome {name:?}")
+                }
+                QueryPoll::Ready(Err(error)) => {
+                    panic!("edition {edition}, {text:?}: preparation error {error:?}")
+                }
+                QueryPoll::NeedInput(request) => {
+                    panic!("edition {edition}, {text:?}: input request {request:?}")
+                }
             };
             let TyTerm::Nominal(point, args) = source.source() else {
                 panic!("nominal source identity erased")
             };
             assert!(args.is_empty());
+            let mut store = crate::runtime::cell::GuestStore::new(1, 1000, 1_000_000).unwrap();
+            let descriptor = source.materialize(&mut store).unwrap();
+            let crate::runtime::shape::TypeKey::Nominal {
+                identity,
+                definition,
+                ..
+            } = store.type_descriptor(descriptor).unwrap().key.as_ref()
+            else {
+                panic!("source-certified nominal descriptor lost its declaration")
+            };
+            assert_eq!(identity, point);
+            let nominal_source = db.input(&InputKey::DefinitionSource(*point)).unwrap();
+            let InputValue::DefinitionSource(parse) = nominal_source.as_ref() else {
+                panic!("selected nominal source absent")
+            };
+            if let Some(generated) = db.input(&InputKey::GeneratedSyntax(parse.content)) {
+                let InputValue::GeneratedSyntax(unit) = generated.as_ref() else {
+                    panic!()
+                };
+                assert_eq!(unit.definitions.get(point), Some(definition));
+                assert_ne!(definition.fingerprint(), *identity);
+            } else {
+                assert_eq!(definition.fingerprint(), *identity);
+            }
+            source.require_descriptor(&store, descriptor).unwrap();
             assert!(
                 matches!(normalizer.normalize(&mut db,*point),QueryPoll::Ready(Ok(AliasTarget::Nominal(actual))) if actual==*point)
             );
@@ -514,4 +552,174 @@ fn generated_type_declaration_lookup_requires_the_actual_memo_header_and_scope()
         ),
         QueryPoll::Ready(Err(_))
     ));
+}
+
+#[test]
+fn separate_generated_nominals_keep_actual_source_identity_with_their_declared_keys() {
+    use crate::frontend::source_types::{NamedTypePreparation, prepare_named};
+    use crate::runtime::{cell::GuestStore, shape::TypeKey};
+    for edition in [2015, 2018, 2021, 2024] {
+        let mut store = GuestStore::new(1, 1000, 1_000_000).unwrap();
+        let mut prepared = Vec::new();
+        for text in [
+            "macro_rules! emit{()=>{struct Point{x:isize}fn answer(p:&Point){}}}emit!();fn main(){}",
+            "macro_rules! other{()=>{struct Point{x:isize}fn answer(p:&Point){}}}other!();fn main(){}",
+            "macro_rules! emit{()=>{struct Point{x:isize}fn answer(p:&Point){}}}macro_rules! wrap{()=>{emit!();}}wrap!();fn main(){}",
+        ] {
+            let (mut db, signature, _, _, owner) =
+                super::tests::prepared_config_retained(text, edition, true, false);
+            db.trace.detailed = true;
+            let graph = NameNamespaces::from_outlines(&[owner.outline()]).unwrap();
+            let views = [&owner];
+            let QueryPoll::Ready(Ok(NamedTypePreparation::Ready(source))) =
+                prepare_named(&mut db, &graph, &views, &signature, "Point")
+            else {
+                panic!("actual generated nominal source preparation failed")
+            };
+            let resolver = CallResolver::new(&graph, &views).unwrap();
+            let QueryPoll::Ready(Ok(CallSelection::Source(callee))) = resolver.select(
+                &mut db,
+                NameLookup::Defined(NameDefinition {
+                    namespace: Namespace::Value,
+                    identity: signature.definition,
+                    defining_unit: signature.scope.crate_key,
+                    definition_edition: edition,
+                }),
+            ) else {
+                panic!("actual generated reference function selection failed")
+            };
+            let reference = ClosedReferenceParameter::capture(&mut db, &callee, &graph, &views, 0)
+                .unwrap()
+                .unwrap();
+            assert_eq!(reference.pointee_source(), source.source());
+            let target = source.materialize(&mut store).unwrap();
+            reference.materialize_hint(&mut store).unwrap();
+            source.require_descriptor(&store, target).unwrap();
+            let TypeKey::Nominal {
+                identity,
+                definition,
+                schema,
+                ..
+            } = store.type_descriptor(target).unwrap().key.as_ref().clone()
+            else {
+                panic!("nominal descriptor absent")
+            };
+            let wrong_key = TypeKey::Nominal {
+                identity: definition.fingerprint(),
+                definition: definition.clone(),
+                schema,
+                args: Box::new([]),
+                const_args: Box::new([]),
+            };
+            assert_ne!(
+                store.type_descriptor(target).unwrap().key.fingerprint(),
+                wrong_key.fingerprint()
+            );
+            let wrong_identity = store.intern_type(wrong_key).unwrap();
+            assert!(source.require_descriptor(&store, wrong_identity).is_err());
+            assert_ne!(identity, definition.fingerprint());
+            assert!(
+                !db.trace.events.iter().any(|event| matches!(
+                    event.key,
+                    QueryKey::BodyStructure(_) | QueryKey::Thunk(_)
+                ))
+            );
+            prepared.push((source, target, definition.fingerprint()));
+        }
+        for left in 0..prepared.len() {
+            for right in left + 1..prepared.len() {
+                assert_eq!(prepared[left].2, prepared[right].2);
+                assert_ne!(prepared[left].0.source(), prepared[right].0.source());
+                assert_ne!(prepared[left].1, prepared[right].1);
+                assert!(
+                    prepared[left]
+                        .0
+                        .require_descriptor(&store, prepared[right].1)
+                        .is_err()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn current_named_field_schema_uses_actual_original_and_generated_type_owners() {
+    use crate::frontend::{
+        source_types::{NamedTypePreparation, prepare_named},
+        types::{NominalFieldBinding, SchemaNames},
+    };
+    for edition in [2015, 2018, 2021, 2024] {
+        for text in [
+            "struct Point{x:isize,cold:fn()}macro_rules! emit{()=>{fn answer(p:&Point){}}}emit!();fn main(){}",
+            "macro_rules! emit{()=>{struct Point{x:isize,cold:fn()}fn answer(p:&Point){}}}emit!();fn main(){}",
+            "macro_rules! emit{()=>{struct Point{x:isize,cold:fn()}fn answer(p:&Point){}}}macro_rules! wrap{()=>{emit!();}}wrap!();fn main(){}",
+        ] {
+            let (mut db, signature, _, _, owner) =
+                super::tests::prepared_config_retained(text, edition, true, false);
+            db.trace.detailed = true;
+            let graph = NameNamespaces::from_outlines(&[owner.outline()]).unwrap();
+            let views = [&owner];
+            let QueryPoll::Ready(Ok(NamedTypePreparation::Ready(source))) =
+                prepare_named(&mut db, &graph, &views, &signature, "Point")
+            else {
+                panic!("actual current field type owner failed")
+            };
+            let TyTerm::Nominal(identity, _) = source.source() else {
+                panic!("nominal identity absent")
+            };
+            let captured = db
+                .fetch(&SyntaxProvider, QueryKey::TypeSchema(*identity))
+                .into_ready()
+                .unwrap()
+                .unwrap();
+            let QueryValue::TypeSchema(schema) = captured.value.as_ref() else {
+                panic!()
+            };
+            let names = SchemaNames::from_current_database(&mut db, &graph, &views, schema)
+                .into_ready()
+                .unwrap()
+                .unwrap();
+            let NominalFieldBinding::Ready(member) = names
+                .bind_named_field_current(&mut db, &views, None, "x", &signature.scope)
+                .into_ready()
+                .unwrap()
+                .unwrap()
+            else {
+                panic!("current selected field did not use its owning Type receipt")
+            };
+            assert_eq!(member.identity(), *identity);
+            assert_eq!(member.primitive(), PrimitiveType::Isize);
+            assert_eq!(member.field(), 0);
+            let mut foreign = signature.scope.clone();
+            foreign.crate_key = Digest([210; 32]);
+            assert!(matches!(
+                names.bind_named_field_current(&mut db, &views, None, "x", &foreign),
+                QueryPoll::Ready(Err(_))
+            ));
+            let mut wrong_header = schema.as_ref().clone();
+            wrong_header.header.tokens.clear();
+            assert!(matches!(
+                SchemaNames::from_current_database(&mut db, &graph, &views, &wrong_header),
+                QueryPoll::Ready(Err(_))
+            ));
+            let mut wrong_owner = schema.as_ref().clone();
+            wrong_owner.scope.crate_key = foreign.crate_key;
+            assert!(matches!(
+                SchemaNames::from_current_database(&mut db, &graph, &views, &wrong_owner),
+                QueryPoll::Ready(Err(_))
+            ));
+            assert!(
+                !db.trace.events.iter().any(|event| matches!(
+                    event.key,
+                    QueryKey::BodyStructure(_) | QueryKey::Thunk(_)
+                ))
+            );
+            db.begin_expansion_epoch(2).unwrap();
+            assert!(matches!(
+                names.bind_named_field_current(&mut db, &views, None, "x", &signature.scope),
+                QueryPoll::Ready(Err(_))
+                    | QueryPoll::Ready(Ok(NominalFieldBinding::Deferred { .. }))
+            ));
+        }
+    }
 }

@@ -10,7 +10,7 @@ impl SourceSyntaxAssembly {
     pub(crate) fn next_body_invocation(
         &self,
         definition: Digest,
-    ) -> Result<Option<(Digest, Option<Digest>)>, Diagnostic> {
+    ) -> Result<Option<(Digest, Digest)>, Diagnostic> {
         let original = self
             .source
             .outline()
@@ -46,7 +46,7 @@ impl SourceSyntaxAssembly {
             }
             return binding
                 .invocation
-                .map(|invocation| Some((invocation, binding.original_item_invocation)))
+                .map(|invocation| Some((binding.parent_identity, invocation)))
                 .ok_or_else(|| fault("selected body call lacks an actual declaration producer"));
         }
         Ok(None)

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "at": "2026-10-16T01:41:33.624976+00:00",
+  "at": "2026-10-16T03:08:36.628062+00:00",
   "claim": "LOCAL-024",
   "tasks": [
     "T014",
@@ -10,282 +10,11 @@
     "T051",
     "M014"
   ],
-  "state": "v3_failed_sealed_independent_admission_bank_assigned",
-  "source_packet": "artifacts/macos-first/common-source-types-patterns-v3/SOURCE.json",
-  "source_packet_sha256": "1560eed7e6784637788613375ca76cffa892e10e84e6b5973fde2fa35fcdb981",
+  "state": "parameter_storage_core5pass3fail_shared_Drop_prerequisite_missing;pattern_retirement101_pending",
+  "source_packet": "artifacts/macos-first/common-call-result-source-v1/SOURCE.json",
+  "source_packet_sha256": "67ca07c6ca61cfc6f0e4f8acd37235797205a41687993ec16e75aba5a923a36e",
   "source_baseline": "f0a30dcc2a67799ab3bab462ec930cf938016735",
-  "source_files": [
-    {
-      "path": "crates/lrr/src/engine/run_argument_hints.rs",
-      "sha256": "a98445daff2e2c922af965c3837f1115d8b5198941d91a0c6990b88cdd85d0cf",
-      "bytes": 11424
-    },
-    {
-      "path": "crates/lrr/src/engine/run_reference_result_tests.rs",
-      "sha256": "0721dcf6ac172455f62be4190085d9069549e9341fa12d8eef76d604a4e9bd09",
-      "bytes": 9554
-    },
-    {
-      "path": "crates/lrr/src/frontend/call_contracts.rs",
-      "sha256": "4d81b4f4a947a5b91d08896c67f8b77087cbd05181db466698e650e9fb514088",
-      "bytes": 57779
-    },
-    {
-      "path": "crates/lrr/src/frontend/closed_reference_calls.rs",
-      "sha256": "bc194b0fc3c3f3dd1a0a62ae6bafe2a2f1f7892ce9e6071968dd5639892a651e",
-      "bytes": 48655
-    },
-    {
-      "path": "crates/lrr/src/frontend/closed_reference_results.rs",
-      "sha256": "c7cd417debe2aaa047240a26cdcf068a2e556214bf0080864c094e043872c1fd",
-      "bytes": 13312
-    },
-    {
-      "path": "crates/lrr/src/frontend/generated_reference_source_tests.rs",
-      "sha256": "5c1212c19eb78179d86968f62faf4186306160258e3a3f55a7c6067c2550300a",
-      "bytes": 21621
-    },
-    {
-      "path": "crates/lrr/src/frontend/generated_result_namespace.rs",
-      "sha256": "1f3899e6a14b2b1e5ab90d01782e1ab378c0128fd2e326aeb4897882be071ea2",
-      "bytes": 37661
-    },
-    {
-      "path": "crates/lrr/src/frontend/generated_return_parent.rs",
-      "sha256": "bd599052aa896a64ff0a15e47b1d064e573971f2bb72ddda1200fd7f81422f9e",
-      "bytes": 15751
-    },
-    {
-      "path": "crates/lrr/src/frontend/mod.rs",
-      "sha256": "6da659bedb7ba5d159944d19764f005315f6c664395337facdd7551d056c3e86",
-      "bytes": 1490
-    },
-    {
-      "path": "crates/lrr/src/frontend/named_reference_source_tests.rs",
-      "sha256": "59afed09d1ced466949172c74afedb11b7cff82d591fa5e569667cf9b8a8ac1e",
-      "bytes": 8641
-    },
-    {
-      "path": "crates/lrr/src/frontend/scalar_pattern_binding.rs",
-      "sha256": "25eef17eb5b5c517756aa877c3f049c424af47e6e469b122160d5153841bd4ee",
-      "bytes": 36880
-    },
-    {
-      "path": "crates/lrr/src/frontend/signature_names.rs",
-      "sha256": "f4d8de877c270ef20b2ea5b36bde5b9954b6bc17034a99c67e23624670060976",
-      "bytes": 8742
-    },
-    {
-      "path": "crates/lrr/src/frontend/source_local_patterns.rs",
-      "sha256": "cdbd9c60807dbfe9052d2656a8d35a8a15cc47a672c573824f38e878b0f7ac3e",
-      "bytes": 3420
-    },
-    {
-      "path": "crates/lrr/src/frontend/source_locals.rs",
-      "sha256": "9e9cc1da6e8bf73d2129d810febf5bf35d0fb78b7cc18e9442db906513faf287",
-      "bytes": 75738
-    },
-    {
-      "path": "crates/lrr/src/frontend/source_types.rs",
-      "sha256": "a1560e88a2c8aeefd6a054d554dc12706e39f7f8104793f6d030ee6a83fd1b91",
-      "bytes": 14695
-    },
-    {
-      "path": "crates/lrr/src/frontend/type_aliases.rs",
-      "sha256": "2921e2598ca33e87049d13561c88dd45ac0f8b66a8610ebe52bfd72854297c68",
-      "bytes": 17540
-    },
-    {
-      "path": "crates/lrr/src/frontend/type_name_namespace.rs",
-      "sha256": "26bd9261dc42e3b7e2db3bc07016649102ccf77965de417491872256e97678ee",
-      "bytes": 18062
-    },
-    {
-      "path": "crates/lrr/src/runtime/cell.rs",
-      "sha256": "46b3bbc01fe88425d1aafee02ecd776a37dfc077d64dd1f7af52a785ab62cd65",
-      "bytes": 204462
-    },
-    {
-      "path": "crates/lrr/src/runtime/cell_reference_return.rs",
-      "sha256": "546049499faf273d2f86e72eb90f026be448767dff483dfed76d193b3e62e3ea",
-      "bytes": 5810
-    },
-    {
-      "path": "crates/lrr/src/runtime/cell_reference_return_tests.rs",
-      "sha256": "5de9828bc7d117869045673e8745c36fc99a26af911722877d671323f708653a",
-      "bytes": 19317
-    },
-    {
-      "path": "crates/lrr/src/runtime/place.rs",
-      "sha256": "65cc30cb0daf81a817a2772c5109e1aef0c0a45455e32a749eaa2f3ca5307acc",
-      "bytes": 6993
-    },
-    {
-      "path": "crates/lrr/src/runtime/reference.rs",
-      "sha256": "39a71cfd81d29feefe20d4560fe39bd2057489a298d1444829dbb70f985e2a3a",
-      "bytes": 2082
-    },
-    {
-      "path": "crates/lrr/src/service/retained_reference_source_tests.rs",
-      "sha256": "cde4929faa4615967dd7eb2c6b72d3b4f979ea996cb2ae1138c54414ed8164ff",
-      "bytes": 12747
-    },
-    {
-      "path": "crates/lrr/src/syntax/body_index.rs",
-      "sha256": "2dc7cfbd61caa2b7594c4ef3c99a0df15d916c0a44c3deb0d2d6db3aaeebbd4b",
-      "bytes": 65661
-    },
-    {
-      "path": "crates/lrr/src/syntax/condition_ranges.rs",
-      "sha256": "3ff785ae808f17dc3ef75073fd991b18ac2d890a52a8a8f769a732d7892ab9b5",
-      "bytes": 19713
-    },
-    {
-      "path": "crates/lrr/src/syntax/lexical_hygiene.rs",
-      "sha256": "4aa41e9f677bbfbdffa0ad6977a6ef946eb699c745c84463f3b182002a4e68f2",
-      "bytes": 2637
-    },
-    {
-      "path": "crates/lrr/src/syntax/literal_match.rs",
-      "sha256": "b43d90f384a3c8b26dee420dbd3bef994dc1e8b51d0bd3aebc0388506ae55087",
-      "bytes": 48367
-    },
-    {
-      "path": "crates/lrr/src/syntax/mod.rs",
-      "sha256": "7376ae4e5c858fef33f5a2033d52a0fbfc2358c70f2c9debc42f9e533ac40740",
-      "bytes": 1694
-    },
-    {
-      "path": "crates/lrr/src/syntax/node_lookup.rs",
-      "sha256": "544d467f2f003fce9a46e1f3034983e1ba863e19fac7d9a54382899710029ece",
-      "bytes": 6455
-    },
-    {
-      "path": "crates/lrr/src/syntax/node_lookup_tests.rs",
-      "sha256": "76e2ab0f50a2392b526d2f8c34800059cace6f3f32378b14944c564c428a6e1a",
-      "bytes": 5922
-    },
-    {
-      "path": "crates/lrr/src/syntax/pattern_bindings.rs",
-      "sha256": "ecfa2f2ecdd489247637bed79949a2b694930601296050fe9d1e7a5716f6bf33",
-      "bytes": 19151
-    },
-    {
-      "path": "crates/lrr/src/syntax/pattern_bindings_tests.rs",
-      "sha256": "9962090df21a2b5af02040e40da920a97830b7ad7c44e0fc06737a3b962f441a",
-      "bytes": 6007
-    },
-    {
-      "path": "crates/lrr/src/syntax/pattern_plan.rs",
-      "sha256": "c4fa735875180efd27e3576028a81c2e7da4456c2221d488068b8684497d1d92",
-      "bytes": 9755
-    },
-    {
-      "path": "crates/lrr/src/syntax/reference_header_plan.rs",
-      "sha256": "51c932718f307dfacb8e3487e24680833d30ce1dd43391d2ab3ab01126ed2ef3",
-      "bytes": 7417
-    },
-    {
-      "path": "crates/lrr/src/syntax/scalar_pattern_binding.rs",
-      "sha256": "2bad9d425fa902dd3d129e8eb96bf87c7de79c1744d02fc311660ec7aef2cc11",
-      "bytes": 11051
-    },
-    {
-      "path": "crates/lrr/src/syntax/thunks.rs",
-      "sha256": "2f41b09a489fb65f28c3054e8b46d2b665c452fd04fcdd8f15b11183ce8680d6",
-      "bytes": 185985
-    },
-    {
-      "path": "crates/lrr/src/syntax/type_aliases.rs",
-      "sha256": "981963ada18150f4419febe2ba5a13656493da62b372d3f9e61f31e6d1426427",
-      "bytes": 4926
-    },
-    {
-      "path": "crates/lrr/src/vm/context.rs",
-      "sha256": "5f284b2d833940da0b7d2f42d34188451419c6489d034538fc773cdbbbb272c7",
-      "bytes": 14361
-    },
-    {
-      "path": "crates/lrr/src/vm/frame.rs",
-      "sha256": "41ba0fdcdbf4dad4f54af0d7d73a50cb80b7647decfd51d990eb70206d95dd6a",
-      "bytes": 309339
-    },
-    {
-      "path": "crates/lrr/src/vm/frame_aggregate_copy.rs",
-      "sha256": "f4e5b170f841a469332a2b634f56ca9d798f8bd4aaf2d658221416e3fbf95b92",
-      "bytes": 8416
-    },
-    {
-      "path": "crates/lrr/src/vm/frame_constant_arrays.rs",
-      "sha256": "999b0405eda633a676c1599d2edb14c3a806812df9ea7f43939b57eb14b87d3f",
-      "bytes": 9250
-    },
-    {
-      "path": "crates/lrr/src/vm/frame_constant_chunk_publication.rs",
-      "sha256": "0137d83343d31ace147fe395291f408a4520b5da0d86f8eda0a3080579723565",
-      "bytes": 14603
-    },
-    {
-      "path": "crates/lrr/src/vm/frame_pattern.rs",
-      "sha256": "8bc3106dc9eb5701f2ae274a89b7d688c623da2334e7effbc95666e7572bf872",
-      "bytes": 9981
-    },
-    {
-      "path": "crates/lrr/src/vm/frame_scope_cleanup.rs",
-      "sha256": "4d25f9b3f154aae3f49be5edd67d542e29b21ea0a2bae13d70905f3d2da477e0",
-      "bytes": 30548
-    },
-    {
-      "path": "crates/lrr/src/vm/frame_source_storage.rs",
-      "sha256": "2931d3abb98a4e9287be975b068423e9496acc683fdb8eb4b327f732631034c9",
-      "bytes": 9321
-    },
-    {
-      "path": "crates/lrr/src/vm/frame_source_types.rs",
-      "sha256": "55edbf67020d0681cc75cf83fd2526771ecc622793b7387f28aef4efd0242446",
-      "bytes": 3880
-    },
-    {
-      "path": "crates/lrr/src/vm/frame_source_types_tests.rs",
-      "sha256": "1df2c5a1d7de8686e42bbdf837ddbabf75b9de4cb33743b3c370cf64b0603e31",
-      "bytes": 21791
-    },
-    {
-      "path": "crates/lrr/src/vm/frame_tuple_sources.rs",
-      "sha256": "26a44cf8fe01c3abd38dd20a77cad096e80a5e74e1d6fcc1227f8e9ec63c2e2b",
-      "bytes": 5681
-    },
-    {
-      "path": "crates/lrr/src/vm/step.rs",
-      "sha256": "5238442b678057a802debf3697f5750b7adcb1393e9f7405ce1055a40e9fdaea",
-      "bytes": 58495
-    },
-    {
-      "path": "fixtures/upstream/rustc-checkout/manifest.json",
-      "sha256": "77c307a7d5f71770f70b2929142a256cf78c699cdadb85c0228417296ade8761",
-      "bytes": 200066
-    },
-    {
-      "path": "fixtures/upstream/rustc-checkout/tests/ui/binding/if-let.rs",
-      "sha256": "267def6c0f6e9e87d3d738bbfa31c02b6fac53f66882d40701dd3109a310e8b6",
-      "bytes": 1317
-    },
-    {
-      "path": "fixtures/upstream/rustc-checkout/tests/ui/consts/const_in_pattern/cyclic-const-dag-pass.rs",
-      "sha256": "31ee02b5cd60be7801100d9b856e8a65939e6c6ca054275598c3994f6d228d1f",
-      "bytes": 295
-    },
-    {
-      "path": "fixtures/upstream/rustc-checkout/tests/ui/regions/regions-infer-borrow-scope.rs",
-      "sha256": "b296c6d78fbf362d7ab196a4dd3418f8bc12f8a6c365bbfe5c0a5a75b6473979",
-      "bytes": 243
-    },
-    {
-      "path": "fixtures/upstream/rustc-checkout/tests/ui/rfcs/rfc-2497-if-let-chains/ast-lowering-does-not-wrap-let-chains.rs",
-      "sha256": "27b70dc63ab348eb971e3057ff27b178023b3ff6fb7ff0de7199417583428a4c",
-      "bytes": 308
-    }
-  ],
+  "source_files": 61,
   "attempts": [
     {
       "attempt": 1,
@@ -858,14 +587,304 @@
       "failure": "nominal_and_alias_normalization_use_the_actual_completed_declaration_type_scope line375; actualtypedvariant/case notprinted",
       "later_scopes": "admission/strict/milestone originallyunexecuted; separateindependent admissionbankassigned onunchangedV3",
       "separate_admission": "new independent scope, not a retry of failed namespace or milestone acceptance"
+    },
+    "v3_independent_admission": {
+      "distinct_bodies": 8,
+      "passed": 6,
+      "failed": 2,
+      "terminal": "811be0/1",
+      "scope": "Source admission controls only; conditional binding candidates absent. Later condition-facts57 repairs both failures. No namespace retry or full gate.",
+      "receipts": {
+        "RELEASE.json": {
+          "path": "artifacts/macos-first/sol-common-source-types-patterns-validation-v3/independent-admission-v1/RELEASE.json",
+          "sha256": "814f005908ede42123191637d75a1b905dc2a19fdc325f1704507c085788918d"
+        },
+        "EVIDENCE-HASHES.json": {
+          "path": "artifacts/macos-first/sol-common-source-types-patterns-validation-v3/independent-admission-v1/EVIDENCE-HASHES.json",
+          "sha256": "7f55d0ad171c03a0940ac23c846946254f7580e2c74fa56a9d755af67ffb9bac"
+        },
+        "HANDOFF.md": {
+          "path": "artifacts/macos-first/sol-common-source-types-patterns-validation-v3/independent-admission-v1/HANDOFF.md",
+          "sha256": "6d35f438225d85de7ec0c70658fd6206e500a0d6b94719c00e431072ea9800b7"
+        }
+      }
+    },
+    "v4_diagnostic": {
+      "distinct_bodies": 1,
+      "passed": 0,
+      "failed": 1,
+      "terminal": "805487/1",
+      "outcome": "LRR-E-TYPE-CONTEXT: selected nominal source/schema publication differs; edition2015 all-generated Point/Chosen. Original source/alias case reached later generated case. Later nominalidentity59 repairs this failure.",
+      "receipts": {
+        "RELEASE.json": {
+          "path": "artifacts/macos-first/sol-common-source-types-patterns-validation-v4/RELEASE.json",
+          "sha256": "9c8f76a76cbd8afa788a4cc0035d826b62157cb7888f0d74111a6d8c8858964d"
+        },
+        "EVIDENCE-HASHES.json": {
+          "path": "artifacts/macos-first/sol-common-source-types-patterns-validation-v4/EVIDENCE-HASHES.json",
+          "sha256": "43420034bcb26411dd47fbe2af39ee93dbeaa97e889487482369477548eeb05c"
+        },
+        "HANDOFF.md": {
+          "path": "artifacts/macos-first/sol-common-source-types-patterns-validation-v4/HANDOFF.md",
+          "sha256": "9afbaa26a7bdca8755e8ab496af7881eb87fcf61105c14fc19be0bfffe828656"
+        }
+      }
+    },
+    "condition_facts57": {
+      "distinct_bodies": 18,
+      "passed": 18,
+      "failed": 0,
+      "terminals": [
+        "5490df/0",
+        "000ced/0"
+      ],
+      "scope": "Independent admission8 and10 source-local/condition controls. Both previously failing conditional candidates pass; nested or/@, duplicate-without-equivalence and lexical scope regressions pass. Not a full runtime fixture, namespace bank or milestone.",
+      "receipts": {
+        "RELEASE.json": {
+          "path": "artifacts/macos-first/sol-common-condition-facts-validation-v1/RELEASE.json",
+          "sha256": "1daf0881fc8cdad8a98375d4699c3271ac3006fa294b05bde2ae523736d63308"
+        },
+        "EVIDENCE-HASHES.json": {
+          "path": "artifacts/macos-first/sol-common-condition-facts-validation-v1/EVIDENCE-HASHES.json",
+          "sha256": "3ddc6ed3ad579cb0b22fc33f08b37a840455046e7ebd35ae6ea75fd4a87c6d3f"
+        },
+        "HANDOFF.md": {
+          "path": "artifacts/macos-first/sol-common-condition-facts-validation-v1/HANDOFF.md",
+          "sha256": "ef10ca43c8c8c70bc9aa390f1b42b53db9ad6f2ec01b9113bccbddae2b1c641b"
+        }
+      }
+    },
+    "nominal_identity59": {
+      "distinct_bodies": 44,
+      "passed": 41,
+      "failed": 3,
+      "terminals": [
+        "bbc559/0",
+        "8bac89/1"
+      ],
+      "banks": {
+        "namespace": {
+          "passed": 25,
+          "failed": 0
+        },
+        "source_plan": {
+          "passed": 7,
+          "failed": 0
+        },
+        "pattern_query": {
+          "passed": 3,
+          "failed": 0
+        },
+        "named_reference": {
+          "passed": 5,
+          "failed": 0
+        },
+        "retained_reference": {
+          "passed": 1,
+          "failed": 3
+        }
+      },
+      "scope": "Same frozen59; prior condition18 is separate, not included in44. 118 selected LRR bodies plus scalar/format/strict/full milestone unexecuted after failure. All generated nominal/alias identity witnesses now pass.",
+      "failures": [
+        "Reference result expected descriptor converted as primitive before source; descriptor-only reference constraints need separate source admission.",
+        "Constructor owner still requires original body key and lacks actual retained-declaration bridge.",
+        "Preparation requires an actual admitted macro expansion output; logs do not identify direct versus wrapper case."
+      ],
+      "receipts": {
+        "RELEASE.json": {
+          "path": "artifacts/macos-first/sol-common-nominal-identity-validation-v1/RELEASE.json",
+          "sha256": "7d6c9544bd66ec5fc15faacffb764d9bea7bd21b2a3d60412f5bdf10a195e40c"
+        },
+        "EVIDENCE-HASHES.json": {
+          "path": "artifacts/macos-first/sol-common-nominal-identity-validation-v1/EVIDENCE-HASHES.json",
+          "sha256": "5dc46a4b1e0538c6ecdc6526b8d762618fbef447ec766f6c131d8088ad1bd08c"
+        },
+        "HANDOFF.md": {
+          "path": "artifacts/macos-first/sol-common-nominal-identity-validation-v1/HANDOFF.md",
+          "sha256": "557f3c9fba0d0dc4d6ed03a84ba5ab4ed588f9fa83b7027399c42054a5df7945"
+        }
+      }
+    },
+    "call_result61": {
+      "distinct_bodies": 1,
+      "passed": 0,
+      "failed": 1,
+      "terminals": [
+        "856a0f/1"
+      ],
+      "scope": "Compiled; floating expected-source error before actual floating selection.42 remaining unexecuted.",
+      "receipts": {
+        "RELEASE.json": {
+          "path": "artifacts/macos-first/sol-common-call-result-source-validation-v1/RELEASE.json",
+          "sha256": "b2da62688ee11e5e9acb53570a74e5df1d762656419540b5437c18f262dd5841"
+        },
+        "EVIDENCE-HASHES.json": {
+          "path": "artifacts/macos-first/sol-common-call-result-source-validation-v1/EVIDENCE-HASHES.json",
+          "sha256": "5d4f4dc68772d7860bd798670770bf1bdc34a691cd68626594e318ead2f22275"
+        },
+        "HANDOFF.md": {
+          "path": "artifacts/macos-first/sol-common-call-result-source-validation-v1/HANDOFF.md",
+          "sha256": "09d3da62c7e82386d48b5012cbb79f9dad649b4a065f8c06f95dc3ecffac2f14"
+        }
+      },
+      "new_complete_upstream_fixtures": 0
+    },
+    "floating_order63": {
+      "distinct_bodies": 1,
+      "passed": 0,
+      "failed": 1,
+      "terminals": [
+        "7cd65f/1"
+      ],
+      "scope": "Compiled; wrapper actual expansion output missing.",
+      "receipts": {
+        "RELEASE.json": {
+          "path": "artifacts/macos-first/sol-common-call-result-source-validation-v2/RELEASE.json",
+          "sha256": "877686ac4e1ddcec0ef1d4321fbebdc761f66107a6e3a3524a078f71e2304b6e"
+        },
+        "EVIDENCE-HASHES.json": {
+          "path": "artifacts/macos-first/sol-common-call-result-source-validation-v2/EVIDENCE-HASHES.json",
+          "sha256": "2152e11c84da9962bccd563c57aa9795036e9c98cd24aea14c975342a93ce6ba"
+        },
+        "HANDOFF.md": {
+          "path": "artifacts/macos-first/sol-common-call-result-source-validation-v2/HANDOFF.md",
+          "sha256": "b5e6e4de7864d716197beff8ff9dc81997ccce7f7c5e4c408ce1e5b215688946"
+        }
+      },
+      "new_complete_upstream_fixtures": 0
+    },
+    "scope_certificate68": {
+      "distinct_bodies": 51,
+      "passed": 49,
+      "failed": 2,
+      "terminals": [
+        "8b7901/0",
+        "8446ac/1",
+        "c17098/1"
+      ],
+      "scope": "25 scope/currentness controls pass; floating24pass1 stale opcode pinfail; wrapper1fail. Separate banks in same source, no stock increment.",
+      "receipts": {
+        "RELEASE.json": {
+          "path": "artifacts/macos-first/sol-common-scope-certificate-index-validation-v1/RELEASE.json",
+          "sha256": "80f9c10961c4d7ac984f9848dd99a0ea4f6f425163c260f774520a5c507fad0a"
+        },
+        "EVIDENCE-HASHES.json": {
+          "path": "artifacts/macos-first/sol-common-scope-certificate-index-validation-v1/EVIDENCE-HASHES.json",
+          "sha256": "5d37dd8f842919b87d0f7572ad7f58a2d8b3909a18361043b156e248d1764bca"
+        },
+        "HANDOFF.md": {
+          "path": "artifacts/macos-first/sol-common-scope-certificate-index-validation-v1/HANDOFF.md",
+          "sha256": "c6464f3ab9c9605290885ba73a15f2fd704e307b702681e1471918d9dab354ec"
+        }
+      },
+      "new_complete_upstream_fixtures": 0
+    },
+    "nested_attachment71": {
+      "distinct_bodies": 1,
+      "passed": 0,
+      "failed": 1,
+      "terminals": [
+        "9a893d/1"
+      ],
+      "scope": "Compiled; actual generated issued request receipt missing.",
+      "receipts": {
+        "RELEASE.json": {
+          "path": "artifacts/macos-first/sol-common-nested-syntax-attachment-validation-v1/RELEASE.json",
+          "sha256": "307eb18ff0a17100a3a3809325e8425473bce37152ff9a5bdc1e90da77672345"
+        },
+        "EVIDENCE-HASHES.json": {
+          "path": "artifacts/macos-first/sol-common-nested-syntax-attachment-validation-v1/EVIDENCE-HASHES.json",
+          "sha256": "0507b230b0bd169f403d1ec85846865f767f0f916e317ab5379c0f9c4c839dd1"
+        },
+        "HANDOFF.md": {
+          "path": "artifacts/macos-first/sol-common-nested-syntax-attachment-validation-v1/HANDOFF.md",
+          "sha256": "fc56ef0897d80eac79dac91a6bac7e1a536187a93bf5117f35289c76dc5dd833"
+        }
+      },
+      "new_complete_upstream_fixtures": 0
+    },
+    "nested_attachment74": {
+      "distinct_bodies": 21,
+      "passed": 16,
+      "failed": 5,
+      "terminals": [
+        "751dcf/0",
+        "e02d88/0",
+        "c3d39f/1"
+      ],
+      "scope": "Assembly11+layout1+wrapper service1 pass; wrapper body includes5forms x4editions, not20stocktests. Independentcore8=3pass5fail.",
+      "receipts": {
+        "RELEASE.json": {
+          "path": "artifacts/macos-first/sol-common-nested-syntax-attachment-validation-v2/RELEASE.json",
+          "sha256": "e928462c283656d701de6ac47825275dbbd8cdc242f5a87a22cfc454729cb001"
+        },
+        "EVIDENCE-HASHES.json": {
+          "path": "artifacts/macos-first/sol-common-nested-syntax-attachment-validation-v2/EVIDENCE-HASHES.json",
+          "sha256": "a9729d6abae22bcae22f892827fd70d94505fe8f0270de648e81877d9d2c1266"
+        },
+        "HANDOFF.md": {
+          "path": "artifacts/macos-first/sol-common-nested-syntax-attachment-validation-v2/HANDOFF.md",
+          "sha256": "6a6e775ddf0d3e635e9513ee83a6e82b66beb8b8f015ef6bc3bbc8fb0ea35088"
+        }
+      },
+      "new_complete_upstream_fixtures": 0
+    },
+    "field_source78": {
+      "distinct_bodies": 11,
+      "passed": 5,
+      "failed": 6,
+      "terminals": [
+        "b218d7/1",
+        "0faf12/0",
+        "3c84a8/1"
+      ],
+      "scope": "Core8=3pass5VALUE-REPRfail;2fieldauthority/currentnesspass; separateconstructorowner1fail.",
+      "receipts": {
+        "RELEASE.json": {
+          "path": "artifacts/macos-first/sol-common-field-source-validation-v1/RELEASE.json",
+          "sha256": "45462b525a1fdf03a30b88ab14e686bdbee46161ee53776a9f8e7070e2e5baed"
+        },
+        "EVIDENCE-HASHES.json": {
+          "path": "artifacts/macos-first/sol-common-field-source-validation-v1/EVIDENCE-HASHES.json",
+          "sha256": "af9fdff1f8d95441f8acf24c4451d7166caf4e6831498ee14b4e71a4d060ecdc"
+        },
+        "HANDOFF.md": {
+          "path": "artifacts/macos-first/sol-common-field-source-validation-v1/HANDOFF.md",
+          "sha256": "c26fe0dd1f428732f225bbd0608b51ab29280c551e5f88e5a278624f1c590280"
+        }
+      },
+      "new_complete_upstream_fixtures": 0
+    },
+    "parameter_storage78": {
+      "distinct_bodies": 8,
+      "passed": 5,
+      "failed": 3,
+      "terminals": [
+        "cba8cc/1"
+      ],
+      "scope": "Core8 now5pass3fail; callee-local nominal/interior escape refusals nowpass; positive3 reach unresolved source-selectedDrop witness. Existing4guards, strict/fullmilestone unexecuted.",
+      "receipts": {
+        "RELEASE.json": {
+          "path": "artifacts/macos-first/sol-common-parameter-storage-validation-v1/RELEASE.json",
+          "sha256": "6b40ddd4ad31046a0e80dd415d9b41dcbccc54be6d73832419dcf1d75b6b4d84"
+        },
+        "EVIDENCE-HASHES.json": {
+          "path": "artifacts/macos-first/sol-common-parameter-storage-validation-v1/EVIDENCE-HASHES.json",
+          "sha256": "939ce396c854780edaa7c644792cfedafa246bd122f18f8b24da3240393fb9ac"
+        },
+        "HANDOFF.md": {
+          "path": "artifacts/macos-first/sol-common-parameter-storage-validation-v1/HANDOFF.md",
+          "sha256": "6363f23ccb7a19b78d92373e2a89bb7813717813a273d8fc6dda91069f5128cf"
+        }
+      },
+      "new_complete_upstream_fixtures": 0
     }
   },
-  "current_repairs": {
-    "alias": "Same current declaration Type authority before nominal completion and alias target classification; no moved nominal shortcut or fabricated function signature. Exact worker5 frozen12efb154...",
-    "condition": "Entry/Commit common current Value binding proof, separate actual pattern occurrence/canonical ID; constant execution/generated Value origin stillrequired.",
-    "source_locals": "Same builder accepts prepared BodyIndex equivalence only with exactname/context/scope/visibility checks; repeated or alternatives canonicalized, conflicting/missingproof/default API stillrefuses.",
-    "cost": "Indexed range/ancestry +binary occurrence lookup, checked temporary local maps. Existing uncached global namespace remint/reconstruction remains prohibited for new product leaf/retry integration; root next replaces with relevant cached proof service."
-  },
+  "current_repairs": [
+    "Current nominal positives require genuine source-selected Drop/no-user-Drop witness; no missing-destructor or empty-inventory inference. GoalEngine/complete relevant impl-catalog and resume integration remain prerequisites.",
+    "Exact common pattern retirement101 source queued for asynchronous review/compilation, no production pattern switch or binding authority closure.",
+    "Genuine generated outer macro-boundary receipt and relevant cached pattern occurrence proof remain independent source-only work."
+  ],
   "architecture_holds": [
     "MA001-MA008 remain open",
     "constant name patterns and generated/retained Value authority incomplete",
@@ -880,8 +899,8 @@
   },
   "publication": {
     "previous_checkpoint": "f0a30dcc2a67799ab3bab462ec930cf938016735",
-    "actual_commit": "207567/0",
-    "actual_push": "c14ac8/0",
-    "scope": "Exactsource corrections and evidence, notruntime/fullfixture acceptance"
+    "actual_commit": "d5e9eecd68790b38eb3ae5c1a408729a804cf0da",
+    "actual_push": "fc1555/0; f0a30dcc2a..d5e9eecd68; local HEAD and origin tracking verified51777a/0",
+    "scope": "Exact V3 frozen54 plus13 documentation/evidence files; WIP, not integration/runtime/fullfixture/task acceptance. Later condition57/identity59/result61 and live field/product changes are not this pushed source."
   }
 }

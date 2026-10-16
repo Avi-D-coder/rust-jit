@@ -110,7 +110,14 @@ fn original_nan_ir_admission_preserves_each_official_edition_and_exact_let_conti
         assert_eq!(constant.edition(), edition);
         assert_eq!(constant.hygiene_context(), locals.context());
         assert_eq!(constant.opcode_tag(), 41);
-        assert_eq!(OPCODE_COUNT, 45); // tag 42 reserved; source constants43, parameter places44
+        assert_eq!(
+            Op::Pattern {
+                operation: crate::ir::op::PatternOperation::Preview { owner: NodeId(0) },
+            }
+            .opcode_tag(),
+            45
+        );
+        assert_eq!(OPCODE_COUNT, 46); // tag42 reserved; constants43, parameter places44, patterns45
         let RecipeExit::Next(next) = &recipe.exit else {
             panic!("missing structural next")
         };

@@ -860,6 +860,7 @@ impl PreparedSourceView {
         file.parsed
             .record_constructor_path(body, index, plan, self.captured_macro_cfg()?)
     }
+    #[cfg(test)]
     pub(crate) fn named_field_member(
         &self,
         index: &crate::syntax::body_index::BodyIndex,

@@ -67,11 +67,9 @@ struct CallBinding {
     // Positions in this vector follow actual AST preorder. Origin keys alone
     // cannot distinguish repeated copies of an invocation in one expansion.
     invocation: Option<Digest>,
-    // Ordinary item discovery and declaration scans retain distinct issued
-    // request IDs for the same exact original syntax occurrence.
-    original_item_invocation: Option<Digest>,
     grammar: Option<GrammarSlot>,
     parent: Arc<DeclarationScan>,
+    parent_identity: Digest,
     anchor: Digest,
 }
 
@@ -204,6 +202,7 @@ impl SourceSyntaxAssembly {
             .collect::<BTreeMap<_, _>>();
         let mut seen = BTreeSet::new();
         let mut calls = Vec::new();
+        let parent_identity = scan.fingerprint();
         reserve_calls(&mut calls, captured.calls.len())?;
         for call in &captured.calls {
             let site = call
@@ -230,14 +229,9 @@ impl SourceSyntaxAssembly {
             }
             calls.push(CallBinding {
                 invocation: producer.map(|p| p.identity),
-                original_item_invocation: source
-                    .outline()
-                    .item_invocations
-                    .iter()
-                    .find(|item| item.range == range && item.attribute_input.is_none())
-                    .map(|item| item.item_input),
                 grammar: producer.map(|p| p.grammar),
                 parent: scan.clone(),
+                parent_identity,
                 anchor: anchor(call)?,
             });
         }
@@ -279,14 +273,12 @@ impl SourceSyntaxAssembly {
         self.attach_receipt(&receipt, output)
     }
 
-    pub(crate) fn next_pending_invocation(
-        &self,
-    ) -> Result<Option<(Digest, Option<Digest>)>, Diagnostic> {
+    pub(crate) fn next_pending_invocation(&self) -> Result<Option<(Digest, Digest)>, Diagnostic> {
         self.calls
             .first()
             .map(|call| {
                 call.invocation
-                    .map(|id| (id, call.original_item_invocation))
+                    .map(|id| (call.parent_identity, id))
                     .ok_or_else(|| {
                         fault("retained source call lacks an actual declaration producer")
                     })
@@ -313,13 +305,15 @@ impl SourceSyntaxAssembly {
         let position = self
             .calls
             .iter()
-            .position(|c| c.matches_invocation(key.invocation))
+            .position(|call| {
+                call.matches_parent(output.parent_inventory(), output.parent_invocation())
+            })
             .ok_or_else(|| fault("source syntax issued invocation is not pending"))?;
         if self
             .calls
             .iter()
             .skip(position + 1)
-            .any(|c| c.matches_invocation(key.invocation))
+            .any(|call| call.matches_parent(output.parent_inventory(), output.parent_invocation()))
         {
             return Err(fault("source syntax invocation identity is ambiguous"));
         }
@@ -524,8 +518,8 @@ fn expansion_metadata(count: usize) -> Result<usize, Diagnostic> {
     )
 }
 impl CallBinding {
-    fn matches_invocation(&self, invocation: Digest) -> bool {
-        self.invocation == Some(invocation) || self.original_item_invocation == Some(invocation)
+    fn matches_parent(&self, inventory: Digest, producer: Digest) -> bool {
+        self.parent_identity == inventory && self.invocation == Some(producer)
     }
 }
 fn reserve_calls(calls: &mut Vec<CallBinding>, count: usize) -> Result<(), Diagnostic> {
@@ -569,6 +563,7 @@ fn generated_calls(
         .collect::<BTreeMap<_, _>>();
     let mut seen = BTreeSet::new();
     let mut result = Vec::new();
+    let parent_identity = scan.fingerprint();
     reserve_calls(&mut result, calls.len())?;
     for call in calls {
         let producer = producers.get(&(call.start, call.end));
@@ -580,9 +575,9 @@ fn generated_calls(
         }
         result.push(CallBinding {
             invocation: producer.map(|p| p.identity),
-            original_item_invocation: None,
             grammar: producer.map(|p| p.grammar),
             parent: scan.clone(),
+            parent_identity,
             anchor: anchor(call)?,
         });
     }

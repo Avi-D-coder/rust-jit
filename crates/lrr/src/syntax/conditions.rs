@@ -44,6 +44,44 @@ impl Default for ConditionLimits {
         }
     }
 }
+/// Structural clause boundaries shared with source lexical discovery. This
+/// does not admit misplaced lets, resolve names or prepare executable shapes.
+pub(crate) fn source_clauses(
+    expression: ast::Expr,
+    limits: ConditionLimits,
+    bytes: &mut usize,
+) -> Result<Vec<ast::Expr>, Diagnostic> {
+    let mut pending = vec![expression];
+    let mut clauses = Vec::new();
+    while let Some(expression) = pending.pop() {
+        if let ast::Expr::BinExpr(binary) = &expression
+            && binary.op_token().is_some_and(|token| token.text() == "&&")
+        {
+            let left = binary
+                .lhs()
+                .ok_or_else(|| invalid("condition left operand absent"))?;
+            let right = binary
+                .rhs()
+                .ok_or_else(|| invalid("condition right operand absent"))?;
+            charge(bytes, 128, limits.metadata_bytes)?;
+            pending.try_reserve(2).map_err(|_| limit())?;
+            pending.push(right);
+            pending.push(left);
+        } else {
+            if clauses.len() >= limits.clauses {
+                return Err(limit());
+            }
+            charge(
+                bytes,
+                std::mem::size_of::<ast::Expr>(),
+                limits.metadata_bytes,
+            )?;
+            clauses.try_reserve(1).map_err(|_| limit())?;
+            clauses.push(expression);
+        }
+    }
+    Ok(clauses)
+}
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ConditionClause {
     Boolean {
@@ -252,27 +290,9 @@ impl ParsedFile {
                 .copied()
                 .ok_or_else(|| invalid("condition clause lacks structural identity"))
         };
-        let mut pending = vec![expression];
+        let sources = source_clauses(expression, limits, &mut bytes)?;
         let mut clauses = Vec::new();
-        while let Some(expression) = pending.pop() {
-            if let ast::Expr::BinExpr(binary) = &expression
-                && binary.op_token().is_some_and(|t| t.text() == "&&")
-            {
-                let left = binary
-                    .lhs()
-                    .ok_or_else(|| invalid("condition left operand absent"))?;
-                let right = binary
-                    .rhs()
-                    .ok_or_else(|| invalid("condition right operand absent"))?;
-                charge(&mut bytes, 128, limits.metadata_bytes)?;
-                pending.try_reserve(2).map_err(|_| limit())?;
-                pending.push(right);
-                pending.push(left);
-                continue;
-            }
-            if clauses.len() >= limits.clauses {
-                return Err(limit());
-            }
+        for expression in sources {
             let node = id(expression.syntax(), 0)?;
             let clause = if let ast::Expr::LetExpr(pattern) = expression {
                 let pat = pattern

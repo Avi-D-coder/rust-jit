@@ -106,6 +106,9 @@ pub enum TypeKey {
     },
     Tuple(Box<[TypeId]>),
     Nominal {
+        /// Actual source declaration identity, including generated item identity.
+        /// The structured declaration key is retained independently below.
+        identity: Digest,
         definition: DefKey,
         schema: Digest,
         args: Box<[TypeId]>,
@@ -321,6 +324,7 @@ impl TypeRegistry {
                 )
             }
             TypeKey::Nominal {
+                identity,
                 definition,
                 schema,
                 args,
@@ -342,7 +346,7 @@ impl TypeRegistry {
                 (
                     ShapeCategory::Nominal,
                     Some(DeferredFieldRecipe::Nominal {
-                        definition: definition.fingerprint(),
+                        definition: *identity,
                         schema: *schema,
                     }),
                     CopyStatus::Deferred,
@@ -485,7 +489,7 @@ impl TypeKey {
 /// Worker-local fingerprint only: child IDs must be remapped from stable source
 /// keys before interning. This encoding is never a portable cache record.
 impl StableEncode for TypeKey {
-    const DOMAIN: &'static str = "lrr/v2/runtime-type-key";
+    const DOMAIN: &'static str = "lrr/v3/runtime-type-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
             Self::Primitive(primitive) => {
@@ -511,12 +515,14 @@ impl StableEncode for TypeKey {
                 e.sequence(members, |e, id| e.u32(id.0));
             }
             Self::Nominal {
+                identity,
                 definition,
                 schema,
                 args,
                 const_args,
             } => {
                 e.u32(5);
+                e.digest(*identity);
                 e.record(definition);
                 e.digest(*schema);
                 e.sequence(args, |e, id| e.u32(id.0));

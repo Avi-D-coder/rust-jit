@@ -25,11 +25,37 @@ enum SyntaxInput {
 }
 impl SyntaxRequestReceipt {
     pub(crate) fn capture(request: &SourceDeclarativeRequest) -> Result<Self, Diagnostic> {
-        request.key().validate()?;
-        let bytes = request.input.encode().map_err(adapter)?;
-        let (input, identity) = if let Some(procedural) = request.procedural_request() {
-            if bytes != procedural.input.encode().map_err(adapter)?
-                || request.site != procedural.call_site
+        Self::capture_parts(
+            request.key(),
+            &request.input,
+            request.site,
+            request.owner,
+            request.procedural_request(),
+        )
+    }
+    pub(crate) fn capture_generated(
+        request: &crate::expand::generated_call_request::GeneratedCallRequest,
+    ) -> Result<Self, Diagnostic> {
+        let (owner, input, site) = request.syntax_input()?;
+        Self::capture_parts(
+            request.key(),
+            input.as_ref(),
+            site,
+            owner,
+            request.procedural_request(),
+        )
+    }
+    fn capture_parts(
+        key: &ExpansionKey,
+        actual_input: &lrr_expand_adapter::token_wire::TokenForest,
+        site: Key,
+        owner: Digest,
+        procedural: Option<&lrr_expand_adapter::proc_client::ProcInvocation>,
+    ) -> Result<Self, Diagnostic> {
+        key.validate()?;
+        let bytes = actual_input.encode().map_err(adapter)?;
+        let (input, identity) = if let Some(procedural) = procedural {
+            if bytes != procedural.input.encode().map_err(adapter)? || site != procedural.call_site
             {
                 return Err(fault(
                     "issued procedural syntax request input or site differs",
@@ -50,20 +76,20 @@ impl SyntaxRequestReceipt {
         } else {
             (SyntaxInput::DelimitedCall, Digest::of_bytes(&bytes))
         };
-        if identity != request.key().input_tokens {
+        if identity != key.input_tokens {
             return Err(fault("issued syntax request input differs from its key"));
         }
         Ok(Self {
-            key: request.key().clone(),
-            site: request.site,
-            roots: roots_identity(request.input.roots())?,
-            definition: match request.key().macro_identity {
+            key: key.clone(),
+            site,
+            roots: roots_identity(actual_input.roots())?,
+            definition: match key.macro_identity {
                 MacroIdentity::Declaration { definition }
                 | MacroIdentity::Builtin { definition } => {
                     Some(crate::expand::scopes::MacroDefinition {
                         identity: definition,
-                        defining_unit: request.owner,
-                        definition_edition: request.key().definition_edition,
+                        defining_unit: owner,
+                        definition_edition: key.definition_edition,
                     })
                 }
                 MacroIdentity::Procedural { .. } => None,

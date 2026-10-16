@@ -1810,7 +1810,7 @@ impl Frame {
         destination: SlotId,
         binding: crate::frontend::types::BoundNominalField,
     ) -> Result<(), Diagnostic> {
-        if self.nominal_place_source(base)? != binding.definition().fingerprint()
+        if self.nominal_place_source(base)? != binding.identity()
             || base == destination
             || self.place_slot(destination)?.place.is_some()
         {
@@ -1879,7 +1879,7 @@ impl Frame {
                     facts.pc == self.pc && facts.base == base && facts.destination == destination
                 })
                 .ok_or_else(|| invalid("named projection lacks exact source dispatcher facts"))?;
-            if self.nominal_place_source(base)? != facts.binding.definition().fingerprint() {
+            if self.nominal_place_source(base)? != facts.binding.identity() {
                 return Err(invalid("named projection source view differs").into());
             }
             Some(&facts.binding)
@@ -2302,8 +2302,8 @@ impl Frame {
             }
             Some(TyTerm::Nominal(definition, arguments)) if arguments.is_empty() => {
                 matches!(store.type_descriptor(target)?.key.as_ref(),
-                    TypeKey::Nominal { definition: actual, args, const_args, .. }
-                    if actual.fingerprint() == *definition && args.is_empty() && const_args.is_empty())
+                    TypeKey::Nominal { identity: actual, args, const_args, .. }
+                    if actual == definition && args.is_empty() && const_args.is_empty())
             }
             Some(TyTerm::Array(element, crate::traits::term::ConstTerm::Value(length))) => {
                 let TyTerm::Primitive(primitive) = element.as_ref() else {
@@ -2676,11 +2676,7 @@ impl Frame {
         {
             return Err(invalid("nominal constructor source shape mismatch"));
         }
-        self.require_nominal_result_source(
-            guard,
-            bound.variant().definition().fingerprint(),
-            true,
-        )?;
+        self.require_nominal_result_source(guard, bound.variant().identity(), true)?;
         let crate::syntax::constructors::ConstructorKind::Record { fields, .. } = plan.kind()
         else {
             return Err(invalid("nominal constructor written fields absent"));
@@ -2767,11 +2763,7 @@ impl Frame {
             .as_ref()
             .ok_or_else(|| invalid("constructor facts absent"))?;
         if let ConstructorBinding::Nominal(bound) = &facts.binding {
-            self.require_nominal_result_source(
-                guard,
-                bound.variant().definition().fingerprint(),
-                true,
-            )?;
+            self.require_nominal_result_source(guard, bound.variant().identity(), true)?;
         }
         if matches!(facts.binding, ConstructorBinding::Observed { .. }) {
             let result = self
@@ -2892,7 +2884,7 @@ impl Frame {
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
         self.preflight_constructor_start(id)?;
-        self.require_nominal_result_source(id, bound.definition().fingerprint(), true)?;
+        self.require_nominal_result_source(id, bound.identity(), true)?;
         let (ty, guard) = store.begin_nominal_construction(bound)?;
         self.slots[id.0 as usize].construction = Some(ActiveConstruction {
             guard,
@@ -2901,7 +2893,7 @@ impl Frame {
             mapping: None,
             source_operands: None,
         });
-        self.publish_nominal_source(id, bound.definition().fingerprint())
+        self.publish_nominal_source(id, bound.identity())
     }
     fn begin_bound_nominal_constructor(
         &mut self,
@@ -2910,7 +2902,7 @@ impl Frame {
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
         self.preflight_constructor_start(id)?;
-        self.require_nominal_result_source(id, bound.variant().definition().fingerprint(), true)?;
+        self.require_nominal_result_source(id, bound.variant().identity(), true)?;
         let bytes = bound
             .mapping()
             .written_to_declaration()
@@ -2945,7 +2937,7 @@ impl Frame {
             source_operands: None,
         });
         self.constructor_mapping_bytes = total;
-        self.publish_nominal_source(id, bound.variant().definition().fingerprint())
+        self.publish_nominal_source(id, bound.variant().identity())
     }
     pub fn constructor_field(
         &mut self,
@@ -3073,10 +3065,10 @@ impl Frame {
         self.preflight_constructor_tuple_source(&active, destination, store)?;
         match active.result {
             ConstructionResult::Bound(ty) => {
-                if let crate::runtime::shape::TypeKey::Nominal { definition, .. } =
+                if let crate::runtime::shape::TypeKey::Nominal { identity, .. } =
                     store.type_descriptor(ty)?.key.as_ref()
                 {
-                    self.require_nominal_result_source(id, definition.fingerprint(), false)?;
+                    self.require_nominal_result_source(id, *identity, false)?;
                 }
                 self.preflight_write_type(destination, ty, store)?;
                 if let Some(cell) = self.slot(destination)?.cell {

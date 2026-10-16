@@ -22,7 +22,9 @@ use crate::{
 pub(crate) struct FloatingFrameSite<'a> {
     pub body: &'a BodyIndex,
     pub pc: &'a PcKey,
-    pub expected: Option<&'a ArgumentType>,
+    // Demand context only after an actual source path selects this service.
+    // Ordinary reference/local paths must be free to use ordinary lowering.
+    pub expected: &'a dyn Fn() -> Result<Option<ArgumentType>, Diagnostic>,
 }
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-TYPE-CONTEXT", message.into())
@@ -132,6 +134,10 @@ impl RuntimeMacroContext<'_> {
                 Ok(None) => return QueryPoll::Ready(Ok(None)),
                 Err(error) => return QueryPoll::Ready(Err(error)),
             };
+        let expected = match (frame.expected)() {
+            Ok(expected) => expected,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
         let mut entered = match self
             .index
             .enter_body(self.source.selection(), &frame.pc.body)
@@ -168,7 +174,7 @@ impl RuntimeMacroContext<'_> {
             qualifier: &written.qualifier,
             member: &written.member,
             context: locals.context(),
-            expected: frame.expected,
+            expected: expected.as_ref(),
         };
         match action(db, &locals, site) {
             QueryPoll::Ready(Ok(value)) => QueryPoll::Ready(Ok(Some(value))),

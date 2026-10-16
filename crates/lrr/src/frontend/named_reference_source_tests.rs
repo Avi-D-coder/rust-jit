@@ -73,16 +73,26 @@ fn unchanged_point_reference_and_ordinary_parameter_share_the_selected_source_ty
         common.require_descriptor(&store, *target).unwrap();
         let TypeKey::Nominal {
             definition, schema, ..
-        } = store.type_descriptor(*target).unwrap().key.as_ref()
+        } = store.type_descriptor(*target).unwrap().key.as_ref().clone()
         else {
             panic!()
         };
         assert_eq!(definition.fingerprint(), point);
         let mut wrong_definition = definition.clone();
         wrong_definition.declared_name = "Other".into();
-        let expected_schema = *schema;
+        let expected_schema = schema;
+        let wrong_identity = store
+            .intern_type(TypeKey::Nominal {
+                identity: Digest([208; 32]),
+                definition: definition.clone(),
+                schema: expected_schema,
+                args: Box::new([]),
+                const_args: Box::new([]),
+            })
+            .unwrap();
         let wrong_schema = store
             .intern_type(TypeKey::Nominal {
+                identity: point,
                 definition: definition.clone(),
                 schema: Digest([207; 32]),
                 args: Box::new([]),
@@ -91,6 +101,7 @@ fn unchanged_point_reference_and_ordinary_parameter_share_the_selected_source_ty
             .unwrap();
         let wrong_owner = store
             .intern_type(TypeKey::Nominal {
+                identity: point,
                 definition: wrong_definition,
                 schema: expected_schema,
                 args: Box::new([]),
@@ -98,6 +109,7 @@ fn unchanged_point_reference_and_ordinary_parameter_share_the_selected_source_ty
             })
             .unwrap();
         assert!(common.require_descriptor(&store, wrong_schema).is_err());
+        assert!(common.require_descriptor(&store, wrong_identity).is_err());
         assert!(common.require_descriptor(&store, wrong_owner).is_err());
         db.begin_expansion_epoch(1).unwrap();
         assert!(proof.require_current(&mut db, &callee).is_err());

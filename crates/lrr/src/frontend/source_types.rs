@@ -293,7 +293,6 @@ fn prepare_selected(
                 return QueryPoll::Ready(Err(fault("selected nominal schema query differs")));
             };
             if schema.definition != identity
-                || definition.fingerprint() != identity
                 || definition.namespace != Namespace::Type
                 || !matches!(definition.item_kind, ItemKind::Struct | ItemKind::Enum)
                 || !matches!(db.input(&InputKey::DefinitionHeader(identity)).as_deref(),Some(InputValue::DefinitionHeader(header)) if header==&schema.header)
@@ -312,6 +311,7 @@ fn prepare_selected(
             SourceType {
                 source: TyTerm::Nominal(identity, vec![]),
                 key: TypeKey::Nominal {
+                    identity,
                     definition,
                     schema: schema.fingerprint(),
                     args: Box::new([]),
@@ -326,7 +326,7 @@ fn prepare_selected(
     }
     QueryPoll::Ready(Ok(NamedTypePreparation::Ready(proof)))
 }
-fn nominal_definition(
+pub(super) fn nominal_definition(
     db: &mut Database,
     sources: &[&PreparedSourceView],
     identity: crate::core::digest::Digest,
@@ -362,6 +362,11 @@ fn nominal_definition(
     if unit.key != *parse {
         return Err(fault("selected generated nominal source key differs"));
     }
+    // Generated declaration identity is the actual GeneratedItemKey, not the
+    // independently retained parsed DefKey. The current canonical map joins
+    // both; callers have already required the exact selected Type receipt and
+    // nominal schema/header/context. Original catalogue selection above still
+    // requires the DefKey fingerprint itself to equal identity.
     unit.definitions
         .get(&identity)
         .cloned()

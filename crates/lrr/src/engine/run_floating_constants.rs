@@ -133,10 +133,7 @@ impl RunMachine {
         let Some(graph) = self.graph.as_ref() else {
             return QueryPoll::Ready(Ok(None));
         };
-        let expected = match self.floating_expected() {
-            Ok(e) => e,
-            Err(e) => return QueryPoll::Ready(Err(e)),
-        };
+        let expected = || self.floating_expected();
         for context in contexts {
             match context.prepare_floating_constant(
                 db,
@@ -144,7 +141,7 @@ impl RunMachine {
                 FloatingFrameSite {
                     body: &self.frame.body,
                     pc: &pc,
-                    expected: expected.as_ref(),
+                    expected: &expected,
                 },
                 self.runtime_no_item_proofs.values(),
             ) {
@@ -210,10 +207,7 @@ impl RunMachine {
         let Some(graph) = self.graph.as_ref() else {
             return QueryPoll::Ready(Err(call_fault("floating source namespace absent")));
         };
-        let expected = match self.floating_expected() {
-            Ok(e) => e,
-            Err(e) => return QueryPoll::Ready(Err(e)),
-        };
+        let expected = || self.floating_expected();
         for context in contexts {
             match context.revalidate_floating_constant(
                 db,
@@ -221,7 +215,7 @@ impl RunMachine {
                 FloatingFrameSite {
                     body: &self.frame.body,
                     pc,
-                    expected: expected.as_ref(),
+                    expected: &expected,
                 },
                 self.runtime_no_item_proofs.values(),
                 retained,

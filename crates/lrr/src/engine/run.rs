@@ -226,6 +226,17 @@ fn primitive_argument_type(
     });
     Ok(ArgumentType { source, descriptor })
 }
+/// Keep an evaluated source identity; descriptors cannot reconstruct references
+/// or nominal declarations. Source contracts validate the pair at the boundary.
+fn reached_argument_type(
+    descriptor: crate::runtime::shape::TypeId,
+    source: Option<crate::traits::term::TyTerm>,
+) -> Result<ArgumentType, Diagnostic> {
+    match source {
+        Some(source) => Ok(ArgumentType { source, descriptor }),
+        None => primitive_argument_type(descriptor),
+    }
+}
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct CallLimits {
     pub max_frames: u32,
@@ -748,23 +759,12 @@ impl RunMachine {
             .as_ref()
             .map(|call| call.result())
             .or(self.frame.body.nodes()[self.frame.pc().node as usize].value);
-        let result_hint = match result_slot {
-            Some(slot) => match self.frame.hint(slot) {
-                Ok(Some(descriptor)) => match primitive_argument_type(descriptor) {
-                    Ok(mut h) => {
-                        match self.frame.source_view(slot) {
-                            Ok(Some(source)) => h.source = source,
-                            Ok(None) => {}
-                            Err(e) => return QueryPoll::Ready(Err(e)),
-                        }
-                        Some(h)
-                    }
-                    Err(e) => return QueryPoll::Ready(Err(e)),
-                },
-                Ok(None) => None,
-                Err(e) => return QueryPoll::Ready(Err(e)),
-            },
-            None => None,
+        let result_hint = match result_slot
+            .map(|slot| self.call_result_source_hint(slot))
+            .transpose()
+        {
+            Ok(hint) => hint.flatten(),
+            Err(error) => return QueryPoll::Ready(Err(error)),
         };
         for hint in &mut hints {
             argument_hints::apply_context(hint, &callee, &explicit, result_hint.as_ref());
@@ -866,6 +866,24 @@ impl RunMachine {
             bytes,
         }))
     }
+    /// A physical expectation may precede the genuine returned source. Keep
+    /// that descriptor in the slot without inventing a region or nominal type.
+    fn call_result_source_hint(&self, slot: SlotId) -> Result<Option<ArgumentType>, Diagnostic> {
+        let Some(descriptor) = self.frame.hint(slot)? else {
+            return Ok(None);
+        };
+        self.store.type_descriptor(descriptor)?;
+        if let Some(source) = self.frame.source_view(slot)? {
+            return Ok(Some(ArgumentType { source, descriptor }));
+        }
+        // These are the fixed builtin source IDs handled by the same ordinary
+        // primitive conversion. Other descriptors supply no source authority.
+        if matches!(descriptor.0, 1..=15) {
+            primitive_argument_type(descriptor).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
     fn prepare_source_call(
         &self,
         db: &mut Database,
@@ -935,7 +953,9 @@ impl RunMachine {
                             {
                                 Some(bytes) => bytes,
                                 None => {
-                                    return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
+                                    return QueryPoll::Ready(
+                                        Err(crate::runtime::arena::resource()),
+                                    );
                                 }
                             };
                             Some(evidence)
@@ -2239,10 +2259,10 @@ impl RunMachine {
                                             "call argument requires a reached concrete type".into(),
                                         )
                                     })?;
-                                let argument = match self.frame.source_view(slot)? {
-                                    Some(source) => ArgumentType { source, descriptor },
-                                    None => primitive_argument_type(descriptor)?,
-                                };
+                                let argument = reached_argument_type(
+                                    descriptor,
+                                    self.frame.source_view(slot)?,
+                                )?;
                                 Ok((cell, argument))
                             })();
                             match argument {
@@ -2283,25 +2303,8 @@ impl RunMachine {
                                     "sealed call result slot absent",
                                 ));
                             };
-                            match self.frame.hint(result_slot) {
-                                Ok(Some(descriptor)) => match primitive_argument_type(descriptor) {
-                                    Ok(mut h) => {
-                                        let slot = result_slot;
-                                        match self.frame.source_view(slot) {
-                                            Ok(Some(source)) => h.source = source,
-                                            Ok(None) => {}
-                                            Err(e) => {
-                                                self.terminal = true;
-                                                return RunPoll::Fault(e);
-                                            }
-                                        }
-                                        Some(h)
-                                    }
-                                    Err(e) => {
-                                        self.terminal = true;
-                                        return RunPoll::Fault(e);
-                                    }
-                                },
+                            match self.call_result_source_hint(result_slot) {
+                                Ok(Some(hint)) => Some(hint),
                                 Ok(None) => {
                                     match call_result_hint {
                                         Some(primitive) => {
@@ -2333,6 +2336,27 @@ impl RunMachine {
                             &explicit,
                         ) {
                             QueryPoll::Ready(Ok(call)) => {
+                                // A descriptor-only expectation is still a
+                                // constraint. Check a known declaration result
+                                // before publishing the call or moving inputs.
+                                if let (Some(slot), Some(actual)) =
+                                    (call_result, call.contracts.result_descriptor)
+                                {
+                                    match self.frame.hint(slot) {
+                                        Ok(Some(expected)) if expected != actual => {
+                                            self.terminal = true;
+                                            return RunPoll::Fault(Diagnostic::new(
+                                                "LRR-E-CALL-RETURN-TYPE",
+                                                "concrete call return descriptor differs from the reached result context".into(),
+                                            ));
+                                        }
+                                        Ok(_) => {}
+                                        Err(error) => {
+                                            self.terminal = true;
+                                            return RunPoll::Fault(error);
+                                        }
+                                    }
+                                }
                                 if let Some(proof) = &call.contracts.closed_references
                                     && let Err(error) =
                                         proof.require_argument_cells(&self.store, &cells, &types)

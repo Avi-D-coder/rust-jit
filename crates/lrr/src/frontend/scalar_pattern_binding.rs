@@ -636,6 +636,68 @@ mod tests {
         ScalarPatternBindingAdmission::capture_current(db, source, &macros, &graph, body, key, cap)
     }
     #[test]
+    fn indexed_scope_selection_preserves_exact_source_edition_epoch_and_reset_all_editions() {
+        for edition in [2015, 2018, 2021, 2024] {
+            let (mut db, source, handle, _) = world(ORIGINAL, "label_break_match", edition);
+            let scope = &source
+                .outline()
+                .items
+                .iter()
+                .find(|item| {
+                    item.body
+                        .as_ref()
+                        .is_some_and(|body| body.key() == handle.key())
+                })
+                .unwrap()
+                .scope;
+            let selected = db
+                .lexical_scope_certificate(source.selection(), scope)
+                .unwrap();
+            assert!(matches!(selected.as_ref(), InputValue::DiscoverySeal(input)
+                if input.scope.as_ref().is_some_and(|certificate|
+                    certificate.scope == *scope && certificate.edition == edition
+                    && certificate.namespace == Namespace::Value)));
+            let mut other = source.selection().clone();
+            other.outline.cfg = Digest::of_bytes(b"unpublished alternate source cfg");
+            assert!(
+                db.optional_lexical_scope_certificate(&other, scope)
+                    .unwrap()
+                    .is_none()
+            );
+            let mut other = source.selection().clone();
+            other.outline.parse.profile.edition = if edition == 2024 { 2021 } else { 2024 };
+            assert!(
+                db.optional_lexical_scope_certificate(&other, scope)
+                    .unwrap()
+                    .is_none()
+            );
+            let mut other = scope.clone();
+            other.crate_key =
+                Digest::of_bytes(b"another genuine scope would need its own certificate");
+            assert!(
+                db.optional_lexical_scope_certificate(source.selection(), &other)
+                    .unwrap()
+                    .is_none()
+            );
+            // A new epoch keeps immutable historical inputs, without making
+            // the old locator a current namespace authority.
+            db.begin_expansion_epoch(2).unwrap();
+            assert!(
+                db.optional_lexical_scope_certificate(source.selection(), scope)
+                    .unwrap()
+                    .is_none()
+            );
+            // A base-universe replacement must remove both old certificates
+            // and their locators; a retained source handle cannot resurrect it.
+            db.publish_inputs(source.prepared_inputs().clone()).unwrap();
+            assert!(
+                db.optional_lexical_scope_certificate(source.selection(), scope)
+                    .unwrap()
+                    .is_none()
+            );
+        }
+    }
+    #[test]
     fn unchanged_guarded_v_bindings_use_actual_source_compiler_and_value_seals_all_editions() {
         for edition in [2015, 2018, 2021, 2024] {
             let (mut db, source, handle, body) = world(ORIGINAL, "label_break_match", edition);

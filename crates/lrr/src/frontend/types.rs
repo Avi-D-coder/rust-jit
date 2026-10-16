@@ -11,7 +11,7 @@ use crate::{
     },
     traits::term::TyTerm,
 };
-use std::collections::BTreeMap;
+use std::{borrow::Cow, collections::BTreeMap};
 
 pub(crate) const MAX_SCHEMA_BYTES: usize = 32 * 1024 * 1024;
 pub(crate) const MAX_SCHEMA_FIELDS: usize = 100_000;
@@ -171,7 +171,7 @@ impl NominalSchema {
 pub struct SchemaNames<'a> {
     graph: &'a super::names::NameNamespaces,
     schema: &'a NominalSchema,
-    definition: &'a crate::source::manifest::DefKey,
+    definition: Cow<'a, crate::source::manifest::DefKey>,
 }
 impl<'a> SchemaNames<'a> {
     pub fn from_database(
@@ -182,10 +182,7 @@ impl<'a> SchemaNames<'a> {
     ) -> crate::db::poll::QueryPoll<Self> {
         use crate::db::{
             dependency::{InputKey, InputValue},
-            key::QueryKey,
             poll::QueryPoll,
-            provider::SyntaxProvider,
-            value::QueryValue,
         };
         if let Err(error) = graph.require_source(source.selection(), source.outline()) {
             return QueryPoll::Ready(Err(error));
@@ -199,6 +196,63 @@ impl<'a> SchemaNames<'a> {
         {
             return QueryPoll::Ready(Err(schema_fault(
                 "field schema/source namespace revision mismatch",
+            )));
+        }
+        let Some(item) = source
+            .outline()
+            .items
+            .iter()
+            .find(|item| item.def_key.fingerprint() == schema.definition)
+        else {
+            return QueryPoll::Ready(Err(schema_fault("source definition is absent")));
+        };
+        Self::from_definition(db, graph, schema, Cow::Borrowed(&item.def_key))
+    }
+    /// Current ordinary member preparation uses the same canonical source map
+    /// as named/reference Type preparation. This constructs no runtime binding;
+    /// the current declaration Type callback must still admit selected names.
+    pub(crate) fn from_current_database(
+        db: &mut crate::db::memo::Database,
+        graph: &'a super::names::NameNamespaces,
+        sources: &[&crate::source::changes::PreparedSourceView],
+        schema: &'a NominalSchema,
+    ) -> crate::db::poll::QueryPoll<Self> {
+        use crate::db::poll::QueryPoll;
+        for source in sources {
+            if let Err(error) = graph.require_source(source.selection(), source.outline()) {
+                return QueryPoll::Ready(Err(error));
+            }
+        }
+        let definition =
+            match super::source_types::nominal_definition(db, sources, schema.definition) {
+                Ok(definition) => definition,
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+        Self::from_definition(db, graph, schema, Cow::Owned(definition))
+    }
+    fn from_definition(
+        db: &mut crate::db::memo::Database,
+        graph: &'a super::names::NameNamespaces,
+        schema: &'a NominalSchema,
+        definition: Cow<'a, crate::source::manifest::DefKey>,
+    ) -> crate::db::poll::QueryPoll<Self> {
+        use crate::db::{
+            dependency::{InputKey, InputValue},
+            key::QueryKey,
+            poll::QueryPoll,
+            provider::SyntaxProvider,
+            value::QueryValue,
+        };
+        if definition.namespace != crate::source::manifest::Namespace::Type
+            || definition.crate_key != schema.scope.crate_key
+            || definition.module_path != schema.scope.module_path
+            || !matches!(
+                definition.item_kind,
+                crate::source::manifest::ItemKind::Struct | crate::source::manifest::ItemKind::Enum
+            )
+        {
+            return QueryPoll::Ready(Err(schema_fault(
+                "nominal schema canonical declaration differs",
             )));
         }
         if !matches!(db.input(&InputKey::DefinitionHeader(schema.definition)).as_deref(), Some(InputValue::DefinitionHeader(header)) if header == &schema.header)
@@ -222,19 +276,14 @@ impl<'a> SchemaNames<'a> {
                 "field schema is stale or differs from its captured recipe",
             )));
         }
-        let Some(item) = source
-            .outline()
-            .items
-            .iter()
-            .find(|item| item.def_key.fingerprint() == schema.definition)
-        else {
-            return QueryPoll::Ready(Err(schema_fault("source definition is absent")));
-        };
         QueryPoll::Ready(Ok(Self {
             graph,
             schema,
-            definition: &item.def_key,
+            definition,
         }))
+    }
+    pub(crate) fn definition(&self) -> &crate::source::manifest::DefKey {
+        &self.definition
     }
     pub fn unqualified(
         &self,
@@ -327,7 +376,8 @@ impl<'a> SchemaNames<'a> {
             fields.push(primitive);
         }
         Ok(NominalBinding::Ready(BoundNominalVariant {
-            definition: self.definition.clone(),
+            identity: self.schema.definition,
+            definition: self.definition.as_ref().clone(),
             schema: self.schema.fingerprint(),
             variant,
             fields,
@@ -349,6 +399,54 @@ impl<'a> SchemaNames<'a> {
         member: &str,
         caller: &ScopeKey,
     ) -> Result<NominalFieldBinding, Diagnostic> {
+        match self.bind_named_field_with(variant_name, member, caller, |name| {
+            crate::db::poll::QueryPoll::Ready(self.unqualified(name, None))
+        })? {
+            crate::db::poll::QueryPoll::Ready(result) => result,
+            crate::db::poll::QueryPoll::NeedInput(_) => {
+                Err(schema_fault("graph field lookup unexpectedly suspended"))
+            }
+        }
+    }
+    /// Reached ordinary field preparation uses the current source Type service
+    /// for its own nominal identity and the single selected member type. The
+    /// metadata graph adapter above shares this exact structural/privacy binder.
+    pub(crate) fn bind_named_field_current(
+        &self,
+        db: &mut crate::db::memo::Database,
+        sources: &[&crate::source::changes::PreparedSourceView],
+        variant_name: Option<&str>,
+        member: &str,
+        caller: &ScopeKey,
+    ) -> crate::db::poll::QueryPoll<NominalFieldBinding> {
+        let outcome = self.bind_named_field_with(variant_name, member, caller, |name| {
+            super::type_name_namespace::resolve_declaration_name(
+                db,
+                super::type_name_namespace::SourceTypeOwner {
+                    definition: self.schema.definition,
+                    scope: &self.schema.scope,
+                    header: &self.schema.header,
+                },
+                &self.schema.generics,
+                sources,
+                name,
+            )
+        });
+        match outcome {
+            Ok(poll) => poll,
+            Err(error) => crate::db::poll::QueryPoll::Ready(Err(error)),
+        }
+    }
+    fn bind_named_field_with(
+        &self,
+        variant_name: Option<&str>,
+        member: &str,
+        caller: &ScopeKey,
+        mut lookup: impl FnMut(
+            &str,
+        )
+            -> crate::db::poll::QueryPoll<super::signature_names::SignatureName>,
+    ) -> Result<crate::db::poll::QueryPoll<NominalFieldBinding>, Diagnostic> {
         use super::signature_names::SignatureName;
         let selected = self.schema.variant(variant_name)?;
         if selected.shape != FieldShape::Record {
@@ -376,38 +474,58 @@ impl<'a> SchemaNames<'a> {
         {
             return Err(schema_fault("reached source field is inaccessible"));
         }
-        let own_name = self.unqualified(&self.definition.declared_name, None)?;
+        let own_name = match lookup(&self.definition.declared_name) {
+            crate::db::poll::QueryPoll::Ready(Ok(selected)) => selected,
+            crate::db::poll::QueryPoll::Ready(Err(error)) => return Err(error),
+            crate::db::poll::QueryPoll::NeedInput(request) => {
+                return Ok(crate::db::poll::QueryPoll::NeedInput(request));
+            }
+        };
         if !matches!(&own_name, SignatureName::Source(found) if found.identity == self.schema.definition)
         {
-            return Ok(NominalFieldBinding::Deferred {
-                field,
-                demand: NominalBindingDemand::Name(own_name),
-            });
+            return Ok(crate::db::poll::QueryPoll::Ready(Ok(
+                NominalFieldBinding::Deferred {
+                    field,
+                    demand: NominalBindingDemand::Name(own_name),
+                },
+            )));
         }
         if !self.schema.generics.is_empty() {
-            return Ok(NominalFieldBinding::Deferred {
-                field,
-                demand: NominalBindingDemand::GenericContext,
-            });
+            return Ok(crate::db::poll::QueryPoll::Ready(Ok(
+                NominalFieldBinding::Deferred {
+                    field,
+                    demand: NominalBindingDemand::GenericContext,
+                },
+            )));
         }
         let resolved = if recipe.ty.len() == 1 {
-            self.unqualified(&recipe.ty[0].text, None)?
+            match lookup(&recipe.ty[0].text) {
+                crate::db::poll::QueryPoll::Ready(Ok(selected)) => selected,
+                crate::db::poll::QueryPoll::Ready(Err(error)) => return Err(error),
+                crate::db::poll::QueryPoll::NeedInput(request) => {
+                    return Ok(crate::db::poll::QueryPoll::NeedInput(request));
+                }
+            }
         } else if matches!(
             recipe.symbolic,
             Some(TyTerm::Primitive(crate::ir::op::PrimitiveType::Unit))
         ) {
             SignatureName::Primitive(crate::ir::op::PrimitiveType::Unit)
         } else {
-            return Ok(NominalFieldBinding::Deferred {
-                field,
-                demand: NominalBindingDemand::TypeRecipe,
-            });
+            return Ok(crate::db::poll::QueryPoll::Ready(Ok(
+                NominalFieldBinding::Deferred {
+                    field,
+                    demand: NominalBindingDemand::TypeRecipe,
+                },
+            )));
         };
         let SignatureName::Primitive(primitive) = resolved else {
-            return Ok(NominalFieldBinding::Deferred {
-                field,
-                demand: NominalBindingDemand::Name(resolved),
-            });
+            return Ok(crate::db::poll::QueryPoll::Ready(Ok(
+                NominalFieldBinding::Deferred {
+                    field,
+                    demand: NominalBindingDemand::Name(resolved),
+                },
+            )));
         };
         let variant = self
             .schema
@@ -416,13 +534,16 @@ impl<'a> SchemaNames<'a> {
             .position(|variant| variant.name.as_deref() == variant_name)
             .and_then(|index| u32::try_from(index).ok())
             .ok_or_else(schema_limit)?;
-        Ok(NominalFieldBinding::Ready(BoundNominalField {
-            definition: self.definition.clone(),
-            schema: self.schema.fingerprint(),
-            variant,
-            field,
-            primitive,
-        }))
+        Ok(crate::db::poll::QueryPoll::Ready(Ok(
+            NominalFieldBinding::Ready(BoundNominalField {
+                identity: self.schema.definition,
+                definition: self.definition.as_ref().clone(),
+                schema: self.schema.fingerprint(),
+                variant,
+                field,
+                primitive,
+            }),
+        )))
     }
     /// Bind the written field order after the caller has selected this exact
     /// source schema. Shape errors precede any selected field type demand.
@@ -571,6 +692,7 @@ pub enum NominalBinding {
 /// construction witness, this cannot force or authorize unrelated fields.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BoundNominalField {
+    identity: Digest,
     definition: crate::source::manifest::DefKey,
     schema: Digest,
     variant: u32,
@@ -578,6 +700,9 @@ pub struct BoundNominalField {
     primitive: crate::ir::op::PrimitiveType,
 }
 impl BoundNominalField {
+    pub(crate) fn identity(&self) -> Digest {
+        self.identity
+    }
     pub(crate) fn estimated_bytes(&self) -> Option<usize> {
         let mut bytes = std::mem::size_of::<Self>()
             .checked_add(
@@ -609,8 +734,9 @@ impl BoundNominalField {
     }
 }
 impl StableEncode for BoundNominalField {
-    const DOMAIN: &'static str = "lrr/v2/bound-nominal-field";
+    const DOMAIN: &'static str = "lrr/v3/bound-nominal-field";
     fn encode_fields(&self, e: &mut StableEncoder) {
+        e.digest(self.identity);
         e.record(&self.definition);
         e.digest(self.schema);
         e.u32(self.variant);
@@ -630,12 +756,16 @@ pub enum NominalFieldBinding {
 /// fields allow a runtime caller to substitute a different nominal recipe.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BoundNominalVariant {
+    identity: Digest,
     definition: crate::source::manifest::DefKey,
     schema: Digest,
     variant: u32,
     fields: Vec<crate::ir::op::PrimitiveType>,
 }
 impl BoundNominalVariant {
+    pub(crate) fn identity(&self) -> Digest {
+        self.identity
+    }
     pub(crate) fn estimated_bytes(&self) -> Option<usize> {
         let mut bytes = std::mem::size_of::<Self>()
             .checked_add(

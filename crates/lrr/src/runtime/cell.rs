@@ -29,7 +29,7 @@ use super::{
     shape::{ShapeCategory, TypeDescriptor, TypeId, TypeKey, TypeRegistry},
     value::{ValueRepr, invalid},
 };
-use crate::core::{diagnostic::Diagnostic, digest::StableEncode};
+use crate::core::diagnostic::Diagnostic;
 pub use construction_cleanup::ConstructionCleanupTransfer;
 pub(crate) use reference_return::ReferenceTarget;
 pub(crate) use run_session::StoreSession;
@@ -264,6 +264,7 @@ impl GuestStore {
             fields.push(super::shape::PrimitiveIdentity::from_recipe(*primitive)?.id());
         }
         let ty = self.types.intern(TypeKey::Nominal {
+            identity: bound.identity(),
             definition: bound.definition().clone(),
             schema: bound.schema(),
             args: Box::new([]),
@@ -788,8 +789,8 @@ impl GuestStore {
         source: &SourceFieldProjection,
         key: &TypeKey,
     ) -> Result<(), Diagnostic> {
-        if !matches!(key,TypeKey::Nominal {definition,schema,args,const_args}
-            if definition.fingerprint()==source.definition && *schema==source.schema && args.is_empty() && const_args.is_empty())
+        if !matches!(key,TypeKey::Nominal {identity,schema,args,const_args,..}
+            if *identity==source.definition && *schema==source.schema && args.is_empty() && const_args.is_empty())
         {
             return Err(ownership());
         }
@@ -1183,6 +1184,7 @@ impl GuestStore {
         })?;
         self.project_bound_field(
             base,
+            bound.identity(),
             bound.definition(),
             bound.schema(),
             bound.variant(),
@@ -1198,6 +1200,7 @@ impl GuestStore {
     ) -> Result<Place, PlaceFailure> {
         self.project_bound_field(
             base,
+            bound.identity(),
             bound.definition(),
             bound.schema(),
             bound.variant(),
@@ -1208,6 +1211,7 @@ impl GuestStore {
     fn project_bound_field(
         &self,
         base: &Place,
+        identity_witness: crate::core::digest::Digest,
         definition_witness: &crate::source::manifest::DefKey,
         schema_witness: crate::core::digest::Digest,
         variant_witness: u32,
@@ -1216,6 +1220,7 @@ impl GuestStore {
     ) -> Result<Place, PlaceFailure> {
         let resolved = self.resolve_place(base)?;
         let TypeKey::Nominal {
+            identity,
             definition,
             schema,
             args,
@@ -1228,7 +1233,8 @@ impl GuestStore {
             )
             .into());
         };
-        if definition != definition_witness
+        if *identity != identity_witness
+            || definition != definition_witness
             || *schema != schema_witness
             || !args.is_empty()
             || !const_args.is_empty()
@@ -1266,7 +1272,7 @@ impl GuestStore {
             .into());
         }
         let place = base.projected(Projection::SourceField(SourceFieldProjection {
-            definition: definition_witness.fingerprint(),
+            definition: identity_witness,
             schema: schema_witness,
             variant: variant_witness,
             field,
@@ -1819,14 +1825,11 @@ impl GuestStore {
             .ok_or_else(resource)?;
         base.checked_add(count).ok_or_else(resource)?;
         for (ty, _) in contracts {
-            if let TypeKey::Ref { target, .. } = self.types.descriptor(*ty)?.key.as_ref() {
-                // Prepared closed reference contracts retain the written target
-                // identity. This admits shared/mutable primitive references,
-                // without inventing aggregate or abstract parameter bindings.
-                super::shape::primitive(*target)?;
-            } else if !self.types.is_string(*ty) {
-                super::shape::primitive(*ty)?;
-            }
+            // This allocates empty physical cells. Frame source admission and
+            // sealed argument types precede it; packet delivery still checks
+            // values, reference targets and ownership. A registered nominal
+            // referent must not be reclassified as a primitive here.
+            self.types.descriptor(*ty)?;
         }
         self.budget.check(count, 0)?;
         let mut cells = Vec::new();

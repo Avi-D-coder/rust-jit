@@ -16,6 +16,7 @@ pub enum BindingForm {
     For,
     Match,
     Receiver,
+    Condition,
 }
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum PatternNameKind {
@@ -113,6 +114,7 @@ impl BindingBudget {
             BindingForm::For => 3,
             BindingForm::Match => 4,
             BindingForm::Receiver => 5,
+            BindingForm::Condition => 6,
         };
         let mut stack = vec![pattern.syntax().clone()];
         while let Some(node) = stack.pop() {

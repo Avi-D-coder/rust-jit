@@ -713,6 +713,52 @@ impl GeneratedCallRequest {
     pub fn key(&self) -> &ExpansionKey {
         &self.key
     }
+    /// Borrow only the immutable inputs of this genuine issued request. This
+    /// transports source identity to common receipt capture; it executes nothing.
+    pub(crate) fn syntax_input(
+        &self,
+    ) -> Result<
+        (
+            Digest,
+            std::borrow::Cow<'_, lrr_expand_adapter::token_wire::TokenForest>,
+            lrr_expand_adapter::token_wire::Key,
+        ),
+        Diagnostic,
+    > {
+        let owner = self.definition.defining_unit;
+        if let Some(request) = &self.procedural {
+            return Ok((
+                owner,
+                std::borrow::Cow::Borrowed(&request.input),
+                request.call_site,
+            ));
+        }
+        let (input, site) = if let Some(attribute) = &self.attribute {
+            (&attribute.item, attribute.site)
+        } else if let Some((input, site, _)) = &self.derive {
+            (input, *site)
+        } else {
+            let call = self
+                .items
+                .calls()
+                .get(self.call)
+                .ok_or_else(|| fault("generated syntax request call input absent"))?;
+            (&call.input, call.site)
+        };
+        // The two pinned wire representations have distinct Rust types. Use
+        // their exact codec bridge, preserving token/context/site identities.
+        let bytes = input.encode().map_err(|error| fault(&error.message))?;
+        if bytes.len() > 32 * 1024 * 1024 {
+            return Err(fault("generated syntax receipt input byte limit"));
+        }
+        let input = lrr_expand_adapter::token_wire::TokenForest::decode(&bytes)
+            .map_err(|error| fault(&error.message))?;
+        Ok((
+            owner,
+            std::borrow::Cow::Owned(input),
+            lrr_expand_adapter::token_wire::Key(site.0),
+        ))
+    }
     pub fn expand(&self) -> Result<ExpansionRecord, Diagnostic> {
         if self.procedural.is_some() || self.attribute.is_some() || self.derive.is_some() {
             return Err(Diagnostic::new(

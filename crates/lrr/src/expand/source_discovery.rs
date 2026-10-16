@@ -8872,8 +8872,14 @@ impl SourceDiscovery {
     }
     pub fn poll(&mut self) -> Result<SourceDiscoveryStep, Diagnostic> {
         let step = self.poll_inner()?;
-        if let SourceDiscoveryStep::NeedExpansion { request } = &step {
-            self.remember_syntax_request(request)?;
+        match &step {
+            SourceDiscoveryStep::NeedExpansion { request } => {
+                self.remember_syntax_request(request)?
+            }
+            SourceDiscoveryStep::NeedGeneratedExpansion { request } => {
+                self.remember_generated_syntax_request(request)?
+            }
+            _ => {}
         }
         Ok(step)
     }

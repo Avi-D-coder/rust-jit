@@ -13,6 +13,9 @@ pub const MAX_QUERY_DEPTH: usize = 256;
 #[path = "lexical_inputs.rs"]
 mod lexical_inputs;
 
+#[path = "scope_certificate_index.rs"]
+mod scope_certificate_index;
+
 #[path = "namespace_witness.rs"]
 mod namespace_witness;
 pub(crate) use namespace_witness::NamespaceWitness;
@@ -151,6 +154,7 @@ impl QueryPin {
 }
 pub struct Database {
     inputs: BTreeMap<InputKey, InputRecord>,
+    scope_certificates: scope_certificate_index::ScopeCertificateIndex,
     memos: BTreeMap<QueryKey, MemoEntry>,
     revision: u64,
     source_revision: u64,
@@ -173,6 +177,7 @@ impl Default for Database {
     fn default() -> Self {
         Self {
             inputs: BTreeMap::new(),
+            scope_certificates: Default::default(),
             memos: BTreeMap::new(),
             revision: 1,
             source_revision: 1,
@@ -379,6 +384,9 @@ impl Database {
             body_leases::metadata(self.body_leases.capacity(), self.body_leases.len())?;
         usage.memo_bytes = account_add(usage.memo_bytes, body_leases)?;
         usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, body_leases)?;
+        let certificates = self.scope_certificates.metadata_bytes();
+        usage.memo_bytes = account_add(usage.memo_bytes, certificates)?;
+        usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, certificates)?;
         let mut source_allocations = std::collections::BTreeSet::new();
         let mut map_allocations = std::collections::BTreeSet::new();
         let mut inventory_allocations = std::collections::BTreeSet::new();
@@ -991,6 +999,7 @@ impl Database {
             );
         }
         self.inputs = staged;
+        self.scope_certificates = Default::default();
         self.revision = revision;
         self.source_revision = revision;
         Ok(())
@@ -2040,6 +2049,7 @@ impl Database {
             }
         }
         let prepared_sources = self.module_prepared_registry(modules, ordinary_modules)?;
+        let scope_certificates = self.scope_certificates.with_input(&input)?;
         let usage =
             self.cache_usage_with_prepared(&prepared_sources, prepared_sources.capacity())?;
         let budgets = self.run_budgets.unwrap_or_default();
@@ -2077,12 +2087,30 @@ impl Database {
                     )
                 })?;
         }
-        let total = usage.memo_bytes.checked_add(extra_bytes).ok_or_else(|| {
-            fault(
-                "LRR-E-METADATA-LIMIT",
-                "discovery publication metadata overflow",
-            )
-        })?;
+        let index_extra = scope_certificates
+            .as_ref()
+            .map(|index| {
+                index
+                    .metadata_bytes()
+                    .checked_sub(self.scope_certificates.metadata_bytes())
+            })
+            .unwrap_or(Some(0))
+            .ok_or_else(|| {
+                fault(
+                    "LRR-E-INTERNAL-SNAPSHOT",
+                    "scope certificate index accounting decreased",
+                )
+            })?;
+        let total = usage
+            .memo_bytes
+            .checked_add(extra_bytes)
+            .and_then(|bytes| bytes.checked_add(index_extra))
+            .ok_or_else(|| {
+                fault(
+                    "LRR-E-METADATA-LIMIT",
+                    "discovery publication metadata overflow",
+                )
+            })?;
         if total > self.run_budgets.unwrap_or_default().query_bytes {
             return Err(fault(
                 "LRR-E-METADATA-LIMIT",
@@ -2116,6 +2144,9 @@ impl Database {
             );
         }
         self.inputs.extend(staged);
+        if let Some(index) = scope_certificates {
+            self.scope_certificates = index;
+        }
         self.prepared_sources = prepared_sources;
         self.revision = revision;
         Ok(())

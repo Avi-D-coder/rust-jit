@@ -3,10 +3,28 @@
 use super::{ParsedFile, TokenContext};
 use crate::{
     core::diagnostic::Diagnostic,
-    syntax::{spans::SourceRange, token_wire::NameContextKey},
+    syntax::{
+        spans::SourceRange,
+        token_wire::{Key, NameContextKey},
+    },
 };
 
 impl ParsedFile {
+    /// Pinned item-namespace normalization for the actual selected identifier.
+    /// This is context data, not member/source authority or rib adjustment.
+    pub(crate) fn item_name_context(&self, range: SourceRange) -> Result<Option<Key>, Diagnostic> {
+        let Some(context) = self.token_context(range)? else {
+            return Ok(None);
+        };
+        let facts = self.hygiene_facts().ok_or_else(|| {
+            Diagnostic::new(
+                "LRR-E-MACRO-OUTPUT",
+                "item source lacks its prepared hygiene facts".into(),
+            )
+        })?;
+        Ok(Some(facts.item(context.context)?))
+    }
+
     pub(super) fn token_context(
         &self,
         range: SourceRange,
