@@ -78,19 +78,19 @@ impl LocalBodyContext {
             let environment = parent
                 .environment()
                 .ok_or_else(|| fault("local body parent environment is not published"))?;
-            let proof = callee.lexical_contract().ok_or_else(|| {
-                fault("local body requires its actual selected lexical admission")
-            })?;
+            let proof = callee
+                .local_source_contract()
+                .ok_or_else(|| fault("local body requires its actual selected source admission"))?;
             // This proves source/body facts, never a current Value selection.
             // The ordinary selected-call contract owns callable revalidation;
             // do not repeat its legacy whole-namespace census here.
             let source = parent.context().source();
             let caller = source.body();
-            if proof.plan().caller() != caller
-                || proof.plan().source() != parse
+            if proof.caller() != caller
+                || proof.source() != parse
                 || source.parsed().key() != *parse
-                || proof.plan().caller_context() != source.context()
-                || proof.plan().caller_header() != source.header()
+                || proof.caller_context() != source.context()
+                || proof.caller_header() != source.header()
                 || callee.body() != Some(handle)
                 || handle.key().definition != callee.identity()
                 || !caller.range.contains(declaration.range)
@@ -110,8 +110,8 @@ impl LocalBodyContext {
                 .ok_or_else(|| fault("local body is absent from its actual parent"))?;
             if rows.next().is_some()
                 || row.attribute_input.is_some()
-                || row.item != *proof.plan().item()
-                || row.scope != proof.plan().scope()
+                || row.item != *proof.item()
+                || row.scope != proof.scope()
                 || row.item.body.as_ref() != Some(handle)
                 || row.item.header != *header
                 || row.item.scope != declaration.scope
@@ -145,8 +145,8 @@ impl LocalBodyContext {
             identity.digest(environment.identity());
             identity.digest(parent.source_identity());
             identity.digest(owner_stamp);
-            // Call-site/revision issuance belongs to LexicalAdmission, which
-            // was validated above. This source environment is reusable across
+            // The selected call contract owns call-site/currentness issuance;
+            // these source facts are deliberately reusable across
             // actual calls to the same declaration under the same parent.
             identity.record(callee.definition());
             identity.record(parse);

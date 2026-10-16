@@ -307,6 +307,8 @@ pub(crate) fn admit_lexical_function(
             range: plan.item().declaration_span,
         },
         lexical: Some(Box::new(admission)),
+        ordinary_local: None,
+        ordinary_owner: None,
         retained: None,
     };
     if let Err(error) = callee.revalidate(db) {

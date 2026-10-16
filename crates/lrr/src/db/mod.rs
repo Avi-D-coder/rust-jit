@@ -19,4 +19,5 @@ mod sealed_name_provider;
 mod source_constraint_provider;
 mod source_plan_provider;
 
+mod entered_call_thunk;
 mod entered_type_thunk;

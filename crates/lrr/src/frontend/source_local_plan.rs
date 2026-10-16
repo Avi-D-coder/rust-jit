@@ -81,6 +81,10 @@ pub(crate) struct LocalTypePrefix {
     fingerprint: Digest,
 }
 enum DeclarationTypeSite {
+    Return {
+        definition: Digest,
+        range: crate::syntax::spans::SourceRange,
+    },
     Field {
         definition: Digest,
         range: crate::syntax::spans::SourceRange,
@@ -220,6 +224,10 @@ impl StableEncode for LocalTypePrefix {
         e.option(&self.node, |e, node| e.u32(node.0));
         e.option(&self.header, |e, site| {
             let (definition, span) = match site {
+                DeclarationTypeSite::Return { definition, range } => {
+                    e.u8(2);
+                    (definition, range)
+                }
                 DeclarationTypeSite::Field { definition, range } => {
                     e.u8(0);
                     (definition, range)

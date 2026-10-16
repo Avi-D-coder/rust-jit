@@ -86,6 +86,9 @@ impl StableEncode for CurrentModuleNameKey {
 pub use crate::frontend::constants::query_identity::ConstQueryIdentity as ConstantKey;
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum QueryKey {
+    EnteredCall(crate::source::manifest::PcKey),
+    DeclaredReturnGoal(Digest),
+    PreparedReturnPlan(Digest),
     EnteredType(crate::source::manifest::PcKey),
     PreparedTypePlan(crate::source::manifest::PcKey),
     PreparedBindingPlan(crate::source::manifest::PcKey),
@@ -138,7 +141,10 @@ impl QueryKey {
                     + k.module_path.iter().map(String::capacity).sum::<usize>()
             }
             Self::ScopeBucket(k) => k.scope.heap_bytes() + k.name.capacity(),
-            Self::DeclaredParameterGoal { .. }
+            Self::EnteredCall(_)
+            | Self::PreparedReturnPlan(_)
+            | Self::DeclaredReturnGoal(_)
+            | Self::DeclaredParameterGoal { .. }
             | Self::EnteredType(_)
             | Self::PreparedTypePlan(_)
             | Self::PreparedBindingPlan(_)
@@ -162,6 +168,9 @@ impl QueryKey {
     }
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::EnteredCall(_) => "EnteredCall",
+            Self::DeclaredReturnGoal(_) => "DeclaredReturnGoal",
+            Self::PreparedReturnPlan(_) => "PreparedReturnPlan",
             Self::EnteredType(_) => "EnteredType",
             Self::PreparedTypePlan(_) => "PreparedTypePlan",
             Self::PreparedBindingPlan(_) => "PreparedBindingPlan",
@@ -198,6 +207,18 @@ impl StableEncode for QueryKey {
     const DOMAIN: &'static str = "lrr/v2/query-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::PreparedReturnPlan(definition) => {
+                e.u32(46);
+                e.digest(*definition);
+            }
+            Self::EnteredCall(key) => {
+                e.u32(44);
+                e.record(key);
+            }
+            Self::DeclaredReturnGoal(definition) => {
+                e.u32(45);
+                e.digest(*definition);
+            }
             Self::EnteredType(key) => {
                 e.u32(42);
                 e.record(key);

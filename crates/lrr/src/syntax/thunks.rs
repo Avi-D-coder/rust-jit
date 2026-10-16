@@ -43,6 +43,17 @@ pub(crate) mod runtime_macro_numeric_context;
 #[path = "string_literal.rs"]
 pub mod string_literal;
 
+#[derive(Default, Clone, Copy)]
+struct EnteredAdmissions<'a> {
+    numeric_admission:
+        Option<&'a crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission>,
+    type_name: Option<&'a crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission>,
+    source_constraints:
+        Option<&'a crate::frontend::binding_constraints::PreparedBindingConstraints>,
+    type_use: Option<&'a crate::frontend::entered_type_goals::EnteredTypeGoal>,
+    call: Option<&'a crate::frontend::entered_call_goals::EnteredCallGoal>,
+}
+
 fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTERNAL-SNAPSHOT", message.into())
 }
@@ -1615,7 +1626,7 @@ impl ParsedFile {
         index: &BodyIndex,
         key: &PcKey,
     ) -> Result<VerifiedRecipe, Diagnostic> {
-        self.initial_thunk_admission(body, index, key, None, None, None, None)
+        self.initial_thunk_admission(body, index, key, EnteredAdmissions::default())
     }
     pub(crate) fn runtime_macro_numeric_request(
         &self,
@@ -1633,8 +1644,15 @@ impl ParsedFile {
         proof: &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         proof.context(self, body, index, key)?;
-        let recipe =
-            self.initial_thunk_admission(body, index, key, Some(proof), None, None, None)?;
+        let recipe = self.initial_thunk_admission(
+            body,
+            index,
+            key,
+            EnteredAdmissions {
+                numeric_admission: Some(proof),
+                ..Default::default()
+            },
+        )?;
         proof.attach(recipe, index)
     }
     pub(crate) fn initial_thunk_with_primitive_name(
@@ -1644,7 +1662,15 @@ impl ParsedFile {
         key: &PcKey,
         proof: &crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission,
     ) -> Result<VerifiedRecipe, Diagnostic> {
-        self.initial_thunk_admission(body, index, key, None, Some(proof), None, None)
+        self.initial_thunk_admission(
+            body,
+            index,
+            key,
+            EnteredAdmissions {
+                type_name: Some(proof),
+                ..Default::default()
+            },
+        )
     }
     pub(crate) fn initial_thunk_with_source_constraints(
         &self,
@@ -1654,7 +1680,15 @@ impl ParsedFile {
         proof: &crate::frontend::binding_constraints::PreparedBindingConstraints,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         proof.hint_for(index, key)?;
-        self.initial_thunk_admission(body, index, key, None, None, Some(proof), None)
+        self.initial_thunk_admission(
+            body,
+            index,
+            key,
+            EnteredAdmissions {
+                source_constraints: Some(proof),
+                ..Default::default()
+            },
+        )
     }
     /// Source Type demand follows the ordinary cfg/attribute admission. A
     /// disabled expression executes its existing skip recipe without resolving
@@ -1671,6 +1705,38 @@ impl ParsedFile {
             .ok_or_else(|| error("source Type consumer is not its actual cast"))?;
         let (enabled, other_attributes) = statement_cfg(&syntax, index.cfg())?;
         Ok(enabled && !other_attributes)
+    }
+    pub(crate) fn entered_call_requires_goal(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+    ) -> Result<bool, Diagnostic> {
+        let syntax = self
+            .entered_node_syntax(body, index, NodeId(key.node))?
+            .filter(|syntax| ast::CallExpr::can_cast(syntax.kind()))
+            .ok_or_else(|| error("source call consumer is not its actual call"))?;
+        let (enabled, other_attributes) = statement_cfg(&syntax, index.cfg())?;
+        Ok(enabled && !other_attributes)
+    }
+    pub(crate) fn initial_thunk_with_source_call(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        goal: &crate::frontend::entered_call_goals::EnteredCallGoal,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        goal.indexed_local_source_name(index, key)?
+            .ok_or_else(|| error("source call consumer lacks local target proof"))?;
+        self.initial_thunk_admission(
+            body,
+            index,
+            key,
+            EnteredAdmissions {
+                call: Some(goal),
+                ..Default::default()
+            },
+        )
     }
     pub(crate) fn initial_thunk_with_source_type(
         &self,
@@ -1691,22 +1757,30 @@ impl ParsedFile {
             key,
             crate::syntax::ast_adapter::range(ty.syntax().text_range()),
         )?;
-        self.initial_thunk_admission(body, index, key, None, None, None, Some(proof))
+        self.initial_thunk_admission(
+            body,
+            index,
+            key,
+            EnteredAdmissions {
+                type_use: Some(proof),
+                ..Default::default()
+            },
+        )
     }
     fn initial_thunk_admission(
         &self,
         body: &BodyHandle,
         index: &BodyIndex,
         key: &PcKey,
-        numeric_admission: Option<
-            &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
-        >,
-        type_name: Option<&crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission>,
-        source_constraints: Option<
-            &crate::frontend::binding_constraints::PreparedBindingConstraints,
-        >,
-        type_use: Option<&crate::frontend::entered_type_goals::EnteredTypeGoal>,
+        admissions: EnteredAdmissions<'_>,
     ) -> Result<VerifiedRecipe, Diagnostic> {
+        let EnteredAdmissions {
+            numeric_admission,
+            type_name,
+            source_constraints,
+            type_use,
+            call,
+        } = admissions;
         if body.key() != *index.body() || key.body != body.key() {
             return Err(error("selected thunk body identity changed"));
         }
@@ -1837,7 +1911,7 @@ impl ParsedFile {
                     unsupported("pattern phase requires retained source plan query")
                 }
             }
-            SyntaxKind::CALL_EXPR => self.initial_call_thunk(body, index, key, syntax),
+            SyntaxKind::CALL_EXPR => self.initial_call_thunk(body, index, key, syntax, call),
             SyntaxKind::RETURN_EXPR
             | SyntaxKind::LOOP_EXPR
             | SyntaxKind::BREAK_EXPR
@@ -2404,6 +2478,7 @@ impl ParsedFile {
         index: &BodyIndex,
         key: &PcKey,
         syntax: SyntaxNode,
+        source_goal: Option<&crate::frontend::entered_call_goals::EnteredCallGoal>,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let id = NodeId(key.node);
         let node = &index.nodes()[key.node as usize];
@@ -2428,7 +2503,7 @@ impl ParsedFile {
                 let Some(ast::Expr::PathExpr(path)) = call.expr() else {
                     return unsupported("callee values await function-value integration");
                 };
-                if local_binding(self, index, body, &path)?.is_some() {
+                if source_goal.is_none() && local_binding(self, index, body, &path)?.is_some() {
                     return unsupported("local callee value awaits function-value integration");
                 }
                 let Some(source_path) = path.path() else {
@@ -2493,105 +2568,133 @@ impl ParsedFile {
                             .collect::<Vec<_>>()
                     })
                     .unwrap_or_default();
-                let local_type = path
-                    .syntax()
-                    .ancestors()
-                    .filter_map(ast::StmtList::cast)
-                    .any(|list| {
-                        list.statements().any(|statement| {
-                            let declared = match statement {
-                                ast::Stmt::Item(ast::Item::TypeAlias(item)) => item.name(),
-                                ast::Stmt::Item(ast::Item::Struct(item)) => item.name(),
-                                ast::Stmt::Item(ast::Item::Enum(item)) => item.name(),
-                                ast::Stmt::Item(ast::Item::Union(item)) => item.name(),
-                                _ => None,
-                            };
-                            declared.is_some_and(|name| {
-                                explicit.iter().any(|ty| {
-                                    MacroName::parse(ty, self.edition).ok().is_some_and(
-                                        |argument| {
-                                            MacroName::parse(name.text(), self.edition)
-                                                .is_ok_and(|local| local == argument)
-                                        },
-                                    )
+                if let Some(goal) = source_goal {
+                    let target = goal
+                        .indexed_local_source_name(index, key)?
+                        .ok_or_else(|| error("source call goal did not admit this local target"))?;
+                    if target.node() != id_for(index, body, path.syntax())?
+                        || target.range()
+                            != crate::syntax::ast_adapter::range(path.syntax().text_range())
+                        || target.name() != name
+                        || target.explicit() != explicit
+                    {
+                        return Err(error("source call lowering written target differs"));
+                    }
+                } else {
+                    let local_type = path
+                        .syntax()
+                        .ancestors()
+                        .filter_map(ast::StmtList::cast)
+                        .any(|list| {
+                            list.statements().any(|statement| {
+                                let declared = match statement {
+                                    ast::Stmt::Item(ast::Item::TypeAlias(item)) => item.name(),
+                                    ast::Stmt::Item(ast::Item::Struct(item)) => item.name(),
+                                    ast::Stmt::Item(ast::Item::Enum(item)) => item.name(),
+                                    ast::Stmt::Item(ast::Item::Union(item)) => item.name(),
+                                    _ => None,
+                                };
+                                declared.is_some_and(|name| {
+                                    explicit.iter().any(|ty| {
+                                        MacroName::parse(ty, self.edition).ok().is_some_and(
+                                            |argument| {
+                                                MacroName::parse(name.text(), self.edition)
+                                                    .is_ok_and(|local| local == argument)
+                                            },
+                                        )
+                                    })
                                 })
                             })
-                        })
-                    });
-                if local_type {
-                    return unsupported(
-                        "body-local explicit type requires lexical type namespace integration",
-                    );
-                }
-                let target_name = MacroName::parse(&root_name, self.edition).ok();
-                if qualified && relative && path.syntax().ancestors().find_map(ast::Fn::cast)
+                        });
+                    if local_type {
+                        return unsupported(
+                            "body-local explicit type requires lexical type namespace integration",
+                        );
+                    }
+                    let target_name = MacroName::parse(&root_name, self.edition).ok();
+                    if qualified && relative && path.syntax().ancestors().find_map(ast::Fn::cast)
                     .and_then(|function| function.generic_param_list())
                     .is_some_and(|parameters| parameters.generic_params().any(|parameter| matches!(parameter,
                         ast::GenericParam::TypeParam(parameter) if parameter.name().is_some_and(|name| MacroName::parse(name.text(),self.edition).ok()==target_name)))) {
                     return unsupported("generic source owner requires associated-call integration");
                 }
-                let local_item = relative
-                    && path
-                        .syntax()
-                        .ancestors()
-                        .filter_map(ast::StmtList::cast)
-                        .any(|list| {
-                            list.statements().any(|statement| match statement {
-                                ast::Stmt::Item(ast::Item::Fn(item)) if !qualified => {
-                                    item.name().is_some_and(|n| {
-                                        MacroName::parse(n.text(), self.edition).ok() == target_name
-                                    })
-                                }
-                                ast::Stmt::Item(ast::Item::Const(item)) if !qualified => {
-                                    item.name().is_some_and(|n| {
-                                        MacroName::parse(n.text(), self.edition).ok() == target_name
-                                    })
-                                }
-                                ast::Stmt::Item(ast::Item::Static(item)) if !qualified => {
-                                    item.name().is_some_and(|n| {
-                                        MacroName::parse(n.text(), self.edition).ok() == target_name
-                                    })
-                                }
-                                ast::Stmt::Item(ast::Item::Module(item)) if qualified => {
-                                    item.name().is_some_and(|n| {
-                                        MacroName::parse(n.text(), self.edition).ok() == target_name
-                                    })
-                                }
-                                ast::Stmt::Item(ast::Item::TypeAlias(item)) if qualified => {
-                                    item.name().is_some_and(|n| {
-                                        MacroName::parse(n.text(), self.edition).ok() == target_name
-                                    })
-                                }
-                                ast::Stmt::Item(ast::Item::Struct(item)) if qualified => {
-                                    item.name().is_some_and(|n| {
-                                        MacroName::parse(n.text(), self.edition).ok() == target_name
-                                    })
-                                }
-                                ast::Stmt::Item(ast::Item::Enum(item)) if qualified => {
-                                    item.name().is_some_and(|n| {
-                                        MacroName::parse(n.text(), self.edition).ok() == target_name
-                                    })
-                                }
-                                ast::Stmt::Item(ast::Item::Union(item)) if qualified => {
-                                    item.name().is_some_and(|n| {
-                                        MacroName::parse(n.text(), self.edition).ok() == target_name
-                                    })
-                                }
-                                _ => false,
-                            })
-                        });
-                // This probe only permits an ordinary call recipe. The
-                // dispatcher must resolve the exact entered lexical definition
-                // before any argument or call opcode; it is not a name proof.
-                let lexical_function = relative
-                    && !qualified
-                    && self.generated_origin.is_none()
-                    && self.lexical_function_recipe_candidate(&path, index.cfg())?;
-                if local_item && !lexical_function
-                    || relative
-                        && self.enclosing_import_may_bind(path.syntax(), &root_name, index.cfg())?
-                {
-                    return unsupported("lexical item callee requires body namespace integration");
+                    let local_item = relative
+                        && path
+                            .syntax()
+                            .ancestors()
+                            .filter_map(ast::StmtList::cast)
+                            .any(|list| {
+                                list.statements().any(|statement| match statement {
+                                    ast::Stmt::Item(ast::Item::Fn(item)) if !qualified => {
+                                        item.name().is_some_and(|n| {
+                                            MacroName::parse(n.text(), self.edition).ok()
+                                                == target_name
+                                        })
+                                    }
+                                    ast::Stmt::Item(ast::Item::Const(item)) if !qualified => {
+                                        item.name().is_some_and(|n| {
+                                            MacroName::parse(n.text(), self.edition).ok()
+                                                == target_name
+                                        })
+                                    }
+                                    ast::Stmt::Item(ast::Item::Static(item)) if !qualified => {
+                                        item.name().is_some_and(|n| {
+                                            MacroName::parse(n.text(), self.edition).ok()
+                                                == target_name
+                                        })
+                                    }
+                                    ast::Stmt::Item(ast::Item::Module(item)) if qualified => {
+                                        item.name().is_some_and(|n| {
+                                            MacroName::parse(n.text(), self.edition).ok()
+                                                == target_name
+                                        })
+                                    }
+                                    ast::Stmt::Item(ast::Item::TypeAlias(item)) if qualified => {
+                                        item.name().is_some_and(|n| {
+                                            MacroName::parse(n.text(), self.edition).ok()
+                                                == target_name
+                                        })
+                                    }
+                                    ast::Stmt::Item(ast::Item::Struct(item)) if qualified => {
+                                        item.name().is_some_and(|n| {
+                                            MacroName::parse(n.text(), self.edition).ok()
+                                                == target_name
+                                        })
+                                    }
+                                    ast::Stmt::Item(ast::Item::Enum(item)) if qualified => {
+                                        item.name().is_some_and(|n| {
+                                            MacroName::parse(n.text(), self.edition).ok()
+                                                == target_name
+                                        })
+                                    }
+                                    ast::Stmt::Item(ast::Item::Union(item)) if qualified => {
+                                        item.name().is_some_and(|n| {
+                                            MacroName::parse(n.text(), self.edition).ok()
+                                                == target_name
+                                        })
+                                    }
+                                    _ => false,
+                                })
+                            });
+                    // This probe only permits an ordinary call recipe. The
+                    // dispatcher must resolve the exact entered lexical definition
+                    // before any argument or call opcode; it is not a name proof.
+                    let lexical_function = relative
+                        && !qualified
+                        && self.generated_origin.is_none()
+                        && self.lexical_function_recipe_candidate(&path, index.cfg())?;
+                    if local_item && !lexical_function
+                        || relative
+                            && self.enclosing_import_may_bind(
+                                path.syntax(),
+                                &root_name,
+                                index.cfg(),
+                            )?
+                    {
+                        return unsupported(
+                            "lexical item callee requires body namespace integration",
+                        );
+                    }
                 }
 
                 if !qualified && MacroName::parse(reference.text(), self.edition).is_err() {

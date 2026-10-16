@@ -218,7 +218,9 @@
         {
           "id": "WT04-01",
           "title": "Lexical source callable admission",
-          "status": "in_progress"
+          "status": "in_progress",
+          "candidate": "worktracks/evidence/2026-10-16-common-entered-call-runtime.json",
+          "acceptance_scope": "Frozenaacb narrowruntime: complete unchanged suffix original/user/wrapper all4,216ordinarycalls+19disjointcontrols; same program notnewstockincrement. Source-onlyguard/zeroarg successor pending; stdmacro/legacyremoval/fullmatrix/milestone unaccepted."
         },
         {
           "id": "WT04-02",

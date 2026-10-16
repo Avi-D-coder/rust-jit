@@ -1,0 +1,223 @@
+{
+  "schema": "lrr/source-review/common-entered-call/root-v1",
+  "at": "2026-10-16T23:07:13.969180+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T032",
+    "T033",
+    "M017",
+    "M018"
+  ],
+  "source_member": "aacb468ff27209845e4ecc174bbe829b55cc07564870ad09d63983e17a01929e",
+  "status": "bounded source review; narrow runtime evidence, broader architecture/removal/milestone held",
+  "files": [
+    {
+      "path": "crates/lrr/src/cli/preentry_loader.rs",
+      "sha256": "0105bac29a6dab3f52ef2f9092b7e32047bb009ba5dfe488d3ec3a354424e7c0"
+    },
+    {
+      "path": "crates/lrr/src/db/entered_call_thunk.rs",
+      "sha256": "637ec62c05ac85dc8de99293f2834ab13c843f43c77a996a406bbff2f67cdea7"
+    },
+    {
+      "path": "crates/lrr/src/db/key.rs",
+      "sha256": "84642f0bdf7f2fc892fc93af6642aa480bd91617d08a90f70ecce5faa43cfd55"
+    },
+    {
+      "path": "crates/lrr/src/db/memo.rs",
+      "sha256": "97c9396bd0f53510292ce5cf5653e2f07d165d5840a8b3708eae8f34431cd5e3"
+    },
+    {
+      "path": "crates/lrr/src/db/mod.rs",
+      "sha256": "b6f0022f7433ec716c14ed326a4f919792e68e22de1111634aef97442451b9f3"
+    },
+    {
+      "path": "crates/lrr/src/db/ordinary_local_inputs.rs",
+      "sha256": "2279c174bd4046cc710fae60cc16fe78abfe29d5b0dd3a0304db858f12d752f5"
+    },
+    {
+      "path": "crates/lrr/src/db/ordinary_local_inputs_tests.rs",
+      "sha256": "042b4218e5a675de42794578fa1cb94eaabe342615cb57cd46b4b6df5228867f"
+    },
+    {
+      "path": "crates/lrr/src/db/product_retention.rs",
+      "sha256": "e87e0c695de8eacdbccda9a1f0e48f61ba8481de30d974cb617efb207514c9a1"
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "60172344943ff6c20cd082e589207adcf1ba2d4342e4567b7e98708eb21ac38e"
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "sha256": "9e5cfcb6d1263d9fe61a2d3ada741e4812f46785750966dd94a814fb649a9620"
+    },
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "475cb20a03a4893da192c03e2d5bac757d8c22c58691158a9100f87906a4e560"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_source_preparation.rs",
+      "sha256": "36aa3262a798c6838f548cde1f0bb599fff7d0ad073b4651555c91c1bd9b3379"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_source_preparation_tests.rs",
+      "sha256": "f1ed952172799b9275833fe4a35630b5c4fa8510fca7b1c4ef6a9c8bc2c0ea1c"
+    },
+    {
+      "path": "crates/lrr/src/frontend/call_contracts.rs",
+      "sha256": "4d9243a43d4e070ac16cb5b263f4b1d6d998b402f5cc50c0c7b304de37fb9e26"
+    },
+    {
+      "path": "crates/lrr/src/frontend/callables.rs",
+      "sha256": "0def3cc4134fdca3a24f9b315c7a4038176b0aee1a4515aafc597ea32a7cc073"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_type_tests.rs",
+      "sha256": "329fec66f38b148c8d28dc971dfdcea1fb50ce1b98a18094176451b19f234b9e"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_types.rs",
+      "sha256": "db9374fa2f897a3db532553f1e8df832aec33f465e1c6aff03d2f142ca16dd9b"
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_return_types.rs",
+      "sha256": "230b2e4ed1337ead47c0efc70382104d14ca50ebe4838b9896363370c5e69aeb"
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "939907ec2971024ea919b593d0f8634f42bc4e0faa37b76ef2422c4b5b100d45"
+    },
+    {
+      "path": "crates/lrr/src/frontend/lexical_callables.rs",
+      "sha256": "55c5f65047c6356997c4c4b6e1372b8cd47d74653f645a6653bea8c37e203ac8"
+    },
+    {
+      "path": "crates/lrr/src/frontend/local_body_context.rs",
+      "sha256": "dd07ea92ee03f3316c308903eb99f47fdcdc5cd23d8e54d460af0ce68b1d503f"
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "sha256": "2f25e8b6936804e8d8a9e037fd516fe38cc88c2194c4762a97b8c50e6f3d5fdd"
+    },
+    {
+      "path": "crates/lrr/src/frontend/ordinary_local_callable_tests.rs",
+      "sha256": "d790c1836dee5bd78d5577d3b05cdd35551d7a25823e31fdb97e3307763e1808"
+    },
+    {
+      "path": "crates/lrr/src/frontend/ordinary_local_callables.rs",
+      "sha256": "e0dcacfd3f698d513c8f1fecdd85e826b84fccba89306eb64218b18f5ee83d66"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "sha256": "f8fef4c1610ae330cda3a18bcb02281dca558fc967cfde64404b80af8749a491"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_return_goals.rs",
+      "sha256": "88374fc4607c17d791a43b1aea89a76e6ed5fed0cb1dd450d1da9343524fa946"
+    },
+    {
+      "path": "crates/lrr/src/service/expansion.rs",
+      "sha256": "ebf36a58a25a6f0a8fa45c130285f93f82bc8703cea24b19d20f01ef37aa8c84"
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "sha256": "adbd43ecade67bce9650f7b26e2fab20edc66a691e14109e475668ce70bd7658"
+    }
+  ],
+  "invariant": "Actual selected CallExpr/source identity flows through common hygienic Value goals, same ordinary lowering and opcodes, SourceCallable, parameter/return contracts and reached body/continuation/cleanup; no origin/numeric fixture profile added.",
+  "review": [
+    {
+      "failure_mode": 1,
+      "symbols": [
+        "ParsedFile::initial_thunk_admission",
+        "initial_call_thunk",
+        "RunMachine::select_common_argument_call"
+      ],
+      "finding": "One CallExpr lowerer; proof extends existing source gate and same CallPrepare/CallAdvance/CallSeal. No assertion operand/synthetic-body compiler introduced. Legacy macro-specific evaluators elsewhere remain held."
+    },
+    {
+      "failure_mode": 2,
+      "symbols": [
+        "entered_call_thunk::thunk",
+        "EnteredCallGoal::indexed_local_source_name"
+      ],
+      "finding": "Generated and handwritten paths use the actual BodyIndex call/path and retained source proof; no literal/break payload executor."
+    },
+    {
+      "failure_mode": 3,
+      "symbols": [
+        "prepare_entered_local_function",
+        "source_parameter_goals::prepare",
+        "source_return_goals::prepare_local_query",
+        "NormalizedDeferredReturn::mint_declared"
+      ],
+      "finding": "Actual Value/canonical local header/signature and ordinary shared Type service select identity/constraints. No numeric/primitive function profile or method whitelist. Nonprimitive result certificates and generic named-return hygiene remain explicit gaps."
+    },
+    {
+      "failure_mode": 4,
+      "symbols": [
+        "EnteredCallGoal::prepare",
+        "ParsedFile::initial_call_thunk"
+      ],
+      "finding": "Exact Local proof bypasses both old local_binding name scan and original-only lexical_function_recipe_candidate probe. No generated-origin exclusion added. Module/Binding/Pending have typed outcomes; module fallback requires exact selected identity; qualified/explicit PathAdjustment legacy routes stay held."
+    },
+    {
+      "failure_mode": 5,
+      "symbols": [
+        "ordinary_local_inputs::publish_ordinary_local_function",
+        "RunMachine::prepare_source_call",
+        "prepare_reached_local_source"
+      ],
+      "finding": "Publisher inserts only the selected exact missing body locator. BodyStructure/executable preparation happens after entry and argument preflight. No pattern implementation/unselected arm lowering added. Follow-up source finding: selected_source_body needs authority recheck before its body demand after arguments/suspension; live successor authored, not in this tested source."
+    },
+    {
+      "failure_mode": 6,
+      "symbols": [
+        "QueryKey::EnteredCall",
+        "QueryKey::PreparedReturnPlan",
+        "EnteredAdmissions",
+        "PreparedReturnPlan::guard"
+      ],
+      "finding": "Q44 retains actual call selection/guard across phases; Q45 facts and Q46 retain return plan/guard across repeated calls. Installed recipe operations do no planning. Actual full suffix runs assert18 Q44 and9 Q46 provider runs per edition/mode."
+    },
+    {
+      "failure_mode": 7,
+      "symbols": [
+        "PreparedInputGuard::require_current",
+        "OrdinaryLocalAdmission::revalidate",
+        "NormalizedDeferredReturn::require_current"
+      ],
+      "finding": "New source guards read relevant cached published input stamps. Missing-body publisher replaces global query revision refusal with real Q39 guard and fixed parent/owner/actual-row correspondence. Existing legacy module resolver/certificates and callable source_revision check remain held, no measured scaling claim."
+    },
+    {
+      "failure_mode": 8,
+      "symbols": [
+        "EnteredCallGoal::retained_plan",
+        "SourceCallable::ordinary_owner",
+        "QueryValue::source_roots",
+        "product_retention",
+        "LocalBodyContext::capture",
+        "ParsedFile::syntax_at"
+      ],
+      "finding": "Retained parent/body/parser/index Arcs; no immutable BodyIndex copy. Explicit additional callable owner handle exposes actual parent lifetime to retirement accounting. QueryValue inner Clone removed, normal memo/outcomes clone Arc<QueryValue>. Exact syntax locations use bounded root-to-range descent, not full-file per-phase traversal. Cold canonical declaration scan remains O(D); guard check O(relevant stamps)."
+    }
+  ],
+  "actual_evidence": {
+    "compile": "14faaa/0",
+    "user_payload_runtime_all4": "0d1865/0",
+    "wrapper_payload_runtime_all4": "8ae716/0",
+    "unchanged_original_runtime_all4": "1b72d5/0",
+    "calls_per_run": 18,
+    "runtime_runs": 12,
+    "interpretation": "Same complete upstream suffix payload in3 source modes; one distinct original program already passed previously, not12 fixtures or a new distinct stock-pass increment."
+  },
+  "pending": [
+    "19 disjoint source/runtime authority controls running asynchronously",
+    "standard-library macro nesting matrix",
+    "full ownership/panic/suspension/cold-branch/source-invalidation matrix",
+    "obsolete production routes removal",
+    "integrated current milestone",
+    "full runtime acceptance, diagnostic compatibility, compiler/tooling compatibility, full-suite compatibility",
+    "Linux port and guest JIT"
+  ]
+}

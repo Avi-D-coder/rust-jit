@@ -82,8 +82,11 @@ pub struct Bucket {
     pub candidates: Vec<Digest>,
     pub blockers: Vec<ScopeBlocker>,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum QueryValue {
+    EnteredCall(Box<crate::frontend::entered_call_goals::EnteredCallGoal>),
+    DeclaredReturnGoal(Box<crate::frontend::source_return_goals::ReturnGoalObservation>),
+    PreparedReturnPlan(Box<crate::frontend::source_return_goals::PreparedReturnPlan>),
     EnteredType(Box<crate::frontend::entered_type_goals::EnteredTypeGoal>),
     PreparedTypePlan(Box<crate::frontend::entered_type_goals::PreparedTypePlan>),
     PreparedBindingPlan(Box<crate::frontend::prepared_binding_plan::PreparedBindingPlan>),
@@ -129,6 +132,7 @@ impl QueryValue {
             _ => None,
         };
         let local = match self {
+            Self::EnteredCall(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::EnteredType(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::PreparedTypePlan(value) => {
                 Some(SourceArtifactRef::LocalPlan(value.retained_plan()))
@@ -174,6 +178,15 @@ impl QueryValue {
         }
     }
     pub fn matches(&self, key: &QueryKey) -> bool {
+        if let (Self::EnteredCall(value), QueryKey::EnteredCall(key)) = (self, key) {
+            return value.key() == key && key.phase == 0;
+        }
+        if let (Self::PreparedReturnPlan(value), QueryKey::PreparedReturnPlan(key)) = (self, key) {
+            return value.definition() == *key;
+        }
+        if let (Self::DeclaredReturnGoal(value), QueryKey::DeclaredReturnGoal(key)) = (self, key) {
+            return value.matches(*key);
+        }
         if let (Self::EnteredType(value), QueryKey::EnteredType(key)) = (self, key) {
             return value.key() == key && key.phase == 0;
         }
@@ -286,6 +299,18 @@ impl QueryValue {
     pub fn fingerprint(&self) -> Digest {
         let mut e = StableEncoder::new("lrr/v2/query-value");
         match self {
+            Self::PreparedReturnPlan(value) => {
+                e.u32(46);
+                e.record(value.as_ref());
+            }
+            Self::EnteredCall(value) => {
+                e.u32(44);
+                e.record(value.as_ref());
+            }
+            Self::DeclaredReturnGoal(value) => {
+                e.u32(45);
+                e.record(value.as_ref());
+            }
             Self::EnteredType(value) => {
                 e.u32(42);
                 e.record(value.as_ref());
@@ -434,6 +459,9 @@ impl QueryValue {
     }
     pub fn estimated_bytes(&self) -> usize {
         std::mem::size_of::<Self>().saturating_add(match self {
+            Self::EnteredCall(value) => value.metadata_bytes(),
+            Self::DeclaredReturnGoal(value) => value.estimated_bytes(),
+            Self::PreparedReturnPlan(value) => value.metadata_bytes(),
             Self::EnteredType(value) => value.metadata_bytes(),
             Self::PreparedTypePlan(value) => value.metadata_bytes(),
             Self::PreparedBindingPlan(value) => value.metadata_bytes(),

@@ -711,3 +711,6 @@ impl PreparedSourceLocalPlan {
 #[cfg(test)]
 #[path = "declaration_field_type_tests.rs"]
 mod tests;
+
+#[path = "declaration_return_types.rs"]
+mod returns;

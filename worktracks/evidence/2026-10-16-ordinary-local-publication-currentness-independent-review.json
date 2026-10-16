@@ -1,0 +1,45 @@
+{
+  "schema": "lrr/source-review/ordinary-local-publication-currentness/independent-v2",
+  "reviewer": "ordinary_call_join_next",
+  "status": "independent source review; no concrete authority blocker found; uncompiled/unexecuted",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/ordinary_local_inputs.rs",
+      "sha256": "2279c174bd4046cc710fae60cc16fe78abfe29d5b0dd3a0304db858f12d752f5"
+    },
+    {
+      "path": "crates/lrr/src/db/ordinary_local_inputs_tests.rs",
+      "sha256": "042b4218e5a675de42794578fa1cb94eaabe342615cb57cd46b4b6df5228867f"
+    },
+    {
+      "path": "crates/lrr/src/frontend/ordinary_local_callables.rs",
+      "sha256": "e0dcacfd3f698d513c8f1fecdd85e826b84fccba89306eb64218b18f5ee83d66"
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "920c02fadac32cb34ba6492865d9c87ca44a47577c79a18b29b6a999ad88ad79"
+    }
+  ],
+  "change": "Remove only global db.revision==proof.query_revision issuance refusal. Preserve genuine private Q39 input guard and exact actual parent/source/header/context/body/environment/LocalOwner + all four child values/stamps and checked coordinator/run/quota/revision-overflow atomicity.",
+  "authority_reason": "OrdinaryLocalAdmission constructor privately binds actual Call/path, canonical current SourceLocalPlan item, actual selected Q39 function declaration and current FunctionSignature. PreparedInputGuard is the successful memo DAG real input closure (including relevant absence/namespace/source/epoch inputs). An unrelated derived body insertion can advance db.revision without changing that closure; no authority is refreshed by reusing proof. Actual rows/env identity still checked before any mutation. Missing cold metadata/owner is never inferred; only exact missing body locator can be inserted.",
+  "inspected_controls": [
+    "Two genuine cached proofs at official suffix call0 id_i8 and call2 id_i16, both body locators and BodyStructure cold; first insertion then second cached insertion and both same-proof idempotence, exact 0 query trace additions, four editions.",
+    "17 actual-value/stamp/guard/quota cases: owner, child/parent headers/source/context/body, genuine reissued opaque env, expansion epoch, all inputs revoked, source/query caps, CapturedSource/SourceBlob/DiscoverySeal removed; no partial rows or revision change.",
+    "Checked derived revision overflow before mutation; active-run/coordinator refusal; retained callable/source graph retirement control."
+  ],
+  "limits": [
+    "No Cargo/source controls/native or guest execution performed by this reviewer. Test-before-production receipt is owning worker evidence, not independently reconstructed historical editing order.",
+    "DB source proof identifies source Call entry; root runtime must still match actual reached frame/site, normal contracts/currentness/body/cleanup and memo/root accounting.",
+    "query_revision may remain diagnostic metadata; this review does not authorize global guard refresh, source parsing on publication, or weakened relevant lookup dependencies."
+  ],
+  "all_eight": {
+    "1": "Source rows only, no expression/assertion evaluator.",
+    "2": "Same body locator, no scalar/break execution lane.",
+    "3": "No primitive/signature/method/macro-name profile.",
+    "4": "Same genuine original/retained/generated private admission; no new origin gate.",
+    "5": "No body/argument/pattern/branch preparation, only reached metadata locator.",
+    "6": "No query/guard recapture/source planning in publisher; fixed row checks plus relevant guard, cache quota preflight only when missing row.",
+    "7": "Real relevant closure replaces conservative global revision refusal; no world map or unchecked absence.",
+    "8": "No body/index graph clone, new registry/context or AST/file search; existing actual parent/source retirement roots retained."
+  }
+}

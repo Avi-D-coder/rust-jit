@@ -12,6 +12,8 @@ pub const MAX_QUERY_DEPTH: usize = 256;
 
 #[path = "lexical_inputs.rs"]
 mod lexical_inputs;
+#[path = "ordinary_local_inputs.rs"]
+mod ordinary_local_inputs;
 
 #[path = "scope_certificate_index.rs"]
 mod scope_certificate_index;
@@ -279,6 +281,7 @@ impl Database {
                     QueryValue::Thunk(_)
                     | QueryValue::SourceLocalPlan(_)
                     | QueryValue::QualifiedBodyType(_)
+                    | QueryValue::EnteredCall(_)
                     | QueryValue::EnteredType(_)
                     | QueryValue::PreparedTypePlan(_)
                     | QueryValue::EnteredValue(_) => {

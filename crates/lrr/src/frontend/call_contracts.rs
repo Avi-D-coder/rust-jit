@@ -14,9 +14,10 @@ use crate::{
     db::{
         dependency::{DependencyStamp, InputKey, InputValue},
         key::QueryKey,
-        memo::Database,
+        memo::{Database, PreparedInputGuard},
         poll::QueryPoll,
         provider::SyntaxProvider,
+        value::QueryValue,
     },
     ir::op::PrimitiveType,
     runtime::shape::TypeId,
@@ -24,7 +25,7 @@ use crate::{
     syntax::ast_adapter::TokenRecipe,
     traits::term::{ParamKey, TyTerm},
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 #[path = "closed_reference_calls.rs"]
 mod closed_reference_calls;
 #[path = "generated_result_namespace.rs"]
@@ -64,6 +65,10 @@ pub struct NormalizedDeferredReturn {
 }
 #[derive(Debug, Clone)]
 enum DeferredReturnOrigin {
+    DeclaredGoal {
+        observation: Digest,
+        guard: Arc<PreparedInputGuard>,
+    },
     PrimitiveNamespace,
     Alias {
         resolution: Digest,
@@ -328,6 +333,54 @@ impl NormalizedDeferredReturn {
             name,
         )
     }
+    fn mint_declared(
+        callee: &SourceCallable,
+        observation: &super::source_return_goals::ReturnGoalObservation,
+        query_fingerprint: Digest,
+        guard: Arc<PreparedInputGuard>,
+        source: PrimitiveType,
+    ) -> Result<Self, Diagnostic> {
+        let signature = callee.signature();
+        let wrapped_signature =
+            QueryValue::FunctionSignature(Box::new(signature.clone())).fingerprint();
+        if callee.ordinary_local_contract().is_none()
+            || signature.result_symbolic.is_some()
+            || signature.result.len() != 1
+            || !observation.matches(callee.identity())
+            || observation.signature_identity() != wrapped_signature
+            || !matches!(observation.goal(), super::source_return_goals::ReturnTypeGoal::Ready(proof)
+                if proof.require(callee.identity(), wrapped_signature).is_ok()
+                && proof.source() == &TyTerm::Primitive(source))
+        {
+            return Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "declared return source proof differs from selected callable",
+            ));
+        }
+        let certificate = Self {
+            definition: signature.definition,
+            signature: signature.fingerprint(),
+            origin: DeferredReturnOrigin::DeclaredGoal {
+                observation: query_fingerprint,
+                guard,
+            },
+            // This origin uses its relevant retained dependency closure, not a
+            // process-wide source or publication revision as a runtime guard.
+            source_revision: 0,
+            query_revision: 0,
+            source,
+            descriptor: primitive_runtime_id(source)?,
+            written_hint: printed_primitive_hint(&signature.result[0].text),
+            dependencies: Box::new([]),
+        };
+        if certificate
+            .metadata_bytes()
+            .is_none_or(|n| n > 32 * 1024 * 1024)
+        {
+            return Err(crate::runtime::arena::resource());
+        }
+        Ok(certificate)
+    }
     fn mint_lexical(db: &mut Database, callee: &SourceCallable) -> Result<Self, Diagnostic> {
         callee.revalidate(db)?;
         let proof = callee
@@ -430,6 +483,7 @@ impl NormalizedDeferredReturn {
             || contracts.result_descriptor != Some(self.descriptor)
             || primitive_runtime_id(self.source)? != self.descriptor
             || self.dependencies.is_empty()
+                && !matches!(self.origin, DeferredReturnOrigin::DeclaredGoal { .. })
             || self.dependencies.len()
                 > match self.origin {
                     DeferredReturnOrigin::PrimitiveNamespace => Database::SOURCE_VIEW_INPUT_LIMIT,
@@ -443,6 +497,16 @@ impl NormalizedDeferredReturn {
             return Err(fault(
                 "LRR-E-CALL-CONTEXT",
                 "normalized deferred return certificate differs from its declaration/packet",
+            ));
+        }
+        if matches!(self.origin, DeferredReturnOrigin::DeclaredGoal { .. })
+            && (!self.dependencies.is_empty()
+                || self.source_revision != 0
+                || self.query_revision != 0)
+        {
+            return Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "declared return proof has a legacy dependency envelope",
             ));
         }
         if let DeferredReturnOrigin::Lexical { parameters, .. } = &self.origin {
@@ -478,6 +542,19 @@ impl NormalizedDeferredReturn {
         callee: &SourceCallable,
     ) -> Result<(), Diagnostic> {
         callee.revalidate(db)?;
+        if let DeferredReturnOrigin::DeclaredGoal { guard, .. } = &self.origin {
+            if callee.identity() != self.definition
+                || callee.signature().fingerprint() != self.signature
+                || callee.ordinary_local_contract().is_none()
+            {
+                return Err(fault(
+                    "LRR-E-CALL-CONTEXT",
+                    "declared return selected owner differs",
+                ));
+            }
+            return guard.require_current(db);
+        }
+
         if let DeferredReturnOrigin::Lexical { plan, parameters } = &self.origin {
             let proof = callee
                 .lexical_contract()
@@ -551,6 +628,9 @@ impl NormalizedDeferredReturn {
     }
     pub(crate) fn metadata_bytes(&self) -> Option<usize> {
         let extra = match &self.origin {
+            DeferredReturnOrigin::DeclaredGoal { guard, .. } => guard
+                .metadata_bytes()
+                .checked_add(2 * std::mem::size_of::<usize>())?,
             DeferredReturnOrigin::PrimitiveNamespace | DeferredReturnOrigin::Alias { .. } => 0,
             DeferredReturnOrigin::Lexical { parameters, .. } => parameters
                 .len()
@@ -567,11 +647,16 @@ impl NormalizedDeferredReturn {
     }
 }
 impl StableEncode for NormalizedDeferredReturn {
-    const DOMAIN: &'static str = "lrr/v5/normalized-deferred-return-certificate-v4";
+    const DOMAIN: &'static str = "lrr/v5/normalized-deferred-return-certificate-v5";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.definition);
         e.digest(self.signature);
         match &self.origin {
+            DeferredReturnOrigin::DeclaredGoal { observation, guard } => {
+                e.u32(3);
+                e.digest(*observation);
+                e.digest(guard.fingerprint());
+            }
             DeferredReturnOrigin::PrimitiveNamespace => e.u32(2),
             DeferredReturnOrigin::Alias { resolution, alias } => {
                 e.u32(0);
@@ -1081,7 +1166,57 @@ fn prepare(
     // Written aliases become source contracts only after immutable owning
     // declaration lookup and bounded normalization. Primitive spelling alone
     // keeps its existing deferred named-result path.
-    if instantiated.result_symbolic.is_none() && callee.lexical_contract().is_some() {
+    if instantiated.result_symbolic.is_none() && callee.ordinary_local_contract().is_some() {
+        let key = QueryKey::PreparedReturnPlan(definition);
+        let selected = match db.fetch(&SyntaxProvider, key.clone()) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+        };
+        let QueryValue::PreparedReturnPlan(plan) = selected.value.as_ref() else {
+            return Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "declared return query variant differs",
+            ));
+        };
+        let observation = plan.observation();
+        if !selected.cacheable || !observation.matches(definition) {
+            return Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "declared return query has no retained source proof",
+            ));
+        }
+        match observation.goal() {
+            super::source_return_goals::ReturnTypeGoal::Ready(proof) => {
+                let TyTerm::Primitive(source) = proof.source() else {
+                    return Ok(QueryPoll::Ready(Ok(ContractPreparation::NeedType {
+                        definition,
+                        syntax: signature.result.clone(),
+                    })));
+                };
+                plan.guard().require_current(db)?;
+                let certificate = NormalizedDeferredReturn::mint_declared(
+                    callee,
+                    observation,
+                    plan.observation_fingerprint(),
+                    Arc::clone(plan.guard()),
+                    *source,
+                )?;
+                instantiated.result_symbolic = Some(TyTerm::Primitive(*source));
+                normalized_deferred_return = Some(Box::new(certificate));
+            }
+            super::source_return_goals::ReturnTypeGoal::NeedAlias(alias) => {
+                return Ok(QueryPoll::Ready(Ok(ContractPreparation::NeedAlias(
+                    alias.clone(),
+                ))));
+            }
+            super::source_return_goals::ReturnTypeGoal::NeedName(name) => {
+                return Ok(QueryPoll::Ready(Ok(ContractPreparation::NeedName(
+                    name.clone(),
+                ))));
+            }
+        }
+    } else if instantiated.result_symbolic.is_none() && callee.lexical_contract().is_some() {
         let proof = NormalizedDeferredReturn::mint_lexical(db, callee)?;
         instantiated.result_symbolic = Some(TyTerm::Primitive(proof.source));
         normalized_deferred_return = Some(Box::new(proof));

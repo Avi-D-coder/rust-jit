@@ -165,6 +165,17 @@ fn assert_complete_suffix_main(text: &str) {
                 "child local tables were reconstructed instead of memoized"
             );
         }
+        for (kind, expected) in [("EnteredCall", 18), ("PreparedReturnPlan", 9)] {
+            assert_eq!(
+                h.db.trace
+                    .events
+                    .iter()
+                    .filter(|event| event.key.kind() == kind && event.action == Action::ProviderRun)
+                    .count(),
+                expected,
+                "common source preparation must be retained across phases and repeated calls"
+            );
+        }
         assert!(h.run.peak_guest_frames >= 2);
         assert!(h.run.calls.is_empty() && h.run.pending.is_empty());
         assert_eq!(h.run.call_bytes, 0);

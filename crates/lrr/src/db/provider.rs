@@ -821,6 +821,36 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::PreparedReturnPlan(definition) => {
+                return match crate::frontend::source_return_goals::prepare_plan(db, *definition) {
+                    QueryPoll::Ready(Ok(value)) => {
+                        Provided::pure(QueryValue::PreparedReturnPlan(Box::new(value)))
+                    }
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            QueryKey::EnteredCall(key) => {
+                return match crate::frontend::entered_call_goals::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => {
+                        Provided::pure(QueryValue::EnteredCall(Box::new(value)))
+                    }
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            QueryKey::DeclaredReturnGoal(definition) => {
+                return match crate::frontend::source_return_goals::prepare_local_query(
+                    db,
+                    *definition,
+                ) {
+                    QueryPoll::Ready(Ok(value)) => {
+                        Provided::pure(QueryValue::DeclaredReturnGoal(Box::new(value)))
+                    }
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::EnteredType(key) => {
                 return match crate::frontend::entered_type_goals::prepare(db, key) {
                     QueryPoll::Ready(Ok(value)) => {
@@ -1105,6 +1135,14 @@ impl Provider for SyntaxProvider {
                         QueryPoll::Ready(Ok(None)) => {}
                         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                         QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
+                    }
+                    match super::entered_call_thunk::thunk(db, parsed, handle, index, pc) {
+                        QueryPoll::Ready(Ok(Some(provided))) => {
+                            return QueryPoll::Ready(Ok(provided));
+                        }
+                        QueryPoll::Ready(Ok(None)) => {}
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
                     }
                     match super::entered_type_thunk::thunk(db, parsed, handle, index, pc) {
                         QueryPoll::Ready(Ok(Some(provided))) => {

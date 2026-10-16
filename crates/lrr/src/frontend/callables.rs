@@ -26,6 +26,9 @@ use crate::{
 #[path = "lexical_callables.rs"]
 pub(crate) mod lexical;
 pub(crate) use lexical::admit_lexical_function;
+#[path = "ordinary_local_callables.rs"]
+pub(crate) mod ordinary_local;
+pub(crate) use ordinary_local::{EnteredLocalCall, prepare_entered_local_function};
 
 #[derive(Debug, Clone)]
 pub struct SourceCallable {
@@ -37,7 +40,63 @@ pub struct SourceCallable {
     revision: u64,
     context: DeclarationContext,
     lexical: Option<Box<lexical::LexicalAdmission>>,
+    ordinary_local: Option<std::sync::Arc<ordinary_local::OrdinaryLocalAdmission>>,
+    // This actual additional handle makes an externally selected callable
+    // visible to parent-plan retirement accounting when its proof Arc is also
+    // retained by an entered-call memo. It never clones the immutable graph.
+    ordinary_owner: Option<std::sync::Arc<super::source_locals::PreparedSourceLocalPlan>>,
     retained: Option<RetainedSourceLease>,
+}
+/// Source/body correspondence shared by held legacy receipts and the ordinary
+/// entered Value receipt during migration. It does not expose the legacy
+/// primitive profile or grant name/type/call execution authority.
+pub(crate) enum LocalCallableSource<'a> {
+    Legacy(&'a lexical::LexicalAdmission),
+    Entered(&'a ordinary_local::OrdinaryLocalAdmission),
+}
+impl LocalCallableSource<'_> {
+    pub(crate) fn caller(&self) -> &BodyHandle {
+        match self {
+            Self::Legacy(proof) => proof.plan().caller(),
+            Self::Entered(proof) => proof.parent().context().source().body(),
+        }
+    }
+    pub(crate) fn caller_header(&self) -> &crate::syntax::outline::HeaderRecipe {
+        match self {
+            Self::Legacy(proof) => proof.plan().caller_header(),
+            Self::Entered(proof) => proof.parent().context().source().header(),
+        }
+    }
+    pub(crate) fn caller_context(&self) -> &DeclarationContext {
+        match self {
+            Self::Legacy(proof) => proof.plan().caller_context(),
+            Self::Entered(proof) => proof.parent().context().source().context(),
+        }
+    }
+    pub(crate) fn source(&self) -> &ParseKey {
+        match self {
+            Self::Legacy(proof) => proof.plan().source(),
+            Self::Entered(proof) => proof.source(),
+        }
+    }
+    pub(crate) fn item(&self) -> &crate::syntax::outline::ItemOutline {
+        match self {
+            Self::Legacy(proof) => proof.plan().item(),
+            Self::Entered(proof) => proof.item(),
+        }
+    }
+    pub(crate) fn scope(&self) -> u32 {
+        match self {
+            Self::Legacy(proof) => proof.plan().scope(),
+            Self::Entered(proof) => proof.scope(),
+        }
+    }
+    pub(crate) fn site(&self) -> &crate::ir::pc::PcKey {
+        match self {
+            Self::Legacy(proof) => proof.plan().site(),
+            Self::Entered(proof) => proof.site(),
+        }
+    }
 }
 impl SourceCallable {
     pub fn identity(&self) -> Digest {
@@ -55,14 +114,34 @@ impl SourceCallable {
     pub(crate) fn lexical_contract(&self) -> Option<&lexical::LexicalAdmission> {
         self.lexical.as_deref()
     }
+    pub(crate) fn ordinary_local_contract(
+        &self,
+    ) -> Option<&ordinary_local::OrdinaryLocalAdmission> {
+        self.ordinary_local.as_deref()
+    }
+    pub(crate) fn local_source_contract(&self) -> Option<LocalCallableSource<'_>> {
+        self.ordinary_local
+            .as_deref()
+            .map(LocalCallableSource::Entered)
+            .or_else(|| self.lexical.as_deref().map(LocalCallableSource::Legacy))
+    }
     pub(crate) fn retained_lexical_metadata_bytes(&self) -> usize {
         self.lexical
             .as_ref()
             .map_or(0, |proof| proof.metadata_bytes())
+            .saturating_add(
+                self.ordinary_local
+                    .as_ref()
+                    .map_or(0, |proof| proof.metadata_bytes()),
+            )
+            .saturating_add(std::mem::size_of_val(&self.ordinary_owner))
             .saturating_add(std::mem::size_of::<Option<RetainedSourceLease>>())
     }
     pub fn revalidate(&self, db: &mut Database) -> Result<(), Diagnostic> {
         if let Some(proof) = &self.lexical {
+            proof.revalidate(db)?;
+        }
+        if let Some(proof) = &self.ordinary_local {
             proof.revalidate(db)?;
         }
         if db.source_revision() != self.revision {
@@ -393,6 +472,8 @@ impl<'a> CallResolver<'a> {
             revision: db.source_revision(),
             context: context.clone(),
             lexical: None,
+            ordinary_local: None,
+            ordinary_owner: None,
             retained: None,
         };
         if let Err(e) = callee.revalidate(db) {
@@ -498,6 +579,8 @@ impl<'a> CallResolver<'a> {
             revision: db.source_revision(),
             context,
             lexical: None,
+            ordinary_local: None,
+            ordinary_owner: None,
             retained: retained.map(RetainedOriginalDeclaration::into_lease),
         };
         if let Err(error) = callee.revalidate(db) {

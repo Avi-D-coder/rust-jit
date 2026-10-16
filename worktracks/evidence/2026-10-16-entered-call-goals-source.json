@@ -1,0 +1,84 @@
+{
+  "schema": "lrr/source-review/entered-call-goals/v1",
+  "status": "source-only; uncompiled/unexecuted; normal query44/lowering/engine joins root-owned",
+  "source_fingerprint": "8694e0c037505cf7e00112d677c2e08c4024dd9094dbc87940ad640e16ee97a6",
+  "frozen_payload": "/private/tmp/lrr-entered-call-goals-v1",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "a8f45a785564084e3598d1ad16ec7dfc8593551e61aef57c5a2592321e4b64f6",
+      "bytes": 29125
+    },
+    {
+      "path": "crates/lrr/src/frontend/callables.rs",
+      "sha256": "0def3cc4134fdca3a24f9b315c7a4038176b0aee1a4515aafc597ea32a7cc073",
+      "bytes": 24233,
+      "before_sha256": "99f96c4a15e17e85e54deac88e8434daff9923e2ae891000e78dd6deccd6cfe1",
+      "before_component": "853f3152"
+    },
+    {
+      "path": "crates/lrr/src/frontend/ordinary_local_callables.rs",
+      "sha256": "e0dcacfd3f698d513c8f1fecdd85e826b84fccba89306eb64218b18f5ee83d66",
+      "bytes": 12593,
+      "before_sha256": "23c3bd0066e2ebc1b062ca3d2d0f2d83a8cf4d1e78b629f3ac9cfe9ec995374d",
+      "before_component": "57fdf929"
+    },
+    {
+      "path": "crates/lrr/src/frontend/lexical_callables.rs",
+      "sha256": "55c5f65047c6356997c4c4b6e1372b8cd47d74653f645a6653bea8c37e203ac8",
+      "bytes": 12349,
+      "before_sha256": "dd58882153071043a3dfca667c2bea46629c56956ecf2f6b86eb9846fc23ae51",
+      "before_component": "853f3152"
+    },
+    {
+      "path": "worktracks/04-calls-source-views/common-entered-call-goals-handoff.md",
+      "sha256": "383cf59237c14ad7b3e41b29d8c9da310b9c2063c068ee42d70d7c11a49378f8",
+      "bytes": 12256
+    }
+  ],
+  "base_contract": "New goal leaf, exact small SourceCallable/shared admission deltas over stated frozen853f3152/57fdf929 leaves and one mechanical legacy constructor None only. No DB/provider/engine/thunks/source-header edits; root merges separate query44/hooks/ordinary normal CallExpr integration. Whole source files supplied with exact before hashes and production.patch for safe splicing.",
+  "api": [
+    "prepare(db,&actualCallEntryPc)->QueryPoll<EnteredCallGoal>",
+    "goal key/retained_plan/selection/metadata_bytes/fingerprint/guard/value_identity/require_current",
+    "selection borrowed Local(&OrdinaryLocalAdmission)|Module(&SelectedValueDeclaration)|Binding(Digest)|Pending(ValueGoalDemand)",
+    "goal.indexed_local_source_name(index,&phasePc)->Result<Option<&EnteredSourceName>,Diagnostic>; actual target node/range/name/explicit getters, no public constructor",
+    "goal.local_source_name(db,index,phasePc) validates current guard then same exact source-index proof",
+    "goal.local_callable(db)->Box<SourceCallable> via private proofArc callable_shared(&Arc<Self>,db); coordinator publication remains separate"
+  ],
+  "authority": "Actual Call index/source/semantic identity, canonical direct Path, actual Value39 result+input guard, real shared header/function admission; no arbitrary name or module-by-name fallback grant. Module/Binding/Pending cannot use local lowering/callable methods. Pure lowerer must compare actual parsed name+explicit data before bypassing old lexical AST gate; root DB validates guard before dependency attach.",
+  "ownership": "Local goal contains one physical parent Arc via proof, nonlocal contains one parent Arc; Local guard aliases actual proof guard, counted once in goal metadata. SourceCallable explicitly clones parent into ordinary_owner to expose external parent ownership even when proofArc is shared with memo; Clone adds one further actual handle. No hidden public proofArc extraction, duplicate registry, deep graph copy or new source artifact variant.",
+  "cost": "Cold common SourceLocalPlan/Value39/FunctionSignature memo demands, actual direct PathExpr locator and bounded written strings/generic syntax; local reuses real guard once, nonlocal captures real guard once. Existing O(D) canonical admission cold scan. Phase selector uses cached source/index semantic identities and direct Vec slots only; no parser/query/planning. Checked <=32MiB goal/target/module/proof/guard capacities; graph registered/accounted separately under existing SourceArtifactRef::LocalPlan.",
+  "witness": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+    "sha256": "f502f13f4f96fe146c05a02dd1a387eb3d4d9932915da35c047975d40eade4a6",
+    "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "source_controls": "whole unchanged suffix all18calls x all4 editions x plain/user/wrapper, target phase reuse/site refusal/epoch; actual Module/Binding/Pending owner; shared callable +1 parent per clone and guard/publication/no-child-code checks"
+  },
+  "remaining": [
+    "Root query44 hooks/value/source-root accounting and actual cached plan reuse/retirement tests",
+    "Same normal CallExpr lowering gate and engine selection/type/arguments/body/return/cleanup integration",
+    "Publisher global query_revision conservative refusal unchanged; cached missing body after unrelated derived publication requires reviewed currentness repair",
+    "Generic/qualified/function-pointer/closure Value39 adjustments explicitly pending, Module identity transport no fallback authorization",
+    "Legacy original-only numeric admissions/AST gate/global census routes remain named/held until replacement+removal+actual full matrix evidence"
+  ],
+  "architecture_review": "Separate all8 exact source pass in handoff; source-aware named shared joins/ownership/costs/remaining exceptions. No evaluator, scalar lane, numeric/method/profile, origin gate, eager child code/pattern, phase replanning, namespace census, body copy or new registry.",
+  "commands": [
+    {
+      "command": "rustfmt --edition 2024 crates/lrr/src/frontend/callables.rs crates/lrr/src/frontend/lexical_callables.rs crates/lrr/src/frontend/ordinary_local_callables.rs crates/lrr/src/frontend/entered_call_goals.rs",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "not_run": [
+    "Cargo",
+    "native compilation",
+    "inline source controls",
+    "guest runtime",
+    "query44 memo/retirement controls",
+    "architecture matrix",
+    "milestone"
+  ]
+}

@@ -1,8 +1,10 @@
 //! Source/authority controls over complete unchanged local-record rustc source.
-#[path = "prepared_constructor_tests.rs"]
-mod prepared_constructor_tests;
 #[path = "binding_constraint_tests.rs"]
 mod binding_constraint_tests;
+#[path = "ordinary_local_callable_tests.rs"]
+mod ordinary_local_callable_tests;
+#[path = "prepared_constructor_tests.rs"]
+mod prepared_constructor_tests;
 use super::*;
 use crate::{
     expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},

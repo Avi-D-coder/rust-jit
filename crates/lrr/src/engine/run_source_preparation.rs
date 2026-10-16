@@ -5,10 +5,7 @@ use super::*;
 use crate::{
     db::dependency::{InputKey, InputValue},
     expand::source_discovery::SealedBodyMacroEnvironment,
-    frontend::{
-        source_body_context::AdmittedBodyContext,
-        source_locals::PreparedSourceLocalPlan,
-    },
+    frontend::{source_body_context::AdmittedBodyContext, source_locals::PreparedSourceLocalPlan},
     syntax::body_index::{ExpressionKind, NodeRole},
 };
 
@@ -34,22 +31,29 @@ impl ReachedLocalBody<'_> {
             // callable checks; here the opaque admitted child and parent supply
             // exact source/header/body/owner authority without a world census.
             let definition = self.callee.identity();
-            let lexical = self.callee.lexical_contract().ok_or_else(|| {
-                call_fault("reached local source lexical proof absent")
-            })?;
-            if lexical.plan().site().body != *self.caller.body()
-                || lexical.plan().site().node != self.site.0
+            let contract = self
+                .callee
+                .local_source_contract()
+                .ok_or_else(|| call_fault("reached local source admission absent"))?;
+            if contract.site().body != *self.caller.body()
+                || contract.site().node != self.site.0
                 || self.callee.body() != Some(self.source.body())
                 || self.callee.signature().header != *self.source.header()
             {
                 return Err(call_fault("reached local source call identity differs"));
             }
-            let actual_parent = self.source.local_parent().ok_or_else(|| {
-                call_fault("reached local source has no admitted parent")
-            })?;
+            let actual_parent = self
+                .source
+                .local_parent()
+                .ok_or_else(|| call_fault("reached local source has no admitted parent"))?;
             if actual_parent.source_identity() != self.parent.source_identity()
-                || actual_parent.environment().map(|environment| environment.identity())
-                    != self.parent.environment().map(|environment| environment.identity())
+                || actual_parent
+                    .environment()
+                    .map(|environment| environment.identity())
+                    != self
+                        .parent
+                        .environment()
+                        .map(|environment| environment.identity())
             {
                 return Err(call_fault("reached local admitted parent differs"));
             }
@@ -61,9 +65,11 @@ impl ReachedLocalBody<'_> {
             }
             if !matches!(db.input(&InputKey::DefinitionBody(self.caller.body().definition)).as_deref(),
                 Some(InputValue::DefinitionBody(body)) if body.key() == *self.caller.body())
-                || !self.caller.nodes().get(self.site.0 as usize).is_some_and(|node| {
-                    node.role == NodeRole::Expression(ExpressionKind::Call)
-                })
+                || !self
+                    .caller
+                    .nodes()
+                    .get(self.site.0 as usize)
+                    .is_some_and(|node| node.role == NodeRole::Expression(ExpressionKind::Call))
             {
                 return Err(call_fault("reached local caller source changed"));
             }
@@ -124,7 +130,7 @@ impl RunMachine {
         let Some(owner) = db.input(&InputKey::LocalDeclarationOwner(callee.identity())) else {
             // Module source preparation retains its existing entry owner.
             // A missing local owner is never inferred from a lexical rib.
-            if callee.lexical_contract().is_some() {
+            if callee.local_source_contract().is_some() {
                 return QueryPoll::Ready(Err(call_fault("reached local callee owner absent")));
             }
             return QueryPoll::Ready(Ok(()));
@@ -134,8 +140,10 @@ impl RunMachine {
                 "reached local callee owner variant differs",
             )));
         };
-        if callee.lexical_contract().is_none() {
-            return QueryPoll::Ready(Err(call_fault("reached local callee lexical proof absent")));
+        if callee.local_source_contract().is_none() {
+            return QueryPoll::Ready(Err(call_fault(
+                "reached local callee source admission absent",
+            )));
         }
         let site = NodeId(self.frame.pc().node);
         if !self

@@ -560,6 +560,115 @@ impl RunMachine {
         };
         self.prepare_selected_argument_call(db, callee, syntax, argument_slots)
     }
+    /// Consume the same immutable source selection used by ordinary lowering.
+    /// Publication is a reached coordinator action; the pure goal never enters
+    /// or prepares a callee body. Qualified/value paths remain explicitly held.
+    fn select_common_argument_call(
+        &self,
+        db: &mut Database,
+        name: &str,
+        syntax: &[String],
+        arguments: &[SlotId],
+    ) -> QueryPoll<Option<SelectedArgumentCall>> {
+        use crate::{
+            db::dependency::{InputKey, InputValue},
+            frontend::{
+                entered_call_goals::EnteredCallSelection, source_value_goals::ValueGoalDemand,
+            },
+            syntax::body_index::{ExpressionKind, NodeRole},
+        };
+        let pc = self.frame.pc();
+        if !self
+            .frame
+            .body
+            .nodes()
+            .get(pc.node as usize)
+            .is_some_and(|node| node.role == NodeRole::Expression(ExpressionKind::Call))
+            || !matches!(
+                db.input(&InputKey::BodyEnvironment(pc.body.clone()))
+                    .as_deref(),
+                Some(InputValue::BodyEnvironment(_))
+            )
+        {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let mut entry = pc.clone();
+        entry.phase = 0;
+        let prepared = match db.fetch(&SyntaxProvider, QueryKey::EnteredCall(entry)) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::EnteredCall(goal) = prepared.value.as_ref() else {
+            return QueryPoll::Ready(Err(call_fault("reached source call goal differs")));
+        };
+        if !prepared.cacheable {
+            return QueryPoll::Ready(Err(call_fault(
+                "reached source call has no retained dependencies",
+            )));
+        }
+        if let Err(error) = goal.require_current(db) {
+            return QueryPoll::Ready(Err(error));
+        }
+        let callee = match goal.selection() {
+            EnteredCallSelection::Local(proof) => {
+                let target = match goal.local_source_name(db, &self.frame.body, pc) {
+                    Ok(Some(target)) => target,
+                    Ok(None) => {
+                        return QueryPoll::Ready(Err(call_fault(
+                            "reached local call lacks written source proof",
+                        )));
+                    }
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                };
+                if target.name() != name || target.explicit() != syntax {
+                    return QueryPoll::Ready(Err(call_fault(
+                        "reached source call written target differs",
+                    )));
+                }
+                if let Err(error) = db.publish_ordinary_local_function(proof) {
+                    return QueryPoll::Ready(Err(error));
+                }
+                match goal.local_callable(db) {
+                    Ok(callee) => callee,
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                }
+            }
+            EnteredCallSelection::Module(declaration) => {
+                // Retain the existing module resolver only with exact identity
+                // agreement. A local selection never uses this fallback.
+                return match self.select_argument_call(db, name, syntax, arguments) {
+                    QueryPoll::Ready(Ok(selected))
+                        if selected.callee.identity() == declaration.identity() =>
+                    {
+                        QueryPoll::Ready(Ok(Some(selected)))
+                    }
+                    QueryPoll::Ready(Ok(_)) => QueryPoll::Ready(Err(call_fault(
+                        "module call selection differs from entered source goal",
+                    ))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            EnteredCallSelection::Binding(_) => {
+                return QueryPoll::Ready(Err(call_fault(
+                    "source callee binding awaits function-value integration",
+                )));
+            }
+            // Associated/qualified and explicitly generic path integration is
+            // still held behind its existing lowerer/dispatcher safety checks.
+            EnteredCallSelection::Pending(ValueGoalDemand::PathAdjustment) => {
+                return QueryPoll::Ready(Ok(None));
+            }
+            EnteredCallSelection::Pending(demand) => {
+                return QueryPoll::Ready(Err(call_fault(&format!(
+                    "source call selection is pending: {demand:?}"
+                ))));
+            }
+        };
+        self.prepare_selected_argument_call(db, callee, syntax, arguments)
+            .map(Some)
+    }
     fn select_reached_argument_call(
         &self,
         db: &mut Database,
@@ -578,6 +687,12 @@ impl RunMachine {
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
+        }
+        match self.select_common_argument_call(db, name, syntax, arguments) {
+            QueryPoll::Ready(Ok(Some(selected))) => return QueryPoll::Ready(Ok(selected)),
+            QueryPoll::Ready(Ok(None)) => {}
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         }
         let Some(graph) = &self.graph else {
             return QueryPoll::Ready(Err(call_fault(
@@ -925,10 +1040,17 @@ impl RunMachine {
         let selected = if let Some(selected) = selected {
             selected
         } else {
-            match self.select_argument_call(db, name, syntax, &[]) {
-                QueryPoll::Ready(Ok(call)) => call,
-                QueryPoll::Ready(Err(e)) => return QueryPoll::Ready(Err(e)),
-                QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
+            match self.select_common_argument_call(db, name, syntax, &[]) {
+                QueryPoll::Ready(Ok(Some(selected))) => selected,
+                QueryPoll::Ready(Ok(None)) => {
+                    match self.select_argument_call(db, name, syntax, &[]) {
+                        QueryPoll::Ready(Ok(call)) => call,
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
+                }
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
         };
         let callee = selected.callee;

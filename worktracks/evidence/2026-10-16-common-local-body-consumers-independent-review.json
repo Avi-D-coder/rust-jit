@@ -1,0 +1,43 @@
+{
+  "schema": "lrr/source-review/common-local-body-consumers/independent-v1",
+  "reviewer": "ordinary_call_join_next",
+  "status": "independent source review only; uncompiled/unexecuted",
+  "component_sha256": "6ce6b56fb6b6ba0dedda5f390e4c83c76ea9175937b07fdbc8d99fd31d70665b",
+  "baseline_source": "f538eb0487c04b3de9d51236eb300bdb259e42810251800b3f94e1faa861485f",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/local_body_context.rs",
+      "before_sha256": "1968e7d7a3c6b5d1818d2dbc361391626656b9f6392e2b74387f2cfe62d1a518",
+      "sha256": "49b33fcf444109165e6eba8c8a0b1a6636a43945e4861888c9e11faf9cf64069",
+      "bytes": 8047,
+      "origin": "/private/tmp/lrr-common-local-body-consumers-v1/overlay/crates/lrr/src/frontend/local_body_context.rs"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_source_preparation.rs",
+      "before_sha256": "34a5363c1a0e77e91fab67d5e6e1bf98e4cbfffdde4996701afb92d21cbe4d04",
+      "sha256": "c4c668826561163136935f13a703a6654d6d0e0ef782c979a88be7863bcc344e",
+      "bytes": 8927,
+      "origin": "/private/tmp/lrr-common-local-body-consumers-v1/overlay/crates/lrr/src/engine/run_source_preparation.rs"
+    }
+  ],
+  "baseline_limit": "Complete f538 baseline independently compared at artifacts/macos-first/sol-common-binding-classification-validation-v1/source. Both exact before_sha256 values verified; actual diffs substitute local_source_contract for lexical_contract and immutable view accessors only. selected_source_body is inherited unchanged in both files. V1 manifest exclusion wording is inaccurate; preserved as historical metadata and corrected here, not an extra helper change.",
+  "compatibility": [
+    "LocalCallableSource Legacy and Entered provide same immutable caller BodyHandle/header/context/source/item/scope/site; no old primitive_result profile used by either consumer.",
+    "LocalBodyContext::capture retains parent.require_current, exact actual canonical row/item/attribute/scope/header/context/body/DefKey, proper body containment, actual LocalDeclarationOwner+stamp, bounded nesting256. No source-origin exclusion added.",
+    "ReachedLocalBody::require_current checks actual callsite/caller BodyIndex and published DefinitionBody, selected body/header, admitted parent source+environment identities, actual LocalDeclarationOwner, then parent/source/macros currentness.",
+    "prepare_reached_local_source reuses only actual current BodyEnvironment with matching body+macro identity; capture_local requires actual callee entry PC. Ordinary selected-call contract must independently revalidate callable selection. This metadata receipt does not replace that contract.",
+    "Stale comment in LocalBodyContext::capture attributes call-site issuance to LexicalAdmission and says validated above; executable checks deliberately do not revalidate selected Value. Update wording separately; no concrete authority defect found in inspected source checks."
+  ],
+  "all_eight": {
+    "1": "No evaluator/compiler introduced: source-body correspondence only; old broader evaluators not reviewed/closed.",
+    "2": "No generated scalar/break execution: same BodyIndex and source preparation entry; legacy routes outside packet held.",
+    "3": "No primitive/numeric/method/macro-name profile; view exposes immutable source facts only.",
+    "4": "Both genuine ordinary and legacy proof variants use same consumers; actual generated authority gaps remain explicit upstream.",
+    "5": "No pattern change or cold executable branch/body demand added by view substitution; selected_source_body remains reached ordinary body demand.",
+    "6": "Existing cold canonical parent O(D) lookup/currentness reused; no new parse/phase reconstruction/installed source planning in two-file change. Engine integration still held.",
+    "7": "No global census introduced: consumers explicitly leave name proof currentness to existing selected-call contract; exact source/owner/currentness preserved.",
+    "8": "Actual retained Arc BodyIndex/plan used; canonical items scan O(D) cold, no immutable body deep-copy or whole-file node search added."
+  },
+  "evidence": "No Cargo, native compilation, guest execution, all-context runtime matrix or acceptance established by this review.",
+  "baseline_root": "/Users/avi/Code/rust-jit/artifacts/macos-first/sol-common-binding-classification-validation-v1/source"
+}

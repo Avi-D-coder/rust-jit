@@ -1,0 +1,118 @@
+{
+  "schema": "lrr/runtime-evidence/common-entered-call/v1",
+  "at": "2026-10-16T23:09:38.150320+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T032",
+    "T033",
+    "M017",
+    "M018"
+  ],
+  "source_member": "aacb468ff27209845e4ecc174bbe829b55cc07564870ad09d63983e17a01929e",
+  "library_sha256": "af5cefb84e91389de6a1b90759dc717e2003deca7f31ec7f5cff7d158f498ac8",
+  "release_sha256": "631ac87050216f884fc72b6aabb3049eb0dbd29b3ec8391c14bcc23ea287f635",
+  "upstream": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "path": "tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+    "sha256": "f502f13f4f96fe146c05a02dd1a387eb3d4d9932915da35c047975d40eade4a6",
+    "original_unchanged": true,
+    "owning_edition": 2015,
+    "supplemental_editions": [
+      2018,
+      2021,
+      2024
+    ],
+    "license": "MIT OR Apache-2.0"
+  },
+  "actual_results": {
+    "compile": {
+      "terminal": "14faaa/0",
+      "bodies": 0
+    },
+    "original": {
+      "terminal": "1b72d5/0",
+      "test_bodies": 1,
+      "editions": [
+        2015,
+        2018,
+        2021,
+        2024
+      ]
+    },
+    "user_macro": {
+      "terminal": "0d1865/0",
+      "test_bodies": 1,
+      "editions": [
+        2015,
+        2018,
+        2021,
+        2024
+      ]
+    },
+    "wrapper_macro": {
+      "terminal": "8ae716/0",
+      "test_bodies": 1,
+      "editions": [
+        2015,
+        2018,
+        2021,
+        2024
+      ]
+    },
+    "disjoint_components": {
+      "terminal": "513c13/0",
+      "test_bodies": 19,
+      "failed": 0,
+      "coverage": [
+        "entered-call3",
+        "declared-return-and-retained-plan4",
+        "publisher6",
+        "ordinary-callable4",
+        "function-shadow1",
+        "wrong-runtime-argument1"
+      ]
+    },
+    "total_test_bodies": 22,
+    "failed_test_bodies": 0,
+    "ordinary_calls": 216,
+    "calls_per_runtime_run": 18,
+    "runtime_runs": 12,
+    "query44_provider_runs_per_runtime_run": 18,
+    "query46_provider_runs_per_runtime_run": 9,
+    "legacy_assert_ops_per_runtime_run": 0,
+    "cleanup_and_exact_once": true,
+    "source_unchanged": true,
+    "target_released": true,
+    "target_inactive_terminal": "4ff800/0"
+  },
+  "previous_failure": {
+    "source_member": "0819b274f84e24617cad192e998e6bdcd274ea674bbaf5fff03827d9836074b3",
+    "terminal": "ad15cf/1",
+    "message": "lexical item callee requires body namespace integration",
+    "preserved": true
+  },
+  "reports": {
+    "upstream_runtime_acceptance": {
+      "selected_runtime_contract": "pass",
+      "all_applicable_runtime_contracts": "incomplete",
+      "new_distinct_upstream_program_pass_increment": 0,
+      "note": "Same full suffix program already passed handwritten previously; generated and wrapper source routes now pass too."
+    },
+    "diagnostic_compatibility": "not established",
+    "compiler_tooling_compatibility": "not established",
+    "full_suite_compatibility": "incomplete",
+    "full_fixture_pass": "not claimed",
+    "architecture_gate": "incomplete",
+    "current_milestone": "not run for this candidate",
+    "guest_jit": "blocked by interpreter gates"
+  },
+  "holds": [
+    "Standard-library macro nesting matrix",
+    "Zero-argument runtime witness pending next stock source",
+    "Pre-body currentness follow-up source-only",
+    "Full invalidation/suspension/ownership/panic/cold-branch matrix",
+    "Superseded legacy paths removal",
+    "Full runtime prerequisite and milestone gates"
+  ],
+  "source_review": "worktracks/evidence/2026-10-16-common-entered-call-source-review.json"
+}

@@ -100,3 +100,6 @@ pub(crate) mod binding_constraints;
 pub(crate) mod prepared_binding_plan;
 
 pub mod entered_type_goals;
+
+pub mod entered_call_goals;
+pub mod source_return_goals;

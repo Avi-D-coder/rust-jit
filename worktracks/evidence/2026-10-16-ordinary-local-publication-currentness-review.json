@@ -1,0 +1,59 @@
+{
+  "schema": "lrr/source-review/ordinary-local-publication-currentness/v1",
+  "status": "review only; global revision refusal deliberately unchanged; no runtime evidence",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/ordinary_local_inputs.rs",
+      "sha256": "bd0a3f80a39220c9042804eab892f2196bff69aa3a4ba8a2db8200b53ac98395"
+    },
+    {
+      "path": "crates/lrr/src/frontend/ordinary_local_callables.rs",
+      "sha256": "23c3bd0066e2ebc1b062ca3d2d0f2d83a8cf4d1e78b629f3ac9cfe9ec995374d"
+    },
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "920c02fadac32cb34ba6492865d9c87ca44a47577c79a18b29b6a999ad88ad79"
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_provider.rs",
+      "sha256": "c6b494f6dc4f9fb9769b08b80079cdeed49bd14e81e6021f75033c63a20dba42"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_body_context.rs",
+      "sha256": "eff7f4469cf0a75e5d51b23d2ab3b95a4acc25689fda54c87fc455c7ae62d76d"
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "cc2a7aa8c117ff0627ca40826a8132747995be948d1f673116bbfcc8565a1f36"
+    }
+  ],
+  "actual_contract": "publish_ordinary_local_function requires coordinator+active run+exact proof.query_revision before real PreparedInputGuard, exact parent source/header/context/body/environment+owner and exact child rows; only missing body locator inserted. callable consumes private proof, checks relevant guard and all four child actual values+stamps and constructs same SourceCallable, whose revalidate checks source_revision/current fixed rows.",
+  "cases": [
+    {
+      "case": "Already published exact body",
+      "result": "Publisher can be skipped only when callable(proof) checks exact full published rows and relevant guard, and normal reached frame/site/call contracts still run. Retain resulting immutable SourceCallable/ordinary proof Arc and use normal revalidation on later entries. Calling publisher again with old issuance unnecessarily fails after first derived publication."
+    },
+    {
+      "case": "First reached missing body after unrelated derived publication",
+      "result": "Skip-if-body-present is insufficient. Genuine cached Value39/guard can remain current while db.revision changes. Existing publisher refuses old issuance before guard, causing needless proof reconstruction if used as permanent production callplan protocol."
+    },
+    {
+      "case": "Relevant source/scope/header/owner/epoch replacement",
+      "result": "Must still refuse. Private guard contains actual successful Q39 input closure with positive/negative relevant namespace dependencies; fixed current parent/owner/child comparisons preserve exact attachments. Root must verify actual retained closure against these controls before removing conservative global issuance guard."
+    }
+  ],
+  "recommended_direction": "Keep current refusal in this component. Root should retain immutable callplan/callable and publish each missing body once at reached coordinator boundary. A future reviewed publisher revision can replace global query_revision equality with genuine private guard plus existing exact current parent/source/header/context/body/environment/LocalOwner/child checks, ensuring exact captured source lease and current input closure remain represented; no namespace census, unchecked absence or reparse/replanning at repeated entry. Do not add a second freshness token that reproduces global invalidation.",
+  "currentness_trace": [
+    "Q39 EnteredValue retains canonical SourceLocalPlan; body_environment_provider::source_local_plan first validates actual opaque BodyEnvironment via source and macros, then attaches same plan.",
+    "AdmittedBodyContext::require_current observes fixed declaration inputs; retained source current validates actual CapturedSource, epoch, DiscoverySeal and outputs; original/generated parse provider observes CapturedSource and actual source inputs.",
+    "PreparedInputGuard is privately constructed from current successful memo DAG; captures input dependencies once and checks cached stamps only. It cannot synthesize selection or refresh itself.",
+    "Database::prepared_source also checks exact current CapturedSource and retained immutable publication handles; those source leases stay alive under parent plan graph. Full retained lease query is not appropriate to add to installed dispatch."
+  ],
+  "required_controls_before_refusal_change": [
+    "Cached private proof with missing body remains usable after unrelated derived body/header or irrelevant namespace publication, with source/epoch unchanged; no Value39 recomputation or namespace census.",
+    "Already exact body and cached callable supports repeated real calls without republishing/reconstructing proof.",
+    "Changed relevant namespace candidate/absence, captured source, header/context/body, LocalOwner and expansion epoch reject retained proof before mutation.",
+    "Budget/run/query-coordinator/overflow/atomicity and real reached-site/body checks preserved; genuine source lease retirement remains accounted."
+  ],
+  "architecture_review": "All8: metadata/currentness discussion only; no evaluator, scalar path, context profile, origin exclusion, eager body/pattern prep, repeated planning, global namespace scan, or deep body copy introduced. No production API/refusal changed by this review."
+}

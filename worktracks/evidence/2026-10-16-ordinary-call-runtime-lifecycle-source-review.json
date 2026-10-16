@@ -1,0 +1,229 @@
+{
+  "schema": "lrr/source-review/ordinary-call-runtime-lifecycle/v1",
+  "reviewer": "drop_catalog_next",
+  "status": "independent source review only; no new concrete blocker found in bounded inspected path; runtime acceptance held",
+  "observed_head": "8a050b99cd7c192a76a4d790d7d2e5652912f349",
+  "source_fingerprint": "088af1db75eb490be5a24f43c29e04a3af762e4870e94949ae73d1b39c29ef17",
+  "observed_dependency_fingerprint": "c70dd091cc2e51088ceefb16c70e0d6324bfe822c9132b16eca4584a104bd696",
+  "fingerprint_encoding": "SHA256 sorted path + NUL + file SHA256 + NUL + decimal bytes + LF; snapshots retained in packet/source",
+  "files": [
+    {
+      "path": "crates/lrr/src/engine/run.rs",
+      "sha256": "475cb20a03a4893da192c03e2d5bac757d8c22c58691158a9100f87906a4e560",
+      "bytes": 118800,
+      "role": "reviewed primary"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_source_preparation.rs",
+      "sha256": "0d7f47d71992f8e9ab10083893064bf1e9a6b1649c324c253f6088dc04267934",
+      "bytes": 9404,
+      "role": "reviewed primary"
+    },
+    {
+      "path": "crates/lrr/src/frontend/local_body_context.rs",
+      "sha256": "dd07ea92ee03f3316c308903eb99f47fdcdc5cd23d8e54d460af0ce68b1d503f",
+      "bytes": 8038,
+      "role": "reviewed primary"
+    },
+    {
+      "path": "crates/lrr/src/frontend/callables.rs",
+      "sha256": "0def3cc4134fdca3a24f9b315c7a4038176b0aee1a4515aafc597ea32a7cc073",
+      "bytes": 24233,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/frontend/ordinary_local_callables.rs",
+      "sha256": "e0dcacfd3f698d513c8f1fecdd85e826b84fccba89306eb64218b18f5ee83d66",
+      "bytes": 12593,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/frontend/entered_call_goals.rs",
+      "sha256": "939907ec2971024ea919b593d0f8634f42bc4e0faa37b76ef2422c4b5b100d45",
+      "bytes": 31862,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/frontend/call_contracts.rs",
+      "sha256": "4d9243a43d4e070ac16cb5b263f4b1d6d998b402f5cc50c0c7b304de37fb9e26",
+      "bytes": 63083,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/db/ordinary_local_inputs.rs",
+      "sha256": "2279c174bd4046cc710fae60cc16fe78abfe29d5b0dd3a0304db858f12d752f5",
+      "bytes": 7062,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/db/body_environment_inputs.rs",
+      "sha256": "f4f837e20183d00f2b3b443df2d94b5e60aa0d51deb5c0b0a14f6778d45ee962",
+      "bytes": 15808,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/db/body_leases.rs",
+      "sha256": "c12761aa4cd2547c615ec0f12cc9a4c4ab3e403896b845faa4b68fcb8f3b8b9d",
+      "bytes": 9564,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/engine/install.rs",
+      "sha256": "225fee71bce79122ed7a1c9a17e9d0c88e1cf0d97f668f43d90f8f835f6517be",
+      "bytes": 11264,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_argument_hints.rs",
+      "sha256": "a98445daff2e2c922af965c3837f1115d8b5198941d91a0c6990b88cdd85d0cf",
+      "bytes": 11424,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_return.rs",
+      "sha256": "df49ad4ef616e96d0365fac0fc79be434b2f76513bfcc81226a8057ebda2b850",
+      "bytes": 11273,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/engine/run_panic.rs",
+      "sha256": "bfa8c5ce060c5ce688aebd3a75691a79a4c65fa73cb87583999670da1a17afb6",
+      "bytes": 4781,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "sha256": "6e791921964933def4568f3a3a1b04f749ded8a030e81e83fb1037462fc39975",
+      "bytes": 313704,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "sha256": "c2421fb371236b39d9937554d113b972b458f1862c6a200d3a48f6f58df91832",
+      "bytes": 60434,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/vm/call.rs",
+      "sha256": "531546f3c7d8ffb850ca9d6450eeee2f6b8d8936244efa3f3ff82dfe8c75202c",
+      "bytes": 1815,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/vm/action.rs",
+      "sha256": "b16e23d4bcaca34fb39b56a88424dd25058d50facd643a7f0ac5d8eb5cdbb1d3",
+      "bytes": 9765,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/runtime/cell.rs",
+      "sha256": "f665c4f15ec0b2be2b58ffa29b3a0cdac43babb5e0172ad5b4fa4d673be7968a",
+      "bytes": 205823,
+      "role": "observed lifecycle dependency"
+    },
+    {
+      "path": "crates/lrr/src/vm/context.rs",
+      "sha256": "5f284b2d833940da0b7d2f42d34188451419c6489d034538fc773cdbbbb272c7",
+      "bytes": 14361,
+      "role": "observed lifecycle dependency"
+    }
+  ],
+  "scope": {
+    "claim": "LOCAL-024 common entered ordinary-call integration, source-only review; T032/T033/T043/T045; M018-M027 source/type/trait prerequisites remain gated",
+    "witness": {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+      "sha256": "f502f13f4f96fe146c05a02dd1a387eb3d4d9932915da35c047975d40eade4a6",
+      "bytes": 1221,
+      "unchanged_import": "No imported fixture edited by this worker. Full-root runtime validation and exact tested source/terminal remain validator-owned; source control selects real id_i8/id_i16 calls and cold locators in ordinary_local_inputs_tests."
+    },
+    "invariant": "Actual entered ordinary CallExpr uses genuine query39/44 selected declaration, reached coordinator publication, ordinary argument protocol, explicit callee/caller frames and existing cleanup; selected signature/type metadata must not enter executable child bodies.",
+    "entrypoints": [
+      "RunMachine::select_common_argument_call",
+      "RunMachine::select_reached_argument_call",
+      "RunMachine::prepare_source_call",
+      "RunMachine::prepare_reached_local_source",
+      "ReachedLocalBody::require_current",
+      "LocalBodyContext::capture",
+      "capture_local",
+      "Database::prepare_reached_local_plan",
+      "Frame::start_call",
+      "Frame::initialize_parameters",
+      "RunMachine::begin_return_cleanup",
+      "RunMachine::advance_return_cleanup",
+      "RunMachine::advance_panic_cleanup"
+    ],
+    "delta": "run.rs adds common query44 local selection and exact module identity check before existing fallback; source consumers accept LocalCallableSource::Entered and Legacy through same opaque source/body metadata projection. No cleanup/VM production path replaced by these three source deltas.",
+    "remaining_routes": "Legacy lexical_numeric selector, module CallResolver, runtime macro call tracks and assertion macro evaluators remain. They are named debt/holds under E-R5-005, not certified common-engine removal."
+  },
+  "authority_and_lifecycle": [
+    "select_common_argument_call requires actual indexed Call and published BodyEnvironment, cacheable EnteredCall query44, current guard, actual target/body/site/index proof and written name/explicit syntax match. Local never falls back after missing authority; Module only uses old resolver after exact declaration identity agreement; bindings and genuine producer gaps refuse.",
+    "publish_ordinary_local_function retains actual private query39 guard plus full actual parent source/header/context/body, opaque owning environment, LocalOwner payload+stamp and all four child rows. It publishes only missing DefinitionBody locator, never BodyStructure or executable thunk. Coarse global revision refusal was replaced separately and reviewed in publication-currentness packet.",
+    "Pending map key is actual frame call_identity; CallPrepare inserts only after selection/hints succeed. CallStartFacts carries actual OrdinaryCallWitness; frame preflight checks body/site/Call role/phase/slots and call progress; runtime macro call facts cannot fill ordinary_calls temporary-scope barrier.",
+    "CallAdvance admits only next reached argument hint; already completed prefix returns without repeating source hint admission. CallSeal reads evaluated cells via immutable GuestStore::admit_move, checks concrete/source argument evidence and prepares contracts before ArgumentPacket::seal transfers owners. NeedInput exits dispatcher before that VM seal; selected pending context remains retained.",
+    "Selected child BodyStructure query and capture_local occur only at reached CallSeal after evaluated input preflight. capture uses exact current source/header/context/body/canonical unique item/DefKey/scope/LocalOwner and bounded parent depth. Child SourceLocalPlan/header discovery is metadata, and can inspect declarations/required producer closure; it does not lower or enter all child executable branches.",
+    "ReachedLocalBody binds actual caller/site, selected child body/header, admitted parent source/environment, exact LocalOwner and actual caller DefinitionBody, followed by parent/source/macros currentness. Receipt owns no alternative selected-name proof; callables/ordinary proof retain that authority separately.",
+    "PreparedSourceCall pins actual BodyExecutionLease and retains Arc<BodyIndex>. Poll checks active, suspended caller and unentered prepared child leases before dispatch. InstalledRecipes::get_current rechecks prepared namespace/input guard before VM step.",
+    "StepOutcome::Call checks site and consumes one action, takes prepared_call/context/argument packet once, revalidates actual callable, initializes a fresh callee with single-use canonical store packet, removes pending call, and moves caller/pending map/source lease into charged SuspendedCall. Failures are fatal profile/resource faults and do not become guest success or re-execution.",
+    "Return checks actual descriptor/source/reference and reserves exact caller resume destination before bounded cleanup; continuation binds current PC/depth/action/ticket. Only after cleanup completion does it restore caller/body lease/pending map and resume once. Panic keeps origin/stack while cleaning callee then callers and retires pending selected calls before terminal panic; it never prepares a child body or resumes a caller recipe during cleanup."
+  ],
+  "costs_and_limits": [
+    "New common selection fetches retained query44 then checks relevant prepared input closure O(G), not a namespace census. Query44 and query39 are immutable cached source metadata; no new parser or direct whole-file syntax search appears in these deltas.",
+    "Existing LocalBodyContext capture scans parent canonical item facts O(D) only at initial reached child-source capture; later entries reuse exact BodyEnvironment. Actual BodyStructure and parent plans are shared through Arc; new call frames allocate mutable slots/continuations, not deep BodyIndex clones.",
+    "Existing per-dynamic-call signature/hint preparation, O(R) source-view vectors and GenericEnv/source-template ownership copies remain in prepare_selected_argument_call/prepare_source_call. This review does not close prepare-once/performance debt or claim zero source preparation at ordinary call entry.",
+    "Per poll body-lease validation traverses active+suspended+prepared call stack O(F) and applicable retained/generated seal guards. Existing InstalledRecipes legacy namespace witness validation remains outside new local query guard precision; no claim of eliminated full-world checks.",
+    "Frame/call metadata checked before frame entry; pending bytes/call bytes use checked addition/subtraction, frame depth limits and bounded source depth256. Full resource/accounting owner DAG is peer-owned and not re-proved by this lifecycle review."
+  ],
+  "all_eight": {
+    "1": {
+      "symbols": "select_common_argument_call -> existing normal CallPrepare/CallSeal -> step::step",
+      "conclusion": "No new evaluator; query44 source metadata feeds ordinary indexed recipe/VM. Legacy assertion evaluator remains held. MA001/MA007/MA008 not closed."
+    },
+    "2": {
+      "symbols": "selected_source_body, capture_local, Frame::new_in_run",
+      "conclusion": "Uses common BodyStructure and ordinary body frame independent of scalar body shape; no literal/break output executor added. Existing MA004/MA005 routes remain held."
+    },
+    "3": {
+      "symbols": "EnteredCallSelection, prepare_selected_argument_call, prepare_contracts",
+      "conclusion": "New local selection keyed by genuine common Value declaration, no macro/method/name whitelist or numeric profile. Old numeric/runtime macro fallback remains, so MA003/MA006 not closed."
+    },
+    "4": {
+      "symbols": "LocalCallableSource::Entered/Legacy, LocalBodyContext::capture, ReachedLocalBody",
+      "conclusion": "Same immutable source projection/capture for genuine original/generated/retained authority; no new source-origin exclusion. Missing genuine producer/origin receipts stay explicit. Required handwritten/user/wrapper/standard runtime route matrix unexecuted here."
+    },
+    "5": {
+      "symbols": "select_common_argument_call, prepare_source_call, selected_source_body, run_argument_hints::prepare_later_argument_hint",
+      "conclusion": "Signature/value demand does not demand child body; body first at reached sealing, argument hints advance after completed predecessors. No pattern engine change or unselected executable branch preflight. Existing MA002 pattern debt stays held."
+    },
+    "6": {
+      "symbols": "EnteredCallGoal, pending SelectedArgumentCall, InstalledRecipes::get_current, CallSeal",
+      "conclusion": "Retained query44 serves same source selection; pending protocol preserves completed argument work across NeedInput. Existing per-entry hints/contracts and retry-time metadata preparation remain; no claim entire planning invariant removed. Required suspension/exactonce controls await execution."
+    },
+    "7": {
+      "symbols": "OrdinaryLocalAdmission::revalidate, publish_ordinary_local_function, SourceCallable::revalidate",
+      "conclusion": "New local selection/currentness uses actual relevant input guard and fixed-row checks, no added global namespace scan. Legacy module resolver/namespace witnesses and source-revision checks remain. Publication two-proof independence test is separately authored/unexecuted here."
+    },
+    "8": {
+      "symbols": "PreparedSourceCall.body, SuspendedCall, selected_source_body, LocalBodyContext::capture",
+      "conclusion": "BodyIndex retained by Arc in plan/frame, no deep body copy. Canonical parent item scan is initial cold O(D); no new repeated full-file node search. Smaller signature/source-term ownership clones are explicit existing costs."
+    }
+  },
+  "evidence_and_gaps": {
+    "commands": "Read-only rg/sed/cat/git diff/status and Python SHA256/snapshot metadata only; no Cargo/compiler/project tests/guest execution.",
+    "not_acceptance": [
+      "No runtime-contract/full-fixture/milestone/JIT completion",
+      "No new runtime suspension/argument effects/cleanup controls executed",
+      "No measured performance/scaling claim",
+      "No all4 editions/origins runtime comparison established here",
+      "No full resource/retention audit beyond inspected lifecycle owners"
+    ],
+    "required_validation": [
+      "Unchanged full suffix root all4 editions and actual unchanged AUTO prerequisite",
+      "Ordinary local source call in handwritten/user/wrapper/standard contexts, route/counters and source origin inspected",
+      "Suspend before/after each argument, body metadata request and call sealing; already completed effects remain once",
+      "Argument panic keeps later hints/child body cold; caller resumes only after callee cleanup; panic unwinds with exact ownership",
+      "Changed relevant source/header/context/owner/env/epoch refuses before entry/resume; unrelated publication does not stale actual cached selection",
+      "Independent two-cached-proof publication/idempotence/17 mutation/quota/overflow controls from separate exact currentness packet"
+    ],
+    "prior_evidence": "Historical run_return_tests/run_panic_tests/run_body_lease_tests/run_body_sharing_tests and separate source consumer review are source witnesses only in this pass; not rerun or promoted."
+  }
+}
