@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-15T23:49:56.431142+00:00",
+  "claim": "LOCAL-024",
+  "state": "source_frozen_uncompiled_unexecuted",
+  "source_baseline": "53ab9d3f97eb4e963b65f24d39c0df1ea9e0669e",
+  "source_packet": "artifacts/macos-first/common-pattern-reference-v1/SOURCE.json",
+  "source_packet_sha256": "79a130cf8bd1ca51c59cd609df71fe020e2b9a4303d43630b8f1c79b5338f9b2",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/frontend/closed_reference_calls.rs",
+      "sha256": "d462f1214ad5cb0b230dadc98ab3a8509cf73173b59706b0399aa2b424764f0d"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_reference_source_tests.rs",
+      "sha256": "f977eebf995f7226e353f6a0cf3789ac599f03c91a967a9472884ef127e2a912"
+    },
+    {
+      "path": "crates/lrr/src/frontend/generated_result_namespace.rs",
+      "sha256": "ffbf658f5553fe7efc57410e81f496db8238373cbcf20c88951b00ea4faabca6"
+    },
+    {
+      "path": "crates/lrr/src/service/common_pattern_route_tests.rs",
+      "sha256": "19a1de7daf36492e32e28761b53146fc171ae73de7a0897a0fcb2e874193d0db"
+    },
+    {
+      "path": "crates/lrr/src/service/mod.rs",
+      "sha256": "f11c792c786222fddd6bdcb1eb3705ebf0d76097409fc5ff0a0a7fc9a5498c3d"
+    },
+    {
+      "path": "crates/lrr/src/service/retained_reference_source_tests.rs",
+      "sha256": "c4396fd0541a54ae9ee85a3254cf9cbfc620388731f9ba006cc3a6b472f10e36"
+    },
+    {
+      "path": "crates/lrr/src/syntax/closed_reference_signatures.rs",
+      "sha256": "4dcea8df143a813018171a75be7be8161495fe08cb03b7b33b9b450a167e7fd9"
+    },
+    {
+      "path": "crates/lrr/src/syntax/condition_ranges.rs",
+      "sha256": "7753efd1fef2141ad70a8593a9a6c8a3b402007612b87a1a9315547442945477"
+    },
+    {
+      "path": "crates/lrr/src/syntax/conditions.rs",
+      "sha256": "a5fce4077fe156a6b1cdac92e373f81519c0c4533487cfb5afa85d8dca849999"
+    },
+    {
+      "path": "crates/lrr/src/syntax/literal_match.rs",
+      "sha256": "d08e1233aac18eb916d97299e06bdda8c129e1946bd6d71a8d010a172204e80b"
+    },
+    {
+      "path": "crates/lrr/src/syntax/node_lookup.rs",
+      "sha256": "ed72037a490f73fc5c230c76b63420ab1f4812574867ec1ea673dba95d424bea"
+    },
+    {
+      "path": "crates/lrr/src/syntax/node_lookup_tests.rs",
+      "sha256": "f71e339b2b6f0212861fdc5080e3b8eb81981c185da989393f1adc978031d24a"
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_tests.rs",
+      "sha256": "b19c22e6a048c14912dda7b953f438de6f0a675416e7b558f9bd2e2990f6b34f"
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_tests_tests.rs",
+      "sha256": "578c87f506c413ca3d1905c74909ed9c3121007051eb868c814f05caf8d41654"
+    },
+    {
+      "path": "crates/lrr/src/syntax/scalar_match_ranges_tests.rs",
+      "sha256": "14b574ae3989e627785e61bdf3af11095c7a6623d28a5da90ff52e7de6039b47"
+    },
+    {
+      "path": "crates/lrr/src/syntax/signatures.rs",
+      "sha256": "282b7c551edd7b1942efc24afcf45de83009c51e6c06c7f65dc2ef6a6853a462"
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "sha256": "76e5e58d1ba26ae9487f9c20c4a081aab97fa25de0adbb5658ec103281369877"
+    }
+  ],
+  "removed_files": [
+    "crates/lrr/src/syntax/scalar_match_ranges.rs"
+  ],
+  "scope": "Combined frozen source-only common scalar pattern test plan, generated/retained reference parameter authority and root ordinary indexed-binding attachment/glue. Replaces duplicated scalar comparison/decoding and boolean condition branch with common syntax mechanism, retains actual source/hygiene/type checks. All task, runtime/fullfixture, standard-macro, pending binding transaction, definition-site scope, installed planning/global census and legacy macro evaluator holds remain open. All tests UNCOMPILED/UNEXECUTED at freeze. Includes explicit deletion, not canonical live HEAD substitution.",
+  "handoffs": [
+    "worktracks/03-control-flow-patterns/common-scalar-tests-handoff.md",
+    "worktracks/04-calls-source-views/common-reference-source-handoff.md",
+    "worktracks/08-macros-editions/common-binding-location-handoff.md"
+  ],
+  "validation": {
+    "state": "queued_after_source_boundaries_full_milestone",
+    "sole_agent": "/root/edition_macro_logic",
+    "target": "artifacts/macos-first/root-constant-next-validation-v1/validation-target",
+    "terminal": null
+  },
+  "acceptance": {
+    "new_configured_upstream_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "task_completed": false,
+    "all_eight_shortcuts_removed": false,
+    "guest_jit_allowed": false
+  }
+}

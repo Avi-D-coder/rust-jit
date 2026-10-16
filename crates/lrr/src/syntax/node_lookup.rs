@@ -34,6 +34,55 @@ fn role_matches(node: &SyntaxNode, role: NodeRole) -> bool {
     }
 }
 impl ParsedFile {
+    /// Structural attachment for an already resolved local binding. This does
+    /// not resolve a name or certify the meaning of a written type. In
+    /// particular, a match/condition binding cannot select a nearby let.
+    pub(crate) fn binding_let_statement(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        binding: NodeId,
+    ) -> Result<Option<ast::LetStmt>, Diagnostic> {
+        if body.key() != *index.body() || index.profile() != &self.profile {
+            return Err(invalid("binding declaration owning body/profile differs"));
+        }
+        // Keep the existing entry and body-content validation. The retained
+        // index supplies a location, not source-currentness or entry authority.
+        self.entered_body_root(body)?;
+        let node = index
+            .nodes()
+            .get(binding.0 as usize)
+            .ok_or_else(|| invalid("binding declaration node ID absent"))?;
+        if node.role != NodeRole::Pattern {
+            return Ok(None);
+        }
+        let start = body
+            .range
+            .start
+            .checked_add(node.range.start)
+            .ok_or_else(|| invalid("binding declaration range overflow"))?;
+        let end = body
+            .range
+            .start
+            .checked_add(node.range.end)
+            .ok_or_else(|| invalid("binding declaration range overflow"))?;
+        let range = SourceRange::checked(start, end)?;
+        if !body.range.contains(range) {
+            return Err(invalid("binding declaration lies outside its body"));
+        }
+        let Some(pattern) = self.syntax_at(range, |syntax| ast::Pat::can_cast(syntax.kind()))?
+        else {
+            return Ok(None);
+        };
+        let Some(statement) = pattern.parent().and_then(ast::LetStmt::cast) else {
+            return Ok(None);
+        };
+        Ok(statement
+            .pat()
+            .is_some_and(|actual| actual.syntax() == &pattern)
+            .then_some(statement))
+    }
+
     /// Structural ownership only. The coordinator chooses expansion demand;
     /// this AST query supplies no name, type, body-entry or producer authority.
     pub(crate) fn macro_call_function_body(

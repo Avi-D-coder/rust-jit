@@ -57,15 +57,19 @@ impl ClosedReferenceParameter {
         else {
             return Err(invalid("reference definition source absent"));
         };
-        if db
-            .published_input(&InputKey::GeneratedSyntax(parse.content))
-            .is_some()
-        {
-            return Ok(None);
-        }
-        let parsed = db
-            .prepared_parse(parse)
-            .ok_or_else(|| invalid("reference original parser lease absent"))?;
+        let parse = parse.clone();
+        // Use the same retained immutable query as ordinary signatures. A
+        // prepared original-source cache cannot supply generated/retained trees.
+        let parsed = match db.fetch(&SyntaxProvider, QueryKey::ParseFile(parse.clone())) {
+            QueryPoll::Ready(Ok(outcome)) => match outcome.value.as_ref() {
+                crate::db::value::QueryValue::ParseFile(parsed) => parsed.clone(),
+                _ => return Err(invalid("reference parser query variant differs")),
+            },
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(_) => {
+                return Err(invalid("reference current parser input absent"));
+            }
+        };
         let Some((InputValue::DeclarationContext(context), _)) =
             db.published_input(&InputKey::DeclarationContext(signature.definition))
         else {
@@ -91,13 +95,24 @@ impl ClosedReferenceParameter {
         if inputs.len() > 4096 {
             return Err(limit());
         }
-        NormalizedDeferredReturn::require_primitive_name_namespace(
-            db,
-            signature,
-            sources,
-            &inputs,
-            Some(syntax.target()),
-        )?;
+        if db
+            .published_input(&InputKey::GeneratedSyntax(parse.content))
+            .is_some()
+        {
+            generated_result_namespace::require_reference(db, signature, &syntax)?;
+        } else {
+            super::super::type_name_namespace::require_primitive_name(
+                db,
+                super::super::type_name_namespace::SourceTypeOwner {
+                    definition: signature.definition,
+                    scope: &signature.scope,
+                    header: &signature.header,
+                },
+                sources,
+                &inputs,
+                syntax.target(),
+            )?;
+        }
         let region = match syntax.lifetime() {
             Some("'static") => {
                 return Err(fault(

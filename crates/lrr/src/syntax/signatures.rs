@@ -93,32 +93,21 @@ impl ParsedFile {
         if body.is_some_and(|b| b.def_key != definition) {
             return Err(fault("signature/body definition mismatch"));
         }
-        let mut selected = None;
-        for function in self
-            .parsed
-            .tree()
-            .syntax()
-            .descendants()
-            .filter_map(ast::Fn::cast)
-        {
-            let block = function.syntax().children().find_map(ast::BlockExpr::cast);
-            let excluded = block.as_ref().map(|b| b.syntax().text_range());
-            if super::ast_adapter::range(function.syntax().text_range()) != context.range {
-                continue;
-            }
-            if body.is_some_and(|handle| {
-                excluded.is_none_or(|r| super::ast_adapter::range(r) != handle.range)
-            }) || tokens(function.syntax(), excluded) != header.tokens
-            {
-                continue;
-            }
-            if selected.is_some() {
-                return Err(fault("signature declaration identity is ambiguous"));
-            }
-            selected = Some(function);
-        }
-        let function = selected
+        let function = self
+            .syntax_at(context.range, |node| ast::Fn::can_cast(node.kind()))
+            .map_err(|_| fault("signature declaration is not in its immutable source"))?
+            .and_then(ast::Fn::cast)
             .ok_or_else(|| fault("signature declaration is not in its immutable source"))?;
+        let block = function.syntax().children().find_map(ast::BlockExpr::cast);
+        let excluded = block.as_ref().map(|b| b.syntax().text_range());
+        if body.is_some_and(|handle| {
+            excluded.is_none_or(|r| super::ast_adapter::range(r) != handle.range)
+        }) || tokens(function.syntax(), excluded) != header.tokens
+        {
+            return Err(fault(
+                "signature declaration is not in its immutable source",
+            ));
+        }
         let generics = capture_generics(function.generic_param_list())?;
         let list = function
             .param_list()

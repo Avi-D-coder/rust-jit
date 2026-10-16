@@ -1,14 +1,44 @@
-//! Current generated function result admission; no original-source substitution.
+//! Current generated primitive-name admission from exact source syntax.
 use super::*;
 use crate::{
     source::manifest::Namespace,
-    syntax::{parse::ParseKey, signatures::FunctionSignature},
+    syntax::{
+        closed_reference_signatures::ClosedReferenceSyntax, parse::ParseKey,
+        signatures::FunctionSignature,
+    },
 };
 
 pub(super) fn require(
     db: &Database,
     signature: &FunctionSignature,
     parse: &ParseKey,
+) -> Result<(), Diagnostic> {
+    if signature.result.len() != 1 || signature.result_symbolic.is_some() {
+        return Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "primitive result requires its exact current generated Type namespace",
+        ));
+    }
+    require_name(db, signature, parse, &signature.result[0].text, None)
+}
+
+/// Parameter authority is supplied by the ordinary parser's opaque RefType
+/// proof. No caller-selected spelling or range can masquerade as that role.
+pub(super) fn require_reference(
+    db: &Database,
+    signature: &FunctionSignature,
+    syntax: &ClosedReferenceSyntax,
+) -> Result<(), Diagnostic> {
+    syntax.require(signature)?;
+    require_name(db, signature, syntax.parse(), syntax.target(), Some(syntax))
+}
+
+fn require_name(
+    db: &Database,
+    signature: &FunctionSignature,
+    parse: &ParseKey,
+    written_name: &str,
+    reference: Option<&ClosedReferenceSyntax>,
 ) -> Result<(), Diagnostic> {
     let missing = || {
         fault(
@@ -34,9 +64,8 @@ pub(super) fn require(
     else {
         return Err(missing());
     };
-    if signature.result.len() != 1
-        || signature.result_symbolic.is_some()
-        || unit.key != *parse
+    if unit.key != *parse
+        || !matches!(db.published_input(&InputKey::DefinitionSource(signature.definition)), Some((InputValue::DefinitionSource(current), _)) if current == parse)
         || signature.header.profile != unit.key.profile
         || context.scope != signature.scope
         || signature.scope.owner.is_some()
@@ -62,49 +91,55 @@ pub(super) fn require(
         .iter()
         .find(|header| header.key.fingerprint() == signature.definition)
         .ok_or_else(missing)?;
-    let origins = unit
-        .items
-        .project_source_spans(crate::syntax::spans::SourceRange::checked(
-            header.header_start,
-            header.header_end,
-        )?)?;
+    let header_range =
+        crate::syntax::spans::SourceRange::checked(header.header_start, header.header_end)?;
+    let selected_range = reference.map_or(header_range, ClosedReferenceSyntax::target_range);
+    if !header_range.contains(selected_range) {
+        return Err(missing());
+    }
+    let origins = unit.items.project_source_spans(selected_range)?;
     if origins.is_empty() {
         return Err(missing());
     }
-    // Reuse exact retained token syntax and the normal pinned signature capture.
-    // No body-structure query, preparation, macro execution or source reparse.
-    let transient = unit
-        .items
-        .syntax_events()
-        .len()
-        .checked_mul(128)
-        .and_then(|n| {
-            unit.items
-                .text()
-                .len()
-                .checked_mul(128)
-                .and_then(|m| n.checked_add(m))
-        })
-        .filter(|n| *n <= 32 * 1024 * 1024)
-        .ok_or_else(crate::runtime::arena::resource)?;
-    if unit.metadata_bytes()? > 32 * 1024 * 1024 {
-        return Err(crate::runtime::arena::resource());
+    // The reference proof already came from the common ParseFile query and
+    // exact current signature. Results preserve their historical full-signature
+    // replay check; no additional replay is needed for a captured parameter.
+    if reference.is_none() {
+        // Reuse exact retained token syntax and the normal pinned signature capture.
+        // No body-structure query, preparation, macro execution or source reparse.
+        let transient = unit
+            .items
+            .syntax_events()
+            .len()
+            .checked_mul(128)
+            .and_then(|n| {
+                unit.items
+                    .text()
+                    .len()
+                    .checked_mul(128)
+                    .and_then(|m| n.checked_add(m))
+            })
+            .filter(|n| *n <= 32 * 1024 * 1024)
+            .ok_or_else(crate::runtime::arena::resource)?;
+        if unit.metadata_bytes()? > 32 * 1024 * 1024 {
+            return Err(crate::runtime::arena::resource());
+        }
+        let parsed = crate::syntax::parse::ParsedFile::from_generated_items(&unit.items)?;
+        if parsed.estimated_bytes() > transient {
+            return Err(crate::runtime::arena::resource());
+        }
+        if parsed.key() != *parse
+            || parsed.function_signature(
+                signature.definition,
+                &signature.header,
+                context,
+                Some(body),
+            )? != *signature
+        {
+            return Err(missing());
+        }
+        drop(parsed);
     }
-    let parsed = crate::syntax::parse::ParsedFile::from_generated_items(&unit.items)?;
-    if parsed.estimated_bytes() > transient {
-        return Err(crate::runtime::arena::resource());
-    }
-    if parsed.key() != *parse
-        || parsed.function_signature(
-            signature.definition,
-            &signature.header,
-            context,
-            Some(body),
-        )? != *signature
-    {
-        return Err(missing());
-    }
-    drop(parsed);
     let Some((InputValue::DiscoverySeal(publication), _)) =
         db.published_input(&InputKey::DiscoverySeal(unit.seal.clone()))
     else {
@@ -138,11 +173,9 @@ pub(super) fn require(
     // Source-authority roots are not name-comparison classes. A foreign root
     // needs its own current original declaration and independently sealed Type
     // lookup; absence in the insertion scope alone cannot authorize it.
-    require_original_origins(db, signature, unit, publication, &origins)?;
-    let name = crate::expand::scopes::MacroName::parse(
-        &signature.result[0].text,
-        signature.header.profile.edition,
-    )?;
+    require_original_origins(db, signature, unit, publication, &origins, written_name)?;
+    let name =
+        crate::expand::scopes::MacroName::parse(written_name, signature.header.profile.edition)?;
     if receipt.scope().namespace != Namespace::Type
         || receipt.scope().names.contains_key(name.as_str())
     {
@@ -169,6 +202,7 @@ fn require_original_origins(
     unit: &crate::expand::generated_syntax::GeneratedSyntaxInput,
     publication: &crate::db::seals::DiscoveryInput,
     origins: &[&crate::syntax::token_wire::SpanRecord],
+    written_name: &str,
 ) -> Result<(), Diagnostic> {
     use crate::{expand::identity::MacroIdentity, syntax::declaration_scan::DeclarationScanLimits};
     let missing = || {
@@ -178,13 +212,7 @@ fn require_original_origins(
         )
     };
     if generated_parent::is_generated_definition(db, unit.items.record()) {
-        return generated_parent::require(
-            db,
-            unit,
-            publication,
-            origins,
-            &signature.result[0].text,
-        );
+        return generated_parent::require(db, unit, publication, origins, written_name);
     }
     let hygiene = unit.items.hygiene_facts();
     // Bounded by project_source_spans' 64-row limit. Retain only borrowed source
@@ -283,7 +311,7 @@ fn require_original_origins(
             proof.require_owner(scope, &source.outline.parse.profile)?;
             proof.require_current(db, publication)?;
             let name = crate::expand::scopes::MacroName::parse(
-                &signature.result[0].text,
+                written_name,
                 source.outline.parse.profile.edition,
             )?;
             if proof.scope().namespace != Namespace::Type
@@ -310,6 +338,10 @@ mod parent_profile_tests;
 #[cfg(test)]
 #[path = "generated_result_cross_source_tests.rs"]
 mod cross_source_tests;
+
+#[cfg(test)]
+#[path = "generated_reference_source_tests.rs"]
+mod reference_source_tests;
 
 #[cfg(test)]
 mod tests {
@@ -365,7 +397,7 @@ mod tests {
             prepared_config_retained(text, edition, publish_epoch, compile_environment);
         (db, signature, parse, publication)
     }
-    fn prepared_config_retained(
+    pub(super) fn prepared_config_retained(
         text: &str,
         edition: u16,
         publish_epoch: bool,

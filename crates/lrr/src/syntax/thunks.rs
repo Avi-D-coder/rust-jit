@@ -28,6 +28,8 @@ mod condition_ranges;
 mod literal_match;
 #[path = "local_numeric_constraints.rs"]
 mod local_numeric_constraints;
+#[path = "pattern_tests.rs"]
+mod pattern_tests;
 #[path = "primitive_cast_target.rs"]
 mod primitive_cast_target;
 #[path = "runtime_local_numeric_context.rs"]
@@ -2384,93 +2386,7 @@ impl ParsedFile {
                 if condition_ranges::selected(&pattern) {
                     return condition_ranges::prepare(self, body, index, key, &expression);
                 }
-                let ast::Pat::LiteralPat(pattern) = pattern else {
-                    return unsupported(
-                        "reached condition pattern awaits ordered pattern integration",
-                    );
-                };
-                let Some(literal) = pattern.literal() else {
-                    return unsupported("condition literal pattern absent");
-                };
-                if pattern.minus_token().is_some()
-                    || !matches!(
-                        literal.token().kind(),
-                        SyntaxKind::TRUE_KW | SyntaxKind::FALSE_KW
-                    )
-                {
-                    return unsupported(
-                        "reached condition literal pattern awaits scalar pattern integration",
-                    );
-                }
-                let Some(scrutinee) = expression.expr() else {
-                    return unsupported("condition scrutinee absent");
-                };
-                let scrutinee = id_for(index, body, scrutinee.syntax())?;
-                let source = index.nodes()[scrutinee.0 as usize]
-                    .value
-                    .ok_or_else(|| error("condition scrutinee slot absent"))?;
-                let expected = node.runtime_temporaries[0]
-                    .ok_or_else(|| error("condition pattern temporary absent"))?;
-                let destination = node
-                    .value
-                    .ok_or_else(|| error("condition test result absent"))?;
-                match phase {
-                    Phase::Entry => draft(
-                        index,
-                        key,
-                        vec![
-                            Op::ScopeEnter {
-                                scope: node
-                                    .clause_scope
-                                    .ok_or_else(|| error("condition clause scope absent"))?,
-                            },
-                            Op::SetHint {
-                                child: source,
-                                hint: HintRecipe::Primitive(PrimitiveType::Bool),
-                            },
-                        ],
-                        RecipeExit::Next(index.pc(scrutinee, Phase::Entry)?),
-                    ),
-                    Phase::Operand(n) if node.operands.get(usize::from(n)) == Some(&scrutinee) => {
-                        let span = literal.syntax().text_range();
-                        let relative_start = u32::from(span.start())
-                            .checked_sub(body.range.start)
-                            .ok_or_else(|| error("condition literal precedes body"))?;
-                        let relative_end = u32::from(span.end())
-                            .checked_sub(body.range.start)
-                            .ok_or_else(|| error("condition literal precedes body"))?;
-                        draft(
-                            index,
-                            key,
-                            vec![
-                                Op::Literal {
-                                    literal: LiteralRecipe {
-                                        kind: LiteralKind::Bool,
-                                        spelling: literal.token().text().into(),
-                                        decoded: None,
-                                        source: super::spans::BodySpan {
-                                            body_key: key.body.clone(),
-                                            relative_start,
-                                            relative_end,
-                                        },
-                                    },
-                                    hint: HintRecipe::Primitive(PrimitiveType::Bool),
-                                    destination: expected,
-                                },
-                                Op::NumericBinary {
-                                    left: source,
-                                    right: expected,
-                                    destination,
-                                    operator: NumericBinary::Eq,
-                                },
-                                Op::Discard { source },
-                                Op::Discard { source: expected },
-                            ],
-                            RecipeExit::Next(return_pc(index, body, expression.syntax())?),
-                        )
-                    }
-                    _ => unsupported("invalid condition pattern phase"),
-                }
+                unsupported("reached condition pattern awaits ordered pattern integration")
             }
             _ => unsupported("entered node phase awaits its ordered lowering task"),
         }

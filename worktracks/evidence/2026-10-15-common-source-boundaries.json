@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "at": "2026-10-15T23:39:29.796983+00:00",
+  "at": "2026-10-15T23:49:56.431142+00:00",
   "claim": "LOCAL-024",
   "tasks": [
     "T024",
     "M014",
     "M016"
   ],
-  "state": "uncompiled_unexecuted_when_frozen_now_validating",
+  "state": "scoped_component_passed_fresh_full_milestone_running",
   "source_baseline": "8e4e1c23c8",
   "source_packet": "artifacts/macos-first/common-source-boundaries-v1/SOURCE.json",
   "source_packet_sha256": "97d10d92d460d35272db0e37126763b94188366abd37088b2ed8cc5705a3b20a",
@@ -60,11 +60,20 @@
     "source_publication": "Checkpoint may be source WIP only. No task or all8 repair closure."
   },
   "validation": {
-    "state": "running",
+    "state": "scoped_passed_full_milestone_running",
     "run_directory": "artifacts/macos-first/sol-common-source-boundaries-validation-v1",
     "actual_launch": "f7ea22 session12021 PID33609",
     "frozen_source_member_prefix": "dca870f7",
-    "source_snapshot_unchanged": true
+    "source_snapshot_unchanged": true,
+    "scoped_release": "artifacts/macos-first/sol-common-source-boundaries-validation-v1/RELEASE.json",
+    "scoped_release_sha256": "3929be12978ab854f1f0fd501da6391d9c4f2491c2745571cd9d5ad4c862acdf",
+    "distinct_scoped_passes": 50,
+    "failed_scoped_bodies": 0,
+    "strict_workspace_alltargets_passed": true,
+    "actual_scoped_seal": "daddcd/0",
+    "actual_target_inactivity": "da81f9/0",
+    "full_milestone_launch": "80ef80 session47019 PID34737",
+    "full_milestone_terminal": null
   },
   "acceptance": {
     "new_configured_upstream_runtime_contract_passes": 0,

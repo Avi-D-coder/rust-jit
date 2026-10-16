@@ -1,16 +1,14 @@
 //! Reached closed scalar match phases. No queries, descriptors or guest effects.
-#[path = "scalar_match_ranges.rs"]
-mod ranges;
+use super::pattern_tests as patterns;
 use super::{draft, error, local_binding, parameter_at, primitive_cast_target, return_pc};
+#[cfg(test)]
+use crate::ir::op::{DecodedLiteral, LiteralKind, LiteralRecipe, NumericBinary};
 use crate::{
     core::diagnostic::Diagnostic,
     expand::scopes::MacroName,
     frontend::{scalar_pattern_binding::ScalarPatternBindingAdmission, thunks},
     ir::{
-        op::{
-            DecodedLiteral, HintRecipe, LiteralKind, LiteralRecipe, NumericBinary, Op,
-            PrimitiveType,
-        },
+        op::{HintRecipe, Op, PrimitiveType},
         pc::{NodeId, PcKey, Phase, SlotId},
         recipe::{Origin, RecipeDraft, RecipeExit, VerifiedRecipe},
     },
@@ -18,7 +16,6 @@ use crate::{
         body_index::{BodyIndex, ExpressionKind, NodeRole},
         outline::BodyHandle,
         parse::ParsedFile,
-        spans::BodySpan,
     },
 };
 use ra_ap_syntax::{
@@ -75,24 +72,7 @@ fn supported(ty: PrimitiveType) -> bool {
     )
 }
 fn pattern_type(pat: &ast::Pat) -> Option<PrimitiveType> {
-    if let ast::Pat::RangePat(range) = pat {
-        return ranges::source_type(range);
-    }
-    let ast::Pat::LiteralPat(pat) = pat else {
-        return None;
-    };
-    let literal = pat.literal()?;
-    match literal.token().kind() {
-        SyntaxKind::TRUE_KW | SyntaxKind::FALSE_KW if pat.minus_token().is_none() => {
-            Some(PrimitiveType::Bool)
-        }
-        SyntaxKind::CHAR if pat.minus_token().is_none() => Some(PrimitiveType::Char),
-        SyntaxKind::BYTE if pat.minus_token().is_none() => Some(PrimitiveType::U8),
-        SyntaxKind::INT_NUMBER => ast::IntNumber::cast(literal.token())?
-            .suffix()
-            .and_then(primitive),
-        _ => None,
-    }
+    patterns::source_type(pat)
 }
 /// The ordinal is an exact source relation, not a printed primitive proof.
 /// Its scalar class is checked against the admitted parameter source by VM.
@@ -187,9 +167,9 @@ fn context(
             SyntaxKind::TRUE_KW | SyntaxKind::FALSE_KW => Some(PrimitiveType::Bool),
             SyntaxKind::CHAR => Some(PrimitiveType::Char),
             SyntaxKind::BYTE => Some(PrimitiveType::U8),
-            SyntaxKind::FLOAT_NUMBER => ranges::floating_context(x, expected),
+            SyntaxKind::FLOAT_NUMBER => patterns::floating_context(x, expected),
             SyntaxKind::INT_NUMBER => {
-                if let Some(ty) = ranges::floating_context(x, expected) {
+                if let Some(ty) = patterns::floating_context(x, expected) {
                     return Ok(Some(ty));
                 }
                 ast::IntNumber::cast(x.token()).and_then(|n| match n.suffix() {
@@ -212,12 +192,9 @@ fn context(
             _ => None,
         },
         ast::Expr::PathExpr(x) => {
-            // Intrinsic literals and control structure above/below have the
-            // same meaning in retained syntax. Names still need their actual
-            // hygienic binding/source join; printed paths grant no authority.
-            if parsed.generated_origin.is_some() {
-                return Ok(None);
-            }
+            // Actual ordinary hygienic lookup chooses the source binding.
+            // Primitive Type paths below still require their source admission;
+            // provenance alone neither rejects nor proves a source constraint.
             let Some(path) = x.path() else {
                 return Ok(None);
             };
@@ -233,45 +210,17 @@ fn context(
                 return Ok(None);
             }
             if let Some(binding) = local_binding(parsed, index, body, x)? {
-                let node = index
-                    .nodes()
-                    .get(binding.0 as usize)
-                    .ok_or_else(|| error("match local binding absent"))?;
-                let start = body
-                    .range
-                    .start
-                    .checked_add(node.range.start)
-                    .ok_or_else(limit)?;
-                let end = body
-                    .range
-                    .start
-                    .checked_add(node.range.end)
-                    .ok_or_else(limit)?;
-                let root = parsed.entered_body_root(body)?;
-                for syntax in root.descendants() {
-                    charge(work)?;
-                    let Some(statement) = ast::LetStmt::cast(syntax) else {
-                        continue;
-                    };
-                    let Some(ast::Pat::IdentPat(binding)) = statement.pat() else {
-                        continue;
-                    };
-                    let range = binding.syntax().text_range();
-                    if u32::from(range.start()) != start || u32::from(range.end()) != end {
-                        continue;
-                    }
-                    if binding.ref_token().is_some() || binding.at_token().is_some() {
-                        return Ok(None);
-                    }
-                    return Ok(primitive_cast_target::resolve(
-                        parsed,
-                        index,
-                        statement.ty(),
-                        None,
-                    )?
-                    .filter(|p| supported(*p)));
+                let Some(statement) = parsed.binding_let_statement(body, index, binding)? else {
+                    return Ok(None);
+                };
+                let Some(ast::Pat::IdentPat(binding)) = statement.pat() else {
+                    return Ok(None);
+                };
+                if binding.ref_token().is_some() || binding.at_token().is_some() {
+                    return Ok(None);
                 }
-                None
+                primitive_cast_target::resolve(parsed, index, statement.ty(), None)?
+                    .filter(|p| supported(*p))
             } else {
                 let Some(name) = segment.name_ref() else {
                     return Ok(None);
@@ -917,9 +866,10 @@ fn prepare_inner(
     {
         return unsupported("reached alternative attributes require macro integration");
     }
-    let range = if let ast::Pat::RangePat(pattern) = &alternative.pattern {
-        match ranges::ScalarRange::from_source(pattern) {
-            Ok(range) => Some(range),
+    let is_range = matches!(alternative.pattern, ast::Pat::RangePat(_));
+    let scalar_test = if !wildcard && binding.is_none() {
+        match patterns::ScalarTestPlan::from_source(&alternative.pattern) {
+            Ok(test) => Some(test),
             Err(error) if error.code == "LRR-E-UNSUPPORTED" => {
                 return unsupported(&error.message);
             }
@@ -928,77 +878,37 @@ fn prepare_inner(
     } else {
         None
     };
-    if !wildcard && binding.is_none() && range.is_none() {
-        let ast::Pat::LiteralPat(pattern) = &alternative.pattern else {
-            return unsupported("reached alternative requires scalar literal or wildcard");
-        };
-        let Some(literal) = pattern.literal() else {
-            return unsupported("reached alternative literal absent");
-        };
-        if !matches!(
-            literal.token().kind(),
-            SyntaxKind::TRUE_KW
-                | SyntaxKind::FALSE_KW
-                | SyntaxKind::INT_NUMBER
-                | SyntaxKind::CHAR
-                | SyntaxKind::BYTE
-        ) || (literal.token().kind() != SyntaxKind::INT_NUMBER
-            && pattern.minus_token().is_some())
-            || (literal.token().kind() == SyntaxKind::INT_NUMBER
-                && ast::IntNumber::cast(literal.token())
-                    .and_then(|n| n.suffix().map(|s| primitive(s).is_none()))
-                    .unwrap_or(false))
-        {
-            return unsupported("reached literal alternative requires supported scalar type");
-        }
-    }
     match phase {
-        Phase::Entry | Phase::Operand(0) if range.is_some() => {
-            let range = range
+        Phase::Entry | Phase::Operand(0) if scalar_test.is_some() => {
+            let scalar_test = scalar_test
                 .as_ref()
-                .ok_or_else(|| error("range source disappeared"))?;
-            if !index.nodes()[alternative.id.0 as usize].scalar_range_phase {
-                return Err(error(
-                    "range continuation lacks its original structural marker",
-                ));
+                .ok_or_else(|| error("scalar test source disappeared"))?;
+            if is_range && !index.nodes()[alternative.id.0 as usize].scalar_range_phase {
+                return Err(error("range continuation lacks its structural marker"));
             }
             let upper = phase == Phase::Operand(0);
-            let literal = match if upper {
-                range.upper(body, key)
+            if upper && !is_range {
+                return unsupported("non-range scalar pattern has no upper phase");
+            }
+            let comparison = match if upper {
+                scalar_test.upper(body, key)
             } else {
-                range.lower(body, key)
+                scalar_test.first(body, key)
             } {
-                Ok(literal) => literal,
+                Ok(comparison) => comparison,
                 Err(error) if error.code == "LRR-E-UNSUPPORTED" => {
                     return unsupported(&error.message);
                 }
                 Err(error) => return Err(error),
             };
-            let hint = ranges::hint(&literal, &plan.ty);
+            let upper_pending = comparison.upper_pending;
             let mut ops = Vec::new();
             ops.try_reserve_exact(if upper { 4 } else { 3 })
                 .map_err(|_| limit())?;
             if upper {
                 ops.push(Op::Discard { source: test });
             }
-            ops.extend([
-                Op::Literal {
-                    literal,
-                    hint,
-                    destination: expected,
-                },
-                Op::NumericBinary {
-                    left: source,
-                    right: expected,
-                    destination: test,
-                    operator: if upper {
-                        range.upper_comparison()
-                    } else {
-                        NumericBinary::Ge
-                    },
-                },
-                Op::Discard { source: expected },
-            ]);
+            ops.extend(comparison.operations(source, expected, test, &plan.ty));
             draft(
                 index,
                 key,
@@ -1007,10 +917,10 @@ fn prepare_inner(
                     condition: test,
                     yes: index.pc(
                         alternative.id,
-                        if upper {
-                            Phase::Commit
-                        } else {
+                        if upper_pending {
                             Phase::Operand(0)
+                        } else {
+                            Phase::Commit
                         },
                     )?,
                     no: index.pc(alternative.id, Phase::Exit)?,
@@ -1030,68 +940,6 @@ fn prepare_inner(
             vec![],
             RecipeExit::Next(index.pc(alternative.id, Phase::Commit)?),
         ),
-        Phase::Entry => {
-            let ast::Pat::LiteralPat(pattern) = &alternative.pattern else {
-                return Err(error("validated scalar alternative shape differs"));
-            };
-            let Some(literal) = pattern.literal() else {
-                return Err(error("validated scalar literal absent"));
-            };
-            let r = pattern.syntax().text_range();
-            let span = BodySpan {
-                body_key: key.body.clone(),
-                relative_start: u32::from(r.start())
-                    .checked_sub(body.range.start)
-                    .ok_or_else(limit)?,
-                relative_end: u32::from(r.end())
-                    .checked_sub(body.range.start)
-                    .ok_or_else(limit)?,
-            };
-            let recipe = if pattern.minus_token().is_some() {
-                let number = ast::IntNumber::cast(literal.token())
-                    .ok_or_else(|| error("match integer token absent"))?;
-                LiteralRecipe {
-                    kind: LiteralKind::NegativeInteger,
-                    spelling: pattern.syntax().text().to_string(),
-                    decoded: Some(crate::syntax::literal_decode::integer(&number, true)),
-                    source: span,
-                }
-            } else {
-                super::literal_recipe(&literal, span)?
-            };
-            let hint = match &recipe.decoded {
-                Some(DecodedLiteral::Integer {
-                    suffix: Some(ty), ..
-                }) => HintRecipe::Primitive(*ty),
-                _ if recipe.kind == LiteralKind::Bool => HintRecipe::Primitive(PrimitiveType::Bool),
-                Some(DecodedLiteral::Char(_)) => HintRecipe::Primitive(PrimitiveType::Char),
-                Some(DecodedLiteral::Byte(_)) => HintRecipe::Primitive(PrimitiveType::U8),
-                _ => plan.ty.clone(),
-            };
-            draft(
-                index,
-                key,
-                vec![
-                    Op::Literal {
-                        literal: recipe,
-                        hint,
-                        destination: expected,
-                    },
-                    Op::NumericBinary {
-                        left: source,
-                        right: expected,
-                        destination: test,
-                        operator: NumericBinary::Eq,
-                    },
-                    Op::Discard { source: expected },
-                ],
-                RecipeExit::Branch {
-                    condition: test,
-                    yes: index.pc(alternative.id, Phase::Commit)?,
-                    no: index.pc(alternative.id, Phase::Exit)?,
-                },
-            )
-        }
         Phase::Commit => {
             if arm.syntax.guard().is_some() && arm.guard.is_none() {
                 return unsupported("matched guard condition syntax absent");

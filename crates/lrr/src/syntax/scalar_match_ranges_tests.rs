@@ -464,14 +464,12 @@ fn guarded_range_commits_before_guard_and_keeps_plain_binding_admission_separate
 }
 
 #[test]
-fn nonliteral_wide_float_and_unbounded_ranges_remain_typed_source_frontiers() {
+fn nonliteral_and_wide_float_ranges_remain_typed_source_frontiers() {
     for edition in [2015, 2018, 2021, 2024] {
         for (pattern, reached_phase) in [
             ("LOW..=4", Phase::Entry),
             ("0..=HIGH", Phase::Operand(0)),
             ("0.0f128..=4.0f128", Phase::Entry),
-            ("0..", Phase::Operand(0)),
-            ("..=4", Phase::Entry),
         ] {
             let source = format!(
                 "const LOW:u8=0;const HIGH:u8=4;fn chosen(c:u8){{match c{{{pattern}=>(),_=>()}}}}"

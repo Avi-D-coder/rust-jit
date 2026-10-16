@@ -41,3 +41,9 @@ mod retained_selected_body_tests;
 
 #[cfg(test)]
 mod retained_lexical_tests;
+
+#[cfg(test)]
+mod retained_reference_source_tests;
+
+#[cfg(test)]
+mod common_pattern_route_tests;

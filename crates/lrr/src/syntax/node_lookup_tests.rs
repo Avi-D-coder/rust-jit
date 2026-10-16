@@ -10,10 +10,18 @@ const ORIGINALS: &[&str] = &[
     include_str!(
         "../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/macro-nested_stmt_macros.rs"
     ),
+    include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/regions/regions-infer-call.rs"
+    ),
+    include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/binding/match-range-infer.rs"
+    ),
 ];
 #[test]
 fn indexed_role_lookup_matches_source_preorder_on_unchanged_originals_all_editions() {
     for edition in [2015, 2018, 2021, 2024] {
+        let mut let_bindings = 0;
+        let mut other_patterns = 0;
         for original in ORIGINALS {
             let mut profile = ProfileIdentity::current();
             profile.edition = edition;
@@ -37,11 +45,37 @@ fn indexed_role_lookup_matches_source_preorder_on_unchanged_originals_all_editio
                     });
                     let actual = parsed.entered_node_syntax(body, &index, node.id).unwrap();
                     assert_eq!(actual, expected, "edition {edition}, node {:?}", node.id);
+                    // Separate structural oracle for let ownership. The normal
+                    // executable-pattern lookup intentionally selects only
+                    // match patterns; local declaration lookup accepts the
+                    // exact indexed pattern and its immediate owning let.
+                    let expected_let = (node.role == NodeRole::Pattern)
+                        .then(|| {
+                            parsed.parsed.tree().syntax().descendants().find(|syntax| {
+                                u32::from(syntax.text_range().start())
+                                    == body.range.start + node.range.start
+                                    && u32::from(syntax.text_range().end())
+                                        == body.range.start + node.range.end
+                                    && ast::Pat::can_cast(syntax.kind())
+                            })
+                        })
+                        .flatten()
+                        .and_then(|pattern| pattern.parent().and_then(ast::LetStmt::cast));
+                    let_bindings += usize::from(expected_let.is_some());
+                    other_patterns +=
+                        usize::from(node.role == NodeRole::Pattern && expected_let.is_none());
+                    assert_eq!(
+                        parsed.binding_let_statement(body, &index, node.id).unwrap(),
+                        expected_let,
+                        "edition {edition}, binding node {:?}",
+                        node.id
+                    );
                     checked += 1;
                 }
             }
             assert!(checked > 0);
         }
+        assert!(let_bindings > 0 && other_patterns > 0);
     }
 }
 #[test]

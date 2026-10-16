@@ -24,6 +24,7 @@ pub(crate) struct ClosedReferenceSyntax {
     mutable: bool,
     lifetime: Option<String>,
     target: String,
+    target_range: SourceRange,
 }
 impl ClosedReferenceSyntax {
     pub(crate) fn parse(&self) -> &ParseKey {
@@ -41,11 +42,17 @@ impl ClosedReferenceSyntax {
     pub(crate) fn target(&self) -> &str {
         &self.target
     }
+    /// Exact NameRef captured from the selected parameter RefType, not its text.
+    pub(crate) fn target_range(&self) -> SourceRange {
+        self.target_range
+    }
     pub(crate) fn require(&self, signature: &FunctionSignature) -> Result<(), Diagnostic> {
         if self.signature != signature.fingerprint()
             || self.parse.profile != signature.header.profile
             || self.ordinal as usize >= signature.parameters.len()
             || self.range.start >= self.range.end
+            || self.target_range.is_empty()
+            || !self.range.contains(self.target_range)
         {
             return Err(fault("closed reference parameter source identity differs"));
         }
@@ -82,14 +89,8 @@ impl ParsedFile {
             return Ok(None);
         }
         let function = self
-            .parsed
-            .tree()
-            .syntax()
-            .descendants()
-            .filter_map(ast::Fn::cast)
-            .find(|function| {
-                super::ast_adapter::range(function.syntax().text_range()) == context.range
-            })
+            .syntax_at(context.range, |node| ast::Fn::can_cast(node.kind()))?
+            .and_then(ast::Fn::cast)
             .ok_or_else(|| fault("closed reference owning function absent"))?;
         let params = function
             .param_list()
@@ -142,6 +143,7 @@ impl ParsedFile {
             mutable: reference.mut_token().is_some(),
             lifetime,
             target,
+            target_range: super::ast_adapter::range(name.syntax().text_range()),
         };
         if proof.allocated_bytes().is_none_or(|n| n > 128 * 1024) {
             return Err(Diagnostic::new(

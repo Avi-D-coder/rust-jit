@@ -159,24 +159,9 @@ impl ParsedFile {
         if body.key() != *index.body() || self.profile != *index.profile() {
             return Err(invalid("match guard body/profile differs"));
         }
-        let root = self.entered_body_root(body)?;
-        let selected = index
-            .nodes()
-            .get(node.0 as usize)
-            .ok_or_else(|| invalid("match guard node absent"))?;
-        let start = body
-            .range
-            .start
-            .checked_add(selected.range.start)
-            .ok_or_else(limit)?;
-        let end = body
-            .range
-            .start
-            .checked_add(selected.range.end)
-            .ok_or_else(limit)?;
-        let syntax = root
-            .descendants()
-            .find(|n| ast::Expr::can_cast(n.kind()) && range(n) == SourceRange { start, end })
+        let syntax = self
+            .entered_node_syntax(body, index, node)?
+            .filter(|syntax| ast::Expr::can_cast(syntax.kind()))
             .ok_or_else(|| invalid("match guard expression absent"))?;
         let mut bytes = 0;
         if misplaced_let(
@@ -208,7 +193,6 @@ impl ParsedFile {
         if body.key() != *index.body() || self.profile != *index.profile() {
             return Err(invalid("condition plan body/profile differs"));
         }
-        let root = self.entered_body_root(body)?;
         let selected = index
             .nodes()
             .get(conditional.0 as usize)
@@ -219,26 +203,13 @@ impl ParsedFile {
         ) {
             return Err(invalid("condition plan requires if or while"));
         }
-        let absolute = SourceRange {
-            start: body
-                .range
-                .start
-                .checked_add(selected.range.start)
-                .ok_or_else(limit)?,
-            end: body
-                .range
-                .start
-                .checked_add(selected.range.end)
-                .ok_or_else(limit)?,
-        };
-        let syntax = root
-            .descendants()
-            .find(|n| {
-                range(n) == absolute
-                    && matches!(
-                        n.kind(),
-                        ra_ap_syntax::SyntaxKind::IF_EXPR | ra_ap_syntax::SyntaxKind::WHILE_EXPR
-                    )
+        let syntax = self
+            .entered_node_syntax(body, index, conditional)?
+            .filter(|syntax| {
+                matches!(
+                    syntax.kind(),
+                    ra_ap_syntax::SyntaxKind::IF_EXPR | ra_ap_syntax::SyntaxKind::WHILE_EXPR
+                )
             })
             .ok_or_else(|| invalid("condition source node differs"))?;
         let expression = if let Some(x) = ast::IfExpr::cast(syntax.clone()) {
