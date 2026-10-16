@@ -32,6 +32,7 @@ mod thunks;
 pub use thunks::pattern_plan;
 pub use thunks::pattern_product;
 pub(crate) use thunks::runtime_macro_numeric_context::MacroNumericSite;
+pub use thunks::string_literal;
 
 pub mod signatures;
 

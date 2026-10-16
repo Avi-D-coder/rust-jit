@@ -672,6 +672,8 @@ fn verify_inner(
     let mut outputs = BTreeSet::new();
     let mut pattern_plans = BTreeSet::new();
     let mut shared_product_admission_bytes = 0usize;
+    let mut string_literals = BTreeSet::new();
+    let mut shared_string_literal_admission_bytes = 0usize;
     pattern_decision::exits(&draft)?;
     for op in &draft.operations {
         charge(&mut bytes, 256usize.max(std::mem::size_of::<Op>()))?;
@@ -1116,7 +1118,7 @@ fn verify_inner(
             Op::Literal {
                 literal,
                 destination,
-                ..
+                hint,
             } => {
                 slot(body, *destination, SlotKind::Value)?;
                 span(body, &literal.source)?;
@@ -1179,6 +1181,31 @@ fn verify_inner(
                     (LiteralKind::Integer | LiteralKind::NegativeInteger, _) => {
                         return Err(invalid(
                             "integer literal requires matched pinned decoded data",
+                        ));
+                    }
+                    (LiteralKind::String, Some(DecodedLiteral::String(proof))) => {
+                        if *hint != super::op::HintRecipe::None {
+                            return Err(invalid(
+                                "string literal recipe cannot supply scalar/type modifiers",
+                            ));
+                        }
+                        proof.require_recipe(body, &draft.key, literal, *destination)?;
+                        if string_literals.insert(std::sync::Arc::as_ptr(proof)) {
+                            let shared = proof
+                                .metadata_bytes()
+                                .ok_or_else(|| invalid("string literal metadata overflow"))?;
+                            charge(&mut bytes, shared)?;
+                            shared_string_literal_admission_bytes =
+                                shared_string_literal_admission_bytes
+                                    .checked_add(shared)
+                                    .ok_or_else(|| {
+                                        invalid("string literal aggregate accounting overflow")
+                                    })?;
+                        }
+                    }
+                    (LiteralKind::String, _) => {
+                        return Err(invalid(
+                            "string literal requires actual indexed source receipt",
                         ));
                     }
                     (LiteralKind::Char, Some(DecodedLiteral::Char(_)))
@@ -1701,6 +1728,7 @@ fn verify_inner(
         },
         metadata_bytes: bytes,
         shared_product_admission_bytes,
+        shared_string_literal_admission_bytes,
         namespace_witness: None,
     })
 }

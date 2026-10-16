@@ -135,12 +135,63 @@ impl<T> GuestArena<T> {
             owned_bytes: vec![0],
         })
     }
+    /// Empty arena metadata for an owner that admits all capacity at first use.
+    /// Unlike the legacy constructor, even the sentinel buffers are deferred
+    /// and charged by reserve before they become retained allocations.
+    pub(crate) fn new_lazy(epoch: u32) -> Result<Self, Diagnostic> {
+        if epoch == 0 {
+            return Err(stale());
+        }
+        Ok(Self {
+            epoch,
+            entries: Vec::new(),
+            owned_bytes: Vec::new(),
+        })
+    }
+    fn initialize_lazy(&mut self, count: usize, budget: &mut RunBudget) -> Result<(), Diagnostic> {
+        let total = count
+            .checked_add(1)
+            .filter(|n| *n <= u32::MAX as usize)
+            .ok_or_else(resource)?;
+        let predicted = total
+            .checked_mul(std::mem::size_of::<Option<T>>())
+            .and_then(|n| {
+                total
+                    .checked_mul(std::mem::size_of::<usize>())
+                    .and_then(|m| n.checked_add(m))
+            })
+            .ok_or_else(resource)?;
+        budget.check(0, predicted)?;
+        // Keep both temporary buffers local until actual allocator capacity has
+        // passed the budget. Failure retains no uncharged sentinel allocation.
+        let mut entries = Vec::new();
+        entries.try_reserve_exact(total).map_err(|_| resource())?;
+        let mut sizes = Vec::new();
+        sizes.try_reserve_exact(total).map_err(|_| resource())?;
+        let actual = entries
+            .capacity()
+            .checked_mul(std::mem::size_of::<Option<T>>())
+            .and_then(|n| {
+                sizes
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<usize>())
+                    .and_then(|m| n.checked_add(m))
+            })
+            .ok_or_else(resource)?;
+        budget.charge(0, actual)?;
+        entries.push(None);
+        sizes.push(0);
+        self.entries = entries;
+        self.owned_bytes = sizes;
+        Ok(())
+    }
     /// Predict the checked incremental arena capacity without allocation or
     /// logical publication, so a caller can admit a complete multi-arena batch.
     pub(crate) fn reservation_bytes(&self, count: usize) -> Result<usize, Diagnostic> {
         let end = self
             .entries
             .len()
+            .max(1) // A lazy arena still reserves its unaddressable sentinel.
             .checked_add(count)
             .filter(|n| *n <= u32::MAX as usize)
             .ok_or_else(resource)?;
@@ -155,9 +206,112 @@ impl<T> GuestArena<T> {
             })
             .ok_or_else(resource)
     }
+    /// Conservative transient capacity for the atomic replacement path. Old
+    /// buffers remain charged while their replacements are admitted together.
+    pub(crate) fn atomic_reservation_bytes(&self, count: usize) -> Result<usize, Diagnostic> {
+        let end = self
+            .entries
+            .len()
+            .max(1)
+            .checked_add(count)
+            .filter(|n| *n <= u32::MAX as usize)
+            .ok_or_else(resource)?;
+        let entries = if end > self.entries.capacity() {
+            end.checked_mul(std::mem::size_of::<Option<T>>())
+                .ok_or_else(resource)?
+        } else {
+            0
+        };
+        let sizes = if end > self.owned_bytes.capacity() {
+            end.checked_mul(std::mem::size_of::<usize>())
+                .ok_or_else(resource)?
+        } else {
+            0
+        };
+        entries.checked_add(sizes).ok_or_else(resource)
+    }
+    /// Reserve all replacement buffers before moving any retained record. A
+    /// failure may not leave an uncharged allocator-grown buffer in the arena.
+    pub(crate) fn reserve_atomic(
+        &mut self,
+        count: usize,
+        budget: &mut RunBudget,
+    ) -> Result<(), Diagnostic> {
+        if self.epoch != budget.epoch {
+            return Err(stale());
+        }
+        if self.entries.is_empty() {
+            return self.initialize_lazy(count, budget);
+        }
+        let end = self
+            .entries
+            .len()
+            .checked_add(count)
+            .filter(|n| *n <= u32::MAX as usize)
+            .ok_or_else(resource)?;
+        budget.check(0, self.atomic_reservation_bytes(count)?)?;
+        let mut entries = if end > self.entries.capacity() {
+            let mut values = Vec::new();
+            values.try_reserve_exact(end).map_err(|_| resource())?;
+            Some(values)
+        } else {
+            None
+        };
+        let mut sizes = if end > self.owned_bytes.capacity() {
+            let mut values = Vec::new();
+            values.try_reserve_exact(end).map_err(|_| resource())?;
+            Some(values)
+        } else {
+            None
+        };
+        let entry_bytes = entries
+            .as_ref()
+            .map_or(Some(0), |v| {
+                v.capacity().checked_mul(std::mem::size_of::<Option<T>>())
+            })
+            .ok_or_else(resource)?;
+        let size_bytes = sizes
+            .as_ref()
+            .map_or(Some(0), |v| {
+                v.capacity().checked_mul(std::mem::size_of::<usize>())
+            })
+            .ok_or_else(resource)?;
+        budget.check(0, entry_bytes.checked_add(size_bytes).ok_or_else(resource)?)?;
+        let entry_delta = entries
+            .as_ref()
+            .map_or(Some(0), |v| {
+                v.capacity()
+                    .checked_sub(self.entries.capacity())
+                    .and_then(|n| n.checked_mul(std::mem::size_of::<Option<T>>()))
+            })
+            .ok_or_else(resource)?;
+        let size_delta = sizes
+            .as_ref()
+            .map_or(Some(0), |v| {
+                v.capacity()
+                    .checked_sub(self.owned_bytes.capacity())
+                    .and_then(|n| n.checked_mul(std::mem::size_of::<usize>()))
+            })
+            .ok_or_else(resource)?;
+        budget.charge(0, entry_delta.checked_add(size_delta).ok_or_else(resource)?)?;
+        // No fallible allocation, budget step or guest callback follows the
+        // first move. Capacities include all old entries and the incoming batch.
+        if let Some(mut values) = entries.take() {
+            values.append(&mut self.entries);
+            self.entries = values;
+        }
+        if let Some(mut values) = sizes.take() {
+            values.append(&mut self.owned_bytes);
+            self.owned_bytes = values;
+        }
+        Ok(())
+    }
     pub fn reserve(&mut self, count: usize, budget: &mut RunBudget) -> Result<(), Diagnostic> {
         if self.epoch != budget.epoch {
             return Err(stale());
+        }
+        if self.entries.is_empty() {
+            return self.initialize_lazy(count, budget);
         }
         let predicted = self.reservation_bytes(count)?;
         budget.check(0, predicted)?;

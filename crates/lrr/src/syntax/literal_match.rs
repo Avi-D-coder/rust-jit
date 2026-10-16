@@ -219,8 +219,13 @@ fn context(
                 if binding.ref_token().is_some() || binding.at_token().is_some() {
                     return Ok(None);
                 }
-                primitive_cast_target::resolve(parsed, index, statement.ty(), None)?
-                    .filter(|p| supported(*p))
+                // Match and conditional patterns use the same actual local
+                // source constraint. An unsuffixed numeric binding remains
+                // unresolved instead of being defaulted from a later pattern.
+                match patterns::binding_source_hint(parsed, index, body, &statement, depth + 1)? {
+                    HintRecipe::Primitive(ty) => Some(ty).filter(|p| supported(*p)),
+                    _ => None,
+                }
             } else {
                 let Some(name) = segment.name_ref() else {
                     return Ok(None);

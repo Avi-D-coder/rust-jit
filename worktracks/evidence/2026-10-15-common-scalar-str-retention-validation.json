@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T04:25:34.278764+00:00",
+  "claim": "LOCAL-024",
+  "status": "scoped_components_and_one_failing_upstream_program; ordinary_literal_integration_not_validated",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "checkpoint_source_packet": "artifacts/macos-first/common-parent-source-retention-v1/SOURCE.json",
+  "checkpoint_source_packet_sha256": "da6ff1d33583f58e12bd224dd23d3aa75f938ff9a3f5a0a2f15c276a7a1d70b1",
+  "baseline": "f0a30dcc2a67799ab3bab462ec930cf938016735",
+  "source_rows": 117,
+  "receipts": [
+    {
+      "kind": "scalar_storage_failed_compile",
+      "receipt": "artifacts/macos-first/sol-common-scalar-str-components-validation-v1/RELEASE.json",
+      "sha256": "53348e52def70824f77148330ce80e5637ba9b01203a0761fe5a12461b287cfd",
+      "reported_source_member": "75736845d977a68b4a06f2dbff03c0b3a01508e5ae7c9b0b896cc49591dfc82f",
+      "actual_terminals": {
+        "launch": "2e3877",
+        "session": 61057,
+        "pid": 99574,
+        "terminal": "75a359",
+        "wrapper_exit": 1,
+        "cargo_exit": 101,
+        "elapsed_seconds": 10.879447166982573
+      }
+    },
+    {
+      "kind": "scalar_storage_mechanical_v2",
+      "receipt": "artifacts/macos-first/sol-common-scalar-str-components-validation-v2/RELEASE.json",
+      "sha256": "27ad898a3c097cb84da8541635b725bda0e887306ef6aaf69042f08cdfd2aea0",
+      "reported_source_member": "37bb795eec0d0f561885f5cdcbbb77ffd7f74e48f7f793506cbe28ead347503a",
+      "actual_terminals": {
+        "compile": {
+          "launch": "ca1e2e",
+          "session": 75713,
+          "pid": 99840,
+          "terminal": "90b6df",
+          "wrapper_exit": 0,
+          "cargo_exit": 0,
+          "seconds": 21.36054724996211
+        },
+        "sequence": {
+          "launch": "339083",
+          "session": 1805,
+          "terminal": "36f119",
+          "wrapper_exit": 1,
+          "scopes": {
+            "str-storage": {
+              "terminal_json_sha256": "7142f9f164cb152948201dc418b24c8b4399ff362d01de4a0beb26813a51870a",
+              "cargo_pid": 586,
+              "cargo_exit": 0,
+              "bodies": 7,
+              "passed": 7,
+              "failed": 0,
+              "elapsed_seconds": 0.10989116702694446
+            },
+            "scalar-route": {
+              "terminal_json_sha256": "bd62f6cf3f73ff69984c26a0906060037058335661914cce2dd18f677be8a054",
+              "cargo_pid": 601,
+              "cargo_exit": 101,
+              "bodies": 1,
+              "passed": 0,
+              "failed": 1,
+              "elapsed_seconds": 0.10772775002988055
+            }
+          }
+        }
+      }
+    },
+    {
+      "kind": "scalar_route_test_only_v3",
+      "receipt": "artifacts/macos-first/sol-common-scalar-str-components-validation-v3/RELEASE.json",
+      "sha256": "d885bd7d85589a1561bdf9649d5808850279c684707adda7fabc3f65a5473b61",
+      "reported_source_member": "aa935ff409ee96db50f02477605007cca3d89365873af2b4f16c8433ac7ec61f",
+      "actual_terminals": null
+    },
+    {
+      "kind": "stock_scalar_progress",
+      "receipt": "artifacts/macos-first/sol-common-scalar-str-stock-cli-validation-v1/RELEASE.json",
+      "sha256": "a096df92199cc737e45df293d1cdb8b14f5af86187809dad60977ab607e5a065",
+      "reported_source_member": "aa935ff409ee96db50f02477605007cca3d89365873af2b4f16c8433ac7ec61f",
+      "actual_terminals": null
+    },
+    {
+      "kind": "parent_retirement",
+      "receipt": "artifacts/macos-first/sol-common-parent-source-retention-validation-v1/RELEASE.json",
+      "sha256": "531a6d3eae723766e231dc503f45b19e5ddfff50214786d4f9ebcbbfab2cfbf4",
+      "reported_source_member": "dbf71da1bcc084468feb6c82169d72b1b1d8f52587c174d6e3f78c1e16c43de7",
+      "actual_terminals": {
+        "compile": {
+          "launch": "c9bed5",
+          "session": 2011,
+          "pid": 1575,
+          "terminal": "a56278",
+          "wrapper_exit": 0,
+          "cargo_exit": 0,
+          "seconds": 20.318166583019774
+        },
+        "sequence": {
+          "launch": "d571b9",
+          "session": 45335,
+          "terminal": "8b475e",
+          "wrapper_exit": 0,
+          "scopes": {
+            "external-parent": {
+              "terminal_sha256": "3518307d5ddbe0692bd2bfcac20de84fd73edc19e00cbd1d827c2b65bbc2c2f5",
+              "child_terminal_sha256": "04afb03e220a672ee3cb0411af24e91fcf523563374fad76bb5343134a5912d1",
+              "cargo_pid": 1641,
+              "cargo_exit": 0,
+              "bodies": 1,
+              "passed": 1,
+              "failed": 0,
+              "seconds": 0.11731925001367927
+            },
+            "direct-root": {
+              "terminal_sha256": "103b7298ab3d6fbb75b58e648636e070b297d97044c394e51f8b88ae2a4677aa",
+              "child_terminal_sha256": "1950c0ebbc8958b8aea3a76b2546301de3e88b1b4730ecd091508ba15665df3e",
+              "cargo_pid": 1645,
+              "cargo_exit": 0,
+              "bodies": 1,
+              "passed": 1,
+              "failed": 0,
+              "seconds": 0.1029073329991661
+            },
+            "product-only": {
+              "terminal_sha256": "4abe80da96cfcab386b14a098a755d305d415e36c372e7a80cbe3d7d99e5a256",
+              "child_terminal_sha256": "a3e0f1c683a73802425794f35efbeb2bcca5fb452975dd4965f615cff96796a3",
+              "cargo_pid": 1649,
+              "cargo_exit": 0,
+              "bodies": 1,
+              "passed": 1,
+              "failed": 0,
+              "seconds": 0.10260154196294025
+            },
+            "cached-root": {
+              "terminal_sha256": "ccf668dc3bbb40b2a0b3743a638e1f2ec3fe1dec3a7f9a36f2a5a5e0754ba1a1",
+              "child_terminal_sha256": "9766249206f4388bf32085f9b9e0a4a1c112b955dc16c11c58d32768ced7ed7c",
+              "cargo_pid": 1653,
+              "cargo_exit": 0,
+              "bodies": 1,
+              "passed": 1,
+              "failed": 0,
+              "seconds": 0.10294962499756366
+            },
+            "cached-index": {
+              "terminal_sha256": "a127cb570ac9010107253e11dec80235c5a08347e484928fd2316f15e86c729a",
+              "child_terminal_sha256": "b7b7e5f7c7d87f4288f45b22468c1a49f7f93ba72d88a35ebe492270288174cf",
+              "cargo_pid": 1657,
+              "cargo_exit": 0,
+              "bodies": 1,
+              "passed": 1,
+              "failed": 0,
+              "seconds": 0.10308404202805832
+            }
+          }
+        }
+      }
+    }
+  ],
+  "separate_banks": {
+    "failed117_compile": {
+      "compiler_errors": 4,
+      "test_bodies": 0
+    },
+    "117_two_external_test_api_repairs": {
+      "compiled": true,
+      "storage_passes": 7,
+      "scalar_control_failures": 1,
+      "symbolic_regressions_unexecuted": 4
+    },
+    "117_scalar_external_parent_selection_repair": {
+      "compiled": true,
+      "scalar_control_passes": 1,
+      "symbolic_regressions_passed": 4,
+      "direct_Str_semantic_acceptance": false
+    },
+    "117_root_parent_retirement": {
+      "compiled": true,
+      "new_parent_lifetime_control_passes": 1,
+      "existing_ownership_regressions_passed": 4
+    }
+  },
+  "upstream_execution": {
+    "case": "tests/ui/match/issue-26251.rs",
+    "unchanged": true,
+    "edition": 2015,
+    "executions": 1,
+    "runtime_contract_passes": 0,
+    "status": "interpreter_failure",
+    "diagnostic": "LRR-E-UNSUPPORTED",
+    "message": "literal kind awaits numeric/source integration",
+    "selected_source_range": [
+      157,
+      162
+    ],
+    "selected_source_excerpt": "\"two\"",
+    "previous_failure_range": [
+      95,
+      229
+    ],
+    "previous_failure": "closed scalar match lacks primitive source context",
+    "observed_progress": "The original source-hint refusal was removed; execution reached the selected ordinary string literal. Whole runtime contract remains failed.",
+    "capture": "incomplete; guest streams and final cleanup unobserved, not inferred empty/success",
+    "guest_rustc_compilation": false
+  },
+  "architecture_holds": [
+    "E-R5-005",
+    "MA001-MA008",
+    "common macro source/body entry and obsolete evaluator removal",
+    "genuine string literal source/IR/VM integration, call/result leases and member/operator selection",
+    "owned local/import/item/generic currentness proof"
+  ],
+  "source_only_excluded": [
+    "Live schema13 String receipt/VM integration",
+    "Root generic immutable literal/source pool accounting and its new2tests",
+    "Live owned entered/local source environment"
+  ],
+  "acceptance": {
+    "new_stock_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "task_completed": false,
+    "guest_jit_allowed": false
+  }
+}

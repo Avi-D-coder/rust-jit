@@ -201,6 +201,9 @@ fn transform(
     budget.charge(1, 0)?;
     let next = depth.checked_add(1).ok_or_else(limit)?;
     match term {
+        // Atomic unsized pointee; substitution never invents a numeric source,
+        // allocation, region or sizedness witness for it.
+        TyTerm::Str => Ok(TyTerm::Str),
         TyTerm::Bound { depth, index } if inst.is_some() => {
             match inst.expect("checked instantiation").bound(
                 BoundKind::Type,

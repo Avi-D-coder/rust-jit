@@ -527,3 +527,135 @@ fn retirement_only_product_pins_an_independently_cached_body_allocation() {
         db.cache_usage().unwrap().memo_bytes
     );
 }
+
+#[test]
+fn external_source_plan_keeps_graph_retirement_lease_across_quiescent_pruning() {
+    let (mut db, plan) = pattern_world();
+    let graph = plan
+        .products()
+        .next()
+        .expect("actual retained source graph");
+    let weak = Arc::downgrade(graph);
+    // Retain the parent allocation only; do not clone its nested graph handle.
+    db.evict_between_runs(CacheBudgets::default()).unwrap();
+    db.memos.clear();
+    db.begin_run().unwrap();
+    drop(plan);
+    assert!(
+        weak.upgrade().is_some(),
+        "graph retired during an active run"
+    );
+    db.finish_run().unwrap();
+    db.evict_between_runs(CacheBudgets::default()).unwrap();
+    assert!(
+        weak.upgrade().is_none(),
+        "quiescent retirement leaked its graph"
+    );
+}
+
+fn string_literal_world(
+    edition: u16,
+) -> (
+    Database,
+    QueryKey,
+    Arc<crate::syntax::string_literal::PreparedStringLiteral>,
+) {
+    let (mut db, definition) = world(
+        include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/match/match-borrowed-str.rs"
+        ),
+        "compare",
+        edition,
+    );
+    let InputValue::DefinitionBody(body) = db.inputs[&InputKey::DefinitionBody(definition)]
+        .value
+        .as_ref()
+    else {
+        panic!("upstream compare body absent")
+    };
+    let body = body.key();
+    let indexed = db
+        .fetch(
+            &super::super::provider::SyntaxProvider,
+            QueryKey::BodyStructure(body),
+        )
+        .into_ready()
+        .unwrap()
+        .unwrap();
+    let QueryValue::BodyStructure(index) = indexed.value.as_ref() else {
+        panic!("upstream compare structural index absent")
+    };
+    let literal = index
+        .nodes()
+        .iter()
+        .find(|node| {
+            node.role
+                == crate::syntax::body_index::NodeRole::Expression(
+                    crate::syntax::body_index::ExpressionKind::Literal,
+                )
+                // The earlier written string belongs to a match pattern.
+                // Select the actual comparison operand, not that endpoint.
+                && node.parent.is_some_and(|parent| index.nodes()[parent.0 as usize].role
+                    == crate::syntax::body_index::NodeRole::Expression(
+                        crate::syntax::body_index::ExpressionKind::Other))
+        })
+        .unwrap();
+    let request = QueryKey::Thunk(index.pc(literal.id, crate::ir::pc::Phase::Entry).unwrap());
+    drop(indexed);
+    let prepared = db
+        .fetch(&super::super::provider::SyntaxProvider, request.clone())
+        .into_ready()
+        .unwrap()
+        .unwrap();
+    let QueryValue::Thunk(recipe) = prepared.value.as_ref() else {
+        panic!("upstream literal did not use an ordinary verified recipe")
+    };
+    let proof = Arc::clone(recipe.string_literal_roots().next().unwrap());
+    assert!(recipe.string_literal_admission_bytes() >= proof.metadata_bytes().unwrap());
+    drop(prepared);
+    (db, request, proof)
+}
+
+#[test]
+fn immutable_literal_inner_aliases_share_accounting_and_retire_between_runs_all_editions() {
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, _, proof) = string_literal_world(edition);
+        let before = db.cache_usage().unwrap();
+        let alias = Arc::clone(&proof);
+        assert_eq!(db.cache_usage().unwrap().memo_bytes, before.memo_bytes);
+        assert_eq!(
+            db.cache_usage().unwrap().pinned_memo_bytes,
+            before.pinned_memo_bytes
+        );
+        drop(alias);
+        let required = proof.metadata_bytes().unwrap();
+        db.memos.clear();
+        assert!(db.cache_usage().unwrap().pinned_memo_bytes >= required);
+        let weak = Arc::downgrade(&proof);
+        db.begin_run().unwrap();
+        drop(proof);
+        assert!(
+            weak.upgrade().is_some(),
+            "literal receipt retired in an active run"
+        );
+        db.finish_run().unwrap();
+        db.evict_between_runs(CacheBudgets::default()).unwrap();
+        assert!(
+            weak.upgrade().is_none(),
+            "literal retirement pool leaked its receipt"
+        );
+    }
+}
+
+#[test]
+fn cached_only_literal_receipt_can_reclaim_to_mandatory_input_budget() {
+    let (mut db, request, proof) = string_literal_world(2015);
+    let weak = Arc::downgrade(&proof);
+    drop(proof);
+    let budget = input_floor_budget(&db);
+    let report = db.evict_between_runs(budget).unwrap();
+    assert!(report.victims.contains(&request));
+    assert!(weak.upgrade().is_none());
+    assert!(report.after.memo_bytes <= budget.query_bytes);
+    assert_eq!(report.after.parse_bytes, 0);
+}

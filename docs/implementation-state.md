@@ -1250,3 +1250,49 @@ ordinary source-certified string literal integration, and sole asynchronous
 validation. Frozen117 shared scalar/symbolicStr/immutable-backing successor and
 all live worker changes are separate from validated110 checkpoint. Evidence:
 worktracks/evidence/2026-10-15-common-current-module-name-validation.json.
+
+
+Published source checkpointaed4ea4b7e4f9908f6f3961473c393275144107d
+(d45221/0 push) contains exact validated110 plus7 explicit documentation files.
+Source guard890734/0:21stagedfiles/883020bytes/0violations; planning4e2b48/0.
+It excludes live workers and is a source WIP, not architecture acceptance.
+
+Later exact117 compiled after preserving two external control API failures.
+Its7 immutable UTF8 backing/reference controls passed in V2; scalar source-route
+control failed on selecting MatchArm with a statement helper. A test-only actual
+indexed parent+role correction passed that scalar control and4 existing symbolic
+regressions in V3; those4 do not test direct Str normalization. Banks remain
+separate sources, not a combined full-suite claim. Actual unchanged owning2015
+issue-26251 main now reaches selected string literal "two"157..162, advancing
+past prior whole-match source-context failure95..229. It still fails with
+LRR-E-UNSUPPORTED literal-source integration; zero runtime-contract/full-fixture
+increment, incomplete capture/effects/cleanup retained.
+
+Root external-parent retirement repair then compiled and passed new1+existing4
+ownership controls (a56278/0,8b475e/0): retaining only a SourcePlan keeps its
+nested graph's quiescent lease through outer memo retirement and an active-run
+parent drop; final release occurs at next quiescent prune. Generic literal
+receipt retention and live ordinary literal/schema13 VM integration remain
+separate uncompiled successors. Owned local/source roots remain active worker
+source. Exact evidence:worktracks/evidence/2026-10-15-common-scalar-str-retention-validation.json.
+
+
+Latest ordinary-string integration: frozen122 source0f68fc1e compiled1ed410/0
+and passed17distinct17/17 controls97d01d/0: VM4, genuine source authority2,
+literal retention2, existing Product ownership5 and schema13 wire4. No source
+repairs were required. Fresh unchanged issue-26251.rs execution fa85cc/1 still
+fails (CLI2) but advances past selected ordinary literal157..162 to original
+assert_eq236..256. The legacy route now refuses INTERNAL-IR missing actual
+indexed source receipt. Do not add an assertion-specific string handler; actual
+macro source expansion/ordinary pipeline replacement remains the priority.
+No new stock runtime-contract or full-fixture pass; prior five-program bank
+remains1/4, full-fixture0. Actual namespace9/storage7/scalar5/parent5 are separate
+prior snapshots, not summed into a single current milestone. Exact receipts:
+worktracks/evidence/2026-10-15-ordinary-str-literal-validation.json.
+
+Root shared admission-order3 and original-retained-footprint2 successors are
+separately frozen, uncompiled/unexecuted pending async validation. They prevent
+rejected retention from exposing a successful memo and bound MacroExport source
+ownership without publishing it into ordinary runtime parse lookup. Owned local
+Type occurrence/name joins and source-backed MacroExport facet remain worker
+source-only. E-R5-005/MA/task/JIT/strict/full-milestone holds stay open.

@@ -200,6 +200,7 @@ fn reference_result_replays_original_enclosing_chain_even_when_endpoints_match()
     let actual = RefId::from_bits(store.peek_ticket(result).unwrap().payload);
     let current = store.references.get(actual).unwrap();
     store.validate_reference_record(current).unwrap();
+    let current = current.location().unwrap();
     assert_eq!(current.root, receipt.root);
     assert_eq!(current.final_cell, receipt.final_cell);
     assert_ne!(current.enclosing, receipt.enclosing);
@@ -291,13 +292,14 @@ fn selected_source_field_return_survives_reborrow_and_input_reference_cleanup() 
     );
     let actual = RefId::from_bits(store.peek_ticket(result).unwrap().payload);
     let record = store.references.get(actual).unwrap();
-    assert_eq!(record.source_projections.len(), 1);
+    assert_eq!(record.location().unwrap().source_projections.len(), 1);
     assert_eq!(
         store.budget().bytes() - before_bytes,
         record.owned_bytes().unwrap()
     );
     assert!(
-        record.owned_bytes().unwrap() > checked_chain_bytes(record.enclosing.capacity()).unwrap()
+        record.owned_bytes().unwrap()
+            > checked_chain_bytes(record.location().unwrap().enclosing.capacity()).unwrap()
     );
     let again = store
         .borrow_ticket(&Place::deref(actual), Access::Shared)
@@ -405,20 +407,45 @@ fn derived_result_checks_source_receipt_and_original_intermediate_ownership() {
         .require_reference_projection_return(result, &receipt, false, ty, TypeId(8))
         .unwrap();
     let actual = RefId::from_bits(store.peek_ticket(result).unwrap().payload);
-    let source = store.references.get(actual).unwrap().source_projections[0];
+    let source = store
+        .references
+        .get(actual)
+        .unwrap()
+        .location()
+        .unwrap()
+        .source_projections[0];
     assert_eq!(source.chain_index, 1);
     // Adversarial corruption controls only: production cannot mint these
     // receipts except through the checked selected-member operation.
     for wrong in [0, 2] {
-        store.references.get_mut(actual).unwrap().source_projections[0].chain_index = wrong;
+        store
+            .references
+            .get_mut(actual)
+            .unwrap()
+            .location_mut()
+            .unwrap()
+            .source_projections[0]
+            .chain_index = wrong;
         assert!(
             store
                 .require_reference_projection_return(result, &receipt, false, ty, TypeId(8))
                 .is_err()
         );
     }
-    store.references.get_mut(actual).unwrap().source_projections[0] = source;
-    store.references.get_mut(actual).unwrap().source_projections[0]
+    store
+        .references
+        .get_mut(actual)
+        .unwrap()
+        .location_mut()
+        .unwrap()
+        .source_projections[0] = source;
+    store
+        .references
+        .get_mut(actual)
+        .unwrap()
+        .location_mut()
+        .unwrap()
+        .source_projections[0]
         .member
         .schema = crate::core::digest::Digest::of_bytes(b"wrong selected schema");
     assert!(
@@ -426,7 +453,13 @@ fn derived_result_checks_source_receipt_and_original_intermediate_ownership() {
             .require_reference_projection_return(result, &receipt, false, ty, TypeId(8))
             .is_err()
     );
-    store.references.get_mut(actual).unwrap().source_projections[0] = source;
+    store
+        .references
+        .get_mut(actual)
+        .unwrap()
+        .location_mut()
+        .unwrap()
+        .source_projections[0] = source;
     store
         .require_reference_projection_return(result, &receipt, false, ty, TypeId(8))
         .unwrap();

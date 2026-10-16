@@ -103,9 +103,15 @@ pub enum TyTerm {
     Opaque(OpaqueKey, Vec<GenericArg>),
     Projection(Box<ProjectionKey>),
     Placeholder(PlaceholderKey),
-    Bound { depth: u32, index: u32 },
+    Bound {
+        depth: u32,
+        index: u32,
+    },
     Function(Box<Binder<FunctionSignature>>),
     Primitive(PrimitiveType),
+    /// Unsized UTF-8 string pointee. This is not a sized primitive, owned
+    /// String, byte slice, runtime value or proof of a written name's identity.
+    Str,
     Nominal(Digest, Vec<GenericArg>),
     Tuple(Vec<TyTerm>),
     Array(Box<TyTerm>, ConstTerm),
@@ -369,6 +375,9 @@ impl StableEncode for TyTerm {
                 e.u32(v.ordinal)
             }
             Self::Never => e.u32(8),
+            // Append without changing any existing term's encoding. There is
+            // no numeric PrimitiveType tag for an unsized string pointee.
+            Self::Str => e.u32(15),
         }
     }
 }

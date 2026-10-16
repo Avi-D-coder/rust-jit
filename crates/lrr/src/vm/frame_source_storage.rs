@@ -13,7 +13,7 @@ impl Frame {
             return None;
         }
         match source {
-            TyTerm::Primitive(_) | TyTerm::Param(_) => Some(0),
+            TyTerm::Primitive(_) | TyTerm::Str | TyTerm::Param(_) => Some(0),
             TyTerm::Nominal(_, args) if args.is_empty() => args
                 .capacity()
                 .checked_mul(std::mem::size_of::<crate::traits::term::GenericArg>()),

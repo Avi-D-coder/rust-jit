@@ -49,6 +49,15 @@ fn metadata(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-METADATA-LIMIT", message.into())
 }
 impl SourceType {
+    /// Called only after the ordinary owning Type service selects builtin str
+    /// or an alias genuinely normalized to it. Descriptor16 is already unsized
+    /// and NotCopy; this proof does not publish a standalone owning value.
+    fn selected_str() -> Result<Self, Diagnostic> {
+        Ok(Self {
+            source: TyTerm::Str,
+            key: TypeKey::Primitive(PrimitiveIdentity::new(TypeId(16))?),
+        })
+    }
     pub(crate) fn source(&self) -> &TyTerm {
         &self.source
     }
@@ -264,6 +273,10 @@ fn prepare_selected(
                 key: TypeKey::Primitive(primitive),
             }
         }
+        SignatureName::Str => match SourceType::selected_str() {
+            Ok(proof) => proof,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        },
         SignatureName::Parameter(key) => {
             return QueryPoll::Ready(Ok(NamedTypePreparation::Parameter(key)));
         }
@@ -277,8 +290,14 @@ fn prepare_selected(
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
             };
-            let AliasTarget::Nominal(identity) = target else {
-                return QueryPoll::Ready(Ok(NamedTypePreparation::Alias(target)));
+            let identity = match target {
+                AliasTarget::Str | AliasTarget::Type(TyTerm::Str) => {
+                    return QueryPoll::Ready(
+                        SourceType::selected_str().map(NamedTypePreparation::Ready),
+                    );
+                }
+                AliasTarget::Nominal(identity) => identity,
+                other => return QueryPoll::Ready(Ok(NamedTypePreparation::Alias(other))),
             };
             let definition = match nominal_definition(db, sources, identity) {
                 Ok(definition) => definition,

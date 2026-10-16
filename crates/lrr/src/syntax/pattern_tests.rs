@@ -1,8 +1,12 @@
-//! Shared non-consuming scalar pattern tests over admitted ordinary syntax.
+//! Shared cold scalar source constraints and non-consuming pattern tests.
 //!
-//! This is the test stage, not a binding transaction. Owners supply the actual
-//! indexed slots and continuations; this module cannot move the scrutinee,
-//! publish bindings, enter scopes, resolve names or execute a cold result.
+//! Source constraints use the ordinary hygienic local/parameter helpers. The
+//! test stage receives actual indexed slots and continuations; neither stage
+//! moves a scrutinee, publishes bindings, enters scopes or executes cold results.
+#[path = "pattern_source.rs"]
+mod source;
+pub(super) use source::{binding_source_hint, source_hint};
+
 use crate::{
     core::diagnostic::Diagnostic,
     ir::{

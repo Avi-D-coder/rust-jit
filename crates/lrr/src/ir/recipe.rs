@@ -94,6 +94,7 @@ pub struct VerifiedRecipe {
     // Included in aggregate admission, separately owned/accounted by immutable
     // Product roots in the memo layer. Never recomputed in installed execution.
     pub(super) shared_product_admission_bytes: usize,
+    pub(super) shared_string_literal_admission_bytes: usize,
     pub(super) namespace_witness: Option<std::sync::Arc<crate::db::memo::NamespaceWitness>>,
 }
 impl VerifiedRecipe {
@@ -122,6 +123,24 @@ impl VerifiedRecipe {
             } => Some(plan),
             _ => None,
         })
+    }
+    /// Actual opaque UTF-8 receipt roots owned by flat literal operations.
+    pub fn string_literal_roots(
+        &self,
+    ) -> impl Iterator<Item = &std::sync::Arc<crate::syntax::string_literal::PreparedStringLiteral>>
+    {
+        self.recipe.operations.iter().filter_map(|op| match op {
+            Op::Literal { literal, .. } => match &literal.decoded {
+                Some(super::op::DecodedLiteral::String(proof)) => Some(proof),
+                _ => None,
+            },
+            _ => None,
+        })
+    }
+    /// Included conservatively in current recipe exclusive accounting until
+    /// the memo owner atomically takes over actual Arc allocation/pin charging.
+    pub fn string_literal_admission_bytes(&self) -> usize {
+        self.shared_string_literal_admission_bytes
     }
     /// Attach only after genuine source admission. Recording currentness does
     /// not authorize a pattern, macro, name lookup or any guest operation.
@@ -234,7 +253,7 @@ fn hint(e: &mut StableEncoder, h: &HintRecipe) {
     }
 }
 impl StableEncode for Recipe {
-    const DOMAIN: &'static str = "lrr/v12/lrir-recipe";
+    const DOMAIN: &'static str = "lrr/v13/lrir-recipe";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         span(e, &self.origin.span);
@@ -498,6 +517,10 @@ impl StableEncode for Recipe {
                         e.u8(*radix);
                         e.option(suffix, |e, ty| e.u32(ty.tag()));
                         e.u32(reason.tag());
+                    }
+                    super::op::DecodedLiteral::String(proof) => {
+                        e.u32(6);
+                        e.record(proof.as_ref());
                     }
                     super::op::DecodedLiteral::Char(value) => {
                         e.u32(1);

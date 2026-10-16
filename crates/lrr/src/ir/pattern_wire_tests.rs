@@ -30,8 +30,8 @@ fn indexed() -> BodyIndex {
 }
 #[test]
 fn pattern_begin_and_retry_have_explicit_stable_tags_and_exact_source_roles() {
-    assert_eq!(LRIR_RECIPE_SCHEMA, 12);
-    assert_eq!(Recipe::DOMAIN, "lrr/v12/lrir-recipe");
+    assert_eq!(LRIR_RECIPE_SCHEMA, 13);
+    assert_eq!(Recipe::DOMAIN, "lrr/v13/lrir-recipe");
     let body = indexed();
     let owner = body
         .nodes()
@@ -77,7 +77,7 @@ fn pattern_begin_and_retry_have_explicit_stable_tags_and_exact_source_roles() {
     };
     let verified = verify(make(operation), &body).unwrap();
     let recipe = verified.recipe();
-    let mut expected = StableEncoder::new("lrr/v12/lrir-recipe");
+    let mut expected = StableEncoder::new("lrr/v13/lrir-recipe");
     expected.record(&recipe.key);
     span(&mut expected, &recipe.origin.span);
     expected.u64(0); // expansion ancestry sequence

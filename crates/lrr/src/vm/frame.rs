@@ -8,6 +8,9 @@ mod call_scope_tests;
 mod constant_array_frame;
 #[path = "frame_source_constant.rs"]
 mod source_constant_frame;
+#[path = "frame_string_literals.rs"]
+mod string_literal_frame;
+pub(crate) use string_literal_frame::StringLiteralPublication;
 #[path = "frame_source_storage.rs"]
 mod source_storage_frame;
 #[path = "frame_source_types.rs"]
@@ -1251,7 +1254,7 @@ impl Frame {
         use crate::traits::term::TyTerm;
         matches!(source, TyTerm::Primitive(_) | TyTerm::Param(_))
             || (matches!(source, TyTerm::Tuple(_)) && Self::supported_structural_source(source))
-            || matches!(source, TyTerm::Ref(region, _, target) if !matches!(region, crate::traits::term::RegionTerm::Placeholder(_)) && (matches!(target.as_ref(), TyTerm::Primitive(_))
+            || matches!(source, TyTerm::Ref(region, _, target) if !matches!(region, crate::traits::term::RegionTerm::Placeholder(_)) && (matches!(target.as_ref(), TyTerm::Primitive(_) | TyTerm::Str)
                 || (matches!(target.as_ref(), TyTerm::Tuple(_)) && Self::supported_structural_source(target))
                 || matches!(target.as_ref(), TyTerm::Nominal(_, args) if args.is_empty())
                 || matches!(target.as_ref(), TyTerm::Array(element, crate::traits::term::ConstTerm::Value(len))

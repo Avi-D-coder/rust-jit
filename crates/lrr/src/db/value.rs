@@ -11,6 +11,48 @@ use crate::{
 };
 use std::sync::Arc;
 
+/// Borrowed immutable preparation allocations. These are private accounting
+/// locators, never a source/name authority or part of a stable key.
+#[derive(Clone, Copy)]
+pub(crate) enum SourceArtifactRef<'a> {
+    Pattern(&'a Arc<crate::syntax::pattern_product::PatternProductPlan>),
+    StringLiteral(&'a Arc<crate::syntax::string_literal::PreparedStringLiteral>),
+}
+impl<'a> SourceArtifactRef<'a> {
+    pub(crate) fn allocation(self) -> usize {
+        match self {
+            Self::Pattern(value) => Arc::as_ptr(value) as usize,
+            Self::StringLiteral(value) => Arc::as_ptr(value) as usize,
+        }
+    }
+    pub(crate) fn strong_count(self) -> usize {
+        match self {
+            Self::Pattern(value) => Arc::strong_count(value),
+            Self::StringLiteral(value) => Arc::strong_count(value),
+        }
+    }
+    pub(crate) fn metadata_bytes(self) -> Result<usize, Diagnostic> {
+        let bytes = match self {
+            Self::Pattern(value) => value
+                .metadata_bytes()
+                .checked_add(2 * std::mem::size_of::<usize>()),
+            Self::StringLiteral(value) => value.metadata_bytes(),
+        };
+        bytes.ok_or_else(|| {
+            Diagnostic::new(
+                "LRR-E-METADATA-LIMIT",
+                "immutable source artifact accounting overflow".into(),
+            )
+        })
+    }
+    pub(crate) fn index(self) -> Option<&'a Arc<crate::syntax::body_index::BodyIndex>> {
+        match self {
+            Self::Pattern(value) => Some(value.index()),
+            Self::StringLiteral(_) => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Bucket {
     pub candidates: Vec<Digest>,
@@ -47,6 +89,18 @@ pub enum QueryValue {
     Error(Diagnostic),
 }
 impl QueryValue {
+    pub(crate) fn source_roots(&self) -> impl Iterator<Item = SourceArtifactRef<'_>> {
+        let recipe = match self {
+            Self::Thunk(recipe) => Some(recipe),
+            _ => None,
+        };
+        self.product_roots().map(SourceArtifactRef::Pattern).chain(
+            recipe
+                .into_iter()
+                .flat_map(|recipe| recipe.string_literal_roots())
+                .map(SourceArtifactRef::StringLiteral),
+        )
+    }
     /// Actual handles, without cloning or allocation. Shared allocation
     /// charging and owner deduplication belong to the coordinator.
     pub(crate) fn product_roots(
@@ -258,7 +312,10 @@ impl QueryValue {
             Self::BodyStructure(value) => value
                 .estimated_bytes()
                 .saturating_add(2 * std::mem::size_of::<usize>()),
-            Self::Thunk(value) => value.exclusive_metadata_bytes(),
+            Self::Thunk(value) => value
+                .exclusive_metadata_bytes()
+                .checked_sub(value.string_literal_admission_bytes())
+                .unwrap_or(usize::MAX),
             Self::ParseFile(v) => v.estimated_bytes(),
             Self::Outline(v) => v.estimated_bytes(),
             Self::Signature(v) => v.estimated_bytes(),

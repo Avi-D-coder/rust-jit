@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "scope": "Ordinary source-certified string literal Op::Literal/VM publication; full str/member/call/result/matrix acceptance open",
+  "source_only": true,
+  "uncompiled": true,
+  "unexecuted": true,
+  "source_fingerprint": "f54bedacc1d5e74c856f06adb8268aeb0bf37ee004963bd607fc0952ad44b5a2",
+  "files": [
+    {
+      "path": "crates/lrr/src/syntax/string_literal.rs",
+      "sha256": "43a75f9b266449658f5a2a1fcdb43f7224ba962c162a198320fe59992c2ebe0c",
+      "bytes": 6689
+    },
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "sha256": "a20544f7c3084bb48df240e4987cf8e05a108dfba80055e657e90c8ed4811a28",
+      "bytes": 186822
+    },
+    {
+      "path": "crates/lrr/src/syntax/mod.rs",
+      "sha256": "b41599a98d5fb560e7211d6071533b395ade11d9504438f777d0ebaa886fe17c",
+      "bytes": 1759
+    },
+    {
+      "path": "crates/lrr/src/ir/op.rs",
+      "sha256": "81eda23f8a3362c9a2b1cb1191a64577f3a645fc432e000972eb840ccc522090",
+      "bytes": 24141
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "sha256": "21965f21e29baf771e41c01bc1bd381365c0b3e295cd9938b4acf9930c0059dc",
+      "bytes": 27407
+    },
+    {
+      "path": "crates/lrr/src/ir/validate.rs",
+      "sha256": "0c96bd77ad483ca935f62d2cb244078fa46a18cfb3da9e4eff66397f5184c106",
+      "bytes": 83119
+    },
+    {
+      "path": "crates/lrr/src/ir/pattern_decision_tests.rs",
+      "sha256": "ffae85f7219417e649f9c31cdcbadd6b4d462669675173e886c6f9d97e4e5cf8",
+      "bytes": 6683
+    },
+    {
+      "path": "crates/lrr/src/ir/pattern_wire_tests.rs",
+      "sha256": "b83a497173c1f6f47412bb76c475f5d3a33bb4e01f3e3ae561c330da960534bb",
+      "bytes": 5544
+    },
+    {
+      "path": "crates/lrr/src/ir/parameter_place_wire_tests.rs",
+      "sha256": "916bfa566de79eb62825c3bb6249ebe64655c57532fee1d5131ddc88718d1821",
+      "bytes": 4922
+    },
+    {
+      "path": "crates/lrr/src/ir/definition_numeric_wire_tests.rs",
+      "sha256": "074ec3bf25cbe7460ea401d6b3de4803855ce3ca65a468b767347b6bc3b2bc7a",
+      "bytes": 16833
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "sha256": "c2421fb371236b39d9937554d113b972b458f1862c6a200d3a48f6f58df91832",
+      "bytes": 60434
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "sha256": "4e77dce40099af9038c25442bcae586fde3ba1cb6cbc67650f1ad4da7ecbbb8e",
+      "bytes": 309537
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_source_storage.rs",
+      "sha256": "e7437cb30995327e77498d0164f743f1d87af170f14308aaca82b3205c79d4b0",
+      "bytes": 9335
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_string_literals.rs",
+      "sha256": "de6b482383ac173869a0c4b406581f5f03b104c32acb208837d0bf51667dd77d",
+      "bytes": 3891
+    },
+    {
+      "path": "crates/lrr/src/vm/intrinsic_literal_source_tests.rs",
+      "sha256": "50bf39cbe479cd6dee1bbdaf3bb722ca5941c645c72ed19bc614acd89036d57b",
+      "bytes": 33438
+    },
+    {
+      "path": "crates/lrr/src/vm/string_literal_source_tests.rs",
+      "sha256": "604d8affba059b051d077d9e199292013ed44fab4bb494254e92c2d0f994207b",
+      "bytes": 8063
+    },
+    {
+      "path": "crates/lrr/src/runtime/str_storage.rs",
+      "sha256": "7a98f82bda730f45c1711a8e5c38195eddde31842a737c6c21f729e797654ab2",
+      "bytes": 13511
+    },
+    {
+      "path": "crates/lrr/src/frontend/named_reference_source_tests.rs",
+      "sha256": "31e5e35ff0a1738a13d7f59295594bf9888e79346e28786fe9b56055c5fb19ab",
+      "bytes": 9195
+    },
+    {
+      "path": "crates/lrr/src/frontend/str_source_authority_tests.rs",
+      "sha256": "3bfca3217cf9905d07e0e5e35f37711be5aae61bd6169fc39b57e15bb345af58",
+      "bytes": 4659
+    }
+  ],
+  "new_test_bodies": 6,
+  "handoff": {
+    "path": "worktracks/03-control-flow-patterns/ordinary-str-literal-integration-handoff.md",
+    "sha256": "e681fd312abcd5d83b71f01ea1ab14eb88a891c88788b1245835f1941495529b"
+  },
+  "dependencies": [
+    "Frozen immutable backing7 with root external-test V2 correction",
+    "Frozen symbolic Str3 and scalar local5",
+    "Root common actual literal Arc root ownership/accounting/weak-retirement join still required; current recipe exclusive charge remains conservative",
+    "Current admitted ordinary source/BodyIndex/profile/token-edition query entry"
+  ]
+}

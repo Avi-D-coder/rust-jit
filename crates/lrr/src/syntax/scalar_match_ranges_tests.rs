@@ -618,3 +618,80 @@ fn floating_range_source_family_sign_and_suffix_are_exact_all_editions() {
         )));
     }
 }
+
+#[test]
+fn unchanged_guarded_char_local_uses_retained_match_plan_and_cold_result_edges() {
+    // Source/route control only: selected &str execution remains a separate
+    // ordinary literal/storage prerequisite, never an expected refusal pass.
+    const ORIGINAL: &str =
+        include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/match/issue-26251.rs");
+    let cold_call = ORIGINAL.replace("\"three\"", "cold_result()")
+        + "\nfn cold_result() -> &'static str { \"three\" }\n";
+    for source in [ORIGINAL, cold_call.as_str()] {
+        for edition in [2015, 2018, 2021, 2024] {
+            let (parsed, body, index) = entered(source, edition, "main");
+            let parsed = std::sync::Arc::new(parsed);
+            let index = std::sync::Arc::new(index);
+            let matched = parsed
+                .entered_body_root(&body)
+                .unwrap()
+                .descendants()
+                .find_map(ast::MatchExpr::cast)
+                .unwrap();
+            let id = super::super::id_for(&index, &body, matched.syntax()).unwrap();
+            let owner = index.pc(id, Phase::Entry).unwrap();
+            let retained = parsed
+                .prepare_pattern_plan(&body, index.clone(), &owner)
+                .unwrap();
+            let entry = retained.lower(&owner, None).unwrap();
+            assert!(matches!(
+                &entry.recipe().operations[..],
+                [Op::SetHint {
+                    hint: HintRecipe::Primitive(PrimitiveType::Char),
+                    ..
+                }]
+            ));
+            let arms: Vec<_> = matched.match_arm_list().unwrap().arms().collect();
+            let first = &arms[0];
+            let pattern = first.pat().unwrap();
+            let pattern_id = super::super::id_for(&index, &body, pattern.syntax()).unwrap();
+            let test = retained
+                .lower(&index.pc(pattern_id, Phase::Entry).unwrap(), None)
+                .unwrap();
+            assert!(test.recipe().operations.iter().any(|op| matches!(
+                op,
+                Op::Pattern {
+                    operation: PatternOperation::Begin { .. }
+                }
+            )));
+            let arm_id = index.nodes()[pattern_id.0 as usize].parent.unwrap();
+            assert_eq!(index.nodes()[arm_id.0 as usize].role, NodeRole::MatchArm);
+            let retry = retained
+                .lower(&index.pc(arm_id, Phase::Exit).unwrap(), None)
+                .unwrap();
+            assert!(matches!(
+                retry.recipe().exit,
+                RecipeExit::PatternRetry { .. }
+            ));
+            // This edge transfers any admitted reached result. Preparing it
+            // never asks the cold call or panic to have an executable recipe.
+            for arm in &arms {
+                let result = arm.expr().unwrap();
+                let result_id = super::super::id_for(&index, &body, result.syntax()).unwrap();
+                let phase = operand(&index, id, result_id).unwrap();
+                let transfer = retained.lower(&index.pc(id, phase).unwrap(), None).unwrap();
+                assert!(matches!(
+                    transfer.recipe().operations.first(),
+                    Some(Op::ResultTransfer { .. })
+                ));
+                assert!(
+                    !transfer
+                        .recipe()
+                        .operations
+                        .iter()
+                        .any(|op| matches!(op, Op::Literal { .. } | Op::Unsupported(_)))
+                );
+            }
+        }
+    }
+}

@@ -20,22 +20,23 @@ impl ReferenceTarget {
 impl GuestStore {
     pub(crate) fn reference_target_owned_bytes(&self, cell: CellId) -> Result<usize, Diagnostic> {
         let reference = self.reference_from_cell(cell)?;
-        checked_chain_bytes(self.references.get(reference)?.enclosing.len())
+        checked_chain_bytes(self.references.get(reference)?.location()?.enclosing.len())
     }
     pub(crate) fn reference_target(&self, cell: CellId) -> Result<ReferenceTarget, Diagnostic> {
         let reference = self.reference_from_cell(cell)?;
         let record = self.references.get(reference)?;
-        checked_chain_bytes(record.enclosing.len())?;
+        let location = record.location()?;
+        checked_chain_bytes(location.enclosing.len())?;
         let mut enclosing = Vec::new();
         enclosing
-            .try_reserve_exact(record.enclosing.len())
+            .try_reserve_exact(location.enclosing.len())
             .map_err(|_| resource())?;
-        enclosing.extend_from_slice(&record.enclosing);
+        enclosing.extend_from_slice(&location.enclosing);
         checked_chain_bytes(enclosing.capacity())?;
         Ok(ReferenceTarget {
             session: self.pattern_binding_session(),
-            root: record.root,
-            final_cell: record.final_cell,
+            root: location.root,
+            final_cell: location.final_cell,
             target: record.target,
             access: record.access,
             enclosing,
@@ -66,9 +67,10 @@ impl GuestStore {
         }
         let record = self.references.get(RefId::from_bits(value.payload))?;
         self.validate_reference_record(record)?;
-        if record.root != expected.root
-            || record.final_cell != expected.final_cell
-            || record.enclosing != expected.enclosing
+        let location = record.location()?;
+        if location.root != expected.root
+            || location.final_cell != expected.final_cell
+            || location.enclosing != expected.enclosing
             || record.target != expected.target
             || record.target != pointee
             || (record.access == Access::Mutable) != mutable
@@ -107,26 +109,27 @@ impl GuestStore {
         }
         let record = self.references.get(RefId::from_bits(value.payload))?;
         self.validate_reference_record(record)?;
+        let location = record.location()?;
         let prefix = expected.enclosing.len();
-        if record.root != expected.root
-            || record.enclosing.len() != prefix.checked_add(1).ok_or_else(resource)?
-            || record.enclosing.get(..prefix) != Some(expected.enclosing.as_slice())
+        if location.root != expected.root
+            || location.enclosing.len() != prefix.checked_add(1).ok_or_else(resource)?
+            || location.enclosing.get(..prefix) != Some(expected.enclosing.as_slice())
             || record.target != pointee
             || (record.access == Access::Mutable) != mutable
             || mutable && expected.access != Access::Mutable
         {
             return Err(ownership());
         }
-        let edge = &record.enclosing[prefix];
-        if edge.parent != expected.final_cell || edge.child != record.final_cell.cell {
+        let edge = &location.enclosing[prefix];
+        if edge.parent != expected.final_cell || edge.child != location.final_cell.cell {
             return Err(ownership());
         }
         let index = u32::try_from(prefix).map_err(|_| resource())?;
-        let source = record
+        let source = location
             .source_projections
             .binary_search_by_key(&index, |step| step.chain_index)
             .ok()
-            .and_then(|index| record.source_projections.get(index))
+            .and_then(|index| location.source_projections.get(index))
             .ok_or_else(ownership)?;
         Self::require_source_projection_parent(
             &source.member,

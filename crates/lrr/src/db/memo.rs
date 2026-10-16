@@ -158,12 +158,8 @@ impl QueryPin {
                     .copied()
                     .unwrap_or(0)
             || self.value.upgrade().is_some_and(|value| {
-                value.product_roots().any(|product| {
-                    Arc::strong_count(product)
-                        > inner
-                            .get(&(Arc::as_ptr(product) as usize))
-                            .copied()
-                            .unwrap_or(0)
+                value.source_roots().any(|root| {
+                    root.strong_count() > inner.get(&root.allocation()).copied().unwrap_or(0)
                 })
             })
             || self.inventory.strong_count()
@@ -191,7 +187,7 @@ pub struct Database {
     // Allocation addresses are private accounting identities, never semantic keys,
     // serialized output, or eviction-order inputs. Weak owners prevent address reuse.
     query_pins: BTreeMap<usize, QueryPin>,
-    product_pins: product_retention::ProductPins,
+    source_plan_pins: product_retention::SourcePlanPins,
     input_pins: BTreeMap<usize, std::sync::Weak<InputValue>>,
     pub trace: Trace,
 }
@@ -213,7 +209,7 @@ impl Default for Database {
             body_leases: vec![],
             prepared_sources: vec![],
             query_pins: BTreeMap::new(),
-            product_pins: Default::default(),
+            source_plan_pins: Default::default(),
             input_pins: BTreeMap::new(),
             trace: Trace::default(),
         }
@@ -246,14 +242,18 @@ impl Database {
                             *inner.entry(Arc::as_ptr(v.parsed()) as usize).or_insert(0) += 1;
                             *inner.entry(Arc::as_ptr(v.index()) as usize).or_insert(0) += 1;
                             for product in v.products() {
-                                product_retention::count_owner(product, &mut inner, &mut products);
+                                product_retention::count_owner(
+                                    super::value::SourceArtifactRef::Pattern(product),
+                                    &mut inner,
+                                    &mut products,
+                                );
                             }
                         }
                         Some(Arc::as_ptr(v) as usize)
                     }
-                    QueryValue::Thunk(recipe) => {
-                        for product in recipe.product_roots() {
-                            product_retention::count_owner(product, &mut inner, &mut products);
+                    QueryValue::Thunk(_) => {
+                        for root in memo.value.source_roots() {
+                            product_retention::count_owner(root, &mut inner, &mut products);
                         }
                         None
                     }
@@ -271,7 +271,8 @@ impl Database {
                 }
             }
         }
-        self.product_pins.count_owners(&mut inner, &mut products);
+        self.source_plan_pins
+            .count_owners(&mut inner, &mut products);
         // A live input box owns one inner inventory reference, regardless of
         // how many outer Arc handles point to that same box.
         let mut owners = std::collections::BTreeSet::new();
@@ -520,7 +521,7 @@ impl Database {
         // Retirement-only Products may outlive their source-plan/recipe memo
         // while an independently cached Body memo still owns the same index.
         // Mark before the Body charge so that deduplication cannot erase its pin.
-        for index in self.product_pins.index_roots() {
+        for index in self.source_plan_pins.index_roots() {
             product_bodies.insert(Arc::as_ptr(index));
         }
         for memo in self.memos.values() {
@@ -840,7 +841,7 @@ impl Database {
             usage.memo_bytes = account_add(usage.memo_bytes, bytes)?;
             usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, bytes)?;
         }
-        self.account_products(&mut usage, &memo_outer, &memo_inner, &mut body_allocations)?;
+        self.account_source_artifacts(&mut usage, &memo_outer, &memo_inner, &mut body_allocations)?;
         for pin in self.query_pins.values() {
             let bytes = 64 + std::mem::size_of::<usize>() + std::mem::size_of::<QueryPin>();
             usage.memo_bytes = account_add(usage.memo_bytes, bytes)?;
@@ -908,9 +909,20 @@ impl Database {
             pin.strong_count() > usize::from(input_owners.contains(allocation))
         });
         let (memo_outer, memo_inner) = self.memo_owners();
+        // An external handle to a shared plan/value does not clone the nested
+        // Product handle. Preserve its retirement lease too, so a later parent
+        // drop cannot perform final graph destruction during an active run.
+        let external_artifacts = self
+            .memos
+            .values()
+            .filter(|memo| QueryPin::new(&memo.value).external(&memo_outer, &memo_inner))
+            .flat_map(|memo| memo.value.source_roots())
+            .map(|root| root.allocation())
+            .collect();
         self.query_pins
             .retain(|_, pin| pin.external(&memo_outer, &memo_inner));
-        self.product_pins.retain_external(&memo_inner)?;
+        self.source_plan_pins
+            .retain_external(&memo_inner, &external_artifacts)?;
         self.source_pins.retain(|pin| {
             pin.snapshot.strong_count() > 0
                 || pin.parsed.strong_count()
@@ -2593,7 +2605,7 @@ impl Database {
         }
     }
     fn returned(&mut self, key: &QueryKey, outcome: Outcome) -> QueryPoll<Outcome> {
-        if let Err(error) = self.product_pins.register(outcome.value.as_ref()) {
+        if let Err(error) = self.source_plan_pins.register(outcome.value.as_ref()) {
             return QueryPoll::Ready(Err(error));
         }
         self.query_pins

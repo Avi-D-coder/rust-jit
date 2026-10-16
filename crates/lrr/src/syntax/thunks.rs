@@ -40,6 +40,8 @@ mod primitive_cast_target;
 mod runtime_local_numeric_context;
 #[path = "runtime_macro_numeric_context.rs"]
 pub(crate) mod runtime_macro_numeric_context;
+#[path = "string_literal.rs"]
+pub mod string_literal;
 
 fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTERNAL-SNAPSHOT", message.into())
@@ -3494,7 +3496,22 @@ impl ParsedFile {
                 thunks::literal(
                     index,
                     key.clone(),
-                    literal_recipe(&literal, index.span(id)?)?,
+                    {
+                        let mut recipe = literal_recipe(&literal, index.span(id)?)?;
+                        if recipe.kind == LiteralKind::String {
+                            recipe.decoded = Some(DecodedLiteral::String(
+                                string_literal::PreparedStringLiteral::capture(
+                                    self,
+                                    body,
+                                    index,
+                                    key,
+                                    &literal,
+                                    node.value.expect("literal value"),
+                                )?,
+                            ));
+                        }
+                        recipe
+                    },
                     HintRecipe::None,
                     node.value.expect("literal value"),
                     return_pc(index, body, literal.syntax())?,

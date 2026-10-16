@@ -125,7 +125,7 @@ impl LiteralKind {
     }
 }
 /// Explicit recipe/cache compatibility, independent of host enum layout.
-pub const LRIR_RECIPE_SCHEMA: u32 = 12;
+pub const LRIR_RECIPE_SCHEMA: u32 = 13;
 pub const DECODED_INTEGER_SCHEMA: u32 = 1;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum IntegerLexicalError {
@@ -144,6 +144,7 @@ impl IntegerLexicalError {
 }
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum DecodedLiteral {
+    String(std::sync::Arc<crate::syntax::string_literal::PreparedStringLiteral>),
     Integer {
         negative: bool,
         radix: u8,

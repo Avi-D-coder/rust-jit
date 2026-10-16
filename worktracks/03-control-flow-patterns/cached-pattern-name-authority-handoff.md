@@ -273,3 +273,117 @@ This is shared memo semantics, not a module/macro-specific exception or relaxed
 error oracle. Four strict controls and existing selector2 remain the acceptance
 scope, plus relevant ordinary memo suspension/dependency controls. Old failures
 remain attached to their original exact sources.
+
+
+## External parent retirement reachability (root, pre-code)
+
+LOCAL-024 / T024/T050/T051/M014, Section32.2. Reviewing literal receipt Arc
+retention exposed the same ownership condition in the existing Product pool:
+a consumer may keep the actual SourcePlan/QueryValue allocation without cloning
+its nested Product Arc. Product strong-count comparison alone cannot see that
+external parent. Pruning the retirement lease between runs while that parent is
+externally retained permits a later source-memo invalidation and parent drop to
+perform final Product destruction during an active run. The actual unchanged
+expr-match.rs source-plan fixture supplies the minimal ownership witness.
+
+Extend the existing pool pruning with externally reachable cached-parent roots,
+using the actual QueryPin outer/inner ownership proof. Preserve leases reachable
+from such parents until a later between-run pruning observes neither an external
+parent nor a separately retained Product. This is a coordinator-only O(cached
+roots) traversal, with no dispatch/source parsing/world namespace changes. The
+same bounded pool will subsequently account actual immutable literal receipts;
+no separate cache framework or source/body-by-equality rebind is introduced.
+
+Required LRR ownership control: retain only the SourcePlan, run quiescent pruning,
+retire every outer memo, begin a run and drop the external plan. Its graph must
+survive until the next quiescent prune, then disappear. Existing direct graph,
+index, cached-only eviction and retirement-only controls must remain valid.
+This does not execute the stock program or close pattern/architecture gates.
+
+
+## Shared immutable literal receipt retention (root, pre-code)
+
+Extend the existing bounded source-plan retirement pool with actual opaque
+PreparedStringLiteral Arc roots exposed by VerifiedRecipe::string_literal_roots.
+The receipt owns bounded UTF8/profile/source-term bytes, no parser/index roots;
+metadata_bytes includes its Arc control block. The verifier retains aggregate
+admission accounting; memo exclusive bytes subtract exactly its stored distinct
+string-literal admission charge while the actual pool charges each allocation
+once. Count every actual flat-operation handle, not only distinct identities.
+
+The pool shares one count/metadata cap and quiescent retirement mechanism for
+PatternProductPlan and immutable literal receipts. Products still retain/account
+their actual BodyIndex; strings cannot mint one. Private allocation locators do
+not enter stable keys/wire identities. QueryPin sees external receipt handles,
+including independently retained public DecodedLiteral Arcs after outer memo
+retirement. Cached external parents preserve nested leases as above.
+
+No macro-specific semantics, parser, namespace scan, source-body rebinding or
+extra query framework is added. The ordinary literal source/verifier/VM route
+is worker-owned and requires its separate source/authority/execution controls.
+Root accounting acceptance needs unchanged match-borrowed-str.rs literal-query
+roots, alias dedup, external-only retention and cached-only reclamation plus
+existing Product ownership regressions. Source-only until exact combined
+ordinary literal/retention candidate compiles and runs asynchronously.
+
+
+## Admit retirement roots before memo publication (root, pre-code)
+
+LOCAL-024 / T024/T050/T051/M014, Section32.2. Database::fetch currently
+inserts a fresh memo before returned registers its immutable source roots. If
+the bounded registration rejects, fetch reports MetadataLimit but memo(key)
+still exposes the unadmitted successful recipe. That bypasses the intended
+retirement lease and resource boundary. This is source-confirmed ordering; a
+new LRR admission regression will use the unchanged match-borrowed-str.rs
+ordinary literal and a test-only reduced registry count cap, never a synthetic
+language fixture or alternate provider.
+
+Register the actual result roots before inserting the successful memo. On
+failure remove any obsolete memo for that key, preserve the typed diagnostic
+and mark enclosing collectors non-cacheable through the existing failed path.
+Registration remains idempotent in returned for cached outcomes. New roots are
+preflighted together; rejection publishes neither root rows nor successful memo.
+Fresh results perform one additional bounded cold root traversal before memo
+publication; returned registration remains idempotent for cached outcomes.
+Installed operations, name/type/source authority, wire keys, parser and runtime
+stay unchanged.
+
+Required control: actual source literal query succeeds under normal limits;
+clear its memos and retirement pool while quiescent, lower only the test cap,
+refetch and require MetadataLimit with no successful memo or admitted root.
+Restoring normal cap must allow a genuine rerun and ordinary verified recipe.
+Existing literal2/Product5 controls remain necessary. All eight architecture
+failure modes are unchanged: this is shared cache admission and introduces no
+context evaluator, origin exclusion, repeated planning or world lookup. The
+ordinary literal integration and macro-route replacement stay independently
+held. Source-only pending separate frozen async validation.
+
+
+## MacroExport source admission footprint (root, pre-code)
+
+LOCAL-024 / M014/M018/H018, Sections32.2/55. A source-only MacroExport facet
+retains an actual PreparedSourceView, whose prepared_metadata_bytes counts state
+map metadata but not complete retained input/blob/parser/outline payloads. Do not
+use that partial number as a full facet admission charge. Registering this view
+in Database.prepared_sources solely for accounting would also make its parse and
+outline discoverable by ordinary runtime-source providers; that would cross worlds.
+
+Add a cold readonly original-publication admission upper-bound method to the
+existing source lease. It walks actual immutable state rows and parser/outline
+handles under checked count/byte bounds, including source storage and nested
+flat input metadata. Conservative repeated-handle charges are permitted for this
+preparation bound; it is not deduplicated installed-cache accounting. Reject
+module/generated/retained publication roots whose hidden parents need a different
+role-aware owner traversal. No inputs are published, bodies indexed, authority
+created, source read, or query/runtime registry changed by this method.
+
+The facet worker consumes this bound in explicit configured capture; it retains
+actual source handles and keeps role-separated currentness/seal/accounting as
+activation prerequisites. Existing ordinary source and generated-language paths
+are unaffected. The unchanged match-borrowed-str.rs source supplies LRR ownership
+controls: all four editions, stable shared-view charge, low-cap atomic rejection,
+actual parser/blob/outline/input floor and no DB publication. Eight-mode source
+review: no evaluator/pattern/inference route, generated runtime refusal, repeated
+phase work, namespace census or immutable deep copy is introduced. This helper
+requires bounded cold O(retained original publication) work only; it does not
+close any macro finding, runtime contract or gate.

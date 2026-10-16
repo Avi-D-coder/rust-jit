@@ -87,14 +87,14 @@ fn begin(plan: &Arc<PatternProductPlan>) -> RecipeDraft {
 }
 #[test]
 fn decision_wire_has_explicit_schema_plan_receipt_and_three_prepared_continuations() {
-    assert_eq!(LRIR_RECIPE_SCHEMA, 12);
+    assert_eq!(LRIR_RECIPE_SCHEMA, 13);
     let plan = plan("search");
     let index = plan.index();
     let recipe = verify(begin(&plan), index).unwrap();
     assert_eq!(recipe.product_roots().count(), 1);
     assert!(Arc::ptr_eq(recipe.product_roots().next().unwrap(), &plan));
     let recipe = recipe.recipe();
-    let mut expected = StableEncoder::new("lrr/v12/lrir-recipe");
+    let mut expected = StableEncoder::new("lrr/v13/lrir-recipe");
     expected.record(&recipe.key);
     expected.record(&recipe.origin.span.body_key);
     expected.u32(recipe.origin.span.relative_start);

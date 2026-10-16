@@ -126,12 +126,23 @@ fn literal_context(
     handles: u32,
     bytes: usize,
 ) -> LiteralContext {
+    literal_context_in(text, edition, kind, fuel, handles, bytes, "main")
+}
+fn literal_context_in(
+    text: &str,
+    edition: u16,
+    kind: LiteralKind,
+    fuel: u64,
+    handles: u32,
+    bytes: usize,
+    function: &str,
+) -> LiteralContext {
     let (mut db, view, _) = source(text, edition);
     let body = view
         .outline()
         .items
         .iter()
-        .find(|i| i.def_key.declared_name == "main")
+        .find(|i| i.def_key.declared_name == function)
         .unwrap()
         .body
         .as_ref()
@@ -153,6 +164,16 @@ fn literal_context(
             )
             || node.negative_integer_literal
     }) {
+        // New string controls select actual expression literals rather than
+        // constant pattern endpoints, whose matching semantics stay separate.
+        if kind == LiteralKind::String
+            && node.parent.is_some_and(|parent| {
+                index.nodes()[parent.0 as usize].role
+                    == crate::syntax::body_index::NodeRole::Pattern
+            })
+        {
+            continue;
+        }
         let pc = index.pc(node.id, Phase::Entry).unwrap();
         let outcome = db
             .fetch(&SyntaxProvider, QueryKey::Thunk(pc.clone()))
@@ -176,7 +197,7 @@ fn literal_context(
     }
     let (pc, recipe, destination) = selected.expect("selected ordinary source literal absent");
     let mut store = GuestStore::new(1, handles, bytes).unwrap();
-    let mut frame = Frame::new(index.as_ref().clone(), pc.clone(), &mut store).unwrap();
+    let mut frame = Frame::new(std::sync::Arc::clone(index), pc.clone(), &mut store).unwrap();
     frame.set_fuel_limit(fuel).unwrap();
     // Keep the exact recipe's charged scope prefix; enter only outer ancestors.
     let node = &index.nodes()[pc.node as usize];
@@ -880,3 +901,6 @@ fn byte_literal_fuel_and_combined_ticket_cell_quota_refuse_without_source_invent
         assert_untouched(&c, before, None);
     }
 }
+
+#[path = "string_literal_source_tests.rs"]
+mod string_literal_source_tests;

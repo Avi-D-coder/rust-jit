@@ -227,3 +227,6 @@ fn named_aliases_keep_the_selected_source_type_and_distinct_same_spelled_owners(
         .fingerprint();
     assert_ne!(one.pointee_source(), &TyTerm::Nominal(other, vec![]));
 }
+
+#[path = "str_source_authority_tests.rs"]
+mod str_source_authority_tests;

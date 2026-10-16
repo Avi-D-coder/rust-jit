@@ -14,6 +14,8 @@ mod construction_cleanup;
 mod reference_return;
 #[path = "cell_run_session.rs"]
 mod run_session;
+#[path = "str_storage.rs"]
+pub mod str_storage;
 use super::{
     arena::{GuestArena, Handle, RunBudget, resource, stale},
     object::{
@@ -25,7 +27,7 @@ use super::{
         ResolvedPlace, SourceFieldProjection, SourceProjectionStep, checked_chain_bytes,
         checked_source_projection_bytes,
     },
-    reference::{Access, ReferenceRecord, access_fault, lease_fault},
+    reference::{Access, ReferenceLease, ReferenceRecord, access_fault, lease_fault},
     shape::{ShapeCategory, TypeDescriptor, TypeId, TypeKey, TypeRegistry},
     value::{ValueRepr, invalid},
 };
@@ -215,11 +217,13 @@ pub struct GuestStore {
     frames: GuestArena<FrameAnchor>,
     constructions: GuestArena<ConstructionRecord>,
     references: GuestArena<ReferenceRecord>,
+    strings: str_storage::ImmutableStrStorage,
 }
 impl GuestStore {
     pub fn new(epoch: u32, max_handles: u32, max_bytes: usize) -> Result<Self, Diagnostic> {
+        let session = StoreSession::mint()?;
         Ok(Self {
-            pattern_binding_session: StoreSession::mint()?,
+            pattern_binding_session: session,
             budget: RunBudget::new(epoch, max_handles, max_bytes)?,
             types: TypeRegistry::default(),
             cells: GuestArena::new(epoch)?,
@@ -230,6 +234,7 @@ impl GuestStore {
             frames: GuestArena::new(epoch)?,
             constructions: GuestArena::new(epoch)?,
             references: GuestArena::new(epoch)?,
+            strings: str_storage::ImmutableStrStorage::new(epoch, session)?,
         })
     }
     pub(crate) fn pattern_binding_session(&self) -> StoreSession {
@@ -747,13 +752,29 @@ impl GuestStore {
         Ok((object_id, storage))
     }
     fn validate_reference_record(&self, reference: &ReferenceRecord) -> Result<(), Diagnostic> {
-        self.validate_reference_target(
-            reference.root,
-            &reference.enclosing,
-            reference.final_cell,
-            reference.target,
-        )?;
-        self.validate_source_projection_steps(&reference.enclosing, &reference.source_projections)
+        match &reference.lease {
+            ReferenceLease::Location(location) => {
+                self.validate_reference_target(
+                    location.root,
+                    &location.enclosing,
+                    location.final_cell,
+                    reference.target,
+                )?;
+                self.validate_source_projection_steps(
+                    &location.enclosing,
+                    &location.source_projections,
+                )
+            }
+            ReferenceLease::Buffer(buffer) => {
+                if reference.access != Access::Shared
+                    || reference.owner.is_some()
+                    || reference.target != TypeId(16)
+                {
+                    return Err(access_fault());
+                }
+                self.strings.resolve(*buffer).map(|_| ())
+            }
+        }
     }
     fn validate_source_projection_steps(
         &self,
@@ -963,27 +984,28 @@ impl GuestStore {
             PlaceRoot::Deref(id) => {
                 let reference = self.references.get(id)?;
                 self.validate_reference_record(reference)?;
+                let location = reference.location()?;
                 (
-                    reference.root,
-                    reference.final_cell.cell,
+                    location.root,
+                    location.final_cell.cell,
                     reference.access == Access::Mutable
-                        && self.cells.get(reference.root.cell)?.writable,
+                        && self.cells.get(location.root.cell)?.writable,
                     {
                         let mut prefix = Vec::new();
-                        checked_chain_bytes(reference.enclosing.len())?;
+                        checked_chain_bytes(location.enclosing.len())?;
                         prefix
-                            .try_reserve_exact(reference.enclosing.len())
+                            .try_reserve_exact(location.enclosing.len())
                             .map_err(|_| resource())?;
-                        prefix.extend_from_slice(&reference.enclosing);
+                        prefix.extend_from_slice(&location.enclosing);
                         prefix
                     },
                     {
                         let mut sources = Vec::new();
-                        checked_source_projection_bytes(reference.source_projections.len())?;
+                        checked_source_projection_bytes(location.source_projections.len())?;
                         sources
-                            .try_reserve_exact(reference.source_projections.len())
+                            .try_reserve_exact(location.source_projections.len())
                             .map_err(|_| resource())?;
-                        sources.extend_from_slice(&reference.source_projections);
+                        sources.extend_from_slice(&location.source_projections);
                         sources
                     },
                 )
@@ -1570,7 +1592,7 @@ impl GuestStore {
         self.validate_reference_record(reference)?;
         // Intrinsic scalars and shared references may be read by Copy. Aggregate
         // Copy and moves through dereferences require a later checked policy.
-        self.read_scalar(reference.final_cell.cell)
+        self.read_scalar(reference.location()?.final_cell.cell)
     }
     /// Commit replacement and retain its old-value cleanup obligation explicitly.
     pub fn replace_reference(
@@ -1583,7 +1605,7 @@ impl GuestStore {
         if reference.access != Access::Mutable {
             return Err(access_fault());
         }
-        let cell = reference.final_cell.cell;
+        let cell = reference.location()?.final_cell.cell;
         self.replace(cell, incoming)
     }
     pub fn aggregate_variant(&self, ticket: TicketId) -> Result<Option<u32>, Diagnostic> {
@@ -4067,7 +4089,14 @@ pub(crate) mod tests {
             projections: Box::new([Projection::Field(1)]),
         };
         let shared = store.borrow(&place, Access::Shared).unwrap();
-        let field = store.references.get(shared).unwrap().final_cell.cell;
+        let field = store
+            .references
+            .get(shared)
+            .unwrap()
+            .location()
+            .unwrap()
+            .final_cell
+            .cell;
         let root_epoch = store.location_epoch(cell).unwrap();
         let field_epoch = store.location_epoch(field).unwrap();
         let incoming = store
@@ -4081,7 +4110,17 @@ pub(crate) mod tests {
         );
         assert_eq!(store.location_epoch(field).unwrap(), field_epoch);
         let direct = store.borrow(&Place::cell(field), Access::Shared).unwrap();
-        assert_eq!(store.references.get(direct).unwrap().root.cell, cell);
+        assert_eq!(
+            store
+                .references
+                .get(direct)
+                .unwrap()
+                .location()
+                .unwrap()
+                .root
+                .cell,
+            cell
+        );
         let (_, replacement_ticket) = point_ticket(&mut store, &bound, &replacement_values);
         let old_record = store.replace(cell, replacement_ticket).unwrap();
         assert_eq!(store.location_epoch(cell).unwrap(), root_epoch);
@@ -4110,7 +4149,14 @@ pub(crate) mod tests {
         );
         drain_point(&mut store, old_record);
         let current = store.borrow(&place, Access::Shared).unwrap();
-        let old_field = store.references.get(current).unwrap().final_cell.cell;
+        let old_field = store
+            .references
+            .get(current)
+            .unwrap()
+            .location()
+            .unwrap()
+            .final_cell
+            .cell;
         // Supplemental LRR invalidation case, not a billion-step stock run:
         // force location-epoch exhaustion on the same original Point field.
         store.cells.get_mut(old_field).unwrap().location_epoch = u32::MAX;
@@ -4127,7 +4173,14 @@ pub(crate) mod tests {
         );
         let current = store.borrow(&place, Access::Shared).unwrap();
         assert_eq!(
-            store.references.get(current).unwrap().final_cell.cell,
+            store
+                .references
+                .get(current)
+                .unwrap()
+                .location()
+                .unwrap()
+                .final_cell
+                .cell,
             new_field
         );
         let moved = store.move_from(cell).unwrap();
@@ -4224,7 +4277,7 @@ pub(crate) mod tests {
             let mut store = GuestStore::new(1, 100_000, 16 * 1024 * 1024).unwrap();
             let (root, leaf) = nested_unit_cells(&mut store, levels, writable);
             let reference = store.borrow(&Place::cell(leaf), Access::Shared).unwrap();
-            let record = store.references.get(reference).unwrap();
+            let record = store.references.get(reference).unwrap().location().unwrap();
             assert_eq!(record.root.cell, root);
             assert_eq!(record.final_cell.cell, leaf);
             assert_eq!(record.enclosing.len(), levels);

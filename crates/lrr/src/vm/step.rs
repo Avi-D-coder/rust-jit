@@ -126,6 +126,7 @@ fn materialize_hint(
     frame_hint(frame, hint, required, store)
 }
 enum PreparedLiteral {
+    String(super::frame::StringLiteralPublication),
     Scalar(ValueRepr),
     /// Private immutable admission from the ordinary indexed literal's kind,
     /// source span and destination, never from a runtime descriptor.
@@ -149,7 +150,7 @@ impl PreparedLiteral {
         match self {
             Self::IntrinsicScalar { primitive, .. } => Some(*primitive),
             Self::Integer { source, .. } | Self::Float { source, .. } => *source,
-            Self::Scalar(_) => None,
+            Self::Scalar(_) | Self::String(_) => None,
         }
     }
     fn ty(&self) -> Option<TypeId> {
@@ -158,6 +159,7 @@ impl PreparedLiteral {
                 Some(TypeId(value.type_id))
             }
             Self::Integer { ty, .. } | Self::Float { ty, .. } => *ty,
+            Self::String(_) => None,
         }
     }
 }
@@ -263,6 +265,11 @@ fn commit_literal(
     store: &mut GuestStore,
 ) -> Result<TicketId, Diagnostic> {
     let (ticket, ty) = match prepared {
+        PreparedLiteral::String(_) => {
+            return Err(invalid(
+                "string literal requires ordinary source publication",
+            ));
+        }
         PreparedLiteral::Scalar(value) | PreparedLiteral::IntrinsicScalar { value, .. } => {
             return store.ticket(value);
         }
@@ -390,6 +397,9 @@ fn intrinsic_literal_preflight(
         PreparedLiteral::IntrinsicScalar { .. } => {
             Err(invalid("intrinsic literal source admission repeated"))
         }
+        PreparedLiteral::String(_) => {
+            Err(invalid("string literal entered scalar source admission"))
+        }
     }
 }
 fn literal_preflight(
@@ -405,6 +415,19 @@ fn literal_preflight(
     else {
         return Ok(None);
     };
+    if literal.kind == LiteralKind::String {
+        let Some(DecodedLiteral::String(proof)) = &literal.decoded else {
+            return Err(invalid("string literal lacks source-certified payload"));
+        };
+        if *hint != HintRecipe::None {
+            return Err(invalid(
+                "string literal recipe cannot supply scalar/type modifiers",
+            ));
+        }
+        return frame
+            .preflight_string_literal(proof, *destination, store)
+            .map(|ready| Some(PreparedLiteral::String(ready)));
+    }
     let explicit = frame_hint(frame, hint, true, store)?;
     let inherited = frame.hint(*destination)?;
     if explicit.is_some() && inherited.is_some() && explicit != inherited {
@@ -1076,6 +1099,17 @@ fn execute(
             hint,
             destination,
         } => {
+            let prepared =
+                prepared.ok_or_else(|| invalid("literal bypassed immutable admission"))?;
+            let prepared = match prepared {
+                PreparedLiteral::String(publication) => {
+                    let Some(DecodedLiteral::String(proof)) = &l.decoded else {
+                        return Err(invalid("prepared string source payload disappeared"));
+                    };
+                    return frame.publish_string_literal(proof, publication, store);
+                }
+                other => other,
+            };
             let explicit = frame_hint(frame, hint, true, store)?;
             let inherited = frame.hint(*destination)?;
             if explicit.is_some() && inherited.is_some() && explicit != inherited {
@@ -1084,8 +1118,6 @@ fn execute(
                 ));
             }
             let hint = explicit.or(inherited);
-            let prepared =
-                prepared.ok_or_else(|| invalid("literal bypassed immutable admission"))?;
             let source = prepared.intrinsic_source();
             if matches!(&prepared, PreparedLiteral::IntrinsicScalar { .. }) {
                 // Immutable admission proved this ordinary temporary needs a
@@ -1272,6 +1304,15 @@ pub(crate) fn step_with_constant(
         // A recipe is data. Refuse a missing/foreign source use before even
         // its ordinary ScopeEnter prefix can execute.
         for op in &recipe.operations {
+            if let Op::Literal {
+                literal,
+                destination,
+                ..
+            } = op
+                && let Some(DecodedLiteral::String(proof)) = &literal.decoded
+            {
+                proof.require_entry(&frame.body, frame.pc(), *destination, &literal.source)?;
+            }
             if let Op::SourceConstant {
                 constant: instruction,
                 ..

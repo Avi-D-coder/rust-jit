@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T04:39:45.727956+00:00",
+  "claim": "LOCAL-024",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "source_member": "0f68fc1e24ae77292abf556b2b848b289d09edd16c25fec4f545c943e06f17f0",
+  "source_packet": {
+    "path": "artifacts/macos-first/sol-common-ordinary-str-literal-validation-v1/COMPOSED-SOURCE.json",
+    "sha256": "c9502f6fe10fdf2789bc92d83053005c084be2022ca4dbe73413bfc6537f3dd4"
+  },
+  "source_rows": 122,
+  "component_receipt": {
+    "path": "artifacts/macos-first/sol-common-ordinary-str-literal-validation-v1/RELEASE.json",
+    "sha256": "31eac1f1f7848e665c8367839964992e171a8a2aa61e487285a90e9cca12cc60"
+  },
+  "architecture_review": {
+    "path": "artifacts/macos-first/sol-common-ordinary-str-literal-validation-v1/SOURCE-ARCHITECTURE-REVIEW.json",
+    "sha256": "6c959a850ad459f1c50acb23ac04fc9141174cfd6aea08e21d057ab6bd2aa912"
+  },
+  "compile_terminal": {
+    "launch": "f91e81",
+    "session": 12931,
+    "pid": 2516,
+    "terminal": "1ed410",
+    "exit": 0,
+    "seconds": 20.472328584000934
+  },
+  "scope_sequence_terminal": {
+    "launch": "bb162d",
+    "session": 15833,
+    "terminal": "97d01d",
+    "exit": 0
+  },
+  "component_groups": {
+    "new_vm_literal": 4,
+    "new_source_authority": 2,
+    "root_literal_retirement": 2,
+    "existing_product": 5,
+    "schema13_wire": 4
+  },
+  "distinct_component_passes": 17,
+  "runtime_receipt": {
+    "path": "artifacts/macos-first/sol-common-ordinary-str-literal-stock-cli-validation-v1/RELEASE.json",
+    "sha256": "b4d090812eb9363a6ebc52e0bbfe93209da75715e2acaba179c8744635a22396"
+  },
+  "runtime_terminal": {
+    "launch": "3b70e3",
+    "session": 76437,
+    "terminal": "fa85cc",
+    "wrapper_exit": 1,
+    "runner_exit": 1,
+    "cli_exit": 2,
+    "cli_pid": 2876,
+    "cli_seconds": 0.667358249949757
+  },
+  "upstream_case": "tests/ui/match/issue-26251.rs",
+  "owning_edition": 2015,
+  "unchanged": true,
+  "runtime_contract_passes": 0,
+  "full_fixture_passes": 0,
+  "runtime_failure": {
+    "code": "LRR-E-INTERNAL-IR",
+    "message": "string literal requires actual indexed source receipt",
+    "range": [
+      236,
+      256
+    ],
+    "source": "assert_eq!(y, \"two\")",
+    "previous_range": [
+      157,
+      162
+    ],
+    "progress": "Actual ordinary selected string literal now executes; legacy assertion source route remains failed."
+  },
+  "effects_evidence": "Incomplete capture; cleanup and guest streams unobserved, never inferred success or empty",
+  "excluded": [
+    "Live root admission-order3 source",
+    "Live root original-retained-footprint2 source",
+    "Live owned local source/name proof work",
+    "Live MacroExport source facet"
+  ],
+  "holds": [
+    "E-R5-005",
+    "MA001-MA008",
+    "common macro source attachment and obsolete evaluator removal",
+    "Interpreter runtime full prerequisite",
+    "Strict/current milestone not executed on this candidate"
+  ],
+  "task_completed": false,
+  "guest_jit_allowed": false
+}
