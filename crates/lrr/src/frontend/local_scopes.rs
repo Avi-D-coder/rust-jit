@@ -73,6 +73,66 @@ fn edition(value: Edition) -> u16 {
     }
 }
 impl LocalScopes {
+    pub(crate) fn facts_root(&self) -> &Arc<HygieneFacts> {
+        &self.facts
+    }
+    /// Conservative owned BTree node/string storage; shared hygiene is separate.
+    pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
+        fn map<K, V>(rows: &BTreeMap<K, V>) -> Result<usize, Diagnostic> {
+            rows.len()
+                .checked_mul(
+                    std::mem::size_of::<(K, V)>()
+                        .checked_mul(16)
+                        .and_then(|n| n.checked_add(256))
+                        .ok_or_else(crate::runtime::arena::resource)?,
+                )
+                .ok_or_else(crate::runtime::arena::resource)
+        }
+        fn set<T>(rows: &BTreeSet<T>) -> Result<usize, Diagnostic> {
+            rows.len()
+                .checked_mul(
+                    std::mem::size_of::<T>()
+                        .checked_mul(16)
+                        .and_then(|n| n.checked_add(256))
+                        .ok_or_else(crate::runtime::arena::resource)?,
+                )
+                .ok_or_else(crate::runtime::arena::resource)
+        }
+        let mut bytes = std::mem::size_of::<Self>();
+        let mut add = |n: usize| -> Result<(), Diagnostic> {
+            bytes = bytes
+                .checked_add(n)
+                .ok_or_else(crate::runtime::arena::resource)?;
+            Ok(())
+        };
+        add(map(&self.scopes)?)?;
+        add(map(&self.definitions)?)?;
+        add(map(&self.expansions)?)?;
+        for scope in self.scopes.values() {
+            add(set(&scope.occupied)?)?;
+            add(set(&scope.frontiers)?)?;
+            add(map(&scope.pending)?)?;
+            add(map(&scope.definitions)?)?;
+            for rows in scope.definitions.values() {
+                add(map(rows)?)?;
+            }
+            for names in [&scope.bindings, &scope.unresolved] {
+                add(map(names)?)?;
+                for (name, contexts) in names {
+                    add(name
+                        .as_str()
+                        .len()
+                        .checked_mul(2)
+                        .ok_or_else(crate::runtime::arena::resource)?)?;
+                    add(map(contexts)?)?;
+                    for rows in contexts.values() {
+                        add(map(rows)?)?;
+                    }
+                }
+            }
+        }
+        Ok(bytes)
+    }
     pub fn new(facts: Arc<HygieneFacts>) -> Self {
         Self {
             facts,

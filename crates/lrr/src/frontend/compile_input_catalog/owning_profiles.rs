@@ -3,7 +3,7 @@ use super::*;
 use crate::core::profile::ProfileIdentity;
 impl CompileInputCatalog {
     pub(crate) fn owning_profile_identity(&self) -> Result<Digest, Diagnostic> {
-        let mut e = StableEncoder::new("lrr/v3/prepared-compiler-facet-membership");
+        let mut e = StableEncoder::new("lrr/v4/prepared-compiler-facet-membership");
         e.digest(self.unit);
         e.u16(self.edition);
         e.map(&self.facades, |e, name, unit| {
@@ -45,6 +45,7 @@ impl CompileInputCatalog {
         e.option(&self.primitive_float_methods, |e, facet| {
             e.digest(facet.identity())
         });
+        e.sequence(&self.macro_exports, |e, facet| e.digest(facet.identity()));
         Ok(e.finish())
     }
     pub(crate) fn canonical_standalone_member(
@@ -106,6 +107,12 @@ impl CompileInputCatalog {
         }
         if bytes > 64 * 1024 {
             return Err(fault("compiler facet retained metadata limit"));
+        }
+        for facet in &self.macro_exports {
+            bytes = bytes.checked_add(facet.metadata_bytes())
+                .and_then(|n| n.checked_add(std::mem::size_of::<std::sync::Arc<crate::expand::source_declarative::macro_exports::SourceMacroExportFacet>>()))
+                .filter(|n| *n <= 64 * 1024 * 1024)
+                .ok_or_else(|| fault("compiler macro-export retained metadata limit"))?;
         }
         Ok(bytes)
     }

@@ -1,6 +1,7 @@
 mod args;
 mod bundle;
 mod compile_inputs;
+pub use compile_inputs::capture_macro_export_facet;
 mod explain;
 #[cfg(test)]
 mod nested_operand_prefix;

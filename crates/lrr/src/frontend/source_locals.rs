@@ -14,7 +14,14 @@ use crate::{
         entered_macros::BodyMacroEventKind, local_bindings::PatternNameKind, token_wire::Key,
     },
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::Deref,
+    sync::Arc,
+};
+#[path = "source_local_plan.rs"]
+pub(crate) mod owned_plan;
+pub(crate) use owned_plan::PreparedSourceLocalPlan;
 #[path = "source_local_patterns.rs"]
 mod pattern_equivalence;
 // Per-call memoization is valid only under this immutable source/namespace borrow.
@@ -67,6 +74,14 @@ impl SourceLocalPublication {
         Ok(e.finish())
     }
 }
+enum PrefixResolution {
+    Name(super::names::NameLookup),
+    Parameter(crate::traits::term::ParamKey),
+    ModuleTail,
+    NeedImport(Digest),
+    NeedDeclaration(Digest),
+    NeedOwnerGeneric,
+}
 pub struct OrdinaryNameSite<'a> {
     pub source: &'a SourceSelection,
     pub body: &'a BodyKey,
@@ -75,9 +90,10 @@ pub struct OrdinaryNameSite<'a> {
     pub context: Key,
     pub namespace: crate::source::manifest::Namespace,
 }
-pub struct SourceLocalIndex<'a> {
+/// Immutable tables built by the single ordinary source-local preparation.
+/// Fields stay private; owning this allocation grants no use-site Type authority.
+pub struct SourceLocalTables {
     anonymous_imports: BTreeMap<u32, Vec<usize>>,
-    entered: &'a EnteredMacroIndex<'a>,
     scopes: BTreeMap<u32, ScopeKey>,
     locals: LocalScopes,
     context: Key,
@@ -89,6 +105,89 @@ pub struct SourceLocalIndex<'a> {
     named_imports: BTreeMap<(u32, MacroName), Vec<usize>>,
     glob_imports: BTreeMap<u32, Vec<usize>>,
 }
+impl SourceLocalTables {
+    pub(crate) fn hygiene_root(&self) -> &Arc<super::hygiene::HygieneFacts> {
+        self.locals.facts_root()
+    }
+    /// Exclusive table/node/string storage. Shared pinned hygiene is separate.
+    pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
+        fn map<K, V>(rows: &BTreeMap<K, V>) -> Result<usize, Diagnostic> {
+            rows.len()
+                .checked_mul(
+                    std::mem::size_of::<(K, V)>()
+                        .checked_mul(16)
+                        .and_then(|n| n.checked_add(256))
+                        .ok_or_else(crate::runtime::arena::resource)?,
+                )
+                .ok_or_else(crate::runtime::arena::resource)
+        }
+        let mut bytes = std::mem::size_of::<Self>();
+        let mut add = |n: usize| -> Result<(), Diagnostic> {
+            bytes = bytes
+                .checked_add(n)
+                .ok_or_else(crate::runtime::arena::resource)?;
+            Ok(())
+        };
+        add(self
+            .locals
+            .metadata_bytes()?
+            .checked_sub(std::mem::size_of::<LocalScopes>())
+            .ok_or_else(crate::runtime::arena::resource)?)?;
+        add(map(&self.scopes)?)?;
+        add(map(&self.anonymous_imports)?)?;
+        add(map(&self.glob_imports)?)?;
+        add(map(&self.named_imports)?)?;
+        add(map(&self.item_candidates)?)?;
+        add(map(&self.item_frontiers)?)?;
+        for rows in self
+            .anonymous_imports
+            .values()
+            .chain(self.glob_imports.values())
+            .chain(self.named_imports.values())
+        {
+            add(rows
+                .capacity()
+                .checked_mul(std::mem::size_of::<usize>())
+                .ok_or_else(crate::runtime::arena::resource)?)?;
+        }
+        for ((_, name), _) in &self.named_imports {
+            add(name
+                .as_str()
+                .len()
+                .checked_mul(2)
+                .ok_or_else(crate::runtime::arena::resource)?)?;
+        }
+        for ((_, _, name), rows) in &self.item_candidates {
+            add(name
+                .as_str()
+                .len()
+                .checked_mul(2)
+                .ok_or_else(crate::runtime::arena::resource)?)?;
+            add(rows
+                .capacity()
+                .checked_mul(std::mem::size_of::<super::names::NameDefinition>())
+                .ok_or_else(crate::runtime::arena::resource)?)?;
+        }
+        for rows in self.item_frontiers.values() {
+            add(rows
+                .len()
+                .checked_mul(16 * std::mem::size_of::<Digest>() + 256)
+                .ok_or_else(crate::runtime::arena::resource)?)?;
+        }
+        Ok(bytes)
+    }
+}
+pub struct SourceLocalIndex<'a> {
+    entered: &'a EnteredMacroIndex<'a>,
+    tables: Arc<SourceLocalTables>,
+}
+impl Deref for SourceLocalIndex<'_> {
+    type Target = SourceLocalTables;
+    fn deref(&self) -> &SourceLocalTables {
+        &self.tables
+    }
+}
+
 fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-SCOPE", message.into())
 }
@@ -133,7 +232,15 @@ impl EnteredMacroIndex<'_> {
         expansions: &[(Key, MacroDefinition)],
         publications: &[SourceLocalPublication],
     ) -> Result<SourceLocalIndex<'_>, Diagnostic> {
-        self.local_index_inner(expected, body, resolutions, expansions, publications, None)
+        self.local_index_inner(
+            expected,
+            body,
+            resolutions,
+            expansions,
+            publications,
+            None,
+            None,
+        )
     }
     pub(crate) fn local_index_with_pattern_index(
         &self,
@@ -143,16 +250,33 @@ impl EnteredMacroIndex<'_> {
         expansions: &[(Key, MacroDefinition)],
         index: &crate::syntax::body_index::BodyIndex,
     ) -> Result<SourceLocalIndex<'_>, Diagnostic> {
+        self.local_index_with_pattern_names(expected, handle, resolutions, expansions, index, None)
+    }
+    fn local_index_with_pattern_names(
+        &self,
+        expected: &SourceSelection,
+        handle: &crate::syntax::outline::BodyHandle,
+        resolutions: &BTreeMap<Digest, PatternResolution>,
+        expansions: &[(Key, MacroDefinition)],
+        index: &crate::syntax::body_index::BodyIndex,
+        names: Option<&owned_plan::LocalTypeNames>,
+    ) -> Result<SourceLocalIndex<'_>, Diagnostic> {
+        let admitted = self.body_context.as_ref().is_some_and(|context| {
+            context.source().body() == handle
+                && context.source().index().body() == index.body()
+                && context.source().index().profile() == index.profile()
+        });
         if handle.key() != self.body
             || index.body() != &self.body
             || index.profile() != &expected.outline.parse.profile
-            || !self
-                .parent
-                .view
-                .outline()
-                .items
-                .iter()
-                .any(|item| item.body.as_ref() == Some(handle))
+            || !(admitted
+                || self
+                    .parent
+                    .view
+                    .outline()
+                    .items
+                    .iter()
+                    .any(|item| item.body.as_ref() == Some(handle)))
         {
             return Err(error("local pattern index owning body/profile differs"));
         }
@@ -164,6 +288,7 @@ impl EnteredMacroIndex<'_> {
             expansions,
             &[],
             Some(&equivalence),
+            names,
         )
     }
     fn local_index_inner(
@@ -174,6 +299,7 @@ impl EnteredMacroIndex<'_> {
         expansions: &[(Key, MacroDefinition)],
         publications: &[SourceLocalPublication],
         equivalence: Option<&BTreeMap<Digest, Digest>>,
+        declaration_names: Option<&owned_plan::LocalTypeNames>,
     ) -> Result<SourceLocalIndex<'_>, Diagnostic> {
         if expected.canonical()? != *self.parent.source() || *body != self.body {
             return Err(error("local index source/body revision mismatch"));
@@ -296,7 +422,13 @@ impl EnteredMacroIndex<'_> {
             .and_then(|n| {
                 n.checked_add(self.facts.bindings.len().checked_mul(
                     std::mem::size_of::<(Digest, PatternNameKind)>()
-                        + std::mem::size_of::<(u32, u64, &str, Digest)>(),
+                        + std::mem::size_of::<(
+                            u32,
+                            u64,
+                            &str,
+                            crate::syntax::token_wire::NameContextKey,
+                            Digest,
+                        )>(),
                 )?)
             })
             .and_then(|n| {
@@ -319,7 +451,7 @@ impl EnteredMacroIndex<'_> {
             .ok_or_else(|| error("source local metadata limit exceeded"))?;
         let _ = metadata;
         let (context, facts) = self.local_hygiene();
-        let mut locals = LocalScopes::new(facts);
+        let mut locals = LocalScopes::new(std::sync::Arc::clone(&facts));
         let root = ScopeKey::root(body.definition);
         locals.add_root(root)?;
         let mut scopes = BTreeMap::from([(0, root)]);
@@ -381,7 +513,12 @@ impl EnteredMacroIndex<'_> {
                     == Some(&PatternResolution::Binding))
                 && resolved_names
                     .insert(
-                        (binding.scope, binding.visible_from, binding.name.as_str()),
+                        (
+                            binding.scope,
+                            binding.visible_from,
+                            binding.name.as_str(),
+                            facts.name_local(self.identifier_context(binding.name_range)?)?,
+                        ),
                         canonical(binding.identity),
                     )
                     .is_some_and(|old| old != canonical(binding.identity))
@@ -453,15 +590,24 @@ impl EnteredMacroIndex<'_> {
                             .copied()
                             .unwrap_or(PatternResolution::NeedInput(b.identity)),
                     };
-                    let name = MacroName::local(&b.raw_name, edition)?;
+                    let name =
+                        MacroName::local(&b.raw_name, self.identifier_edition(b.name_range)?)?;
                     match resolution {
-                        PatternResolution::Binding => {
-                            locals.bind(scope, position, name, context, b.identity)?
-                        }
+                        PatternResolution::Binding => locals.bind(
+                            scope,
+                            position,
+                            name,
+                            self.identifier_context(b.name_range)?,
+                            b.identity,
+                        )?,
                         PatternResolution::Constant => {}
-                        PatternResolution::NeedInput(input) => {
-                            locals.defer_binding(scope, position, name, context, input)?
-                        }
+                        PatternResolution::NeedInput(input) => locals.defer_binding(
+                            scope,
+                            position,
+                            name,
+                            self.identifier_context(b.name_range)?,
+                            input,
+                        )?,
                     }
                 }
                 Row::Emitted(publication, ordinal, declaration) => match declaration {
@@ -480,15 +626,20 @@ impl EnteredMacroIndex<'_> {
                     }
                 },
                 Row::Event(e) => match &e.kind {
-                    BodyMacroEventKind::Definition { identity, .. } => locals.define_macro(
-                        scope,
-                        position,
-                        MacroDefinition {
-                            identity: *identity,
-                            defining_unit: self.parent.source().outline.crate_key,
-                            definition_edition: edition,
-                        },
-                    )?,
+                    BodyMacroEventKind::Definition { identity, .. } => {
+                        let definition = if self.body_context.is_some() {
+                            self.retained_definition(*identity)?.ok_or_else(|| {
+                                error("actual local macro definition metadata absent")
+                            })?
+                        } else {
+                            MacroDefinition {
+                                identity: *identity,
+                                defining_unit: self.parent.source().outline.crate_key,
+                                definition_edition: edition,
+                            }
+                        };
+                        locals.define_macro(scope, position, definition)?;
+                    }
                     BodyMacroEventKind::Producer { identity, .. } => {
                         locals.block(scope, position, *identity)?
                     }
@@ -508,7 +659,15 @@ impl EnteredMacroIndex<'_> {
                 if *namespace == crate::source::manifest::Namespace::Macro {
                     continue;
                 }
-                let name = MacroName::parse(&row.item.def_key.declared_name, edition)?;
+                let (name, definition_edition) = match declaration_names
+                    .and_then(|names| names.item_spelling(row.item.def_key.fingerprint()))
+                {
+                    Some((name, actual_edition)) => (name.clone(), actual_edition),
+                    None => (
+                        MacroName::parse(&row.item.def_key.declared_name, edition)?,
+                        edition,
+                    ),
+                };
                 item_bytes = item_bytes
                     .checked_add(name.as_str().len())
                     .and_then(|n| n.checked_add(160))
@@ -521,7 +680,7 @@ impl EnteredMacroIndex<'_> {
                         namespace: *namespace,
                         identity: row.item.def_key.fingerprint(),
                         defining_unit: row.item.scope.crate_key,
-                        definition_edition: edition,
+                        definition_edition,
                     });
             }
             if let Some(producer) = row.attribute_input {
@@ -598,15 +757,17 @@ impl EnteredMacroIndex<'_> {
             }
         }
         Ok(SourceLocalIndex {
-            anonymous_imports,
-            glob_imports,
-            named_imports,
-            item_candidates,
-            item_frontiers,
             entered: self,
-            scopes,
-            locals,
-            context,
+            tables: Arc::new(SourceLocalTables {
+                anonymous_imports,
+                glob_imports,
+                named_imports,
+                item_candidates,
+                item_frontiers,
+                scopes,
+                locals,
+                context,
+            }),
         })
     }
 }
@@ -1555,10 +1716,79 @@ impl SourceLocalIndex<'_> {
         names: &super::names::NameNamespaces,
         prelude: Option<&crate::syntax::outline::ScopeKey>,
     ) -> Result<super::names::NameLookup, Diagnostic> {
+        match self.lookup_ordinary_prefix(&site, names)? {
+            Some(found) => Ok(found),
+            None => names.lookup_unqualified(
+                site.namespace,
+                site.name,
+                &self.entered.module_scope,
+                site.source.outline.parse.profile.edition,
+                prelude,
+            ),
+        }
+    }
+    /// The same local/import/frontier kernel precedes every module lookup.
+    /// None is a module demand, never a proved absence or namespace authority.
+    /// The owning occurrence query must retain the actual input/dependency proof.
+    pub(crate) fn lookup_ordinary_prefix(
+        &self,
+        site: &OrdinaryNameSite<'_>,
+        names: &super::names::NameNamespaces,
+    ) -> Result<Option<super::names::NameLookup>, Diagnostic> {
+        match self.lookup_prefix_inner(
+            site,
+            Some(names),
+            None,
+            site.source.outline.parse.profile.edition,
+        )? {
+            PrefixResolution::Name(found) => Ok(Some(found)),
+            PrefixResolution::ModuleTail => Ok(None),
+            _ => Err(error(
+                "ordinary graph adapter lacks required prefix service",
+            )),
+        }
+    }
+    fn lookup_prepared_type_prefix(
+        &self,
+        site: &OrdinaryNameSite<'_>,
+        evidence: &owned_plan::LocalTypeNames,
+        edition: u16,
+    ) -> Result<PrefixResolution, Diagnostic> {
+        if site.namespace != crate::source::manifest::Namespace::Type {
+            return Err(error("prepared Type prefix namespace differs"));
+        }
+        self.lookup_prefix_inner(site, None, Some(evidence), edition)
+    }
+    fn lookup_prefix_inner(
+        &self,
+        site: &OrdinaryNameSite<'_>,
+        names: Option<&super::names::NameNamespaces>,
+        evidence: Option<&owned_plan::LocalTypeNames>,
+        edition: u16,
+    ) -> Result<PrefixResolution, Diagnostic> {
         use super::names::NameLookup;
         // Exact selection/position validation remains shared with local lookup.
-        self.lookup(site.source, site.body, site.at, site.name, site.context)?;
-        names.require_source(site.source, self.entered.parent.view.outline())?;
+        self.lookup_in_edition(
+            site.source,
+            site.body,
+            site.at,
+            site.name,
+            site.context,
+            edition,
+        )?;
+        if let Some(names) = names {
+            names.require_source(site.source, self.entered.parent.view.outline())?;
+        }
+        if let Some(evidence) = evidence {
+            if self
+                .entered
+                .body_context
+                .as_ref()
+                .is_none_or(|context| context.source().identity() != evidence.owner())
+            {
+                return Err(error("local Type declaration evidence owner differs"));
+            }
+        }
         if site.namespace == crate::source::manifest::Namespace::Macro {
             use super::{macro_origins::MacroSelection, macro_scopes::HygienicLookup};
             let definition = |d: MacroDefinition| super::names::NameDefinition {
@@ -1567,11 +1797,15 @@ impl SourceLocalIndex<'_> {
                 defining_unit: d.defining_unit,
                 definition_edition: d.definition_edition,
             };
-            return Ok(
-                match self
-                    .entered
-                    .lookup(site.source, site.body, site.at, site.name)?
-                {
+            return Ok(PrefixResolution::Name(
+                match self.entered.lookup_with_context(
+                    site.source,
+                    site.body,
+                    site.at,
+                    site.name,
+                    site.context,
+                    edition,
+                )? {
                     HygienicLookup::NeedInput(id) => NameLookup::NeedInput(id),
                     HygienicLookup::Selection(MacroSelection::Defined(d)) => {
                         NameLookup::Defined(definition(d))
@@ -1581,7 +1815,7 @@ impl SourceLocalIndex<'_> {
                     }
                     HygienicLookup::Selection(MacroSelection::Absent) => NameLookup::Absent,
                 },
-            );
+            ));
         }
 
         let scope = self
@@ -1592,7 +1826,7 @@ impl SourceLocalIndex<'_> {
             .rev()
             .find(|s| u64::from(s.range.start) <= site.at && site.at < u64::from(s.range.end))
             .ok_or_else(|| error("ordinary lookup position outside entered scopes"))?;
-        let name = MacroName::local(site.name, site.source.outline.parse.profile.edition)?;
+        let name = MacroName::local(site.name, edition)?;
         let (local, local_scope) = self.locals.lookup_with_scope(
             self.scopes[&scope.ordinal],
             boundary(site.at)?,
@@ -1611,8 +1845,12 @@ impl SourceLocalIndex<'_> {
                 && self.scopes.get(&ordinal) == Some(&local_scope)
             {
                 match &local {
-                    LocalLookup::Binding(id) => return Ok(NameLookup::LocalBinding(*id)),
-                    LocalLookup::NeedInput(id) => return Ok(NameLookup::NeedInput(*id)),
+                    LocalLookup::Binding(id) => {
+                        return Ok(PrefixResolution::Name(NameLookup::LocalBinding(*id)));
+                    }
+                    LocalLookup::NeedInput(id) => {
+                        return Ok(PrefixResolution::Name(NameLookup::NeedInput(*id)));
+                    }
                     LocalLookup::Absent => {}
                 }
             }
@@ -1621,19 +1859,26 @@ impl SourceLocalIndex<'_> {
                 .get(&ordinal)
                 .and_then(|ids| ids.first())
             {
-                return Ok(NameLookup::NeedInput(*producer));
+                return Ok(PrefixResolution::Name(NameLookup::NeedInput(*producer)));
             }
             for index in self.anonymous_imports.get(&ordinal).into_iter().flatten() {
+                let Some(names) = names else {
+                    return Ok(PrefixResolution::NeedImport(
+                        self.namespace().imports[*index].source.identity,
+                    ));
+                };
                 use super::names::AnonymousImportOutcome;
                 match self.anonymous_import(ordinal, *index, names, &mut import_work, &mut memo)? {
                     AnonymousImportOutcome::Ready(_) => {}
-                    AnonymousImportOutcome::Pending(id) => return Ok(NameLookup::NeedInput(id)),
+                    AnonymousImportOutcome::Pending(id) => {
+                        return Ok(PrefixResolution::Name(NameLookup::NeedInput(id)));
+                    }
                     _ => {
-                        return Ok(NameLookup::NeedInput(
+                        return Ok(PrefixResolution::Name(NameLookup::NeedInput(
                             super::names::NameNamespaces::import_identity(
                                 &self.namespace().imports[*index].source,
                             ),
-                        ));
+                        )));
                     }
                 }
             }
@@ -1641,6 +1886,11 @@ impl SourceLocalIndex<'_> {
                 if *scope != ordinal {
                     continue;
                 }
+                let Some(names) = names else {
+                    return Ok(PrefixResolution::NeedImport(
+                        self.namespace().imports[indices[0]].source.identity,
+                    ));
+                };
                 let mut ready = false;
                 for namespace in [
                     crate::source::manifest::Namespace::Value,
@@ -1656,28 +1906,37 @@ impl SourceLocalIndex<'_> {
                         &mut memo,
                     )? {
                         NameLookup::Defined(_) | NameLookup::ModuleRoot(_) => ready = true,
-                        NameLookup::NeedInput(id) => return Ok(NameLookup::NeedInput(id)),
+                        NameLookup::NeedInput(id) => {
+                            return Ok(PrefixResolution::Name(NameLookup::NeedInput(id)));
+                        }
                         NameLookup::Ambiguous(ds)
                             if alias == &name && namespace == site.namespace =>
                         {
-                            return Ok(NameLookup::Ambiguous(ds));
+                            return Ok(PrefixResolution::Name(NameLookup::Ambiguous(ds)));
                         }
                         NameLookup::AmbiguousModules(paths)
                             if alias == &name && namespace == site.namespace =>
                         {
-                            return Ok(NameLookup::AmbiguousModules(paths));
+                            return Ok(PrefixResolution::Name(NameLookup::AmbiguousModules(paths)));
                         }
                         _ => {}
                     }
                 }
                 if !ready {
                     let source = &self.namespace().imports[indices[0]].source;
-                    return Ok(NameLookup::NeedInput(
+                    return Ok(PrefixResolution::Name(NameLookup::NeedInput(
                         super::names::NameNamespaces::import_identity(source),
-                    ));
+                    )));
                 }
             }
             if self.named_imports.contains_key(&(ordinal, name.clone())) {
+                let Some(names) = names else {
+                    return Ok(PrefixResolution::NeedImport(
+                        self.namespace().imports[self.named_imports[&(ordinal, name.clone())][0]]
+                            .source
+                            .identity,
+                    ));
+                };
                 let found = self.import_lookup(
                     ordinal,
                     &name,
@@ -1687,22 +1946,47 @@ impl SourceLocalIndex<'_> {
                     &mut memo,
                 )?;
                 if found != NameLookup::Absent {
-                    return Ok(found);
+                    return Ok(PrefixResolution::Name(found));
                 }
             }
             if let Some(items) = self
                 .item_candidates
                 .get(&(ordinal, site.namespace, name.clone()))
             {
-                return Ok(if items.len() == 1 {
-                    NameLookup::Defined(items[0].clone())
+                if let Some(evidence) = evidence {
+                    match evidence
+                        .items(items, self.locals.facts_root().name_item(site.context)?)?
+                    {
+                        owned_plan::ItemNames::NeedDeclaration(identity) => {
+                            return Ok(PrefixResolution::NeedDeclaration(identity));
+                        }
+                        owned_plan::ItemNames::Selected(Some(found)) => {
+                            return Ok(PrefixResolution::Name(found));
+                        }
+                        owned_plan::ItemNames::Selected(None) => {}
+                    }
                 } else {
-                    NameLookup::Ambiguous(items.clone())
-                });
+                    return Ok(PrefixResolution::Name(if items.len() == 1 {
+                        NameLookup::Defined(items[0].clone())
+                    } else {
+                        NameLookup::Ambiguous(items.clone())
+                    }));
+                }
             }
-            let glob = self.glob_lookup(ordinal, &name, site.namespace, names, &mut import_work)?;
-            if glob != NameLookup::Absent {
-                return Ok(glob);
+            if let Some(names) = names {
+                let glob =
+                    self.glob_lookup(ordinal, &name, site.namespace, names, &mut import_work)?;
+                if glob != NameLookup::Absent {
+                    return Ok(PrefixResolution::Name(glob));
+                }
+            } else if let Some(index) = self
+                .glob_imports
+                .get(&ordinal)
+                .and_then(|rows| rows.first())
+            {
+                return Ok(PrefixResolution::NeedImport(
+                    self.namespace().imports[*index].source.identity,
+                ));
             }
             current = self
                 .entered
@@ -1716,13 +2000,23 @@ impl SourceLocalIndex<'_> {
                 .ok_or_else(|| error("ordinary body item scope absent"))?
                 .parent;
         }
-        names.lookup_unqualified(
-            site.namespace,
-            site.name,
-            &self.entered.module_scope,
-            site.source.outline.parse.profile.edition,
-            prelude,
-        )
+        if let Some(evidence) = evidence {
+            if let Some(parameter) =
+                evidence.generic(&name, self.locals.facts_root().name_item(site.context)?)?
+            {
+                return Ok(PrefixResolution::Parameter(parameter));
+            }
+            if evidence.needs_owner() {
+                return Ok(PrefixResolution::NeedOwnerGeneric);
+            }
+        }
+        Ok(PrefixResolution::ModuleTail)
+    }
+    pub(crate) fn context_at(
+        &self,
+        range: crate::syntax::spans::SourceRange,
+    ) -> Result<Key, Diagnostic> {
+        self.entered.identifier_context(range)
     }
     pub fn context(&self) -> Key {
         self.context
@@ -1734,6 +2028,24 @@ impl SourceLocalIndex<'_> {
         at: u64,
         name: &str,
         context: Key,
+    ) -> Result<LocalLookup, Diagnostic> {
+        self.lookup_in_edition(
+            expected,
+            body,
+            at,
+            name,
+            context,
+            self.entered.parent.source().outline.parse.profile.edition,
+        )
+    }
+    fn lookup_in_edition(
+        &self,
+        expected: &SourceSelection,
+        body: &BodyKey,
+        at: u64,
+        name: &str,
+        context: Key,
+        edition: u16,
     ) -> Result<LocalLookup, Diagnostic> {
         if expected.canonical()? != *self.entered.parent.source() || *body != self.entered.body {
             return Err(error("local lookup source/body revision mismatch"));
@@ -1758,10 +2070,7 @@ impl SourceLocalIndex<'_> {
         self.locals.lookup(
             self.scopes[&scope.ordinal],
             boundary(at)?,
-            &MacroName::local(
-                name,
-                self.entered.parent.source().outline.parse.profile.edition,
-            )?,
+            &MacroName::local(name, edition)?,
             context,
         )
     }

@@ -14,6 +14,7 @@ use ra_ap_syntax::{
 pub struct SourceMacroCall {
     key: ParseKey,
     range: SourceRange,
+    name_range: SourceRange,
     segments: Vec<ImportSegment>,
     absolute: bool,
     module_suffix: Vec<String>,
@@ -61,6 +62,9 @@ impl SourceMacroCall {
     }
     pub fn range(&self) -> SourceRange {
         self.range
+    }
+    pub(crate) fn name_range(&self) -> SourceRange {
+        self.name_range
     }
     pub fn segments(&self) -> &[ImportSegment] {
         &self.segments
@@ -177,6 +181,13 @@ impl ParsedFile {
         let path = call
             .path()
             .ok_or_else(|| error("macro invocation path is missing"))?;
+        let name_range = range(
+            path.segment()
+                .and_then(|segment| segment.name_ref())
+                .ok_or_else(|| error("macro invocation final identifier is missing"))?
+                .syntax()
+                .text_range(),
+        );
         let (segments, absolute, mut bytes) = owned_path(path, definition_unit)?;
         let mut modules = Vec::new();
         let mut executable = false;
@@ -207,6 +218,7 @@ impl ParsedFile {
         Ok(SourceMacroCall {
             key: self.key(),
             range: selected,
+            name_range,
             segments,
             absolute,
             module_suffix: modules,

@@ -3,6 +3,9 @@ use super::snapshot::{Snapshot, SourceBlob, SourcePath};
 use crate::core::diagnostic::Diagnostic;
 use std::collections::BTreeSet;
 
+#[path = "retained_footprint.rs"]
+mod retained_footprint;
+
 /// A complete source/module context selected by the immutable source resolver.
 /// Includes used as bytes are not parsing contexts. Generated contexts join this
 /// same publication after expansion has established their declaration universe.

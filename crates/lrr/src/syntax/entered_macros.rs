@@ -770,3 +770,96 @@ mod tests {
         // No concat output, static value, main body or upstream run-pass ran.
     }
 }
+
+impl EnteredMacroFacts {
+    /// Owned lexical plan storage, including allocator capacity slack. Shared
+    /// parser/index handles are accounted separately by their retaining owner.
+    pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
+        fn add(bytes: &mut usize, value: usize) -> Result<(), Diagnostic> {
+            *bytes = bytes
+                .checked_add(value)
+                .filter(|n| *n <= 32 * 1024 * 1024)
+                .ok_or_else(|| error("entered lexical plan metadata limit"))?;
+            Ok(())
+        }
+        fn slots<T>(values: &Vec<T>) -> Result<usize, Diagnostic> {
+            values
+                .capacity()
+                .checked_mul(std::mem::size_of::<T>())
+                .ok_or_else(|| error("entered lexical plan capacity overflow"))
+        }
+        fn tokens(
+            bytes: &mut usize,
+            values: &Vec<super::ast_adapter::TokenRecipe>,
+        ) -> Result<(), Diagnostic> {
+            add(bytes, slots(values)?)?;
+            for token in values {
+                add(bytes, token.text.capacity())?;
+            }
+            Ok(())
+        }
+        fn visibility(
+            bytes: &mut usize,
+            value: &super::outline::Visibility,
+        ) -> Result<(), Diagnostic> {
+            if let super::outline::Visibility::Restricted(values) = value {
+                tokens(bytes, values)?;
+            }
+            Ok(())
+        }
+        fn attributes(bytes: &mut usize, values: &Vec<AttributeRecipe>) -> Result<(), Diagnostic> {
+            add(bytes, slots(values)?)?;
+            for value in values {
+                add(bytes, value.name.capacity())?;
+                tokens(bytes, &value.tokens)?;
+            }
+            Ok(())
+        }
+        let mut bytes = std::mem::size_of::<Self>();
+        add(&mut bytes, slots(&self.bindings)?)?;
+        add(&mut bytes, slots(&self.items)?)?;
+        add(&mut bytes, slots(&self.imports)?)?;
+        add(&mut bytes, slots(&self.invocations)?)?;
+        add(&mut bytes, slots(&self.scopes)?)?;
+        add(&mut bytes, slots(&self.events)?)?;
+        add(&mut bytes, slots(&self.opaque)?)?;
+        for binding in &self.bindings {
+            add(&mut bytes, binding.name.capacity())?;
+            add(&mut bytes, binding.raw_name.capacity())?;
+        }
+        for row in &self.items {
+            add(&mut bytes, slots(&row.namespaces)?)?;
+            let item = &row.item;
+            add(&mut bytes, item.scope.heap_bytes())?;
+            add(&mut bytes, item.header.profile.semantics.capacity())?;
+            tokens(&mut bytes, &item.header.tokens)?;
+            tokens(&mut bytes, &item.header.context)?;
+            attributes(&mut bytes, &item.header.attributes)?;
+            visibility(&mut bytes, &item.header.visibility)?;
+            add(&mut bytes, item.def_key.declared_name.capacity())?;
+            add(&mut bytes, slots(&item.def_key.module_path)?)?;
+            for part in &item.def_key.module_path {
+                add(&mut bytes, part.capacity())?;
+            }
+            add(&mut bytes, slots(&item.constructor_fields)?)?;
+            for field in &item.constructor_fields {
+                visibility(&mut bytes, field)?;
+            }
+        }
+        for import in &self.imports {
+            add(&mut bytes, super::imports::retained_bytes(&import.source)?)?;
+        }
+        for event in &self.events {
+            if let BodyMacroEventKind::Definition {
+                name,
+                attributes: values,
+                ..
+            } = &event.kind
+            {
+                add(&mut bytes, name.capacity())?;
+                attributes(&mut bytes, values)?;
+            }
+        }
+        Ok(bytes)
+    }
+}

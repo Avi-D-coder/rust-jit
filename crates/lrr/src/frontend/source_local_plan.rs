@@ -1,0 +1,600 @@
+//! Owned local-prefix preparation. Metadata is not completed name authority.
+use super::{OrdinaryNameSite, SourceLocalIndex, SourceLocalTables, error};
+use crate::{
+    core::{
+        diagnostic::Diagnostic,
+        digest::{Digest, StableEncode, StableEncoder},
+    },
+    db::{dependency::InputValue, memo::Database, poll::QueryPoll},
+    expand::{
+        identity::MacroIdentity,
+        scopes::{MacroDefinition, ScopeKey, TextualScopes},
+    },
+    frontend::{
+        body_namespace::Namespace,
+        hygiene::HygieneFacts,
+        macro_boundary::RetainedMacroScope,
+        macro_origins::ExpansionAncestry,
+        macro_scopes::MacroDeclarations,
+        names::{NameLookup, NameNamespaces},
+        source_body_context::PreparedBodyContext,
+        source_macros::{
+            EnteredMacroIndex, OwnedRuntimeOuter, PublishedMacroIndex, SourceMacroIndex,
+        },
+    },
+    source::changes::PreparedSourceView,
+    syntax::{outline::ProducerKind, token_wire::Key},
+};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
+
+#[path = "local_type_names.rs"]
+mod type_names;
+pub(super) use type_names::{ItemNames, LocalTypeNames};
+/// These are required proof joins, not negative language answers.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum LocalPlanAuthorityDemand {
+    CurrentEnvironmentPublication,
+    ExactEnteredOccurrence,
+    DeclarationNameContext,
+    ModuleNamespacePublication,
+    ExpansionDefinition(Key),
+}
+/// Debug/preparation data only. No caller can turn it into a source certificate.
+pub(crate) struct LocalPrefixMetadata {
+    lookup: Option<NameLookup>,
+    demands: Vec<LocalPlanAuthorityDemand>,
+}
+impl LocalPrefixMetadata {
+    pub(crate) fn lookup(&self) -> Option<&NameLookup> {
+        self.lookup.as_ref()
+    }
+    pub(crate) fn demands(&self) -> &[LocalPlanAuthorityDemand] {
+        &self.demands
+    }
+}
+
+/// Source-local proof fragment. A coordinator must still join its actual
+/// current environment-publication input before downstream source Type authority.
+pub(crate) struct LocalTypePrefix {
+    plan: Arc<PreparedSourceLocalPlan>,
+    node: crate::ir::pc::NodeId,
+    selection: LocalTypePrefixSelection,
+    use_name: Option<LocalTypeUse>,
+    fingerprint: Digest,
+}
+pub(crate) struct LocalTypeUse {
+    name: String,
+    range: crate::syntax::spans::SourceRange,
+    context: Key,
+    edition: u16,
+}
+impl LocalTypeUse {
+    pub(crate) fn name(&self) -> &str {
+        &self.name
+    }
+    pub(crate) fn range(&self) -> crate::syntax::spans::SourceRange {
+        self.range
+    }
+    pub(crate) fn context(&self) -> Key {
+        self.context
+    }
+    pub(crate) fn edition(&self) -> u16 {
+        self.edition
+    }
+}
+pub(crate) enum LocalTypePrefixSelection {
+    Lookup(NameLookup),
+    Parameter(crate::traits::term::ParamKey),
+    ModuleTail,
+    NeedImport(Digest),
+    NeedDeclarationOccurrence(Digest),
+    NeedOwnerGenericOccurrence,
+    NeedSource(crate::frontend::source_body_context::type_occurrences::BodyTypeAuthorityDemand),
+    NeedUnqualifiedPath,
+    NeedExpansionDefinition(Key),
+    NeedModuleScope,
+}
+impl LocalTypePrefix {
+    pub(crate) fn retained_plan(&self) -> &Arc<PreparedSourceLocalPlan> {
+        &self.plan
+    }
+    pub(crate) fn node(&self) -> crate::ir::pc::NodeId {
+        self.node
+    }
+    pub(crate) fn use_name(&self) -> Option<&LocalTypeUse> {
+        self.use_name.as_ref()
+    }
+    pub(crate) fn fingerprint(&self) -> Digest {
+        self.fingerprint
+    }
+    pub(crate) fn selection(&self) -> &LocalTypePrefixSelection {
+        &self.selection
+    }
+    pub(crate) fn exclusive_metadata_bytes(&self) -> Result<usize, Diagnostic> {
+        let extra = match &self.selection {
+            LocalTypePrefixSelection::Lookup(NameLookup::Ambiguous(definitions)) => definitions
+                .capacity()
+                .checked_mul(std::mem::size_of::<crate::frontend::names::NameDefinition>())
+                .ok_or_else(crate::runtime::arena::resource)?,
+            _ => 0,
+        };
+        std::mem::size_of::<Self>()
+            .checked_add(extra)
+            .and_then(|n| {
+                n.checked_add(
+                    self.use_name
+                        .as_ref()
+                        .map_or(0, |name| name.name.capacity()),
+                )
+            })
+            .ok_or_else(crate::runtime::arena::resource)
+    }
+}
+impl StableEncode for LocalTypePrefix {
+    const DOMAIN: &'static str = "lrr/v1/local-type-prefix-source-proof";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.digest(self.plan.source_identity());
+        e.u32(self.node.0);
+        e.option(&self.use_name, |e, name| {
+            e.string(name.name());
+            e.u32(name.range().start);
+            e.u32(name.range().end);
+            e.digest(Digest(name.context().0));
+            e.u16(name.edition());
+        });
+        match &self.selection {
+            LocalTypePrefixSelection::Lookup(lookup) => {
+                e.u8(0);
+                e.record(lookup);
+            }
+            LocalTypePrefixSelection::Parameter(parameter) => {
+                e.u8(1);
+                e.digest(parameter.definition);
+                e.u32(parameter.ordinal);
+            }
+            LocalTypePrefixSelection::ModuleTail => e.u8(2),
+            LocalTypePrefixSelection::NeedImport(identity) => {
+                e.u8(3);
+                e.digest(*identity);
+            }
+            LocalTypePrefixSelection::NeedDeclarationOccurrence(identity) => {
+                e.u8(4);
+                e.digest(*identity);
+            }
+            LocalTypePrefixSelection::NeedOwnerGenericOccurrence => e.u8(5),
+            LocalTypePrefixSelection::NeedSource(demand) => {
+                e.u8(6);
+                use crate::frontend::source_body_context::type_occurrences::BodyTypeAuthorityDemand as D;
+                e.u8(match demand {
+                    D::CachedLocalPrefix => 0,
+                    D::GeneratedBoundary => 1,
+                    D::RetainedExpansionOccurrence => 2,
+                    D::TypeRecipe => 3,
+                });
+            }
+            LocalTypePrefixSelection::NeedUnqualifiedPath => e.u8(7),
+            LocalTypePrefixSelection::NeedExpansionDefinition(key) => {
+                e.u8(8);
+                e.digest(Digest(key.0));
+            }
+            LocalTypePrefixSelection::NeedModuleScope => e.u8(9),
+        }
+    }
+}
+pub(crate) struct PreparedSourceLocalPlan {
+    entered: EnteredMacroIndex<'static>,
+    tables: Arc<SourceLocalTables>,
+    context: Arc<PreparedBodyContext>,
+    missing_expansions: Vec<Key>,
+    type_names: LocalTypeNames,
+    module_scope: Option<crate::syntax::outline::ScopeKey>,
+    source_identity: Digest,
+    exclusive_bytes: usize,
+}
+/// Actual immutable roots. Reading them never permits rebinding a plan to a
+/// different environment; the lookup adapter below always borrows its own owner.
+pub(crate) struct SourceLocalPlanRoots<'a> {
+    entered: &'a EnteredMacroIndex<'static>,
+}
+impl SourceLocalPlanRoots<'_> {
+    pub(crate) fn source(&self) -> &PreparedSourceView {
+        &self.entered.parent.view
+    }
+    pub(crate) fn source_index(&self) -> &Arc<SourceMacroIndex> {
+        self.entered.source_macro_root()
+    }
+    pub(crate) fn runtime_outers(&self) -> &Arc<Vec<OwnedRuntimeOuter>> {
+        self.entered.runtime_outer_root()
+    }
+    pub(crate) fn scopes(&self) -> &Arc<TextualScopes> {
+        self.entered.scope_root()
+    }
+    pub(crate) fn declarations(&self) -> &Arc<MacroDeclarations> {
+        self.entered.declaration_root()
+    }
+    pub(crate) fn scope_keys(&self) -> &Arc<BTreeMap<u32, ScopeKey>> {
+        self.entered.scope_key_root()
+    }
+    pub(crate) fn retired_producers(&self) -> &Arc<BTreeSet<Digest>> {
+        self.entered.retired_root()
+    }
+    pub(crate) fn namespace(&self) -> Option<&Arc<Namespace>> {
+        self.entered.namespace_root()
+    }
+    pub(crate) fn producers(&self) -> impl Iterator<Item = &Arc<BTreeMap<Digest, ProducerKind>>> {
+        self.entered.producer_roots()
+    }
+    pub(crate) fn retained_scopes(&self) -> impl Iterator<Item = &RetainedMacroScope> {
+        self.entered.retained_scope_roots()
+    }
+    pub(crate) fn hygiene(&self) -> &Arc<HygieneFacts> {
+        self.entered.hygiene_root_handle()
+    }
+    pub(crate) fn ancestry(&self) -> &Arc<ExpansionAncestry> {
+        self.entered.ancestry_root_handle()
+    }
+}
+impl PreparedSourceLocalPlan {
+    pub(crate) fn prepare(
+        db: &mut Database,
+        parent: &PublishedMacroIndex,
+        context: Arc<PreparedBodyContext>,
+    ) -> QueryPoll<Arc<Self>> {
+        match context.require_current(db) {
+            QueryPoll::Ready(Ok(())) => {}
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
+        QueryPoll::Ready(Self::build(parent, context).map(Arc::new))
+    }
+    fn build(
+        parent: &PublishedMacroIndex,
+        context: Arc<PreparedBodyContext>,
+    ) -> Result<Self, Diagnostic> {
+        let entered = parent.enter_prepared_body(Arc::clone(&context))?;
+        let (expansions, missing_expansions) = expansion_definitions(&entered, &context)?;
+        let (root, hygiene) = entered.local_hygiene();
+        let type_names = LocalTypeNames::prepare(&context, root, &hygiene)?;
+        // The declaration supplies a lookup goal; only an actual retained
+        // module-outline row can supply module-tail membership authority.
+        let module_goal = crate::syntax::outline::ScopeKey {
+            crate_key: context.source().scope().crate_key,
+            module_path: context.source().scope().module_path.clone(),
+            owner: None,
+        };
+        let module_scope = context.module_source().and_then(|source| {
+            source
+                .outline()
+                .scopes
+                .get_key_value(&module_goal)
+                .map(|(scope, _)| scope.clone())
+        });
+        let module_bytes = module_scope
+            .as_ref()
+            .map_or(Some(0), |scope| {
+                scope.module_path.iter().try_fold(
+                    scope
+                        .module_path
+                        .capacity()
+                        .checked_mul(std::mem::size_of::<String>())?,
+                    |bytes, part| bytes.checked_add(part.capacity()),
+                )
+            })
+            .ok_or_else(crate::runtime::arena::resource)?;
+        let mut identity = StableEncoder::new("lrr/v2/owned-local-source-environment");
+        identity.digest(context.source().identity());
+        identity.digest(type_names.fingerprint());
+        identity.option(&module_scope, |e, scope| e.record(scope));
+        identity.u64(expansions.len() as u64);
+        for (key, definition) in &expansions {
+            identity.digest(Digest(key.0));
+            identity.digest(definition.identity);
+            identity.digest(definition.defining_unit);
+            identity.u32(u32::from(definition.definition_edition));
+        }
+        identity.u64(missing_expansions.len() as u64);
+        for key in &missing_expansions {
+            identity.digest(Digest(key.0));
+        }
+        // No raw caller-provided pattern decisions or emitted declaration grants.
+        let locals = entered.local_index_with_pattern_names(
+            parent.source(),
+            context.source().body(),
+            &BTreeMap::new(),
+            &expansions,
+            context.source().index(),
+            Some(&type_names),
+        )?;
+        let tables = Arc::clone(&locals.tables);
+        drop(locals);
+        let entered = entered.into_owned();
+        let exclusive_bytes = std::mem::size_of::<Self>()
+            .checked_sub(std::mem::size_of::<EnteredMacroIndex>())
+            .and_then(|n| n.checked_add(entered.exclusive_metadata_bytes().ok()?))
+            .and_then(|n| {
+                n.checked_add(
+                    missing_expansions
+                        .capacity()
+                        .checked_mul(std::mem::size_of::<Key>())?,
+                )
+            })
+            .and_then(|n| n.checked_add(type_names.extra_bytes()))
+            .and_then(|n| n.checked_add(module_bytes))
+            .filter(|n| *n <= 32 * 1024 * 1024)
+            .ok_or_else(crate::runtime::arena::resource)?;
+        // Bound the newly retained allocation independently of shared roots.
+        tables
+            .metadata_bytes()?
+            .checked_add(exclusive_bytes)
+            .filter(|n| *n <= 64 * 1024 * 1024)
+            .ok_or_else(crate::runtime::arena::resource)?;
+        Ok(Self {
+            entered,
+            tables,
+            context,
+            missing_expansions,
+            type_names,
+            module_scope,
+            source_identity: identity.finish(),
+            exclusive_bytes,
+        })
+    }
+    pub(crate) fn type_prefix(
+        self: &Arc<Self>,
+        db: &mut Database,
+        node: crate::ir::pc::NodeId,
+    ) -> QueryPoll<LocalTypePrefix> {
+        use crate::frontend::source_body_context::type_occurrences::{
+            BodyTypeOrigin, BodyTypeSegment, BodyTypeShape,
+        };
+        let occurrence = match self.context.body_type_occurrence(db, node) {
+            QueryPoll::Ready(Ok(Some(occurrence))) => occurrence,
+            QueryPoll::Ready(Ok(None)) => {
+                return QueryPoll::Ready(Err(error("entered Type occurrence absent")));
+            }
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let answer = (|| -> Result<LocalTypePrefixSelection, Diagnostic> {
+            if matches!(
+                occurrence.origin(),
+                BodyTypeOrigin::NeedGeneratedBoundary | BodyTypeOrigin::NeedRetainedOccurrence
+            ) || occurrence.shape() != BodyTypeShape::Named
+            {
+                return Ok(LocalTypePrefixSelection::NeedSource(
+                    occurrence.next_authority_demand(),
+                ));
+            }
+            let [BodyTypeSegment::Name(identifier)] = occurrence.segments() else {
+                return Ok(LocalTypePrefixSelection::NeedUnqualifiedPath);
+            };
+            if occurrence.absolute() {
+                return Ok(LocalTypePrefixSelection::NeedUnqualifiedPath);
+            }
+            if let Some(key) = self.missing_expansions.first() {
+                return Ok(LocalTypePrefixSelection::NeedExpansionDefinition(*key));
+            }
+            let (root, _) = self.entered.local_hygiene();
+            let context = self
+                .context
+                .source()
+                .identifier_context_or_original(identifier.range(), root)?;
+            // The cached source occurrence is reselected above under its real
+            // source/currentness dependencies. No caller name/context is trusted.
+            if identifier.raw_context().is_some_and(|raw| raw != context) {
+                return Err(error("cached Type occurrence context differs"));
+            }
+            let site = OrdinaryNameSite {
+                source: self.entered.parent.source(),
+                body: occurrence.body(),
+                at: u64::from(identifier.range().start),
+                name: identifier.name(),
+                context,
+                namespace: crate::source::manifest::Namespace::Type,
+            };
+            Ok(
+                match self.adapter().lookup_prepared_type_prefix(
+                    &site,
+                    &self.type_names,
+                    identifier.edition(),
+                )? {
+                    super::PrefixResolution::Name(found) => LocalTypePrefixSelection::Lookup(found),
+                    super::PrefixResolution::Parameter(parameter) => {
+                        LocalTypePrefixSelection::Parameter(parameter)
+                    }
+                    super::PrefixResolution::ModuleTail => {
+                        if self.module_scope.is_some() {
+                            LocalTypePrefixSelection::ModuleTail
+                        } else {
+                            LocalTypePrefixSelection::NeedModuleScope
+                        }
+                    }
+                    super::PrefixResolution::NeedImport(identity) => {
+                        LocalTypePrefixSelection::NeedImport(identity)
+                    }
+                    super::PrefixResolution::NeedDeclaration(identity) => {
+                        LocalTypePrefixSelection::NeedDeclarationOccurrence(identity)
+                    }
+                    super::PrefixResolution::NeedOwnerGeneric => {
+                        LocalTypePrefixSelection::NeedOwnerGenericOccurrence
+                    }
+                },
+            )
+        })();
+        QueryPoll::Ready(answer.and_then(|selection| {
+            let use_name = if let [BodyTypeSegment::Name(name)] = occurrence.segments() {
+                let (root, _) = self.entered.local_hygiene();
+                Some(LocalTypeUse {
+                    name: name.name().to_owned(),
+                    range: name.range(),
+                    context: self
+                        .context
+                        .source()
+                        .identifier_context_or_original(name.range(), root)?,
+                    edition: name.edition(),
+                })
+            } else {
+                None
+            };
+            let mut proof = LocalTypePrefix {
+                plan: Arc::clone(self),
+                node,
+                selection,
+                use_name,
+                fingerprint: Digest([0; 32]),
+            };
+            proof
+                .exclusive_metadata_bytes()?
+                .checked_add(self.exclusive_bytes)
+                .filter(|n| *n <= 64 * 1024 * 1024)
+                .ok_or_else(crate::runtime::arena::resource)?;
+            proof.fingerprint = StableEncode::fingerprint(&proof);
+            Ok(proof)
+        }))
+    }
+    pub(crate) fn module_scope(&self) -> Option<&crate::syntax::outline::ScopeKey> {
+        self.module_scope.as_ref()
+    }
+    pub(crate) fn context(&self) -> &Arc<PreparedBodyContext> {
+        &self.context
+    }
+    pub(crate) fn source_identity(&self) -> Digest {
+        self.source_identity
+    }
+    pub(crate) fn exclusive_metadata_bytes(&self) -> usize {
+        self.exclusive_bytes
+    }
+    pub(crate) fn tables_root(&self) -> &Arc<SourceLocalTables> {
+        &self.tables
+    }
+    pub(crate) fn allocation_roots(&self) -> SourceLocalPlanRoots<'_> {
+        SourceLocalPlanRoots {
+            entered: &self.entered,
+        }
+    }
+    /// This is an exact allocation/environment comparison for deduplication,
+    /// not an admission, rebind API or semantic cache key.
+    pub(crate) fn same_environment(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.tables, &other.tables) && self.entered.same_environment(&other.entered)
+    }
+    fn adapter(&self) -> SourceLocalIndex<'_> {
+        SourceLocalIndex {
+            entered: &self.entered,
+            tables: Arc::clone(&self.tables),
+        }
+    }
+    /// Cold diagnostic observation only. This API cannot return a completed
+    /// occurrence proof: publication and declaration occurrence joins are held.
+    pub(crate) fn inspect_prefix_metadata(
+        &self,
+        db: &mut Database,
+        site: OrdinaryNameSite<'_>,
+        names: &NameNamespaces,
+    ) -> QueryPoll<LocalPrefixMetadata> {
+        match self.context.require_current(db) {
+            QueryPoll::Ready(Ok(())) => {}
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
+        if site.body != &self.entered.body
+            || site.source.canonical().as_ref().ok() != Some(self.entered.parent.source())
+        {
+            return QueryPoll::Ready(Err(error("owned local observation source/body differs")));
+        }
+        let mut demands = vec![
+            LocalPlanAuthorityDemand::CurrentEnvironmentPublication,
+            LocalPlanAuthorityDemand::ExactEnteredOccurrence,
+            LocalPlanAuthorityDemand::DeclarationNameContext,
+            LocalPlanAuthorityDemand::ModuleNamespacePublication,
+        ];
+        if !self.missing_expansions.is_empty() {
+            demands.extend(
+                self.missing_expansions
+                    .iter()
+                    .copied()
+                    .map(LocalPlanAuthorityDemand::ExpansionDefinition),
+            );
+            return QueryPoll::Ready(Ok(LocalPrefixMetadata {
+                lookup: None,
+                demands,
+            }));
+        }
+        QueryPoll::Ready(
+            self.adapter()
+                .lookup_ordinary_prefix(&site, names)
+                .map(|lookup| LocalPrefixMetadata { lookup, demands }),
+        )
+    }
+}
+
+/// Join actual selected expansion records to retained definition metadata. Raw
+/// context marks provide neither the definition identity nor its owning unit.
+fn expansion_definitions(
+    entered: &EnteredMacroIndex<'_>,
+    context: &PreparedBodyContext,
+) -> Result<(Vec<(Key, MacroDefinition)>, Vec<Key>), Diagnostic> {
+    let mut known = BTreeMap::new();
+    let mut missing = BTreeSet::new();
+    for input in context.source().retained_inputs() {
+        match input.as_ref() {
+            InputValue::RetainedSyntax(unit) => {
+                for (key, definition) in unit.prepared().expansion_definitions() {
+                    if known.insert(Key(key.0), definition.clone()).is_some() {
+                        return Err(error("duplicate retained expansion definition"));
+                    }
+                }
+            }
+            InputValue::GeneratedSyntax(unit) => {
+                let mut join =
+                    |record: &crate::expand::record::ExpansionRecord| -> Result<(), Diagnostic> {
+                        let key = Key(record.key().fingerprint().0);
+                        let selected = match record.key().macro_identity {
+                            MacroIdentity::Declaration { definition }
+                            | MacroIdentity::Builtin { definition } => {
+                                entered.retained_definition(definition)?
+                            }
+                            MacroIdentity::Procedural { .. } => None,
+                        };
+                        if let Some(definition) = selected {
+                            if definition.definition_edition != record.key().definition_edition {
+                                return Err(error(
+                                    "expansion record and retained definition edition differ",
+                                ));
+                            }
+                            if known
+                                .insert(key, definition.clone())
+                                .is_some_and(|old| old != definition)
+                            {
+                                return Err(error(
+                                    "expansion record definition metadata conflicts",
+                                ));
+                            }
+                        } else {
+                            missing.insert(key);
+                        }
+                        Ok(())
+                    };
+                join(unit.items.record())?;
+                if let Some(boundary) = context.generated_boundary() {
+                    for parent in boundary.generated_roots() {
+                        join(parent.record())?;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    known
+        .len()
+        .checked_add(missing.len())
+        .filter(|n| *n <= 1_000_000)
+        .ok_or_else(crate::runtime::arena::resource)?;
+    Ok((known.into_iter().collect(), missing.into_iter().collect()))
+}
+
+#[cfg(test)]
+#[path = "local_type_prefix_tests.rs"]
+mod tests;

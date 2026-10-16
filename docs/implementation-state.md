@@ -1296,3 +1296,65 @@ rejected retention from exposing a successful memo and bound MacroExport source
 ownership without publishing it into ordinary runtime parse lookup. Owned local
 Type occurrence/name joins and source-backed MacroExport facet remain worker
 source-only. E-R5-005/MA/task/JIT/strict/full-milestone holds stay open.
+
+
+Actual source checkpointfefe5e297c0ec95f4d4368ac32497a118985e4ff pushed
+e30bb4/0 to implementation branch after staged sourceguard36eacf/0
+(46files/1943325bytes/0violations), plan d2bc36/0 and diff57ca3d/0.
+Only exact compiled/scoped17PASS frozen122 plus9docs were staged; live source
+was preserved. This is a source-only WIP checkpoint, not common-engine acceptance.
+
+Root admission123 then compiled4b2bdb/0 and passed9distinct5e23d6/0: new
+retention rejection1, original footprint1, literal lifetime2 and Product ownership5.
+Exact source0d2a7747 retained old unused-super/staged-product warnings. The test
+import-only V2 cleanup is pending the next component compilation; no strict/full
+milestone or CLI was rerun for admission-only changes. New macro-export source
+transport8/licensed library inputs6 is frozen separately, with minimal glue
+against122 excluding unrelated owned7, queued to sole background validation.
+Live inventory332/518 adds unchanged basic-operations.rs and borrowck-assign-to-subfield.rs
+for actual local Type occurrence controls; frozen123 remains330/516. The former
+retains its real unresolved assert producer; the latter supplies an ordinary
+local Type positive. Neither full program ran; imports are not stock passes.
+Evidence: worktracks/evidence/2026-10-15-source-retention-admission-validation.json.
+
+
+Latest macro/source component evidence remains separate by frozen source:
+configured macro-facet V3 compiled and passed16 controls; scalar publication V2
+compiled and passed10; owned local-Type V2 compiled and passed12, with16 compiler
+warnings and strict checks unexecuted. Earlier setup/compilation failures remain
+attached to their original packets. These are component controls, not new stock
+runtime or full-fixture passes. Existing legacy assertion dispatch remains
+reachable; issue-26251 still fails there. Macro source activation, actual complete
+retained graph accounting and ordinary execution integration remain incomplete.
+Evidence: worktracks/evidence/2026-10-15-common-macro-source-scoped-progress.json.
+
+Compiler inert-name metadata now supplements the older adapter inventory from
+the complete pinned official compiler table, preserving existing descriptor
+identities; source-only validation is assigned to the sole background validator.
+It does not establish namespace absence or executable macro semantics. Live
+upstream inventory is332cases/525files after registering7 support originals;
+newly registered source inputs are not runtime passes. Three agents are assigned
+to disjoint macro declaration, Type/name and asynchronous validation slices.
+
+
+Compiler-attribute review caught a genuine new semantic gap in frozen161: all
+compiler builtin names were being admitted as inert annotation completion. Its
+29 scoped passes establish metadata/old authority controls only; that behavior
+is held. Corrected frozen171 source df8a97b8 compiled adapter/library and passed
+10 distinct controls (2 inventory/category,8 existing refusal/owner controls).
+Complete compiler-name recognition is separate from newly admitted actions:
+only aliases derived from the entire pinned diagnostic parser registry can
+supplement old RA admission; other new semantic attributes explicitly require
+a missing handler. Existing RA semantic coverage remains debt.16 library
+warnings remain; strict/full milestone and stock CLI unexecuted. Upstream is
+332cases/534files after9 unchanged diagnostic parser support originals; no new
+stock runtime/full-fixture pass. Evidence:
+worktracks/evidence/2026-10-15-compiler-attribute-action-validation.json.
+
+Root role-aware source/seal DB4 + original declaration13 + borrowed facet5 +
+selected source hook3 + exact generated-catalog dependency composed frozen181.
+First actual compile failed3E0502 borrow conflicts; zero test bodies executed.
+A separate2-leaf Arc-lifetime repair is frozen and assigned async validation.
+Actual full SDK/module graph adoption, role annotation replay, complete retained
+provider ownership and legacy assertion-route removal remain prerequisites.
+These live successors are excluded from the validated171 source checkpoint.

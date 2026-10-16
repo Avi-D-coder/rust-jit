@@ -1188,6 +1188,15 @@ impl SourceDiscovery {
                 "declarative discovery configuration is already frozen",
             ));
         }
+        if compiler
+            .as_ref()
+            .is_some_and(|catalog| catalog.macro_export_facets().next().is_some())
+        {
+            return Err(Diagnostic::new(
+                "LRR-E-MACRO-EXPORT-PUBLICATION",
+                "configured macro-export source-currentness and SDK export graph publication is required before discovery installation".into(),
+            ));
+        }
         let procedural_consumer = procedural.as_ref().map(|catalog| catalog.consumer());
         let compiler_attributes = compiler
             .as_ref()

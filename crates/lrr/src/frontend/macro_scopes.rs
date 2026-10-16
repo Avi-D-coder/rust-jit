@@ -43,6 +43,9 @@ fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-SCOPE", message.into())
 }
 impl MacroDeclarations {
+    pub(crate) fn definition_by_identity(&self, identity: Digest) -> Option<&MacroDefinition> {
+        self.declarations.get(&identity).map(|row| &row.definition)
+    }
     pub(crate) fn origin_of(
         &self,
         definition: &MacroDefinition,

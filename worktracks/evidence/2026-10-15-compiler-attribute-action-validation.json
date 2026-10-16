@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "source_member": "df8a97b8a0091d7ee82a614a824c9287faeda442b9f819c7ada872ce2a0e2c5e",
+  "component_sha256": "c5b9d740b16091a303bd442804d0579a855ad4c32d448ab103450a607656e5ff",
+  "actual_terminals": {
+    "inactive_before": "22fd1f/0",
+    "compile-adapter": {
+      "launch": "8e93df",
+      "session": 80543,
+      "pid": 8062,
+      "terminal": "cef454",
+      "exit": 0,
+      "seconds": 1.300749292
+    },
+    "compile-library": {
+      "launch": "711e82",
+      "session": 90489,
+      "pid": 8086,
+      "terminal": "c07724",
+      "exit": 0,
+      "seconds": 31.306155500000003
+    },
+    "inventory-category": {
+      "launch": "6c5470",
+      "session": 71780,
+      "terminal": "5db2d7",
+      "exit": 0
+    },
+    "regressions": {
+      "launch": "a5415e",
+      "session": 54687,
+      "terminal": "62262e",
+      "exit": 0
+    },
+    "inactive_after": "e2eaf3/0"
+  },
+  "tests": [
+    {
+      "name": "builtin_attributes::inventory_tests::complete_pinned_compiler_inventory_matches_actual_static_array",
+      "result": "ok"
+    },
+    {
+      "name": "builtin_attributes::inventory_tests::diagnostic_aliases_match_complete_pinned_parser_registry",
+      "result": "ok"
+    },
+    {
+      "name": "expand::source_discovery::original_inert_tests::metadata_refusal_keeps_original_attribute_unproven",
+      "result": "ok"
+    },
+    {
+      "name": "expand::source_discovery::original_inert_tests::missing_current_compiler_attribute_facet_cannot_seal_original_prefix",
+      "result": "ok"
+    },
+    {
+      "name": "expand::source_discovery::original_inert_tests::genuine_prelude_imported_compiler_attribute_shadow_cannot_be_retired_as_allow",
+      "result": "ok"
+    },
+    {
+      "name": "expand::source_discovery::original_inert_tests::unchanged_header_array_original_publishes_actual_allow_proof_value_and_type_all_editions",
+      "result": "ok"
+    },
+    {
+      "name": "expand::source_derives::compiler_test_inert_binding_tests::compiler_test_proof_rejects_competing_inert_attribute_facet",
+      "result": "ok"
+    },
+    {
+      "name": "expand::source_derives::compiler_test_inert_binding_tests::compiler_test_proof_waits_for_unresolved_inert_attribute_binding",
+      "result": "ok"
+    },
+    {
+      "name": "expand::source_declarative::macro2_tests::original_wrong_definition_owner_cannot_use_private_source_groups",
+      "result": "ok"
+    },
+    {
+      "name": "expand::source_declarative::macro2_tests::macro2_exact_range_and_changed_arguments_body_edition_are_not_interchangeable",
+      "result": "ok"
+    }
+  ],
+  "warning_counts": {
+    "compile-adapter": 0,
+    "compile-library": 16
+  },
+  "inventory": {
+    "cases": 332,
+    "original_files": 534,
+    "previous525_rows_unchanged": true,
+    "support_additions": 9,
+    "new_runtime_cases": 0,
+    "manifest_sha256": "ebe22580ca24fc9ee1ede59cfff36b8067d0eabef261d2d5b1c5f58da67776f3"
+  },
+  "unexecuted": [
+    "strict/fullmilestone/CLI",
+    "new generic source annotation original13 packet",
+    "oldRA semantic action coverage",
+    "SDK/core/common runtime/fullfixture acceptance"
+  ],
+  "runtime_contract_pass_increment": 0,
+  "full_fixture_pass_increment": 0,
+  "architectural_hold": "All8 E-R5-005 remain",
+  "at": "2026-10-16T05:27:31.689105+00:00",
+  "claim": "LOCAL-024",
+  "scope": "Corrected complete compiler attribute recognition / diagnostic parser metadata classification; missing newly recognized semantic handlers fail explicitly. Host component evidence only.",
+  "release": {
+    "path": "artifacts/macos-first/sol-common-compiler-attribute-action-validation-v2/RELEASE.json",
+    "sha256": "f534b10e547afb1ac6c6065e96511506ef325e24caf4a465ca6ebd786237405b"
+  },
+  "counts": {
+    "distinct": 10,
+    "passed": 10,
+    "failed": 0
+  },
+  "retained_failure": "Prior161 broad-name fallback compiled29PASS but reviewer found semantic retirement gap; superseded by corrected171, not accepted semantic coverage.",
+  "current_limit": "Existing RA admission identities/behavior preserved; semantic effects require real existing consumers. No claim complete handler coverage or full compiler diagnostic behavior.",
+  "reproduce": [
+    "cargo test -p lrr-expand-adapter --lib builtin_attributes::inventory_tests",
+    "cargo test -p lrr --lib expand::source_discovery::original_inert_tests",
+    "python3 tools/sync_compiler_inert_inventory.py --check"
+  ]
+}

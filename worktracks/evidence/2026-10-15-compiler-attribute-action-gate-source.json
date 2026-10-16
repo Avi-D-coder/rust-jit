@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T05:18:41.657863+00:00",
+  "claim": "LOCAL-024",
+  "status": "source-only-uncompiled-unexecuted",
+  "baseline": "exact sealed inventory161 e46f0fe95bbf7f122a50c3053b21550edada6b86f6dca95118935523cc946baa",
+  "overlay": "artifacts/macos-first/common-compiler-attribute-action-gate-v2/overlay",
+  "files": [
+    {
+      "path": "crates/lrr-expand-adapter/src/builtin_attributes.rs",
+      "bytes": 15004,
+      "sha256": "6df6c4aa9b90ae547078afbffcecaea9dad3366373054f39c24819e5972f6788"
+    },
+    {
+      "path": "crates/lrr-expand-adapter/src/compiler_inert_inventory.rs",
+      "bytes": 7687,
+      "sha256": "89ba5e8b81aac2695f68fd11a814f1c4359d1a6071e799b69102790017200728"
+    },
+    {
+      "path": "tools/sync_compiler_inert_inventory.py",
+      "bytes": 5924,
+      "sha256": "fb346ed672f04a5012245c455e3c53b0b36c9d018f73fb4169e6da5180803009"
+    },
+    {
+      "path": "tools/compiler_diagnostic_attribute_sources.json",
+      "bytes": 2070,
+      "sha256": "1d97dce7103213289548fb3ff7c02bfba448a58ca4818df92e299a5efc1ac43e"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/manifest.json",
+      "bytes": 204913,
+      "sha256": "ebe22580ca24fc9ee1ede59cfff36b8067d0eabef261d2d5b1c5f58da67776f3"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/compiler/rustc_attr_parsing/src/attributes/diagnostic/do_not_recommend.rs",
+      "bytes": 1446,
+      "sha256": "adea67e3bece1c8b7a5c79beaf6f60afbe222df4e4395e6426ee2c463a1fea9e"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/compiler/rustc_attr_parsing/src/attributes/diagnostic/mod.rs",
+      "bytes": 27163,
+      "sha256": "acc8e5b77ca6c7b5126117bee3783daacd31c9aa8421d4902e20504787e6b733"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/compiler/rustc_attr_parsing/src/attributes/diagnostic/on_const.rs",
+      "bytes": 1841,
+      "sha256": "ad7bead6d84d69443b7f9cf89fbeb4563be1b6082143c0aad858952bed62a81b"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/compiler/rustc_attr_parsing/src/attributes/diagnostic/on_move.rs",
+      "bytes": 1603,
+      "sha256": "80fe26c612918573b274e4089a7f0a5a39f36b3e727dfa073e5d72a2fc37954d"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/compiler/rustc_attr_parsing/src/attributes/diagnostic/on_type_error.rs",
+      "bytes": 1632,
+      "sha256": "313fc92bcbfa020874f18e98753b696af92fc08d6a5b08ea05b41b72f2d5d299"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/compiler/rustc_attr_parsing/src/attributes/diagnostic/on_unimplemented.rs",
+      "bytes": 2058,
+      "sha256": "4781c64c7116888869f93a7f991d134f9680bb5ff7369d7bc414f7e3116135b0"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/compiler/rustc_attr_parsing/src/attributes/diagnostic/on_unknown.rs",
+      "bytes": 1610,
+      "sha256": "5334b94ac85514fb09b9390e8c4f1291971704737cb3dbd58dbbf41e88934464"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/compiler/rustc_attr_parsing/src/attributes/diagnostic/on_unmatched_args.rs",
+      "bytes": 1569,
+      "sha256": "cf6676320802b7ddedd2727dad122ffe78ea160ff1383cb8b35bbbfda73cd62b"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/compiler/rustc_attr_parsing/src/attributes/diagnostic/opaque.rs",
+      "bytes": 2205,
+      "sha256": "299e21bcc7993cb29157f8c40c6a77792918095ffb96dd52b3baddbee0467567"
+    }
+  ],
+  "scope": "Complete compiler-name recognition separated from newly admitted annotation actions; diagnostic parser registry aliases only supplement old RA inert admission; other new semantic names explicitly refuse missing handler.",
+  "new_bodies": 1,
+  "new_test": "builtin_attributes::inventory_tests::diagnostic_aliases_match_complete_pinned_parser_registry",
+  "modified_test": "builtin_attributes::inventory_tests::complete_pinned_compiler_inventory_matches_actual_static_array",
+  "generator_check": "7778e0/0",
+  "inventory": {
+    "cases": 332,
+    "files": 534,
+    "new_runtime_cases": 0
+  },
+  "review": {
+    "all8": "Adapter metadata only, no runtime evaluator/parser recreation, macro identity switching, numeric/member/pattern changes, generated exemption, execution planning, namespace census or deep BodyIndex clone. Existing RA identities preserved.",
+    "reviewer": "edition_macro_logic read-only review; compiled evidence pending",
+    "existing_debt": "Old RA admission is recognition behavior, not complete runtime semantic support. This component does not close old semantic consumers."
+  },
+  "holds": [
+    "Full pinned compiler/world adoption and sdk/source closure remain incomplete.",
+    "Diagnostic metadata retained in actual header, exact diagnostic behavior unimplemented/separate gate.",
+    "Old inventory161 29PASS is metadata/authority evidence and has known overbroad fallback, not accepted semantics.",
+    "No stock/runtime/fullfixture/MA/task/JIT closure"
+  ]
+}

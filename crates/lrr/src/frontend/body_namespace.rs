@@ -10,7 +10,7 @@ use crate::{
     },
 };
 use std::collections::BTreeMap;
-pub(super) struct Namespace {
+pub(crate) struct Namespace {
     pub facts: EnteredMacroFacts,
     pub contexts: BTreeMap<u32, (usize, ScopeKey)>,
 }
@@ -80,6 +80,20 @@ fn item(bytes: &mut usize, row: &crate::syntax::body_items::BodyItem) -> Result<
     Ok(())
 }
 impl Namespace {
+    pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
+        self.facts
+            .metadata_bytes()?
+            .checked_add(std::mem::size_of::<Self>())
+            .and_then(|n| n.checked_sub(std::mem::size_of::<EnteredMacroFacts>()))
+            .and_then(|n| {
+                n.checked_add(
+                    self.contexts
+                        .len()
+                        .checked_mul(16 * std::mem::size_of::<(u32, (usize, ScopeKey))>() + 256)?,
+                )
+            })
+            .ok_or_else(crate::runtime::arena::resource)
+    }
     pub fn capture(
         parent: &EnteredMacroIndex<'_>,
         child: &EnteredMacroFacts,

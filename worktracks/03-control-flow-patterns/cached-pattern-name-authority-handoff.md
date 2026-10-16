@@ -387,3 +387,137 @@ review: no evaluator/pattern/inference route, generated runtime refusal, repeate
 phase work, namespace census or immutable deep copy is introduced. This helper
 requires bounded cold O(retained original publication) work only; it does not
 close any macro finding, runtime contract or gate.
+
+
+## Role-separated macro-export source dependencies (root, pre-code)
+
+LOCAL-024 / M014/M018/H018, Sections32.2/49/55. Actual issue-26251 now
+executes ordinary selected string157..162 then fails at legacy assertion236..256.
+The source-backed MacroExport facet is a prerequisite for replacing that route,
+not another assertion handler. Captured facet source must remain unavailable to
+ordinary runtime ParseFile/DefinitionBody selection.
+
+Add an opaque scalar MacroExportSourceReceipt to the existing DB input protocol
+(tag31, prior encodings unchanged), derived only from an actual validated facet:
+configured unit, immutable facet/preparation/environment identities and exact
+SourceSelection. It owns no parser, source bytes, provider, routes or body grants.
+The actual facet graph remains retained and bounded by its explicit preparation
+catalog; scalar receipt metadata is charged by existing input accounting.
+
+Coordinator publication atomically replaces only this explicit facet receipt set
+after exact configured UnitCompileEnv checks and bounded transient admission.
+Duplicate/cross-generation/stale-environment inputs refuse before publication;
+active runs/queries cannot publish. No SourceBlob/CapturedSource/DefinitionHeader/
+DefinitionBody/CrateCfg or prepared-source registry entry is added. Re-publishing
+the same set is idempotent. Relevant preparation reads return the actual selected
+receipt and environment dependency stamps through ordinary db.input; missing/
+replaced receipts remain typed preparation failures, not name absence or execution
+permission. A discovery certificate may retain those selected compiler input
+stamps; do not add a global facet census to existing compiler_input_stamps.
+
+The coordinator traverses only its bounded facet set plus existing input handles
+when committing that set; currentness checks read two keys and no namespace
+graph, source parser, provider or filesystem. Module/export completeness, actual
+compiler annotation receipts and builtin hooks remain the worker's separate
+prerequisites; this bridge must not activate an incomplete facet. Test authority
+with the existing unchanged foreign-crate-macro-pat.rs fixture/capture helpers:
+no runtime input/parse projection, atomic invalid publication, selected receipt/
+environment replacement/currentness, unrelated receipt stability and repeated
+publication without revision growth. No new replacement language fixture.
+
+All eight architecture modes: no evaluator, generated-literal route, pattern or
+numeric/member specialization, source-origin language restriction, installed
+planning, world scan or immutable graph copy. Only the existing scalar input
+framework is extended; no private query/cache framework or symbol loader.
+Current macro-runtime and full-fixture gates stay open until actual integrated
+source/trace/context evidence and the applicable milestone pass.
+
+
+## Pinned compiler inert metadata reconciliation (root, pre-code)
+
+LOCAL-024 / M001/M014/M018/T063, Sections49/55. Actual unchanged core
+assert_eq header contains rustc_diagnostic_opaque. The vendored adapter inert
+metadata was synchronized to an older compiler and omits it; the complete pinned
+rustc compiler/rustc_feature/src/builtin_attrs.rs at ae0fe511 lists it in the
+BUILTIN_ATTRIBUTES Symbol array (line322). Import that complete original as a
+licensed support input; do not suppress the annotation or special-case assertions.
+
+Reproducibly generate the entire sorted owned compiler-name inventory from that
+fixed metadata schema, with actual commit/source SHA256. Validate the generated
+set against the actual static array through the existing pinned adapter AST in
+an LRR provenance control. This data conversion is not a guest macro matcher or
+Rust evaluator. Existing RA inert descriptors retain their identities; compiler
+metadata supplies a generic fallback for every missing compiler inventory name,
+versioned by its real pinned compiler source. Derive/test expansion actions stay
+with existing dedicated compiler hooks. No dependency pins/vendor code change.
+
+Normal lookup uses static metadata only: no source IO, AST construction, global
+OnceLock plan cache, parsing or source inventory scans in queries/VM operations.
+The common NestedInertProof/competing Attribute-facet selection still establishes
+actual binding authority; inventory membership alone grants neither namespace
+absence, export completion, macro execution nor runtime semantics. Worker-owned
+macro engine identity must include this metadata source version before new
+prepared generation adoption. The configured toolworld compatibility and shared
+source/header interpretation remain explicit gates, not assumed from a lookup.
+
+Required evidence is full original/generated inventory equality and generic
+descriptor metadata/identity through pinned source, unchanged core annotation
+progress through ordinary proof/index discovery when that integration is ready,
+plus existing attribute authority/ambiguity/edition controls. No new guest fixture,
+name-based language rule or early common-engine/stock acceptance. All eight
+architecture modes reviewed: this is compiler metadata, not alternate expression/
+pattern/type/member execution, generated exclusion, repeated planning, global
+namespace validation or immutable-body copying. Scope completion remains held on
+actual caller integration and ordinary/user/wrapper/core trace/cleanup matrices.
+
+
+Root compiler-attribute classification correction (before edits): LOCAL-024,
+MA007/common source preparation prerequisite under the existing M macro ledger.
+Witnesses are the unchanged full compiler builtin list (rustc_align has actual
+repr parser semantics) and unchanged core/macros source using compiler diagnostic
+metadata. Full builtin membership is name-resolution evidence, not permission
+to retire every annotation as having no semantic effect. Extend the pinned
+adapter metadata boundary to distinguish complete recognition from source
+no-transform admission. Preserve existing RA identities; newly recognized
+compiler annotations require semantic handling unless their actual pinned
+diagnostic parser classification establishes diagnostic-only metadata. Generate
+the classification from the complete official diagnostic attribute module
+registry and parser mapping, retain originals/hashes and test against the pinned
+AST. Do not select any behavior by macro name, library path, expression context
+or one-name allowance. No query IO/parser/runtime changes. Cold generation is
+bounded source metadata conversion; runtime descriptor lookup remains bounded
+static metadata lookup. Existing broad RA recognition is inherited semantic
+handler debt, not blanket runtime acceptance. Validator's old inventory161
+results remain metadata evidence; corrected source needs a new frozen run.
+No E-R5-005/MA/task/JIT closure until actual common execution and removal matrix.
+
+
+Root M014/T024/T063 role-aware macro discovery source prerequisite (before
+edits), LOCAL-024 / MA007: unchanged upstream exported macro auxiliary is the
+minimal role witness. Current full DiscoverySeal publication/provider require
+CapturedSource+ordinary Outline query even for an exact configured MacroExport
+source. Publishing that parser/body into ordinary runtime inputs to satisfy the
+query would cross the native/macro source authority boundary. Extend the existing
+scalar MacroExportSource receipt to cache actual configured graph and retained
+Outline fingerprint, with stable receipt domain v2. One opaque relevant-source
+observation joins its actual selection, graph, current receipt and UnitCompileEnv
+(two real cached dependency stamps). Discovery must bind those stamps and actual
+Outline contribution in the existing ledger/seal, then the existing coordinator
+publication and SyntaxProvider DiscoverySeal query validate that same complete
+certificate. Only Scope/Macro certificates may consume role-only source. No
+ordinary parse/outline/body/name grant, role-wide namespace census, private cache,
+new query framework, producer execution or inferred SDK adoption. No source AST
+is returned by the observation. Each preparation source does bounded map reads;
+actual source outline hashing stays at cold capture/discovery. Installed runtime
+operations do not use this preparation API. Source graph ownership stays with
+the existing preparation/discovery owners; owning completed-facet transport still
+requires a separately complete compiler/generated/module graph footprint. Full
+SDK/module-parent adoption, module captures and proof replays with role-owned
+source remain explicit prerequisites, not established by scalar publication.
+Evidence requires unchanged exported-macro source to form a real published/query
+seal without ordinary SourceBlob/CapturedSource/DefinitionBody access, plus stale
+source/environment/graph and missing dependency/seal refusals. Root owns DB input,
+provider and publication guards; pattern agent owns exact SourceDiscovery hooks.
+All eight recurring modes: no executable macro/literal/pattern/method/numeric
+route added, no generated syntax exemption, no execution planning or world scan,
+no deep body copy. Existing legacy runtime routes remain held for replacement.

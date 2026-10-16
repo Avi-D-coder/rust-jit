@@ -1,4 +1,4 @@
-//! Original named and glob import routes in one retained entered body. No expansion effects.
+//! Named and glob import routes in one retained entered body. No expansion effects.
 use super::macro_names::{MacroNamespaces, PathLookup};
 use crate::{
     core::diagnostic::Diagnostic,
@@ -39,7 +39,10 @@ pub(super) fn lookup(
     call: &SourceMacroCall,
     graph: &MacroNamespaces,
     caller: &ScopeKey,
-    mut textual: impl FnMut(u32, u64, &str) -> Result<super::macro_scopes::HygienicLookup, Diagnostic>,
+    mut textual: impl FnMut(
+        &crate::syntax::entered_macros::BodyImport,
+        &str,
+    ) -> Result<super::macro_scopes::HygienicLookup, Diagnostic>,
 ) -> Result<Option<PathLookup>, Diagnostic> {
     if call.absolute() || !matches!(call.segments().first(), Some(ImportSegment::Name(_))) {
         return Ok(None);
@@ -256,7 +259,7 @@ pub(super) fn lookup(
             && let [ImportSegment::Name(name)] = target
         {
             use super::{macro_origins::MacroSelection, macro_scopes::HygienicLookup};
-            match textual(row.scope, row.at, name)? {
+            match textual(row, name)? {
                 HygienicLookup::NeedInput(input) => {
                     return Ok(Some(PathLookup::NeedInput(input)));
                 }

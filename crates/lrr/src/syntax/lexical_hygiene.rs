@@ -10,6 +10,11 @@ use crate::{
 };
 
 impl ParsedFile {
+    /// Raw context attached to this actual token occurrence. Callers must use
+    /// the pinned hygiene service for namespace/rib adjustment; this is data.
+    pub(crate) fn identifier_context(&self, range: SourceRange) -> Result<Option<Key>, Diagnostic> {
+        Ok(self.token_context(range)?.map(|context| context.context))
+    }
     /// Pinned item-namespace normalization for the actual selected identifier.
     /// This is context data, not member/source authority or rib adjustment.
     pub(crate) fn item_name_context(&self, range: SourceRange) -> Result<Option<Key>, Diagnostic> {
@@ -44,7 +49,13 @@ impl ParsedFile {
         };
         let index = contexts.partition_point(|context| context.end <= range.start);
         let context = contexts.get(index).ok_or_else(fail)?;
-        if range.start >= range.end || range.end > context.end {
+        // attach_generated_token_editions admits contiguous intervals from0.
+        // TokenContext stores only endpoints; the preceding endpoint is this
+        // interval's start, rather than a separately stored source location.
+        let start = index
+            .checked_sub(1)
+            .map_or(0, |previous| contexts[previous].end);
+        if range.start >= range.end || range.start < start || range.end > context.end {
             return Err(fail());
         }
         Ok(Some(context))

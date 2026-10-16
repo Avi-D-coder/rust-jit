@@ -16,7 +16,11 @@ use crate::{
         token_wire::{Edition, Key},
     },
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 #[derive(Clone)]
 pub struct SourceMacroIndex {
     item_attributes: BTreeMap<(SourceScope, u32, u32), Vec<crate::syntax::spans::SourceRange>>,
@@ -24,10 +28,10 @@ pub struct SourceMacroIndex {
     attribute_candidates: BTreeMap<(SourceScope, u32, u32), crate::syntax::spans::SourceRange>,
     source_key: crate::syntax::parse::ParseKey,
     cfg: Digest,
-    scopes: TextualScopes,
+    scopes: std::sync::Arc<TextualScopes>,
     scope_keys: BTreeMap<SourceScope, ScopeKey>,
     root: SourceScope,
-    declarations: MacroDeclarations,
+    declarations: std::sync::Arc<MacroDeclarations>,
     definitions: BTreeMap<Digest, MacroDefinition>,
     producers: BTreeMap<Digest, ProducerKind>,
     module_inputs: BTreeMap<Digest, SourceScope>,
@@ -36,7 +40,7 @@ pub struct SourceMacroIndex {
     imported_bytes: usize,
     facts: std::sync::Arc<HygieneFacts>,
     context: Key,
-    ancestry: ExpansionAncestry,
+    ancestry: std::sync::Arc<ExpansionAncestry>,
 }
 fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-SCOPE", message.into())
@@ -50,6 +54,24 @@ fn edition(value: Edition) -> u16 {
     }
 }
 impl SourceMacroIndex {
+    pub(crate) fn retain_outer(
+        &self,
+        outer: super::macro_scopes::OuterMacroScope<'_>,
+    ) -> Result<Option<super::macro_boundary::RetainedMacroScope>, Diagnostic> {
+        if !std::ptr::eq(outer.scopes, self.scopes.as_ref())
+            || !std::ptr::eq(outer.declarations, self.declarations.as_ref())
+        {
+            return Ok(None);
+        }
+        Ok(Some(super::macro_boundary::RetainedMacroScope::new(
+            std::sync::Arc::clone(&self.scopes),
+            std::sync::Arc::clone(&self.declarations),
+            std::sync::Arc::clone(&self.facts),
+            std::sync::Arc::clone(&self.ancestry),
+            outer.scope,
+            outer.before,
+        )?))
+    }
     pub(crate) fn definition_origin(
         &self,
         definition: &MacroDefinition,
@@ -102,10 +124,10 @@ impl SourceMacroIndex {
                 profile: outline.profile.clone(),
             },
             cfg: outline.cfg,
-            scopes,
+            scopes: std::sync::Arc::new(scopes),
             scope_keys: BTreeMap::from([(outline.root_scope.clone(), root)]),
             root: outline.root_scope.clone(),
-            declarations: MacroDeclarations::default(),
+            declarations: std::sync::Arc::new(MacroDeclarations::default()),
             definitions: BTreeMap::new(),
             producers: BTreeMap::new(),
             module_inputs: BTreeMap::new(),
@@ -114,7 +136,7 @@ impl SourceMacroIndex {
             imported_bytes: 0,
             facts: std::sync::Arc::new(facts),
             context,
-            ancestry: ExpansionAncestry::default(),
+            ancestry: std::sync::Arc::new(ExpansionAncestry::default()),
         };
         if outline.textual_events.len() > 1_000_000 || outline.items.len() > 100_000 {
             return Err(error("source macro event limit exceeded"));
@@ -208,14 +230,16 @@ impl SourceMacroIndex {
                         .at
                         .checked_add(1)
                         .ok_or_else(|| error("scope opening position overflow"))?;
-                    let key = index.scopes.add_child(scope, before, *ordinal)?;
+                    let key = std::sync::Arc::make_mut(&mut index.scopes)
+                        .add_child(scope, before, *ordinal)?;
                     index.scope_keys.insert(child.clone(), key);
                 }
                 TextualEventKind::Producer { identity, kind } => {
                     if *kind == ProducerKind::ModuleSource {
                         index.module_inputs.insert(*identity, event.scope.clone());
                     }
-                    index.scopes.block(scope, event.at, *identity)?;
+                    std::sync::Arc::make_mut(&mut index.scopes)
+                        .block(scope, event.at, *identity)?;
                     if index.producers.insert(*identity, *kind).is_some() {
                         return Err(error("duplicate source producer identity"));
                     }
@@ -236,7 +260,7 @@ impl SourceMacroIndex {
                         defining_unit: item.def_key.crate_key,
                         definition_edition: outline.profile.edition,
                     };
-                    index.declarations.register(
+                    std::sync::Arc::make_mut(&mut index.declarations).register(
                         definition.clone(),
                         context,
                         None,
@@ -244,7 +268,7 @@ impl SourceMacroIndex {
                         &index.ancestry,
                     )?;
                     if matches!(event.kind, TextualEventKind::Definition { .. }) {
-                        index.scopes.define(
+                        std::sync::Arc::make_mut(&mut index.scopes).define(
                             scope,
                             event.at,
                             MacroName::parse(source_name, outline.profile.edition)?,
@@ -277,9 +301,11 @@ impl SourceMacroIndex {
                 .scope_keys
                 .get(&child)
                 .ok_or_else(|| error("macro-use child scope absent"))?;
-            index
-                .scopes
-                .macro_use_module(parent, child, u64::from(item.declaration_span.end))?;
+            std::sync::Arc::make_mut(&mut index.scopes).macro_use_module(
+                parent,
+                child,
+                u64::from(item.declaration_span.end),
+            )?;
         }
         Ok(index)
     }
@@ -302,8 +328,11 @@ impl SourceMacroIndex {
             .scope_keys
             .get(&call.scope)
             .ok_or_else(|| error("test attribute source scope absent"))?;
-        self.scopes
-            .block(scope, u64::from(call.range.start), call.item_input)?;
+        std::sync::Arc::make_mut(&mut self.scopes).block(
+            scope,
+            u64::from(call.range.start),
+            call.item_input,
+        )?;
         self.producers
             .insert(call.item_input, ProducerKind::Attribute);
         Ok(())
@@ -326,7 +355,7 @@ impl SourceMacroIndex {
             .scope_keys
             .get(scope)
             .ok_or_else(|| error("completed source macro scope absent"))?;
-        self.scopes.publish(key, at, identity, vec![])?;
+        std::sync::Arc::make_mut(&mut self.scopes).publish(key, at, identity, vec![])?;
         self.producers.remove(&identity);
         Ok(())
     }
@@ -366,7 +395,7 @@ impl SourceMacroIndex {
             return Err(error("source derive producer absent"));
         }
         let mut snapshot = self.snapshot_clone()?;
-        snapshot.scopes = self.scopes.prefix_view(key, at, producer)?;
+        snapshot.scopes = std::sync::Arc::new(self.scopes.prefix_view(key, at, producer)?);
         snapshot.producers.remove(&producer);
         Ok(snapshot)
     }
@@ -402,10 +431,10 @@ impl SourceMacroIndex {
             }
         }
         std::sync::Arc::make_mut(&mut self.facts).extend(catalog.facts())?;
-        self.ancestry.extend(catalog.ancestry())?;
+        std::sync::Arc::make_mut(&mut self.ancestry).extend(catalog.ancestry())?;
         let bindings = catalog.root_bindings()?;
         for entry in catalog.outward() {
-            self.declarations.register(
+            std::sync::Arc::make_mut(&mut self.declarations).register(
                 entry.definition.clone(),
                 entry.context,
                 entry.origin,
@@ -416,9 +445,10 @@ impl SourceMacroIndex {
                 .insert(entry.definition.identity, entry.definition.clone());
         }
         if prefix {
-            self.scopes.publish_prefix(key, at, identity, bindings)?;
+            std::sync::Arc::make_mut(&mut self.scopes)
+                .publish_prefix(key, at, identity, bindings)?;
         } else {
-            self.scopes.publish(key, at, identity, bindings)?;
+            std::sync::Arc::make_mut(&mut self.scopes).publish(key, at, identity, bindings)?;
             self.producers.remove(&identity);
         }
         Ok(())
@@ -713,7 +743,7 @@ impl SourceMacroIndex {
             .scope_keys
             .get(&child.root)
             .ok_or_else(|| error("ordinary module placeholder scope absent"))?;
-        self.scopes.publish(scope, 0, input, Vec::new())?;
+        std::sync::Arc::make_mut(&mut self.scopes).publish(scope, 0, input, Vec::new())?;
         self.producers.remove(&input);
         Ok(true)
     }
@@ -767,8 +797,8 @@ impl SourceMacroIndex {
             .get(scope)
             .ok_or_else(|| error("macro-use placeholder scope absent"))?;
         std::sync::Arc::make_mut(&mut self.facts).extend(&child.facts)?;
-        self.ancestry.extend(&child.ancestry)?;
-        self.declarations.copy_selected(
+        std::sync::Arc::make_mut(&mut self.ancestry).extend(&child.ancestry)?;
+        std::sync::Arc::make_mut(&mut self.declarations).copy_selected(
             &child.declarations,
             &identities,
             &self.facts,
@@ -788,7 +818,7 @@ impl SourceMacroIndex {
                 self.imported_definitions.insert(identity);
             }
         }
-        self.scopes.publish(target, 0, input, bindings)?;
+        std::sync::Arc::make_mut(&mut self.scopes).publish(target, 0, input, bindings)?;
         self.producers.remove(&input);
         self.imported_bytes = bytes;
         Ok(true)
@@ -803,7 +833,7 @@ impl SourceMacroIndex {
             .scope_keys
             .get(scope)
             .ok_or_else(|| error("argument source scope absent"))?;
-        snapshot.scopes.omit_invocation_position(key, at)?;
+        std::sync::Arc::make_mut(&mut snapshot.scopes).omit_invocation_position(key, at)?;
         Ok(snapshot)
     }
     pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
@@ -857,6 +887,30 @@ impl SourceMacroIndex {
             .filter(|n| *n <= 64 * 1024 * 1024)
             .ok_or_else(|| error("source macro snapshot metadata limit"))?;
         Ok(bytes)
+    }
+    pub(crate) fn immutable_roots(
+        &self,
+    ) -> (
+        &Arc<TextualScopes>,
+        &Arc<MacroDeclarations>,
+        &Arc<HygieneFacts>,
+        &Arc<ExpansionAncestry>,
+    ) {
+        (
+            &self.scopes,
+            &self.declarations,
+            &self.facts,
+            &self.ancestry,
+        )
+    }
+    pub(crate) fn exclusive_metadata_bytes(&self) -> Result<usize, Diagnostic> {
+        self.metadata_bytes()?
+            .checked_sub(self.scopes.metadata_bytes()?)
+            .and_then(|n| n.checked_sub(self.declarations.metadata_bytes().ok()?))
+            .and_then(|n| n.checked_sub(self.facts.metadata_bytes().ok()?))
+            .and_then(|n| n.checked_sub(self.ancestry.metadata_bytes().ok()?))
+            .and_then(|n| n.checked_add(std::mem::size_of::<Self>()))
+            .ok_or_else(crate::runtime::arena::resource)
     }
     pub(crate) fn snapshot_clone(&self) -> Result<Self, Diagnostic> {
         self.metadata_bytes()?;
@@ -960,23 +1014,39 @@ impl SourceMacroIndex {
 /// Source-index entry point backed by an exact immutable publication lease.
 pub struct PublishedMacroIndex {
     pub(super) view: crate::source::changes::PreparedSourceView,
-    index: SourceMacroIndex,
-    runtime_outers: Vec<OwnedRuntimeOuter>,
+    index: Arc<SourceMacroIndex>,
+    runtime_outers: Arc<Vec<OwnedRuntimeOuter>>,
     runtime_bytes: usize,
 }
-struct OwnedRuntimeOuter {
-    scopes: TextualScopes,
-    declarations: MacroDeclarations,
+pub(crate) struct OwnedRuntimeOuter {
+    scopes: Arc<TextualScopes>,
+    declarations: Arc<MacroDeclarations>,
     scope: ScopeKey,
     before: u64,
 }
 impl OwnedRuntimeOuter {
+    pub(crate) fn scopes(&self) -> &Arc<TextualScopes> {
+        &self.scopes
+    }
+    pub(crate) fn declarations(&self) -> &Arc<MacroDeclarations> {
+        &self.declarations
+    }
     fn borrowed(&self) -> super::macro_scopes::OuterMacroScope<'_> {
         super::macro_scopes::OuterMacroScope {
             scopes: &self.scopes,
             declarations: &self.declarations,
             scope: self.scope,
             before: self.before,
+        }
+    }
+}
+impl Clone for PublishedMacroIndex {
+    fn clone(&self) -> Self {
+        Self {
+            view: self.view.share(),
+            index: Arc::clone(&self.index),
+            runtime_outers: Arc::clone(&self.runtime_outers),
+            runtime_bytes: self.runtime_bytes,
         }
     }
 }
@@ -993,8 +1063,8 @@ impl PublishedMacroIndex {
         }
         Ok(Self {
             view,
-            index,
-            runtime_outers: Vec::new(),
+            index: Arc::new(index),
+            runtime_outers: Arc::new(Vec::new()),
             runtime_bytes: 0,
         })
     }
@@ -1006,8 +1076,8 @@ impl PublishedMacroIndex {
         let index = SourceMacroIndex::from_outline(view.outline(), context, facts)?;
         Ok(Self {
             view,
-            index,
-            runtime_outers: Vec::new(),
+            index: Arc::new(index),
+            runtime_outers: Arc::new(Vec::new()),
             runtime_bytes: 0,
         })
     }
@@ -1045,17 +1115,17 @@ impl PublishedMacroIndex {
         }
         let mut snapshot = index.snapshot_clone()?;
         snapshot.facts = std::sync::Arc::new(facts.clone());
-        snapshot.ancestry = ancestry.clone();
+        snapshot.ancestry = std::sync::Arc::new(ancestry.clone());
         let mut result = Self::from_completed_index(view, snapshot)?;
-        result
-            .runtime_outers
+        Arc::get_mut(&mut result.runtime_outers)
+            .expect("fresh runtime outer vector")
             .try_reserve_exact(outers.len())
             .map_err(|_| error("runtime source outer allocation"))?;
-        result
-            .runtime_outers
+        Arc::get_mut(&mut result.runtime_outers)
+            .expect("fresh runtime outer vector")
             .extend(outers.iter().map(|outer| OwnedRuntimeOuter {
-                scopes: outer.scopes.clone(),
-                declarations: outer.declarations.clone(),
+                scopes: Arc::new(outer.scopes.clone()),
+                declarations: Arc::new(outer.declarations.clone()),
                 scope: outer.scope,
                 before: outer.before,
             }));
@@ -1100,19 +1170,20 @@ impl PublishedMacroIndex {
 /// Borrowed entered-body index keeps its exact published parent/source alive.
 pub struct EnteredMacroIndex<'a> {
     pub(super) module_scope: SourceScope,
-    pub(super) parent: &'a PublishedMacroIndex,
+    pub(super) parent: Cow<'a, PublishedMacroIndex>,
     pub(super) body: crate::source::manifest::BodyKey,
-    pub(super) facts: crate::syntax::entered_macros::EnteredMacroFacts,
-    pub(super) namespace: Option<super::body_namespace::Namespace>,
-    scopes: TextualScopes,
-    pub(super) keys: BTreeMap<u32, ScopeKey>,
-    declarations: MacroDeclarations,
-    producers: BTreeMap<Digest, ProducerKind>,
-    retired_no_item: BTreeSet<Digest>,
-    outer: ScopeKey,
-    before: u64,
-    body_outers: Vec<super::macro_scopes::OuterMacroScope<'a>>,
-    ancestor_producers: Vec<&'a BTreeMap<Digest, ProducerKind>>,
+    pub(super) facts: std::sync::Arc<crate::syntax::entered_macros::EnteredMacroFacts>,
+    pub(super) body_context:
+        Option<std::sync::Arc<super::source_body_context::PreparedBodyContext>>,
+    pub(super) namespace: Option<Arc<super::body_namespace::Namespace>>,
+    scopes: Arc<TextualScopes>,
+    pub(super) keys: Arc<BTreeMap<u32, ScopeKey>>,
+    declarations: Arc<MacroDeclarations>,
+    producers: Arc<BTreeMap<Digest, ProducerKind>>,
+    retired_no_item: Arc<BTreeSet<Digest>>,
+    module_outer: Option<(ScopeKey, u64)>,
+    body_outers: Vec<super::macro_boundary::RetainedMacroScope>,
+    ancestor_producers: Vec<Arc<BTreeMap<Digest, ProducerKind>>>,
 }
 impl PublishedMacroIndex {
     pub fn enter_body(
@@ -1154,6 +1225,27 @@ impl PublishedMacroIndex {
         before: u64,
         body: &crate::source::manifest::BodyKey,
     ) -> Result<EnteredMacroIndex<'_>, Diagnostic> {
+        self.build_entered_with_context(
+            std::sync::Arc::new(facts),
+            module_scope,
+            Some((outer, before)),
+            body,
+            None,
+        )
+    }
+    fn build_entered_with_context(
+        &self,
+        facts: std::sync::Arc<crate::syntax::entered_macros::EnteredMacroFacts>,
+        module_scope: SourceScope,
+        module_outer: Option<(ScopeKey, u64)>,
+        body: &crate::source::manifest::BodyKey,
+        body_context: Option<std::sync::Arc<super::source_body_context::PreparedBodyContext>>,
+    ) -> Result<EnteredMacroIndex<'_>, Diagnostic> {
+        let hygiene = body_context
+            .as_ref()
+            .and_then(|context| context.macro_hygiene())
+            .unwrap_or(&self.index.facts);
+        hygiene.context(self.index.context)?;
         let mut e = crate::core::digest::StableEncoder::new("lrr/v2/entered-macro-root");
         e.digest(body.definition);
         let root = ScopeKey::root(e.finish());
@@ -1185,17 +1277,41 @@ impl PublishedMacroIndex {
                     name,
                     ..
                 } => {
+                    let (definition_context, definition_edition) =
+                        if let Some(context) = &body_context {
+                            let parsed = context.source().parsed();
+                            let (name_range, actual_name) =
+                                parsed.macro_definition_header_at(event.range)?;
+                            if actual_name != *name {
+                                return Err(error("prepared macro definition name differs"));
+                            }
+                            let raw = context
+                                .source()
+                                .identifier_context_or_original(name_range, self.index.context)?;
+                            (raw, parsed.token_edition(name_range)?)
+                        } else {
+                            (
+                                self.index.context,
+                                self.source().outline.parse.profile.edition,
+                            )
+                        };
                     let definition = MacroDefinition {
                         identity: *identity,
-                        defining_unit: self.source().outline.crate_key,
-                        definition_edition: self.source().outline.parse.profile.edition,
+                        defining_unit: module_scope.crate_key,
+                        definition_edition,
                     };
                     declarations.register(
                         definition.clone(),
-                        self.index.context,
-                        None,
-                        &self.index.facts,
-                        &self.index.ancestry,
+                        definition_context,
+                        match &body_context {
+                            Some(context) => context.reference_origin()?,
+                            None => None,
+                        },
+                        hygiene,
+                        body_context
+                            .as_ref()
+                            .and_then(|context| context.macro_ancestry())
+                            .map_or(self.index.ancestry.as_ref(), |ancestry| ancestry.as_ref()),
                     )?;
                     scopes.define(
                         key,
@@ -1212,17 +1328,17 @@ impl PublishedMacroIndex {
         }
         Ok(EnteredMacroIndex {
             module_scope,
-            parent: self,
+            parent: Cow::Borrowed(self),
             body: body.clone(),
             facts,
+            body_context,
             namespace: None,
-            scopes,
-            keys,
-            declarations,
-            producers,
-            retired_no_item: BTreeSet::new(),
-            outer,
-            before,
+            scopes: Arc::new(scopes),
+            keys: Arc::new(keys),
+            declarations: Arc::new(declarations),
+            producers: Arc::new(producers),
+            retired_no_item: Arc::new(BTreeSet::new()),
+            module_outer,
             body_outers: vec![],
             ancestor_producers: vec![],
         })
@@ -1230,12 +1346,34 @@ impl PublishedMacroIndex {
 }
 impl EnteredMacroIndex<'_> {
     pub(super) fn local_hygiene(&self) -> (Key, std::sync::Arc<HygieneFacts>) {
-        (
-            self.parent.index.context,
-            std::sync::Arc::clone(&self.parent.index.facts),
-        )
+        let facts = self
+            .body_context
+            .as_ref()
+            .and_then(|context| context.macro_hygiene())
+            .unwrap_or(&self.parent.index.facts);
+        (self.parent.index.context, std::sync::Arc::clone(facts))
+    }
+    pub(super) fn identifier_context(
+        &self,
+        range: crate::syntax::spans::SourceRange,
+    ) -> Result<Key, Diagnostic> {
+        let Some(context) = &self.body_context else {
+            return Ok(self.parent.index.context);
+        };
+        context
+            .source()
+            .identifier_context_or_original(range, self.parent.index.context)
     }
 
+    pub(super) fn identifier_edition(
+        &self,
+        range: crate::syntax::spans::SourceRange,
+    ) -> Result<u16, Diagnostic> {
+        match &self.body_context {
+            Some(context) => context.source().parsed().token_edition(range),
+            None => Ok(self.parent.source().outline.parse.profile.edition),
+        }
+    }
     pub fn enter_nested_body(
         &self,
         expected: &crate::source::changes::SourceSelection,
@@ -1281,15 +1419,18 @@ impl EnteredMacroIndex<'_> {
         if self.body_outers.len() >= 255 {
             return Err(error("nested declaration scope-chain depth exceeded"));
         }
+        let (outer, before) = self
+            .module_outer
+            .ok_or_else(|| error("prepared nested body needs its own current owning context"))?;
         let mut child =
             self.parent
-                .build_entered(facts, module_scope, self.outer, self.before, child_body)?;
+                .build_entered(facts, module_scope, outer, before, child_body)?;
         if capture_imports {
-            child.namespace = Some(super::body_namespace::Namespace::capture(
+            child.namespace = Some(Arc::new(super::body_namespace::Namespace::capture(
                 self,
                 &child.facts,
                 item.scope,
-            )?);
+            )?));
         }
         child
             .body_outers
@@ -1297,21 +1438,23 @@ impl EnteredMacroIndex<'_> {
             .map_err(|_| error("nested body outer scope allocation failed"))?;
         child
             .body_outers
-            .push(super::macro_scopes::OuterMacroScope {
-                scopes: &self.scopes,
-                scope: self.keys[&item.scope],
-                before: u64::from(item.item.declaration_span.start),
-                declarations: &self.declarations,
-            });
-        child.body_outers.extend(self.body_outers.iter().copied());
+            .push(super::macro_boundary::RetainedMacroScope::new(
+                Arc::clone(&self.scopes),
+                Arc::clone(&self.declarations),
+                self.hygiene_root(),
+                self.ancestry_root(),
+                self.keys[&item.scope],
+                u64::from(item.item.declaration_span.start),
+            )?);
+        child.body_outers.extend(self.body_outers.iter().cloned());
         child
             .ancestor_producers
             .try_reserve(self.ancestor_producers.len() + 1)
             .map_err(|_| error("nested body producer ancestry allocation failed"))?;
-        child.ancestor_producers.push(&self.producers);
+        child.ancestor_producers.push(Arc::clone(&self.producers));
         child
             .ancestor_producers
-            .extend(self.ancestor_producers.iter().copied());
+            .extend(self.ancestor_producers.iter().cloned());
         Ok(child)
     }
     pub(super) fn no_item_retired(&self, identity: Digest) -> bool {
@@ -1340,7 +1483,7 @@ impl EnteredMacroIndex<'_> {
     ) -> Result<super::macro_names::PathLookup, Diagnostic> {
         self.lookup_invocation_using(expected, body, range, namespaces, |scope, at, name| {
             match scope {
-                Some(scope) => self.resolve_namespace_at(scope, at, name, &[]),
+                Some(row) => self.resolve_import(row, name, &[]),
                 None => self.lookup(expected, body, at, name),
             }
         })
@@ -1390,10 +1533,10 @@ impl EnteredMacroIndex<'_> {
             .keys
             .get(&event.scope)
             .ok_or_else(|| error("no-item producer scope absent"))?;
-        self.scopes.publish(scope, event.at, identity, vec![])?;
+        Arc::make_mut(&mut self.scopes).publish(scope, event.at, identity, vec![])?;
         // Retain only the exact validated empty declaration producer. Ordinary
         // namespace/local indexes must not reconstruct its pending frontier.
-        self.retired_no_item.insert(identity);
+        Arc::make_mut(&mut self.retired_no_item).insert(identity);
         Ok(())
     }
     /// Resolve the actual entered invocation before capturing intrinsic arguments.
@@ -1417,7 +1560,11 @@ impl EnteredMacroIndex<'_> {
         body: &crate::source::manifest::BodyKey,
         range: crate::syntax::spans::SourceRange,
         namespaces: &super::macro_names::MacroNamespaces,
-        mut lookup: impl FnMut(Option<u32>, u64, &str) -> Result<HygienicLookup, Diagnostic>,
+        mut lookup: impl FnMut(
+            Option<&crate::syntax::entered_macros::BodyImport>,
+            u64,
+            &str,
+        ) -> Result<HygienicLookup, Diagnostic>,
     ) -> Result<super::macro_names::PathLookup, Diagnostic> {
         use super::macro_names::PathLookup;
         if expected.canonical()? != *self.parent.source() || *body != self.body {
@@ -1442,7 +1589,10 @@ impl EnteredMacroIndex<'_> {
                 "body invocation requires separate entry into opaque syntax",
             ));
         }
-        let call = self.parent.view.macro_call_at(range)?;
+        let call = match &self.body_context {
+            Some(context) => context.source().parsed().generated_macro_call_at(range)?,
+            None => self.parent.view.macro_call_at(range)?,
+        };
         let Some(invocation) = self
             .facts
             .invocations
@@ -1454,7 +1604,17 @@ impl EnteredMacroIndex<'_> {
         let Some(crate::syntax::imports::ImportSegment::Name(name)) = call.segments().last() else {
             return Err(error("entered invocation member is missing"));
         };
-        let textual = lookup(None, u64::from(range.start), name)?;
+        let textual = match &self.body_context {
+            Some(_) => self.lookup_with_context(
+                expected,
+                body,
+                u64::from(range.start),
+                name,
+                self.identifier_context(call.name_range())?,
+                self.identifier_edition(call.name_range())?,
+            )?,
+            None => lookup(None, u64::from(range.start), name)?,
+        };
         if let HygienicLookup::NeedInput(input) = textual {
             return Ok(PathLookup::NeedInput(input));
         }
@@ -1481,7 +1641,7 @@ impl EnteredMacroIndex<'_> {
             &call,
             namespaces,
             &self.module_scope,
-            |scope, at, name| lookup(Some(scope), at, name),
+            |row, name| lookup(Some(row), row.at, name),
         )? {
             return Ok(result);
         }
@@ -1493,6 +1653,24 @@ impl EnteredMacroIndex<'_> {
         body: &crate::source::manifest::BodyKey,
         at: u64,
         name: &str,
+    ) -> Result<HygienicLookup, Diagnostic> {
+        self.lookup_with_context(
+            expected,
+            body,
+            at,
+            name,
+            self.parent.index.context,
+            self.parent.source().outline.parse.profile.edition,
+        )
+    }
+    pub(super) fn lookup_with_context(
+        &self,
+        expected: &crate::source::changes::SourceSelection,
+        body: &crate::source::manifest::BodyKey,
+        at: u64,
+        name: &str,
+        context: Key,
+        edition: u16,
     ) -> Result<HygienicLookup, Diagnostic> {
         if expected.canonical()? != *self.parent.source() || *body != self.body {
             return Err(error("body lookup source/body revision mismatch"));
@@ -1514,53 +1692,68 @@ impl EnteredMacroIndex<'_> {
             .rev()
             .find(|scope| u64::from(scope.range.start) <= at && at < u64::from(scope.range.end))
             .ok_or_else(|| error("body lookup position is outside entered scopes"))?;
-        self.resolve_at(scope.ordinal, at, name)
+        self.resolve_at_with(scope.ordinal, at, name, context, edition, &[])
     }
     // Called only after public selection checks, with a retained invocation or import scope.
-    fn resolve_namespace_at(
+    fn resolve_import(
+        &self,
+        row: &crate::syntax::entered_macros::BodyImport,
+        name: &str,
+        extra: &[super::macro_scopes::OuterMacroScope<'_>],
+    ) -> Result<HygienicLookup, Diagnostic> {
+        let (raw_context, edition, origin) = match &self.body_context {
+            Some(context) => {
+                let occurrence = context.macro_import_occurrence(row, name)?;
+                (
+                    occurrence.context(context.source(), self.parent.index.context)?,
+                    occurrence.edition(),
+                    context.reference_origin()?,
+                )
+            }
+            None => (
+                self.parent.index.context,
+                self.parent.source().outline.parse.profile.edition,
+                None,
+            ),
+        };
+        self.resolve_namespace_with(row.scope, row.at, name, raw_context, edition, origin, extra)
+    }
+    fn resolve_namespace_with(
         &self,
         ordinal: u32,
         at: u64,
         name: &str,
+        raw_context: Key,
+        edition: u16,
+        origin: Option<Key>,
         extra: &[super::macro_scopes::OuterMacroScope<'_>],
     ) -> Result<HygienicLookup, Diagnostic> {
-        let name = MacroName::parse(name, self.parent.source().outline.parse.profile.edition)?;
+        let name = MacroName::parse(name, edition)?;
         let context = self
             .namespace
             .as_ref()
             .and_then(|n| n.contexts.get(&ordinal));
         let start = context.map_or(0, |(frame, _)| frame + 1);
-        let mut outers = self.body_outers[start..].to_vec();
-        outers
-            .try_reserve(extra.len() + 1)
-            .map_err(|_| error("namespace outer allocation failed"))?;
-        outers.push(super::macro_scopes::OuterMacroScope {
-            scopes: &self.parent.index.scopes,
-            scope: self.outer,
-            before: self.before,
-            declarations: &self.parent.index.declarations,
-        });
-        outers
-            .try_reserve(self.parent.runtime_outers.len())
-            .map_err(|_| error("runtime namespace outer allocation"))?;
-        outers.extend(
-            self.parent
-                .runtime_outers
-                .iter()
-                .map(OwnedRuntimeOuter::borrowed),
-        );
-        outers.extend_from_slice(extra);
+        let mut outers = self.body_outers[start..]
+            .iter()
+            .map(super::macro_boundary::RetainedMacroScope::outer)
+            .collect::<Vec<_>>();
+        self.append_module_outers(&mut outers, extra)?;
         let (scopes, declarations, key) = match context {
             Some((frame, key)) => {
                 let captured = self
                     .body_outers
                     .get(*frame)
                     .ok_or_else(|| error("namespace frame missing"))?;
-                (captured.scopes, captured.declarations, *key)
+                (
+                    captured.scopes().as_ref(),
+                    captured.declarations().as_ref(),
+                    *key,
+                )
             }
             None => (
-                &self.scopes,
-                &self.declarations,
+                self.scopes.as_ref(),
+                self.declarations.as_ref(),
                 *self
                     .keys
                     .get(&ordinal)
@@ -1573,15 +1766,265 @@ impl EnteredMacroIndex<'_> {
                 scope: key,
                 before: at,
                 name: &name,
-                context: self.parent.index.context,
-                origin: None,
+                context: raw_context,
+                origin,
             },
             &outers,
-            &self.parent.index.facts,
-            &self.parent.index.ancestry,
+            self.resolution_hygiene(),
+            self.resolution_ancestry(),
         )
     }
-    fn resolve_at(&self, ordinal: u32, at: u64, name: &str) -> Result<HygienicLookup, Diagnostic> {
+    fn hygiene_root(&self) -> Arc<HygieneFacts> {
+        Arc::clone(
+            self.body_context
+                .as_ref()
+                .and_then(|context| context.macro_hygiene())
+                .unwrap_or(&self.parent.index.facts),
+        )
+    }
+    fn ancestry_root(&self) -> Arc<ExpansionAncestry> {
+        Arc::clone(
+            self.body_context
+                .as_ref()
+                .and_then(|context| context.macro_ancestry())
+                .unwrap_or(&self.parent.index.ancestry),
+        )
+    }
+    pub(crate) fn source_macro_root(&self) -> &Arc<SourceMacroIndex> {
+        &self.parent.index
+    }
+    /// Exact immutable declaration metadata, never a name or token-mark guess.
+    pub(super) fn retained_definition(
+        &self,
+        identity: Digest,
+    ) -> Result<Option<MacroDefinition>, Diagnostic> {
+        let mut selected = self.parent.index.definitions.get(&identity).cloned();
+        let mut join = |declarations: &MacroDeclarations| -> Result<(), Diagnostic> {
+            if let Some(definition) = declarations.definition_by_identity(identity) {
+                if selected.as_ref().is_some_and(|old| old != definition) {
+                    return Err(error("retained macro definition metadata conflicts"));
+                }
+                selected = Some(definition.clone());
+            }
+            Ok(())
+        };
+        join(&self.declarations)?;
+        join(&self.parent.index.declarations)?;
+        for outer in self.parent.runtime_outers.iter() {
+            join(&outer.declarations)?;
+        }
+        for outer in self.body_outers.iter().chain(
+            self.body_context
+                .iter()
+                .flat_map(|context| context.macro_outers()),
+        ) {
+            join(outer.declarations())?;
+        }
+        Ok(selected)
+    }
+    pub(crate) fn runtime_outer_root(&self) -> &Arc<Vec<OwnedRuntimeOuter>> {
+        &self.parent.runtime_outers
+    }
+    pub(crate) fn scope_root(&self) -> &Arc<TextualScopes> {
+        &self.scopes
+    }
+    pub(crate) fn declaration_root(&self) -> &Arc<MacroDeclarations> {
+        &self.declarations
+    }
+    pub(crate) fn scope_key_root(&self) -> &Arc<BTreeMap<u32, ScopeKey>> {
+        &self.keys
+    }
+    pub(crate) fn retired_root(&self) -> &Arc<BTreeSet<Digest>> {
+        &self.retired_no_item
+    }
+    pub(crate) fn namespace_root(&self) -> Option<&Arc<super::body_namespace::Namespace>> {
+        self.namespace.as_ref()
+    }
+    pub(crate) fn producer_roots(
+        &self,
+    ) -> impl Iterator<Item = &Arc<BTreeMap<Digest, ProducerKind>>> {
+        std::iter::once(&self.producers).chain(self.ancestor_producers.iter())
+    }
+    pub(crate) fn retained_scope_roots(
+        &self,
+    ) -> impl Iterator<Item = &super::macro_boundary::RetainedMacroScope> {
+        self.body_outers.iter()
+    }
+    pub(crate) fn hygiene_root_handle(&self) -> &Arc<HygieneFacts> {
+        self.body_context
+            .as_ref()
+            .and_then(|context| context.macro_hygiene())
+            .unwrap_or(&self.parent.index.facts)
+    }
+    pub(crate) fn ancestry_root_handle(&self) -> &Arc<ExpansionAncestry> {
+        self.body_context
+            .as_ref()
+            .and_then(|context| context.macro_ancestry())
+            .unwrap_or(&self.parent.index.ancestry)
+    }
+    pub(crate) fn exclusive_metadata_bytes(&self) -> Result<usize, Diagnostic> {
+        std::mem::size_of::<Self>()
+            .checked_add(self.module_scope.heap_bytes())
+            .and_then(|n| {
+                n.checked_add(
+                    self.parent
+                        .view
+                        .selection()
+                        .metadata_bytes()
+                        .ok()?
+                        .checked_mul(2)?,
+                )
+            })
+            .and_then(|n| {
+                n.checked_add(
+                    self.body_outers
+                        .capacity()
+                        .checked_mul(std::mem::size_of::<
+                            super::macro_boundary::RetainedMacroScope,
+                        >())?,
+                )
+            })
+            .and_then(|n| {
+                n.checked_add(
+                    self.ancestor_producers
+                        .capacity()
+                        .checked_mul(std::mem::size_of::<Arc<BTreeMap<Digest, ProducerKind>>>())?,
+                )
+            })
+            .ok_or_else(crate::runtime::arena::resource)
+    }
+    pub(super) fn same_environment(&self, other: &EnteredMacroIndex<'_>) -> bool {
+        fn scope(
+            a: &super::macro_boundary::RetainedMacroScope,
+            b: &super::macro_boundary::RetainedMacroScope,
+        ) -> bool {
+            let left = a.outer();
+            let right = b.outer();
+            left.scope == right.scope
+                && left.before == right.before
+                && Arc::ptr_eq(a.scopes(), b.scopes())
+                && Arc::ptr_eq(a.declarations(), b.declarations())
+                && Arc::ptr_eq(a.facts(), b.facts())
+                && Arc::ptr_eq(a.ancestry(), b.ancestry())
+        }
+        self.module_scope == other.module_scope
+            && self.body == other.body
+            && self.parent.view.same_publication(&other.parent.view)
+            && self.parent.source() == other.parent.source()
+            && Arc::ptr_eq(&self.parent.index, &other.parent.index)
+            && Arc::ptr_eq(&self.parent.runtime_outers, &other.parent.runtime_outers)
+            && Arc::ptr_eq(&self.facts, &other.facts)
+            && Arc::ptr_eq(&self.scopes, &other.scopes)
+            && Arc::ptr_eq(&self.keys, &other.keys)
+            && Arc::ptr_eq(&self.declarations, &other.declarations)
+            && Arc::ptr_eq(&self.producers, &other.producers)
+            && Arc::ptr_eq(&self.retired_no_item, &other.retired_no_item)
+            && self.module_outer == other.module_outer
+            && match (&self.body_context, &other.body_context) {
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            }
+            && match (&self.namespace, &other.namespace) {
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            }
+            && self.body_outers.len() == other.body_outers.len()
+            && self
+                .body_outers
+                .iter()
+                .zip(&other.body_outers)
+                .all(|(a, b)| scope(a, b))
+            && self.ancestor_producers.len() == other.ancestor_producers.len()
+            && self
+                .ancestor_producers
+                .iter()
+                .zip(&other.ancestor_producers)
+                .all(|(a, b)| Arc::ptr_eq(a, b))
+    }
+    pub(super) fn into_owned(self) -> EnteredMacroIndex<'static> {
+        EnteredMacroIndex {
+            module_scope: self.module_scope,
+            parent: Cow::Owned(self.parent.into_owned()),
+            body: self.body,
+            facts: self.facts,
+            body_context: self.body_context,
+            namespace: self.namespace,
+            scopes: self.scopes,
+            keys: self.keys,
+            declarations: self.declarations,
+            producers: self.producers,
+            retired_no_item: self.retired_no_item,
+            module_outer: self.module_outer,
+            body_outers: self.body_outers,
+            ancestor_producers: self.ancestor_producers,
+        }
+    }
+    fn resolution_hygiene(&self) -> &HygieneFacts {
+        self.body_context
+            .as_ref()
+            .and_then(|context| context.macro_hygiene())
+            .map_or(self.parent.index.facts.as_ref(), |facts| facts.as_ref())
+    }
+    fn resolution_ancestry(&self) -> &ExpansionAncestry {
+        self.body_context
+            .as_ref()
+            .and_then(|context| context.macro_ancestry())
+            .map_or(self.parent.index.ancestry.as_ref(), |ancestry| {
+                ancestry.as_ref()
+            })
+    }
+    fn append_module_outers<'a>(
+        &'a self,
+        outers: &mut Vec<super::macro_scopes::OuterMacroScope<'a>>,
+        extra: &[super::macro_scopes::OuterMacroScope<'a>],
+    ) -> Result<(), Diagnostic> {
+        let retained = self
+            .body_context
+            .as_ref()
+            .map(|context| context.macro_outers())
+            .unwrap_or(&[]);
+        let additional = retained
+            .len()
+            .checked_add(extra.len())
+            .and_then(|n| n.checked_add(self.parent.runtime_outers.len()))
+            .and_then(|n| n.checked_add(usize::from(self.module_outer.is_some())))
+            .ok_or_else(crate::runtime::arena::resource)?;
+        outers
+            .try_reserve(additional)
+            .map_err(|_| crate::runtime::arena::resource())?;
+        if let Some((scope, before)) = self.module_outer {
+            outers.push(super::macro_scopes::OuterMacroScope {
+                scopes: &self.parent.index.scopes,
+                declarations: &self.parent.index.declarations,
+                scope,
+                before,
+            });
+            outers.extend(
+                self.parent
+                    .runtime_outers
+                    .iter()
+                    .map(OwnedRuntimeOuter::borrowed),
+            );
+        }
+        outers.extend(
+            retained
+                .iter()
+                .map(super::macro_boundary::RetainedMacroScope::outer),
+        );
+        outers.extend_from_slice(extra);
+        Ok(())
+    }
+    fn resolve_at_with(
+        &self,
+        ordinal: u32,
+        at: u64,
+        name: &str,
+        context: Key,
+        edition: u16,
+        extra: &[super::macro_scopes::OuterMacroScope<'_>],
+    ) -> Result<HygienicLookup, Diagnostic> {
         let scope = self
             .facts
             .scopes
@@ -1592,38 +2035,29 @@ impl EnteredMacroIndex<'_> {
                     && at < u64::from(scope.range.end)
             })
             .ok_or_else(|| error("retained body declaration scope mismatch"))?;
-        let name = MacroName::parse(name, self.parent.source().outline.parse.profile.edition)?;
-        let mut outers = self.body_outers.clone();
-        outers
-            .try_reserve(1)
-            .map_err(|_| error("body outer scope allocation failed"))?;
-        outers.push(super::macro_scopes::OuterMacroScope {
-            scopes: &self.parent.index.scopes,
-            scope: self.outer,
-            before: self.before,
-            declarations: &self.parent.index.declarations,
-        });
-        outers
-            .try_reserve(self.parent.runtime_outers.len())
-            .map_err(|_| error("runtime body outer allocation"))?;
-        outers.extend(
-            self.parent
-                .runtime_outers
-                .iter()
-                .map(OwnedRuntimeOuter::borrowed),
-        );
+        let name = MacroName::parse(name, edition)?;
+        let mut outers = self
+            .body_outers
+            .iter()
+            .map(super::macro_boundary::RetainedMacroScope::outer)
+            .collect::<Vec<_>>();
+        self.append_module_outers(&mut outers, extra)?;
+        let origin = match &self.body_context {
+            Some(context) => context.reference_origin()?,
+            None => None,
+        };
         self.declarations.resolve_with_outers(
             &self.scopes,
             MacroReference {
                 scope: self.keys[&scope.ordinal],
                 before: at,
                 name: &name,
-                context: self.parent.index.context,
-                origin: None,
+                context,
+                origin,
             },
             &outers,
-            &self.parent.index.facts,
-            &self.parent.index.ancestry,
+            self.resolution_hygiene(),
+            self.resolution_ancestry(),
         )
     }
 }
@@ -1893,10 +2327,7 @@ impl LinkedEnteredMacroIndex<'_> {
             range,
             namespaces,
             |scope, at, name| match scope {
-                Some(scope) => {
-                    self.entered
-                        .resolve_namespace_at(scope, at, name, &self.module.outers)
-                }
+                Some(row) => self.entered.resolve_import(row, name, &self.module.outers),
                 None => self.lookup(expected, body, at, name),
             },
         )
@@ -1932,42 +2363,13 @@ impl LinkedEnteredMacroIndex<'_> {
         self.resolve_at(scope.ordinal, at, name)
     }
     fn resolve_at(&self, ordinal: u32, at: u64, name: &str) -> Result<HygienicLookup, Diagnostic> {
-        let scope = self
-            .entered
-            .facts
-            .scopes
-            .iter()
-            .find(|scope| {
-                scope.ordinal == ordinal
-                    && u64::from(scope.range.start) <= at
-                    && at < u64::from(scope.range.end)
-            })
-            .ok_or_else(|| error("retained linked declaration scope mismatch"))?;
-        let name = MacroName::parse(name, self.module.source().outline.parse.profile.edition)?;
-        let mut outers = Vec::new();
-        outers
-            .try_reserve(self.module.outers.len() + self.entered.body_outers.len() + 1)
-            .map_err(|_| error("linked body scope chain allocation failed"))?;
-        outers.extend(self.entered.body_outers.iter().copied());
-        outers.push(super::macro_scopes::OuterMacroScope {
-            scopes: &self.entered.parent.index.scopes,
-            scope: self.entered.outer,
-            before: self.entered.before,
-            declarations: &self.entered.parent.index.declarations,
-        });
-        outers.extend(self.module.outers.iter().copied());
-        self.entered.declarations.resolve_with_outers(
-            &self.entered.scopes,
-            MacroReference {
-                scope: self.entered.keys[&scope.ordinal],
-                before: at,
-                name: &name,
-                context: self.entered.parent.index.context,
-                origin: None,
-            },
-            &outers,
-            &self.entered.parent.index.facts,
-            &self.entered.parent.index.ancestry,
+        self.entered.resolve_at_with(
+            ordinal,
+            at,
+            name,
+            self.entered.parent.index.context,
+            self.module.source().outline.parse.profile.edition,
+            &self.module.outers,
         )
     }
 }
@@ -2029,5 +2431,59 @@ impl LinkedSourceLocalIndex<'_> {
     ) -> Result<super::local_scopes::LocalLookup, Diagnostic> {
         self.module.check_sources(expected)?;
         self.locals.lookup(&expected[0], body, at, name, context)
+    }
+}
+
+impl PublishedMacroIndex {
+    /// The original and retained declaration bridge supplies the real module
+    /// macro boundary. Generated declarations need that same insertion receipt;
+    /// a diagnostic origin or a generated byte offset cannot substitute for it.
+    pub(crate) fn enter_prepared_body(
+        &self,
+        context: std::sync::Arc<super::source_body_context::PreparedBodyContext>,
+    ) -> Result<EnteredMacroIndex<'_>, Diagnostic> {
+        let source = std::sync::Arc::clone(context.source());
+        let owner = context
+            .module_source()
+            .ok_or_else(|| error("admitted body lacks its module macro-boundary receipt"))?;
+        self.require_publication(owner)?;
+        let module_outer = if context.generated_boundary().is_some() {
+            // declaration_outer was checked by the opaque admission attach;
+            // retained actual scopes carry the generated insertion boundary.
+            None
+        } else {
+            let original = owner
+                .outline()
+                .items
+                .iter()
+                .find(|item| item.def_key.fingerprint() == source.body().def_key)
+                .ok_or_else(|| error("admitted body module boundary declaration absent"))?;
+            if original.scope != *source.scope() {
+                return Err(error("admitted body module boundary scope differs"));
+            }
+            let original_body = original
+                .body
+                .as_ref()
+                .ok_or_else(|| error("admitted body module boundary has no body"))?;
+            let outer = *self
+                .index
+                .scope_keys
+                .get(&original.scope)
+                .ok_or_else(|| error("admitted module macro scope absent"))?;
+            Some((outer, u64::from(original_body.range.start)))
+        };
+        context
+            .exclusive_metadata_bytes()
+            .checked_add(std::mem::size_of::<EnteredMacroIndex>())
+            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+            .ok_or_else(|| error("admitted local context metadata limit"))?;
+        let facts = std::sync::Arc::clone(context.facts());
+        self.build_entered_with_context(
+            facts,
+            source.scope().clone(),
+            module_outer,
+            &source.body().key(),
+            Some(context),
+        )
     }
 }

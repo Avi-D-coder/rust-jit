@@ -29,6 +29,9 @@ mod constant_inputs;
 #[path = "source_view_inputs.rs"]
 mod source_view_inputs;
 
+#[path = "macro_export_inputs.rs"]
+pub(crate) mod macro_export_inputs;
+
 #[path = "body_leases.rs"]
 mod body_leases;
 #[path = "prepared_modules.rs"]
@@ -1014,6 +1017,7 @@ impl Database {
                     | InputValue::GeneratedSyntax(_)
                     | InputValue::RetainedSyntax(_)
                     | InputValue::ScopeCertificateSelection { .. }
+                    | InputValue::MacroExportSource(_)
             )
         }) {
             return Err(fault(
@@ -1158,6 +1162,7 @@ impl Database {
                     | InputKey::IncludeRecord(_)
                     | InputKey::UnitCompileEnv(_)
                     | InputKey::ExpansionRecord(_)
+                    | InputKey::MacroExportSource(_)
             ) || self
                 .inputs
                 .get(key)
@@ -2885,6 +2890,12 @@ impl Database {
             "provider executed",
             collected.dependencies.clone(),
         );
+        // Admit retention before exposing a successful result through memo().
+        // A rejected registration must not leave an unregistered recipe cached.
+        if let Err(error) = self.source_plan_pins.register(value.as_ref()) {
+            self.memos.remove(&key);
+            return self.failed(&key, error.code, error.message);
+        }
         if cacheable {
             let estimated_bytes = value
                 .estimated_bytes()

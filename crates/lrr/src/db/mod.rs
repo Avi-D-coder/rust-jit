@@ -6,6 +6,7 @@ pub mod poll;
 pub mod provider;
 pub mod trace;
 pub mod value;
+pub use memo::macro_export_inputs::MacroExportSourceReceipt;
 
 pub mod retained_syntax;
 pub mod seals;

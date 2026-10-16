@@ -586,3 +586,85 @@ impl PreparedCompileInputs {
         }
     }
 }
+
+/// Explicit coordinator capture of one configured source-only macro facet.
+/// The approved schema4 inventory supplies filesystem authority. Query providers
+/// consume only the resulting immutable source/route handles, never this reader.
+pub fn capture_macro_export_facet(
+    manifest: &crate::project::tool_manifest::ToolManifest,
+    unit: Digest,
+    recorded_path: &Path,
+    source: PreparedSourceView,
+) -> Result<Arc<crate::expand::source_declarative::macro_exports::SourceMacroExportFacet>, Diagnostic>
+{
+    use std::io::Read;
+    manifest.validate()?;
+    let path = recorded_path.to_str().ok_or_else(|| {
+        fault(
+            "LRR-E-MACRO-EXPORT-PREPARATION",
+            "macro-export path must be UTF-8",
+        )
+    })?;
+    let expected = manifest
+        .inputs
+        .source_files
+        .get(path)
+        .and_then(|digest| *digest)
+        .filter(|digest| *digest == source.selection().outline.parse.content)
+        .ok_or_else(|| {
+            fault(
+                "LRR-E-MACRO-EXPORT-PREPARATION",
+                "macro-export source is not recorded",
+            )
+        })?;
+    // Validate the complete pure source/configuration join before opening a file.
+    let facet = crate::expand::source_declarative::macro_exports::SourceMacroExportFacet::capture(
+        manifest, unit, path, source,
+    )?;
+    let mut file = std::fs::File::open(recorded_path)
+        .map_err(|error| fault("LRR-E-SOURCE-IO", error.to_string()))?;
+    let limit = crate::source::snapshot::MAX_SOURCE_FILE;
+    let size = usize::try_from(
+        file.metadata()
+            .map_err(|error| fault("LRR-E-SOURCE-IO", error.to_string()))?
+            .len(),
+    )
+    .map_err(|_| fault("LRR-E-SOURCE-LIMIT", "macro-export source size overflow"))?;
+    if size > limit {
+        return Err(fault(
+            "LRR-E-SOURCE-LIMIT",
+            "macro-export source exceeds limit",
+        ));
+    }
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(size)
+        .map_err(|_| fault("LRR-E-METADATA-LIMIT", "macro-export capture allocation"))?;
+    let mut buffer = [0u8; 16384];
+    loop {
+        let count = file
+            .read(&mut buffer)
+            .map_err(|error| fault("LRR-E-SOURCE-IO", error.to_string()))?;
+        if count == 0 {
+            break;
+        }
+        bytes
+            .len()
+            .checked_add(count)
+            .filter(|n| *n <= limit)
+            .ok_or_else(|| fault("LRR-E-SOURCE-LIMIT", "macro-export capture exceeds limit"))?;
+        bytes
+            .try_reserve(count)
+            .map_err(|_| fault("LRR-E-METADATA-LIMIT", "macro-export capture allocation"))?;
+        bytes.extend_from_slice(&buffer[..count]);
+    }
+    if Digest::of_bytes(&bytes) != expected
+        || bytes != facet.source().captured_macro_blob()?.bytes()
+    {
+        return Err(fault(
+            "LRR-E-TOOL-PREPARE-STALE",
+            "macro-export source changed since preparation",
+        ));
+    }
+    Ok(Arc::new(facet))
+}

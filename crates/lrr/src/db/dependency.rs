@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum InputKey {
+    MacroExportSource(Digest),
     SourceDependencies,
     ScopeCertificateSelection(Digest),
     GeneratedSyntax(Digest),
@@ -33,6 +34,7 @@ pub enum InputKey {
 }
 #[derive(Debug, Clone)]
 pub enum InputValue {
+    MacroExportSource(Box<super::MacroExportSourceReceipt>),
     ScopeCertificateSelection {
         selection: Digest,
         candidate_set: Digest,
@@ -101,6 +103,7 @@ impl InputValue {
             Ok::<_, crate::core::diagnostic::Diagnostic>(())
         };
         match self {
+            Self::MacroExportSource(receipt) => add(receipt.metadata_bytes())?,
             Self::SourceDependencies(graph) => add(graph.metadata_bytes()?)?,
             Self::GeneratedSyntax(input) => add(input.metadata_bytes()?)?,
             Self::RetainedSyntax(input) => add(input.metadata_bytes()?)?,
@@ -142,6 +145,10 @@ impl InputValue {
         Ok(bytes)
     }
     pub fn matches(&self, k: &InputKey) -> bool {
+        if let (Self::MacroExportSource(receipt), InputKey::MacroExportSource(location)) = (self, k)
+        {
+            return receipt.location_identity() == *location;
+        }
         if let (
             Self::ScopeCertificateSelection { selection, .. },
             InputKey::ScopeCertificateSelection(key),
@@ -200,6 +207,10 @@ impl InputValue {
             _ => "lrr/v2/input-value",
         });
         match self {
+            Self::MacroExportSource(receipt) => {
+                e.u32(31);
+                e.record(receipt.as_ref());
+            }
             Self::ScopeCertificateSelection {
                 selection,
                 candidate_set,
@@ -346,6 +357,10 @@ impl StableEncode for InputKey {
     const DOMAIN: &'static str = "lrr/v2/input-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::MacroExportSource(location) => {
+                e.u32(31);
+                e.digest(*location);
+            }
             Self::ScopeCertificateSelection(id) => {
                 e.u32(30);
                 e.digest(*id);

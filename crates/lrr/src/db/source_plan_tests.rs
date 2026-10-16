@@ -659,3 +659,32 @@ fn cached_only_literal_receipt_can_reclaim_to_mandatory_input_budget() {
     assert!(report.after.memo_bytes <= budget.query_bytes);
     assert_eq!(report.after.parse_bytes, 0);
 }
+
+#[test]
+fn rejected_literal_retention_cannot_publish_a_successful_memo() {
+    let (mut db, request, proof) = string_literal_world(2015);
+    drop(proof);
+    db.memos.clear();
+    db.evict_between_runs(CacheBudgets::default()).unwrap();
+    assert_eq!(db.source_plan_pins.registered_artifact_count(), 0);
+    // Exercise the real registry preflight with a reduced count bound. Source
+    // admission, the pinned parser and ordinary provider remain unchanged.
+    db.source_plan_pins.set_test_artifact_limit(0);
+    let failure = match db.fetch(&super::super::provider::SyntaxProvider, request.clone()) {
+        QueryPoll::Ready(Err(error)) => error,
+        _ => panic!("literal registry bound must reject admission"),
+    };
+    assert_eq!(failure.code, "LRR-E-METADATA-LIMIT");
+    assert!(db.memo(&request).is_none(), "rejected recipe was published");
+    assert_eq!(db.source_plan_pins.registered_artifact_count(), 0);
+
+    db.source_plan_pins.set_test_artifact_limit(usize::MAX);
+    let outcome = db
+        .fetch(&super::super::provider::SyntaxProvider, request.clone())
+        .into_ready()
+        .unwrap()
+        .unwrap();
+    assert!(matches!(outcome.value.as_ref(), QueryValue::Thunk(_)));
+    assert!(db.memo(&request).is_some());
+    assert_eq!(db.source_plan_pins.registered_artifact_count(), 1);
+}

@@ -24,6 +24,102 @@
       "bytes": 1068
     },
     {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/do_not_recommend.rs",
+      "git_blob": "f816c4ae03681c1f0858e50f6ea6d64e0f1e2ed6",
+      "sha256": "adea67e3bece1c8b7a5c79beaf6f60afbe222df4e4395e6426ee2c463a1fea9e",
+      "bytes": 1446
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/mod.rs",
+      "git_blob": "53114d0ca9d8a5b6cec3f6f81b2c387fc79b29f9",
+      "sha256": "acc8e5b77ca6c7b5126117bee3783daacd31c9aa8421d4902e20504787e6b733",
+      "bytes": 27163
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/on_const.rs",
+      "git_blob": "61ebe13bfb98df660c395502fe8399d20ee62b04",
+      "sha256": "ad7bead6d84d69443b7f9cf89fbeb4563be1b6082143c0aad858952bed62a81b",
+      "bytes": 1841
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/on_move.rs",
+      "git_blob": "9f8e120353c7f966ba36753b1c3be535a84e9f2a",
+      "sha256": "80fe26c612918573b274e4089a7f0a5a39f36b3e727dfa073e5d72a2fc37954d",
+      "bytes": 1603
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/on_type_error.rs",
+      "git_blob": "ea980c7da0cd56bbf0cf6bf2a8c1c0c3300a5990",
+      "sha256": "313fc92bcbfa020874f18e98753b696af92fc08d6a5b08ea05b41b72f2d5d299",
+      "bytes": 1632
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/on_unimplemented.rs",
+      "git_blob": "9975b2795be4f652db6f8293d6878648f19124c3",
+      "sha256": "4781c64c7116888869f93a7f991d134f9680bb5ff7369d7bc414f7e3116135b0",
+      "bytes": 2058
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/on_unknown.rs",
+      "git_blob": "58e2d37f7cdaf176c7a5ac80a9d6fffbeb5516c5",
+      "sha256": "5334b94ac85514fb09b9390e8c4f1291971704737cb3dbd58dbbf41e88934464",
+      "bytes": 1610
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/on_unmatched_args.rs",
+      "git_blob": "14918b26e8dc2409d25bc1dd5061a00189bf00c0",
+      "sha256": "cf6676320802b7ddedd2727dad122ffe78ea160ff1383cb8b35bbbfda73cd62b",
+      "bytes": 1569
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/opaque.rs",
+      "git_blob": "0e4a524080149b09c947b6d06be7302597829692",
+      "sha256": "299e21bcc7993cb29157f8c40c6a77792918095ffb96dd52b3baddbee0467567",
+      "bytes": 2205
+    },
+    {
+      "path": "compiler/rustc_feature/src/builtin_attrs.rs",
+      "git_blob": "bc8c8f4b2a764fa39a1c4395a5717af1899cf013",
+      "sha256": "a52761c0d4708b4282a9acc09447f11aa955a65289ace2cadabe1d788131a55c",
+      "bytes": 14402
+    },
+    {
+      "path": "library/core/Cargo.toml",
+      "git_blob": "d8f4ec0528dee265a97eeee6badae7a8c6303ff7",
+      "sha256": "f5a8a316d28c1f1f132ff65ec38abd6a55b8078703cf7b5f54058a18a074fc1d",
+      "bytes": 1539
+    },
+    {
+      "path": "library/core/src/lib.rs",
+      "git_blob": "ff63e10a67d582f3aeb9466cccce08b11b4b4212",
+      "sha256": "f7da20c347fb8722a6cfc28b6f899fc8359bd99775ba0f2b34f6f86346a0f1f2",
+      "bytes": 13460
+    },
+    {
+      "path": "library/core/src/macros/mod.rs",
+      "git_blob": "ab8fc470091860a5030f11f7c320ba9bbf537e47",
+      "sha256": "af6f7c1c71eef0923e1f4128729e744e2ca6b6c9954245cc8b87e5c579713f66",
+      "bytes": 72969
+    },
+    {
+      "path": "library/core/src/macros/panic.md",
+      "git_blob": "1a436c7564e0f0351cd58b324ceb2b696adba1f3",
+      "sha256": "bf3c4f4a80494eecbdcd895e81a9c17f4860bb0a9bf22e4af11e03ae9bad7b38",
+      "bytes": 4325
+    },
+    {
+      "path": "library/std/Cargo.toml",
+      "git_blob": "67eebd820ca59fdd80112d661228cb5b3fb367a7",
+      "sha256": "fbb965b5ba747481a0f0ac28acfdf8e40fbb7635fd2a0a0755292d6394d790ea",
+      "bytes": 5649
+    },
+    {
+      "path": "library/std/src/macros.rs",
+      "git_blob": "ea574fc4146e7f655070e46e232069d194892a8c",
+      "sha256": "9b6c83f35166d203cf590b43b184910f7248ca756b86a046851511033a840867",
+      "bytes": 13881
+    },
+    {
       "path": "tests/auxiliary/minicore.rs",
       "git_blob": "e7e924f9ebc08eb89da011442440e058efb0c201",
       "sha256": "87ffcc2c7c3b08fdd96d7fd8f6b104e81aa4d87b6c8d142dc1f9e786988cb406",
@@ -270,6 +366,12 @@
       "bytes": 1118
     },
     {
+      "path": "tests/ui/borrowck/borrowck-assign-to-subfield.rs",
+      "git_blob": "8e5192611ffd9956caf12ae9a4864c7098c07255",
+      "sha256": "aad0ede2f330c1d0c8e4f8bfedeec050ad194511099765ae2eb246c204aff7ae",
+      "bytes": 394
+    },
+    {
       "path": "tests/ui/borrowck/borrowck-describe-field-generic-param-owned-box.rs",
       "git_blob": "95a34f173fbd3bd9c5f3c8fddfa515aaf5e1b039",
       "sha256": "974f09b2141358b4d72af57c6e6f6a7bda75f694511eec5c050b9d52f3e69f05",
@@ -424,6 +526,12 @@
       "git_blob": "4b94c32bdd3aa38394087d162465786e5052e0da",
       "sha256": "b849c574e130f75a63df06d61e9b2046f49798e7091afc7c7caa9099afea32ef",
       "bytes": 227
+    },
+    {
+      "path": "tests/ui/box/unit/basic-operations.rs",
+      "git_blob": "516cffb0c6f49c4564902a14a49a34c8ebd9b003",
+      "sha256": "fdaa73c8af8de7369e755ac1339ce0d21ea438b99784f076cb1a0c732b62a705",
+      "bytes": 1327
     },
     {
       "path": "tests/ui/cast/cast-does-fallback.rs",
@@ -3332,6 +3440,14 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/borrowck/borrowck-assign-to-subfield.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/borrowck/borrowck-fixed-length-vecs.rs",
       "directives": [
         "//@ run-pass"
@@ -3413,6 +3529,14 @@
       "path": "tests/ui/borrowck/tuple-field-move-with-drop-borrow.rs",
       "directives": [
         "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/box/unit/basic-operations.rs",
+      "directives": [
+        "//@ run-pass"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"

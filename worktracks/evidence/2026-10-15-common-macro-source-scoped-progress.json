@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T05:12:18.079931+00:00",
+  "claim": "LOCAL-024",
+  "status": "separate-scoped-component-validation-only",
+  "banks": [
+    {
+      "handoff": "artifacts/macos-first/sol-common-configured-macro-export-facet-validation-v3/HANDOFF.json",
+      "handoff_sha256": "e11eba29d3472e6d93394cd942a026286fa5b30b5804f1231da0aa54c8df37f2",
+      "release": "artifacts/macos-first/sol-common-configured-macro-export-facet-validation-v3/RELEASE.json",
+      "release_sha256": "2c17d8498d499be297359483f1d33e4531fdf85fe91390bf079f3db1d5b8f78b",
+      "source_member": "2820a914033b6d1381446e8d0015516ff1891b34d2fc48d65aa6552cd5852dd7",
+      "counts": {
+        "distinct": 16,
+        "passed": 16,
+        "failed": 0
+      },
+      "status": "Scoped16PASS compile0; sealed/released; production activation/runtime held"
+    },
+    {
+      "handoff": "artifacts/macos-first/sol-common-macro-export-publication-validation-v2/HANDOFF.json",
+      "handoff_sha256": "65e74759ebf5bb7238bc2bc854920baa3a8ba5f3eef24bcaa8b93f4ad55abfcc",
+      "release": "artifacts/macos-first/sol-common-macro-export-publication-validation-v2/RELEASE.json",
+      "release_sha256": "401adff92d3c475020bee66ace2aa2f287081cb26d53674d39a09121aecc0010",
+      "source_member": "9d5d0f0c151f830fe989183bff7097d53b1a69af714f000c0254bd5d2834d759",
+      "counts": {
+        "distinct": 10,
+        "passed": 10,
+        "failed": 0
+      },
+      "status": "Scoped10PASS compile0; sealed/released"
+    },
+    {
+      "handoff": "artifacts/macos-first/sol-common-local-type-owned-validation-v2/HANDOFF.json",
+      "handoff_sha256": "daa6c440578f0e47a95d612154cfa9b96a8d068c5853dc0373ef0342029f3599",
+      "release": "artifacts/macos-first/sol-common-local-type-owned-validation-v2/RELEASE.json",
+      "release_sha256": "d2ae7779ebff939a639ecd1bd1f51daf95a486fde4ee245e1afd324ac2a5a64b",
+      "source_member": "733df3c9e5adba11124066139d59fc87f2e21d2e914a5b2ea6ddd11339b85601",
+      "counts": {
+        "distinct": 12,
+        "passed": 12,
+        "failed": 0
+      },
+      "status": "Compile0,12distinctPASS; sealed/released with16warnings/strictunexecuted"
+    }
+  ],
+  "counting": "Separate immutable source banks; do not sum as a milestone or stock-test bank.",
+  "upstream_runtime_acceptance_delta": 0,
+  "full_fixture_delta": 0,
+  "holds": [
+    "Legacy assertion/runtime macro dispatch remains reachable and fails issue-26251.",
+    "Common macro source activation, complete retained graph accounting and ordinary execution integration are incomplete.",
+    "MA001-MA008, E-R5-005 and guest JIT gates remain open.",
+    "Compiler inventory supplement and original-inert declaration successor remain source-only pending their own validation."
+  ]
+}

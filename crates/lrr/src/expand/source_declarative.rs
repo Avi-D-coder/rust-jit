@@ -23,6 +23,8 @@ use std::collections::BTreeMap;
 type DependencyRoutes = BTreeMap<crate::expand::scopes::MacroName, Digest>;
 type RouteDependencySets = (DependencyRoutes, DependencyRoutes);
 pub mod assembly;
+#[path = "source_declarative/macro_exports.rs"]
+pub mod macro_exports;
 #[path = "source_declarative/scalar_pattern_replay.rs"]
 mod scalar_pattern_replay;
 pub struct SourceDeclarative {
@@ -361,7 +363,8 @@ enum DeclarativeBody {
 pub fn engine_version() -> Digest {
     let mut e = crate::core::digest::StableEncoder::new("lrr/v1/source-declarative-engine");
     e.string(lrr_expand_adapter::UPSTREAM_COMMIT);
-    e.u32(2); // Original module macro2 capture plus opaque expansion marks.
+    e.digest(Digest(lrr_expand_adapter::builtin_attributes::compiler_inert_inventory_identity().0));
+    e.u32(3); // Compiler annotation metadata and original macro dialect/hygiene.
     e.finish()
 }
 fn fault(code: &'static str, message: &str) -> Diagnostic {

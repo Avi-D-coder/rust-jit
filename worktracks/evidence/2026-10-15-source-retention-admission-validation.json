@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T04:45:04.873143+00:00",
+  "claim": "LOCAL-024",
+  "source_member": "0d2a774754bc11ba03b01ddb7e8bc4b1fe1d98d75e1add5039c0f67ef4b17a12",
+  "source_rows": 123,
+  "receipt": "artifacts/macos-first/sol-common-source-retention-admission-validation-v1/RELEASE.json",
+  "receipt_sha256": "87e439b1ef9089916a0979344333ddd4dc630e16222075ac8be83d4ce63124a6",
+  "terminals": {
+    "compile": {
+      "launch": "2a70cb",
+      "session": 98273,
+      "pid": 3727,
+      "terminal": "4b2bdb",
+      "exit": 0,
+      "seconds": 20.502570792043116
+    },
+    "sequence": {
+      "launch": "4bf4dd",
+      "session": 50425,
+      "terminal": "5e23d6",
+      "exit": 0,
+      "scopes": {
+        "admission": {
+          "terminal_sha256": "d9d4c1a9290d6efe4885c26fc81c7f6814421e3882c9bd6bd13a0d180a47e8e6",
+          "cargo_pid": 3844,
+          "exit": 0,
+          "bodies": 1,
+          "passed": 1,
+          "failed": 0,
+          "seconds": 0.11338575003901497
+        },
+        "footprint": {
+          "terminal_sha256": "0f903f5b7344413f4c40af4f968ee386e236bf55bd0bf7a2a18b0655c7e785d9",
+          "cargo_pid": 3848,
+          "exit": 0,
+          "bodies": 1,
+          "passed": 1,
+          "failed": 0,
+          "seconds": 0.10371087497333065
+        },
+        "literal-retention": {
+          "terminal_sha256": "711b3964b07712335fc6fbadfbad61bcc8d0ce9e2261ab4bc7d02a560ab1b990",
+          "cargo_pid": 3852,
+          "exit": 0,
+          "bodies": 1,
+          "passed": 1,
+          "failed": 0,
+          "seconds": 0.10500758298439905
+        },
+        "literal-eviction": {
+          "terminal_sha256": "638265a051e0aec0c399a0e37f1ce326456d39d8763cb77173eb4bd24ef6b443",
+          "cargo_pid": 3857,
+          "exit": 0,
+          "bodies": 1,
+          "passed": 1,
+          "failed": 0,
+          "seconds": 0.10048133396776393
+        },
+        "external-parent": {
+          "terminal_sha256": "b1f52e47aab7f2121872fb8ee68e26ce2be82d30e2a48c598e9bb73d09276108",
+          "cargo_pid": 3861,
+          "exit": 0,
+          "bodies": 1,
+          "passed": 1,
+          "failed": 0,
+          "seconds": 0.10376237501623109
+        },
+        "direct-root": {
+          "terminal_sha256": "e2339a846c7a6738e61a64dd0d387ca4dc315adbafbf115660a232d6805600ca",
+          "cargo_pid": 3865,
+          "exit": 0,
+          "bodies": 1,
+          "passed": 1,
+          "failed": 0,
+          "seconds": 0.10281233402201906
+        },
+        "product-only": {
+          "terminal_sha256": "e596f7f4fb1621153e3fa9c9e3f33aadc3a85b734db88db4583c992ff820379c",
+          "cargo_pid": 3869,
+          "exit": 0,
+          "bodies": 1,
+          "passed": 1,
+          "failed": 0,
+          "seconds": 0.10309945803601295
+        },
+        "cached-root": {
+          "terminal_sha256": "64a4ee2e1df8ff81fa9abdf66fb6273470b46e910d59ac8d67e281577b448f6e",
+          "cargo_pid": 3875,
+          "exit": 0,
+          "bodies": 1,
+          "passed": 1,
+          "failed": 0,
+          "seconds": 0.10266675002640113
+        },
+        "cached-index": {
+          "terminal_sha256": "ad52543064fc402c31cfd1641cec9840f62a1ddf2263c57a9b91f54794f074ad",
+          "cargo_pid": 3885,
+          "exit": 0,
+          "bodies": 1,
+          "passed": 1,
+          "failed": 0,
+          "seconds": 0.10244641697499901
+        }
+      }
+    }
+  },
+  "distinct_component_passes": 9,
+  "new_controls": [
+    "Rejected source retirement registration publishes no successful memo",
+    "Original source retained footprint bound preserves ownership and grants no source publication"
+  ],
+  "existing_regressions": 7,
+  "runtime_contract_passes": 0,
+  "full_fixture_passes": 0,
+  "strict_fullmilestone_cli_unexecuted": true,
+  "warnings_preserved": [
+    "source/retained_footprint.rs110 unused super::* in test module",
+    "Inherited PatternSourcePlan staged_product/staged_owner_for dead_code"
+  ],
+  "test_import_cleanup": "Separate V2 removes only unused cfg(test) import; pending next MacroExport candidate compilation",
+  "source_only_excluded": [
+    "MacroExport transport/compiler annotations/currentness",
+    "Owned local Type/name proof successor"
+  ],
+  "task_completed": false,
+  "guest_jit_allowed": false
+}

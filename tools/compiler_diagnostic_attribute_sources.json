@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "classification": "compiler diagnostic parser registry; diagnostic evidence only, no runtime transform or full diagnostic compatibility claim",
+  "files": [
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/do_not_recommend.rs",
+      "sha256": "adea67e3bece1c8b7a5c79beaf6f60afbe222df4e4395e6426ee2c463a1fea9e",
+      "bytes": 1446
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/mod.rs",
+      "sha256": "acc8e5b77ca6c7b5126117bee3783daacd31c9aa8421d4902e20504787e6b733",
+      "bytes": 27163
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/on_const.rs",
+      "sha256": "ad7bead6d84d69443b7f9cf89fbeb4563be1b6082143c0aad858952bed62a81b",
+      "bytes": 1841
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/on_move.rs",
+      "sha256": "80fe26c612918573b274e4089a7f0a5a39f36b3e727dfa073e5d72a2fc37954d",
+      "bytes": 1603
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/on_type_error.rs",
+      "sha256": "313fc92bcbfa020874f18e98753b696af92fc08d6a5b08ea05b41b72f2d5d299",
+      "bytes": 1632
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/on_unimplemented.rs",
+      "sha256": "4781c64c7116888869f93a7f991d134f9680bb5ff7369d7bc414f7e3116135b0",
+      "bytes": 2058
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/on_unknown.rs",
+      "sha256": "5334b94ac85514fb09b9390e8c4f1291971704737cb3dbd58dbbf41e88934464",
+      "bytes": 1610
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/on_unmatched_args.rs",
+      "sha256": "cf6676320802b7ddedd2727dad122ffe78ea160ff1383cb8b35bbbfda73cd62b",
+      "bytes": 1569
+    },
+    {
+      "path": "compiler/rustc_attr_parsing/src/attributes/diagnostic/opaque.rs",
+      "sha256": "299e21bcc7993cb29157f8c40c6a77792918095ffb96dd52b3baddbee0467567",
+      "bytes": 2205
+    }
+  ]
+}

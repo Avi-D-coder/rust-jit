@@ -27,6 +27,9 @@ fn fault(message: &str) -> Diagnostic {
 pub struct CompileInputCatalog {
     unit: Digest,
     edition: u16,
+    macro_exports: Vec<
+        std::sync::Arc<crate::expand::source_declarative::macro_exports::SourceMacroExportFacet>,
+    >,
     facades: BTreeMap<String, Digest>,
     allocation: Option<Digest>,
     definitions: BTreeMap<Digest, (MacroDefinition, CompileInputDescriptor)>,
@@ -69,6 +72,7 @@ impl CompileInputCatalog {
         Ok(Self {
             unit,
             edition,
+            macro_exports: Vec::new(),
             facades: BTreeMap::new(),
             allocation: None,
             definitions,
@@ -76,6 +80,62 @@ impl CompileInputCatalog {
             value_binding: None,
             primitive_float_methods: None,
         })
+    }
+    /// Retain actual configured declaration facets separately from compiler
+    /// globals and runtime facade bodies. This does not grant source-seal or
+    /// macro-use-prelude completion, and does not rewrite core/std identities.
+    pub fn with_macro_export_facets(
+        mut self,
+        facets: impl IntoIterator<
+            Item = std::sync::Arc<
+                crate::expand::source_declarative::macro_exports::SourceMacroExportFacet,
+            >,
+        >,
+    ) -> Result<Self, Diagnostic> {
+        let mut bytes = self.macro_exports.iter().try_fold(0usize, |bytes, facet| {
+            bytes
+                .checked_add(facet.metadata_bytes())
+                .ok_or_else(|| fault("macro-export facet accounting overflow"))
+        })?;
+        for facet in facets {
+            if self
+                .macro_exports
+                .first()
+                .is_some_and(|old| old.preparation() != facet.preparation())
+            {
+                return Err(fault(
+                    "macro-export facets belong to different preparations",
+                ));
+            }
+            if self.macro_exports.len() >= 256 {
+                return Err(fault("macro-export facet count limit"));
+            }
+            if self.macro_exports.iter().any(|old| {
+                old.source().selection().location_identity()
+                    == facet.source().selection().location_identity()
+            }) {
+                return Err(fault("duplicate macro-export source facet"));
+            }
+            bytes = bytes
+                .checked_add(facet.metadata_bytes())
+                .filter(|n| *n <= 64 * 1024 * 1024)
+                .ok_or_else(|| fault("macro-export facet retained budget"))?;
+            self.macro_exports
+                .try_reserve(1)
+                .map_err(|_| fault("macro-export handle allocation"))?;
+            self.macro_exports.push(facet);
+        }
+        self.macro_exports.sort_by_key(|facet| facet.identity());
+        Ok(self)
+    }
+    pub fn macro_export_facets(
+        &self,
+    ) -> impl Iterator<
+        Item = &std::sync::Arc<
+            crate::expand::source_declarative::macro_exports::SourceMacroExportFacet,
+        >,
+    > {
+        self.macro_exports.iter()
     }
     /// Construct the pinned compiler facets for a captured standalone profile.
     /// This supplies definition facts only, never expansion authority.

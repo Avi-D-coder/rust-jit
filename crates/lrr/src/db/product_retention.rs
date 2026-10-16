@@ -44,9 +44,22 @@ impl RetainedSourceArtifact {
 pub(super) struct SourcePlanPins {
     roots: BTreeMap<usize, RetainedSourceArtifact>,
     retained_bytes: usize,
+    #[cfg(test)]
+    artifact_count_limit: Option<usize>,
 }
 impl SourcePlanPins {
+    #[cfg(test)]
+    pub(super) fn set_test_artifact_limit(&mut self, maximum: usize) {
+        self.artifact_count_limit = Some(maximum.min(MAX_ARTIFACTS));
+    }
+    #[cfg(test)]
+    pub(super) fn registered_artifact_count(&self) -> usize {
+        self.roots.len()
+    }
     pub(super) fn register(&mut self, value: &QueryValue) -> Result<(), Diagnostic> {
+        let maximum = MAX_ARTIFACTS;
+        #[cfg(test)]
+        let maximum = self.artifact_count_limit.unwrap_or(maximum);
         // Preflight all new rows before publishing any. Repeated handles within
         // one recipe do not allocate repeated registry rows.
         let mut new = BTreeSet::new();
@@ -62,7 +75,7 @@ impl SourcePlanPins {
                     }
                 }
                 let count = self.roots.len().checked_add(new.len()).ok_or_else(limit)?;
-                if count > MAX_ARTIFACTS
+                if count > maximum
                     || count
                         .checked_mul(ROW_BYTES)
                         .is_none_or(|n| n > MAX_REGISTRY_BYTES)

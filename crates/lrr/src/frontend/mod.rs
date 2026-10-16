@@ -86,3 +86,6 @@ pub(crate) mod type_name_namespace;
 pub(crate) mod source_types;
 
 pub mod current_module_names;
+
+pub(crate) mod source_body_context;
+pub(crate) mod macro_boundary;
