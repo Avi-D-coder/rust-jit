@@ -54,6 +54,11 @@ pub enum RecipeExit {
     Fault(DiagnosticTemplate),
     /// Reached exhaustion of a match: not compile-time exhaustiveness checking.
     MatchNoArm,
+    /// Roll back the selected pattern alternative and enter its retained retry
+    /// continuation. The source slot stays live and is never evaluated again.
+    PatternRetry {
+        owner: super::pc::NodeId,
+    },
 }
 impl RecipeExit {
     pub fn requires_dispatch_boundary(&self) -> bool {
@@ -160,6 +165,7 @@ fn assign_kind(e: &mut StableEncoder, kind: &super::op::AssignKind) {
 }
 fn hint(e: &mut StableEncoder, h: &HintRecipe) {
     match h {
+        HintRecipe::DefinitionResult => e.u32(8),
         HintRecipe::DefinitionParameter(ordinal) => {
             e.u32(7);
             e.u32(*ordinal);
@@ -200,12 +206,55 @@ fn hint(e: &mut StableEncoder, h: &HintRecipe) {
     }
 }
 impl StableEncode for Recipe {
-    const DOMAIN: &'static str = "lrr/v10/lrir-recipe";
+    const DOMAIN: &'static str = "lrr/v11/lrir-recipe";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         span(e, &self.origin.span);
         e.sequence(&self.origin.expansion_ancestry, |e, d| e.digest(*d));
         e.sequence(&self.operations, |e, op| match op {
+            Op::Pattern { operation } => {
+                use super::op::PatternOperation;
+                e.u32(45);
+                match operation {
+                    PatternOperation::Begin {
+                        owner,
+                        alternative,
+                        source,
+                        retry,
+                    } => {
+                        e.u32(0);
+                        e.u32(owner.0);
+                        e.u32(alternative.0);
+                        e.u32(source.0);
+                        e.record(retry);
+                    }
+                    PatternOperation::StageBinding {
+                        owner,
+                        binding,
+                        source,
+                        writable,
+                    } => {
+                        e.u32(1);
+                        e.u32(owner.0);
+                        e.u32(binding.0);
+                        e.u32(source.0);
+                        e.bool(*writable);
+                    }
+                    PatternOperation::Preview { owner } => {
+                        e.u32(2);
+                        e.u32(owner.0);
+                    }
+                    PatternOperation::Finish { owner, matched } => {
+                        e.u32(3);
+                        e.u32(owner.0);
+                        e.option(matched, |e, slot| e.u32(slot.0));
+                    }
+                    PatternOperation::Rollback { owner } => {
+                        e.u32(4);
+                        e.u32(owner.0);
+                    }
+                }
+            }
             Op::SourceConstant {
                 constant,
                 destination,
@@ -661,6 +710,10 @@ impl StableEncode for Recipe {
                 e.string(&d.message);
             }
             RecipeExit::MatchNoArm => e.u32(7),
+            RecipeExit::PatternRetry { owner } => {
+                e.u32(8);
+                e.u32(owner.0);
+            }
         }
         e.sequence(&self.dependencies, |e, d| e.record(d));
     }
@@ -669,3 +722,6 @@ impl StableEncode for Recipe {
 #[cfg(test)]
 #[path = "definition_numeric_wire_tests.rs"]
 mod definition_numeric_wire_tests;
+#[cfg(test)]
+#[path = "pattern_wire_tests.rs"]
+mod pattern_wire_tests;

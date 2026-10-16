@@ -10,6 +10,8 @@ pub(crate) mod aggregate_copy;
 pub mod constant_instantiation;
 #[path = "cell_construction_cleanup.rs"]
 mod construction_cleanup;
+#[path = "cell_reference_return.rs"]
+mod reference_return;
 #[path = "cell_run_session.rs"]
 mod run_session;
 use super::{
@@ -28,6 +30,7 @@ use super::{
 };
 use crate::core::diagnostic::Diagnostic;
 pub use construction_cleanup::ConstructionCleanupTransfer;
+pub(crate) use reference_return::ReferenceTarget;
 pub(crate) use run_session::StoreSession;
 fn ownership() -> Diagnostic {
     Diagnostic::new(
@@ -742,10 +745,26 @@ impl GuestStore {
         Ok((object_id, storage))
     }
     fn validate_reference_record(&self, reference: &ReferenceRecord) -> Result<(), Diagnostic> {
-        if self.place_stamp(reference.root.cell)? != reference.root {
+        self.validate_reference_target(
+            reference.root,
+            &reference.enclosing,
+            reference.final_cell,
+            reference.target,
+        )
+    }
+    /// The same checked chain serves live leases and retained input-target
+    /// receipts. Endpoint stamps alone cannot certify intermediate ownership.
+    fn validate_reference_target(
+        &self,
+        root: CellStamp,
+        enclosing: &[EnclosingObject],
+        final_cell: CellStamp,
+        target: TypeId,
+    ) -> Result<(), Diagnostic> {
+        if self.place_stamp(root.cell)? != root {
             return Err(lease_fault());
         }
-        match self.cells.get(reference.root.cell)?.owner {
+        match self.cells.get(root.cell)?.owner {
             CellOwner::FrameSlot { frame, .. } => {
                 self.frames.get(frame)?;
             }
@@ -754,8 +773,8 @@ impl GuestStore {
             }
             CellOwner::Field { .. } | CellOwner::Buffer { .. } => return Err(lease_fault()),
         }
-        let mut parent = reference.root.cell;
-        for link in &reference.enclosing {
+        let mut parent = root.cell;
+        for link in enclosing {
             if link.parent.cell != parent || self.place_stamp(parent)? != link.parent {
                 return Err(lease_fault());
             }
@@ -773,9 +792,9 @@ impl GuestStore {
             }
             parent = link.child;
         }
-        if parent != reference.final_cell.cell
-            || self.place_stamp(parent)? != reference.final_cell
-            || self.place_type(parent)? != reference.target
+        if parent != final_cell.cell
+            || self.place_stamp(parent)? != final_cell
+            || self.place_type(parent)? != target
         {
             return Err(lease_fault());
         }
@@ -2494,6 +2513,29 @@ impl GuestStore {
             self.cells.reserve(1, &mut self.budget)?;
         }
         self.tickets.reserve(tickets, &mut self.budget)?;
+        self.budget.check(handles, 0)
+    }
+    /// Admit a pending pattern's whole cell/move-ticket batch before any move.
+    pub(crate) fn preflight_pattern_bindings(&self, count: usize) -> Result<(), Diagnostic> {
+        let handles = u32::try_from(count)
+            .map_err(|_| resource())?
+            .checked_mul(2)
+            .ok_or_else(resource)?;
+        let bytes = self
+            .cells
+            .reservation_bytes(count)?
+            .checked_add(self.tickets.reservation_bytes(count)?)
+            .ok_or_else(resource)?;
+        self.budget.check(handles, bytes)
+    }
+    pub(crate) fn reserve_pattern_bindings(&mut self, count: usize) -> Result<(), Diagnostic> {
+        self.preflight_pattern_bindings(count)?;
+        let handles = u32::try_from(count)
+            .map_err(|_| resource())?
+            .checked_mul(2)
+            .ok_or_else(resource)?;
+        self.cells.reserve(count, &mut self.budget)?;
+        self.tickets.reserve(count, &mut self.budget)?;
         self.budget.check(handles, 0)
     }
     /// Local assignment consumes an RHS ticket, optionally creates an old-value

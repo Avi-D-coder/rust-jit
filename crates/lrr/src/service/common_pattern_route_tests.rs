@@ -235,3 +235,42 @@ fn a_generated_condition_cannot_capture_a_same_spelled_caller_without_its_scope_
         );
     }
 }
+
+#[test]
+fn false_guards_retry_selected_alternatives_without_replaying_the_source() {
+    // Supplemental scalar frontier for unchanged search-via-bindings.rs. Its
+    // nested tuple/binding Cartesian search remains a required stock gap.
+    for edition in [2015, 2018, 2021, 2024] {
+        run(
+            "match {let _=entered();2_i32}{1_i32..=3_i32 | 2_i32 if reject()=>cold(),_=>7_i32}",
+            edition,
+            3,
+            3,
+        );
+        run(
+            "match {let _=entered();true}{true | true if reject()=>cold(),_=>7_i32}",
+            edition,
+            3,
+            2,
+        );
+        run(
+            "match true{_ | _ if reject()=>cold(),_=>7_i32}",
+            edition,
+            2,
+            0,
+        );
+    }
+}
+
+#[test]
+fn conditional_pending_bindings_commit_once_through_the_shared_transaction_owner() {
+    for edition in [2015, 2018, 2021, 2024] {
+        run("if let value=7_i32{value}else{cold()}", edition, 0, 0);
+        run(
+            "if let mut value=6_i32{value+=1_i32;value}else{cold()}",
+            edition,
+            0,
+            1,
+        );
+    }
+}

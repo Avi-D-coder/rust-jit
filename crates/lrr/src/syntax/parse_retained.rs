@@ -259,6 +259,7 @@ impl ParsedFile {
             declaration_grammar: Some(crate::expand::identity::GrammarSlot::Items),
             estimated_bytes,
             token_contexts: None,
+            pinned_hygiene: None,
             retained_syntax: None,
         }
         .with_generated_token_editions(snapshot.origin_records(), &syntax.origins)?;

@@ -88,6 +88,14 @@ pub(crate) fn output_facts(
     let wire = tokens.encode().map_err(|e| error(&e.message))?;
     let tokens = lrr_expand_adapter::token_wire::TokenForest::decode(&wire)
         .map_err(|e| error(&e.message))?;
+    adapter_output_facts(&tokens)
+}
+
+/// Shared pinned conversion for an already validated adapter forest. Parsing
+/// and source indexes retain these facts instead of normalizing them again.
+pub(crate) fn adapter_output_facts(
+    tokens: &lrr_expand_adapter::token_wire::TokenForest,
+) -> Result<crate::frontend::hygiene::HygieneFacts, Diagnostic> {
     let mut store = lrr_expand_adapter::hygiene::HygieneStore::default();
     store
         .import(tokens.contexts())

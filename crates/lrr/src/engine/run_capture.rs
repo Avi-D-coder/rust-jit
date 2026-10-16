@@ -119,6 +119,7 @@ impl RunCapture {
                 | Op::NumericBinary { .. }
                 | Op::NumericUnary { .. }
                 | Op::PrimitiveCast { .. } => {}
+                Op::Pattern { .. } => {}
                 Op::Unsupported(_) => add(&mut facts.unsupported_operation_candidates, 1)?,
             }
         }
@@ -130,6 +131,7 @@ impl RunCapture {
             RecipeExit::Backedge(_)
             | RecipeExit::Call { .. }
             | RecipeExit::Next(_)
+            | RecipeExit::PatternRetry { .. }
             | RecipeExit::Branch { .. } => {}
             RecipeExit::Control(control) => match control {
                 ControlRecipe::Return { .. }

@@ -33,6 +33,9 @@ pub(crate) use receipt::SyntaxRequestReceipt;
 #[path = "assembly_anchors.rs"]
 mod anchors;
 pub use anchors::OriginalDeclarationAnchor;
+#[path = "macro_anchors.rs"]
+mod macro_anchors;
+pub use macro_anchors::MacroDefinitionAnchor;
 #[path = "body_selection.rs"]
 mod body_selection;
 
@@ -79,6 +82,8 @@ pub struct SourceSyntaxAssembly {
     calls: Vec<CallBinding>,
     outputs: Vec<Arc<GeneratedDeclarations>>,
     originals: Vec<OriginalDeclarationAnchor>,
+    macro_definitions: Vec<MacroDefinitionAnchor>,
+    expansion_definitions: BTreeMap<Digest, crate::expand::scopes::MacroDefinition>,
     retained_bytes: usize,
 }
 /// A checked immutable preparation result. Even an empty pending-call set is
@@ -89,6 +94,8 @@ pub struct PreparedSourceSyntax {
     syntax: Arc<SyntaxSnapshot>,
     outputs: Vec<Arc<GeneratedDeclarations>>,
     originals: Vec<OriginalDeclarationAnchor>,
+    macro_definitions: Vec<MacroDefinitionAnchor>,
+    expansion_definitions: BTreeMap<Digest, crate::expand::scopes::MacroDefinition>,
     pending: Vec<Digest>,
     // Only finish_for_body may mint a body-scoped readiness certificate.
     selected_body: Option<Digest>,
@@ -130,6 +137,16 @@ impl PreparedSourceSyntax {
     pub fn original_declarations(&self) -> &[OriginalDeclarationAnchor] {
         &self.originals
     }
+    /// Exact declaration occurrences for the common definition-site resolver.
+    /// These facts do not themselves resolve a name or authorize body entry.
+    pub fn macro_definitions(&self) -> &[MacroDefinitionAnchor] {
+        &self.macro_definitions
+    }
+    pub fn expansion_definitions(
+        &self,
+    ) -> &BTreeMap<Digest, crate::expand::scopes::MacroDefinition> {
+        &self.expansion_definitions
+    }
     pub(crate) fn metadata_excluding_snapshot(&self) -> Result<usize, Diagnostic> {
         let mut bytes = charge(
             std::mem::size_of::<Self>(),
@@ -153,6 +170,8 @@ impl PreparedSourceSyntax {
             bytes = charge(bytes, output.metadata_bytes()?)?;
         }
         bytes = charge(bytes, anchors::metadata(&self.originals)?)?;
+        bytes = charge(bytes, macro_anchors::metadata(&self.macro_definitions)?)?;
+        bytes = charge(bytes, expansion_metadata(self.expansion_definitions.len())?)?;
         Ok(bytes)
     }
 }
@@ -174,8 +193,8 @@ impl SourceSyntaxAssembly {
         {
             return Err(fault("source syntax assembly caller/scan/epoch differs"));
         }
-        let tree = SyntaxAttachment::parse(&provider.owned_forest()?, DeclarationGrammar::Items)
-            .map_err(adapter)?;
+        let forest = provider.owned_forest()?;
+        let tree = SyntaxAttachment::parse(&forest, DeclarationGrammar::Items).map_err(adapter)?;
         let captured = tree.materialize().map_err(adapter)?;
         let producers = scan
             .producers()
@@ -226,11 +245,16 @@ impl SourceSyntaxAssembly {
             return Err(fault("source syntax invocation capture incomplete"));
         }
         let originals = anchors::capture(source, &tree)?;
+        let macro_definitions = macro_anchors::capture(source, &scan, &captured, &forest)?;
+        macro_anchors::validate(&macro_definitions, &captured)?;
         let retained_bytes = charge(
             charge(scan.retained_bytes(), source.prepared_metadata_bytes()?)?,
             anchors::metadata(&originals)?,
         )?;
-        charge_calls(retained_bytes, calls.len())?;
+        charge_calls(
+            charge(retained_bytes, macro_anchors::metadata(&macro_definitions)?)?,
+            calls.len(),
+        )?;
         Ok(Self {
             source: source.share(),
             epoch,
@@ -238,6 +262,8 @@ impl SourceSyntaxAssembly {
             calls,
             outputs: vec![],
             originals,
+            macro_definitions,
+            expansion_definitions: BTreeMap::new(),
             retained_bytes,
         })
     }
@@ -367,6 +393,7 @@ impl SourceSyntaxAssembly {
         }
         .map_err(adapter)?;
         self.originals = anchors::translate(self.originals, edit)?;
+        self.macro_definitions = macro_anchors::translate(self.macro_definitions, edit)?;
         let mut prior = self.calls.into_iter();
         calls.extend(prior.by_ref().take(position));
         prior
@@ -374,7 +401,42 @@ impl SourceSyntaxAssembly {
             .ok_or_else(|| fault("source syntax pending call disappeared"))?;
         calls.extend(replacement);
         calls.extend(prior);
-        verify_calls(&calls, &self.tree.materialize().map_err(adapter)?.calls)?;
+        let after = self.tree.materialize().map_err(adapter)?;
+        verify_calls(&calls, &after.calls)?;
+        macro_anchors::append_generated(
+            &mut self.macro_definitions,
+            &output,
+            &generated,
+            &after,
+            edit,
+        )?;
+        macro_anchors::validate(&self.macro_definitions, &after)?;
+        if let Some(definition) = &receipt.definition {
+            let expansion = key.fingerprint();
+            if self
+                .expansion_definitions
+                .get(&expansion)
+                .is_some_and(|old| old != definition)
+            {
+                return Err(fault("issued expansion definition identity differs"));
+            }
+            expansion_metadata(
+                self.expansion_definitions.len()
+                    + usize::from(!self.expansion_definitions.contains_key(&expansion)),
+            )?;
+            self.expansion_definitions
+                .insert(expansion, definition.clone());
+        }
+        charge_calls(
+            charge(
+                charge(
+                    retained_bytes,
+                    macro_anchors::metadata(&self.macro_definitions)?,
+                )?,
+                expansion_metadata(self.expansion_definitions.len())?,
+            )?,
+            calls.len(),
+        )?;
         self.calls = calls;
         self.retained_bytes = retained_bytes;
         self.outputs.push(output);
@@ -400,9 +462,9 @@ impl SourceSyntaxAssembly {
         self.outputs
             .sort_by_key(|output| output.record().key().fingerprint());
         let mut identity = StableEncoder::new(if selected_body.is_some() {
-            "lrr/v3/prepared-source-syntax/selected-original-body"
+            "lrr/v5/prepared-source-syntax/selected-body-macro-occurrences"
         } else {
-            "lrr/v2/prepared-source-syntax/original-anchors"
+            "lrr/v4/prepared-source-syntax/macro-occurrences"
         });
         if let Some(definition) = selected_body {
             identity.digest(definition);
@@ -423,17 +485,43 @@ impl SourceSyntaxAssembly {
         for anchor in &self.originals {
             anchor.encode(&mut identity);
         }
+        self.macro_definitions
+            .sort_by_key(|anchor| anchor.range().start);
+        identity.u64(self.macro_definitions.len() as u64);
+        for anchor in &self.macro_definitions {
+            anchor.encode(&mut identity);
+        }
+        identity.u64(self.expansion_definitions.len() as u64);
+        for (expansion, definition) in &self.expansion_definitions {
+            identity.digest(*expansion);
+            identity.digest(definition.identity);
+            identity.digest(definition.defining_unit);
+            identity.u16(definition.definition_edition);
+        }
         Ok(PreparedSourceSyntax {
             source: self.source,
             epoch: self.epoch,
             syntax,
             outputs: self.outputs,
             originals: self.originals,
+            macro_definitions: self.macro_definitions,
+            expansion_definitions: self.expansion_definitions,
             pending,
             selected_body,
             identity: identity.finish(),
         })
     }
+}
+fn expansion_metadata(count: usize) -> Result<usize, Diagnostic> {
+    if count > MAX_CALLS {
+        return Err(fault("source expansion definition count limit"));
+    }
+    charge(
+        0,
+        count
+            .checked_mul(256)
+            .ok_or_else(|| fault("source expansion definition metadata overflow"))?,
+    )
 }
 impl CallBinding {
     fn matches_invocation(&self, invocation: Digest) -> bool {

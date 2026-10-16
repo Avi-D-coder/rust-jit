@@ -513,6 +513,16 @@ impl GeneratedDeclarations {
     pub fn tokens(&self) -> &TokenForest {
         &self.tokens
     }
+    pub(crate) fn hygiene_facts(
+        &self,
+    ) -> Result<&crate::frontend::hygiene::HygieneFacts, Diagnostic> {
+        self.parsed.hygiene_facts().map(Arc::as_ref).ok_or_else(|| {
+            fault(
+                "LRR-E-EXPANSION-INPUT",
+                "generated declaration parser hygiene facts absent",
+            )
+        })
+    }
     pub fn epoch(&self) -> u64 {
         self.epoch
     }

@@ -259,8 +259,8 @@ fn definition_numeric_compound_keeps_indexed_rhs_and_entry_checks() {
 }
 #[test]
 fn recipe_schema_separates_definition_context_from_prior_cache_world() {
-    assert_eq!(crate::ir::op::LRIR_RECIPE_SCHEMA, 10);
-    assert_eq!(Recipe::DOMAIN, "lrr/v10/lrir-recipe");
+    assert_eq!(crate::ir::op::LRIR_RECIPE_SCHEMA, 11);
+    assert_eq!(Recipe::DOMAIN, "lrr/v11/lrir-recipe");
     let body = body();
     let recipe = verify(
         draft(
@@ -274,7 +274,7 @@ fn recipe_schema_separates_definition_context_from_prior_cache_world() {
     )
     .unwrap();
     let recipe = recipe.recipe();
-    let mut expected = StableEncoder::new("lrr/v10/lrir-recipe");
+    let mut expected = StableEncoder::new("lrr/v11/lrir-recipe");
     expected.record(&recipe.key);
     expected.record(&recipe.origin.span.body_key);
     expected.u32(recipe.origin.span.relative_start);

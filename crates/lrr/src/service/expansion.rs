@@ -181,6 +181,8 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
         | QueryKey::TypeSchema(_)
         | QueryKey::TypeAlias(_)
         | QueryKey::FunctionSignature(_)
+        | QueryKey::ReferenceHeader(_)
+        | QueryKey::PatternPlan(_)
         | QueryKey::Signature(_)
         | QueryKey::BodyStructure(_)
         | QueryKey::Thunk(_) => {}

@@ -8,7 +8,7 @@ use crate::{
     expand::scopes::MacroName,
     frontend::{scalar_pattern_binding::ScalarPatternBindingAdmission, thunks},
     ir::{
-        op::{HintRecipe, Op, PrimitiveType},
+        op::{HintRecipe, Op, PatternOperation, PrimitiveType},
         pc::{NodeId, PcKey, Phase, SlotId},
         recipe::{Origin, RecipeDraft, RecipeExit, VerifiedRecipe},
     },
@@ -295,24 +295,59 @@ fn context(
         _ => None,
     })
 }
+#[derive(Debug)]
 struct Alternative {
-    pattern: ast::Pat,
     id: NodeId,
+    source_type: Option<PrimitiveType>,
+    empty_binding: bool,
+    wildcard: bool,
+    range: bool,
+    attributed: bool,
+    scalar: Result<patterns::ScalarTestPlan, Diagnostic>,
 }
+#[derive(Debug)]
 struct Arm {
-    syntax: ast::MatchArm,
     guard: Option<NodeId>,
+    missing_guard: bool,
     attributed: bool,
     id: NodeId,
     result: NodeId,
+    binding: Option<NodeId>,
+    empty_binding: bool,
     alternatives: Vec<Alternative>,
 }
-struct Plan {
-    expression: ast::MatchExpr,
+#[derive(Debug, Clone, Copy)]
+enum Selection {
+    Arm(usize),
+    Alternative(usize, usize),
+}
+#[derive(Debug)]
+pub(super) struct Plan {
     id: NodeId,
     source: NodeId,
     ty: HintRecipe,
     arms: Vec<Arm>,
+    return_pc: PcKey,
+    source_phase: u16,
+    selections: Vec<(NodeId, Selection)>,
+    continuations: Vec<(u16, usize, bool)>,
+    bytes: usize,
+}
+impl Plan {
+    pub(super) fn metadata_bytes(&self) -> usize {
+        self.bytes
+    }
+    pub(super) fn requires_binding_admission(&self, key: &PcKey) -> bool {
+        matches!(Phase::from_code(key.phase), Phase::Entry | Phase::Commit)
+            && matches!(self.selected(NodeId(key.node)), Some(Selection::Alternative(arm, alternative))
+                if self.arms[arm].binding == Some(self.arms[arm].alternatives[alternative].id))
+    }
+    fn selected(&self, node: NodeId) -> Option<Selection> {
+        self.selections
+            .binary_search_by_key(&node, |row| row.0)
+            .ok()
+            .map(|i| self.selections[i].1)
+    }
 }
 type IndexRows = Vec<((u32, u32, u8), NodeId)>;
 fn tag(role: NodeRole) -> u8 {
@@ -438,13 +473,30 @@ fn alternatives(
                     .ok_or_else(limit)?;
                 let id = identity(rows, body, pattern.syntax(), 2)?;
                 output.try_reserve(1).map_err(|_| limit())?;
-                output.push(Alternative { pattern, id });
+                output.push(Alternative {
+                    id,
+                    source_type: pattern_type(&pattern),
+                    empty_binding: matches!(
+                        pattern,
+                        ast::Pat::LiteralPat(_)
+                            | ast::Pat::WildcardPat(_)
+                            | ast::Pat::RangePat(_)
+                            | ast::Pat::PathPat(_)
+                    ),
+                    wildcard: matches!(pattern, ast::Pat::WildcardPat(_)),
+                    range: matches!(pattern, ast::Pat::RangePat(_)),
+                    attributed: pattern
+                        .syntax()
+                        .children()
+                        .any(|n| ast::Attr::can_cast(n.kind())),
+                    scalar: patterns::ScalarTestPlan::from_source(&pattern),
+                });
             }
         }
     }
     Ok(Some(output))
 }
-fn plan(
+pub(super) fn plan(
     parsed: &ParsedFile,
     index: &BodyIndex,
     body: &BodyHandle,
@@ -516,7 +568,7 @@ fn plan(
             return Ok(None);
         }
         if expected.is_none() {
-            expected = alternatives.iter().find_map(|a| pattern_type(&a.pattern))
+            expected = alternatives.iter().find_map(|a| a.source_type)
         }
         let Some(result) = syntax.expr() else {
             return Ok(None);
@@ -526,13 +578,31 @@ fn plan(
             .and_then(|guard| guard.condition())
             .map(|guard| identity(&rows, body, guard.syntax(), 0))
             .transpose()?;
+        let binding = if !attributed && alternatives.len() == 1 {
+            syntax.pat().and_then(|root| {
+                let header =
+                    patterns::IrrefutablePattern::from_source(&root, parsed.edition).ok()??;
+                let binding = header.binding?;
+                if header.writable || binding.name().is_none() {
+                    return None;
+                }
+                let id = identity(&rows, body, binding.syntax(), 2).ok()?;
+                (id == alternatives[0].id).then_some(id)
+            })
+        } else {
+            None
+        };
         let arm = Arm {
             guard,
+            missing_guard: syntax.guard().is_some() && guard.is_none(),
             attributed,
+            binding,
+            empty_binding: alternatives
+                .iter()
+                .all(|alternative| alternative.empty_binding),
             id: identity(&rows, body, syntax.syntax(), 1)?,
             result: identity(&rows, body, result.syntax(), 0)?,
             alternatives,
-            syntax,
         };
         arms.try_reserve(1).map_err(|_| limit())?;
         arms.push(arm);
@@ -547,46 +617,102 @@ fn plan(
     } else {
         return Ok(None);
     };
+    let count = arms.len().checked_add(total).ok_or_else(limit)?;
+    let row_bytes = count
+        .checked_mul(std::mem::size_of::<(NodeId, Selection)>())
+        .and_then(|n| {
+            arms.len()
+                .checked_mul(2 * std::mem::size_of::<(u16, usize, bool)>())
+                .and_then(|m| n.checked_add(m))
+        })
+        .ok_or_else(limit)?;
+    bytes
+        .checked_add(row_bytes)
+        .filter(|n| *n <= 32 * 1024 * 1024)
+        .ok_or_else(limit)?;
+    let mut selections = Vec::new();
+    selections.try_reserve_exact(count).map_err(|_| limit())?;
+    let mut continuations = Vec::new();
+    continuations
+        .try_reserve_exact(arms.len().checked_mul(2).ok_or_else(limit)?)
+        .map_err(|_| limit())?;
+    for (i, arm) in arms.iter().enumerate() {
+        selections.push((arm.id, Selection::Arm(i)));
+        for (j, alternative) in arm.alternatives.iter().enumerate() {
+            selections.push((alternative.id, Selection::Alternative(i, j)));
+        }
+        if let Some(guard) = arm.guard {
+            continuations.push((operand(index, id, guard)?.code()?, i, true));
+        }
+        continuations.push((operand(index, id, arm.result)?.code()?, i, false));
+    }
+    selections.sort_unstable_by_key(|row| row.0);
+    continuations.sort_unstable_by_key(|row| row.0);
+    if selections.windows(2).any(|rows| rows[0].0 == rows[1].0)
+        || continuations.windows(2).any(|rows| rows[0].0 == rows[1].0)
+    {
+        return Err(error("pattern retained phase identity ambiguous"));
+    }
+    let mut metadata = std::mem::size_of::<Plan>()
+        .checked_add(
+            arms.capacity()
+                .checked_mul(std::mem::size_of::<Arm>())
+                .ok_or_else(limit)?,
+        )
+        .and_then(|n| {
+            n.checked_add(
+                selections
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<(NodeId, Selection)>())?,
+            )
+        })
+        .and_then(|n| {
+            n.checked_add(continuations.capacity().checked_mul(std::mem::size_of::<(
+                u16,
+                usize,
+                bool,
+            )>())?)
+        })
+        .ok_or_else(limit)?;
+    for arm in &arms {
+        metadata = metadata
+            .checked_add(
+                arm.alternatives
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<Alternative>())
+                    .ok_or_else(limit)?,
+            )
+            .ok_or_else(limit)?;
+        for alternative in &arm.alternatives {
+            if let Err(diagnostic) = &alternative.scalar {
+                metadata = metadata
+                    .checked_add(diagnostic.heap_bytes().ok_or_else(limit)?)
+                    .ok_or_else(limit)?;
+            }
+        }
+    }
+    if metadata > 32 * 1024 * 1024 {
+        return Err(limit());
+    }
     Ok(Some(Plan {
-        expression,
+        return_pc: return_pc(index, body, expression.syntax())?,
+        bytes: metadata,
         id,
         source: source_id,
         ty,
         arms,
+        selections,
+        continuations,
+        source_phase: operand(index, id, source_id)?.code()?,
     }))
 }
+
 fn empty_binding_header(arm: &Arm) -> bool {
-    arm.alternatives.iter().all(|a| {
-        matches!(
-            a.pattern,
-            ast::Pat::LiteralPat(_)
-                | ast::Pat::WildcardPat(_)
-                | ast::Pat::RangePat(_)
-                | ast::Pat::PathPat(_)
-        )
-    })
+    arm.empty_binding
 }
-/// Shape only. A name becomes a binding only after reached namespace admission.
-/// Do not flatten an or/parenthesized binding into this deliberately narrow lane.
-fn plain_binding_header(arm: &Arm) -> Option<NodeId> {
-    let ast::Pat::IdentPat(pattern) = arm.syntax.pat()? else {
-        return None;
-    };
-    if arm.attributed
-        || arm.alternatives.len() != 1
-        || pattern.ref_token().is_some()
-        || pattern.mut_token().is_some()
-        || pattern.at_token().is_some()
-        || pattern.name().is_none()
-        || pattern
-            .syntax()
-            .children()
-            .any(|node| ast::Attr::can_cast(node.kind()))
-        || arm.alternatives[0].pattern.syntax() != pattern.syntax()
-    {
-        return None;
-    }
-    Some(arm.alternatives[0].id)
+/// Structural header only; the reached ordinary namespace proof remains required.
+fn plain_binding_header(_parsed: &ParsedFile, arm: &Arm) -> Option<NodeId> {
+    arm.binding
 }
 fn binding_draft(
     index: &BodyIndex,
@@ -646,6 +772,7 @@ fn operand(index: &BodyIndex, owner: NodeId, child: NodeId) -> Result<Phase, Dia
         .ok_or_else(|| error("match result is not its structural operand"))?;
     Ok(Phase::Operand(u16::try_from(n).map_err(|_| limit())?))
 }
+#[cfg(test)]
 pub(super) fn prepare(
     parsed: &ParsedFile,
     body: &BodyHandle,
@@ -653,37 +780,21 @@ pub(super) fn prepare(
     key: &PcKey,
     syntax: SyntaxNode,
 ) -> Result<VerifiedRecipe, Diagnostic> {
-    prepare_inner(parsed, body, index, key, syntax, None)
+    let retained = plan(parsed, index, body, &syntax)?;
+    prepare_inner(parsed, body, index, key, retained.as_ref(), None)
 }
-pub(super) fn prepare_binding(
+pub(super) fn prepare_inner(
     parsed: &ParsedFile,
     body: &BodyHandle,
     index: &BodyIndex,
     key: &PcKey,
-    syntax: SyntaxNode,
-    admission: &ScalarPatternBindingAdmission,
-) -> Result<VerifiedRecipe, Diagnostic> {
-    if syntax.kind() != SyntaxKind::IDENT_PAT
-        || !matches!(Phase::from_code(key.phase), Phase::Entry | Phase::Commit)
-    {
-        return Err(error(
-            "binding admission requires its identifier pattern entry/commit",
-        ));
-    }
-    prepare_inner(parsed, body, index, key, syntax, Some(admission))
-}
-fn prepare_inner(
-    parsed: &ParsedFile,
-    body: &BodyHandle,
-    index: &BodyIndex,
-    key: &PcKey,
-    syntax: SyntaxNode,
+    retained: Option<&Plan>,
     admission: Option<&ScalarPatternBindingAdmission>,
 ) -> Result<VerifiedRecipe, Diagnostic> {
     let fallback = index.pc(NodeId(key.node), Phase::Exit)?;
     let unsupported =
         |message: &str| thunks::unsupported(index, key.clone(), message.into(), fallback.clone());
-    let Some(plan) = plan(parsed, index, body, &syntax)? else {
+    let Some(plan) = retained else {
         return unsupported(
             "closed scalar match requires supported zero-binding patterns and source-proven primitive context",
         );
@@ -710,7 +821,7 @@ fn prepare_inner(
         if phase == Phase::Exit {
             return draft(index, key, vec![], RecipeExit::MatchNoArm);
         }
-        if phase == operand(index, plan.id, plan.source)? {
+        if key.phase == plan.source_phase {
             let next = plan.arms.first().map(|a| a.id).unwrap_or(plan.id);
             let next_phase = if plan.arms.is_empty() {
                 Phase::Exit
@@ -724,58 +835,57 @@ fn prepare_inner(
                 RecipeExit::Next(index.pc(next, next_phase)?),
             );
         }
-        for arm in &plan.arms {
-            if let Some(guard) = arm.guard
-                && phase == operand(index, plan.id, guard)?
-            {
-                if arm.alternatives.len() != 1 {
-                    return unsupported(
-                        "guarded alternative continuation requires typed progress state",
-                    );
-                }
+        if let Ok(row) = plan
+            .continuations
+            .binary_search_by_key(&key.phase, |row| row.0)
+        {
+            let (_, arm_ordinal, is_guard) = plan.continuations[row];
+            let arm = &plan.arms[arm_ordinal];
+            if is_guard {
+                let guard = arm
+                    .guard
+                    .ok_or_else(|| error("prepared guard continuation absent"))?;
                 let guard_scope = index.nodes()[arm.id.0 as usize]
                     .guard_scope
                     .ok_or_else(|| error("indexed match guard scope absent"))?;
-                let guard_value = value(index, guard)?;
                 return draft(
                     index,
                     key,
                     vec![Op::ScopeLeave { scope: guard_scope }],
                     RecipeExit::Branch {
-                        condition: guard_value,
+                        condition: value(index, guard)?,
                         yes: index.pc(arm.id, Phase::Commit)?,
                         no: index.pc(arm.id, Phase::Exit)?,
                     },
                 );
             }
-            if phase == operand(index, plan.id, arm.result)? {
-                return draft(
-                    index,
-                    key,
-                    vec![
-                        Op::ResultTransfer {
-                            source: value(index, arm.result)?,
-                            destination,
-                        },
-                        Op::ScopeLeave {
-                            scope: index.nodes()[arm.id.0 as usize].scope,
-                        },
-                        Op::Discard { source },
-                    ],
-                    RecipeExit::Next(return_pc(index, body, plan.expression.syntax())?),
-                );
-            }
+            return draft(
+                index,
+                key,
+                vec![
+                    Op::ResultTransfer {
+                        source: value(index, arm.result)?,
+                        destination,
+                    },
+                    Op::ScopeLeave {
+                        scope: index.nodes()[arm.id.0 as usize].scope,
+                    },
+                    Op::Discard { source },
+                ],
+                RecipeExit::Next(plan.return_pc.clone()),
+            );
         }
         return unsupported("invalid closed scalar match phase");
     }
-    if let Some(arm) = plan.arms.iter().find(|a| a.id.0 == key.node) {
+    if let Some(Selection::Arm(ordinal)) = plan.selected(NodeId(key.node)) {
+        let arm = &plan.arms[ordinal];
         if arm.attributed {
             return unsupported("reached match arm attributes require macro integration");
         }
         // Empty headers and one plain identifier may route structurally. Only
         // the reached pattern proof can establish that identifier is a binding;
         // range/constant semantics remain alternative-local.
-        if !empty_binding_header(arm) && plain_binding_header(arm).is_none() {
+        if !empty_binding_header(arm) && plain_binding_header(parsed, arm).is_none() {
             return unsupported(
                 "reached alternative binding header requires transactional pattern integration",
             );
@@ -791,59 +901,47 @@ fn prepare_inner(
                 let Some(guard) = arm.guard else {
                     return unsupported("unguarded arm has no guard continuation phase");
                 };
-                if arm.alternatives.len() != 1 {
-                    return unsupported(
-                        "guarded alternative continuation requires typed progress state",
-                    );
-                }
                 let guard_value = value(index, guard)?;
                 let mut ops = vec![Op::Discard {
                     source: guard_value,
                 }];
-                let next = if phase == Phase::Commit {
+                let exit = if phase == Phase::Commit {
+                    ops.push(Op::Pattern {
+                        operation: PatternOperation::Finish {
+                            owner: plan.id,
+                            matched: None,
+                        },
+                    });
                     ops.push(Op::NumericHint {
                         parent: destination,
                         child: value(index, arm.result)?,
                         left: None,
                         operator: None,
                     });
-                    index.pc(arm.result, Phase::Entry)?
+                    RecipeExit::Next(index.pc(arm.result, Phase::Entry)?)
                 } else {
                     ops.push(Op::ScopeLeave {
                         scope: index.nodes()[arm.id.0 as usize].scope,
                     });
-                    let ordinal = plan
-                        .arms
-                        .iter()
-                        .position(|a| a.id == arm.id)
-                        .ok_or_else(|| error("guard arm ordinal absent"))?;
-                    match plan.arms.get(ordinal + 1) {
-                        Some(next) => index.pc(next.id, Phase::Entry)?,
-                        None => index.pc(plan.id, Phase::Exit)?,
-                    }
+                    RecipeExit::PatternRetry { owner: plan.id }
                 };
-                draft(index, key, ops, RecipeExit::Next(next))
+                draft(index, key, ops, exit)
             }
             _ => unsupported("invalid guarded arm continuation phase"),
         };
     }
-    let Some((arm_ordinal, alternative_ordinal)) =
-        plan.arms.iter().enumerate().find_map(|(i, a)| {
-            a.alternatives
-                .iter()
-                .position(|p| p.id.0 == key.node)
-                .map(|j| (i, j))
-        })
+    let Some(Selection::Alternative(arm_ordinal, alternative_ordinal)) =
+        plan.selected(NodeId(key.node))
     else {
         return unsupported("match alternative is disabled or outside selected source");
     };
     let arm = &plan.arms[arm_ordinal];
-    let binding = plain_binding_header(arm);
+    let binding = plain_binding_header(parsed, arm);
     if arm.attributed || (!empty_binding_header(arm) && binding.is_none()) {
         return unsupported("reached alternative header requires macro/binding integration");
     }
     let alternative = &arm.alternatives[alternative_ordinal];
-    let wildcard = matches!(alternative.pattern, ast::Pat::WildcardPat(_));
+    let wildcard = alternative.wildcard;
     let binding_admission = if let Some(binding) = binding {
         if binding != alternative.id || !matches!(phase, Phase::Entry | Phase::Commit) {
             return unsupported("plain binding pattern requires its exact entry/commit phase");
@@ -858,17 +956,27 @@ fn prepare_inner(
     } else {
         None
     };
-    if alternative
-        .pattern
-        .syntax()
-        .children()
-        .any(|n| ast::Attr::can_cast(n.kind()))
-    {
+    if alternative.attributed {
         return unsupported("reached alternative attributes require macro integration");
     }
-    let is_range = matches!(alternative.pattern, ast::Pat::RangePat(_));
+    let retry = if let Some(next) = arm.alternatives.get(alternative_ordinal + 1) {
+        index.pc(next.id, Phase::Entry)?
+    } else if let Some(next) = plan.arms.get(arm_ordinal + 1) {
+        index.pc(next.id, Phase::Entry)?
+    } else {
+        index.pc(plan.id, Phase::Exit)?
+    };
+    let begin = || Op::Pattern {
+        operation: PatternOperation::Begin {
+            owner: plan.id,
+            alternative: alternative.id,
+            source,
+            retry: retry.clone(),
+        },
+    };
+    let is_range = alternative.range;
     let scalar_test = if !wildcard && binding.is_none() {
-        match patterns::ScalarTestPlan::from_source(&alternative.pattern) {
+        match &alternative.scalar {
             Ok(test) => Some(test),
             Err(error) if error.code == "LRR-E-UNSUPPORTED" => {
                 return unsupported(&error.message);
@@ -891,9 +999,9 @@ fn prepare_inner(
                 return unsupported("non-range scalar pattern has no upper phase");
             }
             let comparison = match if upper {
-                scalar_test.upper(body, key)
+                scalar_test.upper(parsed, body, key)
             } else {
-                scalar_test.first(body, key)
+                scalar_test.first(parsed, body, key)
             } {
                 Ok(comparison) => comparison,
                 Err(error) if error.code == "LRR-E-UNSUPPORTED" => {
@@ -903,10 +1011,11 @@ fn prepare_inner(
             };
             let upper_pending = comparison.upper_pending;
             let mut ops = Vec::new();
-            ops.try_reserve_exact(if upper { 4 } else { 3 })
-                .map_err(|_| limit())?;
+            ops.try_reserve_exact(4).map_err(|_| limit())?;
             if upper {
                 ops.push(Op::Discard { source: test });
+            } else {
+                ops.push(begin());
             }
             ops.extend(comparison.operations(source, expected, test, &plan.ty));
             draft(
@@ -930,24 +1039,19 @@ fn prepare_inner(
         Phase::Entry if binding.is_some() => binding_draft(
             index,
             key,
-            vec![],
+            vec![begin()],
             RecipeExit::Next(index.pc(alternative.id, Phase::Commit)?),
             binding_admission.ok_or_else(|| error("binding admission disappeared"))?,
         ),
         Phase::Entry if wildcard => draft(
             index,
             key,
-            vec![],
+            vec![begin()],
             RecipeExit::Next(index.pc(alternative.id, Phase::Commit)?),
         ),
         Phase::Commit => {
-            if arm.syntax.guard().is_some() && arm.guard.is_none() {
+            if arm.missing_guard {
                 return unsupported("matched guard condition syntax absent");
-            }
-            if arm.guard.is_some() && arm.alternatives.len() != 1 {
-                return unsupported(
-                    "guarded alternative continuation requires typed progress state",
-                );
             }
             let mut ops = Vec::new();
             if !wildcard && binding.is_none() {
@@ -970,21 +1074,38 @@ fn prepare_inner(
                         place,
                         destination: expected,
                     },
-                    Op::BindLocal {
-                        binding,
-                        source: expected,
-                        hint: HintRecipe::None,
-                        writable: false,
+                    Op::Pattern {
+                        operation: PatternOperation::StageBinding {
+                            owner: plan.id,
+                            binding,
+                            source: expected,
+                            writable: false,
+                        },
                     },
                 ]);
             }
             let next = if let Some(guard) = arm.guard {
+                ops.push(Op::Pattern {
+                    operation: PatternOperation::Preview { owner: plan.id },
+                });
+                if binding.is_some() {
+                    // The generic preview copied its pending input without
+                    // consuming it. This separate ReadPlace scratch now retires
+                    // normally; the actual scrutinee remains live for retry.
+                    ops.push(Op::Discard { source: expected });
+                }
                 ops.push(Op::SetHint {
                     child: value(index, guard)?,
                     hint: HintRecipe::Primitive(PrimitiveType::Bool),
                 });
                 index.pc(guard, Phase::Entry)?
             } else {
+                ops.push(Op::Pattern {
+                    operation: PatternOperation::Finish {
+                        owner: plan.id,
+                        matched: None,
+                    },
+                });
                 ops.push(Op::NumericHint {
                     parent: destination,
                     child: value(index, arm.result)?,
@@ -999,21 +1120,17 @@ fn prepare_inner(
                 draft(index, key, ops, RecipeExit::Next(next))
             }
         }
-        Phase::Exit if !wildcard && binding.is_none() => {
-            let next = if let Some(next) = arm.alternatives.get(alternative_ordinal + 1) {
-                index.pc(next.id, Phase::Entry)?
-            } else if let Some(next) = plan.arms.get(arm_ordinal + 1) {
-                index.pc(next.id, Phase::Entry)?
-            } else {
-                index.pc(plan.id, Phase::Exit)?
-            };
-            draft(
-                index,
-                key,
-                vec![Op::Discard { source: test }],
-                RecipeExit::Next(next),
-            )
-        }
+        Phase::Exit if !wildcard && binding.is_none() => draft(
+            index,
+            key,
+            vec![
+                Op::Pattern {
+                    operation: PatternOperation::Rollback { owner: plan.id },
+                },
+                Op::Discard { source: test },
+            ],
+            RecipeExit::Next(retry),
+        ),
         _ => unsupported("invalid closed scalar alternative phase"),
     }
 }

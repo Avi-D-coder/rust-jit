@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T00:04:16.616131+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T024",
+    "T063",
+    "M014",
+    "M017"
+  ],
+  "state": "source_frozen_uncompiled_unexecuted",
+  "source_baseline": "53ab9d3f97eb4e963b65f24d39c0df1ea9e0669e",
+  "source_packet": "artifacts/macos-first/common-definition-site-v2/SOURCE.json",
+  "source_packet_sha256": "14eb5de66b6e3aaefb0575f394a79c72d89daa97310c44e543aacaa2e5973fcd",
+  "source_files": [
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly.rs",
+      "sha256": "d378901a7d9c98396710f9c7ab6d123f5c227a81a21010c212895410d70c79e8"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/assembly_tests.rs",
+      "sha256": "8e0191f8da4555322c43c76aa4d77155b55acfcad5207791befe9e0c11557e85"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/macro_anchors.rs",
+      "sha256": "08c6f8be99091d51e4eaa998a80708adbb5e325e71c65aaa9fa1f16f3d5eb64d"
+    },
+    {
+      "path": "crates/lrr/src/expand/source_declarative/syntax_receipt.rs",
+      "sha256": "d3c32e10fd2f82a8a312a2bc79b81dfd61ef431bd812fdc913aeceb66e5b8053"
+    }
+  ],
+  "scope": "Independent exact4 root source identity prerequisite: actual original/generated source macro definition occurrences through checked SyntaxEdit, actual issued expansion -> definition owner/edition map, identity encoding and bounded metadata; existing unchanged stock attachment controls extended and one LRR repeated-origin authority control. Does not yet join ordinary local lookup to LocalScopes and does not fix valid definition-site witness or remove any legacy macro evaluator. UNCOMPILED/UNEXECUTED. Excludes worker transaction/reference successor code and their IR/VM/runtime dependencies. V2 source-only mechanical refinement uses the existing strictly sorted TokenForest span table for binary original-name lookup, removing new duplicate span-map allocation; v1 was never run. All other source/authority boundaries unchanged.",
+  "architecture_review": "worktracks/08-macros-editions/common-definition-site-handoff.md",
+  "validation": {
+    "state": "queued_after_current_full_milestone_and_frozen_pattern_reference",
+    "sole_agent": "/root/edition_macro_logic",
+    "terminal": null
+  },
+  "acceptance": {
+    "definition_site_execution_witness_passed": false,
+    "ordinary_local_scope_join_implemented": false,
+    "new_configured_upstream_runtime_contract_passes": 0,
+    "new_full_fixture_passes": 0,
+    "task_completed": false,
+    "all_eight_shortcuts_removed": false,
+    "guest_jit_allowed": false
+  },
+  "supersedes_unexecuted_packet": "artifacts/macos-first/common-definition-site-v1/SOURCE.json"
+}

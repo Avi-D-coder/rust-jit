@@ -130,7 +130,12 @@ fn original_signed_if_let_range_component_preserves_bounds_and_lazy_cleanup_all_
         let exit = recipe(&parsed, &body, &index, &condition, Phase::Exit);
         assert!(matches!(
             &exit.recipe().operations[..],
-            [Op::Discard { .. }]
+            [
+                Op::Pattern {
+                    operation: PatternOperation::Finish { .. }
+                },
+                Op::Discard { .. }
+            ]
         ));
     }
 }
@@ -189,7 +194,12 @@ fn upper_source_frontier_is_deferred_and_parameter_source_is_checked_before_owni
     let exit = recipe(&parsed, &body, &index, &condition, Phase::Exit);
     assert!(matches!(
         &exit.recipe().operations[..],
-        [Op::Discard { .. }]
+        [
+            Op::Pattern {
+                operation: PatternOperation::Finish { .. }
+            },
+            Op::Discard { .. }
+        ]
     ));
     for text in [
         "type i32=bool;fn main(){let x:i32=true;if let 1..=3=x{}}",

@@ -28,6 +28,7 @@ pub mod attributes;
 pub mod body_index;
 
 mod thunks;
+pub use thunks::pattern_plan;
 pub(crate) use thunks::runtime_macro_numeric_context::MacroNumericSite;
 
 pub mod signatures;
@@ -83,6 +84,7 @@ pub(crate) mod original_inert;
 pub(crate) mod scalar_pattern_binding;
 
 pub(crate) mod closed_reference_signatures;
+pub use closed_reference_signatures::ReferenceHeaderPlan;
 
 pub(crate) mod primitive_type_names;
 

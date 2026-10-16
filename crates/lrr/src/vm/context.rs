@@ -50,25 +50,32 @@ impl GenericEnv {
         // The declaration owner remains byte-exact. A deferred written
         // result may have a separately normalized primitive contract, just
         // as named alias parameters have resolved source templates.
-        let result_matches = match signature.result_symbolic.as_ref() {
-            Some(source) => contracts.source_result.as_ref() == Some(source),
-            None => match (
-                contracts.source_result.as_ref(),
-                contracts.result_descriptor,
-            ) {
-                (None, None) => true,
-                (Some(TyTerm::Primitive(primitive)), Some(descriptor)) => {
-                    primitive_runtime_id(*primitive)? == descriptor
-                        && contracts
-                            .normalized_deferred_return
-                            .as_ref()
-                            .is_some_and(|proof| {
-                                proof.validate_packet(signature, contracts).is_ok()
-                            })
+        let reference_result = contracts
+            .closed_references
+            .as_ref()
+            .filter(|proof| proof.has_result());
+        let result_matches =
+            if let Some(proof) = reference_result {
+                proof.validate_result_packet(signature, contracts)?;
+                true
+            } else {
+                match signature.result_symbolic.as_ref() {
+                    Some(source) => contracts.source_result.as_ref() == Some(source),
+                    None => match (
+                        contracts.source_result.as_ref(),
+                        contracts.result_descriptor,
+                    ) {
+                        (None, None) => true,
+                        (Some(TyTerm::Primitive(primitive)), Some(descriptor)) => {
+                            primitive_runtime_id(*primitive)? == descriptor
+                                && contracts.normalized_deferred_return.as_ref().is_some_and(
+                                    |proof| proof.validate_packet(signature, contracts).is_ok(),
+                                )
+                        }
+                        _ => false,
+                    },
                 }
-                _ => false,
-            },
-        };
+            };
         if signature.definition != contracts.definition
             || signature.parameters.len() != contracts.source_parameters.len()
             || signature.parameters.len() != contracts.parameter_descriptors.len()
@@ -287,6 +294,15 @@ impl GenericEnv {
     /// Readonly retained authority; no mutable table or source constructor.
     pub fn closed_reference_contracts(&self) -> Option<&ClosedReferenceContracts> {
         self.closed_references.as_deref()
+    }
+    /// Source-selected result, captured with the current declaration and actual
+    /// input reference target. No query or runtime descriptor invents this view.
+    pub(crate) fn reference_result_source(&self) -> Result<&TyTerm, Diagnostic> {
+        self.closed_references
+            .as_ref()
+            .filter(|proof| proof.has_result())
+            .and_then(|proof| proof.result_source())
+            .ok_or_else(|| invalid("reference result requires its admitted source certificate"))
     }
     pub fn retained_bytes(&self) -> usize {
         self.bytes

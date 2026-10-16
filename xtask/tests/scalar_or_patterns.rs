@@ -13,7 +13,7 @@ use lrr::{
     },
     engine::run::{RunMachine, RunPoll, ValueSummary},
     ir::{
-        op::{DecodedLiteral, HintRecipe, Op, PrimitiveType},
+        op::{DecodedLiteral, HintRecipe, NumericBinary, Op, PatternOperation, PrimitiveType},
         pc::Phase,
         recipe::RecipeExit,
     },
@@ -267,22 +267,31 @@ fn disclosed_original_pattern_adapters_preserve_order_single_source_and_local_co
     );
 }
 #[test]
-fn reached_or_binding_range_and_guard_frontiers_refuse_before_compare_or_commit() {
-    for (text, marker, phase) in [
+fn reached_or_range_and_guard_phases_preserve_laziness_and_binding_refusal() {
+    #[derive(Debug)]
+    enum Contract {
+        Range,
+        UnresolvedBinding,
+        Guard,
+    }
+    for (text, marker, phase, contract) in [
         (
             "fn value(source:i8)->bool{match source{0 | 0..=1=>true,_=>false}}fn main(){}",
             "0..=1",
             Phase::Entry,
+            Contract::Range,
         ),
         (
             "fn value(source:bool)->bool{match source{true | other=>true,_=>false}}fn main(){}",
             "true | other=>true,",
             Phase::Entry,
+            Contract::UnresolvedBinding,
         ),
         (
             "fn value(source:bool)->bool{match source{true | false if unknown()=>true,_=>false}}fn main(){}",
             "true",
             Phase::Commit,
+            Contract::Guard,
         ),
     ] {
         let (mut db, view) = source(text, 2024);
@@ -328,21 +337,76 @@ fn reached_or_binding_range_and_guard_frontiers_refuse_before_compare_or_commit(
         let QueryValue::Thunk(recipe) = fetched.value.as_ref() else {
             panic!("unsupported reached recipe")
         };
+        let operations = &recipe.recipe().operations;
+        match contract {
+            Contract::UnresolvedBinding => {
+                assert!(operations.iter().any(|op| matches!(op, Op::Unsupported(_))));
+                assert!(!operations.iter().any(|op| matches!(
+                    op,
+                    Op::NumericBinary { .. } | Op::Literal { .. } | Op::ScopeEnter { .. }
+                )));
+            }
+            Contract::Range => {
+                assert!(!operations.iter().any(|op| matches!(op, Op::Unsupported(_))));
+                assert!(operations.iter().any(|op| matches!(
+                    op,
+                    Op::Pattern { operation: PatternOperation::Begin { alternative, .. } }
+                        if alternative == &node.id
+                )));
+                assert!(operations.iter().any(|op| matches!(op, Op::Literal { .. })));
+                assert!(operations.iter().any(|op| matches!(
+                    op,
+                    Op::NumericBinary {
+                        operator: NumericBinary::Ge,
+                        ..
+                    }
+                )));
+                assert!(
+                    !operations
+                        .iter()
+                        .any(|op| matches!(op, Op::ScopeEnter { .. }))
+                );
+                let RecipeExit::Branch { yes, no, .. } = &recipe.recipe().exit else {
+                    panic!("range lower test must defer its upper comparison");
+                };
+                assert_eq!(*yes, index.pc(node.id, Phase::Operand(0)).unwrap());
+                assert_eq!(*no, index.pc(node.id, Phase::Exit).unwrap());
+            }
+            Contract::Guard => {
+                assert!(!operations.iter().any(|op| matches!(op, Op::Unsupported(_))));
+                assert!(operations.iter().any(|op| matches!(
+                    op,
+                    Op::Pattern {
+                        operation: PatternOperation::Preview { .. }
+                    }
+                )));
+                assert!(
+                    operations
+                        .iter()
+                        .any(|op| matches!(op, Op::ScopeEnter { .. }))
+                );
+                assert!(
+                    !operations
+                        .iter()
+                        .any(|op| matches!(op, Op::NumericBinary { .. } | Op::Literal { .. }))
+                );
+                let guard = index
+                    .nodes()
+                    .iter()
+                    .find(|candidate| candidate.role == NodeRole::Expression(ExpressionKind::Call))
+                    .unwrap();
+                assert_eq!(
+                    recipe.recipe().exit,
+                    RecipeExit::Next(index.pc(guard.id, Phase::Entry).unwrap())
+                );
+            }
+        }
         assert!(
-            recipe
-                .recipe()
-                .operations
+            !operations
                 .iter()
-                .any(|op| matches!(op, Op::Unsupported(_)))
+                .any(|op| matches!(op, Op::ReadLocal { .. } | Op::ReadParameter { .. })),
+            "{contract:?} must not evaluate its source or guard during preparation"
         );
-        assert!(!recipe.recipe().operations.iter().any(|op| matches!(
-            op,
-            Op::NumericBinary { .. }
-                | Op::ReadLocal { .. }
-                | Op::ReadParameter { .. }
-                | Op::Literal { .. }
-                | Op::ScopeEnter { .. }
-        )));
         assert!(
             db.trace
                 .events

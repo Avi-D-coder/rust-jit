@@ -112,7 +112,7 @@ impl SyntaxProvider {
         }
         Ok(Some((source, certificate)))
     }
-    fn scalar_binding_admission(
+    pub(super) fn scalar_binding_admission(
         db: &mut Database,
         index: &crate::syntax::body_index::BodyIndex,
         pc: &crate::ir::pc::PcKey,
@@ -779,6 +779,12 @@ impl Provider for SyntaxProvider {
                 }
             }
 
+            QueryKey::ReferenceHeader(definition) => {
+                return super::source_plan_provider::reference_header(self, db, *definition);
+            }
+            QueryKey::PatternPlan(owner) => {
+                return super::source_plan_provider::pattern_plan(self, db, owner);
+            }
             QueryKey::BodyStructure(body) => {
                 let header = match db.fetch(self, QueryKey::Signature(body.definition)) {
                     QueryPoll::Ready(Ok(outcome)) => outcome,
@@ -974,6 +980,14 @@ impl Provider for SyntaxProvider {
                         Err(error) => QueryValue::Error(error),
                     }
                 } else {
+                    match super::pattern_plan_provider::thunk(self, db, parsed, handle, index, pc) {
+                        QueryPoll::Ready(Ok(Some(provided))) => {
+                            return QueryPoll::Ready(Ok(provided));
+                        }
+                        QueryPoll::Ready(Ok(None)) => {}
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
+                    }
                     match parsed.retained_primitive_type_name_site(handle, index, pc) {
                         Ok(Some(site)) => {
                             let proof = match crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission::capture(db, parsed, handle, pc, site) {
@@ -993,51 +1007,19 @@ impl Provider for SyntaxProvider {
                         Ok(None) => {}
                         Err(error) => return QueryPoll::Ready(Err(error)),
                     }
-                    match parsed.scalar_match_binding_site(handle, index, pc) {
-                        Ok(Some(_)) => {
-                            let prepared =
-                                Self::scalar_binding_admission(db, index, pc).and_then(|proof| {
-                                    parsed
-                                        .initial_thunk_with_scalar_binding(
-                                            handle, index, pc, &proof,
-                                        )
-                                        .and_then(|recipe| recipe.with_namespace_witness(db))
-                                });
-                            // Namespace absence is replayed by the installed
-                            // physical witness, including new source/seal rows.
-                            // The query itself remints this reached admission.
-                            return QueryPoll::Ready(Ok(Provided {
-                                value: match prepared {
-                                    Ok(recipe) => QueryValue::Thunk(Box::new(recipe)),
-                                    Err(error) => QueryValue::Error(error),
-                                },
-                                cacheable: false,
-                            }));
+                    return match parsed.runtime_macro_numeric_request(handle, index, pc) {
+                        Ok(Some(site)) => {
+                            Self::runtime_numeric_thunk(db, parsed, handle, index, pc, site)
                         }
-                        Ok(None) => match parsed.runtime_macro_numeric_request(handle, index, pc) {
-                            Ok(Some(site)) => {
-                                return Self::runtime_numeric_thunk(
-                                    db, parsed, handle, index, pc, site,
-                                );
-                            }
-                            Ok(None) => match parsed.initial_thunk(handle, index, pc) {
-                                Ok(recipe) => QueryValue::Thunk(Box::new(recipe)),
-                                Err(error) => QueryValue::Error(error),
-                            },
-                            Err(error) => {
-                                return QueryPoll::Ready(Ok(Provided {
-                                    value: QueryValue::Error(error),
-                                    cacheable: false,
-                                }));
-                            }
+                        Ok(None) => match parsed.initial_thunk(handle, index, pc) {
+                            Ok(recipe) => Provided::pure(QueryValue::Thunk(Box::new(recipe))),
+                            Err(error) => Provided::pure(QueryValue::Error(error)),
                         },
-                        Err(error) => {
-                            return QueryPoll::Ready(Ok(Provided {
-                                value: QueryValue::Error(error),
-                                cacheable: false,
-                            }));
-                        }
-                    }
+                        Err(error) => QueryPoll::Ready(Ok(Provided {
+                            value: QueryValue::Error(error),
+                            cacheable: false,
+                        })),
+                    };
                 }
             }
             QueryKey::Constant(_) => {

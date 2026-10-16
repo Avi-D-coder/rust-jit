@@ -1211,9 +1211,7 @@ impl GeneratedDeclarationMacroIndex {
             .filter(|n| *n <= 320 * 1024 * 1024)
             .ok_or_else(fault)?;
         let mut facts = parent.facts().clone();
-        facts.extend(&crate::expand::source_hygiene::output_facts(
-            output.tokens(),
-        )?)?;
+        facts.extend(output.hygiene_facts()?)?;
         let mut ancestry = match &parent {
             DeclarationMacroParent::Source(index) => index.ancestry.clone(),
             DeclarationMacroParent::Argument(index) => index.ancestry.clone(),

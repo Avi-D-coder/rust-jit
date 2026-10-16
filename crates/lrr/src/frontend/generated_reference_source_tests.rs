@@ -15,32 +15,17 @@ fn syntax(
     parse: &ParseKey,
     ordinal: usize,
 ) -> ClosedReferenceSyntax {
-    let QueryPoll::Ready(Ok(outcome)) =
-        db.fetch(&SyntaxProvider, QueryKey::ParseFile(parse.clone()))
-    else {
-        panic!("actual admitted parser query did not complete")
+    let QueryPoll::Ready(Ok(outcome)) = db.fetch(
+        &SyntaxProvider,
+        QueryKey::ReferenceHeader(signature.definition),
+    ) else {
+        panic!("actual admitted reference header query did not complete")
     };
-    let QueryValue::ParseFile(parsed) = outcome.value.as_ref() else {
-        panic!("actual parser query variant differs")
+    let QueryValue::ReferenceHeader(plan) = outcome.value.as_ref() else {
+        panic!("actual reference header query variant differs")
     };
-    let InputValue::DeclarationContext(context) = db
-        .published_input(&InputKey::DeclarationContext(signature.definition))
-        .unwrap()
-        .0
-    else {
-        panic!()
-    };
-    let InputValue::DefinitionBody(body) = db
-        .published_input(&InputKey::DefinitionBody(signature.definition))
-        .unwrap()
-        .0
-    else {
-        panic!()
-    };
-    parsed
-        .closed_reference_parameter(signature, context, Some(body), ordinal)
-        .unwrap()
-        .unwrap()
+    plan.require(signature, parse).unwrap();
+    plan.parameter(ordinal).unwrap().as_ref().clone()
 }
 
 #[test]
@@ -91,6 +76,7 @@ fn generated_reference_uses_its_parameter_name_without_a_primitive_result_all_ed
                 });
             }
             assert_eq!(syntax(&mut db, &signature, &parse, 0).target(), "i32");
+            assert_eq!(db.trace.counts.get("ReferenceHeader:ProviderRun"), Some(&1));
             assert!(
                 !db.trace.events.iter().any(|event| matches!(
                     event.key,

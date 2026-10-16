@@ -450,7 +450,7 @@ impl SourceAttributeSelection {
             grammar,
         )
         .map_err(|e| fault(&e.message))?;
-        let facts = crate::expand::source_hygiene::output_facts(output.tokens())?;
+        let facts = output.hygiene_facts()?;
         let mut class = None;
         for span in path.spans() {
             let context = crate::syntax::token_wire::Key(span.context.0);

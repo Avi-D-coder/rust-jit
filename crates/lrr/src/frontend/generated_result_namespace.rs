@@ -3,7 +3,8 @@ use super::*;
 use crate::{
     source::manifest::Namespace,
     syntax::{
-        closed_reference_signatures::ClosedReferenceSyntax, parse::ParseKey,
+        closed_reference_signatures::{ClosedReferenceSyntax, ClosedReferenceTypeSyntax},
+        parse::ParseKey,
         signatures::FunctionSignature,
     },
 };
@@ -30,6 +31,14 @@ pub(super) fn require_reference(
     syntax: &ClosedReferenceSyntax,
 ) -> Result<(), Diagnostic> {
     syntax.require(signature)?;
+    require_reference_type(db, signature, syntax.reference())
+}
+pub(super) fn require_reference_type(
+    db: &Database,
+    signature: &FunctionSignature,
+    syntax: &ClosedReferenceTypeSyntax,
+) -> Result<(), Diagnostic> {
+    syntax.require(signature)?;
     require_name(db, signature, syntax.parse(), syntax.target(), Some(syntax))
 }
 
@@ -38,7 +47,7 @@ fn require_name(
     signature: &FunctionSignature,
     parse: &ParseKey,
     written_name: &str,
-    reference: Option<&ClosedReferenceSyntax>,
+    reference: Option<&ClosedReferenceTypeSyntax>,
 ) -> Result<(), Diagnostic> {
     let missing = || {
         fault(
@@ -93,7 +102,7 @@ fn require_name(
         .ok_or_else(missing)?;
     let header_range =
         crate::syntax::spans::SourceRange::checked(header.header_start, header.header_end)?;
-    let selected_range = reference.map_or(header_range, ClosedReferenceSyntax::target_range);
+    let selected_range = reference.map_or(header_range, ClosedReferenceTypeSyntax::target_range);
     if !header_range.contains(selected_range) {
         return Err(missing());
     }

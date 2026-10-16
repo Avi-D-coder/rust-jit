@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "status": "source-only-uncompiled-unexecuted",
+  "base_transaction_packet": "90ca357f770b7d03d813ec1c95f7e940cc30c7be80aa50b565cd36e276492b44",
+  "worker_packet_sha256": "0245b2694cca0af8558abecb0c689e5db9760a8bdabf0f0c674465e352f10b7e",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/pattern_plan_provider.rs",
+      "sha256": "de504eaab15d374f234b9a9ca1bd81f03a0a5679597d310957ecfd7580c774b7",
+      "bytes": 2842
+    },
+    {
+      "path": "crates/lrr/src/db/pattern_plan_provider_tests.rs",
+      "sha256": "4974ecc9d35f76a50d3c6420808a12ca3fc68d9666aa3f2b082a7c6076b9c1c9",
+      "bytes": 11687
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_plan.rs",
+      "sha256": "4beb7b22259eebad2d2910dc39059c447ccf6933f1b1091ae68607c46010c6df",
+      "bytes": 9549
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_tests.rs",
+      "sha256": "1e389785672995fccea1ca86abff3b423fc6403302440811320d5015b432aea8",
+      "bytes": 16531
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_tests_tests.rs",
+      "sha256": "b7265c83aab62f5871ca8b180010ed79452528bc2902a427192e1f271318ff63",
+      "bytes": 9506
+    },
+    {
+      "path": "crates/lrr/src/syntax/literal_match.rs",
+      "sha256": "ea4fc976a1bcc03d7de2b81ac51f64e32caa4943dc0fdab8f75cdddffbdf9faa",
+      "bytes": 48348
+    },
+    {
+      "path": "crates/lrr/src/syntax/condition_ranges.rs",
+      "sha256": "cc3cea67803e9cf9d997e3d9fd7ea83baaca4531031b206882daaaf7dc11275b",
+      "bytes": 18477
+    }
+  ],
+  "dependencies": [
+    "root thunks.rs/module and source lookup glue",
+    "reference peer DB key/value/provider/accounting/wire/source_plan_provider changes"
+  ],
+  "checks": {
+    "rustfmt": "exit0",
+    "git_diff_check": "exit0",
+    "cargo": "not run by worker"
+  },
+  "historical_worker_packet_sha256": "bd46780caf1729acbaaa8f2252f14d66e8225c1401975c7137bbafb2f236e74e",
+  "review_correction": "Preserve existing require_boolean_match_guard once in source-plan preparation when owning match is itself an enclosing guard."
+}

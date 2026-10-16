@@ -111,3 +111,33 @@ This successor is validating, with no pass claimed yet. Two additional authorize
 workers now implement shared scalar pattern-test lowering and generated reference
 source authority; their in-progress files are excluded from this frozen source.
 [Exact source/failure/review boundary](../evidence/2026-10-15-common-source-boundaries.json).
+
+The next transactional-pattern/reference-return successor is separate from the
+pushed, unvalidated `fa071ee` source checkpoint. Root owns three narrow integration
+leaves: `syntax/thunks.rs` removes the obsolete Ident/Wildcard condition binding
+branch in favor of the shared pattern transaction consumer; its actual root Fn
+`RefType` result selects `HintRecipe::DefinitionResult`, whose region/source must
+come from the opaque prepared reference-result certificate rather than header
+elision. Other result annotations keep existing source admission. `engine/failure.rs`
+and `engine/run_capture.rs` exhaustively classify the explicit ordinary
+Pattern/PatternRetry operation/continuation without source planning or effects.
+These depend on the pattern worker's IR/verifier/frame/step implementation and
+the reference worker's result proof/context/store/return implementation; they
+cannot be validated or integrated as isolated glue. No macro identity selects
+these semantics. The old exact17 packet remains unchanged for its queued run.
+
+Root's separate four-leaf macro-declaration occurrence prerequisite is frozen
+and unexecuted. Exact original/generated occurrences follow adapter edits;
+actual issued expansion definitions retain owner/edition. This is input to the
+existing LocalScopes resolver, whose ordinary entered-body cached join remains
+pending; it does not yet pass definition-site execution. V1 was unexecuted and
+superseded by V2, which reuses the TokenForest's existing sorted span index.
+[Exact source/review](../evidence/2026-10-15-common-definition-site.json).
+
+Pre-freeze source review of the live successors also requires genuine
+non-consuming Copy publication during pattern Preview, plus replay of an input
+reference's enclosing-object ownership chain during reference return. Endpoints
+alone do not certify the original lease; a successful Copy preflight alone does
+not make a later move non-consuming. Both workers are repairing their shared
+mechanisms before freeze. These are source findings, not executed failures or
+passed regressions. All task/runtime/full-fixture and legacy macro holds remain.

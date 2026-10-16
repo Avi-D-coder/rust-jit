@@ -116,7 +116,10 @@ fn execute(text: &str, expected: u64, expected_prefix: usize) {
         };
         let ops = &recipe.recipe().operations;
         for op in ops {
-            if let Op::BindLocal { source, .. } = op {
+            if let Op::Pattern {
+                operation: lrr::ir::op::PatternOperation::StageBinding { source, .. },
+            } = op
+            {
                 let cell = frame.cell(*source).unwrap();
                 assert!(!sources.contains(&cell));
                 sources.push(cell);
@@ -224,8 +227,11 @@ fn while_pattern_clause_cells_reincarnate_after_continue_and_break_cleanup() {
             panic!("wrong recipe")
         };
         for op in &recipe.recipe().operations {
-            if let Op::BindLocal {
-                binding, source, ..
+            if let Op::Pattern {
+                operation:
+                    lrr::ir::op::PatternOperation::StageBinding {
+                        binding, source, ..
+                    },
             } = op
                 && index.scopes()[index.nodes()[binding.0 as usize].scope.0 as usize].kind
                     == ScopeKind::Clause

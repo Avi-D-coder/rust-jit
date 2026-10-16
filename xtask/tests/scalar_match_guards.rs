@@ -272,7 +272,7 @@ fn false_guard_and_true_guard_effects_survive_once_before_selected_body() {
     );
 }
 #[test]
-fn guarded_multiple_alternatives_keep_explicit_continuation_frontier_after_matching() {
+fn guarded_multiple_alternatives_retry_without_replaying_the_scrutinee() {
     let text = "fn value()->bool{match true{true | true if false=>false,_=>true}}fn main(){}";
     let (mut db, view) = source(text, 2024);
     let body = view
@@ -291,11 +291,16 @@ fn guarded_multiple_alternatives_keep_explicit_continuation_frontier_after_match
     else {
         panic!("overlap startup")
     };
-    let RunPoll::Fault(error) = machine.poll(&mut db) else {
-        panic!("overlapping guarded alternatives must retain prerequisite")
+    let RunPoll::Completed(report) = machine.poll(&mut db) else {
+        panic!("overlapping guarded alternatives did not retry")
     };
-    assert_eq!(error.code, "LRR-E-UNSUPPORTED");
-    assert!(error.message.contains("alternative continuation"));
+    assert!(matches!(report.value, ValueSummary::Bool(true)));
+    assert_eq!(report.opcode_counters.started_by_opcode[10], 2);
+    assert_eq!(report.opcode_counters.started_by_opcode[45], 6);
+    assert_eq!(
+        report.opcode_counters.operations_started,
+        report.opcode_counters.operations_completed
+    );
     db.finish_run().unwrap();
 }
 #[test]

@@ -693,6 +693,7 @@ impl Frame {
                                 .checked_add(1)
                                 .ok_or_else(crate::runtime::arena::resource)?;
                         }
+                        self.patterns.retire_scope(active.scope);
                         self.active_scopes.pop();
                         if active.scope == active.target {
                             return Ok(true);

@@ -61,6 +61,9 @@ pub enum DefinitionNumericContext {
 }
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum HintRecipe {
+    /// Actual prepared reference result of this definition, including the
+    /// caller's instantiated source region. Root Entry only.
+    DefinitionResult,
     /// Exact admitted primitive value-parameter source; refuses references and
     /// nominal/rigid sources before an owning scalar scrutinee read.
     DefinitionParameter(u32),
@@ -122,7 +125,7 @@ impl LiteralKind {
     }
 }
 /// Explicit recipe/cache compatibility, independent of host enum layout.
-pub const LRIR_RECIPE_SCHEMA: u32 = 10;
+pub const LRIR_RECIPE_SCHEMA: u32 = 11;
 pub const DECODED_INTEGER_SCHEMA: u32 = 1;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum IntegerLexicalError {
@@ -238,7 +241,7 @@ pub enum BorrowAccess {
 /// Stable opcode inventory. Runtime counter storage must use this bound.
 // Tag42 remains reserved for the separately frozen managed Vec instruction.
 pub const SOURCE_CONSTANT_OPCODE: u8 = 43;
-pub const OPCODE_COUNT: usize = 45;
+pub const OPCODE_COUNT: usize = 46;
 pub type OpcodeCounters = [u64; OPCODE_COUNT];
 
 /// Closed source-bound floating value. Public callers can inspect or clone a
@@ -403,8 +406,43 @@ impl crate::core::digest::StableEncode for PrimitiveFloatingConstant {
     }
 }
 
+/// Prepared ordinary pattern transitions. No guest values, scopes, leases or
+/// source parsing are embedded in a cached transition.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum PatternOperation {
+    Begin {
+        owner: super::pc::NodeId,
+        alternative: super::pc::NodeId,
+        source: SlotId,
+        retry: super::pc::PcKey,
+    },
+    StageBinding {
+        owner: super::pc::NodeId,
+        binding: super::pc::NodeId,
+        source: SlotId,
+        writable: bool,
+    },
+    /// Publish provisional copies for a guard. General non-Copy guard views
+    /// require their shared borrow/projection engine and remain unsupported.
+    Preview {
+        owner: super::pc::NodeId,
+    },
+    /// None means an already successful irrefutable/selected pattern. A Bool
+    /// result commits on true and rolls back on false without consuming it.
+    Finish {
+        owner: super::pc::NodeId,
+        matched: Option<SlotId>,
+    },
+    Rollback {
+        owner: super::pc::NodeId,
+    },
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Op {
+    Pattern {
+        operation: PatternOperation,
+    },
     SourceConstant {
         constant: Box<super::source_constant::SourceConstantInstruction>,
         destination: SlotId,
@@ -607,6 +645,7 @@ impl Op {
     /// Stable opcode IDs shared by execution counters and redacted failure records.
     pub(crate) fn opcode_tag(&self) -> u8 {
         match self {
+            Self::Pattern { .. } => 45,
             Self::SourceConstant { .. } => SOURCE_CONSTANT_OPCODE,
             Self::CompoundHint { .. } => 40,
             Self::ProjectTuple { .. } => 35,
@@ -666,6 +705,7 @@ pub enum EffectClass {
 impl Op {
     pub fn effect_class(&self) -> EffectClass {
         match self {
+            Self::Pattern { .. } => EffectClass::OwnershipTransfer,
             Self::MakePlace { .. }
             | Self::ParameterPlace { .. }
             | Self::ValuePlace { .. }

@@ -2064,6 +2064,12 @@
       "bytes": 1462
     },
     {
+      "path": "tests/ui/or-patterns/search-via-bindings.rs",
+      "git_blob": "42174bd7cef737eb4e84049ca6c7f8b67f089a19",
+      "sha256": "38723ec8521136188a19a4b465362e979d95f59ed65009a358aff640a23a08b6",
+      "bytes": 2823
+    },
+    {
       "path": "tests/ui/panics/args-panic.rs",
       "git_blob": "9675c99dcb6f81691817b153a37c7a671dfed426",
       "sha256": "12d116bb5cd4ce6b065ff10d8c2c553536879a755dacfd63791d5de9aaaeaded",
@@ -2596,6 +2602,12 @@
       "git_blob": "7e71cb1f113b3c2666ef2cee8657940493795e26",
       "sha256": "73131591f74861a63dd15ec0aeb36f64d06acc30525a057dadaaf17f637067ec",
       "bytes": 371
+    },
+    {
+      "path": "tests/ui/regions/regions-addr-of-ret.rs",
+      "git_blob": "bf95709848fb137161515ac94daadc56f5ac0870",
+      "sha256": "9082b9f9faea5db67c36136721ef4153951027cda2fc4d80eb78e34f3c1dc914",
+      "bytes": 129
     },
     {
       "path": "tests/ui/regions/regions-infer-borrow-scope-within-loop-ok.rs",
@@ -4817,6 +4829,14 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/or-patterns/search-via-bindings.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/panics/args-panic.rs",
       "directives": [
         "//@ run-fail",
@@ -5259,6 +5279,14 @@
     },
     {
       "path": "tests/ui/reachable/reachable-unnameable-type-alias.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/regions/regions-addr-of-ret.rs",
       "directives": [
         "//@ run-pass"
       ],

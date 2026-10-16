@@ -351,8 +351,10 @@ impl Packet {
                 | QueryKey::ScopeBucket(_)
                 | QueryKey::Signature(_)
                 | QueryKey::FunctionSignature(_)
+                | QueryKey::ReferenceHeader(_)
                 | QueryKey::TypeAlias(_) => {}
                 QueryKey::BodyStructure(_)
+                | QueryKey::PatternPlan(_)
                 | QueryKey::Thunk(_)
                 | QueryKey::CurrentExpansionInput(_)
                 | QueryKey::ExpansionInput(_)

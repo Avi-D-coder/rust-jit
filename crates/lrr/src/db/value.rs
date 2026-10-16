@@ -35,6 +35,8 @@ pub enum QueryValue {
     ScopeBucket(Bucket),
     Signature(Arc<HeaderRecipe>),
     FunctionSignature(Box<crate::syntax::signatures::FunctionSignature>),
+    ReferenceHeader(Arc<crate::syntax::closed_reference_signatures::ReferenceHeaderPlan>),
+    PatternPlan(Arc<crate::syntax::pattern_plan::PatternSourcePlan>),
     TypeAlias(Box<crate::syntax::type_aliases::TypeAliasRecipe>),
     TypeSchema(Box<crate::frontend::types::NominalSchema>),
     ConstructorPlan(Box<crate::syntax::constructors::ConstructorPlan>),
@@ -44,14 +46,6 @@ pub enum QueryValue {
     Error(Diagnostic),
 }
 impl QueryValue {
-    pub fn is_pinned(&self) -> bool {
-        match self {
-            Self::ParseFile(v) => Arc::strong_count(v) > 1,
-            Self::Outline(v) => Arc::strong_count(v) > 1,
-            Self::Signature(v) => Arc::strong_count(v) > 1,
-            _ => false,
-        }
-    }
     pub fn parse_bytes(&self) -> usize {
         match self {
             Self::ParseFile(v) => v.estimated_bytes(),
@@ -86,6 +80,12 @@ impl QueryValue {
         }
         if let (Self::FunctionSignature(value), QueryKey::FunctionSignature(key)) = (self, key) {
             return value.definition == *key;
+        }
+        if let (Self::ReferenceHeader(value), QueryKey::ReferenceHeader(key)) = (self, key) {
+            return value.definition() == *key;
+        }
+        if let (Self::PatternPlan(value), QueryKey::PatternPlan(key)) = (self, key) {
+            return value.owner() == key && key.phase == 0;
         }
         if let (Self::BodyStructure(value), QueryKey::BodyStructure(key)) = (self, key) {
             return value.body() == key;
@@ -173,6 +173,14 @@ impl QueryValue {
                 e.u32(8);
                 e.record(v.as_ref());
             }
+            Self::ReferenceHeader(v) => {
+                e.u32(31);
+                e.record(v.as_ref());
+            }
+            Self::PatternPlan(v) => {
+                e.u32(32);
+                e.digest(v.fingerprint());
+            }
             Self::TypeAlias(v) => {
                 e.u32(9);
                 e.record(v.as_ref());
@@ -226,6 +234,12 @@ impl QueryValue {
             Self::Outline(v) => v.estimated_bytes(),
             Self::Signature(v) => v.estimated_bytes(),
             Self::FunctionSignature(v) => v.estimated_bytes(),
+            Self::ReferenceHeader(v) => v
+                .metadata_bytes()
+                .saturating_add(2 * std::mem::size_of::<usize>()),
+            Self::PatternPlan(v) => v
+                .metadata_bytes()
+                .saturating_add(2 * std::mem::size_of::<usize>()),
             Self::TypeAlias(v) => v.estimated_bytes(),
             Self::TypeSchema(v) => v.estimated_bytes(),
             Self::ConstructorPlan(v) => v.estimated_bytes().unwrap_or(usize::MAX),

@@ -28,6 +28,8 @@ mod condition_ranges;
 mod literal_match;
 #[path = "local_numeric_constraints.rs"]
 mod local_numeric_constraints;
+#[path = "pattern_plan.rs"]
+pub mod pattern_plan;
 #[path = "pattern_tests.rs"]
 mod pattern_tests;
 #[path = "primitive_cast_target.rs"]
@@ -49,20 +51,17 @@ fn id_for(index: &BodyIndex, body: &BodyHandle, syntax: &SyntaxNode) -> Result<N
         .checked_sub(body.range.start)
         .ok_or_else(|| error("phase node before selected body"))?;
     index
-        .nodes()
-        .iter()
+        .nodes_at_range(super::spans::SourceRange { start, end })
         .find(|node| {
-            node.range.start == start
-                && node.range.end == end
-                && if ast::Expr::can_cast(syntax.kind()) {
-                    matches!(node.role, NodeRole::Expression(_))
-                } else if ast::Pat::can_cast(syntax.kind()) {
-                    node.role == NodeRole::Pattern
-                } else if ast::Item::can_cast(syntax.kind()) {
-                    node.role == NodeRole::OpaqueItem
-                } else {
-                    node.role == NodeRole::Statement
-                }
+            if ast::Expr::can_cast(syntax.kind()) {
+                matches!(node.role, NodeRole::Expression(_))
+            } else if ast::Pat::can_cast(syntax.kind()) {
+                node.role == NodeRole::Pattern
+            } else if ast::Item::can_cast(syntax.kind()) {
+                node.role == NodeRole::OpaqueItem
+            } else {
+                node.role == NodeRole::Statement
+            }
         })
         .map(|node| node.id)
         .ok_or_else(|| error("selected syntax has no structural phase identity"))
@@ -1599,17 +1598,7 @@ impl ParsedFile {
         index: &BodyIndex,
         key: &PcKey,
     ) -> Result<VerifiedRecipe, Diagnostic> {
-        self.initial_thunk_admission(body, index, key, None, None, None)
-    }
-    pub(crate) fn initial_thunk_with_scalar_binding(
-        &self,
-        body: &BodyHandle,
-        index: &BodyIndex,
-        key: &PcKey,
-        admission: &crate::frontend::scalar_pattern_binding::ScalarPatternBindingAdmission,
-    ) -> Result<VerifiedRecipe, Diagnostic> {
-        admission.require(self, body, index, key, NodeId(key.node))?;
-        self.initial_thunk_admission(body, index, key, Some(admission), None, None)
+        self.initial_thunk_admission(body, index, key, None, None)
     }
     pub(crate) fn runtime_macro_numeric_request(
         &self,
@@ -1627,7 +1616,7 @@ impl ParsedFile {
         proof: &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         proof.context(self, body, index, key)?;
-        let recipe = self.initial_thunk_admission(body, index, key, None, Some(proof), None)?;
+        let recipe = self.initial_thunk_admission(body, index, key, Some(proof), None)?;
         proof.attach(recipe, index)
     }
     pub(crate) fn initial_thunk_with_primitive_name(
@@ -1637,14 +1626,13 @@ impl ParsedFile {
         key: &PcKey,
         proof: &crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission,
     ) -> Result<VerifiedRecipe, Diagnostic> {
-        self.initial_thunk_admission(body, index, key, None, None, Some(proof))
+        self.initial_thunk_admission(body, index, key, None, Some(proof))
     }
     fn initial_thunk_admission(
         &self,
         body: &BodyHandle,
         index: &BodyIndex,
         key: &PcKey,
-        admission: Option<&crate::frontend::scalar_pattern_binding::ScalarPatternBindingAdmission>,
         numeric_admission: Option<
             &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
         >,
@@ -1764,12 +1752,16 @@ impl ParsedFile {
             | SyntaxKind::LITERAL_PAT
             | SyntaxKind::WILDCARD_PAT
             | SyntaxKind::IDENT_PAT
-            | SyntaxKind::RANGE_PAT => match admission {
-                Some(proof) => {
-                    literal_match::prepare_binding(self, body, index, key, syntax, proof)
+            | SyntaxKind::RANGE_PAT => {
+                #[cfg(test)]
+                {
+                    literal_match::prepare(self, body, index, key, syntax)
                 }
-                None => literal_match::prepare(self, body, index, key, syntax),
-            },
+                #[cfg(not(test))]
+                {
+                    unsupported("pattern phase requires retained source plan query")
+                }
+            }
             SyntaxKind::CALL_EXPR => self.initial_call_thunk(body, index, key, syntax),
             SyntaxKind::RETURN_EXPR
             | SyntaxKind::LOOP_EXPR
@@ -1914,9 +1906,17 @@ impl ParsedFile {
                         .and_then(|function| function.ret_type())
                         .and_then(|ret| ret.ty())
                 {
-                    let Some(return_hint) = annotation_hint(self, Some(ty), key.body.definition)?
-                    else {
-                        return unsupported("return type requires symbolic resolution");
+                    let return_hint = if matches!(ty, ast::Type::RefType(_)) {
+                        // Region identity comes from the admitted definition's
+                        // actual caller/result certificate, never a header-local
+                        // elision or a region invented while lowering syntax.
+                        HintRecipe::DefinitionResult
+                    } else {
+                        let Some(hint) = annotation_hint(self, Some(ty), key.body.definition)?
+                        else {
+                            return unsupported("return type requires symbolic resolution");
+                        };
+                        hint
                     };
                     ops.push(Op::SetHint {
                         child: node.value.expect("root value"),
@@ -2272,7 +2272,7 @@ impl ParsedFile {
     #[inline(never)]
     fn initial_let_condition_thunk(
         &self,
-        body: &BodyHandle,
+        _body: &BodyHandle,
         index: &BodyIndex,
         key: &PcKey,
         syntax: SyntaxNode,
@@ -2284,7 +2284,7 @@ impl ParsedFile {
             thunks::unsupported(index, key.clone(), message.into(), fallback.clone())
         };
         match (syntax.kind(), Phase::from_code(key.phase)) {
-            (SyntaxKind::LET_EXPR, phase) => {
+            (SyntaxKind::LET_EXPR, _) => {
                 let expression = ast::LetExpr::cast(syntax).expect("checked condition let");
                 if node.clause_scope.is_none() {
                     return unsupported(
@@ -2294,99 +2294,18 @@ impl ParsedFile {
                 let Some(pattern) = expression.pat() else {
                     return unsupported("condition pattern absent");
                 };
-                if matches!(pattern, ast::Pat::IdentPat(_) | ast::Pat::WildcardPat(_)) {
-                    let binding = if let ast::Pat::IdentPat(pattern) = &pattern {
-                        use crate::vm::pattern::{BindingModifier, PatternContext};
-                        let modifier =
-                            match (pattern.ref_token().is_some(), pattern.mut_token().is_some()) {
-                                (false, false) => BindingModifier::Plain,
-                                (false, true) => BindingModifier::Mut,
-                                (true, false) => BindingModifier::Ref,
-                                (true, true) => BindingModifier::RefMut,
-                            };
-                        // The admitted scalar condition path begins in Move;
-                        // reference/aggregate peeling belongs to T050/M028.
-                        PatternContext::new(self.edition)?.binding_mode(modifier)?;
-                        if pattern.ref_token().is_some() || pattern.at_token().is_some() {
-                            return unsupported(
-                                "condition binding mode awaits pattern integration",
-                            );
-                        }
-                        Some((
-                            id_for(index, body, pattern.syntax())?,
-                            pattern.mut_token().is_some(),
-                        ))
-                    } else {
-                        None
-                    };
-                    let Some(scrutinee) = expression.expr() else {
-                        return unsupported("condition scrutinee absent");
-                    };
-                    let scrutinee = id_for(index, body, scrutinee.syntax())?;
-                    let source = index.nodes()[scrutinee.0 as usize]
-                        .value
-                        .ok_or_else(|| error("condition scrutinee slot absent"))?;
-                    let destination = node
-                        .value
-                        .ok_or_else(|| error("condition test result absent"))?;
-                    return match phase {
-                        Phase::Entry => draft(
-                            index,
-                            key,
-                            vec![
-                                Op::ScopeEnter {
-                                    scope: node
-                                        .clause_scope
-                                        .ok_or_else(|| error("condition clause scope absent"))?,
-                                },
-                                Op::SetHint {
-                                    child: source,
-                                    hint: HintRecipe::None,
-                                },
-                            ],
-                            RecipeExit::Next(index.pc(scrutinee, Phase::Entry)?),
-                        ),
-                        Phase::Operand(n)
-                            if node.operands.get(usize::from(n)) == Some(&scrutinee) =>
-                        {
-                            draft(
-                                index,
-                                key,
-                                vec![Op::Literal {
-                                    literal: LiteralRecipe {
-                                        kind: LiteralKind::Bool,
-                                        spelling: "true".into(),
-                                        decoded: None,
-                                        source: index.span(id)?,
-                                    },
-                                    hint: HintRecipe::Primitive(PrimitiveType::Bool),
-                                    destination,
-                                }],
-                                RecipeExit::Next(index.pc(id, Phase::Commit)?),
-                            )
-                        }
-                        Phase::Commit => draft(
-                            index,
-                            key,
-                            vec![if let Some((binding, writable)) = binding {
-                                Op::BindLocal {
-                                    binding,
-                                    source,
-                                    hint: HintRecipe::None,
-                                    writable,
-                                }
-                            } else {
-                                Op::Discard { source }
-                            }],
-                            RecipeExit::Next(return_pc(index, body, expression.syntax())?),
-                        ),
-                        _ => unsupported("invalid condition binding phase"),
-                    };
+                #[cfg(test)]
+                {
+                    if condition_ranges::selected(&pattern) {
+                        return condition_ranges::prepare(self, _body, index, key, &expression);
+                    }
+                    unsupported("reached condition pattern awaits ordered pattern integration")
                 }
-                if condition_ranges::selected(&pattern) {
-                    return condition_ranges::prepare(self, body, index, key, &expression);
+                #[cfg(not(test))]
+                {
+                    let _ = pattern;
+                    unsupported("pattern phase requires retained source plan query")
                 }
-                unsupported("reached condition pattern awaits ordered pattern integration")
             }
             _ => unsupported("entered node phase awaits its ordered lowering task"),
         }

@@ -69,14 +69,15 @@ pub struct ParsedFile {
     pub(crate) declaration_grammar: Option<crate::expand::identity::GrammarSlot>,
     estimated_bytes: usize,
     token_contexts: Option<Vec<TokenContext>>,
+    pinned_hygiene: Option<std::sync::Arc<crate::frontend::hygiene::HygieneFacts>>,
     retained_syntax: Option<retained::RetainedSyntax>,
 }
-// Comparison-only normal forms from the pinned adapter, never source authority.
+// Actual token context keys into the retained pinned facts; no source authority.
 #[derive(Debug)]
 struct TokenContext {
     end: u32,
     edition: u16,
-    local: lrr_expand_adapter::token_wire::NameContextKey,
+    context: crate::syntax::token_wire::Key,
 }
 #[path = "lexical_hygiene.rs"]
 mod lexical_hygiene;
@@ -160,6 +161,7 @@ impl ParsedFile {
             parsed,
             estimated_bytes,
             token_contexts: None,
+            pinned_hygiene: None,
             generated_origin: None,
             declaration_grammar: None,
             retained_syntax: None,
@@ -239,6 +241,7 @@ impl ParsedFile {
             parsed,
             estimated_bytes,
             token_contexts: None,
+            pinned_hygiene: None,
             generated_origin: Some(items.record().descriptor().fingerprint()),
             declaration_grammar: Some(crate::expand::identity::GrammarSlot::Items),
             retained_syntax: None,
@@ -252,6 +255,7 @@ impl ParsedFile {
                     lrr_expand_adapter::token_wire::Key(origin.span.0),
                 )
             }),
+            Some(items.hygiene_facts()),
         )
     }
     pub(crate) fn from_generated_declarations(
@@ -332,6 +336,7 @@ impl ParsedFile {
             parsed,
             estimated_bytes,
             token_contexts: None,
+            pinned_hygiene: None,
             generated_origin: Some(identity),
             declaration_grammar: Some(grammar),
             retained_syntax: None,
@@ -349,12 +354,14 @@ impl ParsedFile {
             origins
                 .iter()
                 .map(|origin| (origin.start, origin.end, origin.span)),
+            None,
         )
     }
     fn attach_generated_token_editions(
         mut self,
         tokens: &lrr_expand_adapter::token_wire::TokenForest,
         origins: impl ExactSizeIterator<Item = (u32, u32, lrr_expand_adapter::token_wire::Key)>,
+        prepared: Option<std::sync::Arc<crate::frontend::hygiene::HygieneFacts>>,
     ) -> Result<Self, Diagnostic> {
         let fail = || {
             Diagnostic::new(
@@ -372,40 +379,31 @@ impl ParsedFile {
             .and_then(|n| n.checked_mul(256))
             .filter(|n| *n <= 128 * 1024 * 1024)
             .ok_or_else(fail)?;
-        let mut hygiene = lrr_expand_adapter::hygiene::HygieneStore::default();
-        hygiene
-            .import(tokens.contexts())
-            .map_err(|e| Diagnostic::new(e.code, e.message))?;
-        let mut demanded = Vec::new();
-        demanded
-            .try_reserve_exact(tokens.contexts().len())
-            .map_err(|_| fail())?;
-        demanded.extend(tokens.contexts().iter().map(|context| context.key()));
-        let names = hygiene
-            .name_contexts(&demanded)
-            .map_err(|e| Diagnostic::new(e.code, e.message))?;
-        let contexts = hygiene
-            .records()
-            .into_iter()
-            .map(|c| {
-                let edition = match c.edition {
-                    lrr_expand_adapter::token_wire::Edition::E2015 => 2015,
-                    lrr_expand_adapter::token_wire::Edition::E2018 => 2018,
-                    lrr_expand_adapter::token_wire::Edition::E2021 => 2021,
-                    lrr_expand_adapter::token_wire::Edition::E2024 => 2024,
-                };
-                let local = names
-                    .binary_search_by_key(&c.key(), |row| row.original)
-                    .map(|index| names[index].local)
-                    .map_err(|_| fail())?;
-                Ok((c.key(), (edition, local)))
+        // Normalization can add item/local context records. Bound that retained
+        // expansion and interval storage before allocating the fact tables.
+        tokens
+            .contexts()
+            .len()
+            .checked_mul(1024)
+            .and_then(|bytes| {
+                origins
+                    .len()
+                    .checked_mul(std::mem::size_of::<TokenContext>())
+                    .and_then(|intervals| bytes.checked_add(intervals))
             })
-            .collect::<Result<std::collections::BTreeMap<_, _>, Diagnostic>>()?;
-        let spans = tokens
-            .spans()
-            .iter()
-            .map(|s| (s.key(), s.context))
-            .collect::<std::collections::BTreeMap<_, _>>();
+            .filter(|bytes| *bytes <= 128 * 1024 * 1024)
+            .ok_or_else(|| {
+                Diagnostic::new(
+                    "LRR-E-METADATA-LIMIT",
+                    "prepared source hygiene byte budget".into(),
+                )
+            })?;
+        let facts = match prepared {
+            Some(facts) => facts,
+            None => {
+                std::sync::Arc::new(crate::expand::source_hygiene::adapter_output_facts(tokens)?)
+            }
+        };
         origins
             .len()
             .checked_mul(std::mem::size_of::<TokenContext>())
@@ -420,12 +418,24 @@ impl ParsedFile {
             if start != end || next_end <= end {
                 return Err(fail());
             }
-            let context = spans.get(&span).ok_or_else(fail)?;
-            let (edition, local) = *contexts.get(context).ok_or_else(fail)?;
+            // The validated immutable forest already has a strict span-key
+            // index; do not rebuild it for every representation conversion.
+            let position = tokens
+                .spans()
+                .binary_search_by_key(&span, |record| record.key())
+                .map_err(|_| fail())?;
+            let context = crate::syntax::token_wire::Key(tokens.spans()[position].context.0);
+            let edition = match facts.context(context)?.edition {
+                crate::syntax::token_wire::Edition::E2015 => 2015,
+                crate::syntax::token_wire::Edition::E2018 => 2018,
+                crate::syntax::token_wire::Edition::E2021 => 2021,
+                crate::syntax::token_wire::Edition::E2024 => 2024,
+            };
+            facts.name_local(context)?;
             editions.push(TokenContext {
                 end: next_end,
                 edition,
-                local,
+                context,
             });
             end = next_end;
         }
@@ -437,13 +447,21 @@ impl ParsedFile {
             .checked_mul(std::mem::size_of::<TokenContext>())
             .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(fail)?;
+        let fact_bytes = facts.metadata_bytes()?;
         self.estimated_bytes = self
             .estimated_bytes
             .checked_add(bytes)
+            .and_then(|n| n.checked_add(fact_bytes))
             .filter(|n| *n <= 128 * 1024 * 1024)
             .ok_or_else(fail)?;
         self.token_contexts = Some(editions);
+        self.pinned_hygiene = Some(facts);
         Ok(self)
+    }
+    pub(crate) fn hygiene_facts(
+        &self,
+    ) -> Option<&std::sync::Arc<crate::frontend::hygiene::HygieneFacts>> {
+        self.pinned_hygiene.as_ref()
     }
     pub(crate) fn token_edition(&self, range: SourceRange) -> Result<u16, Diagnostic> {
         // Captured module/argument syntax may carry generated provenance while

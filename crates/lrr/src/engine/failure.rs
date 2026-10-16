@@ -374,6 +374,7 @@ fn exit_tag(exit: &RecipeExit) -> &'static str {
         RecipeExit::Effect { .. } => "effect",
         RecipeExit::Next(_) => "next",
         RecipeExit::Branch { .. } => "branch",
+        RecipeExit::PatternRetry { .. } => "pattern_retry",
         RecipeExit::Control(ControlRecipe::Return { .. }) => "return",
         RecipeExit::Control(ControlRecipe::Break { .. }) => "break",
         RecipeExit::Control(ControlRecipe::Continue { .. }) => "continue",

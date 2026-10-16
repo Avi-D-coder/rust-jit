@@ -97,5 +97,7 @@
     "task_completed": false,
     "all_eight_shortcuts_removed": false,
     "guest_jit_allowed": false
-  }
+  },
+  "execution_superseded_by": "worktracks/evidence/2026-10-15-common-source-plans-v2.json",
+  "supersession_scope": "Exact17 source checkpoint remains historical unexecuted; coherent71 contains its functionality and owns next validation, not a failed attempt."
 }

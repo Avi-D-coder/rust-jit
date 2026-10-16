@@ -12,7 +12,11 @@ use crate::{
         },
         pc::{PcKey, SlotId},
     },
-    syntax::{outline::BodyHandle, spans::BodySpan},
+    syntax::{
+        outline::BodyHandle,
+        parse::ParsedFile,
+        spans::{BodySpan, SourceRange},
+    },
 };
 use ra_ap_syntax::{
     AstNode, AstToken, SyntaxKind, SyntaxNode,
@@ -234,14 +238,65 @@ fn decode(
     }
 }
 
-/// Actual syntax handles, with no guest values or executable result bodies.
+/// Exact immutable source locations, with no red nodes or decoded cold values.
+#[derive(Debug)]
 pub(super) enum ScalarTestPlan {
-    Literal(ast::Pat),
+    Literal(SourceRange),
     Range {
-        lower: Option<ast::Pat>,
-        upper: Option<ast::Pat>,
+        lower: Option<SourceRange>,
+        upper: Option<SourceRange>,
         inclusive: bool,
     },
+}
+
+/// Shared irrefutable header admission. Name/constant namespace disambiguation
+/// and source ownership remain the ordinary caller's separate proof service.
+pub(super) struct IrrefutablePattern {
+    pub(super) binding: Option<ast::IdentPat>,
+    pub(super) writable: bool,
+}
+impl IrrefutablePattern {
+    pub(super) fn from_source(
+        pattern: &ast::Pat,
+        edition: u16,
+    ) -> Result<Option<Self>, Diagnostic> {
+        use crate::vm::pattern::{BindingModifier, DefaultBindingMode, PatternContext};
+        if pattern
+            .syntax()
+            .children()
+            .any(|node| ast::Attr::can_cast(node.kind()))
+        {
+            return Err(unsupported(
+                "pattern binding attributes require source admission",
+            ));
+        }
+        match pattern {
+            ast::Pat::WildcardPat(_) => Ok(Some(Self {
+                binding: None,
+                writable: false,
+            })),
+            ast::Pat::IdentPat(binding) => {
+                let modifier = match (binding.ref_token().is_some(), binding.mut_token().is_some())
+                {
+                    (false, false) => BindingModifier::Plain,
+                    (false, true) => BindingModifier::Mut,
+                    (true, false) => BindingModifier::Ref,
+                    (true, true) => BindingModifier::RefMut,
+                };
+                let mode = PatternContext::new(edition)?.binding_mode(modifier)?;
+                if mode != DefaultBindingMode::Move || binding.at_token().is_some() {
+                    return Err(unsupported(
+                        "reached binding requires shared projection/borrow pattern integration",
+                    ));
+                }
+                Ok(Some(Self {
+                    binding: Some(binding.clone()),
+                    writable: binding.mut_token().is_some(),
+                }))
+            }
+            _ => Ok(None),
+        }
+    }
 }
 
 impl ScalarTestPlan {
@@ -256,10 +311,16 @@ impl ScalarTestPlan {
             ));
         }
         match pattern {
-            ast::Pat::LiteralPat(_) => Ok(Self::Literal(pattern.clone())),
+            ast::Pat::LiteralPat(_) => Ok(Self::Literal(crate::syntax::ast_adapter::range(
+                pattern.syntax().text_range(),
+            ))),
             ast::Pat::RangePat(range) => Ok(Self::Range {
-                lower: range.start(),
-                upper: range.end(),
+                lower: range
+                    .start()
+                    .map(|p| crate::syntax::ast_adapter::range(p.syntax().text_range())),
+                upper: range
+                    .end()
+                    .map(|p| crate::syntax::ast_adapter::range(p.syntax().text_range())),
                 inclusive: match range.op_kind() {
                     Some(RangeOp::Inclusive) => true,
                     Some(RangeOp::Exclusive) => false,
@@ -272,23 +333,35 @@ impl ScalarTestPlan {
         }
     }
 
+    fn endpoint(parsed: &ParsedFile, source: Option<SourceRange>) -> Result<ast::Pat, Diagnostic> {
+        let source = source.ok_or_else(|| unsupported("scalar endpoint absent"))?;
+        parsed
+            .syntax_at(source, |syntax| ast::Pat::can_cast(syntax.kind()))?
+            .and_then(ast::Pat::cast)
+            .ok_or_else(|| super::error("retained scalar endpoint syntax differs"))
+    }
     pub(super) fn first(
         &self,
+        parsed: &ParsedFile,
         body: &BodyHandle,
         key: &PcKey,
     ) -> Result<ScalarComparison, Diagnostic> {
         match self {
-            Self::Literal(pattern) => Ok(ScalarComparison {
-                literal: decode(reached_literal(Some(pattern))?, body, key)?,
-                operator: NumericBinary::Eq,
-                upper_pending: false,
-            }),
+            Self::Literal(source) => {
+                let pattern = Self::endpoint(parsed, Some(*source))?;
+                Ok(ScalarComparison {
+                    literal: decode(reached_literal(Some(&pattern))?, body, key)?,
+                    operator: NumericBinary::Eq,
+                    upper_pending: false,
+                })
+            }
             Self::Range {
                 lower,
                 upper,
                 inclusive,
             } => {
-                let endpoint = reached_literal(lower.as_ref().or(upper.as_ref()))?;
+                let pattern = Self::endpoint(parsed, (*lower).or(*upper))?;
+                let endpoint = reached_literal(Some(&pattern))?;
                 if family(endpoint) == Some(Family::Bool) {
                     return Err(unsupported(
                         "scalar range requires numeric, byte or char literals",
@@ -311,6 +384,7 @@ impl ScalarTestPlan {
 
     pub(super) fn upper(
         &self,
+        parsed: &ParsedFile,
         body: &BodyHandle,
         key: &PcKey,
     ) -> Result<ScalarComparison, Diagnostic> {
@@ -322,8 +396,10 @@ impl ScalarTestPlan {
         else {
             return Err(super::error("non-range pattern has no upper continuation"));
         };
-        let lower = reached_literal(lower.as_ref())?;
-        let upper = reached_literal(upper.as_ref())?;
+        let lower_pattern = Self::endpoint(parsed, *lower)?;
+        let upper_pattern = Self::endpoint(parsed, *upper)?;
+        let lower = reached_literal(Some(&lower_pattern))?;
+        let upper = reached_literal(Some(&upper_pattern))?;
         if family(lower) == Some(Family::Bool) || family(lower) != family(upper) {
             return Err(unsupported(
                 "scalar range endpoints require the same literal family",

@@ -289,7 +289,7 @@ fn upstream_nested_statement_and_expression_requests_attach_to_ordinary_bodies()
                 .unwrap();
             let nested = GeneratedDeclarationMacroIndex::new(
                 generated.clone(),
-                DeclarationMacroParent::Source(index),
+                DeclarationMacroParent::Source(index.clone()),
             )
             .unwrap();
             let invocation = generated
@@ -311,6 +311,35 @@ fn upstream_nested_statement_and_expression_requests_attach_to_ordinary_bodies()
             assert_eq!(prepared.epoch(), 1);
             assert_eq!(prepared.outputs().len(), 2);
             assert_eq!(prepared.pending_calls().len(), remaining);
+            assert_eq!(
+                prepared.macro_definitions().len(),
+                index.scan().macro_definitions().len()
+            );
+            for header in index.scan().macro_definitions() {
+                let anchor = prepared
+                    .macro_definitions()
+                    .iter()
+                    .find(|anchor| anchor.definition().identity == header.identity)
+                    .expect("actual original macro declaration occurrence");
+                assert_eq!(
+                    anchor.definition().defining_unit,
+                    index.scan().scope().crate_key
+                );
+                assert_eq!(anchor.definition().definition_edition, edition);
+            }
+            for issued in [&outer, &inner] {
+                let definition = prepared
+                    .expansion_definitions()
+                    .get(&issued.key().fingerprint())
+                    .expect("actual issued expansion definition");
+                assert_eq!(
+                    Some(definition),
+                    receipt::SyntaxRequestReceipt::capture(issued)
+                        .unwrap()
+                        .definition
+                        .as_ref()
+                );
+            }
             for original in &provider.module_source().outline().items {
                 let anchor = prepared
                     .original_declarations()
@@ -352,6 +381,50 @@ fn upstream_nested_statement_and_expression_requests_attach_to_ordinary_bodies()
                 ["Bar", "Baz", "Xyzzy"]
             );
         }
+    }
+}
+
+#[test]
+fn copied_macro_definition_origins_keep_distinct_source_occurrences() {
+    // LRR source-identity regression, supplementing the unchanged upstream
+    // nested/wrapped attachment witnesses above. Both emitted definitions have
+    // the same token origins and body, but distinct admitted scan identities.
+    for edition in [2015, 2018, 2021, 2024] {
+        let (provider, index) = provider(
+            "macro_rules! duplicate{($item:item)=>{$item $item}} duplicate!(macro_rules! inner{()=>{1_i32}});fn main(){}",
+            edition,
+        );
+        let issued = request(&provider, &index);
+        let generated = output(&provider, index.scan(), &issued, 1);
+        assert_eq!(generated.scan().macro_definitions().len(), 2);
+        let prepared = SourceSyntaxAssembly::new(&provider, &index, 1)
+            .unwrap()
+            .attach(&issued, generated.clone())
+            .unwrap()
+            .finish()
+            .unwrap();
+        let selected: Vec<_> = generated
+            .scan()
+            .macro_definitions()
+            .iter()
+            .map(|header| {
+                prepared
+                    .macro_definitions()
+                    .iter()
+                    .find(|anchor| anchor.definition().identity == header.identity)
+                    .unwrap()
+            })
+            .collect();
+        assert_ne!(
+            selected[0].definition().identity,
+            selected[1].definition().identity
+        );
+        assert_ne!(selected[0].range(), selected[1].range());
+        let actual = prepared.syntax().syntax();
+        macro_anchors::validate(prepared.macro_definitions(), actual).unwrap();
+        let mut duplicated = prepared.macro_definitions().to_vec();
+        duplicated.push(selected[0].clone());
+        assert!(macro_anchors::validate(&duplicated, actual).is_err());
     }
 }
 

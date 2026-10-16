@@ -12,6 +12,142 @@ use std::collections::BTreeSet;
 fn invalid(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTERNAL-IR", message.into())
 }
+fn pattern_descendant(body: &BodyIndex, mut child: NodeId, owner: NodeId) -> bool {
+    for _ in 0..4096 {
+        if child == owner {
+            return true;
+        }
+        let Some(parent) = body
+            .nodes()
+            .get(child.0 as usize)
+            .and_then(|node| node.parent)
+        else {
+            return false;
+        };
+        child = parent;
+    }
+    false
+}
+fn pattern_transition(
+    body: &BodyIndex,
+    key: &PcKey,
+    operation: &super::op::PatternOperation,
+) -> Result<(), Diagnostic> {
+    use super::op::PatternOperation;
+    use crate::syntax::body_index::{ExpressionKind, NodeRole};
+    let owner = match operation {
+        PatternOperation::Begin { owner, .. }
+        | PatternOperation::StageBinding { owner, .. }
+        | PatternOperation::Preview { owner }
+        | PatternOperation::Finish { owner, .. }
+        | PatternOperation::Rollback { owner } => *owner,
+    };
+    let selected = body
+        .nodes()
+        .get(owner.0 as usize)
+        .ok_or_else(|| invalid("pattern transaction owner absent"))?;
+    let is_match = selected.role == NodeRole::Expression(ExpressionKind::Match);
+    let conditional = selected.role == NodeRole::Expression(ExpressionKind::Other)
+        && selected.clause_scope.is_some();
+    if (!is_match && !conditional) || !pattern_descendant(body, NodeId(key.node), owner) {
+        return Err(invalid(
+            "pattern transition is outside its indexed ordinary owner",
+        ));
+    }
+    let scrutinee = selected
+        .operands
+        .first()
+        .and_then(|id| body.nodes().get(id.0 as usize))
+        .and_then(|node| node.value)
+        .ok_or_else(|| invalid("pattern source operand absent"))?;
+    match operation {
+        PatternOperation::Begin {
+            alternative,
+            source,
+            retry,
+            ..
+        } => {
+            let alternative_node = body
+                .nodes()
+                .get(alternative.0 as usize)
+                .ok_or_else(|| invalid("pattern alternative absent"))?;
+            if *source != scrutinee
+                || alternative_node.role != NodeRole::Pattern
+                || !pattern_descendant(body, *alternative, owner)
+                || (is_match && (key.node != alternative.0 || key.phase != Phase::Entry.code()?))
+                || (conditional
+                    && (key.node != owner.0
+                        || !matches!(Phase::from_code(key.phase), Phase::Operand(_))))
+            {
+                return Err(invalid("pattern begin source/alternative/entry differs"));
+            }
+            slot(body, *source, SlotKind::Value)?;
+            pc(body, retry)?;
+            let target = &body.nodes()[retry.node as usize];
+            if conditional {
+                if *retry != body.pc(owner, Phase::Exit)? {
+                    return Err(invalid("condition retry is not its indexed exit"));
+                }
+            } else if *retry != body.pc(owner, Phase::Exit)?
+                && (retry.phase != Phase::Entry.code()?
+                    || !matches!(target.role, NodeRole::Pattern | NodeRole::MatchArm)
+                    || !pattern_descendant(body, target.id, owner)
+                    || target.range.start <= alternative_node.range.start)
+            {
+                return Err(invalid(
+                    "pattern retry is not a forward continuation of its owner",
+                ));
+            }
+        }
+        PatternOperation::StageBinding {
+            binding, source, ..
+        } => {
+            if key.phase != Phase::Commit.code()?
+                || (is_match && key.node != binding.0)
+                || body.nodes().get(binding.0 as usize).is_none_or(|node| {
+                    node.role != NodeRole::Pattern || !pattern_descendant(body, *binding, owner)
+                })
+                || (*source != scrutinee && !selected.runtime_temporaries.contains(&Some(*source)))
+            {
+                return Err(invalid(
+                    "pending pattern binding source/target/phase differs",
+                ));
+            }
+            slot(body, *source, SlotKind::Value)?;
+        }
+        PatternOperation::Preview { .. } => {
+            if !is_match || key.phase != Phase::Commit.code()? {
+                return Err(invalid(
+                    "pattern guard preview is outside its selected commit phase",
+                ));
+            }
+        }
+        PatternOperation::Finish { matched, .. } => {
+            if let Some(matched) = matched {
+                if !conditional
+                    || key.node != owner.0
+                    || key.phase != Phase::Exit.code()?
+                    || selected.value != Some(*matched)
+                {
+                    return Err(invalid("conditional pattern finish Bool differs"));
+                }
+                slot(body, *matched, SlotKind::Value)?;
+            } else if key.phase != Phase::Commit.code()? {
+                return Err(invalid(
+                    "pattern commit is outside its selected commit phase",
+                ));
+            }
+        }
+        PatternOperation::Rollback { .. } => {
+            if !is_match || key.phase != Phase::Exit.code()? {
+                return Err(invalid(
+                    "pattern rollback is outside its failed alternative exit",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
 fn definition_numeric_context(
     context: super::op::DefinitionNumericContext,
 ) -> Result<(), Diagnostic> {
@@ -143,11 +279,14 @@ fn scalar_binding_copy(body: &BodyIndex, draft: &RecipeDraft) -> Option<(SlotId,
                 place: read_place,
                 destination: read_destination,
             },
-            Op::BindLocal {
-                binding,
-                source: bound_source,
-                hint: super::op::HintRecipe::None,
-                writable: false,
+            Op::Pattern {
+                operation:
+                    super::op::PatternOperation::StageBinding {
+                        owner: transaction_owner,
+                        binding,
+                        source: bound_source,
+                        writable: false,
+                    },
             },
             ..,
         ] if *scope == arm.scope
@@ -155,6 +294,7 @@ fn scalar_binding_copy(body: &BodyIndex, draft: &RecipeDraft) -> Option<(SlotId,
             && *actual_place == place
             && *read_place == place
             && *read_destination == destination
+            && *transaction_owner == owner.id
             && *binding == pattern.id
             && *bound_source == destination =>
         {
@@ -519,6 +659,15 @@ fn verify_inner(
                 "definition parameter ordinal exceeds structural limit",
             ));
         }
+        if matches!(annotation, Some(super::op::HintRecipe::DefinitionResult))
+            && (draft.key.node != 0
+                || draft.key.phase != Phase::Entry.code()?
+                || !matches!(op, Op::SetHint { child, .. } if body.nodes()[0].value == Some(*child)))
+        {
+            return Err(invalid(
+                "definition result hint requires its exact owning root entry/result",
+            ));
+        }
         if let Some(super::op::HintRecipe::DefinitionNumeric(context)) = annotation {
             // Structural bound only. The reached VM must still replay the actual
             // current definition/source relation and admitted primitive contract.
@@ -568,6 +717,10 @@ fn verify_inner(
         }
 
         let output = match op {
+            Op::Pattern { operation } => {
+                pattern_transition(body, &draft.key, operation)?;
+                None
+            }
             Op::ProjectTuple {
                 base, destination, ..
             }
@@ -1361,6 +1514,22 @@ fn verify_inner(
         return Err(invalid("call seal requires one matching Call exit"));
     }
     match &exit {
+        RecipeExit::PatternRetry { owner } => {
+            use crate::syntax::body_index::{ExpressionKind, NodeRole};
+            if draft.key.phase != Phase::Exit.code()?
+                || node.role != NodeRole::MatchArm
+                || node.guard_scope.is_none()
+                || body
+                    .nodes()
+                    .get(owner.0 as usize)
+                    .is_none_or(|owner| owner.role != NodeRole::Expression(ExpressionKind::Match))
+                || !pattern_descendant(body, node.id, *owner)
+            {
+                return Err(invalid(
+                    "pattern retry requires its owning ordinary guard-failure exit",
+                ));
+            }
+        }
         RecipeExit::Call {
             site,
             resume,

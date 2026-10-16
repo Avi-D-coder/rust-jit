@@ -178,6 +178,13 @@ fn original_range_boundaries_char_and_suffix_context_have_exact_phases_all_editi
             let lower = range_recipe(&parsed, &body, &index, &range, Phase::Entry);
             let upper = range_recipe(&parsed, &body, &index, &range, Phase::Operand(0));
             let [
+                Op::Pattern {
+                    operation:
+                        PatternOperation::Begin {
+                            source: begin_source,
+                            ..
+                        },
+                },
                 Op::Literal {
                     literal: lo,
                     hint: low_hint,
@@ -195,6 +202,7 @@ fn original_range_boundaries_char_and_suffix_context_have_exact_phases_all_editi
                 panic!("original lower range phase shape")
             };
             assert_eq!(right, expected);
+            assert_eq!(begin_source, source);
             assert_eq!(discarded, expected);
             let [
                 Op::Discard { source: prior },
@@ -281,7 +289,7 @@ fn original_range_boundaries_char_and_suffix_context_have_exact_phases_all_editi
         {
             let recipe = range_recipe(&parsed, &body, &index, range, Phase::Entry);
             assert!(
-                matches!(recipe.recipe().operations.first(), Some(Op::Literal { hint: HintRecipe::Primitive(actual), .. }) if *actual == ty)
+                matches!(recipe.recipe().operations.iter().find(|op| matches!(op, Op::Literal { .. })), Some(Op::Literal { hint: HintRecipe::Primitive(actual), .. }) if *actual == ty)
             );
         }
     }
@@ -317,7 +325,11 @@ fn original_macro_ranges_stay_opaque_and_lrr_signed_min_preserves_its_source() {
             literal,
             hint: HintRecipe::Primitive(PrimitiveType::I8),
             ..
-        }) = recipe.recipe().operations.first()
+        }) = recipe
+            .recipe()
+            .operations
+            .iter()
+            .find(|op| matches!(op, Op::Literal { .. }))
         else {
             panic!("LRR direct range signed MIN instruction")
         };
@@ -417,7 +429,7 @@ fn guarded_range_commits_before_guard_and_keeps_plain_binding_admission_separate
         let arm_id = index.nodes()[range_id.0 as usize].parent.unwrap();
         assert_eq!(index.nodes()[arm_id.0 as usize].role, NodeRole::MatchArm);
         assert!(
-            matches!(commit.recipe().operations.as_ref(), [Op::Discard { .. }, Op::ScopeEnter { scope }, Op::SetHint { hint: HintRecipe::Primitive(PrimitiveType::Bool), .. }] if *scope == index.nodes()[arm_id.0 as usize].scope)
+            matches!(commit.recipe().operations.as_ref(), [Op::Discard { .. }, Op::ScopeEnter { scope }, Op::Pattern { operation: PatternOperation::Preview { .. } }, Op::SetHint { hint: HintRecipe::Primitive(PrimitiveType::Bool), .. }] if *scope == index.nodes()[arm_id.0 as usize].scope)
         );
         let guard_false = prepare(
             &parsed,
@@ -434,10 +446,15 @@ fn guarded_range_commits_before_guard_and_keeps_plain_binding_admission_separate
         let id = super::super::id_for(&index, &body, pattern.syntax()).unwrap();
         let next = index.nodes()[id.0 as usize].parent.unwrap();
         assert_eq!(index.nodes()[next.0 as usize].role, NodeRole::MatchArm);
+        let match_id = super::super::id_for(&index, &body, matched.syntax()).unwrap();
         assert_eq!(
             guard_false.recipe().exit,
-            RecipeExit::Next(index.pc(next, Phase::Entry).unwrap())
+            RecipeExit::PatternRetry { owner: match_id }
         );
+        let first = range_recipe(&parsed, &body, &index, &range, Phase::Entry);
+        assert!(matches!(first.recipe().operations.first(),
+            Some(Op::Pattern { operation: PatternOperation::Begin { retry, .. } })
+                if *retry == index.pc(next, Phase::Entry).unwrap()));
         let unproven = prepare(
             &parsed,
             &body,
@@ -553,7 +570,11 @@ fn floating_range_source_family_sign_and_suffix_are_exact_all_editions() {
                 literal,
                 hint: HintRecipe::Primitive(actual),
                 ..
-            }) = recipe.recipe().operations.first()
+            }) = recipe
+                .recipe()
+                .operations
+                .iter()
+                .find(|op| matches!(op, Op::Literal { .. }))
             else {
                 panic!("source floating range missing actual literal/hint")
             };

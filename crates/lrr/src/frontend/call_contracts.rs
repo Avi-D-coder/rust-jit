@@ -1037,6 +1037,7 @@ fn prepare(
         EvaluatedArguments::References(reference) => closed_reference_calls::bind_references(
             db,
             callee,
+            (graph, sources),
             &mut hints,
             reference.store,
             arguments,
@@ -1060,6 +1061,12 @@ fn prepare(
     let transaction = Digest::of_bytes(&[definition.0.as_slice(), b"call-contract"].concat());
     let mut instantiated = signature.clone();
     let mut normalized_deferred_return = None;
+    if let Some(source) = closed_references
+        .as_ref()
+        .and_then(|proof| proof.result_source())
+    {
+        instantiated.result_symbolic = Some(source.clone());
+    }
     for (parameter, term) in instantiated.parameters.iter_mut().zip(&templates) {
         parameter.symbolic = Some(term.clone());
     }
@@ -1179,7 +1186,9 @@ fn prepare(
     let result_descriptor = match instantiated.result_symbolic.as_ref() {
         Some(TyTerm::Param(key)) => runtime.get(key).copied(),
         Some(TyTerm::Primitive(p)) => Some(primitive_runtime_id(*p)?),
-        _ => None,
+        _ => closed_references
+            .as_ref()
+            .and_then(|proof| proof.result_descriptor()),
     };
     Ok(QueryPoll::Ready(Ok(ContractPreparation::Ready(
         PreparedCallContracts {

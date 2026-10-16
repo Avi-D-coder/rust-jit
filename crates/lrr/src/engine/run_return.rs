@@ -59,7 +59,21 @@ impl RunMachine {
                         "returned rigid source parameter differs from declared result".into(),
                     ));
                 }
-                if suspended.call.contracts.result_descriptor.is_some()
+                let reference_result = suspended
+                    .call
+                    .contracts
+                    .closed_references
+                    .as_ref()
+                    .is_some_and(|proof| proof.has_result());
+                if reference_result {
+                    suspended.call.contracts.admit_reference_return(
+                        db,
+                        &suspended.call.callee,
+                        &self.store,
+                        ticket,
+                        self.frame.return_source.as_ref(),
+                    )?;
+                } else if suspended.call.contracts.result_descriptor.is_some()
                     || matches!(
                         suspended.call.contracts.source_result,
                         Some(crate::traits::term::TyTerm::Param(_))
@@ -146,6 +160,14 @@ impl RunMachine {
             return Err(call_fault("return continuation changed during cleanup"));
         }
         self.store.peek_ticket(active.ticket)?;
+        if let Some(proof) = self
+            .calls
+            .last()
+            .and_then(|call| call.call.contracts.closed_references.as_ref())
+            .filter(|proof| proof.has_result())
+        {
+            proof.recheck_result_ticket(&self.store, active.ticket)?;
+        }
         if !self.frame.advance_return_cleanup(&mut self.store)? {
             return Ok(None);
         }
@@ -154,6 +176,20 @@ impl RunMachine {
             .take()
             .ok_or_else(|| call_fault("completed return continuation absent"))?;
         if let Some(mut suspended) = self.calls.pop() {
+            // Cleanup may retire locations. Refuse before publishing the caller
+            // unless the actual target still matches the admitted input lease.
+            if let Some(proof) = suspended
+                .call
+                .contracts
+                .closed_references
+                .as_ref()
+                .filter(|proof| proof.has_result())
+            {
+                if let Err(error) = proof.recheck_result_ticket(&self.store, active.ticket) {
+                    self.calls.push(suspended);
+                    return Err(error);
+                }
+            }
             let bytes = match self.call_bytes.checked_sub(suspended.call.retained_bytes) {
                 Some(bytes) => bytes,
                 None => {
@@ -213,3 +249,7 @@ impl RunMachine {
         }))
     }
 }
+
+#[cfg(test)]
+#[path = "run_reference_result_tests.rs"]
+mod reference_result_tests;

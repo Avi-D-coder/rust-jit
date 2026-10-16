@@ -893,6 +893,21 @@ impl RunMachine {
             .iter()
             .any(|argument| matches!(argument.source, crate::traits::term::TyTerm::Ref(..)));
         if reference_arguments {
+            let Some(available) = self
+                .call_limits
+                .max_metadata_bytes
+                .checked_sub(self.call_bytes)
+                .and_then(|bytes| bytes.checked_sub(self.pending_bytes))
+            else {
+                return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
+            };
+            let Some(mut reference_bytes) = arguments
+                .len()
+                .checked_mul(std::mem::size_of::<Option<ClosedReferenceArgument>>())
+                .filter(|bytes| *bytes <= available)
+            else {
+                return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
+            };
             if references.try_reserve_exact(arguments.len()).is_err() {
                 return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
             }
@@ -903,8 +918,28 @@ impl RunMachine {
                             "reference source argument slot absent",
                         )));
                     };
-                    match ClosedReferenceArgument::capture(&self.frame, *slot, &self.store) {
-                        Ok(evidence) => Some(evidence),
+                    match ClosedReferenceArgument::capture_budgeted(
+                        &self.frame,
+                        *slot,
+                        &self.store,
+                        available - reference_bytes,
+                    ) {
+                        Ok(evidence) => {
+                            let bytes = match evidence.allocated_bytes() {
+                                Ok(bytes) => bytes,
+                                Err(error) => return QueryPoll::Ready(Err(error)),
+                            };
+                            reference_bytes = match reference_bytes
+                                .checked_add(bytes)
+                                .filter(|bytes| *bytes <= available)
+                            {
+                                Some(bytes) => bytes,
+                                None => {
+                                    return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
+                                }
+                            };
+                            Some(evidence)
+                        }
                         Err(error) => return QueryPoll::Ready(Err(error)),
                     }
                 } else {
@@ -1095,6 +1130,15 @@ impl RunMachine {
         actual: crate::runtime::shape::TypeId,
     ) -> Result<(), Diagnostic> {
         call.callee.revalidate(db)?;
+        if let Some(proof) = call
+            .contracts
+            .closed_references
+            .as_ref()
+            .filter(|proof| proof.has_result())
+        {
+            proof.validate_packet(call.callee.signature(), &call.contracts)?;
+            return call.contracts.check_return_descriptor(actual);
+        }
         if call.contracts.result_descriptor.is_some() {
             call.contracts.check_return_descriptor(actual)?;
             if let (Some(expected @ crate::traits::term::TyTerm::Primitive(_)), Some(found)) = (

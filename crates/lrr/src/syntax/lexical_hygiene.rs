@@ -39,7 +39,15 @@ impl ParsedFile {
     ) -> Result<bool, Diagnostic> {
         match (self.token_context(reference)?, self.token_context(binding)?) {
             (None, None) => Ok(true),
-            (Some(reference), Some(binding)) => Ok(reference.local == binding.local),
+            (Some(reference), Some(binding)) => {
+                let facts = self.hygiene_facts().ok_or_else(|| {
+                    Diagnostic::new(
+                        "LRR-E-MACRO-OUTPUT",
+                        "lexical source lacks its prepared hygiene facts".into(),
+                    )
+                })?;
+                Ok(facts.name_local(reference.context)? == facts.name_local(binding.context)?)
+            }
             _ => Err(Diagnostic::new(
                 "LRR-E-MACRO-OUTPUT",
                 "lexical reference and binding source contexts differ".into(),

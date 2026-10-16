@@ -180,16 +180,30 @@ fn irrefutable_condition_test_preserves_scalar_source_until_move_commit() {
             panic!("wrong recipe")
         };
         let ops = &recipe.recipe().operations;
-        if let Some(Op::BindLocal { source, .. }) =
-            ops.iter().find(|op| matches!(op, Op::BindLocal { .. }))
-        {
+        if let Some(Op::Pattern {
+            operation: lrr::ir::op::PatternOperation::StageBinding { source, .. },
+        }) = ops.iter().find(|op| {
+            matches!(
+                op,
+                Op::Pattern {
+                    operation: lrr::ir::op::PatternOperation::StageBinding { .. }
+                }
+            )
+        }) {
             assert!(tested);
             let cell = frame.cell(*source).unwrap();
             assert!(matches!(store.state(cell).unwrap(), CellState::Live(_)));
             original = Some(cell);
         }
         let result = step(&mut frame, &mut store, recipe).unwrap();
-        if ops.iter().any(|op| matches!(op, Op::BindLocal { .. })) {
+        if ops.iter().any(|op| {
+            matches!(
+                op,
+                Op::Pattern {
+                    operation: lrr::ir::op::PatternOperation::Finish { matched: None, .. }
+                }
+            )
+        }) {
             assert_eq!(store.state(original.unwrap()).unwrap(), CellState::Moved);
             committed = true;
         }

@@ -56,7 +56,9 @@ fn frame_hint(
     required: bool,
     store: &GuestStore,
 ) -> Result<Option<TypeId>, Diagnostic> {
-    if let HintRecipe::DefinitionParameter(ordinal) = hint {
+    if matches!(hint, HintRecipe::DefinitionResult) {
+        frame_hint(frame, &frame.definition_result_hint()?, required, store)
+    } else if let HintRecipe::DefinitionParameter(ordinal) = hint {
         concrete(&HintRecipe::Primitive(
             frame.definition_parameter_primitive(*ordinal)?,
         ))
@@ -98,6 +100,9 @@ fn materialize_hint(
     required: bool,
     store: &mut GuestStore,
 ) -> Result<Option<TypeId>, Diagnostic> {
+    if matches!(hint, HintRecipe::DefinitionResult) {
+        return materialize_hint(frame, &frame.definition_result_hint()?, required, store);
+    }
     if let HintRecipe::Reference {
         mutable, target, ..
     } = hint
@@ -551,6 +556,7 @@ fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Dia
             frame_hint(frame, hint, true, store)?;
             frame.preflight_declaration(*binding)
         }
+        Op::Pattern { operation } => frame.preflight_pattern(operation, store),
         Op::BindLocal {
             binding,
             source,
@@ -651,6 +657,7 @@ fn state_preflight(frame: &Frame, store: &GuestStore, op: &Op) -> Result<(), Dia
 }
 fn exit_preflight(frame: &Frame, store: &GuestStore, exit: &RecipeExit) -> Result<(), Diagnostic> {
     match exit {
+        RecipeExit::PatternRetry { owner } => frame.preflight_pattern_retry(*owner, store),
         RecipeExit::Call { .. } => {
             if !frame.call_ready || frame.call_arguments.is_none() {
                 return Err(invalid("Call exit requires a sealed argument packet"));
@@ -1134,6 +1141,7 @@ fn execute(
                 HintRecipe::Parameter(_)
                     | HintRecipe::DefinitionNumeric(_)
                     | HintRecipe::DefinitionParameter(_)
+                    | HintRecipe::DefinitionResult
                     | HintRecipe::Reference { .. }
                     | HintRecipe::ArrayPrimitive { .. }
             ) {
@@ -1196,6 +1204,7 @@ fn execute(
             source,
             destination,
         } => frame.assign_local(*binding, *source, *destination, store),
+        Op::Pattern { operation } => frame.execute_pattern(operation, store),
         Op::BindLocal {
             binding,
             source,
@@ -1406,6 +1415,9 @@ pub(crate) fn step_with_constant(
         exit_preflight(frame, store, &recipe.exit)?;
         frame.charge_fuel()?;
         let outcome = match &recipe.exit {
+            RecipeExit::PatternRetry { owner } => {
+                StepOutcome::Next(frame.pattern_retry(*owner, store)?)
+            }
             RecipeExit::Call {
                 site,
                 resume,

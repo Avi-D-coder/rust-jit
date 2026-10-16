@@ -14,6 +14,7 @@ pub(crate) struct SyntaxRequestReceipt {
     pub(super) key: ExpansionKey,
     pub(super) site: Key,
     pub(super) roots: Digest,
+    pub(super) definition: Option<crate::expand::scopes::MacroDefinition>,
     input: SyntaxInput,
 }
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -56,6 +57,17 @@ impl SyntaxRequestReceipt {
             key: request.key().clone(),
             site: request.site,
             roots: roots_identity(request.input.roots())?,
+            definition: match request.key().macro_identity {
+                MacroIdentity::Declaration { definition }
+                | MacroIdentity::Builtin { definition } => {
+                    Some(crate::expand::scopes::MacroDefinition {
+                        identity: definition,
+                        defining_unit: request.owner,
+                        definition_edition: request.key().definition_edition,
+                    })
+                }
+                MacroIdentity::Procedural { .. } => None,
+            },
             input,
         })
     }

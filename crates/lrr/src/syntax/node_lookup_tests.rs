@@ -36,6 +36,21 @@ fn indexed_role_lookup_matches_source_preorder_on_unchanged_originals_all_editio
             for body in outline.items.iter().filter_map(|item| item.body.as_ref()) {
                 let index = parsed.index_body(body, Default::default()).unwrap();
                 for node in index.nodes() {
+                    let expected_ids: Vec<_> = index
+                        .nodes()
+                        .iter()
+                        .filter(|candidate| candidate.range == node.range)
+                        .map(|candidate| candidate.id)
+                        .collect();
+                    let actual_ids: Vec<_> = index
+                        .nodes_at_range(node.range)
+                        .map(|candidate| candidate.id)
+                        .collect();
+                    assert_eq!(
+                        actual_ids, expected_ids,
+                        "edition {edition}, range {:?}",
+                        node.range
+                    );
                     let expected = parsed.parsed.tree().syntax().descendants().find(|syntax| {
                         u32::from(syntax.text_range().start())
                             == body.range.start + node.range.start

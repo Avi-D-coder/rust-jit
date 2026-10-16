@@ -62,6 +62,8 @@ pub enum QueryKey {
     ScopeBucket(BucketKey),
     Signature(Digest),
     FunctionSignature(Digest),
+    ReferenceHeader(Digest),
+    PatternPlan(crate::source::manifest::PcKey),
     TypeAlias(Digest),
     TypeSchema(Digest),
     ConstructorPlan(crate::source::manifest::PcKey),
@@ -90,6 +92,8 @@ impl QueryKey {
             | Self::TypeSchema(_)
             | Self::TypeAlias(_)
             | Self::FunctionSignature(_)
+            | Self::ReferenceHeader(_)
+            | Self::PatternPlan(_)
             | Self::Signature(_)
             | Self::BodyStructure(_)
             | Self::Thunk(_) => 0,
@@ -108,6 +112,8 @@ impl QueryKey {
             Self::ScopeBucket(_) => "ScopeBucket",
             Self::Signature(_) => "Signature",
             Self::FunctionSignature(_) => "FunctionSignature",
+            Self::ReferenceHeader(_) => "ReferenceHeader",
+            Self::PatternPlan(_) => "PatternPlan",
             Self::TypeAlias(_) => "TypeAlias",
             Self::TypeSchema(_) => "TypeSchema",
             Self::ConstructorPlan(_) => "ConstructorPlan",
@@ -175,6 +181,14 @@ impl StableEncode for QueryKey {
             Self::FunctionSignature(k) => {
                 e.u32(8);
                 e.digest(*k);
+            }
+            Self::ReferenceHeader(k) => {
+                e.u32(31);
+                e.digest(*k);
+            }
+            Self::PatternPlan(k) => {
+                e.u32(32);
+                e.record(k);
             }
             Self::TypeAlias(k) => {
                 e.u32(9);

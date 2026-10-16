@@ -12,6 +12,11 @@ pub(crate) use constant_array_frame::{ConstantPublicationActivation, ConstantPub
 #[cfg(test)]
 #[path = "integer_literal_decode_tests.rs"]
 mod integer_literal_decode_tests;
+#[path = "frame_pattern.rs"]
+mod pattern_frame;
+#[cfg(test)]
+#[path = "frame_pattern_tests.rs"]
+mod pattern_tests;
 #[path = "frame_scope_cleanup.rs"]
 mod scope_cleanup_frame;
 #[path = "frame_temporary_scopes.rs"]
@@ -201,6 +206,7 @@ pub struct Frame {
     constant_activation: Option<source_constant_frame::BoundSourceConstant>,
     copy_activation: Option<aggregate_copy_frame::OpActivation>,
     cleanup_activation: Option<scope_cleanup_frame::Activation>,
+    patterns: super::pattern::Transactions,
     call_progress: Vec<(super::call::CallIdentity, (u32, u32))>,
     ordinary_calls: Box<[Option<crate::core::digest::Digest>]>,
     pub(crate) call_cells: Vec<CellId>,
@@ -273,6 +279,8 @@ impl Frame {
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<aggregate_copy_frame::OpActivation>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<scope_cleanup_frame::Activation>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<crate::runtime::cell::StoreSession>()))
+            .and_then(|bytes| super::pattern::Transactions::metadata_bytes(body.nodes().len())
+                .and_then(|patterns| bytes.checked_add(patterns)))
     }
     pub fn new(
         body: impl Into<Arc<BodyIndex>>,
@@ -394,6 +402,7 @@ impl Frame {
             .map_err(|_| crate::runtime::arena::resource())?;
         ordinary_calls.resize(body.nodes().len(), None);
         let ordinary_calls = ordinary_calls.into_boxed_slice();
+        let patterns = super::pattern::Transactions::new(body.nodes().len())?;
         let anchor = store.new_frame_anchor()?;
         Ok(Self {
             body,
@@ -413,6 +422,7 @@ impl Frame {
             constant_activation: None,
             copy_activation: None,
             cleanup_activation: None,
+            patterns,
             call_progress: Default::default(),
             ordinary_calls,
             call_cells: vec![],
@@ -1340,10 +1350,52 @@ impl Frame {
                 )
             })
     }
+    pub(crate) fn definition_result_source(
+        &self,
+    ) -> Result<crate::traits::term::TyTerm, Diagnostic> {
+        let context = self.context.as_ref().ok_or_else(|| {
+            invalid("reference result requires its prepared definition environment")
+        })?;
+        if self.pc.node != 0
+            || self.pc.phase != crate::ir::pc::Phase::Entry.code()?
+            || context.definition().definition != self.body.body().definition
+        {
+            return Err(invalid(
+                "reference result hint belongs to another definition/root entry",
+            ));
+        }
+        let source = context.reference_result_source()?;
+        if !matches!(source, crate::traits::term::TyTerm::Ref(_, _, target)
+            if matches!(target.as_ref(), crate::traits::term::TyTerm::Primitive(_)))
+        {
+            return Err(invalid(
+                "prepared reference result source is outside its closed contract",
+            ));
+        }
+        Ok(source.clone())
+    }
+    pub(crate) fn definition_result_hint(&self) -> Result<crate::ir::op::HintRecipe, Diagnostic> {
+        let crate::traits::term::TyTerm::Ref(region, mutable, target) =
+            self.definition_result_source()?
+        else {
+            return Err(invalid("prepared reference result disappeared"));
+        };
+        let crate::traits::term::TyTerm::Primitive(target) = *target else {
+            return Err(invalid("prepared reference result pointee disappeared"));
+        };
+        Ok(crate::ir::op::HintRecipe::Reference {
+            region,
+            mutable,
+            target,
+        })
+    }
     pub(crate) fn resolved_annotation_source(
         &self,
         hint: &crate::ir::op::HintRecipe,
     ) -> Result<Option<crate::traits::term::TyTerm>, Diagnostic> {
+        if matches!(hint, crate::ir::op::HintRecipe::DefinitionResult) {
+            return self.definition_result_source().map(Some);
+        }
         if let crate::ir::op::HintRecipe::DefinitionParameter(ordinal) = hint {
             return Ok(Some(crate::traits::term::TyTerm::Primitive(
                 self.definition_parameter_primitive(*ordinal)?,
@@ -1365,7 +1417,8 @@ impl Frame {
             // they never manufacture an annotation without that frame context.
             HintRecipe::BorrowTarget { .. }
             | HintRecipe::DefinitionNumeric(_)
-            | HintRecipe::DefinitionParameter(_) => None,
+            | HintRecipe::DefinitionParameter(_)
+            | HintRecipe::DefinitionResult => None,
             HintRecipe::ArrayPrimitive { element, len } => Some(TyTerm::Array(
                 Box::new(TyTerm::Primitive(*element)),
                 crate::traits::term::ConstTerm::Value(u64::from(*len)),
@@ -4030,10 +4083,13 @@ impl Frame {
         // Checked object ownership/storage is already admitted by GuestStore.
         // A scalar preview cannot validate or copy an aggregate. Numeric
         // literal binding still requires the existing reached scalar context.
-        let actual = if admitted.kind == 8 {
-            admitted
-        } else {
-            store.preview_scalar(cell, None)?
+        let actual = match admitted.kind {
+            8 => admitted,
+            9 => {
+                store.reference_from_cell(cell)?;
+                admitted
+            }
+            _ => store.preview_scalar(cell, None)?,
         };
         if let Some(expected) = self.hint(SlotId(0))?
             && actual.type_id != expected.0
@@ -4296,6 +4352,7 @@ impl Frame {
                 }
             }
         }
+        self.patterns.retire_scope(scope);
         self.active_scopes.pop();
         Ok(())
     }

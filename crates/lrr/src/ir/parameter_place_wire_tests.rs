@@ -22,10 +22,10 @@ const ORIGINAL: &str = include_str!(
 );
 #[test]
 fn unchanged_dereference_parameters_address_original_cells_without_owning_read_all_editions() {
-    assert_eq!(LRIR_RECIPE_SCHEMA, 10);
-    assert_eq!(Recipe::DOMAIN, "lrr/v10/lrir-recipe");
+    assert_eq!(LRIR_RECIPE_SCHEMA, 11);
+    assert_eq!(Recipe::DOMAIN, "lrr/v11/lrir-recipe");
     assert_eq!(SOURCE_CONSTANT_OPCODE, 43);
-    assert_eq!(OPCODE_COUNT, 45);
+    assert_eq!(OPCODE_COUNT, 46);
     for edition in [2015, 2018, 2021, 2024] {
         let parsed = ParsedFile::parse(
             &SourceBlob::new(ORIGINAL.as_bytes().to_vec()).unwrap(),

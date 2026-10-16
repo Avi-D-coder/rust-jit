@@ -261,6 +261,6 @@ fn shared_pattern_literal_source_cannot_cross_the_owning_body() {
     let mut key = index.pc(NodeId(0), Phase::Entry).unwrap();
     key.body.definition = Digest([41; 32]);
     assert!(
-        matches!(plan.first(&body, &key), Err(error) if error.code == "LRR-E-INTERNAL-SNAPSHOT")
+        matches!(plan.first(&parsed, &body, &key), Err(error) if error.code == "LRR-E-INTERNAL-SNAPSHOT")
     );
 }

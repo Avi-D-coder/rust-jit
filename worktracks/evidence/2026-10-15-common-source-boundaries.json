@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "at": "2026-10-15T23:49:56.431142+00:00",
+  "at": "2026-10-16T00:39:44.682105+00:00",
   "claim": "LOCAL-024",
   "tasks": [
     "T024",
     "M014",
     "M016"
   ],
-  "state": "scoped_component_passed_fresh_full_milestone_running",
+  "state": "scoped_passed_full_milestone_failed",
   "source_baseline": "8e4e1c23c8",
   "source_packet": "artifacts/macos-first/common-source-boundaries-v1/SOURCE.json",
   "source_packet_sha256": "97d10d92d460d35272db0e37126763b94188366abd37088b2ed8cc5705a3b20a",
@@ -60,7 +60,7 @@
     "source_publication": "Checkpoint may be source WIP only. No task or all8 repair closure."
   },
   "validation": {
-    "state": "scoped_passed_full_milestone_running",
+    "state": "scoped_passed_full_milestone_failed",
     "run_directory": "artifacts/macos-first/sol-common-source-boundaries-validation-v1",
     "actual_launch": "f7ea22 session12021 PID33609",
     "frozen_source_member_prefix": "dca870f7",
@@ -73,7 +73,29 @@
     "actual_scoped_seal": "daddcd/0",
     "actual_target_inactivity": "da81f9/0",
     "full_milestone_launch": "80ef80 session47019 PID34737",
-    "full_milestone_terminal": null
+    "full_milestone_terminal": "ad127a/1",
+    "full_milestone_reconciliation": {
+      "listed": 3313,
+      "passed": 2894,
+      "failed": 1,
+      "unstarted": 418,
+      "interrupted": 0,
+      "ignored": 0,
+      "unexpected": 0
+    },
+    "full_milestone_named_failure": {
+      "name": "reached_or_binding_range_and_guard_frontiers_refuse_before_compare_or_commit",
+      "path": "xtask/tests/scalar_or_patterns.rs",
+      "line": 331,
+      "assertion": "recipe.recipe().operations contains Op::Unsupported",
+      "actual": "assertion false; no operation dump printed"
+    },
+    "architecture_audit_passed": true,
+    "lrr_library_passes_inside_milestone": 1159,
+    "sealed_release": "artifacts/macos-first/sol-common-source-boundaries-validation-v1/GATE-RELEASE.json",
+    "sealed_release_sha256": "47c758f1d4118e2dcd609a1942d82eb8fb2952b441305881b17e8bd4802d0d03",
+    "independent_verified_summary": "artifacts/macos-first/sol-common-source-boundaries-validation-v1/RELEASE-SUMMARY-VERIFIED.json",
+    "independent_verified_summary_sha256": "9c5713b7e597393865ff189e0d5e06482c8cfcdfd348ab544c73931ef602fb80"
   },
   "acceptance": {
     "new_configured_upstream_runtime_contract_passes": 0,

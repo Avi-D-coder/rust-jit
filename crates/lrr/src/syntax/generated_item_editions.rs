@@ -61,6 +61,10 @@ fn materialized(rules: &str, argument: &str) -> GeneratedItems {
 }
 fn scan(items: &GeneratedItems) -> crate::syntax::declaration_scan::DeclarationScan {
     let parsed = ParsedFile::from_generated_items(items).unwrap();
+    assert!(Arc::ptr_eq(
+        parsed.hygiene_facts().unwrap(),
+        &items.hygiene_facts()
+    ));
     assert_eq!(parsed.profile.edition, 2024);
     assert!(parsed.errors.is_empty());
     parsed

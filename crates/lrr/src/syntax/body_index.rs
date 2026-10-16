@@ -177,6 +177,9 @@ pub struct BodyIndex {
     profile: ProfileIdentity,
     cfg: crate::source::snapshot::CfgSet,
     nodes: Vec<StructuralNode>,
+    /// Derived from the explicitly encoded node ranges/IDs, never a second
+    /// source identity. Equal ranges preserve original preorder selection.
+    source_order: Vec<NodeId>,
     scopes: Vec<LexicalScope>,
     labels: Vec<LabelTarget>,
     constructor_guards: Vec<(SlotId, NodeId)>,
@@ -195,6 +198,23 @@ impl BodyIndex {
     }
     pub fn nodes(&self) -> &[StructuralNode] {
         &self.nodes
+    }
+    /// Exact relative source location, retaining all role-distinct nodes at
+    /// that location in original NodeId order. No source walk or resolution.
+    pub(crate) fn nodes_at_range(
+        &self,
+        range: SourceRange,
+    ) -> impl Iterator<Item = &StructuralNode> {
+        let key = (range.start, range.end);
+        let range_of = |id: &NodeId| {
+            let range = self.nodes[id.0 as usize].range;
+            (range.start, range.end)
+        };
+        let start = self.source_order.partition_point(|id| range_of(id) < key);
+        let count = self.source_order[start..].partition_point(|id| range_of(id) == key);
+        self.source_order[start..start + count]
+            .iter()
+            .map(|id| &self.nodes[id.0 as usize])
     }
     /// Syntactic pattern locations, not resolved binding declarations.
     pub fn pattern_locations(&self) -> impl Iterator<Item = &StructuralNode> {
@@ -516,12 +536,18 @@ impl ParsedFile {
             profile: self.profile.clone(),
             cfg: cfg.clone(),
             nodes: Vec::new(),
+            source_order: Vec::new(),
             scopes: Vec::new(),
             labels: Vec::new(),
             constructor_guards: Vec::new(),
             slots: 0,
             estimated_bytes: cfg_bytes,
         };
+        charge(
+            &mut index.estimated_bytes,
+            std::mem::size_of::<Vec<NodeId>>(),
+            limits.metadata_bytes,
+        )?;
         // Non-block initializers need an enclosing lifetime boundary even
         // when their root is itself a loop with a separate control scope.
         let initializer_scope = if ast::BlockExpr::can_cast(root.kind()) {
@@ -1298,6 +1324,37 @@ impl ParsedFile {
             });
             index.slots = next_slots;
         }
+        // Build this once, after real syntax and administrative IDs are final.
+        // Lookup must not rebuild or sort ranges during phase preparation.
+        let row_bytes = index
+            .nodes
+            .len()
+            .checked_mul(std::mem::size_of::<NodeId>())
+            .ok_or_else(|| limit("source range index metadata overflow"))?;
+        charge(&mut index.estimated_bytes, row_bytes, limits.metadata_bytes)?;
+        index
+            .source_order
+            .try_reserve_exact(index.nodes.len())
+            .map_err(|_| limit("source range index allocation"))?;
+        let spare_bytes = index
+            .source_order
+            .capacity()
+            .checked_sub(index.nodes.len())
+            .and_then(|spare| spare.checked_mul(std::mem::size_of::<NodeId>()))
+            .ok_or_else(|| limit("source range index capacity overflow"))?;
+        charge(
+            &mut index.estimated_bytes,
+            spare_bytes,
+            limits.metadata_bytes,
+        )?;
+        index
+            .source_order
+            .extend(index.nodes.iter().map(|node| node.id));
+        let nodes = &index.nodes;
+        index.source_order.sort_unstable_by_key(|id| {
+            let node = &nodes[id.0 as usize];
+            (node.range.start, node.range.end, id.0)
+        });
         Ok(index)
     }
 }
@@ -1339,6 +1396,29 @@ mod tests {
         assert_eq!(index.scopes()[0].kind, ScopeKind::Initializer);
         assert_eq!(index.scopes()[0].parent, None);
         assert!(index.nodes()[0].constructor_guard.is_none());
+        let same_range: Vec<_> = index
+            .nodes_at_range(index.nodes()[0].range)
+            .map(|node| (node.id, node.role))
+            .collect();
+        assert_eq!(
+            same_range,
+            vec![
+                (NodeId(0), NodeRole::Expression(ExpressionKind::Literal)),
+                (
+                    index.nodes().last().unwrap().id,
+                    NodeRole::InitializerReturn,
+                ),
+            ]
+        );
+        assert!(
+            index
+                .nodes_at_range(SourceRange {
+                    start: u32::MAX,
+                    end: u32::MAX,
+                })
+                .next()
+                .is_none()
+        );
         let exact_metadata_limit = BodyIndexLimits {
             metadata_bytes: index.estimated_bytes,
             ..Default::default()

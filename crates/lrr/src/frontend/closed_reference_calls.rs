@@ -3,18 +3,21 @@ use super::*;
 use crate::{
     ir::pc::SlotId,
     runtime::{
-        cell::{CellId, GuestStore, StoreSession},
+        cell::{CellId, GuestStore, ReferenceTarget, StoreSession},
         shape::TypeKey,
         value::ValueRepr,
     },
     syntax::{
-        closed_reference_signatures::ClosedReferenceSyntax,
+        closed_reference_signatures::{ClosedReferenceSyntax, ReferenceHeaderPlan},
         signatures::{FunctionSignature, GenericKind},
     },
     traits::term::RegionTerm,
     vm::frame::Frame,
 };
 use std::sync::Arc;
+#[path = "closed_reference_results.rs"]
+mod results;
+use results::ReferenceResultContract;
 fn invalid(message: &str) -> Diagnostic {
     fault("LRR-E-CALL-CONTEXT", message)
 }
@@ -32,7 +35,8 @@ enum DeclaredRegion {
 /// Source-created parameter syntax plus current owning primitive lookup.
 #[derive(Debug, Clone)]
 pub struct ClosedReferenceParameter {
-    syntax: ClosedReferenceSyntax,
+    syntax: Arc<ClosedReferenceSyntax>,
+    plan: Arc<ReferenceHeaderPlan>,
     definition: Digest,
     signature: Digest,
     region: DeclaredRegion,
@@ -50,40 +54,13 @@ impl ClosedReferenceParameter {
         sources: &[&PreparedSourceView],
         ordinal: usize,
     ) -> Result<Option<Arc<Self>>, Diagnostic> {
-        callee.revalidate(db)?;
         let signature = callee.signature();
-        let Some((InputValue::DefinitionSource(parse), _)) =
-            db.published_input(&InputKey::DefinitionSource(signature.definition))
-        else {
-            return Err(invalid("reference definition source absent"));
-        };
-        let parse = parse.clone();
-        // Use the same retained immutable query as ordinary signatures. A
-        // prepared original-source cache cannot supply generated/retained trees.
-        let parsed = match db.fetch(&SyntaxProvider, QueryKey::ParseFile(parse.clone())) {
-            QueryPoll::Ready(Ok(outcome)) => match outcome.value.as_ref() {
-                crate::db::value::QueryValue::ParseFile(parsed) => parsed.clone(),
-                _ => return Err(invalid("reference parser query variant differs")),
-            },
-            QueryPoll::Ready(Err(error)) => return Err(error),
-            QueryPoll::NeedInput(_) => {
-                return Err(invalid("reference current parser input absent"));
-            }
-        };
-        let Some((InputValue::DeclarationContext(context), _)) =
-            db.published_input(&InputKey::DeclarationContext(signature.definition))
-        else {
-            return Err(invalid("reference declaration context absent"));
-        };
-        let Some(syntax) =
-            parsed.closed_reference_parameter(signature, context, callee.body(), ordinal)?
-        else {
+        let plan = reference_header(db, callee)?;
+        let Some(syntax) = plan.parameter(ordinal).cloned() else {
             return Ok(None);
         };
         syntax.require(signature)?;
-        if syntax.parse() != &parsed.key() {
-            return Err(invalid("reference syntax parser differs"));
-        }
+        let parse = plan.parse();
         let primitive = match SignatureNames::from_database(db, graph, signature)?
             .unqualified(syntax.target(), None)?
         {
@@ -150,6 +127,7 @@ impl ClosedReferenceParameter {
         );
         let proof = Self {
             syntax,
+            plan,
             definition: signature.definition,
             signature: signature.fingerprint(),
             region,
@@ -183,6 +161,7 @@ impl ClosedReferenceParameter {
     ) -> Result<(), Diagnostic> {
         callee.revalidate(db)?;
         self.syntax.require(callee.signature())?;
+        self.plan.require(callee.signature(), self.syntax.parse())?;
         if self.definition != callee.signature().definition
             || self.signature != callee.signature().fingerprint()
             || self.revision != db.revision()
@@ -216,8 +195,7 @@ impl ClosedReferenceParameter {
     }
     pub fn allocated_bytes(&self) -> Result<usize, Diagnostic> {
         let mut bytes = std::mem::size_of::<Self>()
-            .checked_add(self.syntax.allocated_bytes().ok_or_else(limit)?)
-            .and_then(|n| self.source.heap_bytes().and_then(|m| n.checked_add(m)))
+            .checked_add(self.source.heap_bytes().ok_or_else(limit)?)
             .ok_or_else(limit)?;
         for key in self.inputs.keys() {
             bytes = bytes
@@ -228,6 +206,34 @@ impl ClosedReferenceParameter {
         Ok(bytes)
     }
 }
+/// Immutable source preparation is query-owned; Type and caller authority are
+/// admitted separately after this lookup. A retained proof pins its whole plan.
+fn reference_header(
+    db: &mut Database,
+    callee: &SourceCallable,
+) -> Result<Arc<ReferenceHeaderPlan>, Diagnostic> {
+    callee.revalidate(db)?;
+    let signature = callee.signature();
+    let plan = match db.fetch(
+        &SyntaxProvider,
+        QueryKey::ReferenceHeader(signature.definition),
+    ) {
+        QueryPoll::Ready(Ok(outcome)) => match outcome.value.as_ref() {
+            crate::db::value::QueryValue::ReferenceHeader(plan) => Arc::clone(plan),
+            crate::db::value::QueryValue::Error(error) => return Err(error.clone()),
+            _ => return Err(invalid("reference header query variant differs")),
+        },
+        QueryPoll::Ready(Err(error)) => return Err(error),
+        QueryPoll::NeedInput(_) => return Err(invalid("reference header source input absent")),
+    };
+    let Some((InputValue::DefinitionSource(parse), _)) =
+        db.published_input(&InputKey::DefinitionSource(signature.definition))
+    else {
+        return Err(invalid("reference definition source absent"));
+    };
+    plan.require(signature, parse)?;
+    Ok(plan)
+}
 /// The source term is read from an admitted frame slot, never supplied by caller.
 #[derive(Debug, Clone)]
 pub(crate) struct ClosedReferenceArgument {
@@ -235,12 +241,22 @@ pub(crate) struct ClosedReferenceArgument {
     cell: CellId,
     value: ValueRepr,
     source: TyTerm,
+    target: ReferenceTarget,
 }
 impl ClosedReferenceArgument {
+    #[cfg(test)]
     pub(crate) fn capture(
         frame: &Frame,
         slot: SlotId,
         store: &GuestStore,
+    ) -> Result<Self, Diagnostic> {
+        Self::capture_budgeted(frame, slot, store, 32 * 1024 * 1024)
+    }
+    pub(crate) fn capture_budgeted(
+        frame: &Frame,
+        slot: SlotId,
+        store: &GuestStore,
+        max_bytes: usize,
     ) -> Result<Self, Diagnostic> {
         frame.require_store(store)?;
         let source = frame
@@ -268,12 +284,31 @@ impl ClosedReferenceArgument {
         let cell = frame.cell(slot)?;
         let value = store.admit_move(cell)?;
         validate_value(store, cell, source, value)?;
-        Ok(Self {
+        let target_bytes = store.reference_target_owned_bytes(cell)?;
+        if std::mem::size_of::<Self>()
+            .checked_add(target_bytes)
+            .and_then(|n| source.heap_bytes().and_then(|m| n.checked_add(m)))
+            .is_none_or(|bytes| bytes > max_bytes)
+        {
+            return Err(limit());
+        }
+        let proof = Self {
             session: store.pattern_binding_session(),
             cell,
             value,
             source: source.clone(),
-        })
+            target: store.reference_target(cell)?,
+        };
+        if proof.allocated_bytes()? > max_bytes {
+            return Err(limit());
+        }
+        Ok(proof)
+    }
+    pub(crate) fn allocated_bytes(&self) -> Result<usize, Diagnostic> {
+        std::mem::size_of::<Self>()
+            .checked_add(self.target.owned_bytes()?)
+            .and_then(|n| self.source.heap_bytes().and_then(|m| n.checked_add(m)))
+            .ok_or_else(limit)
     }
     fn require(&self, store: &GuestStore, actual: &ArgumentType) -> Result<(), Diagnostic> {
         if self.session != store.pattern_binding_session()
@@ -323,6 +358,7 @@ pub struct ClosedReferenceContracts {
     definition: Digest,
     signature: Digest,
     bindings: Box<[ReferenceBinding]>,
+    result: Option<ReferenceResultContract>,
 }
 impl ClosedReferenceContracts {
     pub(super) fn admits(&self, ordinal: usize) -> bool {
@@ -398,6 +434,9 @@ impl ClosedReferenceContracts {
                 "reference certificate ordinal is outside the parameter table",
             ));
         }
+        if let Some(result) = &self.result {
+            result.validate_packet(signature, packet, &self.bindings)?;
+        }
         Ok(())
     }
     pub fn require_current(
@@ -412,6 +451,9 @@ impl ClosedReferenceContracts {
         }
         for binding in &self.bindings {
             binding.parameter.require_current(db, callee)?;
+        }
+        if let Some(result) = &self.result {
+            result.require_signature(callee.signature())?;
         }
         Ok(())
     }
@@ -445,6 +487,7 @@ impl ClosedReferenceContracts {
             )
             .ok_or_else(limit)?;
         for binding in &self.bindings {
+            let target_bytes = binding.argument.target.owned_bytes()?;
             bytes = bytes
                 .checked_add(binding.parameter.allocated_bytes()?)
                 .and_then(|n| {
@@ -454,6 +497,12 @@ impl ClosedReferenceContracts {
                         .heap_bytes()
                         .and_then(|m| n.checked_add(m))
                 })
+                .and_then(|n| n.checked_add(target_bytes))
+                .ok_or_else(limit)?;
+        }
+        if let Some(result) = &self.result {
+            bytes = bytes
+                .checked_add(result.allocated_bytes()?)
                 .ok_or_else(limit)?;
         }
         Ok(bytes)
@@ -462,11 +511,13 @@ impl ClosedReferenceContracts {
 pub(super) fn bind_references(
     db: &mut Database,
     callee: &SourceCallable,
+    namespace: (&NameNamespaces, &[&PreparedSourceView]),
     hints: &mut [ArgumentHint],
     store: &GuestStore,
     actuals: &[ArgumentType],
     references: &[Option<ClosedReferenceArgument>],
 ) -> Result<Option<Box<ClosedReferenceContracts>>, Diagnostic> {
+    let (graph, sources) = namespace;
     if hints.len() != actuals.len() || references.len() != actuals.len() {
         return Err(invalid("reference evidence arity differs"));
     }
@@ -523,8 +574,11 @@ pub(super) fn bind_references(
                 }
             }
         }
+        let target_bytes = argument.target.owned_bytes()?;
+        let parameter_bytes = parameter.allocated_bytes()?;
         retained = retained
-            .checked_add(parameter.allocated_bytes()?)
+            .checked_add(target_bytes)
+            .and_then(|n| n.checked_add(parameter_bytes))
             .and_then(|n| argument.source.heap_bytes().and_then(|m| n.checked_add(m)))
             .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(limit)?;
@@ -535,6 +589,7 @@ pub(super) fn bind_references(
         });
         hint.source = argument.source.clone();
     }
+    let result = ReferenceResultContract::capture(db, callee, graph, sources, &bindings, store)?;
     if bindings.is_empty() {
         return Ok(None);
     }
@@ -542,6 +597,7 @@ pub(super) fn bind_references(
         definition: callee.signature().definition,
         signature: callee.signature().fingerprint(),
         bindings: bindings.into_boxed_slice(),
+        result,
     };
     if proof.allocated_bytes()? > 32 * 1024 * 1024 {
         return Err(limit());
@@ -734,6 +790,9 @@ mod tests {
         slot: SlotId,
     }
     fn coverage_world() -> Coverage {
+        coverage_source("fn take(x:&bool,y:bool){}fn main(){&true;}")
+    }
+    fn coverage_source(text: &str) -> Coverage {
         use crate::{
             db::{key::QueryKey, provider::SyntaxProvider, value::QueryValue},
             ir::{
@@ -742,7 +801,7 @@ mod tests {
             },
             vm::step::{StepOutcome, step},
         };
-        let (mut db, source, graph) = source("fn take(x:&bool,y:bool){}fn main(){&true;}", 2024);
+        let (mut db, source, graph) = source(text, 2024);
         let callee = callable(&mut db, &source, &graph, "take");
         let body = source
             .outline()
@@ -919,5 +978,204 @@ mod tests {
         let mut different = c.callee.signature().clone();
         different.definition = Digest([87; 32]);
         assert!(certificate.validate_packet(&different, &packet).is_err());
+    }
+    #[test]
+    fn reference_result_source_certificate_rejects_public_packet_tampering() {
+        let mut c = coverage_source("fn take(x:&bool,y:bool)->&bool{x}fn main(){&true;}");
+        let mut packet = coverage_packet(&mut c);
+        let proof = packet.closed_references.as_ref().unwrap().clone();
+        assert!(proof.has_result());
+        proof
+            .validate_packet(c.callee.signature(), &packet)
+            .unwrap();
+        crate::vm::context::GenericEnv::checked_bytes(c.callee.signature(), &packet).unwrap();
+        let original = packet.source_result.clone();
+        packet.source_result = Some(TyTerm::Ref(
+            RegionTerm::Static,
+            false,
+            Box::new(TyTerm::Primitive(PrimitiveType::Bool)),
+        ));
+        assert!(
+            proof
+                .validate_packet(c.callee.signature(), &packet)
+                .is_err()
+        );
+        assert!(
+            crate::vm::context::GenericEnv::checked_bytes(c.callee.signature(), &packet).is_err()
+        );
+        packet.source_result = original;
+        packet.result_descriptor = Some(TypeId(2));
+        assert!(
+            proof
+                .validate_packet(c.callee.signature(), &packet)
+                .is_err()
+        );
+    }
+    #[test]
+    fn reference_result_return_admission_checks_current_source_and_actual_provenance() {
+        let mut c = coverage_source("fn take(x:&bool,y:bool)->&bool{x}fn main(){&true;}");
+        let mut packet = coverage_packet(&mut c);
+        let cell = c.frame.cell(c.slot).unwrap();
+        let ticket = c.store.copy_from(cell).unwrap();
+        let actual_source = c.frame.source_view(c.slot).unwrap().unwrap();
+        packet
+            .admit_reference_return(&mut c.db, &c.callee, &c.store, ticket, Some(&actual_source))
+            .unwrap();
+        packet
+            .closed_references
+            .as_ref()
+            .unwrap()
+            .recheck_result_ticket(&c.store, ticket)
+            .unwrap();
+        let value = c.store.peek_ticket(ticket).unwrap();
+        let forged = TyTerm::Ref(
+            RegionTerm::Static,
+            false,
+            Box::new(TyTerm::Primitive(PrimitiveType::Bool)),
+        );
+        assert!(
+            packet
+                .admit_reference_return(&mut c.db, &c.callee, &c.store, ticket, Some(&forged))
+                .is_err()
+        );
+        assert_eq!(c.store.peek_ticket(ticket).unwrap(), value);
+        c.db.begin_expansion_epoch(1).unwrap();
+        assert!(
+            packet
+                .admit_reference_return(
+                    &mut c.db,
+                    &c.callee,
+                    &c.store,
+                    ticket,
+                    Some(&actual_source)
+                )
+                .is_err()
+        );
+        assert_eq!(c.store.peek_ticket(ticket).unwrap(), value);
+    }
+    #[test]
+    fn prepared_reference_result_hint_requires_its_actual_definition_and_root_entry() {
+        use crate::{
+            db::value::QueryValue,
+            ir::pc::{NodeId, Phase},
+            vm::context::GenericEnv,
+        };
+        let mut c = coverage_source("fn take(x:&bool,y:bool)->&bool{x}fn main(){&true;}");
+        let packet = coverage_packet(&mut c);
+        let context = GenericEnv::capture_current(&mut c.db, &c.callee, &packet).unwrap();
+        let fetched =
+            c.db.fetch(
+                &SyntaxProvider,
+                QueryKey::BodyStructure(c.callee.body().unwrap().key()),
+            )
+            .into_ready()
+            .unwrap()
+            .unwrap();
+        let QueryValue::BodyStructure(index) = fetched.value.as_ref() else {
+            panic!()
+        };
+        let mut frame = Frame::new(
+            index.clone(),
+            index.pc(NodeId(0), Phase::Entry).unwrap(),
+            &mut c.store,
+        )
+        .unwrap();
+        assert!(frame.definition_result_source().is_err());
+        frame.install_context(context).unwrap();
+        assert_eq!(
+            Some(frame.definition_result_source().unwrap()),
+            packet.source_result
+        );
+        let counters = frame.counters.operations_started;
+        frame.pc = index.pc(NodeId(0), Phase::Commit).unwrap();
+        assert!(frame.definition_result_source().is_err());
+        assert_eq!(frame.counters.operations_started, counters);
+        let context = GenericEnv::capture_current(&mut c.db, &c.callee, &packet).unwrap();
+        assert!(c.frame.install_context(context).is_err());
+    }
+    #[test]
+    fn reference_target_evidence_budget_refuses_before_any_owner_or_counter_change() {
+        let c = coverage_world();
+        let before = (
+            c.store.budget().handles(),
+            c.store.budget().bytes(),
+            c.store.admit_move(c.frame.cell(c.slot).unwrap()).unwrap(),
+            c.frame.counters.operations_started,
+        );
+        assert!(ClosedReferenceArgument::capture_budgeted(&c.frame, c.slot, &c.store, 0).is_err());
+        assert_eq!(
+            before,
+            (
+                c.store.budget().handles(),
+                c.store.budget().bytes(),
+                c.store.admit_move(c.frame.cell(c.slot).unwrap()).unwrap(),
+                c.frame.counters.operations_started
+            )
+        );
+    }
+    #[test]
+    fn shared_header_plan_does_not_share_actual_caller_regions_or_target_receipts() {
+        use crate::{
+            db::value::QueryValue,
+            ir::op::Op,
+            vm::step::{StepOutcome, step},
+        };
+        let mut c = coverage_source("fn take(x:&bool,y:bool)->&bool{x}fn main(){&true;&false;}");
+        let first = coverage_packet(&mut c);
+        let first_plan = Arc::clone(
+            &first.closed_references.as_ref().unwrap().bindings[0]
+                .parameter
+                .plan,
+        );
+        // Reach the second ordinary Borrow through the same VM continuation;
+        // no source/region or ticket is installed directly by this control.
+        let mut reached = false;
+        for _ in 0..128 {
+            let outcome =
+                c.db.fetch(&SyntaxProvider, QueryKey::Thunk(c.frame.pc().clone()))
+                    .into_ready()
+                    .unwrap()
+                    .unwrap();
+            let QueryValue::Thunk(recipe) = outcome.value.as_ref() else {
+                panic!()
+            };
+            let borrow = recipe.recipe().operations.iter().find_map(|op| match op {
+                Op::Borrow { destination, .. } => Some(*destination),
+                _ => None,
+            });
+            assert!(matches!(
+                step(&mut c.frame, &mut c.store, recipe).unwrap(),
+                StepOutcome::Next(_)
+            ));
+            if let Some(slot) = borrow {
+                c.slot = slot;
+                reached = true;
+                break;
+            }
+        }
+        assert!(reached);
+        let second = coverage_packet(&mut c);
+        let second_proof = second.closed_references.as_ref().unwrap();
+        assert!(Arc::ptr_eq(
+            &first_plan,
+            &second_proof.bindings[0].parameter.plan
+        ));
+        assert_ne!(first.source_result, second.source_result);
+        assert_eq!(
+            c.db.trace.counts.get("ReferenceHeader:ProviderRun"),
+            Some(&1)
+        );
+        let ticket = c.store.copy_from(c.frame.cell(c.slot).unwrap()).unwrap();
+        second_proof
+            .recheck_result_ticket(&c.store, ticket)
+            .unwrap();
+        assert!(
+            first
+                .closed_references
+                .as_ref()
+                .unwrap()
+                .recheck_result_ticket(&c.store, ticket)
+                .is_err()
+        );
     }
 }

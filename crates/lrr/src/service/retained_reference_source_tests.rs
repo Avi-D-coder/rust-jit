@@ -142,3 +142,81 @@ fn retained_reference_parameter_proof_refuses_changed_expansion_epoch() {
     db.begin_expansion_epoch(2).unwrap();
     assert!(proof.require_current(&mut db, &callee).is_err());
 }
+
+#[test]
+fn common_reference_results_forward_real_caller_provenance_after_cleanup_all_editions() {
+    for edition in [2015, 2018, 2021, 2024] {
+        for (declarations, binding, argument) in [
+            ("fn take(x:&isize)->&isize{return &*x;}", "value", "&value"),
+            ("fn take<'a>(x:&'a isize)->&'a isize{x}", "value", "&value"),
+            (
+                "macro_rules! emit{()=>{fn take(x:&isize)->&isize{return &*x;}}}emit!();",
+                "value",
+                "&value",
+            ),
+            (
+                "macro_rules! emit{()=>{fn take(x:&isize)->&isize{return &*x;}}}macro_rules! wrap{()=>{emit!();}}wrap!();",
+                "value",
+                "&value",
+            ),
+            (
+                "fn take(x:&mut isize)->&isize{&*x}",
+                "mut value",
+                "&mut value",
+            ),
+        ] {
+            let text = format!(
+                "{declarations}fn read(x:&isize)->isize{{*x}}fn main()->isize{{let {binding}:isize=22;read(take({argument}))}}fn cold<T:Missing>(){{unknown();}}"
+            );
+            let mut db = Database::default();
+            db.trace.detailed = true;
+            let (input, discovery) = prepare_expanded_source(&mut db, &text, edition, 1, true);
+            let source = db
+                .prepared_source(input.prepared().source())
+                .unwrap()
+                .unwrap();
+            let original_main = body(&source, "main");
+            let cold = body(&source, "cold");
+            ready(db.publish_retained_syntax(input.clone()));
+            for name in ["take", "read"] {
+                if let Some(item) = source
+                    .outline()
+                    .items
+                    .iter()
+                    .find(|item| item.def_key.declared_name == name)
+                {
+                    ready(db.publish_retained_body(input.clone(), item.def_key.fingerprint()));
+                }
+            }
+            let main = ready(db.publish_retained_body(input, original_main.definition));
+            let mut run = ready(RunMachine::start_with_discovery(
+                &mut db, main, 100_000, discovery,
+            ));
+            let report = match run.poll(&mut db) {
+                RunPoll::Completed(report) => report,
+                RunPoll::Fault(error) => panic!("common reference result faulted: {error:?}"),
+                RunPoll::NeedInput(input) => panic!("common reference result suspended: {input:?}"),
+                RunPoll::Panicked(report) => panic!("common reference result panicked: {report:?}"),
+            };
+            assert!(matches!(report.value, ValueSummary::Signed(ref value) if value == "22"));
+            assert_eq!(report.opcode_counters.started_by_opcode[19], 2);
+            assert_eq!(report.opcode_counters.started_by_opcode[26], 0);
+            assert_eq!(
+                report.opcode_counters.operations_started,
+                report.opcode_counters.operations_completed
+            );
+            assert!(report.opcode_counters.return_scopes_cleaned >= 3);
+            assert_eq!(run.peak_guest_frames(), 2);
+            assert!(!db.trace.events.iter().any(|event| matches!(&event.key,
+                QueryKey::BodyStructure(body) if body == &cold)));
+            assert!(
+                db.trace
+                    .events
+                    .iter()
+                    .any(|event| matches!(event.key, QueryKey::FunctionSignature(_)))
+            );
+        }
+    }
+    // Forwarding to a second real source call exercises the restored caller
+    // reference source; a matching scalar value alone cannot admit that call.
+}
