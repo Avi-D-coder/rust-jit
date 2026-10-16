@@ -1737,15 +1737,81 @@ impl EnteredMacroIndex<'_> {
         module_scope: SourceScope,
         capture_imports: bool,
     ) -> Result<EnteredMacroIndex<'_>, Diagnostic> {
+        self.child_from_facts_with_context(
+            Arc::new(facts),
+            item,
+            child_body,
+            module_scope,
+            capture_imports,
+            None,
+        )
+    }
+    pub(super) fn enter_prepared_nested(
+        &self,
+        context: Arc<super::source_body_context::PreparedBodyContext>,
+    ) -> Result<EnteredMacroIndex<'_>, Diagnostic> {
+        let parent = context
+            .source()
+            .local_parent()
+            .ok_or_else(|| error("prepared nested body lacks its actual parent source plan"))?;
+        let source = context.source();
+        if parent.context().source().index().body() != &self.body
+            || self.body_context.as_ref().is_none_or(|actual| {
+                actual.source().identity() != parent.context().source().identity()
+            })
+        {
+            return Err(error(
+                "prepared nested body belongs to another entered parent",
+            ));
+        }
+        let mut rows = self.facts.items.iter().filter(|row| {
+            row.item.body.as_ref() == Some(source.body())
+                && row.item.def_key.fingerprint() == source.body().def_key
+        });
+        let item = rows
+            .next()
+            .ok_or_else(|| error("prepared nested declaration is absent"))?;
+        if rows.next().is_some()
+            || item.attribute_input.is_some()
+            || item.item.header != *source.header()
+            || item.item.scope != *source.scope()
+            || item.item.declaration_span != source.context().range
+        {
+            return Err(error("prepared nested declaration source facts differ"));
+        }
+        self.child_from_facts_with_context(
+            Arc::clone(context.facts()),
+            item,
+            &source.body().key(),
+            self.module_scope.clone(),
+            true,
+            Some(Arc::clone(&context)),
+        )
+    }
+    fn child_from_facts_with_context(
+        &self,
+        facts: Arc<crate::syntax::entered_macros::EnteredMacroFacts>,
+        item: &crate::syntax::body_items::BodyItem,
+        child_body: &crate::source::manifest::BodyKey,
+        module_scope: SourceScope,
+        capture_imports: bool,
+        context: Option<Arc<super::source_body_context::PreparedBodyContext>>,
+    ) -> Result<EnteredMacroIndex<'_>, Diagnostic> {
         if self.body_outers.len() >= 255 {
             return Err(error("nested declaration scope-chain depth exceeded"));
         }
-        let (outer, before) = self
-            .module_outer
-            .ok_or_else(|| error("prepared nested body needs its own current owning context"))?;
-        let mut child =
-            self.parent
-                .build_entered(facts, module_scope, outer, before, child_body)?;
+        if context.is_none() && self.module_outer.is_none() {
+            return Err(error(
+                "prepared nested body needs its own current owning context",
+            ));
+        }
+        let mut child = self.parent.build_entered_with_context(
+            facts,
+            module_scope,
+            self.module_outer,
+            child_body,
+            context,
+        )?;
         if capture_imports {
             child.namespace = Some(Arc::new(super::body_namespace::Namespace::capture(
                 self,
@@ -2768,6 +2834,9 @@ impl PublishedMacroIndex {
             .module_source()
             .ok_or_else(|| error("admitted body lacks its module macro-boundary receipt"))?;
         self.require_publication(owner)?;
+        if let Some(parent) = source.local_parent() {
+            return parent.enter_prepared_local_body(context);
+        }
         let module_outer = if context.generated_boundary().is_some() {
             // declaration_outer was checked by the opaque admission attach;
             // retained actual scopes carry the generated insertion boundary.

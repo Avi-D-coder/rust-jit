@@ -212,105 +212,24 @@ fn genuine_role_source_seal_yields_borrowed_view_without_runtime_source_grants()
 /// and retain its actual unresolved producer/namespace diagnostic.
 #[test]
 fn unchanged_full_core_macro_source_requires_real_annotation_closure_and_publication() {
-    let package = fixture_root().join("library/core");
-    let path = package.join("src/macros/mod.rs");
-    let (mut manifest, unit) = manifest(&path, CORE, 2024, &package);
-    let root = package.join("src/lib.rs").to_str().unwrap().to_owned();
-    manifest.inputs.source_files.insert(
-        root.clone(),
-        Some(Digest::of_bytes(include_bytes!(
-            "../../../../../fixtures/upstream/rustc-checkout/library/core/src/lib.rs"
-        ))),
+    let (mut db, mut discovery, sources) =
+        full_core_preparation::configured().unwrap_or_else(|error| {
+            panic!(
+                "unchanged full core actual preparation frontier: {}: {}",
+                error.code, error.message
+            )
+        });
+    let path = fixture_root().join("library/core/src/macros/mod.rs");
+    let facet = Arc::clone(
+        sources
+            .facets()
+            .iter()
+            .find(|facet| facet.recorded_path() == path.to_str().unwrap())
+            .expect("actual captured and adopted macros source is required"),
     );
-    manifest.graph.units.get_mut(&unit).unwrap().source_path = root;
-    let (mut source, mut selection) = input(unit, "src/macros/mod.rs", CORE, 2024);
-    source.module_path = vec!["macros".into()];
-    selection.outline.module_path = source.module_path.clone();
-    // The configured target's actual root is a separate source. Keeping the
-    // real child module path must not turn macros/mod.rs into a crate root.
-    let (root_input, root_selection) = input(
-        unit,
-        "src/lib.rs",
-        include_bytes!("../../../../../fixtures/upstream/rustc-checkout/library/core/src/lib.rs"),
-        2024,
-    );
-    let inputs =
-        PreparedSourceInputs::refresh(None, vec![root_input, source], BTreeMap::new()).unwrap();
-    let root_source = select(&inputs, &root_selection);
-    let source = select(&inputs, &selection);
-    let root_facet = Arc::new(
-        SourceMacroExportFacet::capture(
-            &manifest,
-            unit,
-            package.join("src/lib.rs").to_str().unwrap(),
-            root_source.share(),
-        )
-        .unwrap(),
-    );
-    let facet = Arc::new(
-        SourceMacroExportFacet::capture(&manifest, unit, path.to_str().unwrap(), source.share())
-            .unwrap(),
-    );
-    assert_eq!(facet.source().captured_macro_blob().unwrap().bytes(), CORE);
-    let environment =
-        Arc::new(FrozenCompileEnvironment::new(unit, &manifest.compile_env[&unit]).unwrap());
-    let mut db = Database::default();
-    db.publish_inputs(BTreeMap::from([
-        (
-            InputKey::SourceDependencies,
-            InputValue::SourceDependencies(source.source_dependencies().unwrap()),
-        ),
-        (
-            InputKey::UnitCompileEnv(unit),
-            InputValue::UnitCompileEnv(Arc::clone(&environment)),
-        ),
-    ]))
-    .unwrap();
-    db.begin_expansion_epoch(1).unwrap();
-    db.publish_macro_export_sources(&[Arc::clone(&root_facet), Arc::clone(&facet)])
-        .unwrap();
-    let declaration =
-        crate::frontend::source_module_declarations::SourceModuleDeclaration::from_captured(
-            root_facet.source(),
-        )
-        .unwrap()
-        .into_iter()
-        .find(|declaration| declaration.request().name == "macros")
-        .unwrap();
-    let request = crate::source::macro_export_module::MacroExportModuleRequest::prepare(
-        &mut db,
-        Arc::clone(&root_facet),
-        None,
-        Arc::clone(&facet),
-        declaration,
-        &super::module_adoption_tests::authorities(&root_facet, root_facet.preparation()),
-    )
-    .unwrap();
-    let module = super::module_adoption_tests::adopt(&mut db, &request).unwrap();
-    let compiler = Arc::new(
-        crate::frontend::compile_input_catalog::CompileInputCatalog::standalone(
-            &source.selection().outline.parse.profile,
-        )
-        .unwrap(),
-    );
-    let mut discovery = SourceDiscovery::new(
-        vec![root_source, source.share()],
-        source.outline().root_scope.clone(),
-        Namespace::Macro,
-        manifest.graph.fingerprint(),
-        1,
-    )
-    .unwrap()
-    .with_macro_export_source_publications(&mut db)
-    .unwrap()
-    .with_macro_export_module_adoptions(&mut db, &[module])
-    .unwrap()
-    .with_declarative_compiler(
-        environment.fingerprint(),
-        crate::expand::source_declarative::engine_version(),
-        compiler,
-    )
-    .unwrap();
+    let source = facet.source();
+    let selection = source.selection();
+    assert_eq!(source.captured_macro_blob().unwrap().bytes(), CORE);
     match discovery.poll().unwrap() {
         SourceDiscoveryStep::Sealed(_) => {}
         SourceDiscoveryStep::Incomplete {
@@ -350,5 +269,8 @@ fn unchanged_full_core_macro_source_requires_real_annotation_closure_and_publica
         db.input(&InputKey::SourceBlob(selection.outline.parse.content))
             .is_none()
     );
-    assert!(db.prepared_source(&selection).unwrap().is_none());
+    assert!(db.prepared_source(selection).unwrap().is_none());
 }
+
+#[path = "full_core_preparation.rs"]
+mod full_core_preparation;

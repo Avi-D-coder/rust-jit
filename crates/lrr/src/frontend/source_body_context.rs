@@ -25,6 +25,9 @@ use crate::{
 use std::sync::Arc;
 #[path = "body_import_occurrences.rs"]
 mod import_occurrences;
+#[path = "local_body_context.rs"]
+mod local_body;
+pub(crate) use local_body::capture_local;
 #[path = "body_type_occurrences.rs"]
 pub(crate) mod type_occurrences;
 fn fault(message: &str) -> Diagnostic {
@@ -41,6 +44,7 @@ pub(crate) struct AdmittedBodyContext {
     source_receipt: Option<Arc<InputValue>>,
     original: Option<PreparedSourceView>,
     generated_boundary: Option<Arc<crate::expand::body_macro_boundary::GeneratedBodyBoundary>>,
+    local_body: Option<local_body::LocalBodyContext>,
     identity: Digest,
     input_stamps: [Digest; 6],
     exclusive_bytes: usize,
@@ -62,6 +66,12 @@ impl AdmittedBodyContext {
         ]
         .into_iter()
         .chain(self.source_receipt.iter())
+        .chain(self.local_body.iter().map(|local| local.owner_input()))
+    }
+    pub(crate) fn local_parent(
+        &self,
+    ) -> Option<&Arc<super::source_locals::PreparedSourceLocalPlan>> {
+        self.local_body.as_ref().map(|local| local.parent())
     }
     pub(crate) fn generated_boundary(
         &self,
@@ -71,13 +81,16 @@ impl AdmittedBodyContext {
     pub(crate) fn generated_source(
         &self,
     ) -> Option<&Arc<crate::expand::generated_syntax::GeneratedSyntaxInput>> {
+        if self.local_body.is_some() {
+            return None;
+        }
         match self.source_receipt.as_deref() {
             Some(InputValue::GeneratedSyntax(unit)) => Some(unit),
             _ => None,
         }
     }
     fn refresh_identity(&mut self) {
-        let mut e = crate::core::digest::StableEncoder::new("lrr/v1/admitted-owning-body-context");
+        let mut e = crate::core::digest::StableEncoder::new("lrr/v2/admitted-owning-body-context");
         e.record(&self.parsed.key());
         e.record(self.index.body());
         e.digest(self.index.fingerprint());
@@ -94,6 +107,7 @@ impl AdmittedBodyContext {
         e.option(&self.generated_boundary, |e, boundary| {
             e.digest(boundary.fingerprint())
         });
+        e.option(&self.local_body, |e, local| e.digest(local.identity()));
         self.identity = e.finish();
     }
     pub(crate) fn attach_generated_boundary(
@@ -101,6 +115,11 @@ impl AdmittedBodyContext {
         db: &mut Database,
         boundary: Arc<crate::expand::body_macro_boundary::GeneratedBodyBoundary>,
     ) -> QueryPoll<Arc<Self>> {
+        if self.local_body.is_some() {
+            return QueryPoll::Ready(Err(fault(
+                "local body uses its actual parent lexical boundary",
+            )));
+        }
         match self.require_current(db) {
             QueryPoll::Ready(Ok(())) => {}
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -138,6 +157,7 @@ impl AdmittedBodyContext {
             source_receipt: self.source_receipt.clone(),
             original: self.original.as_ref().map(PreparedSourceView::share),
             generated_boundary: Some(boundary),
+            local_body: None,
             identity: Digest([0; 32]),
             input_stamps: self.input_stamps,
             exclusive_bytes: self.exclusive_bytes,
@@ -176,6 +196,9 @@ impl AdmittedBodyContext {
         self.original.as_ref()
     }
     pub(crate) fn module_source(&self) -> Option<&PreparedSourceView> {
+        if let Some(parent) = self.local_parent() {
+            return parent.context().module_source();
+        }
         self.generated_boundary()
             .and_then(|boundary| boundary.source_roots().first())
             .or_else(|| self.original_source())
@@ -361,7 +384,7 @@ pub(crate) fn capture(
     index: &BodyIndex,
     pc: &PcKey,
 ) -> QueryPoll<AdmittedBodyContext> {
-    match capture_inner(db, sources, index, pc) {
+    match capture_inner(db, sources, index, pc, None) {
         Ok(poll) => poll,
         Err(error) => QueryPoll::Ready(Err(error)),
     }
@@ -371,6 +394,10 @@ fn capture_inner(
     sources: &[&PreparedSourceView],
     index: &BodyIndex,
     pc: &PcKey,
+    local: Option<(
+        Arc<super::source_locals::PreparedSourceLocalPlan>,
+        &super::callables::SourceCallable,
+    )>,
 ) -> Result<QueryPoll<AdmittedBodyContext>, Diagnostic> {
     if index.body() != &pc.body || index.pc(NodeId(pc.node), Phase::from_code(pc.phase))? != *pc {
         return Err(fault("entered source source entered PC differs"));
@@ -446,7 +473,31 @@ fn capture_inner(
     }
     let mut source_receipt = None;
     let mut original = None;
-    if let Some(input) = db.input(&InputKey::RetainedSyntax(parse.content)) {
+    let local_body = if let Some((parent, callee)) = local {
+        let admitted = match local_body::LocalBodyContext::capture(
+            db,
+            parent,
+            callee,
+            parse,
+            handle,
+            declaration,
+            header,
+        ) {
+            QueryPoll::Ready(Ok(admitted)) => admitted,
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
+        };
+        let owner = admitted.parent().context().source();
+        original = owner.original_source().map(PreparedSourceView::share);
+        source_receipt = owner.source_receipt.clone();
+        Some(admitted)
+    } else {
+        None
+    };
+    if local_body.is_some() {
+        // The exact selected local declaration and source receipt were joined
+        // above. Module declaration maps are not local-function authority.
+    } else if let Some(input) = db.input(&InputKey::RetainedSyntax(parse.content)) {
         let InputValue::RetainedSyntax(unit) = input.as_ref() else {
             return Err(fault("entered source retained source input differs"));
         };
@@ -650,6 +701,7 @@ fn capture_inner(
         source_receipt,
         original,
         generated_boundary: None,
+        local_body,
         identity: Digest([0; 32]),
         input_stamps: [Digest([0; 32]); 6],
         exclusive_bytes,
@@ -705,6 +757,9 @@ impl PreparedBodyContext {
     pub(crate) fn reference_origin(
         &self,
     ) -> Result<Option<crate::syntax::token_wire::Key>, Diagnostic> {
+        if let Some(parent) = self.source.local_parent() {
+            return parent.context().reference_origin();
+        }
         match self.source.source_receipt.as_deref() {
             Some(InputValue::GeneratedSyntax(unit)) if self.source.generated_boundary.is_some() => {
                 Ok(Some(crate::syntax::token_wire::Key(
@@ -757,6 +812,29 @@ impl PreparedBodyContext {
             QueryPoll::Ready(Ok(())) => {}
             other => return other,
         }
+        self.require_retained_lease(db)
+    }
+    /// The opaque environment already owns and checks this exact source. Do
+    /// not recursively walk a retained local parent twice at every depth.
+    pub(crate) fn require_current_in_environment(
+        &self,
+        db: &mut Database,
+        environment: &crate::db::BodyEnvironmentInput,
+    ) -> QueryPoll<()> {
+        if environment.source().identity() != self.source.identity()
+            || environment.body() != self.source.index().body()
+            || !matches!(db.input(&InputKey::BodyEnvironment(environment.body().clone())).as_deref(),
+                Some(InputValue::BodyEnvironment(current)) if current.identity() == environment.identity())
+        {
+            return QueryPoll::Ready(Err(fault("prepared context current environment differs")));
+        }
+        match environment.require_current(db) {
+            QueryPoll::Ready(Ok(())) => {}
+            other => return other,
+        }
+        self.require_retained_lease(db)
+    }
+    fn require_retained_lease(&self, db: &mut Database) -> QueryPoll<()> {
         match &self.retained_lease {
             Some(lease) => match lease.require_current(db) {
                 QueryPoll::Ready(Ok(())) => {}
@@ -771,6 +849,11 @@ impl AdmittedBodyContext {
     /// Coordinator reuse test only. A true answer does not grant body/name
     /// authority: reuse must still consume require_current and the actual seal.
     pub(crate) fn has_current_inputs(&self, db: &mut Database) -> Result<bool, Diagnostic> {
+        if let Some(local) = &self.local_body {
+            if !local.has_current_inputs(db)? {
+                return Ok(false);
+            }
+        }
         let definition = self.body().def_key;
         for (ordinal, key) in [
             InputKey::DefinitionSource(definition),
@@ -822,6 +905,12 @@ impl AdmittedBodyContext {
         Ok(true)
     }
     pub(crate) fn require_current(&self, db: &mut Database) -> QueryPoll<()> {
+        if let Some(local) = &self.local_body {
+            match local.require_current(db) {
+                QueryPoll::Ready(Ok(())) => {}
+                other => return other,
+            }
+        }
         let definition = self.body().def_key;
         for (ordinal, key) in [
             InputKey::DefinitionSource(definition),
@@ -923,10 +1012,12 @@ impl AdmittedBodyContext {
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         }
         let mut retained_lease = None;
-        if matches!(
-            self.source_receipt.as_deref(),
-            Some(InputValue::RetainedSyntax(_))
-        ) {
+        if self.local_body.is_none()
+            && matches!(
+                self.source_receipt.as_deref(),
+                Some(InputValue::RetainedSyntax(_))
+            )
+        {
             let Some(owner) = self.original_source() else {
                 return QueryPoll::Ready(Err(fault("retained body original publication absent")));
             };
@@ -953,6 +1044,18 @@ impl AdmittedBodyContext {
         let mut macro_outers = Vec::new();
         let mut macro_hygiene = self.parsed.hygiene_facts().map(Arc::clone);
         let mut macro_ancestry = None;
+        if let Some(parent) = self.local_parent() {
+            macro_hygiene = parent.context().macro_hygiene().cloned();
+            macro_ancestry = parent.context().macro_ancestry().cloned();
+            if parent.context().macro_outers().len() > 256
+                || macro_outers
+                    .try_reserve_exact(parent.context().macro_outers().len())
+                    .is_err()
+            {
+                return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
+            }
+            macro_outers.extend(parent.context().macro_outers().iter().cloned());
+        }
         if let Some(boundary) = &generated_boundary {
             let Some(InputValue::GeneratedSyntax(unit)) = self.source_receipt.as_deref() else {
                 return QueryPoll::Ready(Err(fault(

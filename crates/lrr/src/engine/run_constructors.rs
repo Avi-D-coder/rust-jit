@@ -1,44 +1,31 @@
 //! Reached constructor facts are resolved before opcode fuel or guard allocation.
 use super::*;
 use crate::{
-    frontend::{
-        constructors::{RecordConstructorBinding, RecordConstructorDemand},
-        names::NameLookup,
-    },
-    syntax::constructors::ConstructorKind,
+    frontend::constructors::RecordConstructorBinding, syntax::constructors::ConstructorKind,
 };
 
 fn unsupported(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-UNSUPPORTED", message.into())
 }
-fn unresolved(demand: &RecordConstructorDemand) -> Diagnostic {
-    match demand {
-        RecordConstructorDemand::Name(NameLookup::Absent) => {
-            Diagnostic::new("LRR-E-NAME-MISSING", "constructor type is absent".into())
-        }
-        RecordConstructorDemand::Name(NameLookup::Inaccessible(_)) => Diagnostic::new(
-            "LRR-E-NAME-VISIBILITY",
-            "constructor type is inaccessible".into(),
-        ),
-        RecordConstructorDemand::Name(NameLookup::Ambiguous(_))
-        | RecordConstructorDemand::Name(NameLookup::AmbiguousModules(_)) => Diagnostic::new(
-            "LRR-E-NAME-AMBIGUOUS",
-            "constructor type is ambiguous".into(),
-        ),
-        RecordConstructorDemand::Name(NameLookup::NeedInput(_)) => {
-            unsupported("constructor lookup requires unresolved source producers or imports")
-        }
-        RecordConstructorDemand::Parameter(_) | RecordConstructorDemand::OwnerContext(_) => {
-            unsupported("constructor requires its entered generic or owner type context")
-        }
-        RecordConstructorDemand::Fields(_) => {
-            unsupported("constructor field types require further source type binding")
-        }
-        _ => unsupported("constructor requires further source member/type binding"),
-    }
-}
-
 impl RunMachine {
+    pub(super) fn prepare_installed_constructor(
+        &mut self,
+        db: &mut Database,
+        id: super::super::install::RecipeId,
+        contexts: &[super::super::runtime_macros::RuntimeMacroContext<'_>],
+    ) -> QueryPoll<()> {
+        match self.installed.prepared_constructor(db, id) {
+            Ok(Some(source)) => QueryPoll::Ready(
+                self.frame
+                    .prepare_installed_nominal_constructor(source, &mut self.store),
+            ),
+            Ok(None) => self.prepare_constructor(db, contexts),
+            Err(error) => QueryPoll::Ready(Err(error)),
+        }
+    }
+    // Unsealed legacy/structural entries retain their existing route until
+    // their common immutable preparation is delivered. Prepared record entries
+    // above never re-enter this query/binder path.
     pub(super) fn prepare_constructor(
         &mut self,
         db: &mut Database,
@@ -75,9 +62,9 @@ impl RunMachine {
                 "constructor requires a checked source catalogue",
             )));
         };
-        // Prepared entries retain their genuine owning environment. Consume
-        // that query before any original-only outline owner search. A failed
-        // current lookup must never fall back to the legacy reconstruction.
+        // A genuine prepared record entry must have installed its binding
+        // atomically with the recipe. Never reconstruct a missing payload or
+        // fall back after a stale/invalid prepared environment.
         if matches!(plan.kind(), ConstructorKind::Record { rest: None, .. })
             && db
                 .published_input(&crate::db::dependency::InputKey::BodyEnvironment(
@@ -85,28 +72,9 @@ impl RunMachine {
                 ))
                 .is_some()
         {
-            let mut sources = Vec::new();
-            if sources.try_reserve_exact(self.sources.len()).is_err() {
-                return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
-            }
-            sources.extend(self.sources.iter());
-            return match crate::frontend::constructors::bind_prepared_record_constructor(
-                db,
-                graph,
-                &sources,
-                &self.frame.body,
-                plan,
-            ) {
-                QueryPoll::Ready(Ok(RecordConstructorBinding::Ready(bound))) => QueryPoll::Ready(
-                    self.frame
-                        .prepare_nominal_constructor(plan, *bound, &mut self.store),
-                ),
-                QueryPoll::Ready(Ok(RecordConstructorBinding::Deferred(demand))) => {
-                    QueryPoll::Ready(Err(unresolved(&demand)))
-                }
-                QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
-            };
+            return QueryPoll::Ready(Err(call_fault(
+                "prepared record recipe lacks installed source binding",
+            )));
         }
         // This fixed-size identity has no owned syntax or allocation. Retain
         // it independently while the checked closure prepares frame facts.
@@ -264,7 +232,7 @@ impl RunMachine {
                     .prepare_nominal_constructor(plan, *bound, &mut self.store),
             ),
             QueryPoll::Ready(Ok(RecordConstructorBinding::Deferred(demand))) => {
-                QueryPoll::Ready(Err(unresolved(&demand)))
+                QueryPoll::Ready(Err(demand.diagnostic()))
             }
             QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(request) => QueryPoll::NeedInput(request),

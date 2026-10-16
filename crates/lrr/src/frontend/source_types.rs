@@ -460,15 +460,26 @@ pub(super) fn local_nominal_owner(
     let InputValue::DeclarationContext(context) = context.as_ref() else {
         return QueryPoll::Ready(Err(fault("local nominal context variant differs")));
     };
-    let Some(owner) = context.scope.owner else {
+    if context.scope.owner.is_none() {
         return QueryPoll::Ready(Ok(None));
+    }
+    // A scope owner is a lexical rib, not a definition. Only the admitted
+    // declaration publication supplies its actual owning executable body.
+    let Some(owner) = db.input(&InputKey::LocalDeclarationOwner(identity)) else {
+        return QueryPoll::Ready(Err(fault("local nominal owning declaration is absent")));
     };
-    let Some(body) = db.input(&InputKey::DefinitionBody(owner)) else {
+    let InputValue::LocalDeclarationOwner(owner) = owner.as_ref() else {
+        return QueryPoll::Ready(Err(fault("local nominal owner variant differs")));
+    };
+    let Some(body) = db.input(&InputKey::DefinitionBody(owner.definition)) else {
         return QueryPoll::Ready(Err(fault("local nominal owning body is absent")));
     };
     let InputValue::DefinitionBody(body) = body.as_ref() else {
         return QueryPoll::Ready(Err(fault("local nominal owning body variant differs")));
     };
+    if body.key() != *owner {
+        return QueryPoll::Ready(Err(fault("local nominal owning body changed")));
+    }
     let result = match db.fetch(&SyntaxProvider, QueryKey::SourceLocalPlan(body.key())) {
         QueryPoll::Ready(Ok(value)) => value,
         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),

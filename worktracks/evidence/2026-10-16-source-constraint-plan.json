@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-024",
+  "status": "structural component passed, runtime numeric consumer incomplete",
+  "source": "d3ef558c8b146296bf21aead90dd80c38abf84515759de4339a0382809757a6c",
+  "component_sha256": "1c8dbc0f301764f2b2623c9e97c4b3ad3ffe4e066abfd469bde93d9f4825bafd",
+  "compile": "4fa372/0",
+  "compiler_warnings": 14,
+  "listed_bodies": 1385,
+  "controls_terminal": "4054b0/0",
+  "passed": 2,
+  "failed": 0,
+  "scope": "Real indexed call/binding facts from unchanged upstream suffix main; memo reuse and reverse node edges; all four editions. Cold literal-to-call mutation prepares no other body/signature/thunk. No guest operations executed.",
+  "source_review_sha256": "2ed17aa3bf4955055952748f296508717ca373a3dcb395c6d6095d96e2a65704",
+  "release": {
+    "path": "artifacts/macos-first/sol-common-source-constraints-validation-v1/RELEASE.json",
+    "sha256": "184c9972cfb71b3a97ba08a282b7ed4619e3216aa6815ce70b71f5c3868fad9a",
+    "inactive": "b2131f/0",
+    "seal": "0e7bee/0"
+  },
+  "runtime_contract_pass_increment": 0,
+  "full_fixture_pass_increment": 0,
+  "remaining": [
+    "Actual Value/binding occurrence authority join",
+    "Declared parameter goal38/Header Type dependency integration",
+    "Demand numeric constraint solver and ordinary lowering",
+    "Legacy numeric/macro routes held for validated removal"
+  ]
+}

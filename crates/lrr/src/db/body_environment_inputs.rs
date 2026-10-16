@@ -2,8 +2,10 @@
 //! caller digest, index equality, namespace answer or source-only rebind.
 use super::*;
 use crate::{
-    core::digest::StableEncoder, expand::source_discovery::SealedBodyMacroEnvironment,
-    frontend::source_body_context::AdmittedBodyContext, source::manifest::BodyKey,
+    core::digest::{StableEncode, StableEncoder},
+    expand::source_discovery::SealedBodyMacroEnvironment,
+    frontend::source_body_context::AdmittedBodyContext,
+    source::manifest::BodyKey,
 };
 
 pub struct BodyEnvironmentInput {
@@ -142,15 +144,43 @@ impl Database {
             ready!(self.publish_body_environment(source, macros));
         }
         let result = ready!(self.fetch(&SyntaxProvider, QueryKey::SourceLocalPlan(body.clone())));
-        match result.value.as_ref() {
+        let plan = match result.value.as_ref() {
             QueryValue::SourceLocalPlan(plan) if plan.context().source().index().body() == body => {
-                QueryPoll::Ready(Ok(Arc::clone(plan)))
+                Arc::clone(plan)
             }
-            _ => QueryPoll::Ready(Err(fault(
-                "LRR-E-INTERNAL-SNAPSHOT",
-                "owning local-plan result differs",
-            ))),
+            _ => {
+                return QueryPoll::Ready(Err(fault(
+                    "LRR-E-INTERNAL-SNAPSHOT",
+                    "owning local-plan result differs",
+                )));
+            }
+        };
+        if plan.context().facts().items.len() > 100_000 {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-METADATA-LIMIT",
+                "owning local declaration inventory limit",
+            )));
         }
+        // These are already-admitted declaration headers, not executable
+        // preparation or TypeSchema demands. Opaque attribute owners remain
+        // pending in the same prefix index and acquire no declaration rows.
+        for row in &plan.context().facts().items {
+            if row.attribute_input.is_some() {
+                continue;
+            }
+            let definition = row.item.def_key.fingerprint();
+            match ready!(self.publish_local_declaration(plan.context(), definition)) {
+                super::local_declaration_inputs::LocalDeclarationPublication::Published(actual)
+                    if actual == definition => {}
+                _ => {
+                    return QueryPoll::Ready(Err(fault(
+                        "LRR-E-EXPANSION-INPUT",
+                        "owning local header publication differs",
+                    )));
+                }
+            }
+        }
+        QueryPoll::Ready(Ok(plan))
     }
     /// Cold coordinator publication from two opaque, current source receipts.
     /// Replacing a completed environment is a derived revision, never a query
@@ -168,6 +198,18 @@ impl Database {
                 "LRR-E-INTERNAL-SNAPSHOT",
                 "body environment publication during run",
             )));
+        }
+        self.publish_body_environment_checked(source, macros)
+    }
+    /// Shared publication core. Its callers enforce either cold coordinator
+    /// authority or the engine's opaque, current reached-call receipt.
+    fn publish_body_environment_checked(
+        &mut self,
+        source: Arc<AdmittedBodyContext>,
+        macros: Arc<SealedBodyMacroEnvironment>,
+    ) -> QueryPoll<()> {
+        if let Err(error) = self.require_coordinator() {
+            return QueryPoll::Ready(Err(error));
         }
         match source.require_current(self) {
             QueryPoll::Ready(Ok(())) => {}
@@ -258,6 +300,77 @@ impl Database {
             self.revision = revision;
             Ok(())
         })())
+    }
+    /// Derived no-I/O source facts for the exact reached local callee. The
+    /// original cold APIs remain unavailable during an active run.
+    pub(crate) fn prepare_reached_local_plan(
+        &mut self,
+        receipt: &crate::engine::run::source_preparation::ReachedLocalBody<'_>,
+    ) -> QueryPoll<()> {
+        use crate::db::{key::QueryKey, provider::SyntaxProvider, value::QueryValue};
+        macro_rules! ready {
+            ($value:expr) => {
+                match $value {
+                    QueryPoll::Ready(Ok(value)) => value,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            };
+        }
+        if let Err(error) = self.require_coordinator() {
+            return QueryPoll::Ready(Err(error));
+        }
+        if !self.run_active {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-INTERNAL-SNAPSHOT",
+                "reached local preparation requires active run",
+            )));
+        }
+        ready!(receipt.require_current(self));
+        ready!(self.publish_body_environment_checked(
+            Arc::clone(receipt.source()),
+            Arc::clone(receipt.macros()),
+        ));
+        let body = receipt.source().index().body();
+        let value = ready!(self.fetch(&SyntaxProvider, QueryKey::SourceLocalPlan(body.clone())));
+        let QueryValue::SourceLocalPlan(plan) = value.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-INTERNAL-SNAPSHOT",
+                "reached local plan variant differs",
+            )));
+        };
+        if plan.context().source().identity() != receipt.source().identity()
+            || plan.context().source().index().body() != body
+            || plan.environment().is_none()
+        {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-BODY-ENVIRONMENT",
+                "reached local plan source differs",
+            )));
+        }
+        if plan.context().facts().items.len() > 100_000 {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-METADATA-LIMIT",
+                "reached local declaration inventory limit",
+            )));
+        }
+        for row in &plan.context().facts().items {
+            if row.attribute_input.is_some() {
+                continue;
+            }
+            let definition = row.item.def_key.fingerprint();
+            match ready!(self.publish_local_declaration_checked(plan.context(), definition)) {
+                super::local_declaration_inputs::LocalDeclarationPublication::Published(actual)
+                    if actual == definition => {}
+                _ => {
+                    return QueryPoll::Ready(Err(fault(
+                        "LRR-E-EXPANSION-INPUT",
+                        "reached local header publication differs",
+                    )));
+                }
+            }
+        }
+        QueryPoll::Ready(Ok(()))
     }
 }
 

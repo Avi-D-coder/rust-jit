@@ -1,5 +1,7 @@
 //! Owned module prefix resolution. Alias targets retain original import paths,
 //! rather than flattening away privacy checks. Traversal is iterative.
+#[path = "module_paths/retention.rs"]
+mod retention;
 use super::macro_names::MacroPath;
 use crate::{
     core::{diagnostic::Diagnostic, digest::Digest},

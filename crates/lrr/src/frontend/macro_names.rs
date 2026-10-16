@@ -1,6 +1,8 @@
 //! Canonical unit/module macro routes, supplied by the source/import index.
 //! This index does not parse imports or execute expansions. Definition identity
 //! survives reexports; `$crate` starts at the defining compilation unit.
+#[path = "macro_names/retention.rs"]
+mod retention;
 use crate::{
     core::{
         diagnostic::Diagnostic,

@@ -1,0 +1,66 @@
+{
+  "kind": "suffix-main-source-diagnosis",
+  "status": "actual-failed-runtime-with-source-diagnosis-no-repair-by-this-worker",
+  "source_fingerprint": "03d7090efdd5dc981a4f6261434bbbfc4d67bbe8394e424aa6ebe0402aa5f681",
+  "actual_compile": "617847/0",
+  "actual_main_first": "2a3855/1",
+  "actual_release_sha256": "20f2e09d1e5716039b9896a8f8436e14ed4e63475be30e0d18b26b3fc59c0e14",
+  "stderr": {
+    "path": "artifacts/macos-first/sol-common-reached-local-preparation-validation-v3/main-first/stderr.log",
+    "sha256": "e11f6ae36beca181bb147f0676a5f88d85942214ce44c71d33e98224c80abc87"
+  },
+  "failure": {
+    "code": "LRR-E-CALL-ARG-TYPE",
+    "message": "argument descriptor differs from the reached concrete signature",
+    "pc": "3a96f6325c76844b693a914e55d306c47b51917549215f748660a2a1c66db53d",
+    "source_range": [
+      391,
+      399
+    ],
+    "relative_body_range": [
+      363,
+      371
+    ],
+    "source_expression": "id_i8(j)",
+    "owning_source": "unchanged integer-literal-suffix-inference.rs, preceding let j=-128",
+    "descriptor_values": "not printed; do not infer actual TypeId/default type from this terminal"
+  },
+  "source_evidence": [
+    {
+      "path": "syntax/local_numeric_constraints.rs",
+      "symbols": [
+        "operator_type"
+      ],
+      "finding": "Candidate direct source constraints propose later explicitly typed let initializer only; no CallExpr parameter signature relation. Without proposal returns existing default."
+    },
+    {
+      "path": "syntax/runtime_local_numeric_context.rs",
+      "symbols": [
+        "binding_context",
+        "inferred_context"
+      ],
+      "finding": "Current same-owner result/parameter numeric relations do not collect ordinary callee parameter constraints."
+    },
+    {
+      "path": "frontend/runtime_macro_numeric.rs",
+      "symbols": [
+        "RuntimeMacroNumericAdmission::capture"
+      ],
+      "finding": "Held alternate numeric service gathers only actual AssertEq/AssertNe comparison proofs; emptyordinals initializer returnsNone. Official suffix original has no such comparison macro. Do not extend this identity-selected path."
+    },
+    {
+      "path": "frontend/call_contracts.rs",
+      "symbols": [
+        "prepare argument template Primitive branch"
+      ],
+      "finding": "Actual completed argument descriptor inequality against concrete selectedsignature correctly rejects at1193; casting/weakening guard would hide the missing pre-evaluation source constraint."
+    }
+  ],
+  "required_common_repair": "Root-owned ordinary source-constraint service must consume genuine selected call signature/local binding occurrence/Type authority before choosing numeric local representation, through actual source/currentness proof and cachedplan. Signature demand cannot enter/lower/execute child body; source/hygiene/import/producer and edition authority preserved. No assertion identity, copied value/layout inference or fixture-name rule.",
+  "scope": [
+    "First failed actual guest call reached on first edition; complete main/remainingeditions not passed",
+    "Other2 reached controls and regressions unexecuted on this snapshot",
+    "No production change or Cargo/native execution by this reviewer",
+    "Known upstream A/B Drop/library/qualified/macro-origin held facets unchanged"
+  ]
+}

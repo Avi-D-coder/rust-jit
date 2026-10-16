@@ -31,6 +31,18 @@ impl Database {
                 "local declaration publication during run",
             )));
         }
+        self.publish_local_declaration_checked(context, definition)
+    }
+    /// Shared exact-header publication after a cold or opaque reached-call
+    /// coordinator boundary. It never prepares an executable declaration body.
+    pub(super) fn publish_local_declaration_checked(
+        &mut self,
+        context: &PreparedBodyContext,
+        definition: Digest,
+    ) -> QueryPoll<LocalDeclarationPublication> {
+        if let Err(error) = self.require_coordinator() {
+            return QueryPoll::Ready(Err(error));
+        }
         match context.require_current(self) {
             QueryPoll::Ready(Ok(())) => {}
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -88,6 +100,10 @@ impl Database {
             }
             let rows = [
                 (
+                    InputKey::LocalDeclarationOwner(definition),
+                    InputValue::LocalDeclarationOwner(source.index().body().clone()),
+                ),
+                (
                     InputKey::DefinitionSource(definition),
                     InputValue::DefinitionSource(source.parsed().key()),
                 ),
@@ -111,6 +127,10 @@ impl Database {
                     // Compare the actual rows too; an equal hash cannot attach
                     // this declaration to another source location or scope.
                     let identical = match (current.value.as_ref(), &value) {
+                        (
+                            InputValue::LocalDeclarationOwner(a),
+                            InputValue::LocalDeclarationOwner(b),
+                        ) => a == b,
                         (InputValue::DefinitionSource(a), InputValue::DefinitionSource(b)) => {
                             a == b
                         }

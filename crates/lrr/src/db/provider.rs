@@ -845,8 +845,20 @@ impl Provider for SyntaxProvider {
             QueryKey::ReferenceHeader(definition) => {
                 return super::source_plan_provider::reference_header(self, db, *definition);
             }
+            QueryKey::SourceConstraints(body) => {
+                return super::source_constraint_provider::prepare(self, db, body);
+            }
             QueryKey::SourceLocalPlan(body) => {
                 return super::body_environment_provider::source_local_plan(db, body);
+            }
+            QueryKey::BoundRecordConstructor(key) => {
+                return match crate::frontend::prepared_constructors::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => {
+                        Provided::pure(QueryValue::BoundRecordConstructor(Box::new(value)))
+                    }
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
             }
             QueryKey::PatternPlan(owner) => {
                 return super::source_plan_provider::pattern_plan(self, db, owner);

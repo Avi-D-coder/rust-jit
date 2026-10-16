@@ -36,6 +36,8 @@ mod type_modules;
 mod type_names;
 pub(crate) use type_modules::LocalTypeModuleSelector;
 use type_modules::{LexicalTypeModule, ModuleRoute};
+#[path = "declaration_field_types.rs"]
+pub(super) mod field_types;
 #[path = "body_type_declarations.rs"]
 pub(crate) mod type_declarations;
 pub(super) use type_names::{ItemNames, LocalTypeNames};
@@ -66,7 +68,8 @@ impl LocalPrefixMetadata {
 /// current environment-publication input before downstream source Type authority.
 pub(crate) struct LocalTypePrefix {
     plan: Arc<PreparedSourceLocalPlan>,
-    node: crate::ir::pc::NodeId,
+    node: Option<crate::ir::pc::NodeId>,
+    field: Option<(Digest, crate::syntax::spans::SourceRange)>,
     selection: LocalTypePrefixSelection,
     use_name: Option<LocalTypeUse>,
     module_selector: Option<LocalTypeModuleSelector>,
@@ -162,7 +165,7 @@ impl LocalTypePrefix {
     pub(crate) fn retained_plan(&self) -> &Arc<PreparedSourceLocalPlan> {
         &self.plan
     }
-    pub(crate) fn node(&self) -> crate::ir::pc::NodeId {
+    pub(crate) fn node(&self) -> Option<crate::ir::pc::NodeId> {
         self.node
     }
     pub(crate) fn use_name(&self) -> Option<&LocalTypeUse> {
@@ -195,10 +198,15 @@ impl LocalTypePrefix {
     }
 }
 impl StableEncode for LocalTypePrefix {
-    const DOMAIN: &'static str = "lrr/v2/local-type-prefix-source-proof";
+    const DOMAIN: &'static str = "lrr/v3/local-type-prefix-source-proof";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.plan.source_identity());
-        e.u32(self.node.0);
+        e.option(&self.node, |e, node| e.u32(node.0));
+        e.option(&self.field, |e, (definition, span)| {
+            e.digest(*definition);
+            e.u32(span.start);
+            e.u32(span.end);
+        });
         e.option(&self.use_name, |e, name| {
             e.string(name.name());
             e.u32(name.range().start);
@@ -256,6 +264,7 @@ pub struct PreparedSourceLocalPlan {
     context: Arc<PreparedBodyContext>,
     missing_expansions: Vec<Key>,
     type_names: LocalTypeNames,
+    field_types: field_types::DeclarationFieldTypes,
     lexical_module: LexicalTypeModule,
     source_identity: Digest,
     exclusive_bytes: usize,
@@ -305,23 +314,39 @@ impl SourceLocalPlanRoots<'_> {
     }
 }
 impl PreparedSourceLocalPlan {
+    pub(in crate::frontend) fn enter_prepared_local_body(
+        &self,
+        context: Arc<PreparedBodyContext>,
+    ) -> Result<EnteredMacroIndex<'static>, Diagnostic> {
+        let selected = context
+            .source()
+            .local_parent()
+            .ok_or_else(|| error("local source plan requires its actual retained parent"))?;
+        if selected.source_identity != self.source_identity
+            || selected.environment.as_ref().map(|env| env.identity())
+                != self.environment.as_ref().map(|env| env.identity())
+        {
+            return Err(error(
+                "local source plan belongs to another parent environment",
+            ));
+        }
+        self.entered
+            .enter_prepared_nested(context)
+            .map(|entered| entered.into_owned())
+    }
     pub(crate) fn environment(&self) -> Option<&Arc<crate::db::BodyEnvironmentInput>> {
         self.environment.as_ref()
     }
     pub(crate) fn require_current(&self, db: &mut Database) -> QueryPoll<()> {
-        match self.context.require_current(db) {
-            QueryPoll::Ready(Ok(())) => {}
-            other => return other,
-        }
         let Some(environment) = &self.environment else {
-            return QueryPoll::Ready(Ok(()));
+            return self.context.require_current(db);
         };
         let key = crate::db::dependency::InputKey::BodyEnvironment(environment.body().clone());
         if !matches!(db.input(&key).as_deref(),Some(InputValue::BodyEnvironment(current)) if current.identity()==environment.identity())
         {
             return QueryPoll::Ready(Err(error("published local environment was replaced")));
         }
-        environment.require_current(db)
+        self.context.require_current_in_environment(db, environment)
     }
     /// Pure-query join to an opaque coordinator input. No caller-provided
     /// digest or equivalent-looking source can install this association.
@@ -384,10 +409,12 @@ impl PreparedSourceLocalPlan {
         let (expansions, missing_expansions) = expansion_definitions(&entered, &context)?;
         let (root, hygiene) = entered.local_hygiene();
         let type_names = LocalTypeNames::prepare(&context, root, &hygiene)?;
+        let field_types = field_types::DeclarationFieldTypes::prepare(&context, root, &hygiene)?;
         let module_bytes = lexical_module.extra_bytes();
-        let mut identity = StableEncoder::new("lrr/v3/owned-local-source-environment");
+        let mut identity = StableEncoder::new("lrr/v4/owned-local-source-environment");
         identity.digest(context.source().identity());
         identity.digest(type_names.fingerprint());
+        identity.digest(field_types.fingerprint());
         identity.digest(lexical_module.fingerprint());
         identity.u64(expansions.len() as u64);
         for (key, definition) in &expansions {
@@ -423,6 +450,7 @@ impl PreparedSourceLocalPlan {
                 )
             })
             .and_then(|n| n.checked_add(type_names.extra_bytes()))
+            .and_then(|n| n.checked_add(field_types.extra_bytes()))
             .and_then(|n| n.checked_add(module_bytes))
             .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
@@ -438,11 +466,49 @@ impl PreparedSourceLocalPlan {
             context,
             missing_expansions,
             type_names,
+            field_types,
             lexical_module,
             source_identity: identity.finish(),
             exclusive_bytes,
             environment: None,
         })
+    }
+    fn select_type_prefix(
+        &self,
+        found: super::PrefixResolution,
+        context: Key,
+    ) -> Result<(LocalTypePrefixSelection, Option<LocalTypeModuleSelector>), Diagnostic> {
+        let mut selector = None;
+        let selected = match found {
+            super::PrefixResolution::Name(found) => LocalTypePrefixSelection::Lookup(found),
+            super::PrefixResolution::Parameter(parameter) => {
+                LocalTypePrefixSelection::Parameter(parameter)
+            }
+            super::PrefixResolution::ModuleTail => {
+                let (_, hygiene) = self.entered.local_hygiene();
+                match self.lexical_module.route(&hygiene, context)? {
+                    ModuleRoute::Definition(expansion) => {
+                        LocalTypePrefixSelection::NeedDefinitionModule(expansion)
+                    }
+                    ModuleRoute::Lexical(actual) => {
+                        selector = Some(actual);
+                        if self.lexical_module.has_module_source() {
+                            LocalTypePrefixSelection::ModuleTail
+                        } else {
+                            LocalTypePrefixSelection::NeedModulePublication
+                        }
+                    }
+                }
+            }
+            super::PrefixResolution::NeedImport(id) => LocalTypePrefixSelection::NeedImport(id),
+            super::PrefixResolution::NeedDeclaration(id) => {
+                LocalTypePrefixSelection::NeedDeclarationOccurrence(id)
+            }
+            super::PrefixResolution::NeedOwnerGeneric => {
+                LocalTypePrefixSelection::NeedOwnerGenericOccurrence
+            }
+        };
+        Ok((selected, selector))
     }
     pub(crate) fn type_prefix(
         self: &Arc<Self>,
@@ -503,43 +569,14 @@ impl PreparedSourceLocalPlan {
                 context,
                 namespace: crate::source::manifest::Namespace::Type,
             };
-            Ok(
-                match self.adapter().lookup_prepared_type_prefix(
-                    &site,
-                    &self.type_names,
-                    identifier.edition(),
-                )? {
-                    super::PrefixResolution::Name(found) => LocalTypePrefixSelection::Lookup(found),
-                    super::PrefixResolution::Parameter(parameter) => {
-                        LocalTypePrefixSelection::Parameter(parameter)
-                    }
-                    super::PrefixResolution::ModuleTail => {
-                        let (_, hygiene) = self.entered.local_hygiene();
-                        match self.lexical_module.route(&hygiene, context)? {
-                            ModuleRoute::Definition(expansion) => {
-                                LocalTypePrefixSelection::NeedDefinitionModule(expansion)
-                            }
-                            ModuleRoute::Lexical(selector) => {
-                                module_selector = Some(selector);
-                                if self.lexical_module.has_module_source() {
-                                    LocalTypePrefixSelection::ModuleTail
-                                } else {
-                                    LocalTypePrefixSelection::NeedModulePublication
-                                }
-                            }
-                        }
-                    }
-                    super::PrefixResolution::NeedImport(identity) => {
-                        LocalTypePrefixSelection::NeedImport(identity)
-                    }
-                    super::PrefixResolution::NeedDeclaration(identity) => {
-                        LocalTypePrefixSelection::NeedDeclarationOccurrence(identity)
-                    }
-                    super::PrefixResolution::NeedOwnerGeneric => {
-                        LocalTypePrefixSelection::NeedOwnerGenericOccurrence
-                    }
-                },
-            )
+            let found = self.adapter().lookup_prepared_type_prefix(
+                &site,
+                &self.type_names,
+                identifier.edition(),
+            )?;
+            let (selection, selector) = self.select_type_prefix(found, context)?;
+            module_selector = selector;
+            Ok(selection)
         })();
         QueryPoll::Ready(answer.and_then(|selection| {
             let use_name = if let [BodyTypeSegment::Name(name)] = occurrence.segments() {
@@ -558,7 +595,8 @@ impl PreparedSourceLocalPlan {
             };
             let mut proof = LocalTypePrefix {
                 plan: Arc::clone(self),
-                node,
+                node: Some(node),
+                field: None,
                 selection,
                 use_name,
                 module_selector,
@@ -587,6 +625,11 @@ impl PreparedSourceLocalPlan {
     }
     pub(crate) fn context(&self) -> &Arc<PreparedBodyContext> {
         &self.context
+    }
+    /// Actual physical Arc owners, solely for allocation/retirement accounting.
+    /// The entered lookup adapter can retain the same context as the plan.
+    pub(crate) fn context_roots(&self) -> impl Iterator<Item = &Arc<PreparedBodyContext>> {
+        std::iter::once(&self.context).chain(self.entered.body_context.iter())
     }
     pub(crate) fn source_identity(&self) -> Digest {
         self.source_identity

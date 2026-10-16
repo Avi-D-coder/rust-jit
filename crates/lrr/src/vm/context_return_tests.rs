@@ -258,7 +258,9 @@ fn official_shadowed_nominal_and_named_primitive_controls_keep_owning_source_kin
             discovery.poll().unwrap(),
             crate::expand::source_discovery::SourceDiscoveryStep::Sealed(_)
         ));
-        let (_, mut graph) = discovery.into_runtime_parts().unwrap();
+        let (_, graph) = discovery.into_runtime_parts().unwrap();
+        let mut graph = std::sync::Arc::try_unwrap(graph)
+            .unwrap_or_else(|_| panic!("unshared completed test graph expected"));
         let imports = graph.resolve_imports().unwrap();
         assert!(imports.pending.is_empty());
         // Official bool is nominal; this is header/name admission, not impl execution.

@@ -1,5 +1,7 @@
 //! Namespace-qualified owned lookup over the existing deterministic import engine.
 //! This selects definitions only; it never expands, type-checks or executes a body.
+#[path = "names_retention.rs"]
+pub(super) mod retention;
 use super::{
     generated_headers::declared_names::DeclaredItemName,
     macro_names::{MacroNamespaces, MacroPath, NameBindingClass, PathLookup},

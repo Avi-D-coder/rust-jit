@@ -133,7 +133,7 @@ fn world(text: &str, edition: u16) -> World {
     }
 }
 fn predicate(world: &mut World) -> Box<SourceCallable> {
-    let graph = world.catalog.runtime_graph().unwrap();
+    let graph = world.catalog.runtime_environment().unwrap().names();
     let caller = world
         .source
         .outline()
@@ -154,7 +154,7 @@ fn packet(world: &mut World, callee: &SourceCallable) -> PreparedCallContracts {
     let QueryPoll::Ready(Ok(ContractPreparation::Ready(packet))) = prepare_contracts(
         &mut world.db,
         callee,
-        world.catalog.runtime_graph().unwrap(),
+        world.catalog.runtime_environment().unwrap().names(),
         &[&world.source],
         &[],
         None,

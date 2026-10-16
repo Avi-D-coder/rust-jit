@@ -15,3 +15,4 @@ pub mod seals;
 mod body_environment_provider;
 mod pattern_plan_provider;
 mod source_plan_provider;
+mod source_constraint_provider;

@@ -90,6 +90,8 @@ mod shift_fallback_tests;
 mod source_constant_tests;
 #[path = "run_source_constants.rs"]
 mod source_constants;
+#[path = "run_source_preparation.rs"]
+pub(crate) mod source_preparation;
 #[cfg(test)]
 #[path = "run_temporaries.rs"]
 mod temporaries;
@@ -265,6 +267,22 @@ impl CallLimits {
         Ok(self)
     }
 }
+/// Discovery-complete graphs are shared immutable source data. The owned
+/// legacy entry still performs its existing context contribution separately;
+/// it must not turn a completed graph into a copy-on-write runtime namespace.
+enum RunNames {
+    Legacy(NameNamespaces),
+    Completed(Arc<crate::expand::source_discovery::CompletedSourceEnvironment>),
+}
+impl std::ops::Deref for RunNames {
+    type Target = NameNamespaces;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Legacy(graph) => graph,
+            Self::Completed(environment) => environment.names(),
+        }
+    }
+}
 pub struct RunMachine {
     frame: Frame,
     body_lease: crate::db::memo::BodyExecutionLease,
@@ -276,7 +294,7 @@ pub struct RunMachine {
     terminal_facts: Option<TerminalFacts>,
     runtime_capture: Option<capture::RunCapture>,
     sources: Vec<PreparedSourceView>,
-    graph: Option<NameNamespaces>,
+    graph: Option<RunNames>,
     static_panic_body_bases: BTreeMap<crate::core::digest::Digest, u32>,
     static_panic_plans: BTreeMap<
         (crate::core::digest::Digest, u32, u32),
@@ -420,7 +438,7 @@ impl RunMachine {
         match Self::start(db, body, fuel_limit) {
             QueryPoll::Ready(Ok(mut run)) => {
                 run.sources = sources;
-                run.graph = Some(graph);
+                run.graph = Some(RunNames::Legacy(graph));
                 QueryPoll::Ready(Ok(run))
             }
             QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
@@ -440,7 +458,9 @@ impl RunMachine {
         match Self::start(db, body, fuel_limit) {
             QueryPoll::Ready(Ok(mut run)) => {
                 run.sources = sources;
-                run.graph = catalog.runtime_graph().cloned();
+                run.graph = catalog
+                    .runtime_environment()
+                    .map(|environment| RunNames::Completed(Arc::clone(environment)));
                 QueryPoll::Ready(Ok(run))
             }
             other => other,
@@ -455,6 +475,11 @@ impl RunMachine {
         if let Err(error) = discovery.publish(db) {
             return QueryPoll::Ready(Err(error));
         }
+        let source_environment = match discovery.completed_source_environment(db) {
+            QueryPoll::Ready(Ok(environment)) => environment,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
         let seal_fingerprint = match db.fetch(
             &SyntaxProvider,
             QueryKey::DiscoverySeal(discovery.key().clone()),
@@ -480,7 +505,7 @@ impl RunMachine {
             Ok(records) => records,
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
-        let (sources, graph) = match discovery.into_runtime_parts() {
+        let (sources, _graph) = match discovery.into_runtime_parts() {
             Ok(parts) => parts,
             Err(e) => return QueryPoll::Ready(Err(e)),
         };
@@ -495,7 +520,7 @@ impl RunMachine {
         match Self::start(db, body, fuel_limit) {
             QueryPoll::Ready(Ok(mut run)) => {
                 run.sources = sources;
-                run.graph = Some(graph);
+                run.graph = Some(RunNames::Completed(source_environment));
                 run.declarative_runtime = declarative_runtime;
                 if let Err(error) = run.bootstrap_no_item_proofs(db, &seal_key, seal_fingerprint) {
                     return QueryPoll::Ready(Err(error));
@@ -906,6 +931,38 @@ impl RunMachine {
                 QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
             }
         };
+        let callee = selected.callee;
+        // An admitted local owner needs its derived environment before revision-
+        // bound contracts. Other source calls retain contract-before-body order.
+        // This is reached call preparation, never a signature/type-goal demand.
+        let prepared_body = if db
+            .input(&crate::db::dependency::InputKey::LocalDeclarationOwner(
+                callee.identity(),
+            ))
+            .is_some()
+        {
+            if let Err(error) = crate::frontend::call_contracts::preflight_evaluated_call(
+                &callee,
+                &selected.explicit,
+                result_hint,
+                arguments,
+            ) {
+                return QueryPoll::Ready(Err(error));
+            }
+            let body = match Self::selected_source_body(db, &callee) {
+                QueryPoll::Ready(Ok(body)) => body,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            match self.prepare_reached_local_source(db, &callee, &body) {
+                QueryPoll::Ready(Ok(())) => {}
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+            Some(body)
+        } else {
+            None
+        };
         let mut references = Vec::new();
         let reference_arguments = arguments
             .iter()
@@ -968,7 +1025,6 @@ impl RunMachine {
                 references.push(evidence);
             }
         }
-        let callee = selected.callee;
         let prepared = if reference_arguments {
             prepare_contracts_with_references(
                 db,
@@ -1049,98 +1105,94 @@ impl RunMachine {
                 Err(e) => return QueryPoll::Ready(Err(e)),
             }
         }
-        let Some(body) = callee.body() else {
-            return QueryPoll::Ready(Err(call_fault("selected source function has no body")));
-        };
-        match db.fetch(&SyntaxProvider, QueryKey::BodyStructure(body.key())) {
-            QueryPoll::Ready(Ok(value)) => match value.value.as_ref() {
-                QueryValue::BodyStructure(body) => {
-                    let context_bytes = match crate::vm::context::GenericEnv::checked_bytes(
-                        callee.signature(),
-                        &contracts,
-                    ) {
-                        Ok(bytes) => bytes,
-                        Err(e) => return QueryPoll::Ready(Err(e)),
-                    };
-                    // The query cache owns and charges the shared immutable
-                    // body. This call retains two handles (plan and frame),
-                    // plus independently allocated mutable execution metadata.
-                    let bytes = std::mem::size_of::<Arc<BodyIndex>>()
-                        .checked_mul(2)
-                        .and_then(|n| {
-                            Frame::metadata_bytes(body, contracts.source_parameters.len())
-                                .and_then(|size| n.checked_add(size))
-                        })
-                        .and_then(|n| n.checked_add(callee.signature().estimated_bytes()))
-                        .and_then(|n| {
-                            contracts
-                                .runtime_substitution
-                                .len()
-                                .checked_mul(128)
-                                .and_then(|size| n.checked_add(size))
-                        })
-                        .and_then(|n| {
-                            contracts
-                                .source_substitution
-                                .len()
-                                .checked_mul(128)
-                                .and_then(|size| n.checked_add(size))
-                        })
-                        .and_then(|n| {
-                            contracts
-                                .source_parameters
-                                .len()
-                                .checked_mul(std::mem::size_of::<crate::traits::term::TyTerm>())
-                                .and_then(|size| n.checked_add(size))
-                        })
-                        .and_then(|n| n.checked_add(context_bytes))
-                        .and_then(|n| n.checked_add(4096));
-                    if self
-                        .calls
-                        .len()
-                        .checked_add(2)
-                        .is_none_or(|frames| frames > self.call_limits.max_frames as usize)
-                    {
-                        return QueryPoll::Ready(Err(Diagnostic::new(
-                            "LRR-E-RUNTIME-RESOURCE",
-                            "guest frame limit exceeded".into(),
-                        )));
-                    }
-                    let Some(retained_bytes) = bytes.filter(|n| {
-                        self.call_bytes
-                            .checked_add(*n)
-                            .and_then(|total| total.checked_add(self.pending_bytes))
-                            .is_some_and(|total| total <= self.call_limits.max_metadata_bytes)
-                    }) else {
-                        return QueryPoll::Ready(Err(Diagnostic::new(
-                            "LRR-E-RUNTIME-RESOURCE",
-                            "call stack metadata budget exceeded".into(),
-                        )));
-                    };
-                    let context = match crate::vm::context::GenericEnv::capture_current(
-                        db, &callee, &contracts,
-                    ) {
-                        Ok(context) => context,
-                        Err(e) => return QueryPoll::Ready(Err(e)),
-                    };
-                    let body_lease = match db.pin_guest_body(body.body()) {
-                        QueryPoll::Ready(Ok(lease)) => lease,
-                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                    };
-                    QueryPoll::Ready(Ok(PreparedSourceCall {
-                        context: Some(context),
-                        callee,
-                        contracts,
-                        body: Arc::clone(body),
-                        body_lease: Some(body_lease),
-                        retained_bytes,
-                    }))
-                }
-                _ => QueryPoll::Ready(Err(call_fault("callee body query variant mismatch"))),
+        let body = match prepared_body {
+            Some(body) => body,
+            None => match Self::selected_source_body(db, &callee) {
+                QueryPoll::Ready(Ok(body)) => body,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             },
-            QueryPoll::Ready(Err(e)) => QueryPoll::Ready(Err(e)),
-            QueryPoll::NeedInput(i) => QueryPoll::NeedInput(i),
+        };
+        {
+            let context_bytes =
+                match crate::vm::context::GenericEnv::checked_bytes(callee.signature(), &contracts)
+                {
+                    Ok(bytes) => bytes,
+                    Err(e) => return QueryPoll::Ready(Err(e)),
+                };
+            // The query cache owns and charges the shared immutable
+            // body. This call retains two handles (plan and frame),
+            // plus independently allocated mutable execution metadata.
+            let bytes = std::mem::size_of::<Arc<BodyIndex>>()
+                .checked_mul(2)
+                .and_then(|n| {
+                    Frame::metadata_bytes(&body, contracts.source_parameters.len())
+                        .and_then(|size| n.checked_add(size))
+                })
+                .and_then(|n| n.checked_add(callee.signature().estimated_bytes()))
+                .and_then(|n| {
+                    contracts
+                        .runtime_substitution
+                        .len()
+                        .checked_mul(128)
+                        .and_then(|size| n.checked_add(size))
+                })
+                .and_then(|n| {
+                    contracts
+                        .source_substitution
+                        .len()
+                        .checked_mul(128)
+                        .and_then(|size| n.checked_add(size))
+                })
+                .and_then(|n| {
+                    contracts
+                        .source_parameters
+                        .len()
+                        .checked_mul(std::mem::size_of::<crate::traits::term::TyTerm>())
+                        .and_then(|size| n.checked_add(size))
+                })
+                .and_then(|n| n.checked_add(context_bytes))
+                .and_then(|n| n.checked_add(4096));
+            if self
+                .calls
+                .len()
+                .checked_add(2)
+                .is_none_or(|frames| frames > self.call_limits.max_frames as usize)
+            {
+                return QueryPoll::Ready(Err(Diagnostic::new(
+                    "LRR-E-RUNTIME-RESOURCE",
+                    "guest frame limit exceeded".into(),
+                )));
+            }
+            let Some(retained_bytes) = bytes.filter(|n| {
+                self.call_bytes
+                    .checked_add(*n)
+                    .and_then(|total| total.checked_add(self.pending_bytes))
+                    .is_some_and(|total| total <= self.call_limits.max_metadata_bytes)
+            }) else {
+                return QueryPoll::Ready(Err(Diagnostic::new(
+                    "LRR-E-RUNTIME-RESOURCE",
+                    "call stack metadata budget exceeded".into(),
+                )));
+            };
+            let context =
+                match crate::vm::context::GenericEnv::capture_current(db, &callee, &contracts) {
+                    Ok(context) => context,
+                    Err(e) => return QueryPoll::Ready(Err(e)),
+                };
+            let body_lease = match db.pin_guest_body(body.body()) {
+                QueryPoll::Ready(Ok(lease)) => lease,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            QueryPoll::Ready(Ok(PreparedSourceCall {
+                context: Some(context),
+                callee,
+                contracts,
+                body,
+                body_lease: Some(body_lease),
+                retained_bytes,
+            }))
         }
     }
     fn check_source_return(
@@ -1779,7 +1831,7 @@ impl RunMachine {
                 "terminal run cannot execute again".into(),
             ));
         }
-        if let Some(graph) = &mut self.graph {
+        if let Some(RunNames::Legacy(graph)) = &mut self.graph {
             for context in contexts {
                 if let Err(error) = context.contribute_names(graph) {
                     self.terminal = true;
@@ -1964,11 +2016,11 @@ impl RunMachine {
                     None
                 };
             let resolution = if let Some(recipe) = prepared_constant {
-                QueryPoll::Ready(self.installed.install_prepared(db, pc, &recipe))
+                self.installed.prepare_install(db, pc, &recipe)
             } else if let Some(recipe) = prepared_floating {
-                QueryPoll::Ready(self.installed.install_prepared(db, pc, &recipe))
+                self.installed.prepare_install(db, pc, &recipe)
             } else if let Some(recipe) = reached_recipe {
-                QueryPoll::Ready(self.installed.install_prepared(db, pc, &recipe))
+                self.installed.prepare_install(db, pc, &recipe)
             } else if let Some((source, plan)) = prepared_key
                 .as_ref()
                 .and_then(|key| self.static_panic_plans.get(key))
@@ -1978,7 +2030,7 @@ impl RunMachine {
                     plan.lower_static_panic_recipe(source, &self.frame.body, &pc, next)
                 }) {
                     Ok(StaticPanicRecipeLowering::Recipe(recipe)) => {
-                        QueryPoll::Ready(self.installed.install_prepared(db, pc, &recipe))
+                        self.installed.prepare_install(db, pc, &recipe)
                     }
                     Ok(StaticPanicRecipeLowering::NeedsFormatting) => {
                         QueryPoll::Ready(Err(Diagnostic::new(
@@ -2019,7 +2071,7 @@ impl RunMachine {
                 }
             };
             if constructor {
-                match self.prepare_constructor(db, contexts) {
+                match self.prepare_installed_constructor(db, id, contexts) {
                     QueryPoll::Ready(Ok(())) => {}
                     QueryPoll::Ready(Err(error)) => {
                         self.terminal = true;

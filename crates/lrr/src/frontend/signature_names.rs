@@ -255,3 +255,15 @@ fn classify_type_lookup(name: &str, lookup: NameLookup) -> SignatureName {
         other => SignatureName::Unresolved(other),
     }
 }
+
+/// Classification after an owning source service has supplied its completed
+/// local/generic/module lookup. This adds no lookup or authority and preserves
+/// pending/ambiguous outcomes. Old declaration adapters retain their owner guard.
+pub(crate) fn classify_completed_type_lookup(
+    name: &str,
+    edition: u16,
+    lookup: NameLookup,
+) -> Result<SignatureName, Diagnostic> {
+    let name = crate::expand::scopes::MacroName::parse(name, edition)?;
+    Ok(classify_type_lookup(name.as_str(), lookup))
+}

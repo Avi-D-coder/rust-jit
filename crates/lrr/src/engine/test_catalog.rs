@@ -41,7 +41,7 @@ pub struct TestCatalog {
     cases: Vec<TestCase>,
     seal: Option<crate::db::seals::Seal>,
     source_revision: u64,
-    graph: Option<crate::frontend::names::NameNamespaces>,
+    environment: Option<std::sync::Arc<crate::expand::source_discovery::CompletedSourceEnvironment>>,
 }
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-TEST-DISCOVERY", message.into())
@@ -200,14 +200,14 @@ impl TestCatalog {
             cases,
             seal: None,
             source_revision: 0,
-            graph: None,
+            environment: None,
         })
     }
     pub(crate) fn from_declarations(
         entries: Vec<TestDeclaration<'_>>,
         seal: crate::db::seals::Seal,
         source_revision: u64,
-        graph: crate::frontend::names::NameNamespaces,
+        environment: std::sync::Arc<crate::expand::source_discovery::CompletedSourceEnvironment>,
     ) -> Result<Self, Diagnostic> {
         if !matches!(
             seal.domain(),
@@ -242,7 +242,7 @@ impl TestCatalog {
         }
         catalog.seal = Some(seal);
         catalog.source_revision = source_revision;
-        catalog.graph = Some(graph);
+        catalog.environment = Some(environment);
         Ok(catalog)
     }
     pub fn seal(&self) -> Option<&crate::db::seals::Seal> {
@@ -268,8 +268,10 @@ impl TestCatalog {
             )),
         }
     }
-    pub(crate) fn runtime_graph(&self) -> Option<&crate::frontend::names::NameNamespaces> {
-        self.graph.as_ref()
+    pub(crate) fn runtime_environment(
+        &self,
+    ) -> Option<&std::sync::Arc<crate::expand::source_discovery::CompletedSourceEnvironment>> {
+        self.environment.as_ref()
     }
     pub fn cases(&self) -> &[TestCase] {
         &self.cases

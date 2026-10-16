@@ -86,6 +86,8 @@ impl StableEncode for CurrentModuleNameKey {
 pub use crate::frontend::constants::query_identity::ConstQueryIdentity as ConstantKey;
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum QueryKey {
+    SourceConstraints(crate::source::manifest::BodyKey),
+    BoundRecordConstructor(crate::source::manifest::PcKey),
     SourceLocalPlan(crate::source::manifest::BodyKey),
     CurrentModuleName(Box<CurrentModuleNameKey>),
     SealedName(Box<SealedNameKey>),
@@ -130,6 +132,8 @@ impl QueryKey {
             }
             Self::ScopeBucket(k) => k.scope.heap_bytes() + k.name.capacity(),
             Self::SourceLocalPlan(_)
+            | Self::SourceConstraints(_)
+            | Self::BoundRecordConstructor(_)
             | Self::ConstructorPlan(_)
             | Self::TypeSchema(_)
             | Self::TypeAlias(_)
@@ -144,6 +148,8 @@ impl QueryKey {
     }
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::SourceConstraints(_) => "SourceConstraints",
+            Self::BoundRecordConstructor(_) => "BoundRecordConstructor",
             Self::SourceLocalPlan(_) => "SourceLocalPlan",
             Self::CurrentModuleName(_) => "CurrentModuleName",
             Self::SealedName(_) => "SealedName",
@@ -171,6 +177,14 @@ impl StableEncode for QueryKey {
     const DOMAIN: &'static str = "lrr/v2/query-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::SourceConstraints(key) => {
+                e.u32(37);
+                e.record(key);
+            }
+            Self::BoundRecordConstructor(key) => {
+                e.u32(35);
+                e.record(key);
+            }
             Self::SourceLocalPlan(key) => {
                 e.u32(34);
                 e.record(key);

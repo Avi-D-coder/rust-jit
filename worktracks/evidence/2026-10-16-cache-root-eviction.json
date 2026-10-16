@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-024",
+  "status": "scoped component validation passed; actual stock main still fails",
+  "source": "cdbfba3a59265611d2b875a7b96b3614c7e6c18ff9ab5a73b7548b743f7a408f",
+  "baseline_source": "8a733a43f23ad04ea482119dbbf33d096d7ed02206f30c33f96176bf255684c2",
+  "only_delta": {
+    "path": "crates/lrr/src/db/memo.rs",
+    "sha256": "b8f50b7360b15c6d48983e62cfc35d449fdf13aa0d34fe701ece099068e13f45"
+  },
+  "compile": "f2a63e/0",
+  "listed_bodies": 1383,
+  "selected_terminal": "75e555/1",
+  "component_controls": {
+    "passed": 7,
+    "failed": 0,
+    "prior_failing_retained_query": "passed; actual child exit0"
+  },
+  "actual_main": {
+    "fixture": "borrowck-assign-to-subfield.rs",
+    "edition": 2015,
+    "status": "failed",
+    "diagnostic": "LRR-E-UNSUPPORTED: cleanup requires its source-selected Drop witness",
+    "other_editions": "unexecuted",
+    "completed_report": "not returned; exact assignment/cleanup counts not inferred"
+  },
+  "architecture_review": {
+    "review": "artifacts/macos-first/common-cache-root-eviction-review-v1/REVIEW.json",
+    "sha256": "df8a75cd31f46306083aab892e4f2a6d272f618d1dc73a67647cdf6adce60e00",
+    "change": "Cold quiescent eviction removes only truly cache-owned memos before declaring retained-source floor, rechecks actual owners after each removal, prunes dead leases and enforces all three caps. External querypin row ownership observed before temporary weak upgrades. No input/revision/authority mutation or pin subtraction.",
+    "remaining": "Broader conservative payload accounting and existing language architecture holds remain; no speed claim"
+  },
+  "release": {
+    "path": "artifacts/macos-first/sol-common-installed-record-binding-validation-v3/RELEASE.json",
+    "sha256": "bc3a9a3e96317f0578301fc3064d6d53c81965b5c30548c2bce08e1ef80bf716",
+    "inactive": "71be99/0",
+    "seal": "140cfc/0"
+  },
+  "runtime_contract_pass_increment": 0,
+  "full_fixture_pass_increment": 0,
+  "platform": "aarch64-apple-darwin; Linux unexecuted",
+  "inventory": {
+    "cases": 335,
+    "originals": 857,
+    "original_licenses_and_hashes_preserved": true
+  }
+}

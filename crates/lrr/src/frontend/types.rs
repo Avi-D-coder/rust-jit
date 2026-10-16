@@ -180,7 +180,7 @@ pub struct SchemaNames<'a> {
 /// One lookup result and, when available, its source-selected concrete type.
 /// Metadata-only graph callers cannot mint nominal schema authority.
 struct SchemaTypeName {
-    name: super::signature_names::SignatureName,
+    name: Option<super::signature_names::SignatureName>,
     concrete: Option<super::source_types::SourceType>,
 }
 impl SchemaTypeName {
@@ -190,7 +190,35 @@ impl SchemaTypeName {
         } else {
             None
         };
-        Ok(Self { name, concrete })
+        Ok(Self {
+            name: Some(name),
+            concrete,
+        })
+    }
+    fn from_preparation(
+        prepared: super::source_types::NamedTypePreparation,
+    ) -> Result<Self, Diagnostic> {
+        use super::{signature_names::SignatureName, source_types::NamedTypePreparation};
+        Ok(match prepared {
+            NamedTypePreparation::Ready(concrete) => Self {
+                name: None,
+                concrete: Some(concrete),
+            },
+            NamedTypePreparation::Name(name) => Self {
+                name: Some(name),
+                concrete: None,
+            },
+            NamedTypePreparation::Parameter(parameter) => Self {
+                name: Some(SignatureName::Parameter(parameter)),
+                concrete: None,
+            },
+            NamedTypePreparation::Alias(_) => {
+                return Err(Diagnostic::new(
+                    "LRR-E-UNSUPPORTED",
+                    "field type requires further source alias binding".into(),
+                ));
+            }
+        })
     }
 }
 impl<'a> SchemaNames<'a> {
@@ -208,44 +236,43 @@ impl<'a> SchemaNames<'a> {
         {
             let declaration = body_type.declaration();
             return QueryPoll::Ready(Ok(SchemaTypeName {
-                name: super::signature_names::SignatureName::Source(super::names::NameDefinition {
-                    namespace: crate::source::manifest::Namespace::Type,
-                    identity: declaration.definition_identity(),
-                    defining_unit: declaration.definition().crate_key,
-                    definition_edition: declaration.token_edition(),
-                }),
+                name: Some(super::signature_names::SignatureName::Source(
+                    super::names::NameDefinition {
+                        namespace: crate::source::manifest::Namespace::Type,
+                        identity: declaration.definition_identity(),
+                        defining_unit: declaration.definition().crate_key,
+                        definition_edition: declaration.token_edition(),
+                    },
+                )),
                 concrete: Some(body_type.source_type().clone()),
             }));
         }
-        if self.body_type.is_some() && field.is_some() && self.schema.scope.owner.is_some() {
-            // The actual field occurrence must enter the same owning-prefix
-            // service. A module lookup cannot stand in for a local header use.
-            return QueryPoll::Ready(Ok(SchemaTypeName {
-                name: super::signature_names::SignatureName::NeedOwnerContext(
-                    self.schema.scope.clone(),
-                ),
-                concrete: None,
-            }));
+        if let Some(field) = field
+            && self.schema.scope.owner.is_some()
+            && let Some(plan) = self
+                .body_type
+                .map(|ty| ty.declaration().retained_plan())
+                .or_else(|| self.body_owner.as_ref().map(|owner| &owner.plan))
+        {
+            return match plan.prepare_field_type(db, self.schema, field) {
+                QueryPoll::Ready(Ok(prepared)) => {
+                    QueryPoll::Ready(SchemaTypeName::from_preparation(prepared))
+                }
+                QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+            };
         }
         if let Some(owner) = &self.body_owner {
             if field.is_none() && name == self.definition.declared_name {
                 return QueryPoll::Ready(Ok(SchemaTypeName {
-                    name: super::signature_names::SignatureName::Source(
+                    name: Some(super::signature_names::SignatureName::Source(
                         super::names::NameDefinition {
                             namespace: crate::source::manifest::Namespace::Type,
                             identity: self.schema.definition,
                             defining_unit: owner.definition.crate_key,
                             definition_edition: owner.edition,
                         },
-                    ),
-                    concrete: None,
-                }));
-            }
-            if field.is_some() {
-                return QueryPoll::Ready(Ok(SchemaTypeName {
-                    name: super::signature_names::SignatureName::NeedOwnerContext(
-                        self.schema.scope.clone(),
-                    ),
+                    )),
                     concrete: None,
                 }));
             }
@@ -281,7 +308,7 @@ impl<'a> SchemaNames<'a> {
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
         QueryPoll::Ready(Ok(SchemaTypeName {
-            name: selected,
+            name: Some(selected),
             concrete,
         }))
     }
@@ -520,12 +547,14 @@ impl<'a> SchemaNames<'a> {
                 return Ok(crate::db::poll::QueryPoll::NeedInput(input));
             }
         };
-        if !matches!(&own_name.name, SignatureName::Source(found) if found.identity == self.schema.definition)
+        if !matches!(&own_name.name, Some(SignatureName::Source(found)) if found.identity == self.schema.definition)
         {
             return Ok(crate::db::poll::QueryPoll::Ready(Ok(
                 NominalBinding::Deferred {
                     field: None,
-                    demand: NominalBindingDemand::Name(own_name.name),
+                    demand: NominalBindingDemand::Name(own_name.name.ok_or_else(|| {
+                        schema_fault("own nominal lookup lacks its selected identity")
+                    })?),
                 },
             )));
         }
@@ -581,7 +610,9 @@ impl<'a> SchemaNames<'a> {
                 return Ok(crate::db::poll::QueryPoll::Ready(Ok(
                     NominalBinding::Deferred {
                         field,
-                        demand: NominalBindingDemand::Name(resolved.name),
+                        demand: NominalBindingDemand::Name(resolved.name.ok_or_else(|| {
+                            schema_fault("deferred field lookup lacks its demand")
+                        })?),
                     },
                 )));
             };
@@ -689,12 +720,14 @@ impl<'a> SchemaNames<'a> {
                 return Ok(crate::db::poll::QueryPoll::NeedInput(request));
             }
         };
-        if !matches!(&own_name.name, SignatureName::Source(found) if found.identity == self.schema.definition)
+        if !matches!(&own_name.name, Some(SignatureName::Source(found)) if found.identity == self.schema.definition)
         {
             return Ok(crate::db::poll::QueryPoll::Ready(Ok(
                 NominalFieldBinding::Deferred {
                     field,
-                    demand: NominalBindingDemand::Name(own_name.name),
+                    demand: NominalBindingDemand::Name(own_name.name.ok_or_else(|| {
+                        schema_fault("own nominal lookup lacks its selected identity")
+                    })?),
                 },
             )));
         }
@@ -731,7 +764,11 @@ impl<'a> SchemaNames<'a> {
             return Ok(crate::db::poll::QueryPoll::Ready(Ok(
                 NominalFieldBinding::Deferred {
                     field,
-                    demand: NominalBindingDemand::Name(resolved.name),
+                    demand: NominalBindingDemand::Name(
+                        resolved.name.ok_or_else(|| {
+                            schema_fault("deferred field lookup lacks its demand")
+                        })?,
+                    ),
                 },
             )));
         };
@@ -910,6 +947,13 @@ impl BoundNominalConstructor {
             .checked_add(self.mapping.heap_bytes()?)
     }
 }
+impl StableEncode for BoundNominalConstructor {
+    const DOMAIN: &'static str = "lrr/v1/bound-nominal-constructor";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.record(&self.variant);
+        e.record(&self.mapping);
+    }
+}
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum NominalConstructorBinding {
     Ready(BoundNominalConstructor),
@@ -1011,6 +1055,16 @@ pub struct BoundNominalVariant {
     schema: Digest,
     variant: u32,
     fields: Vec<super::source_types::SourceType>,
+}
+impl StableEncode for BoundNominalVariant {
+    const DOMAIN: &'static str = "lrr/v1/bound-nominal-variant";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.digest(self.identity);
+        e.record(&self.definition);
+        e.digest(self.schema);
+        e.u32(self.variant);
+        e.sequence(&self.fields, |e, field| e.record(field));
+    }
 }
 impl BoundNominalVariant {
     pub(crate) fn identity(&self) -> Digest {

@@ -164,6 +164,9 @@ impl Roots {
         }
         // These exact handles were fetched by capture. Existing QueryPin and
         // input_pins retain/charge them even after their outer wrappers retire.
+        if let Some(parent) = source.local_parent() {
+            self.plan(parent)?;
+        }
         if let Some(boundary) = source.generated_boundary() {
             if self.add(boundary, boundary.exclusive_metadata_bytes())? {
                 if let Some(root) = boundary.selected_root() {
@@ -217,6 +220,23 @@ impl Roots {
         }
         Ok(())
     }
+    fn completed_environment(
+        &mut self,
+        environment: &Arc<crate::expand::source_discovery::CompletedSourceEnvironment>,
+    ) -> Result<(), Diagnostic> {
+        if !self.add(environment, environment.exclusive_metadata_bytes())? {
+            return Ok(());
+        }
+        self.add(environment.names_root(), environment.names_metadata_bytes())?;
+        self.add(
+            environment.sources_root(),
+            environment.sources_metadata_bytes(),
+        )?;
+        // All retained views are actual live-runtime source publications. Their
+        // state/parser/input allocations remain in the existing prepared-source
+        // weak pool; this traversal neither registers nor republishes them.
+        Ok(())
+    }
     fn environment(
         &mut self,
         environment: &Arc<crate::db::BodyEnvironmentInput>,
@@ -235,6 +255,7 @@ impl Roots {
                 .ok_or_else(crate::runtime::arena::resource)?,
         )? {
             self.published(owner.index_root())?;
+            self.completed_environment(owner.source_environment())?;
         }
         Ok(())
     }
@@ -333,6 +354,49 @@ impl Roots {
     }
 }
 impl Database {
+    /// A genuine current/externally retained input can expose nested completed
+    /// graphs or lexical parent plans after an earlier prune. Preserve their
+    /// existing artifact rows while that actual input DAG can still expose them.
+    /// This is the same bounded allocation traversal, only between runs.
+    pub(super) fn completed_environment_input_roots(
+        &self,
+        owners: &BTreeMap<usize, usize>,
+    ) -> Result<BTreeSet<usize>, Diagnostic> {
+        let mut roots = Roots::default();
+        for value in self
+            .inputs
+            .values()
+            .map(|row| Arc::clone(&row.value))
+            .chain(
+                self.input_pins
+                    .values()
+                    .filter_map(std::sync::Weak::upgrade),
+            )
+        {
+            if let InputValue::BodyEnvironment(environment) = value.as_ref() {
+                roots.environment(environment)?;
+            }
+        }
+        // Inspect before pruning. A raw admitted source/context can outlive
+        // every outer input and still expose its actual parent-plan DAG later.
+        // Retain all those existing artifact rows, not just the child's row.
+        for root in self.source_plan_pins.roots() {
+            if !super::product_retention::has_external_owners(root, owners) {
+                continue;
+            }
+            match root {
+                SourceArtifactRef::LocalPlan(plan) => roots.plan(plan)?,
+                SourceArtifactRef::BodyEnvironment(environment) => {
+                    roots.environment(environment)?
+                }
+                SourceArtifactRef::CompletedEnvironment(environment) => {
+                    roots.completed_environment(environment)?
+                }
+                _ => {}
+            }
+        }
+        Ok(roots.seen)
+    }
     /// Same allocation traversal for budget preflight and live/retired usage.
     pub(super) fn body_environment_root_bytes(
         &self,
@@ -463,6 +527,9 @@ impl Database {
         }
         for root in self.source_plan_pins.roots() {
             match root {
+                SourceArtifactRef::CompletedEnvironment(environment) => {
+                    roots.completed_environment(environment)?
+                }
                 SourceArtifactRef::LocalPlan(plan) => roots.plan(plan)?,
                 SourceArtifactRef::BodyEnvironment(environment) => {
                     roots.environment(environment)?

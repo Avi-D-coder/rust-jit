@@ -16,6 +16,8 @@ impl Database {
             if matches!(
                 key,
                 InputKey::DefinitionSource(_)
+                    | InputKey::LocalDeclarationOwner(_)
+                    | InputKey::BodyEnvironment(_)
                     | InputKey::DefinitionHeader(_)
                     | InputKey::DefinitionBody(_)
                     | InputKey::DeclarationContext(_)
@@ -230,7 +232,18 @@ impl Database {
             }
             let fingerprint = value.fingerprint();
             if let Some(old) = self.inputs.get(&key) {
-                if old.fingerprint != fingerprint {
+                // Header fingerprints deliberately omit source attachments.
+                // A prior cold publication must agree on the actual rows too.
+                let identical = match (old.value.as_ref(), &value) {
+                    (InputValue::DefinitionSource(a), InputValue::DefinitionSource(b)) => a == b,
+                    (InputValue::DefinitionHeader(a), InputValue::DefinitionHeader(b)) => a == b,
+                    (InputValue::DeclarationContext(a), InputValue::DeclarationContext(b)) => {
+                        a == b
+                    }
+                    (InputValue::DefinitionBody(a), InputValue::DefinitionBody(b)) => a == b,
+                    _ => false,
+                };
+                if !identical || old.fingerprint != fingerprint {
                     return Err(fault(
                         "LRR-E-CALL-CONTEXT",
                         "lexical immutable definition row conflict",
@@ -250,7 +263,28 @@ impl Database {
                 );
             }
         }
-        if existing != 0 && existing != 4 {
+        let definition = proof.plan().item().def_key.fingerprint();
+        let expected_owner = InputValue::LocalDeclarationOwner(proof.plan().caller().key());
+        let owner = self
+            .inputs
+            .get(&InputKey::LocalDeclarationOwner(definition));
+        let certified_owner = owner.is_some_and(|row| {
+            matches!((row.value.as_ref(), &expected_owner),
+                (InputValue::LocalDeclarationOwner(actual), InputValue::LocalDeclarationOwner(expected))
+                if actual == expected)
+                && row.fingerprint == expected_owner.fingerprint()
+        });
+        if owner.is_some() && !certified_owner {
+            return Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "lexical cold declaration belongs to another owning body",
+            ));
+        }
+        let exact_cold_headers = existing == 3
+            && certified_owner
+            && staged.len() == 1
+            && staged.contains_key(&InputKey::DefinitionBody(definition));
+        if existing != 0 && existing != 4 && !exact_cold_headers {
             return Err(fault(
                 "LRR-E-INTERNAL-SNAPSHOT",
                 "lexical definition has a partial prior publication",
@@ -281,3 +315,7 @@ impl Database {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "lexical_inputs_tests.rs"]
+mod tests;

@@ -532,7 +532,7 @@ mod tests {
                 );
                 let prefix = ready(local.type_prefix(&mut db, NodeId(0)));
                 assert!(matches!(prefix.selection(),crate::frontend::source_locals::owned_plan::LocalTypePrefixSelection::ModuleTail));
-                assert_eq!(prefix.node(), NodeId(0));
+                assert_eq!(prefix.node(), Some(NodeId(0)));
                 let actual = prefix.use_name().unwrap();
                 assert_eq!(actual.name(), expected);
                 assert_eq!(actual.edition(), edition);

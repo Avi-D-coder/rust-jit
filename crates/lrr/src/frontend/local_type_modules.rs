@@ -24,6 +24,7 @@ use crate::{
 };
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub(super) struct LexicalTypeModule {
     key: OutlineKey,
     outline: Arc<Outline>,
@@ -61,6 +62,23 @@ impl LocalTypeModuleSelector {
 impl LexicalTypeModule {
     pub(super) fn prepare(db: &mut Database, context: &PreparedBodyContext) -> QueryPoll<Self> {
         let source = context.source();
+        if let Some(parent) = source.local_parent() {
+            match parent.require_current(db) {
+                QueryPoll::Ready(Ok(())) => {}
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+            // capture_local proved the exact proper nested declaration. Its
+            // module is the actual parent's module proof, never a local rib
+            // stripped into a guessed module or another outline search.
+            if parent.context().source().parsed().key() != source.parsed().key()
+                || parent.context().source().scope().crate_key != source.scope().crate_key
+                || parent.context().source().scope().module_path != source.scope().module_path
+            {
+                return QueryPoll::Ready(Err(error("local body lexical module parent differs")));
+            }
+            return QueryPoll::Ready(Ok(parent.lexical_module.clone()));
+        }
         let mut key = None;
         for input in source.retained_inputs() {
             let candidate = match input.as_ref() {

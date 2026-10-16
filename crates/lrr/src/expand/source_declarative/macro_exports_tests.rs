@@ -402,3 +402,6 @@ fn wrong_unit_source_configuration_and_unpublished_facet_remain_typed() {
         .unwrap();
     assert_eq!(error.code, "LRR-E-MACRO-EXPORT-PUBLICATION");
 }
+
+#[path = "../../cli/macro_export_modules_tests.rs"]
+mod configured_module_preparation_tests;

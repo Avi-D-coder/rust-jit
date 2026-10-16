@@ -22,8 +22,15 @@ use std::collections::{BTreeMap, BTreeSet};
 #[path = "source_discovery/body_macro_environment.rs"]
 mod body_macro_environment;
 pub use body_macro_environment::SealedBodyMacroEnvironment;
+#[path = "source_discovery/completed_source_environment.rs"]
+mod completed_source_environment;
+pub use completed_source_environment::CompletedSourceEnvironment;
+pub(crate) use completed_source_environment::SourceScopeOwner;
+#[path = "source_discovery/compiler_preparation.rs"]
+mod compiler_preparation;
 #[path = "source_discovery/compiler_profiles.rs"]
 mod compiler_profiles;
+pub(crate) use compiler_preparation::SourceCompilerPreparation;
 #[path = "source_discovery/original_modules.rs"]
 mod original_modules;
 use original_modules::{OrdinaryModuleOwner, OriginalModuleDeclaration};
@@ -34,6 +41,12 @@ mod source_syntax;
 #[path = "source_discovery/type_scope_receipts.rs"]
 mod type_scope_receipts;
 pub(crate) use type_scope_receipts::TypeScopeReceipt;
+fn unique_graph(
+    graph: &mut std::sync::Arc<NameNamespaces>,
+) -> Result<&mut NameNamespaces, Diagnostic> {
+    std::sync::Arc::get_mut(graph)
+        .ok_or_else(|| fault("completed source namespace graph is immutable"))
+}
 pub enum SourceDiscoveryStep {
     NeedSourceDeriveSelection {
         selection: std::sync::Arc<crate::service::source_derive_requests::SourceDeriveSelection>,
@@ -437,7 +450,8 @@ pub struct SourceDiscovery {
     scope: ScopeKey,
     namespace: Namespace,
     key: crate::db::seals::SealKey,
-    graph: NameNamespaces,
+    graph: std::sync::Arc<NameNamespaces>,
+    completed_source_environment: Option<std::sync::Arc<CompletedSourceEnvironment>>,
     work: Discovery,
     source_jobs: BTreeMap<Digest, usize>,
     original_modules: BTreeMap<Digest, OriginalModuleDeclaration>,
@@ -999,7 +1013,8 @@ impl SourceDiscovery {
             scope,
             namespace,
             key,
-            graph,
+            graph: std::sync::Arc::new(graph),
+            completed_source_environment: None,
             work,
             source_jobs,
             original_modules,
@@ -1125,13 +1140,13 @@ impl SourceDiscovery {
             provider.install_procedural(catalog.clone())?;
         }
         Self::install_macro_routes_with_modules(
-            &mut self.graph,
+            unique_graph(&mut self.graph)?,
             providers,
             &self.module_routes,
             &self.nested_sources,
             &self.nested_inert_proofs,
         )?;
-        self.imports = self.graph.resolve_imports()?;
+        self.imports = unique_graph(&mut self.graph)?.resolve_imports()?;
         self.reserve_test_attribute_candidates(Some(catalog.consumer()), false)?;
         Ok(self)
     }
@@ -1182,9 +1197,9 @@ impl SourceDiscovery {
                 .ok_or_else(|| fault("test attribute provider absent"))?
                 .2[ordinal]
                 .reserve_test_attribute(&call)?;
-            self.graph
+            unique_graph(&mut self.graph)?
                 .hide_pending_attribute_declarations(&BTreeSet::from([definition]));
-            self.graph
+            unique_graph(&mut self.graph)?
                 .reserve_generated_frontier(call.scope.clone(), call.frontier)?;
             self.work.enqueue(DiscoveryJob {
                 module_order: u32::try_from(ordinal)
@@ -1224,8 +1239,16 @@ impl SourceDiscovery {
     ) -> Result<Self, Diagnostic> {
         self.configure_declarative(compile_env, engine, Some(catalog), None)
     }
+    pub(crate) fn prepare_with_declarative_compiler(
+        self,
+        compile_env: Digest,
+        engine: Digest,
+        catalog: std::sync::Arc<crate::frontend::compile_input_catalog::CompileInputCatalog>,
+    ) -> Result<SourceCompilerPreparation, Diagnostic> {
+        self.prepare_declarative(compile_env, engine, Some(catalog), None)
+    }
     fn configure_declarative(
-        mut self,
+        self,
         compile_env: Digest,
         engine: Digest,
         compiler: Option<
@@ -1235,6 +1258,20 @@ impl SourceDiscovery {
             std::sync::Arc<crate::frontend::procedural_exports::PreparedProcCatalog>,
         >,
     ) -> Result<Self, Diagnostic> {
+        self.prepare_declarative(compile_env, engine, compiler, procedural)?
+            .require_ready()
+    }
+    fn prepare_declarative(
+        mut self,
+        compile_env: Digest,
+        engine: Digest,
+        compiler: Option<
+            std::sync::Arc<crate::frontend::compile_input_catalog::CompileInputCatalog>,
+        >,
+        procedural: Option<
+            std::sync::Arc<crate::frontend::procedural_exports::PreparedProcCatalog>,
+        >,
+    ) -> Result<SourceCompilerPreparation, Diagnostic> {
         if self.started || self.declarative.is_some() {
             return Err(fault(
                 "declarative discovery configuration is already frozen",
@@ -1289,6 +1326,8 @@ impl SourceDiscovery {
                 provider.install_procedural(catalog.clone())?;
             }
         }
+        let mut prepared_nested_bytes = self.nested_bytes;
+        let mut prepared_profiles = None;
         if let Some(catalog) = compiler {
             if catalog.definitions().next().is_none() {
                 return Err(fault("compiler facet is empty"));
@@ -1298,34 +1337,47 @@ impl SourceDiscovery {
                 catalog,
                 64 * 1024 * 1024,
             )?;
-            let retained = self
-                .nested_bytes
+            let retained = prepared_nested_bytes
                 .checked_add(prepared.metadata_bytes())
                 .filter(|n| *n <= 512 * 1024 * 1024)
                 .ok_or_else(|| fault("owning compiler facet metadata limit"))?;
             prepared.install(&mut providers)?;
-            self.nested_bytes = retained;
-            self.compiler_profiles = Some(prepared);
+            prepared_nested_bytes = retained;
+            prepared_profiles = Some(prepared);
         }
         super::source_declarative::SourceDeclarative::configure_captured_modules(&mut providers)?;
         for (ordinal, provider) in providers.iter_mut().enumerate() {
             if let Some(plan) = self.original_annotation_plans.get(&ordinal) {
                 let bytes = provider.prepare_compiler_attributes(plan)?;
-                self.nested_bytes = self
-                    .nested_bytes
+                prepared_nested_bytes = prepared_nested_bytes
                     .checked_add(bytes)
                     .filter(|n| *n <= 512 * 1024 * 1024)
                     .ok_or_else(|| fault("compiler attribute preparation metadata limit"))?;
             }
         }
-        Self::install_macro_routes_with_modules(
-            &mut self.graph,
+        let routes = Self::completed_macro_routes(&providers, &self.module_routes)?;
+        let namespaces = match Self::prepare_compiler_import_graph(&routes, &providers)? {
+            crate::frontend::source_macro_routes::ModuleGraphPreparation::Ready(namespaces) => {
+                namespaces
+            }
+            crate::frontend::source_macro_routes::ModuleGraphPreparation::NeedModule(demand) => {
+                return Ok(SourceCompilerPreparation::NeedModule {
+                    discovery: self,
+                    demand,
+                });
+            }
+        };
+        Self::install_prepared_macro_routes(
+            unique_graph(&mut self.graph)?,
             &providers,
-            &self.module_routes,
             &self.nested_sources,
             &self.nested_inert_proofs,
+            &routes,
+            namespaces,
         )?;
-        self.imports = self.graph.resolve_imports()?;
+        self.nested_bytes = prepared_nested_bytes;
+        self.compiler_profiles = prepared_profiles;
+        self.imports = unique_graph(&mut self.graph)?.resolve_imports()?;
         self.declarative = Some((compile_env, engine, providers));
         if let Some(consumer) = procedural_consumer {
             self.reserve_test_attribute_candidates(Some(consumer), false)?;
@@ -1333,7 +1385,7 @@ impl SourceDiscovery {
         if compiler_attributes {
             self.reserve_compiler_test_attribute_candidates()?;
         }
-        Ok(self)
+        Ok(SourceCompilerPreparation::Ready(self))
     }
     pub fn with_compiler(
         mut self,
@@ -1372,13 +1424,13 @@ impl SourceDiscovery {
             }
         }
         Self::install_macro_routes_with_modules(
-            &mut self.graph,
+            unique_graph(&mut self.graph)?,
             providers,
             &self.module_routes,
             &self.nested_sources,
             &self.nested_inert_proofs,
         )?;
-        self.imports = self.graph.resolve_imports()?;
+        self.imports = unique_graph(&mut self.graph)?.resolve_imports()?;
         if compiler_attributes {
             self.reserve_compiler_test_attribute_candidates()?;
         }
@@ -1439,7 +1491,7 @@ impl SourceDiscovery {
             .ok_or_else(|| fault("compiler source indexes absent"))?
             .2;
         let namespaces = Self::install_macro_routes_with_modules(
-            &mut self.graph,
+            unique_graph(&mut self.graph)?,
             providers,
             &self.module_routes,
             &self.nested_sources,
@@ -1827,7 +1879,7 @@ impl SourceDiscovery {
                 .ok_or_else(|| fault("compiler providers absent"))?
                 .2;
             let namespaces = Self::install_macro_routes_with_modules(
-                &mut self.graph,
+                unique_graph(&mut self.graph)?,
                 providers,
                 &self.module_routes,
                 &self.nested_sources,
@@ -2547,7 +2599,7 @@ impl SourceDiscovery {
         bound_impl_headers.extend(impl_headers.iter().map(|(_, header)| *header));
         let result = (|| {
             self.retain_module_sources(&plan)?;
-            plan.publish(&mut self.graph)?;
+            plan.publish(unique_graph(&mut self.graph)?)?;
             self.work.block(&ticket, vec![id])?;
             self.work.enqueue_batch(jobs)?;
             self.fragments.insert(
@@ -2587,7 +2639,7 @@ impl SourceDiscovery {
             self.retained_record_bytes = allocated;
             self.generated_bytes = wire;
             self.generated_headers = headers;
-            self.imports = self.graph.resolve_imports()?;
+            self.imports = unique_graph(&mut self.graph)?.resolve_imports()?;
             self.pending_source_derive = None;
             Ok::<_, Diagnostic>(())
         })();
@@ -2633,7 +2685,7 @@ impl SourceDiscovery {
         };
         self.work.preflight_complete(ticket, &mut update)?;
         let result = (|| {
-            self.graph.restore_source_attribute_declaration(
+            unique_graph(&mut self.graph)?.restore_source_attribute_declaration(
                 self.sources[ordinal].outline(),
                 proof.item,
             )?;
@@ -2650,11 +2702,11 @@ impl SourceDiscovery {
                 return Err(fault("source derive already completed"));
             }
             if frontier.is_empty() {
-                self.graph
+                unique_graph(&mut self.graph)?
                     .release_generated_frontier(&call.scope, call.frontier);
             }
             Self::install_macro_routes_with_modules(
-                &mut self.graph,
+                unique_graph(&mut self.graph)?,
                 &self
                     .declarative
                     .as_ref()
@@ -2664,7 +2716,7 @@ impl SourceDiscovery {
                 &self.nested_sources,
                 &self.nested_inert_proofs,
             )?;
-            self.imports = self.graph.resolve_imports()?;
+            self.imports = unique_graph(&mut self.graph)?.resolve_imports()?;
             self.source_derive_completions
                 .insert(call.item_input, proof);
             self.producers.remove(&call.item_input);
@@ -3226,7 +3278,7 @@ impl SourceDiscovery {
         // The original frontier remains until header/import publication succeeds.
         let result = (|| {
             self.retain_module_sources(&plan)?;
-            plan.publish(&mut self.graph)?;
+            plan.publish(unique_graph(&mut self.graph)?)?;
             let entry = self
                 .frontier_producers
                 .get_mut(&(call.scope.clone(), call.frontier))
@@ -3235,7 +3287,7 @@ impl SourceDiscovery {
                 return Err(fault("source frontier producer already completed"));
             }
             if entry.is_empty() {
-                self.graph
+                unique_graph(&mut self.graph)?
                     .release_generated_frontier(&call.scope, call.frontier);
             }
             if opaque.is_empty() && !deferred {
@@ -3256,10 +3308,10 @@ impl SourceDiscovery {
                     }
                 }
                 for id in &discharged {
-                    self.graph.release_generated_frontier(&call.scope, *id);
+                    unique_graph(&mut self.graph)?.release_generated_frontier(&call.scope, *id);
                 }
                 Self::install_macro_routes_with_modules(
-                    &mut self.graph,
+                    unique_graph(&mut self.graph)?,
                     &self
                         .declarative
                         .as_ref()
@@ -3270,7 +3322,7 @@ impl SourceDiscovery {
                     &self.nested_inert_proofs,
                 )?;
             }
-            self.imports = self.graph.resolve_imports()?;
+            self.imports = unique_graph(&mut self.graph)?.resolve_imports()?;
             self.work.complete(&ticket, update)?;
             self.producers.remove(&call.item_input);
             self.producers.extend(opaque);
@@ -3615,7 +3667,7 @@ impl SourceDiscovery {
             &mut self.module_source_bytes,
             &plan,
         )?;
-        if let Err(error) = plan.publish(&mut self.graph) {
+        if let Err(error) = plan.publish(unique_graph(&mut self.graph)?) {
             self.failed = Some(error.clone());
             return Err(error);
         }
@@ -3662,7 +3714,7 @@ impl SourceDiscovery {
         self.generated_headers = headers;
         self.retained_record_bytes = allocated;
         self.pending_generated = None;
-        match self.graph.resolve_imports() {
+        match unique_graph(&mut self.graph)?.resolve_imports() {
             Ok(imports) => self.imports = imports,
             Err(error) => {
                 self.failed = Some(error.clone());
@@ -3918,6 +3970,12 @@ impl SourceDiscovery {
         routes: &[std::sync::Arc<crate::frontend::source_macro_routes::SourceMacroRoutes>],
         providers: &[super::source_declarative::SourceDeclarative],
     ) -> Result<crate::frontend::macro_names::MacroNamespaces, Diagnostic> {
+        Self::prepare_compiler_import_graph(routes, providers)?.require_ready()
+    }
+    fn prepare_compiler_import_graph(
+        routes: &[std::sync::Arc<crate::frontend::source_macro_routes::SourceMacroRoutes>],
+        providers: &[super::source_declarative::SourceDeclarative],
+    ) -> Result<crate::frontend::source_macro_routes::ModuleGraphPreparation, Diagnostic> {
         let mut imports = Vec::new();
         for provider in providers {
             if provider.macro_export_source_role().is_some() {
@@ -3935,7 +3993,7 @@ impl SourceDiscovery {
                 imports.push(import);
             }
         }
-        crate::frontend::source_macro_routes::SourceMacroRoutes::discovery_graph_with_compiler_imports(routes, &imports)
+        crate::frontend::source_macro_routes::SourceMacroRoutes::prepare_discovery_graph_with_compiler_imports(routes, &imports)
     }
     fn runtime_preludes<'a>(
         namespaces: &mut crate::frontend::macro_names::MacroNamespaces,
@@ -4150,7 +4208,20 @@ impl SourceDiscovery {
         inert: &BTreeMap<Digest, super::nested_inert::NestedInertProof>,
     ) -> Result<crate::frontend::macro_names::MacroNamespaces, Diagnostic> {
         let routes = Self::completed_macro_routes(providers, modules)?;
-        let mut namespaces = Self::compiler_import_graph(&routes, providers)?;
+        let namespaces = Self::compiler_import_graph(&routes, providers)?;
+        Self::install_prepared_macro_routes(graph, providers, sources, inert, &routes, namespaces)
+    }
+    fn install_prepared_macro_routes(
+        graph: &mut NameNamespaces,
+        providers: &[super::source_declarative::SourceDeclarative],
+        sources: &BTreeMap<
+            usize,
+            std::sync::Arc<crate::frontend::impl_index::DeclarationMacroIndex>,
+        >,
+        inert: &BTreeMap<Digest, super::nested_inert::NestedInertProof>,
+        routes: &[std::sync::Arc<crate::frontend::source_macro_routes::SourceMacroRoutes>],
+        mut namespaces: crate::frontend::macro_names::MacroNamespaces,
+    ) -> Result<crate::frontend::macro_names::MacroNamespaces, Diagnostic> {
         Self::install_original_module_bindings(
             &mut namespaces,
             sources.values().map(|index| index.scan()),
@@ -4186,7 +4257,7 @@ impl SourceDiscovery {
             }
         }
         if providers.first().is_some_and(|p| p.compiler.is_some()) {
-            for route in &routes {
+            for route in routes {
                 for (unit, names) in &route.modules {
                     if names.is_empty() {
                         graph.declare_module(
@@ -4219,7 +4290,7 @@ impl SourceDiscovery {
             }
         }
         Self::runtime_preludes(&mut namespaces, providers.iter())?;
-        for route in &routes {
+        for route in routes {
             for row in &route.extern_aliases {
                 graph.extern_alias(row, route.edition)?;
             }
@@ -4247,7 +4318,7 @@ impl SourceDiscovery {
 
             graph.define(route.path.clone(), definition.clone(), access)?;
         }
-        for routes in &routes {
+        for routes in routes {
             for import in &routes.source_imports {
                 if let Some(definition) = routes.import_definition(import, &namespaces)? {
                     graph.macro_import_facet(
@@ -4319,7 +4390,7 @@ impl SourceDiscovery {
             };
             Self::poll_fragment_in(
                 &mut fragment,
-                &mut self.graph,
+                unique_graph(&mut self.graph)?,
                 &mut self.retained_record_bytes,
                 context,
             )
@@ -4632,18 +4703,18 @@ impl SourceDiscovery {
                             && !staged.completed_invocations.contains(&call.item_input)
                     });
                 if !pending {
-                    self.graph
+                    unique_graph(&mut self.graph)?
                         .release_generated_frontier(&fragment.call.scope, fragment.call.frontier);
                 }
                 self.producers.remove(&fragment.call.item_input);
                 self.refresh_staged_module_routes(module)?;
             }
             for frontier in fragment.release {
-                self.graph
+                unique_graph(&mut self.graph)?
                     .release_generated_frontier(&fragment.call.scope, frontier);
             }
             Self::install_macro_routes_with_modules(
-                &mut self.graph,
+                unique_graph(&mut self.graph)?,
                 &self
                     .declarative
                     .as_ref()
@@ -4653,7 +4724,7 @@ impl SourceDiscovery {
                 &self.nested_sources,
                 &self.nested_inert_proofs,
             )?;
-            self.imports = self.graph.resolve_imports()?;
+            self.imports = unique_graph(&mut self.graph)?.resolve_imports()?;
             self.work.complete(ticket, update)?;
             self.producers.remove(&id);
             Ok::<_, Diagnostic>(())
@@ -4665,19 +4736,18 @@ impl SourceDiscovery {
     }
     pub(crate) fn into_runtime_parts(
         self,
-    ) -> Result<(Vec<PreparedSourceView>, NameNamespaces), Diagnostic> {
+    ) -> Result<(Vec<PreparedSourceView>, std::sync::Arc<NameNamespaces>), Diagnostic> {
         let _record_count = self.sealed_expansions()?.len();
-        let mut sources = self.sources;
+        let environment = self
+            .completed_source_environment
+            .as_ref()
+            .ok_or_else(|| fault("completed runtime source environment absent"))?;
+        let mut sources = Vec::new();
         sources
-            .try_reserve_exact(self.staged_modules.len())
+            .try_reserve_exact(environment.sources().len())
             .map_err(|_| fault("module runtime source allocation"))?;
-        sources.extend(
-            self.staged_modules
-                .values()
-                .filter(|module| module.namespace_complete)
-                .map(|module| module.syntax.prepared_source().share()),
-        );
-        Ok((sources, self.graph))
+        sources.extend(environment.sources().iter().map(PreparedSourceView::share));
+        Ok((sources, std::sync::Arc::clone(environment.names_root())))
     }
     fn attach_incomplete_source_origin(
         &self,
@@ -5820,16 +5890,16 @@ impl SourceDiscovery {
         };
         let applied = (|| {
             for declaration in &ordinary_modules {
-                self.graph.reserve_generated_frontier(
+                unique_graph(&mut self.graph)?.reserve_generated_frontier(
                     declaration.scope().clone(),
                     declaration.producer(),
                 )?;
             }
-            self.graph.disclose_module_source_scope(
+            unique_graph(&mut self.graph)?.disclose_module_source_scope(
                 producer,
                 syntax.prepared_source().outline().root_scope.clone(),
             )?;
-            self.graph
+            unique_graph(&mut self.graph)?
                 .admit_source_outline(syntax.prepared_source().outline())?;
             let hidden = syntax
                 .prepared_source()
@@ -5842,12 +5912,12 @@ impl SourceDiscovery {
                 })
                 .map(|item| item.def_key.fingerprint())
                 .collect::<BTreeSet<_>>();
-            self.graph.hide_pending_attribute_declarations(&hidden);
+            unique_graph(&mut self.graph)?.hide_pending_attribute_declarations(&hidden);
             for call in source_calls
                 .values()
                 .filter(|call| call.attribute_input.is_some())
             {
-                self.graph
+                unique_graph(&mut self.graph)?
                     .reserve_generated_frontier(call.scope.clone(), call.frontier)?;
             }
             self.graph.require_source(
@@ -5856,7 +5926,7 @@ impl SourceDiscovery {
             )?;
             self.module_routes.insert(producer, routes);
             Self::install_macro_routes_with_modules(
-                &mut self.graph,
+                unique_graph(&mut self.graph)?,
                 &self
                     .declarative
                     .as_ref()
@@ -5866,7 +5936,7 @@ impl SourceDiscovery {
                 &self.nested_sources,
                 &self.nested_inert_proofs,
             )?;
-            self.imports = self.graph.resolve_imports()?;
+            self.imports = unique_graph(&mut self.graph)?.resolve_imports()?;
             self.work.enqueue_batch(jobs)?;
             self.work.namespace_changed()?;
             Ok::<_, Diagnostic>(())
@@ -5934,7 +6004,7 @@ impl SourceDiscovery {
             .ok_or_else(|| fault("module procedural providers absent"))?
             .2;
         let namespaces = Self::install_macro_routes_with_modules(
-            &mut self.graph,
+            unique_graph(&mut self.graph)?,
             providers,
             &self.module_routes,
             &self.nested_sources,
@@ -5992,7 +6062,7 @@ impl SourceDiscovery {
             .ok_or_else(|| fault("module macro providers absent"))?
             .2;
         let namespaces = Self::install_macro_routes_with_modules(
-            &mut self.graph,
+            unique_graph(&mut self.graph)?,
             providers,
             &self.module_routes,
             &self.nested_sources,
@@ -6235,7 +6305,7 @@ impl SourceDiscovery {
         self.work.preflight_complete(&ticket, &mut update)?;
         let applied = (|| {
             self.retain_module_sources(&plan)?;
-            plan.publish(&mut self.graph)?;
+            plan.publish(unique_graph(&mut self.graph)?)?;
             if completed {
                 self.staged_modules
                     .get_mut(&producer)
@@ -6260,14 +6330,14 @@ impl SourceDiscovery {
                             })
                     });
                 if !other_pending {
-                    self.graph
+                    unique_graph(&mut self.graph)?
                         .release_generated_frontier(&call.scope, call.frontier);
                 }
                 for id in &macros {
-                    self.graph.release_generated_frontier(&call.scope, *id);
+                    unique_graph(&mut self.graph)?.release_generated_frontier(&call.scope, *id);
                 }
             }
-            self.imports = self.graph.resolve_imports()?;
+            self.imports = unique_graph(&mut self.graph)?.resolve_imports()?;
             self.work.complete(&ticket, update)?;
             if completed {
                 self.producers.remove(&call.item_input);
@@ -6548,7 +6618,7 @@ impl SourceDiscovery {
             for call in &calls {
                 if call.attribute_input.is_some() {
                     let names = Self::install_macro_routes_with_modules(
-                        &mut self.graph,
+                        unique_graph(&mut self.graph)?,
                         &self
                             .declarative
                             .as_ref()
@@ -6754,7 +6824,7 @@ impl SourceDiscovery {
                     .retain_source_module_owner(producer, child)?;
                 self.module_routes.insert(producer, routes);
                 Self::install_macro_routes_with_modules(
-                    &mut self.graph,
+                    unique_graph(&mut self.graph)?,
                     &self
                         .declarative
                         .as_ref()
@@ -6764,11 +6834,11 @@ impl SourceDiscovery {
                     &self.nested_sources,
                     &self.nested_inert_proofs,
                 )?;
-                self.graph.release_generated_frontier(
+                unique_graph(&mut self.graph)?.release_generated_frontier(
                     ready.syntax.origin().declaration().scope(),
                     producer,
                 );
-                self.imports = self.graph.resolve_imports()?;
+                self.imports = unique_graph(&mut self.graph)?.resolve_imports()?;
                 self.staged_modules
                     .get_mut(&producer)
                     .ok_or_else(|| fault("ordinary completion source disappeared"))?
@@ -6909,14 +6979,14 @@ impl SourceDiscovery {
             self.module_routes.insert(producer, routes);
             let applied = (|| {
                 Self::install_macro_routes_with_modules(
-                    &mut self.graph,
+                    unique_graph(&mut self.graph)?,
                     providers,
                     &self.module_routes,
                     &self.nested_sources,
                     &self.nested_inert_proofs,
                 )?;
-                self.graph.release_generated_frontier(&owner, producer);
-                self.imports = self.graph.resolve_imports()?;
+                unique_graph(&mut self.graph)?.release_generated_frontier(&owner, producer);
+                self.imports = unique_graph(&mut self.graph)?.resolve_imports()?;
                 self.staged_modules
                     .get_mut(&producer)
                     .ok_or_else(|| fault("module namespace source disappeared"))?
@@ -7494,7 +7564,13 @@ impl SourceDiscovery {
             entries,
             seal,
             db.source_revision(),
-            self.graph.clone(),
+            match self.completed_source_environment(db) {
+                QueryPoll::Ready(Ok(environment)) => environment,
+                QueryPoll::Ready(Err(error)) => return Err(error),
+                QueryPoll::NeedInput(_) => {
+                    return Err(fault("test source environment is not published"));
+                }
+            },
         )
     }
     pub(crate) fn completed_test_sources(&self) -> Result<Vec<PreparedSourceView>, Diagnostic> {
@@ -8525,7 +8601,7 @@ impl SourceDiscovery {
             .get(ordinal)
             .ok_or_else(|| fault("argument provider owner absent"))?;
         let namespaces = Self::install_macro_routes_with_modules(
-            &mut self.graph,
+            unique_graph(&mut self.graph)?,
             providers,
             &self.module_routes,
             &self.nested_sources,
@@ -8691,7 +8767,7 @@ impl SourceDiscovery {
             .get(ordinal)
             .ok_or_else(|| fault("item declaration provider owner absent"))?;
         let namespaces = Self::install_macro_routes_with_modules(
-            &mut self.graph,
+            unique_graph(&mut self.graph)?,
             providers,
             &self.module_routes,
             &self.nested_sources,
@@ -8888,7 +8964,7 @@ impl SourceDiscovery {
                 return Ok(None);
             }
             let namespaces = Self::install_macro_routes_with_modules(
-                &mut self.graph,
+                unique_graph(&mut self.graph)?,
                 providers,
                 &self.module_routes,
                 &self.nested_sources,
@@ -9017,7 +9093,7 @@ impl SourceDiscovery {
                 return Ok(None);
             }
             let namespaces = Self::install_macro_routes_with_modules(
-                &mut self.graph,
+                unique_graph(&mut self.graph)?,
                 providers,
                 &self.module_routes,
                 &self.nested_sources,
@@ -9153,7 +9229,7 @@ impl SourceDiscovery {
             self.nested_fragments.insert(identity, fragment);
         }
         let namespaces = Self::install_macro_routes_with_modules(
-            &mut self.graph,
+            unique_graph(&mut self.graph)?,
             providers,
             &self.module_routes,
             &self.nested_sources,
@@ -9565,7 +9641,7 @@ impl SourceDiscovery {
                                         .ok_or_else(|| fault("staged attribute providers absent"))?
                                         .2;
                                     let names = Self::install_macro_routes_with_modules(
-                                        &mut self.graph,
+                                        unique_graph(&mut self.graph)?,
                                         providers,
                                         &self.module_routes,
                                         &self.nested_sources,
@@ -9600,10 +9676,11 @@ impl SourceDiscovery {
                                             ..Default::default()
                                         };
                                         self.work.preflight_complete(&ticket, &mut update)?;
-                                        self.graph.restore_source_attribute_declaration(
-                                            source.outline(),
-                                            proof.item,
-                                        )?;
+                                        unique_graph(&mut self.graph)?
+                                            .restore_source_attribute_declaration(
+                                                source.outline(),
+                                                proof.item,
+                                            )?;
                                         let staged = self
                                             .staged_modules
                                             .get_mut(&producer)
@@ -9616,7 +9693,7 @@ impl SourceDiscovery {
                                             .provider
                                             .complete_original_inert_item(job.identity, &proof)?;
                                         staged.completed_invocations.insert(job.identity);
-                                        self.graph
+                                        unique_graph(&mut self.graph)?
                                             .release_generated_frontier(&call.scope, call.frontier);
                                         self.source_empty_derives.insert(job.identity, proof);
                                         self.producers.remove(&job.identity);
@@ -9673,7 +9750,7 @@ impl SourceDiscovery {
                                 }
                                 let ordinal = *ordinal;
                                 let namespaces = Self::install_macro_routes_with_modules(
-                                    &mut self.graph,
+                                    unique_graph(&mut self.graph)?,
                                     providers,
                                     &self.module_routes,
                                     &self.nested_sources,
@@ -9704,10 +9781,11 @@ impl SourceDiscovery {
                                         ..Default::default()
                                     };
                                     self.work.preflight_complete(&ticket, &mut update)?;
-                                    self.graph.restore_source_attribute_declaration(
-                                        self.sources[ordinal].outline(),
-                                        proof.item,
-                                    )?;
+                                    unique_graph(&mut self.graph)?
+                                        .restore_source_attribute_declaration(
+                                            self.sources[ordinal].outline(),
+                                            proof.item,
+                                        )?;
                                     self.declarative
                                         .as_mut()
                                         .ok_or_else(|| fault("source provider absent"))?
@@ -9723,14 +9801,14 @@ impl SourceDiscovery {
                                         return Err(fault("source empty derive already settled"));
                                     }
                                     if frontier.is_empty() {
-                                        self.graph
+                                        unique_graph(&mut self.graph)?
                                             .release_generated_frontier(&call.scope, call.frontier);
                                     }
                                     self.source_empty_derives.insert(job.identity, proof);
                                     self.work.complete(&ticket, update)?;
                                     self.producers.remove(&job.identity);
                                     Self::install_macro_routes_with_modules(
-                                        &mut self.graph,
+                                        unique_graph(&mut self.graph)?,
                                         &self
                                             .declarative
                                             .as_ref()
@@ -9742,7 +9820,8 @@ impl SourceDiscovery {
                                         &self.nested_sources,
                                         &self.nested_inert_proofs,
                                     )?;
-                                    self.imports = self.graph.resolve_imports()?;
+                                    self.imports =
+                                        unique_graph(&mut self.graph)?.resolve_imports()?;
                                     continue;
                                 }
                                 match super::source_derives::prepare_group(
@@ -9818,13 +9897,14 @@ impl SourceDiscovery {
                             {
                                 if let Some(catalog) = &providers[*ordinal].procedural {
                                     let namespaces = Self::install_macro_routes_with_modules(
-                                        &mut self.graph,
+                                        unique_graph(&mut self.graph)?,
                                         providers,
                                         &self.module_routes,
                                         &self.nested_sources,
                                         &self.nested_inert_proofs,
                                     )?;
-                                    self.imports = self.graph.resolve_imports()?;
+                                    self.imports =
+                                        unique_graph(&mut self.graph)?.resolve_imports()?;
                                     if let crate::frontend::macro_names::PathLookup::Defined(
                                         definition,
                                     ) = providers[*ordinal]
@@ -9866,13 +9946,14 @@ impl SourceDiscovery {
                                     direct
                                 } else {
                                     let namespaces = Self::install_macro_routes_with_modules(
-                                        &mut self.graph,
+                                        unique_graph(&mut self.graph)?,
                                         providers,
                                         &self.module_routes,
                                         &self.nested_sources,
                                         &self.nested_inert_proofs,
                                     )?;
-                                    self.imports = self.graph.resolve_imports()?;
+                                    self.imports =
+                                        unique_graph(&mut self.graph)?.resolve_imports()?;
                                     providers[*ordinal].demand_in(
                                         job.identity,
                                         *compile_env,
@@ -9888,7 +9969,7 @@ impl SourceDiscovery {
                                     )
                                 ) {
                                     let namespaces = Self::install_macro_routes_with_modules(
-                                        &mut self.graph,
+                                        unique_graph(&mut self.graph)?,
                                         providers,
                                         &self.module_routes,
                                         &self.nested_sources,
@@ -9967,7 +10048,8 @@ impl SourceDiscovery {
                                             ..Default::default()
                                         },
                                     )?;
-                                    self.graph.release_generated_frontier(&scope, job.identity);
+                                    unique_graph(&mut self.graph)?
+                                        .release_generated_frontier(&scope, job.identity);
                                     self.producers.remove(&job.identity);
                                 } else {
                                     self.work.block(&ticket, vec![declaration_job])?;
@@ -10036,7 +10118,7 @@ impl SourceDiscovery {
                     }) && let Some((_, _, providers)) = &self.declarative
                     {
                         let namespaces = Self::install_macro_routes_with_modules(
-                            &mut self.graph,
+                            unique_graph(&mut self.graph)?,
                             providers,
                             &self.module_routes,
                             &self.nested_sources,
@@ -10076,7 +10158,7 @@ impl SourceDiscovery {
                 DiscoveryStep::Sealed(seal) => {
                     if let Some((_, _, providers)) = &self.declarative {
                         let namespaces = match Self::install_macro_routes_with_modules(
-                            &mut self.graph,
+                            unique_graph(&mut self.graph)?,
                             providers,
                             &self.module_routes,
                             &self.nested_sources,
@@ -10088,7 +10170,7 @@ impl SourceDiscovery {
                                 return Err(error);
                             }
                         };
-                        self.imports = self.graph.resolve_imports()?;
+                        self.imports = unique_graph(&mut self.graph)?.resolve_imports()?;
                         for (identity, definition) in &self.procedural_selections {
                             if let Some(ordinal) = self.nested_jobs.get(identity) {
                                 let parent = self.nested_sources.get(ordinal).ok_or_else(|| {
@@ -10172,6 +10254,7 @@ impl SourceDiscovery {
                         crate::db::value::QueryValue::DiscoverySeal(Box::new(seal.clone()))
                             .fingerprint(),
                     );
+                    self.prepare_completed_source_environment(&seal)?;
                     self.seal = Some(seal.clone());
                     return Ok(SourceDiscoveryStep::Sealed(seal));
                 }
@@ -10613,7 +10696,8 @@ mod seal_tests {
             1,
         )
         .unwrap();
-        work.graph
+        unique_graph(&mut work.graph)
+            .unwrap()
             .reserve_generated_frontier(scope, Digest([63; 32]))
             .unwrap();
         let error = work

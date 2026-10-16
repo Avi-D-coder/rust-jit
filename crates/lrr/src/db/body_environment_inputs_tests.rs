@@ -112,7 +112,12 @@ fn selected_local_types(db: &mut Database, plan: &Arc<PreparedSourceLocalPlan>) 
             continue;
         };
         let definition = row.item.def_key.fingerprint();
-        ready(db.publish_local_declaration(plan.context(), definition));
+        // Production coordinator preparation must have registered the actual
+        // declaration; this control must not supply missing runtime inputs.
+        assert!(
+            matches!(db.input(&InputKey::DefinitionHeader(definition)).as_deref(),
+            Some(InputValue::DefinitionHeader(header)) if header == &row.item.header)
+        );
         match ready(plan.prepare_body_type(db, node.id)) {
             BodyTypeOutcome::Ready(proof) => {
                 assert_eq!(proof.declaration().definition_identity(), definition);
@@ -295,6 +300,11 @@ fn budget_and_pure_query_cannot_publish_a_partial_owning_environment() {
             .contains_key(&InputKey::BodyEnvironment(body.clone()))
     );
     assert_eq!(db.revision(), revision);
+    assert_eq!(
+        db.source_plan_pins.registered_artifact_count(),
+        0,
+        "rejected environment must not publish either completed or body retirement root"
+    );
     db.run_budgets = None;
     struct DuringQuery {
         source: Arc<AdmittedBodyContext>,
@@ -324,4 +334,43 @@ fn budget_and_pure_query_cannot_publish_a_partial_owning_environment() {
     }
     assert!(!db.inputs.contains_key(&InputKey::BodyEnvironment(body)));
     assert_eq!(db.revision(), revision);
+}
+
+#[test]
+fn current_input_retains_completed_graph_row_before_late_child_extraction() {
+    let (mut db, source, discovery) = world(ORIGINAL, 2024);
+    let body = main_body(&mut db, &discovery);
+    let plan = ready(db.prepare_source_local_plan(&discovery, &[&source], &body));
+    let weak = Arc::downgrade(plan.environment().unwrap().macros().source_environment());
+    drop(plan);
+    drop(discovery);
+    // No raw child handle is external yet. The actual current opaque input
+    // must still preserve the row from which a later child can be extracted.
+    db.evict_between_runs(CacheBudgets::default()).unwrap();
+    let graph = match db
+        .input(&InputKey::BodyEnvironment(body.clone()))
+        .as_deref()
+    {
+        Some(InputValue::BodyEnvironment(input)) => {
+            Arc::clone(input.macros().source_environment().names_root())
+        }
+        _ => panic!("genuine current body environment absent"),
+    };
+    db.publish_inputs(BTreeMap::new()).unwrap();
+    match db.fetch(&SyntaxProvider, QueryKey::SourceLocalPlan(body)) {
+        QueryPoll::Ready(Err(_)) => {}
+        other => panic!("revoked plan remained current: {other:?}"),
+    }
+    drop(source);
+    db.evict_between_runs(CacheBudgets::default()).unwrap();
+    let retained = weak
+        .upgrade()
+        .expect("late raw child must retain its charged completed owner");
+    assert!(
+        db.cache_usage().unwrap().pinned_memo_bytes >= retained.retained_metadata_bytes().unwrap()
+    );
+    drop(retained);
+    drop(graph);
+    db.evict_between_runs(CacheBudgets::default()).unwrap();
+    assert!(weak.upgrade().is_none());
 }

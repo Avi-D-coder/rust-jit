@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum InputKey {
+    LocalDeclarationOwner(Digest),
     BodyEnvironment(crate::source::manifest::BodyKey),
     MacroExportSource(Digest),
     SourceDependencies,
@@ -35,6 +36,7 @@ pub enum InputKey {
 }
 #[derive(Debug, Clone)]
 pub enum InputValue {
+    LocalDeclarationOwner(crate::source::manifest::BodyKey),
     BodyEnvironment(Arc<super::BodyEnvironmentInput>),
     MacroExportSource(Box<super::MacroExportSourceReceipt>),
     ScopeCertificateSelection {
@@ -125,7 +127,7 @@ impl InputValue {
                     ))?)?
             }
             Self::ExpansionRecord(record) => add(record.estimated_bytes()?)?,
-            Self::SourceBlob(_) | Self::DefinitionBody(_) => {}
+            Self::SourceBlob(_) | Self::DefinitionBody(_) | Self::LocalDeclarationOwner(_) => {}
             Self::DefinitionHeader(v) => add(v.estimated_bytes())?,
             Self::DeclarationContext(v) => add(v.scope.heap_bytes())?,
             Self::CompileEnv(v) => add(v.capacity())?,
@@ -191,6 +193,10 @@ impl InputValue {
         matches!(
             (self, k),
             (Self::SourceDependencies(_), InputKey::SourceDependencies)
+                | (
+                    Self::LocalDeclarationOwner(_),
+                    InputKey::LocalDeclarationOwner(_)
+                )
                 | (Self::DeclarationContext(_), InputKey::DeclarationContext(_))
                 | (Self::DefinitionSource(_), InputKey::DefinitionSource(_))
                 | (Self::ExpansionEpoch(_), InputKey::ExpansionEpoch)
@@ -213,6 +219,10 @@ impl InputValue {
             _ => "lrr/v2/input-value",
         });
         match self {
+            Self::LocalDeclarationOwner(body) => {
+                e.u32(33);
+                e.record(body);
+            }
             Self::BodyEnvironment(input) => {
                 e.u32(32);
                 e.digest(input.identity());
@@ -367,6 +377,10 @@ impl StableEncode for InputKey {
     const DOMAIN: &'static str = "lrr/v2/input-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::LocalDeclarationOwner(definition) => {
+                e.u32(33);
+                e.digest(*definition);
+            }
             Self::BodyEnvironment(body) => {
                 e.u32(32);
                 e.record(body);

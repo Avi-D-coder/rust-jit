@@ -971,22 +971,17 @@ enum EvaluatedArguments<'a> {
     Ordinary(&'a [ArgumentType]),
     References(ReferenceCallArguments<'a>),
 }
-fn prepare(
-    db: &mut Database,
+/// Common cheap validation of fully evaluated call inputs. This performs no
+/// source/body preparation and mints no revision-bound return/GenericEnv proof.
+/// The reached local-body coordinator uses it before its derived publication;
+/// all public contract adapters retain the same check at their own boundary.
+pub(crate) fn preflight_evaluated_call(
     callee: &SourceCallable,
-    graph: &NameNamespaces,
-    sources: &[&PreparedSourceView],
     explicit: &[(u32, ArgumentType)],
     result_hint: Option<&ArgumentType>,
-    evaluated: EvaluatedArguments<'_>,
-) -> Result<QueryPoll<ContractPreparation>, Diagnostic> {
-    let arguments = match &evaluated {
-        EvaluatedArguments::Ordinary(arguments) => *arguments,
-        EvaluatedArguments::References(reference) => reference.arguments,
-    };
-    callee.revalidate(db)?;
+    arguments: &[ArgumentType],
+) -> Result<(), Diagnostic> {
     let signature = callee.signature();
-    let definition = signature.definition;
     if arguments.len() != signature.parameters.len() {
         return Err(fault(
             "LRR-E-CALL-ARITY",
@@ -1036,6 +1031,25 @@ fn prepare(
             ));
         }
     }
+    Ok(())
+}
+fn prepare(
+    db: &mut Database,
+    callee: &SourceCallable,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    explicit: &[(u32, ArgumentType)],
+    result_hint: Option<&ArgumentType>,
+    evaluated: EvaluatedArguments<'_>,
+) -> Result<QueryPoll<ContractPreparation>, Diagnostic> {
+    let arguments = match &evaluated {
+        EvaluatedArguments::Ordinary(arguments) => *arguments,
+        EvaluatedArguments::References(reference) => reference.arguments,
+    };
+    callee.revalidate(db)?;
+    preflight_evaluated_call(callee, explicit, result_hint, arguments)?;
+    let signature = callee.signature();
+    let definition = signature.definition;
     let mut hints = match prepare_argument_hints(db, callee, graph, sources) {
         QueryPoll::Ready(Ok(ArgumentHintPreparation::Ready(hints))) => hints,
         QueryPoll::Ready(Ok(ArgumentHintPreparation::NeedType { definition, syntax })) => {

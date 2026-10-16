@@ -17,6 +17,7 @@ use std::sync::Arc;
 pub(crate) enum SourceArtifactRef<'a> {
     LocalPlan(&'a Arc<crate::frontend::source_locals::PreparedSourceLocalPlan>),
     BodyEnvironment(&'a Arc<super::BodyEnvironmentInput>),
+    CompletedEnvironment(&'a Arc<crate::expand::source_discovery::CompletedSourceEnvironment>),
     Pattern(&'a Arc<crate::syntax::pattern_product::PatternProductPlan>),
     StringLiteral(&'a Arc<crate::syntax::string_literal::PreparedStringLiteral>),
 }
@@ -25,6 +26,7 @@ impl<'a> SourceArtifactRef<'a> {
         match self {
             Self::LocalPlan(value) => Arc::as_ptr(value) as usize,
             Self::BodyEnvironment(value) => Arc::as_ptr(value) as usize,
+            Self::CompletedEnvironment(value) => Arc::as_ptr(value) as usize,
             Self::Pattern(value) => Arc::as_ptr(value) as usize,
             Self::StringLiteral(value) => Arc::as_ptr(value) as usize,
         }
@@ -33,6 +35,7 @@ impl<'a> SourceArtifactRef<'a> {
         match self {
             Self::LocalPlan(value) => Arc::strong_count(value),
             Self::BodyEnvironment(value) => Arc::strong_count(value),
+            Self::CompletedEnvironment(value) => Arc::strong_count(value),
             Self::Pattern(value) => Arc::strong_count(value),
             Self::StringLiteral(value) => Arc::strong_count(value),
         }
@@ -44,7 +47,7 @@ impl<'a> SourceArtifactRef<'a> {
                 .checked_add(2 * std::mem::size_of::<usize>()),
             // The same environment can also be owned transitively by a local
             // plan. The shared root traversal charges its allocation once.
-            Self::BodyEnvironment(_) => Some(0),
+            Self::BodyEnvironment(_) | Self::CompletedEnvironment(_) => Some(0),
             Self::Pattern(value) => value
                 .metadata_bytes()
                 .checked_add(2 * std::mem::size_of::<usize>()),
@@ -57,10 +60,19 @@ impl<'a> SourceArtifactRef<'a> {
             )
         })
     }
+    pub(crate) fn admission_bytes(self) -> Result<usize, Diagnostic> {
+        match self {
+            Self::CompletedEnvironment(environment) => environment.retained_metadata_bytes(),
+            _ => self.metadata_bytes(),
+        }
+    }
     pub(crate) fn index(self) -> Option<&'a Arc<crate::syntax::body_index::BodyIndex>> {
         match self {
             Self::Pattern(value) => Some(value.index()),
-            Self::StringLiteral(_) | Self::LocalPlan(_) | Self::BodyEnvironment(_) => None,
+            Self::StringLiteral(_)
+            | Self::LocalPlan(_)
+            | Self::BodyEnvironment(_)
+            | Self::CompletedEnvironment(_) => None,
         }
     }
 }
@@ -72,6 +84,8 @@ pub struct Bucket {
 }
 #[derive(Debug, Clone)]
 pub enum QueryValue {
+    SourceConstraints(Box<crate::syntax::source_constraints::SourceConstraintPlan>),
+    BoundRecordConstructor(Box<crate::frontend::prepared_constructors::PreparedRecordConstructor>),
     SourceLocalPlan(Arc<crate::frontend::source_locals::PreparedSourceLocalPlan>),
     CurrentModuleName(Arc<crate::frontend::current_module_names::CurrentModuleNameObservation>),
     SealedName {
@@ -145,6 +159,11 @@ impl QueryValue {
         }
     }
     pub fn matches(&self, key: &QueryKey) -> bool {
+        if let (Self::BoundRecordConstructor(value), QueryKey::BoundRecordConstructor(key)) =
+            (self, key)
+        {
+            return value.key() == key && key.phase == 0;
+        }
         if let (Self::SourceLocalPlan(plan), QueryKey::SourceLocalPlan(body)) = (self, key) {
             return plan.context().source().index().body() == body;
         }
@@ -189,6 +208,9 @@ impl QueryValue {
         if let (Self::BodyStructure(value), QueryKey::BodyStructure(key)) = (self, key) {
             return value.body() == key;
         }
+        if let (Self::SourceConstraints(value), QueryKey::SourceConstraints(key)) = (self, key) {
+            return value.body() == key;
+        }
         if let (Self::Thunk(value), QueryKey::Thunk(key)) = (self, key) {
             return &value.recipe().key == key;
         }
@@ -220,6 +242,14 @@ impl QueryValue {
     pub fn fingerprint(&self) -> Digest {
         let mut e = StableEncoder::new("lrr/v2/query-value");
         match self {
+            Self::SourceConstraints(value) => {
+                e.u32(37);
+                e.record(value.as_ref());
+            }
+            Self::BoundRecordConstructor(value) => {
+                e.u32(35);
+                e.record(value.as_ref());
+            }
             Self::SourceLocalPlan(plan) => {
                 e.u32(34);
                 e.digest(plan.source_identity());
@@ -329,6 +359,7 @@ impl QueryValue {
     }
     pub fn estimated_bytes(&self) -> usize {
         std::mem::size_of::<Self>().saturating_add(match self {
+            Self::SourceConstraints(value) => value.estimated_bytes(),
             Self::CurrentModuleName(value) => value
                 .exclusive_metadata_bytes()
                 .saturating_add(2 * std::mem::size_of::<usize>()),
@@ -361,6 +392,7 @@ impl QueryValue {
             Self::TypeAlias(v) => v.estimated_bytes(),
             Self::TypeSchema(v) => v.estimated_bytes(),
             Self::ConstructorPlan(v) => v.estimated_bytes().unwrap_or(usize::MAX),
+            Self::BoundRecordConstructor(v) => v.metadata_bytes().unwrap_or(usize::MAX),
             Self::ScopeBucket(v) => {
                 v.candidates.capacity() * std::mem::size_of::<Digest>()
                     + v.blockers.capacity() * std::mem::size_of::<ScopeBlocker>()

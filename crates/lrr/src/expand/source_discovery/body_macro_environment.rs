@@ -15,6 +15,7 @@ use std::sync::Arc;
 pub struct SealedBodyMacroEnvironment {
     source: PreparedSourceView,
     index: Arc<PublishedMacroIndex>,
+    source_environment: Arc<CompletedSourceEnvironment>,
     seal_dependency: DependencyStamp,
     identity: Digest,
     bytes: usize,
@@ -37,6 +38,9 @@ impl SealedBodyMacroEnvironment {
     }
     pub fn index_root(&self) -> &Arc<PublishedMacroIndex> {
         &self.index
+    }
+    pub fn source_environment(&self) -> &Arc<CompletedSourceEnvironment> {
+        &self.source_environment
     }
     pub fn identity(&self) -> Digest {
         self.identity
@@ -196,6 +200,18 @@ impl SourceDiscovery {
                     Some(self.module_projection_inherited(&staged.syntax)?),
                 )
             };
+            let source_environment = self
+                .completed_source_environment
+                .as_ref()
+                .ok_or_else(|| fault("completed source environment absent"))?;
+            if source_environment.dependency()
+                != &(DependencyStamp::Query {
+                    key: key.clone(),
+                    fingerprint,
+                })
+            {
+                return Err(fault("completed source environment seal differs"));
+            }
             let index = provider.completed_runtime_index(
                 providers,
                 inherited.as_ref(),
@@ -217,13 +233,22 @@ impl SourceDiscovery {
             });
             let seal_dependency = DependencyStamp::Query { key, fingerprint };
             let bytes = std::mem::size_of::<SealedBodyMacroEnvironment>()
-                .checked_add(3 * std::mem::size_of::<usize>())
+                .checked_add(2 * std::mem::size_of::<usize>())
+                .and_then(|bytes| {
+                    bytes.checked_add(
+                        source
+                            .exclusive_metadata_bytes()
+                            .ok()?
+                            .checked_sub(std::mem::size_of::<PreparedSourceView>())?,
+                    )
+                })
                 .and_then(|bytes| bytes.checked_add(seal_dependency.heap_bytes()))
                 .filter(|bytes| *bytes <= 1024 * 1024)
                 .ok_or_else(|| fault("body environment receipt metadata limit"))?;
             Ok(Arc::new(SealedBodyMacroEnvironment {
                 source: source.share(),
                 index: Arc::new(index),
+                source_environment: Arc::clone(source_environment),
                 seal_dependency,
                 identity: identity.finish(),
                 bytes,

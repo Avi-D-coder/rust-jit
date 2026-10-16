@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "claim": "LOCAL-024",
+  "status": "WIP, no integration or runtime acceptance",
+  "lexical568": {
+    "source": "3a96d23fc115fba925ca8790c5833010a917ed02ee41e666bf9828eaf7cf0176",
+    "compile": "44e023/0",
+    "controls": "836e0c/0",
+    "distinct_passed": 5,
+    "scope": "three lexical authority controls and two regressions; no whole main",
+    "release_sha256": "5f6b285169fdcf7f039f0b64187d2ea24a391be840157909f34a353b34eb0f23"
+  },
+  "reached580": {
+    "source": "20c465aa523c33aba82aa0a83866571cc1f02cd386a55f18209b6048f37652eb",
+    "compile": "a70d60/1",
+    "compiler_errors": 3,
+    "test_bodies": 0,
+    "release_sha256": "5e7ced63ff7a12bf31d852eab19481d24d45be16b3ff6a89bcc6861aa202d63e"
+  },
+  "reached581": {
+    "source": "29f4f9fe49c41b2cfce18a514d6c65f80bacf959f3322132d2af0d61dff15a41",
+    "compile": "7b20ea/0",
+    "compiler_warnings": 13,
+    "main_control": "845c57/1",
+    "distinct_passed": 0,
+    "distinct_failed": 1,
+    "failure_stage": "test startup begins run before required cold RunMachine startup; zero guest main operations",
+    "other_controls": "unexecuted",
+    "release_sha256": "b017cff7a38d3ac58bfdd86c6d6554193c04ea2512e542f72c16bea6f48cf8ab"
+  },
+  "startup_order_successor": "worktracks/evidence/2026-10-16-reached-local-test-startup-order-fix.json",
+  "unexecuted_source": [
+    "worktracks/evidence/2026-10-16-contained-type-scope-transport.json",
+    "Common source constraint query37 and declared parameter Type successor; source only, not numeric repair acceptance"
+  ],
+  "runtime_contract_pass_increment": 0,
+  "full_fixture_pass_increment": 0,
+  "inventory": {
+    "imported_cases": 335,
+    "original_files": 857,
+    "import_is_not_pass": true
+  },
+  "guards": "Cold source-preparation guard preserved; an uncompiled exact-retained-row early-return draft was reverted and held locally, never adopted or validated.",
+  "reached_startup_corrected": {
+    "source": "03d7090efdd5dc981a4f6261434bbbfc4d67bbe8394e424aa6ebe0402aa5f681",
+    "compile": "617847/0",
+    "main_control": "2a3855/1",
+    "distinct_passed": 0,
+    "distinct_failed": 1,
+    "failure_stage": "Guest main reached: id_i8(j) reports LRR-E-CALL-ARG-TYPE; actual TypeId not printed",
+    "edition_reached": 2015,
+    "other_editions": "unexecuted after first failure",
+    "release_sha256": "20f2e09d1e5716039b9896a8f8436e14ed4e63475be30e0d18b26b3fc59c0e14",
+    "diagnosis": "worktracks/evidence/2026-10-16-suffix-main-source-diagnosis.json"
+  },
+  "constructor_cold_guard": {
+    "source": "8a733a43f23ad04ea482119dbbf33d096d7ed02206f30c33f96176bf255684c2",
+    "compile": "4f4f3d/0",
+    "controls": "5cee85/1",
+    "distinct_passed": 6,
+    "distinct_failed": 1,
+    "failure_stage": "Final zero-budget cache reclamation after releasing actual retained query handle",
+    "runtime_mains": "unexecuted after control failure",
+    "release_sha256": "d1413dd81c0af17f520dd6ac273182260c9241eed73a661f9b722658f9700e4f"
+  },
+  "constructor_cache_successor": "worktracks/evidence/2026-10-16-cache-root-eviction.json"
+}

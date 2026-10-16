@@ -11,7 +11,7 @@ fn unchanged_root_prefix_replays_with_independent_current_scan_and_captured_set(
         seal(&mut d);
         let providers = &d.declarative.as_ref().unwrap().2;
         let names = SourceDiscovery::install_macro_routes_with_modules(
-            &mut d.graph,
+            unique_graph(&mut d.graph).unwrap(),
             providers,
             &d.module_routes,
             &d.nested_sources,
@@ -55,7 +55,7 @@ fn retained_prefix_refuses_current_cfg_scope_and_changed_attribute_binding() {
     seal(&mut d);
     let providers = &d.declarative.as_ref().unwrap().2;
     let names = SourceDiscovery::install_macro_routes_with_modules(
-        &mut d.graph,
+        unique_graph(&mut d.graph).unwrap(),
         providers,
         &d.module_routes,
         &d.nested_sources,

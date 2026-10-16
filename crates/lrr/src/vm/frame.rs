@@ -139,7 +139,7 @@ struct ActiveConstruction {
     guard: ConstructionId,
     result: ConstructionResult,
     cleaning: bool,
-    mapping: Option<std::sync::Arc<[u32]>>,
+    mapping: Option<ConstructionMapping>,
     source_operands: Option<Arc<[SlotId]>>,
 }
 #[derive(Clone, Copy)]
@@ -147,18 +147,42 @@ enum ConstructionResult {
     Bound(TypeId),
     Observed(crate::runtime::object::StructuralConstructionKind),
 }
+#[derive(Clone)]
+enum ConstructionMapping {
+    Legacy(Arc<[u32]>),
+    Prepared(crate::frontend::prepared_constructors::PreparedRecordConstructorHandle),
+}
+impl ConstructionMapping {
+    fn fields(&self) -> &[u32] {
+        match self {
+            Self::Legacy(mapping) => mapping,
+            Self::Prepared(source) => source.prepared().bound().mapping().written_to_declaration(),
+        }
+    }
+    fn heap_bytes(&self) -> Option<usize> {
+        match self {
+            Self::Legacy(mapping) => mapping
+                .len()
+                .checked_mul(std::mem::size_of::<u32>())?
+                .checked_add(3 * std::mem::size_of::<usize>()),
+            // Retained outer query allocation is charged by its actual query
+            // pin. The handle itself is inline in the frame's slot storage.
+            Self::Prepared(_) => Some(0),
+        }
+    }
+}
 impl ActiveConstruction {
     fn mapping_bytes(&self) -> Option<usize> {
-        let mapping = self.mapping.as_ref().map_or(Some(0), |map| {
-            map.len()
-                .checked_mul(std::mem::size_of::<u32>())?
-                .checked_add(3 * std::mem::size_of::<usize>())
-        })?;
+        let mapping = self
+            .mapping
+            .as_ref()
+            .map_or(Some(0), ConstructionMapping::heap_bytes)?;
         mapping.checked_add(Frame::tuple_operand_bytes(self.source_operands.as_deref())?)
     }
     fn storage_field(&self, written: u32) -> Result<u32, Diagnostic> {
         self.mapping.as_ref().map_or(Ok(written), |map| {
-            map.get(written as usize)
+            map.fields()
+                .get(written as usize)
                 .copied()
                 .ok_or_else(|| invalid("written constructor field absent from bound source map"))
         })
@@ -171,6 +195,7 @@ enum ConstructorBinding {
         fields: usize,
     },
     Nominal(Box<crate::frontend::types::BoundNominalConstructor>),
+    PreparedNominal(crate::frontend::prepared_constructors::PreparedRecordConstructorHandle),
 }
 struct PreparedConstructor {
     pc: PcKey,
@@ -2681,8 +2706,72 @@ impl Frame {
         bound: crate::frontend::types::BoundNominalConstructor,
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
+        let binding_bytes = bound
+            .estimated_bytes()
+            .and_then(|bytes| {
+                bytes.checked_add(
+                    bound
+                        .mapping()
+                        .written_to_declaration()
+                        .len()
+                        .checked_mul(std::mem::size_of::<u32>())?
+                        .checked_add(3 * std::mem::size_of::<usize>())?,
+                )
+            })
+            .ok_or_else(crate::runtime::arena::resource)?;
+        let (guard, hints) = self.prepare_nominal_hints(
+            plan,
+            crate::core::digest::StableEncode::fingerprint(plan),
+            &bound,
+            binding_bytes,
+            store,
+        )?;
+        self.constructor_start = Some(PreparedConstructor {
+            pc: self.pc.clone(),
+            guard,
+            binding: ConstructorBinding::Nominal(Box::new(bound)),
+            hints,
+            source_operands: None,
+        });
+        Ok(())
+    }
+    pub(crate) fn prepare_installed_nominal_constructor(
+        &mut self,
+        source: crate::frontend::prepared_constructors::PreparedRecordConstructorHandle,
+        store: &mut GuestStore,
+    ) -> Result<(), Diagnostic> {
+        let prepared = source.prepared();
+        if prepared.key() != &self.pc {
+            return Err(invalid("installed constructor source PC differs"));
+        }
+        let (guard, hints) = self.prepare_nominal_hints(
+            prepared.plan(),
+            prepared.plan_identity(),
+            prepared.bound(),
+            0,
+            store,
+        )?;
+        self.constructor_start = Some(PreparedConstructor {
+            pc: self.pc.clone(),
+            guard,
+            binding: ConstructorBinding::PreparedNominal(source),
+            hints,
+            source_operands: None,
+        });
+        Ok(())
+    }
+    /// Source binding is immutable. Only runtime hints/materialized descriptors
+    /// and the pending frame facts are prepared at each reached construction.
+    fn prepare_nominal_hints(
+        &self,
+        plan: &crate::syntax::constructors::ConstructorPlan,
+        plan_identity: crate::core::digest::Digest,
+        bound: &crate::frontend::types::BoundNominalConstructor,
+        binding_bytes: usize,
+        store: &mut GuestStore,
+    ) -> Result<(SlotId, Vec<(SlotId, TypeId)>), Diagnostic> {
         let guard = self.admit_constructor_plan(plan)?;
-        if bound.mapping().constructor() != crate::core::digest::StableEncode::fingerprint(plan)
+        if bound.mapping().constructor() != plan_identity
             || !matches!(plan.kind(), crate::syntax::constructors::ConstructorKind::Record { fields, rest: None, .. } if fields.len() == bound.variant().fields().len())
         {
             return Err(invalid("nominal constructor source shape mismatch"));
@@ -2707,34 +2796,14 @@ impl Frame {
             // accounting placeholder, never an installed operand constraint.
             hints.push((field.operand.value, TypeId(0)));
         }
-        let extra = bound
-            .estimated_bytes()
-            .and_then(|bytes| {
-                bytes.checked_add(
-                    bound
-                        .mapping()
-                        .written_to_declaration()
-                        .len()
-                        .checked_mul(std::mem::size_of::<u32>())?
-                        .checked_add(3 * std::mem::size_of::<usize>())?,
-                )
-            })
-            .ok_or_else(crate::runtime::arena::resource)?;
-        self.admit_constructor_hints(&hints, extra)?;
+        self.admit_constructor_hints(&hints, binding_bytes)?;
         for (hint, ordinal) in hints
             .iter_mut()
             .zip(bound.mapping().written_to_declaration())
         {
             hint.1 = bound.variant().fields()[*ordinal as usize].materialize(store)?;
         }
-        self.constructor_start = Some(PreparedConstructor {
-            pc: self.pc.clone(),
-            guard,
-            binding: ConstructorBinding::Nominal(Box::new(bound)),
-            hints,
-            source_operands: None,
-        });
-        Ok(())
+        Ok((guard, hints))
     }
     fn admit_constructor_hints(
         &self,
@@ -2782,6 +2851,13 @@ impl Frame {
         if let ConstructorBinding::Nominal(bound) = &facts.binding {
             self.require_nominal_result_source(guard, bound.variant().identity(), true)?;
         }
+        if let ConstructorBinding::PreparedNominal(source) = &facts.binding {
+            self.require_nominal_result_source(
+                guard,
+                source.prepared().bound().variant().identity(),
+                true,
+            )?;
+        }
         if matches!(facts.binding, ConstructorBinding::Observed { .. }) {
             let result = self
                 .body
@@ -2828,6 +2904,12 @@ impl Frame {
             }
             ConstructorBinding::Nominal(bound) => {
                 self.begin_bound_nominal_constructor(guard, &bound, store)?
+            }
+            ConstructorBinding::PreparedNominal(source) => {
+                let mapping = ConstructionMapping::Prepared(source.clone());
+                let bound = source.prepared().bound();
+                let total = self.preflight_nominal_mapping(guard, bound, 0)?;
+                self.begin_nominal_with_mapping(guard, bound, mapping, total, store)?
             }
         }
         if let Some(operands) = facts.source_operands {
@@ -2918,8 +3000,6 @@ impl Frame {
         bound: &crate::frontend::types::BoundNominalConstructor,
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
-        self.preflight_constructor_start(id)?;
-        self.require_nominal_result_source(id, bound.variant().identity(), true)?;
         let bytes = bound
             .mapping()
             .written_to_declaration()
@@ -2927,6 +3007,27 @@ impl Frame {
             .checked_mul(std::mem::size_of::<u32>())
             .and_then(|bytes| bytes.checked_add(3 * std::mem::size_of::<usize>()))
             .ok_or_else(crate::runtime::arena::resource)?;
+        let total = self.preflight_nominal_mapping(id, bound, bytes)?;
+        let mut map = Vec::new();
+        map.try_reserve_exact(bound.mapping().written_to_declaration().len())
+            .map_err(|_| crate::runtime::arena::resource())?;
+        map.extend_from_slice(bound.mapping().written_to_declaration());
+        self.begin_nominal_with_mapping(
+            id,
+            bound,
+            ConstructionMapping::Legacy(map.into()),
+            total,
+            store,
+        )
+    }
+    fn preflight_nominal_mapping(
+        &self,
+        id: SlotId,
+        bound: &crate::frontend::types::BoundNominalConstructor,
+        bytes: usize,
+    ) -> Result<usize, Diagnostic> {
+        self.preflight_constructor_start(id)?;
+        self.require_nominal_result_source(id, bound.variant().identity(), true)?;
         let total = self
             .constructor_mapping_bytes
             .checked_add(bytes)
@@ -2940,11 +3041,16 @@ impl Frame {
         {
             return Err(crate::runtime::arena::resource());
         }
-        let mut map = Vec::new();
-        map.try_reserve_exact(bound.mapping().written_to_declaration().len())
-            .map_err(|_| crate::runtime::arena::resource())?;
-        map.extend_from_slice(bound.mapping().written_to_declaration());
-        let mapping: std::sync::Arc<[u32]> = map.into();
+        Ok(total)
+    }
+    fn begin_nominal_with_mapping(
+        &mut self,
+        id: SlotId,
+        bound: &crate::frontend::types::BoundNominalConstructor,
+        mapping: ConstructionMapping,
+        total: usize,
+        store: &mut GuestStore,
+    ) -> Result<(), Diagnostic> {
         let (ty, guard) = store.begin_nominal_construction(bound.variant())?;
         self.slots[id.0 as usize].construction = Some(ActiveConstruction {
             guard,

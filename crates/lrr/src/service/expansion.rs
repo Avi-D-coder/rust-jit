@@ -184,6 +184,7 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
         }
         QueryKey::DiscoverySeal(_) | QueryKey::ScopeDeclarationInventory(_) => {}
         QueryKey::ConstructorPlan(_)
+        | QueryKey::BoundRecordConstructor(_)
         | QueryKey::SourceLocalPlan(_)
         | QueryKey::TypeSchema(_)
         | QueryKey::TypeAlias(_)
@@ -192,6 +193,7 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
         | QueryKey::PatternPlan(_)
         | QueryKey::Signature(_)
         | QueryKey::BodyStructure(_)
+        | QueryKey::SourceConstraints(_)
         | QueryKey::Thunk(_) => {}
         QueryKey::ExpansionInput(k) | QueryKey::CurrentExpansionInput(k) => {
             bytes = add(

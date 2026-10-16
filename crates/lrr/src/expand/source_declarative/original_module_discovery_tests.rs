@@ -126,3 +126,6 @@ fn original_role_module_demand_rejects_wrong_preparation_and_missing_role() {
         QueryPoll::Ready(Err(_))
     ));
 }
+
+#[path = "compiler_module_preparation_tests.rs"]
+mod compiler_module_preparation_tests;

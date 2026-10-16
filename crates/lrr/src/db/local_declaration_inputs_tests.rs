@@ -117,7 +117,9 @@ fn source_rows(db: &Database) -> BTreeMap<InputKey, InputValue> {
         .filter(|(key, _)| {
             !matches!(
                 key,
-                InputKey::ScopeBlockers(_) | InputKey::NameCandidates(_)
+                InputKey::ScopeBlockers(_)
+                    | InputKey::NameCandidates(_)
+                    | InputKey::LocalDeclarationOwner(_)
             )
         })
         .map(|(key, row)| (key.clone(), row.value.as_ref().clone()))
@@ -126,6 +128,7 @@ fn source_rows(db: &Database) -> BTreeMap<InputKey, InputValue> {
 fn absent(db: &Database, definition: Digest) {
     for key in [
         InputKey::DefinitionSource(definition),
+        InputKey::LocalDeclarationOwner(definition),
         InputKey::DefinitionHeader(definition),
         InputKey::DeclarationContext(definition),
         InputKey::DefinitionBody(definition),
@@ -150,7 +153,16 @@ fn unchanged_local_structs_publish_selected_headers_for_the_shared_schema_query(
                 ready(db.publish_local_declaration(&context, definition)),
                 LocalDeclarationPublication::Published(definition)
             );
-            assert_eq!(db.inputs.len(), keys.len() + 3);
+            assert_eq!(db.inputs.len(), keys.len() + 4);
+            assert!(matches!(
+                db.input(&InputKey::LocalDeclarationOwner(definition)).as_deref(),
+                Some(InputValue::LocalDeclarationOwner(owner))
+                    if owner == context.source().index().body()
+            ));
+            assert_ne!(
+                item.scope.owner,
+                Some(context.source().index().body().definition)
+            );
             assert!(keys.iter().all(|key| db.inputs.contains_key(key)));
             assert!(
                 !db.inputs
@@ -203,6 +215,43 @@ fn local_header_publication_conflict_and_budget_refusals_are_atomic() {
         InputValue::DefinitionSource(wrong),
     );
     db.publish_inputs(rows).unwrap();
+    let before = stamps(&db);
+    let revision = db.revision;
+    assert!(matches!(db.publish_local_declaration(&context, definition),
+        QueryPoll::Ready(Err(error)) if error.code == "LRR-E-EXPANSION-CONFLICT"));
+    assert_eq!(stamps(&db), before);
+    assert_eq!(db.revision, revision);
+    assert!(
+        !db.inputs
+            .contains_key(&InputKey::DefinitionHeader(definition))
+    );
+    assert!(
+        !db.inputs
+            .contains_key(&InputKey::DeclarationContext(definition))
+    );
+}
+#[test]
+fn local_owner_locator_is_derived_and_conflicts_publish_no_partial_headers() {
+    let (mut db, context) = setup(ORIGINAL, 2024);
+    let definition = local(&context, "A");
+    let mut wrong = context.source().index().body().clone();
+    wrong.definition = Digest([249; 32]);
+    let key = InputKey::LocalDeclarationOwner(definition);
+    let value = InputValue::LocalDeclarationOwner(wrong);
+    let mut base = source_rows(&db);
+    base.insert(key.clone(), value.clone());
+    let before = stamps(&db);
+    assert!(db.publish_inputs(base).is_err());
+    assert_eq!(stamps(&db), before);
+    // Only this adversarial DB control can install an invalid derived locator.
+    // The production service must reject it before any other header row appears.
+    db.inputs.insert(
+        key,
+        InputRecord {
+            fingerprint: value.fingerprint(),
+            value: Arc::new(value),
+        },
+    );
     let before = stamps(&db);
     let revision = db.revision;
     assert!(matches!(db.publish_local_declaration(&context, definition),

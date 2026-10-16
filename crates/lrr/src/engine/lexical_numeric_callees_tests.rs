@@ -14,10 +14,10 @@ use crate::{
     },
     syntax::{body_index::ExpressionKind, parse::ParseKey},
 };
-const ORIGINAL: &str = include_str!(
+pub(super) const ORIGINAL: &str = include_str!(
     "../../../../fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs"
 );
-fn setup(text: &str, edition: u16) -> (Database, PreparedSourceView, SourceDiscovery) {
+pub(super) fn setup(text: &str, edition: u16) -> (Database, PreparedSourceView, SourceDiscovery) {
     let profile = ProfileIdentity {
         edition,
         ..ProfileIdentity::current()

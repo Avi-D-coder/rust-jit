@@ -36,8 +36,11 @@ pub(crate) mod macro_export_inputs;
 
 #[path = "body_leases.rs"]
 mod body_leases;
+#[path = "prepared_inputs.rs"]
+mod prepared_inputs;
 #[path = "prepared_modules.rs"]
 mod prepared_modules;
+pub(crate) use prepared_inputs::PreparedInputGuard;
 #[path = "retained_body_inputs.rs"]
 mod retained_body_inputs;
 pub(crate) use retained_body_inputs::{RetainedOriginalDeclaration, RetainedSourceLease};
@@ -234,6 +237,19 @@ impl Database {
         }
         Ok(())
     }
+    /// Filesystem/source preparation must be rejected before opening a capture
+    /// service when a guest run or pure query is active. This grants no effect
+    /// authority; callers still need their configured source/capture capability.
+    pub(crate) fn require_source_preparation(&self) -> Result<(), Diagnostic> {
+        self.require_coordinator()?;
+        if self.run_active {
+            return Err(fault(
+                "LRR-E-INTERNAL-SNAPSHOT",
+                "source preparation during active run",
+            ));
+        }
+        Ok(())
+    }
     fn memo_owners(&self) -> (BTreeMap<usize, usize>, BTreeMap<usize, usize>) {
         let mut outer = BTreeMap::new();
         let mut inner = BTreeMap::new();
@@ -298,7 +314,11 @@ impl Database {
                             .or_insert(0) += 1
                     }
                     InputValue::BodyEnvironment(input) => {
-                        *inner.entry(Arc::as_ptr(input) as usize).or_insert(0) += 1
+                        product_retention::count_owner(
+                            super::value::SourceArtifactRef::BodyEnvironment(input),
+                            &mut inner,
+                            &mut products,
+                        );
                     }
                     _ => {}
                 }
@@ -430,6 +450,13 @@ impl Database {
         prepared_sources: &[std::sync::Weak<crate::source::changes::PreparedSourceState>],
         prepared_capacity: usize,
     ) -> Result<crate::engine::telemetry::CacheUsage, Diagnostic> {
+        let (memo_outer, memo_inner) = self.memo_owners();
+        let external_query_pins: std::collections::BTreeSet<_> = self
+            .query_pins
+            .iter()
+            .filter(|(_, pin)| pin.external(&memo_outer, &memo_inner))
+            .map(|(allocation, _)| *allocation)
+            .collect();
         let mut usage = crate::engine::telemetry::CacheUsage::default();
         let body_leases =
             body_leases::metadata(self.body_leases.capacity(), self.body_leases.len())?;
@@ -529,7 +556,6 @@ impl Database {
         let mut cached_pattern_plans = BTreeMap::new();
         let mut cached_module_names = BTreeMap::new();
         let mut cached_plan_parses = BTreeMap::new();
-        let (memo_outer, memo_inner) = self.memo_owners();
         // A retained Product handle does not clone its nested index handle.
         // Propagate that external ownership before charging cached Body memos.
         let mut product_bodies = std::collections::BTreeSet::new();
@@ -865,10 +891,10 @@ impl Database {
             usage.pinned_memo_bytes,
             self.pinned_body_environment_root_bytes()?,
         )?;
-        for pin in self.query_pins.values() {
+        for (allocation, _) in &self.query_pins {
             let bytes = 64 + std::mem::size_of::<usize>() + std::mem::size_of::<QueryPin>();
             usage.memo_bytes = account_add(usage.memo_bytes, bytes)?;
-            if pin.external(&memo_outer, &memo_inner) {
+            if external_query_pins.contains(allocation) {
                 usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, bytes)?;
             }
         }
@@ -920,80 +946,45 @@ impl Database {
                 "cache eviction during active run/query",
             ));
         }
-        self.prepared_sources
-            .retain(|state| state.strong_count() > 0);
-        self.prepared_sources.shrink_to_fit();
-        let input_owners: std::collections::BTreeSet<_> = self
-            .inputs
-            .values()
-            .map(|record| Arc::as_ptr(&record.value) as usize)
-            .collect();
-        self.input_pins.retain(|allocation, pin| {
-            pin.strong_count() > usize::from(input_owners.contains(allocation))
-        });
-        let (memo_outer, memo_inner) = self.memo_owners();
-        // An external handle to a shared plan/value does not clone the nested
-        // Product handle. Preserve its retirement lease too, so a later parent
-        // drop cannot perform final graph destruction during an active run.
-        let external_artifacts = self
-            .memos
-            .values()
-            .filter(|memo| QueryPin::new(&memo.value).external(&memo_outer, &memo_inner))
-            .flat_map(|memo| memo.value.source_roots())
-            .map(|root| root.allocation())
-            .collect();
-        self.query_pins
-            .retain(|_, pin| pin.external(&memo_outer, &memo_inner));
-        self.source_plan_pins
-            .retain_external(&memo_inner, &external_artifacts)?;
-        self.source_pins.retain(|pin| {
-            pin.snapshot.strong_count() > 0
-                || pin.parsed.strong_count()
-                    > memo_inner
-                        .get(&(pin.parsed.as_ptr() as usize))
-                        .copied()
-                        .unwrap_or(0)
-                || pin.attachments.strong_count() > 0
-        });
-        self.source_pins.shrink_to_fit();
+        self.prune_cache_roots()?;
         let before = self.cache_usage()?;
-        if before.source_input_bytes > budgets.source_input_bytes
-            || before.pinned_memo_bytes > budgets.query_bytes
-            || before.pinned_parse_bytes > budgets.parse_bytes
-        {
-            return Err(fault(
-                "LRR-E-METADATA-LIMIT",
-                "pinned cache/source inputs exceed configured cap",
-            ));
-        }
+        // A prepared-source pool may be owned only by a stale cached plan.
+        // Reclaim its genuinely evictable owners before declaring an irreducible
+        // floor. Nothing here discounts a live allocation or external handle.
         let mut candidates: Vec<_> = self
             .memos
             .iter()
-            .filter(|(_, m)| {
-                Arc::strong_count(&m.value) == 1
-                    && !QueryPin::new(&m.value).external(&memo_outer, &memo_inner)
-            })
-            .map(|(key, m)| (m.last_used_counter, key.clone()))
+            .map(|(key, memo)| (memo.last_used_counter, key.clone()))
             .collect();
         candidates.sort();
         let mut after = before.clone();
         let mut victims = vec![];
-        for (_, key) in candidates {
-            if after.memo_bytes <= budgets.query_bytes && after.parse_bytes <= budgets.parse_bytes {
-                break;
-            }
-            if after.memo_bytes <= budgets.query_bytes
-                && self.memos.get(&key).is_some_and(|m| {
-                    m.value.parse_bytes() == 0
-                        && !matches!(m.value.as_ref(), QueryValue::PatternPlan(_))
-                })
-            {
-                continue;
-            }
+        while after.memo_bytes > budgets.query_bytes
+            || after.parse_bytes > budgets.parse_bytes
+            || after.source_input_bytes > budgets.source_input_bytes
+        {
+            // Parent eviction can make a previously retained child evictable.
+            // Recompute genuine ownership; each successful iteration removes a
+            // memo, so this bounded cold fixed point cannot spin without work.
+            let (memo_outer, memo_inner) = self.memo_owners();
+            let selected = candidates.iter().find_map(|(_, key)| {
+                self.memos
+                    .get(key)
+                    .filter(|memo| {
+                        Arc::strong_count(&memo.value) == 1
+                            && !QueryPin::new(&memo.value).external(&memo_outer, &memo_inner)
+                    })
+                    .map(|_| key.clone())
+            });
+            let Some(key) = selected else {
+                return Err(fault(
+                    "LRR-E-METADATA-LIMIT",
+                    "pinned cache/source inputs exceed configured cap",
+                ));
+            };
             let memo = self.memos.remove(&key).expect("selected retained memo");
             drop(memo);
-            // Transitive Product/index/parser roots may still have other owners.
-            // Between-run eviction can account the real graph after removal.
+            self.prune_cache_roots()?;
             after = self.cache_usage()?;
             self.trace.record(
                 self.revision,
@@ -1009,6 +1000,53 @@ impl Database {
             after,
             victims,
         })
+    }
+    /// Quiescent cache-owner maintenance. No inputs or source authority change.
+    fn prune_cache_roots(&mut self) -> Result<(), Diagnostic> {
+        self.prepared_sources
+            .retain(|state| state.strong_count() > 0);
+        self.prepared_sources.shrink_to_fit();
+        let input_owners: std::collections::BTreeSet<_> = self
+            .inputs
+            .values()
+            .map(|record| Arc::as_ptr(&record.value) as usize)
+            .collect();
+        self.input_pins.retain(|allocation, pin| {
+            pin.strong_count() > usize::from(input_owners.contains(allocation))
+        });
+        let (memo_outer, memo_inner) = self.memo_owners();
+        // An external handle to a shared plan/value does not clone the nested
+        // Product handle. Preserve its retirement lease too, so a later parent
+        // drop cannot perform final graph destruction during an active run.
+        let mut external_artifacts: std::collections::BTreeSet<usize> = self
+            .memos
+            .values()
+            .filter(|memo| QueryPin::new(&memo.value).external(&memo_outer, &memo_inner))
+            .flat_map(|memo| memo.value.source_roots())
+            .map(|root| root.allocation())
+            .collect();
+        // Preserve existing retirement leases while actual current/retained
+        // body inputs can still expose a raw immutable completed graph.
+        external_artifacts.extend(self.completed_environment_input_roots(&memo_inner)?);
+        self.query_pins
+            .retain(|_, pin| pin.external(&memo_outer, &memo_inner));
+        self.source_plan_pins
+            .retain_external(&memo_inner, &external_artifacts)?;
+        self.source_pins.retain(|pin| {
+            pin.snapshot.strong_count() > 0
+                || pin.parsed.strong_count()
+                    > memo_inner
+                        .get(&(pin.parsed.as_ptr() as usize))
+                        .copied()
+                        .unwrap_or(0)
+                || pin.attachments.strong_count() > 0
+        });
+        self.source_pins.shrink_to_fit();
+        // Dropping retirement-only parents above may release their source state.
+        self.prepared_sources
+            .retain(|state| state.strong_count() > 0);
+        self.prepared_sources.shrink_to_fit();
+        Ok(())
     }
     pub fn source_revision(&self) -> u64 {
         self.source_revision
@@ -1030,7 +1068,8 @@ impl Database {
         if inputs.values().any(|value| {
             matches!(
                 value,
-                InputValue::BodyEnvironment(_)
+                InputValue::LocalDeclarationOwner(_)
+                    | InputValue::BodyEnvironment(_)
                     | InputValue::ExpansionRecord(_)
                     | InputValue::ModuleRecord { .. }
                     | InputValue::IncludeRecord { .. }

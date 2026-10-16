@@ -218,7 +218,7 @@ fn genuine_prelude_imported_compiler_attribute_shadow_cannot_be_retired_as_allow
         let mut d = discovery(&view, Namespace::Type, true);
         let providers = &d.declarative.as_ref().unwrap().2;
         let names = SourceDiscovery::install_macro_routes_with_modules(
-            &mut d.graph,
+            unique_graph(&mut d.graph).unwrap(),
             providers,
             &d.module_routes,
             &d.nested_sources,
@@ -438,3 +438,6 @@ mod body_macro_environment_tests;
 
 #[path = "original_module_staging_tests.rs"]
 mod original_module_staging_tests;
+
+#[path = "completed_source_environment_tests.rs"]
+mod completed_source_environment_tests;

@@ -1740,6 +1740,7 @@ impl SourceLocalIndex<'_> {
             Some(names),
             None,
             site.source.outline.parse.profile.edition,
+            None,
         )? {
             PrefixResolution::Name(found) => Ok(Some(found)),
             PrefixResolution::ModuleTail => Ok(None),
@@ -1757,7 +1758,16 @@ impl SourceLocalIndex<'_> {
         if site.namespace != crate::source::manifest::Namespace::Type {
             return Err(error("prepared Type prefix namespace differs"));
         }
-        self.lookup_prefix_inner(site, None, Some(evidence), edition)
+        self.lookup_prefix_inner(site, None, Some(evidence), edition, None)
+    }
+    fn lookup_prepared_field_type_prefix(
+        &self,
+        site: &OrdinaryNameSite<'_>,
+        evidence: &owned_plan::LocalTypeNames,
+        edition: u16,
+        header: &owned_plan::field_types::HeaderTypeSite<'_>,
+    ) -> Result<PrefixResolution, Diagnostic> {
+        self.lookup_prefix_inner(site, None, Some(evidence), edition, Some(header))
     }
     fn lookup_prefix_inner(
         &self,
@@ -1765,17 +1775,34 @@ impl SourceLocalIndex<'_> {
         names: Option<&super::names::NameNamespaces>,
         evidence: Option<&owned_plan::LocalTypeNames>,
         edition: u16,
+        header: Option<&owned_plan::field_types::HeaderTypeSite<'_>>,
     ) -> Result<PrefixResolution, Diagnostic> {
         use super::names::NameLookup;
         // Exact selection/position validation remains shared with local lookup.
-        self.lookup_in_edition(
-            site.source,
-            site.body,
-            site.at,
-            site.name,
-            site.context,
-            edition,
-        )?;
+        if let Some(header) = header {
+            let owner = self
+                .entered
+                .body_context
+                .as_ref()
+                .ok_or_else(|| error("declaration Type body context absent"))?;
+            if site.source.canonical()? != *self.entered.parent.source()
+                || *site.body != self.entered.body
+            {
+                return Err(error("declaration Type owning source/body differs"));
+            }
+            // This exact header occurrence, not a caller position or boolean,
+            // discharges the ordinary opaque-item entry boundary.
+            header.require(owner.source().identity(), site, edition)?;
+        } else {
+            self.lookup_in_edition(
+                site.source,
+                site.body,
+                site.at,
+                site.name,
+                site.context,
+                edition,
+            )?;
+        }
         if let Some(names) = names {
             names.require_source(site.source, self.entered.parent.view.outline())?;
         }
@@ -1824,15 +1851,38 @@ impl SourceLocalIndex<'_> {
             .scopes
             .iter()
             .rev()
-            .find(|s| u64::from(s.range.start) <= site.at && site.at < u64::from(s.range.end))
+            .find(|s| {
+                if let Some(header) = header {
+                    s.ordinal == header.scope()
+                } else {
+                    u64::from(s.range.start) <= site.at && site.at < u64::from(s.range.end)
+                }
+            })
             .ok_or_else(|| error("ordinary lookup position outside entered scopes"))?;
         let name = MacroName::local(site.name, edition)?;
-        let (local, local_scope) = self.locals.lookup_with_scope(
-            self.scopes[&scope.ordinal],
-            boundary(site.at)?,
-            &name,
-            site.context,
-        )?;
+        if let Some(header) = header {
+            if let Some(parameter) =
+                header.generic(&name, self.locals.facts_root().name_item(site.context)?)?
+            {
+                return Ok(PrefixResolution::Parameter(parameter));
+            }
+        }
+        let (local, local_scope) = if header.is_some() {
+            (
+                LocalLookup::Absent,
+                *self
+                    .scopes
+                    .get(&scope.ordinal)
+                    .ok_or_else(|| error("declaration Type lexical scope absent"))?,
+            )
+        } else {
+            self.locals.lookup_with_scope(
+                self.scopes[&scope.ordinal],
+                boundary(site.at)?,
+                &name,
+                site.context,
+            )?
+        };
         let mut current = Some(scope.ordinal);
         let mut seen = BTreeSet::new();
         let mut import_work = 0usize;
@@ -2000,7 +2050,9 @@ impl SourceLocalIndex<'_> {
                 .ok_or_else(|| error("ordinary body item scope absent"))?
                 .parent;
         }
-        if let Some(evidence) = evidence {
+        // Local declaration headers own their generic scope; they cannot
+        // capture a containing function's generic by equal spelling.
+        if let Some(evidence) = evidence.filter(|_| header.is_none()) {
             if let Some(parameter) =
                 evidence.generic(&name, self.locals.facts_root().name_item(site.context)?)?
             {

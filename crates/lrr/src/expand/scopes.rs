@@ -26,6 +26,9 @@ impl MacroName {
             Self::parse(text, edition)
         }
     }
+    pub(crate) fn retained_heap_bytes(&self) -> usize {
+        self.0.capacity()
+    }
     pub fn as_str(&self) -> &str {
         &self.0
     }

@@ -92,3 +92,5 @@ pub use closed_reference_signatures::ReferenceHeaderPlan;
 pub(crate) mod primitive_type_names;
 
 mod node_lookup;
+
+pub(crate) mod source_constraints;

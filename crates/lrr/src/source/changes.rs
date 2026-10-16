@@ -117,7 +117,7 @@ impl SourceSelection {
     }
     pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
         let mut bytes = std::mem::size_of::<Self>()
-            .checked_add(self.path.as_str().len())
+            .checked_add(self.path.heap_bytes())
             .and_then(|n| n.checked_add(self.outline.parse.profile.semantics.capacity()))
             .and_then(|n| {
                 self.outline
@@ -163,6 +163,29 @@ pub struct PreparedSourceView {
     selection: SourceSelection,
 }
 impl PreparedSourceView {
+    /// This view's owned key/path storage only. The actual immutable state,
+    /// inputs, parser and outline allocations retain their existing pool owners.
+    pub(crate) fn exclusive_metadata_bytes(&self) -> Result<usize, Diagnostic> {
+        let mut bytes = std::mem::size_of::<Self>()
+            .checked_add(self.selection.metadata_bytes()?)
+            .and_then(|n| n.checked_sub(std::mem::size_of::<SourceSelection>()))
+            .and_then(|n| n.checked_add(self.location.path.heap_bytes()))
+            .and_then(|n| {
+                n.checked_add(
+                    self.location
+                        .module_path
+                        .capacity()
+                        .checked_mul(std::mem::size_of::<String>())?,
+                )
+            })
+            .ok_or_else(crate::runtime::arena::resource)?;
+        for name in &self.location.module_path {
+            bytes = bytes
+                .checked_add(name.capacity())
+                .ok_or_else(crate::runtime::arena::resource)?;
+        }
+        Ok(bytes)
+    }
     /// Share only the identity of this already prepared immutable publication.
     /// Registration never publishes its inputs or grants current source authority.
     pub(crate) fn retained_state_weak(&self) -> std::sync::Weak<PreparedSourceState> {

@@ -1,6 +1,6 @@
 //! Original source contributions to path lookup. Membership seals and visibility
 //! checks remain the caller's responsibility; these are not a complete namespace.
-pub(crate) use super::module_aliases::ModuleGraphPreparation;
+pub(crate) use super::module_aliases::{ModuleGraphPreparation, ModulePreparationDemand};
 use super::{
     hygiene::HygieneFacts,
     macro_names::{MacroNamespaces, MacroPath},
