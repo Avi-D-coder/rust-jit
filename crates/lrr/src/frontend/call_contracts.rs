@@ -817,32 +817,11 @@ fn argument_hints(
 ) -> Result<QueryPoll<ArgumentHintPreparation>, Diagnostic> {
     callee.revalidate(db)?;
     let signature = callee.signature();
-    let definition = signature.definition;
-    // Preserve the ordinary source catalogue/graph admission before even a
-    // symbolic or primitive hint. Named resolution below shares SourceType.
-    let _catalogue = AliasNormalizer::new(graph, sources)?;
     let mut templates = Vec::new();
     let mut template_bytes = 0usize;
     let mut reference_hints = BTreeMap::new();
     for (ordinal, parameter) in signature.parameters.iter().enumerate() {
         if index.is_some_and(|selected| selected != ordinal) {
-            continue;
-        }
-        if let Some(proof) = callee.lexical_contract() {
-            proof.revalidate(db)?;
-            let primitive = proof
-                .plan()
-                .primitive_parameters()
-                .get(ordinal)
-                .copied()
-                .ok_or_else(|| {
-                    fault("LRR-E-CALL-CONTEXT", "lexical parameter certificate absent")
-                })?;
-            push_template(
-                &mut templates,
-                &mut template_bytes,
-                TyTerm::Primitive(primitive),
-            )?;
             continue;
         }
         if parameter.ty.first().is_some_and(|token| token.text == "&")
@@ -862,40 +841,35 @@ fn argument_hints(
             )?;
             continue;
         }
-        if let Some(term) = &parameter.symbolic {
-            push_template(&mut templates, &mut template_bytes, term.clone())?;
-            continue;
-        }
-        if parameter.ty.len() != 1 {
-            return Ok(QueryPoll::Ready(Ok(ArgumentHintPreparation::NeedType {
-                definition,
-                syntax: parameter.ty.clone(),
-            })));
-        }
-        match super::source_types::prepare_named(
+        match super::source_parameter_goals::prepare(
             db,
             graph,
             sources,
-            signature,
-            &parameter.ty[0].text,
+            signature.definition,
+            ordinal,
         ) {
-            QueryPoll::Ready(Ok(super::source_types::NamedTypePreparation::Ready(proof))) => {
-                push_template(&mut templates, &mut template_bytes, proof.source().clone())?;
+            QueryPoll::Ready(Ok(super::source_parameter_goals::ParameterTypeGoal::Ready(goal))) => {
+                push_template(&mut templates, &mut template_bytes, goal.source().clone())?;
             }
-            QueryPoll::Ready(Ok(super::source_types::NamedTypePreparation::Parameter(key))) => {
-                push_template(&mut templates, &mut template_bytes, TyTerm::Param(key))?;
+            QueryPoll::Ready(Ok(super::source_parameter_goals::ParameterTypeGoal::NeedType {
+                definition,
+                syntax,
+            })) => {
+                return Ok(QueryPoll::Ready(Ok(ArgumentHintPreparation::NeedType {
+                    definition,
+                    syntax,
+                })));
             }
-            QueryPoll::Ready(Ok(super::source_types::NamedTypePreparation::Alias(
-                AliasTarget::Type(term),
+            QueryPoll::Ready(Ok(super::source_parameter_goals::ParameterTypeGoal::NeedAlias(
+                other,
             ))) => {
-                push_template(&mut templates, &mut template_bytes, term)?;
-            }
-            QueryPoll::Ready(Ok(super::source_types::NamedTypePreparation::Alias(other))) => {
                 return Ok(QueryPoll::Ready(Ok(ArgumentHintPreparation::NeedAlias(
                     other,
                 ))));
             }
-            QueryPoll::Ready(Ok(super::source_types::NamedTypePreparation::Name(other))) => {
+            QueryPoll::Ready(Ok(super::source_parameter_goals::ParameterTypeGoal::NeedName(
+                other,
+            ))) => {
                 return Ok(QueryPoll::Ready(Ok(ArgumentHintPreparation::NeedName(
                     other,
                 ))));

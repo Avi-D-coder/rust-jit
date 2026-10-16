@@ -1,5 +1,7 @@
 //! Namespace-qualified owned lookup over the existing deterministic import engine.
 //! This selects definitions only; it never expands, type-checks or executes a body.
+#[path = "namespace_reads.rs"]
+pub(crate) mod reads;
 #[path = "names_retention.rs"]
 pub(super) mod retention;
 use super::{
@@ -2029,6 +2031,20 @@ impl NameNamespaces {
         path: &NamePath,
         ignore_imports: bool,
     ) -> Result<Option<Digest>, Diagnostic> {
+        self.producer_frontier_observed(
+            namespace,
+            path,
+            ignore_imports,
+            &mut reads::NamespaceReads::disabled(),
+        )
+    }
+    fn producer_frontier_observed(
+        &self,
+        namespace: Namespace,
+        path: &NamePath,
+        ignore_imports: bool,
+        reads: &mut reads::NamespaceReads,
+    ) -> Result<Option<Digest>, Diagnostic> {
         let mut stack = vec![path.clone()];
         let mut seen = std::collections::BTreeSet::new();
         while let Some(path) = stack.pop() {
@@ -2048,7 +2064,7 @@ impl NameNamespaces {
                 names: path.components()[..path.components().len().saturating_sub(1)].to_vec(),
             };
             let external_alias = matches!(
-                self.types.module_paths.resolve_module(&prefix, None)?,
+                self.types.module_paths.resolve_module_observed(&prefix, None,reads)?,
                 super::module_paths::ModuleResolution::Known { path: ref actual, .. } if actual.unit != path.unit
             );
             let mut scope = ScopeKey {
@@ -2057,6 +2073,7 @@ impl NameNamespaces {
                 owner: None,
             };
             for name in path.components() {
+                reads.scope(namespace, &scope)?;
                 if let Some(producer) = self.frontiers.get(&scope).and_then(|ids| {
                     ids.iter().find(|id| {
                         if (namespace != Namespace::Macro || external_alias)
@@ -2092,6 +2109,7 @@ impl NameNamespaces {
             // Prefix lookups bound work by path depth, independent of alias count.
             for length in 1..=path.components().len() {
                 let alias = NamePath::new(path.unit, path.components()[..length].to_vec())?;
+                reads.name(Namespace::Type, &alias)?;
                 let strong = self
                     .types
                     .module_paths
@@ -2120,6 +2138,7 @@ impl NameNamespaces {
                             module_path: vec![],
                             owner: None,
                         };
+                        reads.scope(namespace, &root)?;
                         if let Some(id) = self.frontiers.get(&root).and_then(|ids| {
                             ids.iter()
                                 .find(|id| !ignore_imports || !self.imports.contains_key(id))
@@ -2131,6 +2150,7 @@ impl NameNamespaces {
                     }
                 }
             }
+            reads.name(namespace, &path)?;
             if let Some(targets) = self.links.get(&(namespace, path)) {
                 stack.extend(targets.iter().cloned());
             }
@@ -2142,9 +2162,20 @@ impl NameNamespaces {
         path: &NamePath,
         caller: &ScopeKey,
     ) -> Result<Option<Vec<NamePath>>, Diagnostic> {
+        self.ambiguous_prefix_observed(path, caller, &mut reads::NamespaceReads::disabled())
+    }
+    fn ambiguous_prefix_observed(
+        &self,
+        path: &NamePath,
+        caller: &ScopeKey,
+        reads: &mut reads::NamespaceReads,
+    ) -> Result<Option<Vec<NamePath>>, Diagnostic> {
         let modules = &path.components()[..path.components().len() - 1];
         Ok(
-            match self.types.lookup_module_from(path.unit, modules, caller)? {
+            match self
+                .types
+                .lookup_module_from_observed(path.unit, modules, caller, reads)?
+            {
                 super::macro_names::ModuleLookup::Ambiguous(paths) => Some(
                     paths
                         .into_iter()
@@ -2334,17 +2365,26 @@ impl NameNamespaces {
         import: &crate::syntax::imports::SourceImport,
         edition: u16,
     ) -> Result<super::macro_names::ModuleLookup, Diagnostic> {
-        let Some(path) = self.types.import_module_route(
+        self.lookup_import_module_observed(import, edition, &mut reads::NamespaceReads::disabled())
+    }
+    pub(crate) fn lookup_import_module_observed(
+        &self,
+        import: &crate::syntax::imports::SourceImport,
+        edition: u16,
+        reads: &mut reads::NamespaceReads,
+    ) -> Result<super::macro_names::ModuleLookup, Diagnostic> {
+        let Some(path) = self.types.import_module_route_observed(
             &import.path,
             import.absolute,
             &import.scope,
             edition,
+            reads,
         )?
         else {
             return Ok(super::macro_names::ModuleLookup::Absent);
         };
         self.types
-            .lookup_module_from(path.unit, &path.names, &import.scope)
+            .lookup_module_from_observed(path.unit, &path.names, &import.scope, reads)
     }
     pub fn lookup_glob_member(
         &self,
@@ -2353,21 +2393,39 @@ impl NameNamespaces {
         namespace: Namespace,
         edition: u16,
     ) -> Result<NameLookup, Diagnostic> {
+        self.lookup_glob_member_observed(
+            import,
+            name,
+            namespace,
+            edition,
+            &mut reads::NamespaceReads::disabled(),
+        )
+    }
+    pub(crate) fn lookup_glob_member_observed(
+        &self,
+        import: &crate::syntax::imports::SourceImport,
+        name: &str,
+        namespace: Namespace,
+        edition: u16,
+        reads: &mut reads::NamespaceReads,
+    ) -> Result<NameLookup, Diagnostic> {
+        reads.scope(Namespace::Type, &import.scope)?;
         use super::module_paths::ModuleResolution;
-        let Some(reference) = self.types.import_module_route(
+        let Some(reference) = self.types.import_module_route_observed(
             &import.path,
             import.absolute,
             &import.scope,
             edition,
+            reads,
         )?
         else {
             return Ok(NameLookup::NeedInput(Self::import_identity(import)));
         };
-        match self
-            .types
-            .module_paths
-            .resolve_module(&reference, Some(&import.scope))?
-        {
+        match self.types.module_paths.resolve_module_observed(
+            &reference,
+            Some(&import.scope),
+            reads,
+        )? {
             ModuleResolution::Known { .. } => {}
             ModuleResolution::Absent => {
                 return Ok(NameLookup::NeedInput(Self::import_identity(import)));
@@ -2391,7 +2449,7 @@ impl NameNamespaces {
             .path
             .push(crate::syntax::imports::ImportSegment::Name(name.into()));
         Ok(
-            match self.lookup_import_target(&member, namespace, edition)? {
+            match self.lookup_import_target_observed(&member, namespace, edition, reads)? {
                 NameLookup::Inaccessible(_) => NameLookup::Absent,
                 found => found,
             },
@@ -2403,33 +2461,58 @@ impl NameNamespaces {
         namespace: Namespace,
         edition: u16,
     ) -> Result<NameLookup, Diagnostic> {
-        if let Some(root) =
-            self.types
-                .import_module_route(&import.path, import.absolute, &import.scope, edition)?
-            && root.names.is_empty()
+        self.lookup_import_target_observed(
+            import,
+            namespace,
+            edition,
+            &mut reads::NamespaceReads::disabled(),
+        )
+    }
+    pub(crate) fn lookup_import_target_observed(
+        &self,
+        import: &crate::syntax::imports::SourceImport,
+        namespace: Namespace,
+        edition: u16,
+        reads: &mut reads::NamespaceReads,
+    ) -> Result<NameLookup, Diagnostic> {
+        reads.scope(Namespace::Type, &import.scope)?;
+        if let Some(root) = self.types.import_module_route_observed(
+            &import.path,
+            import.absolute,
+            &import.scope,
+            edition,
+            reads,
+        )? && root.names.is_empty()
         {
             return Ok(if namespace != Namespace::Type {
                 NameLookup::Absent
             } else if let super::module_paths::ModuleResolution::Known { path, .. } = self
                 .types
                 .module_paths
-                .resolve_module(&root, Some(&import.scope))?
+                .resolve_module_observed(&root, Some(&import.scope), reads)?
             {
                 NameLookup::ModuleRoot(path.unit)
             } else {
                 NameLookup::NeedInput(Self::import_identity(import))
             });
         }
-        let Some(path) = self.table(namespace).import_segments_path(
+        let Some(path) = self.table(namespace).import_segments_path_observed(
             &import.path,
             import.absolute,
             &import.scope,
             edition,
+            reads,
         )?
         else {
             return Ok(NameLookup::NeedInput(Self::import_identity(import)));
         };
-        self.lookup(namespace, &path, &import.scope)
+        self.lookup_in_class_observed(
+            namespace,
+            &path,
+            &import.scope,
+            NameBindingClass::Root,
+            reads,
+        )
     }
     /// Resolve source module qualifiers through the existing unit/module route index.
     pub fn lookup_source_path(
@@ -2580,13 +2663,32 @@ impl NameNamespaces {
         edition: u16,
         prelude: Option<&ScopeKey>,
     ) -> Result<NameLookup, Diagnostic> {
-        self.lookup_unqualified_in_class(
+        self.lookup_unqualified_observed(
+            namespace,
+            name,
+            caller,
+            edition,
+            prelude,
+            &mut reads::NamespaceReads::disabled(),
+        )
+    }
+    pub(crate) fn lookup_unqualified_observed(
+        &self,
+        namespace: Namespace,
+        name: &str,
+        caller: &ScopeKey,
+        edition: u16,
+        prelude: Option<&ScopeKey>,
+        reads: &mut reads::NamespaceReads,
+    ) -> Result<NameLookup, Diagnostic> {
+        self.lookup_unqualified_in_class_observed(
             namespace,
             name,
             caller,
             edition,
             prelude,
             NameBindingClass::Root,
+            reads,
         )
     }
     /// Pure class-keyed lookup facts. The caller's actual source occurrence and
@@ -2600,6 +2702,26 @@ impl NameNamespaces {
         prelude: Option<&ScopeKey>,
         class: NameBindingClass,
     ) -> Result<NameLookup, Diagnostic> {
+        self.lookup_unqualified_in_class_observed(
+            namespace,
+            name,
+            caller,
+            edition,
+            prelude,
+            class,
+            &mut reads::NamespaceReads::disabled(),
+        )
+    }
+    pub(crate) fn lookup_unqualified_in_class_observed(
+        &self,
+        namespace: Namespace,
+        name: &str,
+        caller: &ScopeKey,
+        edition: u16,
+        prelude: Option<&ScopeKey>,
+        class: NameBindingClass,
+        reads: &mut reads::NamespaceReads,
+    ) -> Result<NameLookup, Diagnostic> {
         let mut parts = caller
             .module_path
             .iter()
@@ -2607,7 +2729,7 @@ impl NameNamespaces {
             .collect::<Vec<_>>();
         parts.push(name);
         let path = Self::path(caller.crate_key, &parts, edition)?;
-        let found = self.lookup_in_class(namespace, &path, caller, class)?;
+        let found = self.lookup_in_class_observed(namespace, &path, caller, class, reads)?;
         if found != NameLookup::Absent {
             return Ok(found);
         }
@@ -2632,11 +2754,12 @@ impl NameNamespaces {
             .map(String::as_str)
             .collect::<Vec<_>>();
         parts.push(name);
-        self.lookup_in_class(
+        self.lookup_in_class_observed(
             namespace,
             &Self::path(prelude.crate_key, &parts, edition)?,
             caller,
             class,
+            reads,
         )
     }
     pub fn lookup(
@@ -2656,21 +2779,40 @@ impl NameNamespaces {
         caller: &ScopeKey,
         class: NameBindingClass,
     ) -> Result<NameLookup, Diagnostic> {
+        self.lookup_in_class_observed(
+            namespace,
+            path,
+            caller,
+            class,
+            &mut reads::NamespaceReads::disabled(),
+        )
+    }
+    pub(crate) fn lookup_in_class_observed(
+        &self,
+        namespace: Namespace,
+        path: &NamePath,
+        caller: &ScopeKey,
+        class: NameBindingClass,
+        reads: &mut reads::NamespaceReads,
+    ) -> Result<NameLookup, Diagnostic> {
         // An unknown producer may add a duplicate item or change module prefixes,
         // so disclosed definitions do not establish completeness either.
-        if let Some(producer) = self.producer_frontier(namespace, path, false)? {
+        if let Some(producer) = self.producer_frontier_observed(namespace, path, false, reads)? {
             return Ok(NameLookup::NeedInput(producer));
         }
-        if let Some(paths) = self.ambiguous_prefix(path, caller)? {
+        if let Some(paths) = self.ambiguous_prefix_observed(path, caller, reads)? {
             return Ok(NameLookup::AmbiguousModules(paths));
         }
         if class == NameBindingClass::Root
             && namespace == Namespace::Type
             && let super::macro_names::ModuleLookup::Defined {
                 unit, components, ..
-            } = self
-                .types
-                .lookup_module_from(path.unit, path.components(), caller)?
+            } = self.types.lookup_module_from_observed(
+                path.unit,
+                path.components(),
+                caller,
+                reads,
+            )?
             && components.is_empty()
         {
             return Ok(NameLookup::ModuleRoot(unit));
@@ -2684,7 +2826,7 @@ impl NameNamespaces {
         Ok(
             match self
                 .table(namespace)
-                .lookup_from_in_class(path, caller, class)?
+                .lookup_from_in_class_observed(path, caller, class, namespace, reads)?
             {
                 PathLookup::Defined(d) => NameLookup::Defined(owned(d)),
                 PathLookup::Ambiguous(ds) => {

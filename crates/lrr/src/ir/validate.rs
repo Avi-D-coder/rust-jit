@@ -659,7 +659,7 @@ fn verify_inner(
     } else {
         draft.operations.as_slice()
     };
-    let mut bytes = 512usize;
+    let mut bytes = 512usize.max(std::mem::size_of::<VerifiedRecipe>());
     charge(
         &mut bytes,
         draft
@@ -1730,6 +1730,7 @@ fn verify_inner(
         shared_product_admission_bytes,
         shared_string_literal_admission_bytes,
         namespace_witness: None,
+        prepared_inputs: None,
     })
 }
 /// Exact reached declarative literal admission. The private witness is created

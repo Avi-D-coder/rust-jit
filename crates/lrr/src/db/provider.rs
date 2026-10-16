@@ -370,51 +370,7 @@ impl Provider for SyntaxProvider {
                 };
             }
             QueryKey::SealedName(key) => {
-                if key.seal.domain
-                    != (super::seals::SealDomain::Scope {
-                        id: key.bucket.scope.fingerprint(),
-                        namespace: key.bucket.namespace,
-                    })
-                    || key.bucket.name.len() > 64 * 1024
-                    || key.bucket.scope.owner.is_some()
-                {
-                    return Provided::error(
-                        "LRR-E-QUERY-REQUEST",
-                        "sealed name query domain/owner differs",
-                    );
-                }
-                match db.fetch(self, QueryKey::DiscoverySeal(key.seal.clone())) {
-                    QueryPoll::Ready(Ok(outcome)) if matches!(outcome.value.as_ref(),QueryValue::DiscoverySeal(seal) if seal.key()==key.seal) =>
-                        {}
-                    QueryPoll::Ready(Ok(_)) => {
-                        return Provided::error(
-                            "LRR-E-INTERNAL-SNAPSHOT",
-                            "sealed name certificate variant differs",
-                        );
-                    }
-                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                    QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
-                }
-                let input = db.input(&InputKey::DiscoverySeal(key.seal.clone()));
-                let Some(InputValue::DiscoverySeal(input)) = input.as_deref() else {
-                    return Provided::error(
-                        "LRR-E-INTERNAL-SNAPSHOT",
-                        "sealed name input absent after verification",
-                    );
-                };
-                let Some(scope) = &input.scope else {
-                    return QueryPoll::NeedInput(super::poll::InputRequest::Discover {
-                        key: key.seal.clone(),
-                    });
-                };
-                let lookup = match scope.lookup(&key.bucket) {
-                    Ok(lookup) => lookup,
-                    Err(error) => return QueryPoll::Ready(Err(error)),
-                };
-                QueryValue::SealedName {
-                    key: key.clone(),
-                    lookup,
-                }
+                return super::sealed_name_provider::execute(db, key);
             }
             QueryKey::ScopeDeclarationInventory(key) => {
                 if !matches!(&key.domain, super::seals::SealDomain::Scope { .. }) {
@@ -785,7 +741,11 @@ impl Provider for SyntaxProvider {
                         "function source parse result mismatch",
                     );
                 };
-                let body = if is_schema {
+                // Function header/type facts are independent of whether its
+                // executable body locator has been published yet. The actual
+                // Fn/header/context are validated directly by the pinned AST;
+                // SourceCallable separately validates body entry authority.
+                let body = if !is_alias {
                     None
                 } else {
                     db.input(&InputKey::DefinitionBody(*definition))
@@ -845,6 +805,48 @@ impl Provider for SyntaxProvider {
             QueryKey::ReferenceHeader(definition) => {
                 return super::source_plan_provider::reference_header(self, db, *definition);
             }
+            QueryKey::DeclaredParameterGoal {
+                definition,
+                ordinal,
+            } => {
+                return match crate::frontend::source_parameter_goals::prepare_local_query(
+                    db,
+                    *definition,
+                    *ordinal,
+                ) {
+                    QueryPoll::Ready(Ok(value)) => {
+                        Provided::pure(QueryValue::DeclaredParameterGoal(Box::new(value)))
+                    }
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            QueryKey::PreparedBindingPlan(key) => {
+                return match crate::frontend::prepared_binding_plan::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::PreparedBindingPlan(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            QueryKey::BindingConstraints(key) => {
+                return match crate::frontend::binding_constraints::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::BindingConstraints(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            QueryKey::EnteredValue(key) => {
+                if key.phase != 0 {
+                    return Provided::error("LRR-E-QUERY-REQUEST", "entered Value goal requires entry phase");
+                }
+                return match crate::frontend::source_value_goals::prepare(
+                    db, &key.body, crate::ir::pc::NodeId(key.node),
+                ) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::EnteredValue(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::SourceConstraints(body) => {
                 return super::source_constraint_provider::prepare(self, db, body);
             }
@@ -855,6 +857,15 @@ impl Provider for SyntaxProvider {
                 return match crate::frontend::prepared_constructors::prepare(db, key) {
                     QueryPoll::Ready(Ok(value)) => {
                         Provided::pure(QueryValue::BoundRecordConstructor(Box::new(value)))
+                    }
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            QueryKey::QualifiedBodyType(key) => {
+                return match crate::frontend::qualified_type_names::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => {
+                        Provided::pure(QueryValue::QualifiedBodyType(Box::new(value)))
                     }
                     QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
@@ -1084,6 +1095,12 @@ impl Provider for SyntaxProvider {
                         }
                         Ok(None) => {}
                         Err(error) => return QueryPoll::Ready(Err(error)),
+                    }
+                    match super::binding_constraint_thunk::thunk(db, parsed, handle, index, pc) {
+                        QueryPoll::Ready(Ok(Some(provided))) => return QueryPoll::Ready(Ok(provided)),
+                        QueryPoll::Ready(Ok(None)) => {}
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
                     }
                     return match parsed.runtime_macro_numeric_request(handle, index, pc) {
                         Ok(Some(site)) => {

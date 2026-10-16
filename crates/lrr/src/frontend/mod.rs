@@ -26,6 +26,7 @@ mod body_namespace;
 pub mod container_catalogue;
 
 pub mod source_locals;
+pub use source_locals::owned_plan::qualified_type_names;
 
 pub(crate) mod source_body_context;
 
@@ -88,6 +89,12 @@ pub(crate) mod runtime_macro_numeric;
 pub(crate) mod primitive_type_names;
 pub(crate) mod type_name_namespace;
 
+pub(crate) mod source_parameter_goals;
 pub(crate) mod source_types;
 
 pub mod current_module_names;
+
+pub use source_locals::owned_plan::source_value_goals;
+
+pub(crate) mod binding_constraints;
+pub(crate) mod prepared_binding_plan;

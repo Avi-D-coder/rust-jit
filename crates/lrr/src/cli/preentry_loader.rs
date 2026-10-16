@@ -355,6 +355,10 @@ impl Packet {
                 | QueryKey::ReferenceHeader(_)
                 | QueryKey::TypeAlias(_) => {}
                 QueryKey::BodyStructure(_)
+                | QueryKey::PreparedBindingPlan(_)
+                | QueryKey::BindingConstraints(_)
+                | QueryKey::EnteredValue(_)
+                | QueryKey::DeclaredParameterGoal { .. }
                 | QueryKey::SourceConstraints(_)
                 | QueryKey::SourceLocalPlan(_)
                 | QueryKey::PatternPlan(_)
@@ -364,6 +368,7 @@ impl Packet {
                 | QueryKey::TypeSchema(_)
                 | QueryKey::ConstructorPlan(_)
                 | QueryKey::BoundRecordConstructor(_)
+                | QueryKey::QualifiedBodyType(_)
                 | QueryKey::Constant(_) => {
                     return Err(fault(
                         "LRR-E-PREENTRY-QUERY",

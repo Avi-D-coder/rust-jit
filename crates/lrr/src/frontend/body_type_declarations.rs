@@ -64,7 +64,7 @@ pub(crate) enum BodyTypeDemand {
     GenericArguments(Digest),
     CachedSchema(Digest),
     OwnerGeneric,
-    QualifiedPath,
+    QualifiedNamespace(Digest),
     Parameter(crate::traits::term::ParamKey),
     Source(crate::frontend::source_body_context::type_occurrences::BodyTypeAuthorityDemand),
     ExpansionDefinition(Key),
@@ -298,6 +298,68 @@ pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<B
             module = Some(observation);
             selected
         }
+        LocalTypePrefixSelection::QualifiedTail => {
+            let Some(node) = prefix.node() else {
+                return QueryPoll::Ready(Err(error("qualified body Type has no actual node")));
+            };
+            let request = crate::ir::pc::PcKey {
+                body: prefix
+                    .retained_plan()
+                    .context()
+                    .source()
+                    .index()
+                    .body()
+                    .clone(),
+                node: node.0,
+                phase: 0,
+            };
+            let value = polled!(trace.query(db, QueryKey::QualifiedBodyType(request.clone())));
+            let QueryValue::QualifiedBodyType(observation) = value.as_ref() else {
+                return QueryPoll::Ready(Err(error("qualified Type query variant differs")));
+            };
+            if observation.key() != &request
+                || observation.retained_plan().context().source().identity()
+                    != prefix.retained_plan().context().source().identity()
+                || observation.retained_plan().source_identity()
+                    != prefix.retained_plan().source_identity()
+            {
+                return QueryPoll::Ready(Err(error(
+                    "qualified Type actual source/environment differs",
+                )));
+            }
+            if observation.demand().is_some() {
+                return pending(BodyTypeDemand::QualifiedNamespace(
+                    observation.fingerprint(),
+                ));
+            }
+            let selected = match observation.lookup() {
+                Some(NameLookup::Defined(selected)) => selected.clone(),
+                Some(NameLookup::NeedInput(producer)) => {
+                    return pending(BodyTypeDemand::Producer(*producer));
+                }
+                _ => return pending(BodyTypeDemand::ModuleCandidate(observation.fingerprint())),
+            };
+            let Some(request) = observation.module_request() else {
+                return pending(BodyTypeDemand::QualifiedNamespace(
+                    observation.fingerprint(),
+                ));
+            };
+            // The final declaration route reuses the ordinary module observation;
+            // all prefix/module/import reads remain inside QualifiedBodyType.
+            let final_name =
+                polled!(trace.query(db, QueryKey::CurrentModuleName(Box::new(request.clone()))));
+            let QueryValue::CurrentModuleName(final_name) = final_name.as_ref() else {
+                return QueryPoll::Ready(Err(error("qualified final module observation differs")));
+            };
+            if !final_name.matches_request(request)
+                || final_name.completion() != ModuleNameCompletion::Complete
+                || !matches!(final_name.lookup(), Some(NameLookup::Defined(actual)) if actual == &selected)
+            {
+                return QueryPoll::Ready(Err(error("qualified final module selection changed")));
+            }
+            module = Some(Arc::clone(final_name));
+            selected
+        }
         LocalTypePrefixSelection::Lookup(NameLookup::Defined(selected)) => selected.clone(),
         LocalTypePrefixSelection::Lookup(NameLookup::NeedInput(producer)) => {
             return pending(BodyTypeDemand::Producer(*producer));
@@ -317,9 +379,6 @@ pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<B
         }
         LocalTypePrefixSelection::NeedSource(demand) => {
             return pending(BodyTypeDemand::Source(*demand));
-        }
-        LocalTypePrefixSelection::NeedUnqualifiedPath => {
-            return pending(BodyTypeDemand::QualifiedPath);
         }
         LocalTypePrefixSelection::NeedExpansionDefinition(key) => {
             return pending(BodyTypeDemand::ExpansionDefinition(*key));

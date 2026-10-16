@@ -73,3 +73,88 @@ Its candidate binding target is not binding authority. No callable, callee body
 or runtime descriptor can be minted by this query. Root owns query/accounting
 hooks; the pattern worker owns its source service and bounded kernel/index
 extensions. These staged hooks are uncompiled until that leaf is complete.
+
+After the graph37 two-control pass on `d3ef558c`, a separate successor adds a
+bounded derived spelling-to-Path node index. This is solely a candidate filter
+for relevant numeric uses: each candidate still needs the real hygienic Value
+goal, so same-spelling shadowed locals cannot supply another binding's type.
+Raw identifier token spelling shares the filter key; no text is reparsed and
+the underlying body/structure identity remains authoritative. The immutable
+index is built/accounted once, avoiding a complete fact/AST scan per local
+numeric demand. This successor is not covered by the earlier two-control pass.
+
+The next consumer is query40 `BindingConstraints(PcKey)`, entry-keyed and pure.
+It joins graph37 with genuine Value39 binding identity and selected local
+parameter38 source goals; it never grants callable/body entry. Demand begins
+with the reached numeric let and follows the retained candidate-name/reverse-use
+indexes. Shadowed uses require the actual binding identity. Parenthesized uses
+and ordinary call argument ordinals retain their real indexed nodes. Other
+required relationships return a typed pending goal rather than defaulting over
+missing source evidence. No selected function body is queried. The module
+declaration-environment transport and wider trait/assignment/return constraints
+remain explicit prerequisites; no alternate resolver is introduced for them.
+Only a resolved concrete numeric source fact may supply the normal local hint;
+an unconstrained result alone does not authorize a new fallback path. Wiring
+that result into ordinary lowering and installed dependency guards is separate
+required work. Until then query40 is an unintegrated source component.
+
+Draft ordinary lowering now selects the retained source hint before the held
+legacy local/macro numeric routes. It is not a validated integration. The cold
+provider wrapper must attach the real relevant-input closure; installed checks
+read stamps only. To avoid recapturing that closure for every let phase, query41
+`PreparedBindingPlan(PcKey)` will retain raw goal40 plus its once-captured shared
+guard. Recipe clones share the immutable guard and conservatively charge its
+payload; guard fingerprinting is cached at private construction. No new cache
+registry, parsing, world census or runtime source planning is permitted. The
+unsealed historical entry remains an explicitly held route, not architecture
+acceptance. Activation evidence must include actual phase reuse/currentness,
+not just a source goal's final primitive.
+
+Cold signature dependency correction before numeric activation: the shared
+FunctionSignature provider currently reads optional DefinitionBody even though
+its header recipe has no body handle. That captures an irrelevant absence in a
+future-typed-call constraint; publishing the genuinely reached child body later
+could stale the installed let hint. A FunctionSignature must derive from its
+actual immutable parsed Fn, source/header/context and declared Type occurrences,
+without depending on availability of executable body metadata. Existing
+`ParsedFile::function_signature(..., None)` validates that actual header/context
+and excludes the syntax body; SourceCallable still separately validates the
+real body handle before execution. Preserve TypeAlias body dependencies. This
+is a source-reasoned counterexample until a reached-loop witness runs; the
+signature-dependency structural control must explicitly inspect the real memo.
+
+Actual candidate compile correction, October 16: frozen numeric V2
+`e29bfef4` stopped at terminal `d16aaa/1` (18 errors, zero test bodies).
+The failure groups are missing occurrence-module registration, the actual
+namespace-certification import, and an omitted opaque proof parameter between
+`initial_thunk_admission` and its sole `initial_scope_thunk` call. Exact-baseline
+mechanical successors `c2b57a3a` (two leaves) and `67467925` (one leaf) correct
+those joins. The latter passes the same borrowed PreparedBindingConstraints;
+existing `hint_for` body/node/structure checks and ordinary SetHint/BindLocal
+remain authoritative. No parsing, evaluator, dispatch context, type selection
+or input dependency behavior changes. All eight recurring failure-mode
+conclusions remain limited to these mechanical edits; none closes the held
+legacy numeric/macro routes. Full upstream main remains the first execution
+required after a successful compile. This is not a runtime pass.
+
+Next bounded compatibility repair: source review `63092721` found the new graph
+consumer treats every non-call parent as unresolved, including a cast. The
+unchanged, already imported official `auto-traits/auto-is-contextual.rs` contains
+`let auto = 10; auto; auto as u8;` after an ordinary unit function call, and is
+the primary runtime witness. A cast fixes its result type without equating its
+operand's type with that result. Extend only the existing SourceFact::Cast
+operand-zero relation in BindingConstraints::prepare; do not propagate the cast
+result's annotation into its operand. Actual Value39 binding identity remains
+required. This replaces a new blanket Pending response for the known relation,
+not a language evaluator. Other unknown relations remain pending. Unconstrained
+results still use the explicitly held existing fallback: the new graph does not
+yet prove complete absence of constraints hidden in opaque macro output, so
+this change must not grant fresh fallback authority or expand that legacy path.
+
+Cold cost adds one fixed branch per visited actual reverse edge; no new source,
+namespace, parse, body, index or runtime allocation/authority. Modes1–4/5 retain
+one source service and ordinary lowering, modes6–8 retain the existing bounded
+indexed cold traversal and installed relevant-input checks. Reproduce the
+unchanged official complete main through the production CLI before and after;
+any earlier preparation failure remains a gap rather than removing attributes
+or the actual user macro. This record is source reasoning, not execution proof.

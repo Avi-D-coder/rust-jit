@@ -123,11 +123,8 @@ fn upstream_module_answers_distinguish_unsealed_absent_and_defined_all_editions(
         assert!(matches!(absent.lookup(), Some(NameLookup::Absent)));
 
         let type_key = key(&source, Namespace::Type, "search");
-        assert_eq!(
-            observe(&mut db, &type_key).completion(),
-            ModuleNameCompletion::Unsealed
-        );
-        publish(&mut db, &source, Namespace::Type, 1);
+        // The actual Value parent retains a separately completed Type facet;
+        // its existence is no longer hidden behind the primary namespace.
         let type_answer = observe(&mut db, &type_key);
         assert_eq!(type_answer.completion(), ModuleNameCompletion::Complete);
         assert!(matches!(type_answer.lookup(), Some(NameLookup::Absent)));
@@ -223,3 +220,6 @@ fn cache_only_module_answer_does_not_pin_the_retired_input_universe() {
     assert!(weak.upgrade().is_none());
     assert_eq!(eviction.after.memo_bytes, 0);
 }
+
+#[path = "current_type_scope_tests.rs"]
+mod type_scope_tests;

@@ -1,6 +1,8 @@
 //! Source/authority controls over complete unchanged local-record rustc source.
 #[path = "prepared_constructor_tests.rs"]
 mod prepared_constructor_tests;
+#[path = "binding_constraint_tests.rs"]
+mod binding_constraint_tests;
 use super::*;
 use crate::{
     expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
@@ -103,10 +105,30 @@ fn world(text: &str, edition: u16, retained: bool) -> (Database, Arc<PreparedSou
         body = ready(db.publish_retained_body(input, selected.identity()));
     }
     let plan = ready(db.prepare_source_local_plan(&discovery, &[&source], &body));
-    // This is actual Type completion, not a Value-absence primitive fallback.
-    // Production must project genuine existing Type receipts through the same
-    // module service, or prepare this namespace before admitting the field.
-    let _type_discovery = complete(&mut db, &source, Namespace::Type);
+    // The actual completed Value publication owns a separately completed Type
+    // facet. A second independent Type parent would create genuine ambiguity.
+    let certificate = db
+        .current_scope_certificate(
+            source.selection(),
+            &source.outline().root_scope,
+            Namespace::Type,
+        )
+        .unwrap()
+        .unwrap();
+    let InputValue::DiscoverySeal(certificate) = certificate.as_ref() else {
+        panic!()
+    };
+    assert_eq!(certificate.seal.key(), discovery.key().clone());
+    assert!(
+        certificate
+            .scope_certificate(
+                &source.outline().root_scope,
+                Namespace::Type,
+                &source.outline().profile
+            )
+            .unwrap()
+            .is_some()
+    );
     for row in &plan.context().facts().items {
         ready(db.publish_local_declaration(plan.context(), row.item.def_key.fingerprint()));
     }
@@ -260,3 +282,9 @@ fn field_recipe_substitution_and_revoked_owning_environment_are_refused() {
         "revoked owning field environment",
     );
 }
+
+#[path = "source_parameter_goal_tests.rs"]
+mod source_parameter_goal_tests;
+
+#[path = "source_value_goal_tests.rs"]
+mod source_value_goal_tests;

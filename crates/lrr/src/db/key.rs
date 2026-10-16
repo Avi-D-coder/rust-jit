@@ -86,7 +86,12 @@ impl StableEncode for CurrentModuleNameKey {
 pub use crate::frontend::constants::query_identity::ConstQueryIdentity as ConstantKey;
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum QueryKey {
+    PreparedBindingPlan(crate::source::manifest::PcKey),
+    BindingConstraints(crate::source::manifest::PcKey),
+    EnteredValue(crate::source::manifest::PcKey),
+    DeclaredParameterGoal { definition: Digest, ordinal: u32 },
     SourceConstraints(crate::source::manifest::BodyKey),
+    QualifiedBodyType(crate::source::manifest::PcKey),
     BoundRecordConstructor(crate::source::manifest::PcKey),
     SourceLocalPlan(crate::source::manifest::BodyKey),
     CurrentModuleName(Box<CurrentModuleNameKey>),
@@ -131,8 +136,13 @@ impl QueryKey {
                     + k.module_path.iter().map(String::capacity).sum::<usize>()
             }
             Self::ScopeBucket(k) => k.scope.heap_bytes() + k.name.capacity(),
-            Self::SourceLocalPlan(_)
+            Self::DeclaredParameterGoal { .. }
+            | Self::PreparedBindingPlan(_)
+            | Self::BindingConstraints(_)
+            | Self::EnteredValue(_)
+            | Self::SourceLocalPlan(_)
             | Self::SourceConstraints(_)
+            | Self::QualifiedBodyType(_)
             | Self::BoundRecordConstructor(_)
             | Self::ConstructorPlan(_)
             | Self::TypeSchema(_)
@@ -148,7 +158,12 @@ impl QueryKey {
     }
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::PreparedBindingPlan(_) => "PreparedBindingPlan",
+            Self::BindingConstraints(_) => "BindingConstraints",
+            Self::EnteredValue(_) => "EnteredValue",
+            Self::DeclaredParameterGoal { .. } => "DeclaredParameterGoal",
             Self::SourceConstraints(_) => "SourceConstraints",
+            Self::QualifiedBodyType(_) => "QualifiedBodyType",
             Self::BoundRecordConstructor(_) => "BoundRecordConstructor",
             Self::SourceLocalPlan(_) => "SourceLocalPlan",
             Self::CurrentModuleName(_) => "CurrentModuleName",
@@ -177,8 +192,27 @@ impl StableEncode for QueryKey {
     const DOMAIN: &'static str = "lrr/v2/query-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::PreparedBindingPlan(key) => { e.u32(41); e.record(key); }
+            Self::BindingConstraints(key) => { e.u32(40); e.record(key); }
+            Self::EnteredValue(key) => {
+                e.u32(39);
+                e.record(key);
+            }
+            Self::DeclaredParameterGoal {
+                definition,
+                ordinal,
+            } => {
+                e.u32(38);
+                e.digest(*definition);
+                e.u32(*ordinal);
+            }
             Self::SourceConstraints(key) => {
                 e.u32(37);
+                e.u32(crate::syntax::source_constraints::SOURCE_CONSTRAINT_SCHEMA);
+                e.record(key);
+            }
+            Self::QualifiedBodyType(key) => {
+                e.u32(36);
                 e.record(key);
             }
             Self::BoundRecordConstructor(key) => {

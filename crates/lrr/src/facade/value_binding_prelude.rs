@@ -1,5 +1,9 @@
 //! Finite compiler-owned Value-prelude declarations for pattern disambiguation.
 //! This is the selected synthetic facade, not a host/sysroot export catalogue.
+#[path = "retained_value_binding_prelude.rs"]
+mod retained;
+pub(crate) use retained::{RetainedPreludeName, RetainedValueBindingPrelude};
+
 use crate::{
     core::{
         diagnostic::Diagnostic,
@@ -90,6 +94,9 @@ impl ValueBindingPrelude {
     }
     pub(crate) fn source(&self) -> &SourceSelection {
         &self.source
+    }
+    pub(crate) fn scope(&self) -> &ScopeKey {
+        &self.scope
     }
     pub(crate) fn require_absent(
         &self,

@@ -80,6 +80,10 @@ fn unchanged_suffix_source_constraints_retain_real_call_and_binding_nodes_once()
         };
         assert_eq!(plan.structure(), index.semantic_identity());
         assert_eq!(plan.facts().len(), index.nodes().len());
+        assert_eq!(plan.paths_named("j").len(), 9);
+        assert_eq!(plan.paths_named("r#j"), plan.paths_named("j"));
+        assert_eq!(plan.paths_named("id_i8").len(), 2);
+        assert!(plan.paths_named("not_a_source_use").is_empty());
         for (parent, fact) in plan.facts().iter().enumerate() {
             for (ordinal, child) in fact.operands().iter().enumerate() {
                 if let Some(child) = child {

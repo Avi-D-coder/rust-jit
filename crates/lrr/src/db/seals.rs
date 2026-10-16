@@ -158,6 +158,115 @@ pub struct DiscoveryInput {
     pub(crate) scope: Option<CertifiedScope>,
 }
 impl DiscoveryInput {
+    /// Exact privately minted primary or contained facet. A contained Type
+    /// receipt keeps the enclosing seal identity; it is not another seal.
+    /// Sorted ownership is checked once before the locator is published.
+    pub(crate) fn scope_certificate(
+        &self,
+        scope: &crate::syntax::outline::ScopeKey,
+        namespace: Namespace,
+        profile: &ProfileIdentity,
+    ) -> Result<Option<&CertifiedScope>, crate::core::diagnostic::Diagnostic> {
+        profile.validate_source()?;
+        if let Some(primary) = &self.scope
+            && primary.scope == *scope
+            && primary.namespace == namespace
+            && primary.edition == profile.edition
+        {
+            return Ok(Some(primary));
+        }
+        if namespace != Namespace::Type {
+            return Ok(None);
+        }
+        let key = (scope, profile);
+        let Ok(index) = self
+            .type_scopes
+            .binary_search_by(|proof| proof.owner_profile().cmp(&key))
+        else {
+            return Ok(None);
+        };
+        let proof = &self.type_scopes[index];
+        proof.require_owner(scope, profile)?;
+        Ok(Some(proof.scope()))
+    }
+    /// SealedName predates profile-specific facets. Select only an unambiguous
+    /// owning edition; callers cannot project one profile through another key.
+    pub(crate) fn bucket_certificate(
+        &self,
+        bucket: &crate::db::key::BucketKey,
+    ) -> Result<Option<&CertifiedScope>, crate::core::diagnostic::Diagnostic> {
+        let mut selected = self
+            .scope
+            .as_ref()
+            .filter(|scope| scope.scope == bucket.scope && scope.namespace == bucket.namespace);
+        if bucket.namespace == Namespace::Type {
+            let start = self
+                .type_scopes
+                .partition_point(|proof| proof.scope().scope < bucket.scope);
+            for proof in self.type_scopes[start..]
+                .iter()
+                .take_while(|proof| proof.scope().scope == bucket.scope)
+            {
+                let candidate = proof.scope();
+                if selected.is_some_and(|old| old.edition != candidate.edition) {
+                    return Err(crate::core::diagnostic::Diagnostic::new(
+                        "LRR-E-QUERY-REQUEST",
+                        "sealed bucket requires profile-specific query identity".into(),
+                    ));
+                }
+                selected = Some(candidate);
+            }
+        }
+        Ok(selected)
+    }
+    /// Coordinator-only structural admission, before any selector/input commit.
+    pub(crate) fn require_scope_certificate_layout(
+        &self,
+    ) -> Result<(), crate::core::diagnostic::Diagnostic> {
+        let fail = || {
+            crate::core::diagnostic::Diagnostic::new(
+                "LRR-E-CALL-CONTEXT",
+                "discovery scope facet parent/order differs".into(),
+            )
+        };
+        if let Some(scope) = &self.scope
+            && (!matches!(self.seal.domain(), SealDomain::Scope { id, namespace }
+                if *id == scope.scope.fingerprint() && *namespace == scope.namespace)
+                || scope.scope.owner.is_some())
+        {
+            return Err(fail());
+        }
+        if self.type_scopes.len() > 4096
+            || (!self.type_scopes.is_empty()
+                && !matches!(self.seal.domain(), SealDomain::Scope { .. }))
+        {
+            return Err(fail());
+        }
+        let parent = self.seal.fingerprint();
+        let mut previous = None;
+        for proof in &self.type_scopes {
+            proof.require_publication(parent)?;
+            let key = proof.owner_profile();
+            if previous.is_some_and(|old| old >= key) {
+                return Err(fail());
+            }
+            previous = Some(key);
+            if let Some(primary) = &self.scope
+                && primary.scope == proof.scope().scope
+                && primary.namespace == Namespace::Type
+                && primary.edition == proof.scope().edition
+                && primary.fingerprint() != proof.scope().fingerprint()
+            {
+                return Err(fail());
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn scope_certificates(&self) -> impl Iterator<Item = &CertifiedScope> {
+        self.scope
+            .iter()
+            .chain(self.type_scopes.iter().map(|proof| proof.scope()))
+    }
     pub(crate) fn metadata_bytes(&self) -> Result<usize, crate::core::diagnostic::Diagnostic> {
         let fail = || {
             crate::core::diagnostic::Diagnostic::new(

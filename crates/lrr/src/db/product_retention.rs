@@ -72,6 +72,18 @@ impl SourcePlanPins {
             QueryValue::SourceLocalPlan(plan) => plan.environment().map(|environment| {
                 SourceArtifactRef::CompletedEnvironment(environment.macros().source_environment())
             }),
+            QueryValue::EnteredValue(value) => {
+                value.retained_plan().environment().map(|environment| {
+                    SourceArtifactRef::CompletedEnvironment(environment.macros().source_environment())
+                })
+            }
+            QueryValue::QualifiedBodyType(value) => {
+                value.retained_plan().environment().map(|environment| {
+                    SourceArtifactRef::CompletedEnvironment(
+                        environment.macros().source_environment(),
+                    )
+                })
+            }
             _ => None,
         };
         self.register_roots(|| value.source_roots().chain(completed))

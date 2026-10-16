@@ -185,6 +185,7 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
         QueryKey::DiscoverySeal(_) | QueryKey::ScopeDeclarationInventory(_) => {}
         QueryKey::ConstructorPlan(_)
         | QueryKey::BoundRecordConstructor(_)
+        | QueryKey::QualifiedBodyType(_)
         | QueryKey::SourceLocalPlan(_)
         | QueryKey::TypeSchema(_)
         | QueryKey::TypeAlias(_)
@@ -193,6 +194,10 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
         | QueryKey::PatternPlan(_)
         | QueryKey::Signature(_)
         | QueryKey::BodyStructure(_)
+        | QueryKey::PreparedBindingPlan(_)
+        | QueryKey::BindingConstraints(_)
+        | QueryKey::EnteredValue(_)
+        | QueryKey::DeclaredParameterGoal { .. }
         | QueryKey::SourceConstraints(_)
         | QueryKey::Thunk(_) => {}
         QueryKey::ExpansionInput(k) | QueryKey::CurrentExpansionInput(k) => {

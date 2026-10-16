@@ -257,6 +257,23 @@ pub(super) fn lookup_in_class(
     caller: Option<&ScopeKey>,
     class: NameBindingClass,
 ) -> Result<PathLookup, Diagnostic> {
+    lookup_in_class_observed(
+        graph,
+        path,
+        caller,
+        class,
+        crate::source::manifest::Namespace::Macro,
+        &mut crate::frontend::names::reads::NamespaceReads::disabled(),
+    )
+}
+pub(super) fn lookup_in_class_observed(
+    graph: &MacroNamespaces,
+    path: &MacroPath,
+    caller: Option<&ScopeKey>,
+    class: NameBindingClass,
+    namespace: crate::source::manifest::Namespace,
+    reads: &mut crate::frontend::names::reads::NamespaceReads,
+) -> Result<PathLookup, Diagnostic> {
     let caller = caller
         .map(|s| {
             Ok(ScopeKey {
@@ -280,10 +297,14 @@ pub(super) fn lookup_in_class(
     while next < nodes.len() {
         let (path, caller, class) = nodes[next].key.clone();
         let mut own = State::default();
+        reads.name(namespace, &path)?;
         if let Some(raw) = graph.bindings.get(&path) {
             own.pending.extend(raw.pending.iter().copied());
         }
-        let canonical = match graph.module_paths.resolve(&path, caller.as_ref())? {
+        let canonical = match graph
+            .module_paths
+            .resolve_observed(&path, caller.as_ref(), reads)?
+        {
             Resolution::Known(p) => p,
             Resolution::Absent => {
                 if class != NameBindingClass::Root {
@@ -306,6 +327,7 @@ pub(super) fn lookup_in_class(
         let mut strong = Vec::new();
         let mut weak = Vec::new();
         let scope = origin(&canonical);
+        reads.name(namespace, &canonical)?;
         if let Some(all) = graph.bindings.get(&canonical) {
             // An unresolved source producer has no proved output name class.
             own.pending.extend(all.pending.iter().copied());

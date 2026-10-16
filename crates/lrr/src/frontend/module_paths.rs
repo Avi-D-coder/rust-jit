@@ -472,6 +472,26 @@ impl ModulePaths {
         path: &MacroPath,
         caller: Option<&ScopeKey>,
     ) -> Result<Resolution, Diagnostic> {
+        self.resolve_observed(
+            path,
+            caller,
+            &mut crate::frontend::names::reads::NamespaceReads::disabled(),
+        )
+    }
+    pub(crate) fn resolve_observed(
+        &self,
+        path: &MacroPath,
+        caller: Option<&ScopeKey>,
+        reads: &mut crate::frontend::names::reads::NamespaceReads,
+    ) -> Result<Resolution, Diagnostic> {
+        reads.scope(
+            crate::source::manifest::Namespace::Type,
+            &ScopeKey {
+                crate_key: path.unit,
+                module_path: vec![],
+                owner: None,
+            },
+        )?;
         // Standalone macro-only indexes retain their pre-source-registry semantics.
         if self.bindings.is_empty() {
             return Ok(Resolution::Known(path.clone()));
@@ -484,7 +504,7 @@ impl ModulePaths {
             unit: path.unit,
             names: names.to_vec(),
         };
-        match self.resolve_module(&module, caller)? {
+        match self.resolve_module_observed(&module, caller, reads)? {
             ModuleResolution::Known { path: module, .. } => {
                 let mut names = module.names;
                 if names.len() >= 256 {
@@ -512,6 +532,18 @@ impl ModulePaths {
         path: &'a ModulePath,
         caller: Option<&'a ScopeKey>,
     ) -> Result<ModuleResolution, Diagnostic> {
+        self.resolve_module_observed(
+            path,
+            caller,
+            &mut crate::frontend::names::reads::NamespaceReads::disabled(),
+        )
+    }
+    pub(crate) fn resolve_module_observed<'a>(
+        &'a self,
+        path: &'a ModulePath,
+        caller: Option<&'a ScopeKey>,
+        reads: &mut crate::frontend::names::reads::NamespaceReads,
+    ) -> Result<ModuleResolution, Diagnostic> {
         ModulePath::validate_components(&path.names)?;
         let names = &path.names;
         static PUBLIC: VisibilityScope = VisibilityScope::Public;
@@ -528,6 +560,7 @@ impl ModulePaths {
             unit: path.unit,
             names: vec![],
         };
+        reads.module(&root)?;
         if !self.bindings.contains_key(&root) {
             return Ok(ModuleResolution::Absent);
         }
@@ -582,12 +615,14 @@ impl ModulePaths {
                 .names
                 .push(frame.names[frame.position].clone());
             frame.position += 1;
+            reads.module(&frame.current)?;
             let Some((key, binding)) = self.bindings.get_key_value(&frame.current) else {
                 let Some(members) = self.weak.get(&frame.current) else {
                     return Ok(ModuleResolution::Absent);
                 };
                 let mut selected: BTreeMap<&ModulePath, &VisibilityScope> = BTreeMap::new();
                 for (target, ranges) in members {
+                    reads.module(target)?;
                     for range in ranges {
                         if let Some(caller) = frame.caller
                             && !range.allows(caller)?
@@ -629,6 +664,8 @@ impl ModulePaths {
                     let mut visible = Vec::new();
                     let mut budget = Self::default();
                     for alias in aliases {
+                        reads.scope(crate::source::manifest::Namespace::Type, &alias.origin)?;
+                        reads.module(&alias.target)?;
                         if let Some(caller) = frame.caller
                             && !alias.visibility.allows(caller)?
                         {
@@ -650,6 +687,8 @@ impl ModulePaths {
                     alias
                 }
             };
+            reads.scope(crate::source::manifest::Namespace::Type, &alias.origin)?;
+            reads.module(&alias.target)?;
             if let Some(caller) = frame.caller
                 && !alias.visibility.allows(caller)?
             {
@@ -658,6 +697,10 @@ impl ModulePaths {
             if !active.insert(key) {
                 return Err(error("module path alias cycle"));
             }
+            reads.module(&ModulePath {
+                unit: alias.target.unit,
+                names: vec![],
+            })?;
             if !self.bindings.contains_key(&ModulePath {
                 unit: alias.target.unit,
                 names: vec![],

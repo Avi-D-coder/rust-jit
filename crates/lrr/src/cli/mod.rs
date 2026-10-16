@@ -2,6 +2,7 @@ mod args;
 mod bundle;
 mod compile_inputs;
 pub(crate) mod macro_export_modules;
+#[cfg(test)]
 mod type_preparation;
 pub use compile_inputs::capture_macro_export_facet;
 mod explain;
@@ -319,9 +320,6 @@ fn standalone_captured(
     let mut db = Database::default();
     prepared.publish(&mut db)?;
     db.begin_expansion_epoch(1)?;
-    // Retain genuine Type closure/source roots through the entire ordinary run.
-    let _type_preparation =
-        type_preparation::prepare(&compiler, &mut db, &view, &sources, snapshot)?;
     let mut discovery = crate::expand::source_discovery::SourceDiscovery::new(
         sources,
         view.outline().root_scope.clone(),

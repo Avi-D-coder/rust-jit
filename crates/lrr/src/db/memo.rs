@@ -276,7 +276,10 @@ impl Database {
                         }
                         Some(Arc::as_ptr(v) as usize)
                     }
-                    QueryValue::Thunk(_) | QueryValue::SourceLocalPlan(_) => {
+                    QueryValue::Thunk(_)
+                    | QueryValue::SourceLocalPlan(_)
+                    | QueryValue::QualifiedBodyType(_)
+                    | QueryValue::EnteredValue(_) => {
                         for root in memo.value.source_roots() {
                             product_retention::count_owner(root, &mut inner, &mut products);
                         }

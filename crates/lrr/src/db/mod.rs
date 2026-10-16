@@ -14,5 +14,7 @@ pub mod seals;
 
 mod body_environment_provider;
 mod pattern_plan_provider;
+mod sealed_name_provider;
 mod source_plan_provider;
 mod source_constraint_provider;
+mod binding_constraint_thunk;

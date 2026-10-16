@@ -3,7 +3,7 @@
 use super::*;
 use crate::{
     core::digest::{StableEncode, StableEncoder},
-    db::seals::{DiscoveryInput, SealDomain, SealKey},
+    db::seals::{DiscoveryInput, SealKey},
     source::{changes::SourceSelection, manifest::Namespace},
     syntax::outline::ScopeKey,
 };
@@ -11,6 +11,19 @@ use std::collections::BTreeSet;
 
 const MAX_ASSOCIATIONS: usize = 100_000;
 const MAX_METADATA: usize = 32 * 1024 * 1024;
+
+// A locator need not associate a Type scope with foreign or sibling physical
+// source roots. This is only structural narrowing; consumers still require
+// actual Outline membership and the genuine certificate, not a prefix grant.
+fn source_can_own(source: &SourceSelection, scope: &crate::db::seals::CertifiedScope) -> bool {
+    source.outline.parse.profile.edition == scope.edition
+        && (scope.namespace != Namespace::Type
+            || (source.outline.crate_key == scope.scope.crate_key
+                && scope
+                    .scope
+                    .module_path
+                    .starts_with(&source.outline.module_path)))
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 struct SelectionKey {
@@ -77,65 +90,56 @@ impl ScopeCertificateIndex {
     /// Cold coordinator preparation only. All fallible checks and allocations
     /// precede publication of either the input rows or their derived locator.
     pub(super) fn with_input(&self, input: &DiscoveryInput) -> Result<Option<Self>, Diagnostic> {
-        let Some(scope) = &input.scope else {
-            return Ok(None);
-        };
+        input.require_scope_certificate_layout()?;
         let seal = input.seal.key();
-        if !matches!(&seal.domain, SealDomain::Scope { id, namespace }
-            if *id == scope.scope.fingerprint() && *namespace == scope.namespace)
-        {
-            return Err(fault(
-                "LRR-E-CALL-CONTEXT",
-                "lexical namespace seal owner differs",
-            ));
-        }
         let mut next = None;
-        for source in &input.sources {
-            // Match the existing reader's source-edition selection exactly.
-            if source.outline.parse.profile.edition != scope.edition {
-                continue;
-            }
-            let key = SelectionKey::new(source, &scope.scope, scope.namespace);
-            let current = next.as_ref().unwrap_or(self);
-            if current
-                .entries
-                .get(&key)
-                .is_some_and(|keys| keys.candidates.contains(&seal))
-            {
-                continue;
-            }
-            let associations = current
-                .associations
-                .checked_add(1)
-                .filter(|n| *n <= MAX_ASSOCIATIONS)
-                .ok_or_else(|| {
-                    fault(
+        for scope in input.scope_certificates() {
+            for source in &input.sources {
+                if !source_can_own(source, scope) {
+                    continue;
+                }
+                let key = SelectionKey::new(source, &scope.scope, scope.namespace);
+                let current = next.as_ref().unwrap_or(self);
+                if current
+                    .entries
+                    .get(&key)
+                    .is_some_and(|keys| keys.candidates.contains(&seal))
+                {
+                    continue;
+                }
+                let associations = current
+                    .associations
+                    .checked_add(1)
+                    .filter(|n| *n <= MAX_ASSOCIATIONS)
+                    .ok_or_else(|| {
+                        fault(
+                            "LRR-E-METADATA-LIMIT",
+                            "scope certificate index count limit",
+                        )
+                    })?;
+                // Conservative BTree node allowance, including owned inline keys.
+                let mut bytes = account_add(current.bytes, 128 + std::mem::size_of::<SealKey>())?;
+                if !current.entries.contains_key(&key) {
+                    bytes = account_add(
+                        bytes,
+                        128 + std::mem::size_of::<SelectionKey>()
+                            + std::mem::size_of::<SelectionEntry>(),
+                    )?;
+                }
+                if bytes > MAX_METADATA {
+                    return Err(fault(
                         "LRR-E-METADATA-LIMIT",
-                        "scope certificate index count limit",
-                    )
-                })?;
-            // Conservative BTree node allowance, including owned inline keys.
-            let mut bytes = account_add(current.bytes, 128 + std::mem::size_of::<SealKey>())?;
-            if !current.entries.contains_key(&key) {
-                bytes = account_add(
-                    bytes,
-                    128 + std::mem::size_of::<SelectionKey>()
-                        + std::mem::size_of::<SelectionEntry>(),
-                )?;
+                        "scope certificate index byte limit",
+                    ));
+                }
+                let next = next.get_or_insert_with(|| self.clone());
+                next.entries
+                    .entry(key)
+                    .or_insert_with(SelectionEntry::new)
+                    .insert(seal.clone());
+                next.associations = associations;
+                next.bytes = bytes;
             }
-            if bytes > MAX_METADATA {
-                return Err(fault(
-                    "LRR-E-METADATA-LIMIT",
-                    "scope certificate index byte limit",
-                ));
-            }
-            let next = next.get_or_insert_with(|| self.clone());
-            next.entries
-                .entry(key)
-                .or_insert_with(SelectionEntry::new)
-                .insert(seal.clone());
-            next.associations = associations;
-            next.bytes = bytes;
         }
         Ok(next)
     }
@@ -161,9 +165,9 @@ impl ScopeCertificateIndex {
     }
     pub(super) fn selection_rows(&self, input: &DiscoveryInput) -> BTreeMap<InputKey, InputValue> {
         let mut rows = BTreeMap::new();
-        if let Some(scope) = &input.scope {
+        for scope in input.scope_certificates() {
             for source in &input.sources {
-                if source.outline.parse.profile.edition == scope.edition {
+                if source_can_own(source, scope) {
                     let (key, value) = self.selection_row(source, &scope.scope, scope.namespace);
                     rows.insert(key, value);
                 }

@@ -1,5 +1,8 @@
 //! Reached plain-pattern binding admission from current original source facts.
 //! No discovery, query fetch, macro expansion, descriptor inference or static check.
+#[path = "pattern_binding_occurrences.rs"]
+pub(crate) mod occurrences;
+
 use crate::{
     core::{
         diagnostic::Diagnostic,

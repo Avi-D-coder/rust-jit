@@ -164,27 +164,14 @@ impl Database {
                     "indexed scope certificate variant differs",
                 ));
             };
-            let certified = input.scope.as_ref().ok_or_else(|| {
-                fault(
-                    "LRR-E-INTERNAL-SNAPSHOT",
-                    "indexed scope certificate owner absent",
-                )
-            })?;
-            if certified.scope != *scope
-                || certified.namespace != namespace
-                || certified.edition != source.outline.parse.profile.edition
+            if input
+                .scope_certificate(scope, namespace, &source.outline.parse.profile)?
+                .is_none()
                 || !input.sources.contains(source)
             {
                 return Err(fault(
                     "LRR-E-INTERNAL-SNAPSHOT",
                     "indexed scope certificate source/owner differs",
-                ));
-            }
-            if !matches!(input.seal.domain(), crate::db::seals::SealDomain::Scope { id, namespace } if *id == scope.fingerprint() && *namespace == certified.namespace)
-            {
-                return Err(fault(
-                    "LRR-E-CALL-CONTEXT",
-                    "lexical namespace seal owner differs",
                 ));
             }
             if self.inputs.get(&InputKey::ExpansionEpoch).is_some_and(|epoch| !matches!(epoch.value.as_ref(), InputValue::ExpansionEpoch(current) if *current == input.seal.key().epoch)) {

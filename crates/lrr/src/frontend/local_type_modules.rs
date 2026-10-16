@@ -274,6 +274,14 @@ impl LexicalTypeModule {
         name: &str,
         edition: u16,
     ) -> Result<Option<CurrentModuleNameKey>, Diagnostic> {
+        self.request_in_namespace(name, edition, Namespace::Type)
+    }
+    pub(super) fn request_in_namespace(
+        &self,
+        name: &str,
+        edition: u16,
+        namespace: Namespace,
+    ) -> Result<Option<CurrentModuleNameKey>, Diagnostic> {
         // Normalize the actual use spelling in its own token edition before
         // handing its semantic name to the ordinary module query.
         let name = crate::frontend::names::owned_name(name, edition)?;
@@ -282,7 +290,7 @@ impl LexicalTypeModule {
             path: source.path.as_str().to_owned(),
             bucket: crate::db::key::BucketKey {
                 scope: self.scope.clone(),
-                namespace: Namespace::Type,
+                namespace,
                 name: name.as_str().to_owned(),
             },
         }))

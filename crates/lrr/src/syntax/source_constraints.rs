@@ -15,13 +15,15 @@ use crate::{
     source::manifest::BodyKey,
 };
 use ra_ap_syntax::{
-    AstNode, SyntaxKind, SyntaxNode,
+    AstNode, AstToken, SyntaxKind, SyntaxNode,
     ast::{self, HasArgList},
 };
+use std::collections::BTreeMap;
 
 const MAX_NODES: usize = 100_000;
 const MAX_EDGES: usize = 200_000;
 const MAX_BYTES: usize = 32 * 1024 * 1024;
+pub(crate) const SOURCE_CONSTRAINT_SCHEMA: u32 = 2;
 fn limit() -> Diagnostic {
     Diagnostic::new(
         "LRR-E-METADATA-LIMIT",
@@ -51,6 +53,8 @@ pub(crate) enum FactKind {
     Return,
     Cast,
     Borrow,
+    SuffixedInteger,
+    SuffixedFloat,
 }
 impl FactKind {
     fn tag(self) -> u8 {
@@ -70,6 +74,8 @@ impl FactKind {
             Self::Return => 12,
             Self::Cast => 13,
             Self::Borrow => 14,
+            Self::SuffixedInteger => 15,
+            Self::SuffixedFloat => 16,
         }
     }
 }
@@ -83,6 +89,7 @@ pub(crate) struct SourceFact {
     annotation: Option<SourceRange>,
     // Exact operator token location, not its printed text or a type judgment.
     operator: Option<SourceRange>,
+    numeric_prefix: bool,
 }
 
 /// Derived reverse edges permit a demand to visit only its connected syntax.
@@ -106,12 +113,16 @@ impl SourceFact {
     pub(crate) fn operator(&self) -> Option<SourceRange> {
         self.operator
     }
+    pub(crate) fn numeric_prefix(&self) -> bool {
+        self.numeric_prefix
+    }
     fn opaque() -> Self {
         Self {
             kind: FactKind::Opaque,
             operands: Vec::new(),
             annotation: None,
             operator: None,
+            numeric_prefix: false,
         }
     }
 }
@@ -124,6 +135,7 @@ pub(crate) struct SourceConstraintPlan {
     structure: Digest,
     facts: Vec<SourceFact>,
     uses: Vec<SourceUse>,
+    path_names: BTreeMap<String, Vec<NodeId>>,
     bytes: usize,
 }
 impl SourceConstraintPlan {
@@ -143,6 +155,13 @@ impl SourceConstraintPlan {
         let start = self.uses.partition_point(|edge| edge.child < node);
         let count = self.uses[start..].partition_point(|edge| edge.child == node);
         &self.uses[start..start + count]
+    }
+    /// Candidate filter only. Equal spelling does not establish a binding;
+    /// every selected use still requires the common hygienic Value goal.
+    pub(crate) fn paths_named(&self, name: &str) -> &[NodeId] {
+        self.path_names
+            .get(name.strip_prefix("r#").unwrap_or(name))
+            .map_or(&[], Vec::as_slice)
     }
     pub(crate) fn estimated_bytes(&self) -> usize {
         self.bytes
@@ -175,6 +194,7 @@ impl SourceConstraintPlan {
             return Err(limit());
         }
         let mut edges = 0usize;
+        let mut path_names = BTreeMap::new();
         for node in index.nodes() {
             if node.id.0 as usize != facts.len() {
                 return Err(invalid("source constraint node order differs"));
@@ -183,6 +203,9 @@ impl SourceConstraintPlan {
             if matches!(node.role, NodeRole::Expression(_) | NodeRole::Statement)
                 && let Some(syntax) = parsed.entered_node_syntax(body, index, node.id)?
             {
+                if let Some(name) = unqualified_path_name(&syntax) {
+                    index_name(&mut path_names, name.text(), node.id, &mut bytes)?;
+                }
                 classify(body, index, syntax, &mut fact, &mut edges)?;
             }
             bytes = bytes
@@ -227,9 +250,65 @@ impl SourceConstraintPlan {
             structure: index.semantic_identity(),
             facts,
             uses,
+            path_names,
             bytes,
         })
     }
+}
+
+fn unqualified_path_name(syntax: &SyntaxNode) -> Option<ast::NameRef> {
+    let path = ast::PathExpr::cast(syntax.clone())?.path()?;
+    if path.qualifier().is_some() {
+        return None;
+    }
+    path.segment()?.name_ref()
+}
+fn index_name(
+    names: &mut BTreeMap<String, Vec<NodeId>>,
+    raw: &str,
+    node: NodeId,
+    bytes: &mut usize,
+) -> Result<(), Diagnostic> {
+    let name = raw.strip_prefix("r#").unwrap_or(raw);
+    if name.len() > 64 * 1024 {
+        return Err(limit());
+    }
+    if !names.contains_key(name) {
+        // Conservative deterministic BTree node allowance. No string is made
+        // before bounding its size; source facts never intern guest state.
+        let overhead = std::mem::size_of::<(String, Vec<NodeId>)>()
+            .checked_add(128)
+            .ok_or_else(limit)?;
+        *bytes = bytes
+            .checked_add(overhead)
+            .and_then(|n| n.checked_add(name.len()))
+            .filter(|n| *n <= MAX_BYTES)
+            .ok_or_else(limit)?;
+        let mut key = String::new();
+        key.try_reserve_exact(name.len()).map_err(|_| limit())?;
+        key.push_str(name);
+        *bytes = bytes
+            .checked_add(key.capacity().checked_sub(name.len()).ok_or_else(limit)?)
+            .filter(|n| *n <= MAX_BYTES)
+            .ok_or_else(limit)?;
+        names.insert(key, Vec::new());
+    }
+    let row = names
+        .get_mut(name)
+        .ok_or_else(|| invalid("source path-name index absent"))?;
+    let old = row.capacity();
+    row.try_reserve(1).map_err(|_| limit())?;
+    let growth = row
+        .capacity()
+        .checked_sub(old)
+        .and_then(|n| n.checked_mul(std::mem::size_of::<NodeId>()))
+        .ok_or_else(limit)?;
+    *bytes = bytes
+        .checked_add(growth)
+        .filter(|n| *n <= MAX_BYTES)
+        .ok_or_else(limit)?;
+    row.push(node);
+    Ok(())
 }
 
 fn relative(body: &BodyHandle, range: ra_ap_syntax::TextRange) -> Result<SourceRange, Diagnostic> {
@@ -325,8 +404,16 @@ fn classify(
         ast::Expr::PathExpr(_) => fact.kind = FactKind::Path,
         ast::Expr::Literal(literal) => {
             fact.kind = match literal.token().kind() {
-                SyntaxKind::INT_NUMBER => FactKind::Integer,
-                SyntaxKind::FLOAT_NUMBER => FactKind::Float,
+                SyntaxKind::INT_NUMBER => match ast::IntNumber::cast(literal.token()) {
+                    Some(number) if number.suffix().is_none() => FactKind::Integer,
+                    Some(_) => FactKind::SuffixedInteger,
+                    None => FactKind::Literal,
+                },
+                SyntaxKind::FLOAT_NUMBER => match ast::FloatNumber::cast(literal.token()) {
+                    Some(number) if number.suffix().is_none() => FactKind::Float,
+                    Some(_) => FactKind::SuffixedFloat,
+                    None => FactKind::Literal,
+                },
                 _ => FactKind::Literal,
             }
         }
@@ -336,6 +423,9 @@ fn classify(
         }
         ast::Expr::PrefixExpr(prefix) => {
             fact.kind = FactKind::Prefix;
+            fact.numeric_prefix = prefix
+                .op_token()
+                .is_some_and(|token| matches!(token.text(), "-" | "!"));
             fact.operator = prefix
                 .op_token()
                 .map(|t| relative(body, t.text_range()))
@@ -405,6 +495,7 @@ fn classify(
 impl StableEncode for SourceConstraintPlan {
     const DOMAIN: &'static str = "lrr/v1/source-constraint-plan";
     fn encode_fields(&self, e: &mut StableEncoder) {
+        e.u32(SOURCE_CONSTRAINT_SCHEMA);
         e.record(&self.body);
         e.digest(self.structure);
         e.sequence(&self.facts, |e, fact| {
@@ -412,6 +503,7 @@ impl StableEncode for SourceConstraintPlan {
             e.sequence(&fact.operands, |e, node| e.option(node, |e, n| e.u32(n.0)));
             e.option(&fact.annotation, encode_range);
             e.option(&fact.operator, encode_range);
+            e.bool(fact.numeric_prefix);
         });
     }
 }

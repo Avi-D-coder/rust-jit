@@ -12,7 +12,6 @@ use crate::{
         memo::Database,
         poll::QueryPoll,
         provider::SyntaxProvider,
-        seals::SealDomain,
         value::QueryValue,
     },
     frontend::names::{NameLookup, owned_name},
@@ -101,17 +100,20 @@ impl CurrentModuleNameObservation {
                     "current module certificate input variant differs",
                 )));
             };
-            let exact = input.scope.as_ref().is_some_and(|actual| {
-                actual.scope == *scope
-                    && actual.namespace == namespace
-                    && actual.edition == observation.edition
-            }) && input.sources.contains(source.selection())
-                && matches!(input.seal.domain(), SealDomain::Scope { id, namespace: actual }
-                    if *id == scope.fingerprint() && *actual == namespace);
-            if !exact {
-                return QueryPoll::Ready(Err(fault(
-                    "current module certificate owner/source/edition differs",
-                )));
+            match input.scope_certificate(
+                scope,
+                namespace,
+                &source.selection().outline.parse.profile,
+            ) {
+                Ok(Some(actual))
+                    if actual.edition == observation.edition
+                        && input.sources.contains(source.selection()) => {}
+                Ok(_) => {
+                    return QueryPoll::Ready(Err(fault(
+                        "current module certificate owner/source/edition differs",
+                    )));
+                }
+                Err(error) => return QueryPoll::Ready(Err(error)),
             }
             observation.completion = ModuleNameCompletion::Incomplete;
             if input.seal.unresolved_frontiers() == 0 {

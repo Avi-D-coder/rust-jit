@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "component": "common-contained-type-scope-transport-v1",
+  "status": "source-only/uncompiled/unexecuted",
+  "base": "856b5654682f428b61ef7c8a832202940c916c02",
+  "source_fingerprint": "edc868d6359f243680cc1e2096aeefb45061e9be5f589dc56a126d288bd299ad",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/seals.rs",
+      "sha256": "67805a037e93effd10c542bd2cc2b3dec45480a8c724dd8ccfd555e90789e9ea",
+      "bytes": 23713
+    },
+    {
+      "path": "crates/lrr/src/db/scope_certificate_index.rs",
+      "sha256": "e57b6a072e5f31512e29f7ec93bdc4f4e166d0414404acaf545c0ec06f84ab98",
+      "bytes": 6346
+    },
+    {
+      "path": "crates/lrr/src/db/lexical_inputs.rs",
+      "sha256": "e739f44586553832e27f135d3e670a493b32039db7e5f08435110ed9b7da4adc",
+      "bytes": 12916
+    },
+    {
+      "path": "crates/lrr/src/db/sealed_name_provider.rs",
+      "sha256": "82b4585e3bd1a522d8a9758a2e2c469b0455691cca2a3c60615b725f75abc827",
+      "bytes": 2362
+    },
+    {
+      "path": "crates/lrr/src/frontend/current_module_names.rs",
+      "sha256": "6eaa8b2617f134d815ddf7b52245545f96b49a6dd22a2d21fc4404cc0f24c0f5",
+      "bytes": 14804
+    },
+    {
+      "path": "crates/lrr/src/frontend/current_module_name_tests.rs",
+      "sha256": "7685fdc4539e63b28fcad13376e49fbefe1ac0bbbebb06152bd47ecf16b3f2c2",
+      "bytes": 9142
+    },
+    {
+      "path": "crates/lrr/src/frontend/current_type_scope_tests.rs",
+      "sha256": "3728ece35d1264124d2b105dd4c95ccb7b04e1c704872f05e4765d9e427a85d1",
+      "bytes": 5887
+    },
+    {
+      "path": "crates/lrr/src/expand/source_discovery/type_scope_receipts.rs",
+      "sha256": "7ba3cc1809cc85194e3ea7102419d7ec944dfecba512d0f005ba6bd4c12075a0",
+      "bytes": 18897
+    }
+  ],
+  "required_hooks": [
+    "db/mod.rs private mod sealed_name_provider",
+    "db/provider.rs SealedName branch delegates to sealed_name_provider::execute; omit unrelated pending BoundRecordConstructor changes from minimal validation overlay"
+  ],
+  "dependencies": [
+    "existing genuine TypeScopeReceipt capture and actual publication validation",
+    "existing ScopeCertificateIndex publication atomic selector staging",
+    "current source/namespace transport through CurrentModuleName and parent DiscoverySeal provider; no new query/value schema"
+  ],
+  "holds": [
+    "qualified resolver observer and QualifiedBodyType integration not included",
+    "mixed-profile same-scope SealedName requests refuse pending profile-specific key",
+    "legacy TypeScopeReceipt::require_current census consumers unchanged",
+    "no stock runtime acceptance"
+  ]
+}

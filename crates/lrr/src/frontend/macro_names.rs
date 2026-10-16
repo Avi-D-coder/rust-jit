@@ -1198,6 +1198,20 @@ impl MacroNamespaces {
         components: &[MacroName],
         caller: &ScopeKey,
     ) -> Result<ModuleLookup, Diagnostic> {
+        self.lookup_module_from_observed(
+            unit,
+            components,
+            caller,
+            &mut crate::frontend::names::reads::NamespaceReads::disabled(),
+        )
+    }
+    pub(crate) fn lookup_module_from_observed(
+        &self,
+        unit: Digest,
+        components: &[MacroName],
+        caller: &ScopeKey,
+        reads: &mut crate::frontend::names::reads::NamespaceReads,
+    ) -> Result<ModuleLookup, Diagnostic> {
         use super::module_paths::{ModulePath, ModuleResolution};
         ModulePath::validate_components(components)?;
         let path = ModulePath {
@@ -1205,7 +1219,10 @@ impl MacroNamespaces {
             names: components.to_vec(),
         };
         Ok(
-            match self.module_paths.resolve_module(&path, Some(caller))? {
+            match self
+                .module_paths
+                .resolve_module_observed(&path, Some(caller), reads)?
+            {
                 ModuleResolution::Known { path, visibility } => ModuleLookup::Defined {
                     unit: path.unit,
                     components: path.names,
@@ -1678,9 +1695,26 @@ impl MacroNamespaces {
         scope: &ScopeKey,
         edition: u16,
     ) -> Result<Option<MacroPath>, Diagnostic> {
+        self.import_segments_path_observed(
+            parts,
+            absolute,
+            scope,
+            edition,
+            &mut crate::frontend::names::reads::NamespaceReads::disabled(),
+        )
+    }
+    pub(crate) fn import_segments_path_observed(
+        &self,
+        parts: &[crate::syntax::imports::ImportSegment],
+        absolute: bool,
+        scope: &ScopeKey,
+        edition: u16,
+        reads: &mut crate::frontend::names::reads::NamespaceReads,
+    ) -> Result<Option<MacroPath>, Diagnostic> {
         let reference = Self::import_reference_scope(parts, scope, edition);
-        let Some((unit, names)) =
-            self.source_segments_route_optional(parts, absolute, &reference, edition, false, true)?
+        let Some((unit, names)) = self.source_segments_route_optional_observed(
+            parts, absolute, &reference, edition, false, true, reads,
+        )?
         else {
             return Ok(None);
         };
@@ -1693,9 +1727,26 @@ impl MacroNamespaces {
         scope: &ScopeKey,
         edition: u16,
     ) -> Result<Option<super::module_paths::ModulePath>, Diagnostic> {
+        self.import_module_route_observed(
+            parts,
+            absolute,
+            scope,
+            edition,
+            &mut crate::frontend::names::reads::NamespaceReads::disabled(),
+        )
+    }
+    pub(crate) fn import_module_route_observed(
+        &self,
+        parts: &[crate::syntax::imports::ImportSegment],
+        absolute: bool,
+        scope: &ScopeKey,
+        edition: u16,
+        reads: &mut crate::frontend::names::reads::NamespaceReads,
+    ) -> Result<Option<super::module_paths::ModulePath>, Diagnostic> {
         let reference = Self::import_reference_scope(parts, scope, edition);
-        let Some((unit, names)) =
-            self.source_segments_route_optional(parts, absolute, &reference, edition, true, true)?
+        let Some((unit, names)) = self.source_segments_route_optional_observed(
+            parts, absolute, &reference, edition, true, true, reads,
+        )?
         else {
             return Ok(None);
         };
@@ -1726,6 +1777,26 @@ impl MacroNamespaces {
         module: bool,
         import: bool,
     ) -> Result<Option<(Digest, Vec<MacroName>)>, Diagnostic> {
+        self.source_segments_route_optional_observed(
+            parts,
+            absolute,
+            scope,
+            edition,
+            module,
+            import,
+            &mut crate::frontend::names::reads::NamespaceReads::disabled(),
+        )
+    }
+    fn source_segments_route_optional_observed(
+        &self,
+        parts: &[crate::syntax::imports::ImportSegment],
+        absolute: bool,
+        scope: &ScopeKey,
+        edition: u16,
+        module: bool,
+        import: bool,
+        reads: &mut crate::frontend::names::reads::NamespaceReads,
+    ) -> Result<Option<(Digest, Vec<MacroName>)>, Diagnostic> {
         use crate::syntax::imports::ImportSegment;
         let mut unit = scope.crate_key;
         let mut names = super::source_macro_routes::module_names(&scope.module_path, edition)?;
@@ -1735,6 +1806,7 @@ impl MacroNamespaces {
                 return Err(error("absolute macro path requires a dependency alias"));
             };
             let alias = MacroName::parse(first, edition)?;
+            reads.dependency(scope, &alias)?;
             if !self.implicit_enabled(scope) {
                 return Ok(None);
             }
@@ -1760,17 +1832,20 @@ impl MacroNamespaces {
                     let mut local = names.clone();
                     local.push(first.clone());
                     if matches!(
-                        self.lookup_module_from(unit, &local, scope)?,
+                        self.lookup_module_from_observed(unit, &local, scope, reads)?,
                         ModuleLookup::Absent
-                    ) && ((!import && !absolute)
-                        || edition >= 2018
-                        || self.compiler_imports.contains_key(&(unit, first.clone())))
-                        && self.implicit_enabled(scope)
-                        && let Some(provider) = self.dependencies.get(&(unit, first))
-                    {
-                        unit = *provider;
-                        names.clear();
-                        segments.next();
+                    ) {
+                        reads.dependency(scope, &first)?;
+                        if ((!import && !absolute)
+                            || edition >= 2018
+                            || self.compiler_imports.contains_key(&(unit, first.clone())))
+                            && self.implicit_enabled(scope)
+                            && let Some(provider) = self.dependencies.get(&(unit, first))
+                        {
+                            unit = *provider;
+                            names.clear();
+                            segments.next();
+                        }
                     }
                 }
                 _ => {}
@@ -1836,8 +1911,31 @@ impl MacroNamespaces {
         caller: &ScopeKey,
         class: NameBindingClass,
     ) -> Result<PathLookup, Diagnostic> {
+        self.lookup_from_in_class_observed(
+            path,
+            caller,
+            class,
+            crate::source::manifest::Namespace::Macro,
+            &mut crate::frontend::names::reads::NamespaceReads::disabled(),
+        )
+    }
+    pub(crate) fn lookup_from_in_class_observed(
+        &self,
+        path: &MacroPath,
+        caller: &ScopeKey,
+        class: NameBindingClass,
+        namespace: crate::source::manifest::Namespace,
+        reads: &mut crate::frontend::names::reads::NamespaceReads,
+    ) -> Result<PathLookup, Diagnostic> {
         if !self.glob_reexports.is_empty() {
-            return super::glob_lookup::lookup_in_class(self, path, Some(caller), class);
+            return super::glob_lookup::lookup_in_class_observed(
+                self,
+                path,
+                Some(caller),
+                class,
+                namespace,
+                reads,
+            );
         }
         let caller = ScopeKey {
             crate_key: caller.crate_key,
@@ -1851,7 +1949,10 @@ impl MacroNamespaces {
         let mut denied = BTreeSet::new();
         let mut pending = BTreeSet::new();
         while let Some((path, caller, class)) = stack.pop() {
-            let path = match self.module_paths.resolve(&path, Some(&caller))? {
+            let path = match self
+                .module_paths
+                .resolve_observed(&path, Some(&caller), reads)?
+            {
                 super::module_paths::Resolution::Known(path) => path,
                 super::module_paths::Resolution::Absent => {
                     if class != NameBindingClass::Root {
@@ -1873,6 +1974,7 @@ impl MacroNamespaces {
             if visited.len() > 1_000_000 {
                 return Err(error("macro access walk limit exceeded"));
             }
+            reads.name(namespace, &path)?;
             if let Some(all) = self.bindings.get(&path) {
                 // Producer output class is unresolved, so this wait applies
                 // even when no binding of the requested class exists yet.
@@ -1931,14 +2033,19 @@ impl MacroNamespaces {
                     continue;
                 }
                 let origin = declaration_scope(&path);
-                let checked_target = match self.module_paths.resolve(target, Some(&origin))? {
-                    super::module_paths::Resolution::Known(target) => target,
-                    super::module_paths::Resolution::Absent => continue,
-                    super::module_paths::Resolution::Denied(witness) => {
-                        denied.insert(witness);
-                        continue;
-                    }
-                };
+                let checked_target =
+                    match self
+                        .module_paths
+                        .resolve_observed(target, Some(&origin), reads)?
+                    {
+                        super::module_paths::Resolution::Known(target) => target,
+                        super::module_paths::Resolution::Absent => continue,
+                        super::module_paths::Resolution::Denied(witness) => {
+                            denied.insert(witness);
+                            continue;
+                        }
+                    };
+                reads.name(namespace, &checked_target)?;
                 if let Some(target_binding) = self
                     .bindings
                     .get(&checked_target)

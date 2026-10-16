@@ -1,0 +1,86 @@
+{
+  "schema": 1,
+  "component": "common-qualified-type-read-footprint-v1",
+  "status": "source-only/uncompiled/unexecuted",
+  "base": "856b5654682f428b61ef7c8a832202940c916c02",
+  "source_fingerprint": "08e4f0801fa51095175600abb8b2acdb0a6e1089b173216ecd37769891c5733c",
+  "files": [
+    {
+      "path": "crates/lrr/src/frontend/names.rs",
+      "sha256": "36afe6f7e3bd53df76e3e3d8ff23d06b01e0ecfe68677581b6536b128d775bd8",
+      "bytes": 114448
+    },
+    {
+      "path": "crates/lrr/src/frontend/namespace_reads.rs",
+      "sha256": "bcbb54b65f42ac9e145873efd5dbbdf36c2e1cab1b542601b657908d41593d6e",
+      "bytes": 9907
+    },
+    {
+      "path": "crates/lrr/src/frontend/module_paths.rs",
+      "sha256": "085c3d33d540e35b85c2ba4fe25346bcbd224c7e43ee1f055fc64e39323964ba",
+      "bytes": 27758
+    },
+    {
+      "path": "crates/lrr/src/frontend/macro_names.rs",
+      "sha256": "c5a9c0a99d83a46ad1624e24ea69a976d19e9b70865bcd046bc98811fc375e1d",
+      "bytes": 106849
+    },
+    {
+      "path": "crates/lrr/src/frontend/glob_lookup.rs",
+      "sha256": "cc0fee6f4d6198c35def8ee96e16fef7efc283b3ff6886100571b37ae08da183",
+      "bytes": 21226
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_locals.rs",
+      "sha256": "d425601e482512646119059e63b14b4c87249676dc0d7b97b364f71dc828cef3",
+      "bytes": 90962
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "sha256": "ffeb4115a18a1d65593c0fe268663af0fadf1b957ce3222aa317d5eccf100bdd",
+      "bytes": 32397
+    },
+    {
+      "path": "crates/lrr/src/frontend/qualified_type_names.rs",
+      "sha256": "1ebbed35eff66bd1da36d2c9e8b7c9f1da080dbb70dd741a920f3bee8f85b922",
+      "bytes": 18587
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_type_declarations.rs",
+      "sha256": "68c533d0168d9435805073d9a900639cb568f03fad10b94ce9a359f7735d96ea",
+      "bytes": 25773
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_type_declaration_tests.rs",
+      "sha256": "feb2b5397452a324ce1454121e736951790e164fa2b5ee579ef4c49c61863f0f",
+      "bytes": 21202
+    },
+    {
+      "path": "crates/lrr/src/frontend/qualified_type_names_tests.rs",
+      "sha256": "7bea3fbdb4e42d0d28ba06c11a297fe07c1264770c117ad1d509a39ef30fc93a",
+      "bytes": 7727
+    }
+  ],
+  "dependencies": [
+    "completed-source-environment19 +retirement2 +scope-owner2 +root local-parent DAG retention",
+    "contained Type transport8 e67fcf1f + boundary/single-parent successor4 39166850",
+    "parent root QueryKey/Value/Provider QualifiedBodyType tag36 +source roots/owner accounting +frontend reexport +trace classification",
+    "existing field5/local body source-plan source facts and actual entered ownership publication"
+  ],
+  "api": {
+    "prepare": "frontend::qualified_type_names::prepare(&mut Database,&PcKey)->QueryPoll<QualifiedTypeObservation>",
+    "observation": "public opaque Clone; key(),fingerprint(),estimated_bytes(),retained_plan(); private mint"
+  },
+  "remaining_gaps": [
+    "logical alias scopes without genuine current scope/edge certificate remain PendingSourceOwner; no path-only owner inference",
+    "mixed token editions/item adjustments and actual selected definition-module transport remain explicit Pending",
+    "associated Type paths/generic arguments/source TypeAlias declaration adjustments remain existing genuine prerequisites",
+    "no generated/wrapper/std macro qualified runtime matrix, installed execution or whole official fixture executed"
+  ],
+  "removed_routes": [
+    "NeedUnqualifiedPath enum/encoder/BodyTypeDemand branch superseded by common query consumer"
+  ],
+  "controls": [
+    "unchanged_qualified_type_uses_shared_kernel_certified_read_footprint_and_declaration_all_editions (one test body,four editions): actual qualified source/current Type proof/query reuse, ordinary-vs-observed shared resolver positive+negative equivalence, exact m/S/root/missing read footprint, no executable preparation, wrong phase and epoch invalidation"
+  ]
+}

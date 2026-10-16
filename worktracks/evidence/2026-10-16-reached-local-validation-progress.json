@@ -30,14 +30,17 @@
   },
   "startup_order_successor": "worktracks/evidence/2026-10-16-reached-local-test-startup-order-fix.json",
   "unexecuted_source": [
-    "worktracks/evidence/2026-10-16-contained-type-scope-transport.json",
-    "Common source constraint query37 and declared parameter Type successor; source only, not numeric repair acceptance"
+    "Common graph cast-relation successor d278243b: source-only, baseline CLI witness pending.",
+    "Impl header/catalog/Drop cleanup prerequisite: source-only, no successful A/B runtime.",
+    "Complete handwritten/user/wrapper/standard-macro execution architecture matrix and current milestone."
   ],
-  "runtime_contract_pass_increment": 0,
+  "runtime_contract_pass_increment": 1,
   "full_fixture_pass_increment": 0,
   "inventory": {
-    "imported_cases": 335,
-    "original_files": 857,
+    "imported_cases": 336,
+    "original_files": 858,
+    "validated_v3_inventory_cases": 335,
+    "validated_v3_inventory_files": 857,
     "import_is_not_pass": true
   },
   "guards": "Cold source-preparation guard preserved; an uncompiled exact-retained-row early-return draft was reverted and held locally, never adopted or validated.",
@@ -63,5 +66,86 @@
     "runtime_mains": "unexecuted after control failure",
     "release_sha256": "d1413dd81c0af17f520dd6ac273182260c9241eed73a661f9b722658f9700e4f"
   },
-  "constructor_cache_successor": "worktracks/evidence/2026-10-16-cache-root-eviction.json"
+  "constructor_cache_successor": "worktracks/evidence/2026-10-16-cache-root-eviction.json",
+  "declared_parameter_source_component": {
+    "source": "8af6a5c53c042f37e9420dd3821c53fd5738cd8be2d49e0c9d84c2085a4ba2a5",
+    "compile": "f70292/0",
+    "controls": "dcf484/1",
+    "distinct_passed": 13,
+    "distinct_failed": 1,
+    "scope": "4 new parameter, 8 Type/name/field, 1 runtime wrong-argument authority control passed; legacy startup control failed before argument evaluation. Not full upstream main."
+  },
+  "legacy_startup_correction": {
+    "source": "e6d6dc2e3afcb8424714fd47ec062231a2d124e073f8f81bdabfd3d19e9779b1",
+    "compile": "cc1fd4/0",
+    "controls": "9df3fd/0",
+    "distinct_passed": 3,
+    "distinct_failed": 0,
+    "scope": "Three startup-corrected legacy controls only; separate source from prior 13 controls."
+  },
+  "numeric_pipeline_v2": {
+    "source": "e29bfef4c9e992510352c4bbb20415ec383aeb88decf18eebe6de43cc52ac260",
+    "compile": "d16aaa/1",
+    "compiler_errors": 18,
+    "compiler_warnings": 13,
+    "test_bodies": 0,
+    "main": "unstarted",
+    "failure_groups": [
+      "Missing scalar_pattern_binding occurrences module registration",
+      "Missing actual NamespaceReadCertification import",
+      "source_constraints proof not passed from admission to ordinary scope lowering"
+    ],
+    "release_sha256": "4795e711b8c458801e4aa90a4ba822e6241c9431f9ae174954cc0e26060894b4",
+    "correction": "Bounded exact-baseline module/import2 c2b57a3a and thunk passthrough1 67467925; compile/runtime evidence pending."
+  },
+  "numeric_pipeline_v3": {
+    "source": "7406d479ceb29e9a8c41cd39ef75290b206722bb3685e0d52d269336146b4384",
+    "compile": "f40725/0",
+    "main_control": "5d426f/0",
+    "main_elapsed_seconds": 1.532,
+    "main_runtime_contract_passes": 1,
+    "edition_executions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "source_original": "tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+    "source_sha256": "f502f13f4f96fe146c05a02dd1a387eb3d4d9932915da35c047975d40eade4a6",
+    "per_edition": {
+      "actual_calls": 18,
+      "source_local_body_count": 9,
+      "CallSeal": 18,
+      "CheckParameters": 18,
+      "ReadParameter": 18,
+      "CallPrepare": 18,
+      "CallAdvance": 18,
+      "ReadLocal": 9,
+      "integer_literals": 27,
+      "legacy_Assert": 0,
+      "operations_started_equal_completed": true,
+      "cleanup_scopes_at_least": 19,
+      "terminal_frames_and_continuations_empty": true,
+      "each_child_source_plan_provider_runs": 1
+    },
+    "oracle_source_review": "687de8/0",
+    "components_terminal": "8e2008/1",
+    "components_passed": 8,
+    "components_failed": 1,
+    "component_failure": "Constant-pattern authority control expected BindingClassification pending; actual Prefix pending and local_binding None. Runtime constant-pattern acceptance remains unsupported. Exact source diagnosis pending.",
+    "full_fixture_passes": 0,
+    "production_cli_passes": 0,
+    "architecture_acceptance": false,
+    "jit_acceptance": false,
+    "release_sha256": "b778e5b2c2136f85754fd7f89070202d820307ffa16888c3dbed5251ef2e4dd3",
+    "component_failure_correction": {
+      "component_sha256": "57ce0ae9612622f330b910a4dbc09d5f39a18a3fcfcdb4d89fccd09f8224be19",
+      "scope": "Test-only exact pending Prefix(identity) checked against actual retained source Const/Value declaration identity; no acceptance of arbitrary pending and no constant runtime pass.",
+      "status": "uncompiled successor, excluded from validated7406"
+    }
+  },
+  "next_official_witnesses": [
+    "Already imported auto-traits/auto-is-contextual.rs: ordinary numeric cast/discard constraint regression, no run yet.",
+    "New unchanged unary-minus-suffix-inference.rs imported d019d7/0; output/library dependencies remain unexecuted."
+  ]
 }

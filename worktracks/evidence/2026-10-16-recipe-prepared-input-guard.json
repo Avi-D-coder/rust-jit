@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "component": "common-recipe-prepared-input-guard-v1",
+  "status": "source-only/uncompiled/unexecuted",
+  "payload": "/private/tmp/lrr-recipe-prepared-input-guard-v1/overlay",
+  "base": "/Users/avi/Code/rust-jit/artifacts/macos-first/sol-common-type-parameter-goal-validation-v2/source",
+  "source_fingerprint": "68d78e2d516d5b0a6e853c60167e6cf12ad66133dc45d36674573de224c511da",
+  "files": [
+    {
+      "path": "crates/lrr/src/db/prepared_inputs.rs",
+      "sha256": "920c02fadac32cb34ba6492865d9c87ca44a47577c79a18b29b6a999ad88ad79",
+      "bytes": 27814
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "sha256": "119b43c076cecb5a3b9e7d3e921df881e5f5d8ee8e20124549208c2b2444c2ae",
+      "bytes": 17638
+    },
+    {
+      "path": "crates/lrr/src/ir/prepared_input_recipe_tests.rs",
+      "sha256": "3c804d307dbdf2485a63672c0aae68a351c6ed5255ade815eece216cee35ccdb",
+      "bytes": 10022
+    },
+    {
+      "path": "crates/lrr/src/ir/recipe.rs",
+      "sha256": "91f425a4de402725a9ed2d0a1da5fa287790ecdf214aa033412b2cc784281095",
+      "bytes": 29707
+    },
+    {
+      "path": "crates/lrr/src/ir/validate.rs",
+      "sha256": "f447ac8d3658abe1564b655175dc133be72417c5a40bc0c22c48b9237b5ea05b",
+      "bytes": 83193
+    }
+  ],
+  "shared_hook": "db/value.rs derived from frozen Type38 source, ONLY Thunk tag7 optional prepared guard digest; excludes live query36/39/40/41 and numeric activation",
+  "api": [
+    "VerifiedRecipe::with_shared_prepared_inputs(Arc<PreparedInputGuard>)->Result<Self,Diagnostic>",
+    "VerifiedRecipe::prepared_inputs_fingerprint()->Option<Digest> reads cached guard fingerprint O(1)",
+    "existing revalidate_namespace also checks prepared_inputs.require_current(db), retaining namespace_witness",
+    "cfg(test) owned convenience with_prepared_inputs delegates to same shared service"
+  ],
+  "guard_authority": "Private complete/repaired guard capture computes actual sorted input fingerprint once. Input stamps/currentness unchanged; extra Digest included in checked actual struct size. No caller supplied digest or name/Type/operation grant. Duplicate attachment rejected.",
+  "accounting": "Each recipe metadata conservatively charges entire guard payload plus Arc control; recipe.clone/shared phase attachment retain same actual Arc. Existing outer query/installed metadata charge remains, no new registry or parser/index roots. Raw structural recipe data is not current source/execution authority.",
+  "fingerprint_migration": "QueryValue Thunk tag7 now appends optional cached input guard digest. Raw Recipe domain lrr/v13/lrir-recipe and opcode schema13 unchanged. No-guard predecessor Thunk memo fingerprints differ too because optional marker is explicit.",
+  "dependencies": [
+    "existing cold prepare_input_guard API and actual positive/negative input observation/memo eviction controls",
+    "actual root query41 PreparedBindingPlan will retain guard once and record cached guard digest; its source/lowering/activation is a separate component",
+    "existing InstalledRecipes prepare_install/install_ready/get_current before normal VM work; direct low-level vm::step still not a source authority boundary"
+  ],
+  "controls": [
+    "recipe_guard_checks_relevant_inputs_without_queries_after_memo_eviction",
+    "recipe_envelope_distinguishes_new_stamps_and_cannot_replace_or_exceed_budget",
+    "retained_recipe_envelope_is_charged_after_outer_memo_replacement_until_release"
+  ],
+  "witness": "unchanged official integer-literal-suffix-inference.rs complete1221B SHA256f502f13f4f96fe146c05a02dd1a387eb3d4d9932915da35c047975d40eade4a6, pinned ae0fe511b15ab760d7e963b13389d1bc2ab42b18; structural recipe only, not a guest runtime pass",
+  "review": {
+    "1": "no expression/assertion evaluator",
+    "2": "no macro-output runtime route",
+    "3": "guard currentness only, no inference/member semantics",
+    "4": "common VerifiedRecipe independent of source origin",
+    "5": "no pattern or eager body planning",
+    "6": "input closure capture/hash once; shared Arc attachment/fpO(1), runtime readonlyO(relevant inputs), no provider source reentry",
+    "7": "actual positive/negative stamps; legacy namespace full census/source_revision checks remain named holds",
+    "8": "shared guardArc, no BodyIndex clone/file search; conservative perrecipe payload charge retained after outer query replacement"
+  },
+  "holds": [
+    "new controls uncompiled/unexecuted; runtime constraint lowering/query41 and unchanged full main still unproved",
+    "legacy namespace/source publication coarse guards remain; relevant guard does not remove or weaken them",
+    "same-source active-run derived mutation/suspension-exactonce/runtime cleanup matrix not established by host currentness controls",
+    "standalone raw recipe clone consumers must account recipe.metadata_bytes in their owner; production InstalledRecipes does; no new raw guard/root extraction API"
+  ],
+  "format": "rustfmt exact owned4 leaves and git diff --check returned0; not runtime evidence",
+  "patch_sha256": "adedfcaad75b42782c6b134bfeb05ff5df2537cb4b64e8556c8f5926abc41a13"
+}

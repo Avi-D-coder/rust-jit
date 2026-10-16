@@ -498,3 +498,6 @@ fn generated_and_wrapper_local_types_use_their_actual_owning_body_facts() {
         }
     }
 }
+
+#[path = "qualified_type_names_tests.rs"]
+mod qualified_type_tests;

@@ -17,6 +17,7 @@ use crate::{
         macro_origins::ExpansionAncestry,
         macro_scopes::MacroDeclarations,
         names::{NameLookup, NameNamespaces},
+        scalar_pattern_binding::occurrences::PreparedPatternBindingOccurrences,
         source_body_context::PreparedBodyContext,
         source_macros::{
             EnteredMacroIndex, OwnedRuntimeOuter, PublishedMacroIndex, SourceMacroIndex,
@@ -30,6 +31,10 @@ use std::{
     sync::Arc,
 };
 
+#[path = "qualified_type_names.rs"]
+pub mod qualified_type_names;
+#[path = "source_value_goals.rs"]
+pub mod source_value_goals;
 #[path = "local_type_modules.rs"]
 mod type_modules;
 #[path = "local_type_names.rs"]
@@ -69,11 +74,22 @@ impl LocalPrefixMetadata {
 pub(crate) struct LocalTypePrefix {
     plan: Arc<PreparedSourceLocalPlan>,
     node: Option<crate::ir::pc::NodeId>,
-    field: Option<(Digest, crate::syntax::spans::SourceRange)>,
+    header: Option<DeclarationTypeSite>,
     selection: LocalTypePrefixSelection,
     use_name: Option<LocalTypeUse>,
     module_selector: Option<LocalTypeModuleSelector>,
     fingerprint: Digest,
+}
+enum DeclarationTypeSite {
+    Field {
+        definition: Digest,
+        range: crate::syntax::spans::SourceRange,
+    },
+    Parameter {
+        definition: Digest,
+        ordinal: u32,
+        range: crate::syntax::spans::SourceRange,
+    },
 }
 pub(crate) struct LocalTypeUse {
     name: String,
@@ -103,7 +119,7 @@ pub(crate) enum LocalTypePrefixSelection {
     NeedDeclarationOccurrence(Digest),
     NeedOwnerGenericOccurrence,
     NeedSource(crate::frontend::source_body_context::type_occurrences::BodyTypeAuthorityDemand),
-    NeedUnqualifiedPath,
+    QualifiedTail,
     NeedExpansionDefinition(Key),
     NeedDefinitionModule(Key),
     NeedModulePublication,
@@ -198,11 +214,26 @@ impl LocalTypePrefix {
     }
 }
 impl StableEncode for LocalTypePrefix {
-    const DOMAIN: &'static str = "lrr/v3/local-type-prefix-source-proof";
+    const DOMAIN: &'static str = "lrr/v5/local-type-prefix-source-proof";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.plan.source_identity());
         e.option(&self.node, |e, node| e.u32(node.0));
-        e.option(&self.field, |e, (definition, span)| {
+        e.option(&self.header, |e, site| {
+            let (definition, span) = match site {
+                DeclarationTypeSite::Field { definition, range } => {
+                    e.u8(0);
+                    (definition, range)
+                }
+                DeclarationTypeSite::Parameter {
+                    definition,
+                    ordinal,
+                    range,
+                } => {
+                    e.u8(1);
+                    e.u32(*ordinal);
+                    (definition, range)
+                }
+            };
             e.digest(*definition);
             e.u32(span.start);
             e.u32(span.end);
@@ -245,7 +276,6 @@ impl StableEncode for LocalTypePrefix {
                     D::TypeRecipe => 3,
                 });
             }
-            LocalTypePrefixSelection::NeedUnqualifiedPath => e.u8(7),
             LocalTypePrefixSelection::NeedExpansionDefinition(key) => {
                 e.u8(8);
                 e.digest(Digest(key.0));
@@ -255,6 +285,7 @@ impl StableEncode for LocalTypePrefix {
                 e.digest(Digest(expansion.0));
             }
             LocalTypePrefixSelection::NeedModulePublication => e.u8(11),
+            LocalTypePrefixSelection::QualifiedTail => e.u8(12),
         }
     }
 }
@@ -265,6 +296,7 @@ pub struct PreparedSourceLocalPlan {
     missing_expansions: Vec<Key>,
     type_names: LocalTypeNames,
     field_types: field_types::DeclarationFieldTypes,
+    pattern_occurrences: PreparedPatternBindingOccurrences,
     lexical_module: LexicalTypeModule,
     source_identity: Digest,
     exclusive_bytes: usize,
@@ -410,11 +442,14 @@ impl PreparedSourceLocalPlan {
         let (root, hygiene) = entered.local_hygiene();
         let type_names = LocalTypeNames::prepare(&context, root, &hygiene)?;
         let field_types = field_types::DeclarationFieldTypes::prepare(&context, root, &hygiene)?;
+        let pattern_occurrences =
+            PreparedPatternBindingOccurrences::capture(Arc::clone(&context), 32 * 1024 * 1024)?;
         let module_bytes = lexical_module.extra_bytes();
-        let mut identity = StableEncoder::new("lrr/v4/owned-local-source-environment");
+        let mut identity = StableEncoder::new("lrr/v5/owned-local-source-environment");
         identity.digest(context.source().identity());
         identity.digest(type_names.fingerprint());
         identity.digest(field_types.fingerprint());
+        identity.digest(pattern_occurrences.identity());
         identity.digest(lexical_module.fingerprint());
         identity.u64(expansions.len() as u64);
         for (key, definition) in &expansions {
@@ -437,6 +472,7 @@ impl PreparedSourceLocalPlan {
             Some(&type_names),
         )?;
         let tables = Arc::clone(&locals.tables);
+        identity.digest(tables.binding_source_identity());
         drop(locals);
         let entered = entered.into_owned();
         let exclusive_bytes = std::mem::size_of::<Self>()
@@ -451,6 +487,13 @@ impl PreparedSourceLocalPlan {
             })
             .and_then(|n| n.checked_add(type_names.extra_bytes()))
             .and_then(|n| n.checked_add(field_types.extra_bytes()))
+            .and_then(|n| {
+                n.checked_add(
+                    pattern_occurrences
+                        .metadata_bytes()
+                        .checked_sub(std::mem::size_of::<PreparedPatternBindingOccurrences>())?,
+                )
+            })
             .and_then(|n| n.checked_add(module_bytes))
             .filter(|n| *n <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
@@ -467,6 +510,7 @@ impl PreparedSourceLocalPlan {
             missing_expansions,
             type_names,
             field_types,
+            pattern_occurrences,
             lexical_module,
             source_identity: identity.finish(),
             exclusive_bytes,
@@ -543,10 +587,10 @@ impl PreparedSourceLocalPlan {
                 ));
             }
             let [BodyTypeSegment::Name(identifier)] = occurrence.segments() else {
-                return Ok(LocalTypePrefixSelection::NeedUnqualifiedPath);
+                return Ok(LocalTypePrefixSelection::QualifiedTail);
             };
             if occurrence.absolute() {
-                return Ok(LocalTypePrefixSelection::NeedUnqualifiedPath);
+                return Ok(LocalTypePrefixSelection::QualifiedTail);
             }
             if let Some(key) = self.missing_expansions.first() {
                 return Ok(LocalTypePrefixSelection::NeedExpansionDefinition(*key));
@@ -579,7 +623,7 @@ impl PreparedSourceLocalPlan {
             Ok(selection)
         })();
         QueryPoll::Ready(answer.and_then(|selection| {
-            let use_name = if let [BodyTypeSegment::Name(name)] = occurrence.segments() {
+            let use_name = if let Some(BodyTypeSegment::Name(name)) = occurrence.segments().last() {
                 let (root, _) = self.entered.local_hygiene();
                 Some(LocalTypeUse {
                     name: name.name().to_owned(),
@@ -596,7 +640,7 @@ impl PreparedSourceLocalPlan {
             let mut proof = LocalTypePrefix {
                 plan: Arc::clone(self),
                 node: Some(node),
-                field: None,
+                header: None,
                 selection,
                 use_name,
                 module_selector,
@@ -629,7 +673,9 @@ impl PreparedSourceLocalPlan {
     /// Actual physical Arc owners, solely for allocation/retirement accounting.
     /// The entered lookup adapter can retain the same context as the plan.
     pub(crate) fn context_roots(&self) -> impl Iterator<Item = &Arc<PreparedBodyContext>> {
-        std::iter::once(&self.context).chain(self.entered.body_context.iter())
+        std::iter::once(&self.context)
+            .chain(self.entered.body_context.iter())
+            .chain(std::iter::once(self.pattern_occurrences.source()))
     }
     pub(crate) fn source_identity(&self) -> Digest {
         self.source_identity

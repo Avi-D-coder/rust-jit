@@ -96,6 +96,8 @@ pub struct VerifiedRecipe {
     pub(super) shared_product_admission_bytes: usize,
     pub(super) shared_string_literal_admission_bytes: usize,
     pub(super) namespace_witness: Option<std::sync::Arc<crate::db::memo::NamespaceWitness>>,
+    // Owned relevant input currentness only, never name/type/operation grants.
+    pub(super) prepared_inputs: Option<std::sync::Arc<crate::db::memo::PreparedInputGuard>>,
 }
 impl VerifiedRecipe {
     pub fn recipe(&self) -> &Recipe {
@@ -168,12 +170,58 @@ impl VerifiedRecipe {
         self.metadata_bytes = bytes;
         Ok(self)
     }
+    /// Cold attachment only. A new guard cannot replace or refresh a retained
+    /// one, and a relevant guard does not replace the legacy namespace witness.
+    #[cfg(test)]
+    pub(crate) fn with_prepared_inputs(
+        self,
+        inputs: crate::db::memo::PreparedInputGuard,
+    ) -> Result<Self, crate::core::diagnostic::Diagnostic> {
+        self.with_shared_prepared_inputs(std::sync::Arc::new(inputs))
+    }
+    /// Phase preparation shares the one genuine cold query guard. Neither
+    /// attachment nor recipe fingerprinting walks its input closure again.
+    pub(crate) fn with_shared_prepared_inputs(
+        mut self,
+        inputs: std::sync::Arc<crate::db::memo::PreparedInputGuard>,
+    ) -> Result<Self, crate::core::diagnostic::Diagnostic> {
+        if self.prepared_inputs.is_some() {
+            return Err(crate::core::diagnostic::Diagnostic::new(
+                "LRR-E-INTERNAL-SNAPSHOT",
+                "recipe already retains prepared input currentness".into(),
+            ));
+        }
+        let bytes = self
+            .metadata_bytes
+            .checked_add(inputs.metadata_bytes())
+            .and_then(|n| n.checked_add(2 * std::mem::size_of::<usize>()))
+            .filter(|n| *n <= 64 * 1024 * 1024)
+            .ok_or_else(|| {
+                crate::core::diagnostic::Diagnostic::new(
+                    "LRR-E-METADATA-LIMIT",
+                    "recipe prepared inputs exceed metadata limit".into(),
+                )
+            })?;
+        self.prepared_inputs = Some(inputs);
+        self.metadata_bytes = bytes;
+        Ok(self)
+    }
+    /// Cached once at cold guard capture; memo fingerprinting never rehashes the
+    /// input closure. Raw Recipe wire data remains separate from current use.
+    pub(crate) fn prepared_inputs_fingerprint(&self) -> Option<Digest> {
+        self.prepared_inputs
+            .as_ref()
+            .map(|inputs| inputs.fingerprint())
+    }
     pub(crate) fn revalidate_namespace(
         &self,
         db: &crate::db::memo::Database,
     ) -> Result<(), crate::core::diagnostic::Diagnostic> {
         if let Some(witness) = &self.namespace_witness {
             witness.require_current(db)?;
+        }
+        if let Some(inputs) = &self.prepared_inputs {
+            inputs.require_current(db)?;
         }
         Ok(())
     }
@@ -833,3 +881,7 @@ mod definition_numeric_wire_tests;
 #[cfg(test)]
 #[path = "pattern_wire_tests.rs"]
 mod pattern_wire_tests;
+
+#[cfg(test)]
+#[path = "prepared_input_recipe_tests.rs"]
+mod prepared_input_recipe_tests;

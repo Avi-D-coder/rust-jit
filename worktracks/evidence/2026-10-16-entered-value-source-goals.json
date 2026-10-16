@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "component": "common-entered-value-source-goals-v1",
+  "status": "source-only/uncompiled/unexecuted",
+  "base": "856b5654682f428b61ef7c8a832202940c916c02",
+  "source_fingerprint": "66902db20459c31a4e430bde1b0f12ff7fb1ef70209afb3a4727d4553e805564",
+  "fingerprint_encoding": "SHA256(sorted path NUL lowercase-sha256 LF)",
+  "payload": "/private/tmp/lrr-entered-value-source-goals-v1/overlay",
+  "files": [
+    {
+      "path": "crates/lrr/src/facade/value_binding_prelude.rs",
+      "sha256": "5686c883d5b296d569f6a55d56d761f86cef003385e0a9a39c7d5b90dc31c685",
+      "bytes": 5523
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_type_tests.rs",
+      "sha256": "7bb627bbb7cdd202ead3a200936cc394c39cec32c02a5d04e13473330efbc6ec",
+      "bytes": 10950
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_types.rs",
+      "sha256": "20b61d93aa99d910dd5caa8c995dd189a0cabd4ef24199db5a2de7440d9631bd",
+      "bytes": 30476
+    },
+    {
+      "path": "crates/lrr/src/frontend/local_type_modules.rs",
+      "sha256": "a420cb36608557061d2afd7f9243d8fb7a9460747b744d7314bada3044ee29a3",
+      "bytes": 11642
+    },
+    {
+      "path": "crates/lrr/src/frontend/namespace_reads.rs",
+      "sha256": "4497dde247fc653ea9577aad769ec72e7bfb25ea031e04d24abb6ac31d94a772",
+      "bytes": 17372
+    },
+    {
+      "path": "crates/lrr/src/frontend/pattern_binding_occurrences.rs",
+      "sha256": "e74fa2bc3e7327a8075405f2b4ec8272fdb278ea1fcfc997aa299f8dcf304caf",
+      "bytes": 34482
+    },
+    {
+      "path": "crates/lrr/src/frontend/qualified_type_names.rs",
+      "sha256": "a664e8a2dd9dc54824d777d34ff3edad6721d8ca1d737a3308705420d0865135",
+      "bytes": 14681
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "sha256": "5c1d9076f1b7b56ff1a590a975da7ff159911fcf260f4dd843d32e4dc906fa14",
+      "bytes": 33954
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_locals.rs",
+      "sha256": "050017c60d973d6a1694bdca32ff02f0d58d8c1bed9726280f2ef12c47214f3b",
+      "bytes": 94301
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_value_goal_tests.rs",
+      "sha256": "6cb01ad28ee21f4af4834a9a2edc3aaa4e1f8410352d2f33aa8681d1e4a9dd47",
+      "bytes": 9281
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_value_goals.rs",
+      "sha256": "3ee491a13751127b7a5633f36088a2cdce8223fd85a4f1a9b897d38b0e6aa479",
+      "bytes": 29639
+    }
+  ],
+  "dependencies": [
+    "frozen qualified11 b7e3eefb source08e4f080 for unchanged observed namespace/module kernels and qualified Type consumer; this successor replaces namespace_reads,qualified_type_names,source_locals,source_local_plan",
+    "contained Type8 e67fcf1f +boundary4 39166850 +mechanical scope path fix ff8e2b36 +root CLI duplicate-Type retirement",
+    "declared parameter12 SHA8cbb8058 source360808f7; this successor adds readonly header_identity and composes shared plan/test hooks",
+    "root EnteredValue tag39 key/value/provider/frontend reexport +existing SourcePlanPins/LocalPlan retirement roots",
+    "shared external test leaf also retains root prepared_constructor_tests and binding_constraint_tests/query40 hooks; root must freeze those exact dependencies before test compilation"
+  ],
+  "upstream": [
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+      "sha256": "f502f13f4f96fe146c05a02dd1a387eb3d4d9932915da35c047975d40eade4a6",
+      "contract": "source metadata goals only; fullfixture unexecuted"
+    },
+    {
+      "path": "fixtures/upstream/rustc-checkout/tests/ui/pattern/match-constant-and-byte-literal.rs",
+      "sha256": "f6027de4bd970afc8394582a9aef83c6229d8d1d21d3a3ab76976a6a31aaa97c",
+      "contract": "LRR authority refusal only; valid constant runtime contract remains unsupported"
+    }
+  ],
+  "review": "worktracks/04-calls-source-views/common-entered-value-goals-handoff.md",
+  "validation": "rustfmt only; sole validator owns all Cargo/native execution; no bodies run by worker",
+  "holds": [
+    "No callable/body-entry/runtime-value/transaction publication authority",
+    "Qualified Value paths, structural targets, parameter-only binding nodes, selected constant patterns, missing real prelude/definition-module receipts remain typed pending",
+    "Legacy scalar pattern global-capture and lexical result source authority are not expanded or closed",
+    "Root query40/IR/runtime integration and all standard-macro/fullfixture acceptance remain unexecuted"
+  ]
+}

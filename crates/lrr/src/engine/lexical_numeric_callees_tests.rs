@@ -108,7 +108,6 @@ fn unchanged_original_local_headers_admit_exact_bodies_without_child_body_querie
             .as_ref()
             .unwrap()
             .key();
-        db.begin_run().unwrap();
         let QueryPoll::Ready(Ok(machine)) = crate::engine::run::RunMachine::start_with_discovery(
             &mut db,
             main.clone(),
@@ -117,6 +116,7 @@ fn unchanged_original_local_headers_admit_exact_bodies_without_child_body_querie
         ) else {
             panic!()
         };
+        db.begin_run().unwrap();
         let context = contexts
             .iter()
             .find(|context| context.source().selection() == view.selection())
@@ -212,7 +212,6 @@ fn source_alias_generic_value_shadow_and_ambiguity_refuse_before_child_body_or_a
             .body
             .as_ref()
             .unwrap();
-        db.begin_run().unwrap();
         let QueryPoll::Ready(Ok(machine)) = crate::engine::run::RunMachine::start_with_discovery(
             &mut db,
             main.key(),
@@ -221,6 +220,7 @@ fn source_alias_generic_value_shadow_and_ambiguity_refuse_before_child_body_or_a
         ) else {
             panic!()
         };
+        db.begin_run().unwrap();
         let at = u32::try_from(text.find("id(side())").unwrap()).unwrap() - main.range.start;
         let node = machine
             .frame
@@ -276,12 +276,12 @@ fn absent_entered_context_refuses_before_same_named_module_body_or_arguments() {
             .as_ref()
             .unwrap()
             .key();
-        db.begin_run().unwrap();
         let QueryPoll::Ready(Ok(mut machine)) =
             RunMachine::start_with_discovery(&mut db, main.clone(), 100000, discovery)
         else {
             panic!()
         };
+        db.begin_run().unwrap();
         let RunPoll::Fault(error) = machine.poll(&mut db) else {
             panic!("missing entered context selected a callable")
         };

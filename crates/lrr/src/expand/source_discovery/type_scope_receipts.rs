@@ -65,6 +65,22 @@ impl TypeScopeReceipt {
     pub(crate) fn scope(&self) -> &CertifiedScope {
         &self.scope
     }
+    /// Cold publication validation; querying a retained facet never re-encodes
+    /// the parent/source universe or scans the namespace world.
+    pub(crate) fn require_publication(&self, parent: Digest) -> Result<(), Diagnostic> {
+        self.profile.validate_source()?;
+        if self.parent != parent
+            || self.scope.namespace != Namespace::Type
+            || self.scope.scope.owner.is_some()
+            || self.scope.edition != self.profile.edition
+        {
+            return Err(unavailable());
+        }
+        Ok(())
+    }
+    pub(crate) fn owner_profile(&self) -> (&ScopeKey, &ProfileIdentity) {
+        (&self.scope.scope, &self.profile)
+    }
     pub(crate) fn require_owner(
         &self,
         scope: &ScopeKey,

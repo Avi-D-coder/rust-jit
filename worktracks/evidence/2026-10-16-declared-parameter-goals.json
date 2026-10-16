@@ -1,0 +1,136 @@
+{
+  "schema": 1,
+  "component": "common-declared-parameter-goals-v1",
+  "status": "source-only/uncompiled/unexecuted",
+  "base": {
+    "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/sol-common-source-constraints-validation-v1/source",
+    "member": "d3ef558c"
+  },
+  "payload": "/private/tmp/lrr-declared-parameter-goals-v1/overlay",
+  "source_fingerprint": "360808f701a4d57cf540c1a300a3a7d46656c8f3a294659a75f582446b5576ba",
+  "files": [
+    {
+      "path": "crates/lrr/src/cli/preentry_loader.rs",
+      "sha256": "e9249f4d49aa3c04669983887d61e011d12f3d37ad086632024fec749d8fd57e",
+      "bytes": 21199
+    },
+    {
+      "path": "crates/lrr/src/db/key.rs",
+      "sha256": "242790b4ce79fa8315ef345a5aa2b3c1b821efa71d4bc4b96e3c578588bdd381",
+      "bytes": 10292
+    },
+    {
+      "path": "crates/lrr/src/db/provider.rs",
+      "sha256": "bc683a39ea2473e740f4b37c20d27af43dc324a392ca4daf671cc9102833cdeb",
+      "bytes": 55711
+    },
+    {
+      "path": "crates/lrr/src/db/value.rs",
+      "sha256": "5f38c466dc51d05c6bbbd6e42a077855acd02a97827d9215bf7e6561c0fe1157",
+      "bytes": 17493
+    },
+    {
+      "path": "crates/lrr/src/frontend/call_contracts.rs",
+      "sha256": "73287aa8be81c8b2273e15a31fc3f9687bb4a7d94aff790b846c08c3b28d10bc",
+      "bytes": 57218
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_type_tests.rs",
+      "sha256": "1c305860f28428d016e34a74ec6ffd7f82a159580caa5765a7c7b467434c820c",
+      "bytes": 10811
+    },
+    {
+      "path": "crates/lrr/src/frontend/declaration_field_types.rs",
+      "sha256": "0494d0b1f75609cb3e845016f548eb0c578c881b500b6ac98de3ea1c6036e475",
+      "bytes": 29885
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "sha256": "0407d0a419cdadfaee329bb73786471fc98d796117192352743040080bdc47e6",
+      "bytes": 1707
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "sha256": "8e81c09ef86c845addc05dda9b11d5806c832f72283c453daf4924d4300f5b4e",
+      "bytes": 33063
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_parameter_goal_tests.rs",
+      "sha256": "6d206a0ed55705e89d2af8d4158b88f963bcc3c50e571b7db31d0bcc7ca7e554",
+      "bytes": 7996
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_parameter_goals.rs",
+      "sha256": "e3d6526aaef9538020392281a9ccd47575168a00a66883e4d8670e8f2326c99e",
+      "bytes": 14476
+    },
+    {
+      "path": "crates/lrr/src/service/expansion.rs",
+      "sha256": "4054bec96ffe3b7ab1f58deed1de9b5167965aca843b82d54baf31f47f9ee002",
+      "bytes": 22516
+    }
+  ],
+  "integration": {
+    "independent_query_tag": 38,
+    "retains_existing_query_tags": [
+      35,
+      37
+    ],
+    "excluded_live_queries": [
+      36,
+      39,
+      40
+    ],
+    "no_memo_or_runtime_edits": true,
+    "test_parent": "same boundary4 single-parent Type facet world; append parameter test hook only; omit Value39/binding40 hooks",
+    "shared_roots": "Goal observation owns bounded TyTerm/name/alias/token facts only, no parser/index/source/plan Arc. Existing memo dependency replay/query pins govern ownership. Header table adds one cached actual header-input Digest within checked HeaderItem size."
+  },
+  "dependencies": [
+    "validated source-constraints baseline d3ef558c with existing field5 owning plan/header kernel",
+    "frozen Type8 plus boundary4 and minimalhooks2, root CLI duplicate cold Type-prepass retirement; Type facet must be genuine Value-parent contained proof, not a competing independent Type seal",
+    "existing genuine LocalDeclarationOwner publication, SourceLocalPlan parent environment/source/hygiene/outer/epoch, exact local header/source/context rows"
+  ],
+  "controls": [
+    "unchanged_declared_parameter_goals_are_memoized_without_child_code_all_editions",
+    "emitted_and_wrapper_parameter_headers_use_the_same_goal_and_real_epoch",
+    "parameter_goal_rejects_wrong_ordinal_header_and_revoked_parent",
+    "header_goal_uses_own_generic_identity_and_keeps_nested_type_occurrences_pending"
+  ],
+  "upstream": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs",
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "git_blob": "ed59bba119606fe2c37ee70504de592b1ba25172",
+    "sha256": "f502f13f4f96fe146c05a02dd1a387eb3d4d9932915da35c047975d40eade4a6",
+    "bytes": 1221,
+    "unchanged": true,
+    "directives": [
+      "run-pass"
+    ],
+    "auxiliaries": [],
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ]
+  },
+  "holds": [
+    "actual full suffix-main id_i8(j) failure2a3855/1 is preserved; root binding source constraints/VM lowering are required for runtime repair",
+    "complex nested local symbolic Type/region occurrence hygiene remains typed NeedOwnerContext; no FunctionSignature.symbolic bypass",
+    "generalized module declaration-environment query transport not implemented; old module source_types/symbolic route and its mode6/7 costs remain behavior-preserving explicit debt",
+    "actual standard macro/enclosing-generic/mixed nested hygiene/runtime suspension/main matrix unexecuted",
+    "no callable/descriptor/execution authority from opaque goal alone"
+  ],
+  "all_eight_review": {
+    "1": "source goal/provider/header facts only; no evaluator/assertion operand compiler",
+    "2": "same original/retained/generated header table; no literal/break output path",
+    "3": "one selected parameter classifier; no primitive-name, macro-name or runtime descriptor rule",
+    "4": "same local header prefix for all admitted origins; typed nested Type demand uniform, actual generated epoch kept",
+    "5": "header-only parameter list capture, no child BodyStructure/Thunk or pattern engine",
+    "6": "local memo38 retains immutable fact; once-built header-input stamp avoids perordinal header rehash, genuine FunctionSignature pointer fast path before exact-equality fallback; module/selected-callable costs remain held",
+    "7": "real positive/negative Type/current source/environment deps; no new namespace census, existing coarse callable/Type guards remain held",
+    "8": "syntax_at exact declaration range, actual parameter list only, retained Arc plan; no BodyIndex copies/wholefile node searches"
+  },
+  "review_basis": "exact payload hashes above; separate source review by existing peers requested; no Rust compilation/execution by implementation worker",
+  "patch_sha256": "f9c03f4735d04975dc2eb834bbde06cb7d8528646bb3e36d8155c6d2eae32cfc"
+}

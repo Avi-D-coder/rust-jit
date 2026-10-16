@@ -1615,7 +1615,7 @@ impl ParsedFile {
         index: &BodyIndex,
         key: &PcKey,
     ) -> Result<VerifiedRecipe, Diagnostic> {
-        self.initial_thunk_admission(body, index, key, None, None)
+        self.initial_thunk_admission(body, index, key, None, None, None)
     }
     pub(crate) fn runtime_macro_numeric_request(
         &self,
@@ -1633,7 +1633,7 @@ impl ParsedFile {
         proof: &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         proof.context(self, body, index, key)?;
-        let recipe = self.initial_thunk_admission(body, index, key, Some(proof), None)?;
+        let recipe = self.initial_thunk_admission(body, index, key, Some(proof), None, None)?;
         proof.attach(recipe, index)
     }
     pub(crate) fn initial_thunk_with_primitive_name(
@@ -1643,7 +1643,17 @@ impl ParsedFile {
         key: &PcKey,
         proof: &crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission,
     ) -> Result<VerifiedRecipe, Diagnostic> {
-        self.initial_thunk_admission(body, index, key, None, Some(proof))
+        self.initial_thunk_admission(body, index, key, None, Some(proof), None)
+    }
+    pub(crate) fn initial_thunk_with_source_constraints(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        proof: &crate::frontend::binding_constraints::PreparedBindingConstraints,
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        proof.hint_for(index, key)?;
+        self.initial_thunk_admission(body, index, key, None, None, Some(proof))
     }
     fn initial_thunk_admission(
         &self,
@@ -1654,6 +1664,9 @@ impl ParsedFile {
             &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
         >,
         type_name: Option<&crate::frontend::primitive_type_names::PrimitiveTypeNameAdmission>,
+        source_constraints: Option<
+            &crate::frontend::binding_constraints::PreparedBindingConstraints,
+        >,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         if body.key() != *index.body() || key.body != body.key() {
             return Err(error("selected thunk body identity changed"));
@@ -1761,7 +1774,14 @@ impl ParsedFile {
             | SyntaxKind::MACRO_RULES
             | SyntaxKind::MACRO_DEF => self.initial_declaration_thunk(body, index, key, syntax),
             SyntaxKind::BLOCK_EXPR | SyntaxKind::LET_STMT | SyntaxKind::EXPR_STMT => {
-                self.initial_scope_thunk(body, index, key, syntax, numeric_admission)
+                self.initial_scope_thunk(
+                    body,
+                    index,
+                    key,
+                    syntax,
+                    numeric_admission,
+                    source_constraints,
+                )
             }
             SyntaxKind::LET_EXPR => self.initial_let_condition_thunk(body, index, key, syntax),
             SyntaxKind::MATCH_EXPR
@@ -1854,6 +1874,7 @@ impl ParsedFile {
         numeric_admission: Option<
             &crate::frontend::runtime_macro_numeric::RuntimeMacroNumericAdmission,
         >,
+        source_constraints: Option<&crate::frontend::binding_constraints::PreparedBindingConstraints>,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let id = NodeId(key.node);
         let node = &index.nodes()[key.node as usize];
@@ -2099,6 +2120,13 @@ impl ParsedFile {
                     )?;
                     return draft(index, key, ops, RecipeExit::Next(next));
                 };
+                if hint == HintRecipe::None
+                    && !by_reference
+                    && let Some(proof) = source_constraints
+                    && let Some(source_hint) = proof.hint_for(index, key)?
+                {
+                    hint = source_hint;
+                }
                 // An exact owning parameter/result source relation may constrain
                 // a bare numeric local before its first read. The hint carries
                 // the definition relation, never a guessed primitive descriptor.

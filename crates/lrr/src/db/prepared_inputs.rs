@@ -2,7 +2,10 @@
 //! only cached published stamps; they never fetch a query or plan source.
 use super::{Database, fault};
 use crate::{
-    core::{diagnostic::Diagnostic, digest::Digest},
+    core::{
+        diagnostic::Diagnostic,
+        digest::{Digest, StableEncoder},
+    },
     db::{
         dependency::{DependencyStamp, InputKey, missing_fingerprint},
         key::QueryKey,
@@ -21,10 +24,21 @@ const MAX_BYTES: usize = 32 * 1024 * 1024;
 pub(crate) struct PreparedInputGuard {
     inputs: Vec<DependencyStamp>,
     bytes: usize,
+    fingerprint: Digest,
+}
+fn guard_fingerprint(inputs: &[DependencyStamp]) -> Digest {
+    let mut e = StableEncoder::new("lrr/v1/prepared-input-guard");
+    e.sequence(inputs, |e, input| e.record(input));
+    e.finish()
 }
 impl PreparedInputGuard {
     pub(crate) fn metadata_bytes(&self) -> usize {
         self.bytes
+    }
+    /// Cached once at private cold capture. It never grants lookup/execution
+    /// authority or refreshes a stamp; shared phase attachment reads O(1).
+    pub(crate) fn fingerprint(&self) -> Digest {
+        self.fingerprint
     }
     pub(crate) fn require_current(&self, db: &Database) -> Result<(), Diagnostic> {
         for dependency in &self.inputs {
@@ -172,6 +186,7 @@ impl Database {
                 }),
         );
         let guard = PreparedInputGuard {
+            fingerprint: guard_fingerprint(&stamps),
             inputs: stamps,
             bytes,
         };
@@ -340,6 +355,7 @@ impl Database {
                 .map(|(key, fingerprint)| DependencyStamp::Input { key, fingerprint }),
         );
         let guard = PreparedInputGuard {
+            fingerprint: guard_fingerprint(&stamps),
             inputs: stamps,
             bytes,
         };

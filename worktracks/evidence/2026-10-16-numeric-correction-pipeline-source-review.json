@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "component": "numeric-source-pipeline-correction-and-phase-review",
+  "status": "read-only/source-only/no Cargo or runtime execution",
+  "source_fingerprint": "da2fb4ce51529110a1b85c9b2afca71095272cb2b85bf8f6eb52db54316b8c3f",
+  "files": [
+    {
+      "path": "crates/lrr/src/syntax/thunks.rs",
+      "read_from": "/Users/avi/Code/rust-jit",
+      "sha256": "a145463c0f06a6544526db75db2f453d197251d2a8817fe12640ac50608d4384",
+      "bytes": 187918
+    },
+    {
+      "path": "crates/lrr/src/frontend/binding_constraints.rs",
+      "read_from": "/Users/avi/Code/rust-jit/artifacts/macos-first/common-numeric-binding-pipeline-v1/source",
+      "sha256": "69136e3b2cd885beca9b27ccca4d5e4d83ed02e7ee6132eb865af06555fecf33",
+      "bytes": 12850
+    },
+    {
+      "path": "crates/lrr/src/frontend/prepared_binding_plan.rs",
+      "read_from": "/Users/avi/Code/rust-jit/artifacts/macos-first/common-numeric-binding-pipeline-v1/source",
+      "sha256": "b8bb4095f9e05b0cbcc8732a721017fd176541d1e59460e5aa25142c5154d351",
+      "bytes": 3330
+    },
+    {
+      "path": "crates/lrr/src/db/binding_constraint_thunk.rs",
+      "read_from": "/Users/avi/Code/rust-jit/artifacts/macos-first/common-numeric-binding-pipeline-v1/source",
+      "sha256": "e48a98512942edc5979dc241f3e2d1b9b46a072e9266b8348cfdc2d4414d4b00",
+      "bytes": 3284
+    },
+    {
+      "path": "crates/lrr/src/frontend/scalar_pattern_binding.rs",
+      "read_from": "/private/tmp/lrr-value39-module-import-correction-v1/overlay",
+      "sha256": "2a840edb810ef85d1822b1e17ef3c2542300af03ad50b5d8124acc713c310d90",
+      "bytes": 39823
+    },
+    {
+      "path": "crates/lrr/src/frontend/qualified_type_names.rs",
+      "read_from": "/private/tmp/lrr-value39-module-import-correction-v1/overlay",
+      "sha256": "e2185d447aef61e48dca1c84773185a672c08a3433c64140fe5612f5a9e2c29f",
+      "bytes": 14694
+    }
+  ],
+  "failed_predecessor": "frozen numeric V2 e29bfef4, compiled d16aaa/1,18 errors,zero bodies; preserved",
+  "corrections_reviewed": [
+    "thunks a145 passes Option<&PreparedBindingConstraints> from initial_thunk_admission into sole initial_scope_thunk dispatch/callee; no other helper consumes newsourceproof",
+    "pattern correction c2b57a3a only registers actual retained occurrence childmodule and imports actual NamespaceReadCertification used by allfourmatcharms; resolves missingtype cascades without semantic change"
+  ],
+  "api_findings": [],
+  "semantic_findings": [
+    {
+      "severity": "compatibility hold outside selected suffix main",
+      "minimal_source": "fn main(){let x=1; let _=x as u8;}",
+      "source_supported": "SourceConstraintPlan captures Cast operand x; BindingConstraints40 treats every nonCall/nonParenthesis use as Pending(ExpressionRelation), so binding_constraint_thunk refuses before prior ordinary local_numeric_constraints::unconstrained_literal can classify casts/discarded reads as nonconstraining. Original-only scope not alleged; affects new common BodyEnvironment route.",
+      "evidence_kind": "source-only causal path, no execution or matching official stock fixture claim",
+      "required_direction": "extend same source relationship graph/constraint handling for non-equating cast/discard use; do not bypass every pending/unknown relation or route source by origin; preserve actual callable-signature proof",
+      "suffix_scope": "unchanged suffix uses actual calls only, so this is not claimed to block its nextmain; root future runtime/feature acceptance must retain this gap"
+    }
+  ],
+  "ownership_currentness": [
+    "41 actual40 completed closure retained once with privatecachedstampdigest; allphase recipes shareactualArc, no guard hash/closure walk perphase",
+    "normal installed get_current/install protects namespace witness+preparedguard before VM; guard facts are currentness only, frame mutation/continuation/cleanup remain ordinary runtime",
+    "FunctionSignature provider sourceheader-only fix reviewed separately; no absentcalleeBody dependency in newguard. SourceCallable still revalidates actual childbody at execution.",
+    "plain numeric source goal and Value occurrence proof do not grant callable runtime entry or local binding commit; root common engine owns those"
+  ],
+  "all_eight": {
+    "1": "no separate evaluator; sourcegoal inference feeds existing hint/verifier/VM",
+    "2": "no literal/break-only macro path; current thunk uses admitted ordinary source",
+    "3": "same parameter signature goal for localcall Type; cast-use compatibility gap recorded, no shortcut whitelist added",
+    "4": "sourceproof route uses actual BodyEnvironment for all origins; generated authority pending remains explicit",
+    "5": "signature/header goals no childexecutable query; no new pattern evaluator, actual occurrence proof reused",
+    "6": "source37/40/41 retained and normalizedphase; same sourceproof borrowed by scopehelper, guardArc shared/cachedfp; oldfallback phase parsing costs held",
+    "7": "relevantguardO(D log I), multiple normal get_current calls may repeat; legacy broadnamespace/sourcepub guard remains held",
+    "8": "exactenterednode locator and sharedparser/index, no new deepclone or wholefile search"
+  },
+  "acceptance": "compile mismatch corrections source-reviewed only. Actual suffixmain remains unstarted in V2; no stock/runtime/architecture closure. Do not change returnlogic on speculation."
+}

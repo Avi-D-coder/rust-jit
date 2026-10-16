@@ -61,6 +61,7 @@ struct HeaderGeneric {
     parameter: ParamKey,
 }
 struct HeaderField {
+    parameter: Option<u32>,
     range: SourceRange,
     tokens: Vec<TokenRecipe>,
     name: Option<LocalTypeUse>,
@@ -69,6 +70,7 @@ struct HeaderItem {
     scope: u32,
     declaration: SourceRange,
     header: Digest,
+    header_input: Digest,
     generics: Vec<HeaderGeneric>,
     fields: Vec<HeaderField>,
 }
@@ -152,7 +154,8 @@ impl DeclarationFieldTypes {
         };
         let mut items = BTreeMap::new();
         let mut bytes = 0;
-        let mut fingerprint = StableEncoder::new("lrr/v1/local-declaration-field-Type-occurrences");
+        let mut fingerprint =
+            StableEncoder::new("lrr/v2/local-declaration-header-Type-occurrences");
         fingerprint.digest(source.identity());
         fingerprint.u64(
             context
@@ -162,7 +165,7 @@ impl DeclarationFieldTypes {
                 .filter(|row| {
                     matches!(
                         row.item.def_key.item_kind,
-                        ItemKind::Struct | ItemKind::Enum | ItemKind::Union
+                        ItemKind::Struct | ItemKind::Enum | ItemKind::Union | ItemKind::Function
                     )
                 })
                 .count() as u64,
@@ -170,19 +173,43 @@ impl DeclarationFieldTypes {
         for row in &context.facts().items {
             if !matches!(
                 row.item.def_key.item_kind,
-                ItemKind::Struct | ItemKind::Enum | ItemKind::Union
+                ItemKind::Struct | ItemKind::Enum | ItemKind::Union | ItemKind::Function
             ) {
                 continue;
             }
             let syntax = parsed
                 .syntax_at(row.item.declaration_span, |n| ast::Item::can_cast(n.kind()))?
                 .ok_or_else(|| error("declaration field owning syntax absent"))?;
-            if tokens(&syntax, None) != row.item.header.tokens {
+            let function = ast::Fn::cast(syntax.clone());
+            let excluded = function
+                .as_ref()
+                .and_then(|function| function.syntax().children().find_map(ast::BlockExpr::cast))
+                .map(|body| body.syntax().text_range());
+            if (row.item.def_key.item_kind == ItemKind::Function) != function.is_some()
+                || tokens(&syntax, excluded) != row.item.header.tokens
+            {
                 return Err(error("declaration field header syntax differs"));
             }
+            // Parameter/field token copies are subsets of this already owned
+            // header. Bound their possible token storage before capturing any.
+            add(bytes, row.item.header.estimated_bytes())?;
             let definition = row.item.def_key.fingerprint();
             let mut generics = Vec::new();
             if let Some(list) = syntax.children().find_map(ast::GenericParamList::cast) {
+                let count = list.generic_params().count();
+                if count > 100_000 {
+                    return Err(crate::runtime::arena::resource());
+                }
+                add(
+                    add(bytes, row.item.header.estimated_bytes())?,
+                    count.checked_mul(
+                        std::mem::size_of::<HeaderGeneric>()
+                            + std::mem::size_of::<crate::syntax::signatures::DefinitionParameter>(),
+                    ).ok_or_else(crate::runtime::arena::resource)?,
+                )?;
+                generics
+                    .try_reserve_exact(count)
+                    .map_err(|_| crate::runtime::arena::resource())?;
                 let common = crate::syntax::signatures::capture_generics(Some(list.clone()))?;
                 for (ordinal, parameter) in list.generic_params().enumerate() {
                     let ast::GenericParam::TypeParam(parameter) = parameter else {
@@ -213,14 +240,95 @@ impl DeclarationFieldTypes {
                 }
             }
             let mut fields = Vec::new();
-            // Confined to this exact header, never a full-file/node-phase scan.
-            for field in syntax.descendants().filter_map(|n| {
-                if let Some(f) = ast::RecordField::cast(n.clone()) {
-                    f.ty()
-                } else {
-                    ast::TupleField::cast(n).and_then(|f| f.ty())
+            // Function bodies are excluded: only the actual parameter list is
+            // source Type evidence, never an executable child body scan.
+            let mut types = Vec::new();
+            if let Some(function) = function {
+                let list = function
+                    .param_list()
+                    .ok_or_else(|| error("declaration parameter list absent"))?;
+                let first = usize::from(list.self_param().is_some());
+                let count = list
+                    .params()
+                    .filter(|parameter| parameter.ty().is_some())
+                    .count();
+                if list
+                    .params()
+                    .count()
+                    .checked_add(first)
+                    .is_none_or(|count| count > 100_000)
+                {
+                    return Err(crate::runtime::arena::resource());
                 }
-            }) {
+                add(
+                    bytes,
+                    count
+                        .checked_mul(std::mem::size_of::<(Option<u32>, ast::Type)>())
+                        .ok_or_else(crate::runtime::arena::resource)?,
+                )?;
+                types
+                    .try_reserve_exact(count)
+                    .map_err(|_| crate::runtime::arena::resource())?;
+                for (index, parameter) in list.params().enumerate() {
+                    if let Some(ty) = parameter.ty() {
+                        let ordinal = u32::try_from(
+                            index
+                                .checked_add(first)
+                                .ok_or_else(crate::runtime::arena::resource)?,
+                        )
+                        .map_err(|_| crate::runtime::arena::resource())?;
+                        types.push((Some(ordinal), ty));
+                    }
+                }
+            } else {
+                // Confined to this exact nominal header.
+                let count = syntax
+                    .descendants()
+                    .filter(|node| {
+                        ast::RecordField::can_cast(node.kind())
+                            || ast::TupleField::can_cast(node.kind())
+                    })
+                    .count();
+                if count > crate::frontend::types::MAX_SCHEMA_FIELDS {
+                    return Err(crate::runtime::arena::resource());
+                }
+                add(
+                    bytes,
+                    count
+                        .checked_mul(std::mem::size_of::<(Option<u32>, ast::Type)>())
+                        .ok_or_else(crate::runtime::arena::resource)?,
+                )?;
+                types
+                    .try_reserve_exact(count)
+                    .map_err(|_| crate::runtime::arena::resource())?;
+                for ty in syntax.descendants().filter_map(|n| {
+                    if let Some(f) = ast::RecordField::cast(n.clone()) {
+                        f.ty()
+                    } else {
+                        ast::TupleField::cast(n).and_then(|f| f.ty())
+                    }
+                }) {
+                    types.push((None, ty));
+                }
+            }
+            let temporary_bytes = types
+                .capacity()
+                .checked_mul(std::mem::size_of::<(Option<u32>, ast::Type)>())
+                .ok_or_else(crate::runtime::arena::resource)?;
+            add(
+                add(
+                    add(bytes, temporary_bytes)?,
+                    row.item.header.estimated_bytes(),
+                )?,
+                types
+                    .len()
+                    .checked_mul(std::mem::size_of::<HeaderField>())
+                    .ok_or_else(crate::runtime::arena::resource)?,
+            )?;
+            fields
+                .try_reserve_exact(types.len())
+                .map_err(|_| crate::runtime::arena::resource())?;
+            for (parameter, field) in types {
                 let field_range = range(field.syntax().text_range());
                 let name = if let ast::Type::PathType(ty) = &field {
                     ty.path()
@@ -236,11 +344,18 @@ impl DeclarationFieldTypes {
                     None
                 };
                 fields.push(HeaderField {
+                    parameter,
                     range: field_range,
                     tokens: tokens(field.syntax(), None),
                     name,
                 });
-                if fields.len() > crate::frontend::types::MAX_SCHEMA_FIELDS {
+                if fields.len()
+                    > if row.item.def_key.item_kind == ItemKind::Function {
+                        100_000
+                    } else {
+                        crate::frontend::types::MAX_SCHEMA_FIELDS
+                    }
+                {
                     return Err(crate::runtime::arena::resource());
                 }
             }
@@ -285,6 +400,7 @@ impl DeclarationFieldTypes {
             }
             fingerprint.u64(fields.len() as u64);
             for field in &fields {
+                fingerprint.option(&field.parameter, |e, ordinal| e.u32(*ordinal));
                 bytes = add(
                     bytes,
                     field
@@ -307,6 +423,11 @@ impl DeclarationFieldTypes {
                     e.digest(Digest(n.context().0));
                 });
             }
+            // Cache the actual header-input projection once at owning-plan
+            // preparation; parameter goals compare the published input stamp.
+            add(bytes, row.item.header.estimated_bytes())?;
+            let header_input = InputValue::DefinitionHeader(row.item.header.clone()).fingerprint();
+            fingerprint.digest(header_input);
             if items
                 .insert(
                     definition,
@@ -314,6 +435,7 @@ impl DeclarationFieldTypes {
                         scope: row.scope,
                         declaration: row.item.declaration_span,
                         header: row.item.header.fingerprint(),
+                        header_input,
                         generics,
                         fields,
                     },
@@ -350,10 +472,9 @@ impl DeclarationFieldTypes {
         {
             return Err(error("declaration field actual header/range differs"));
         }
-        let mut matches = item
-            .fields
-            .iter()
-            .filter(|row| row.range == field.type_range && row.tokens == field.ty);
+        let mut matches = item.fields.iter().filter(|row| {
+            row.parameter.is_none() && row.range == field.type_range && row.tokens == field.ty
+        });
         let selected = matches
             .next()
             .ok_or_else(|| error("declaration field exact Type occurrence absent"))?;
@@ -366,8 +487,120 @@ impl DeclarationFieldTypes {
             field: selected,
         })
     }
+    /// Cached actual owning header projection, shared by Value/header goals.
+    /// The current input stamp is read by the caller before this comparison.
+    pub(super) fn header_identity(
+        &self,
+        definition: Digest,
+        actual_header_input: Digest,
+    ) -> Result<Option<Digest>, Diagnostic> {
+        let Some(item) = self.items.get(&definition) else {
+            return Ok(None);
+        };
+        if item.header_input != actual_header_input {
+            return Err(error("actual declaration header input differs"));
+        }
+        Ok(Some(item.header))
+    }
+    fn parameter(
+        &self,
+        signature: &crate::syntax::signatures::FunctionSignature,
+        ordinal: u32,
+        header_input: Digest,
+    ) -> Result<HeaderTypeSite<'_>, Diagnostic> {
+        let item = self
+            .items
+            .get(&signature.definition)
+            .ok_or_else(|| error("parameter Type actual owning header absent"))?;
+        if item.header_input != header_input {
+            return Err(error("parameter Type actual header input differs"));
+        }
+        let parameter = signature
+            .parameters
+            .get(ordinal as usize)
+            .ok_or_else(|| error("parameter Type ordinal absent"))?;
+        let mut matches = item
+            .fields
+            .iter()
+            .filter(|field| field.parameter == Some(ordinal) && field.tokens == parameter.ty);
+        let field = matches
+            .next()
+            .ok_or_else(|| error("parameter Type exact occurrence absent"))?;
+        if matches.next().is_some() || !item.declaration.contains(field.range) {
+            return Err(error("parameter Type occurrence range is ambiguous"));
+        }
+        Ok(HeaderTypeSite {
+            owner: self.owner,
+            item,
+            field,
+        })
+    }
 }
 impl PreparedSourceLocalPlan {
+    /// Own declaration header only: its parent plan supplies lexical outers,
+    /// while FunctionSignature supplies the actual current parameter ordinal.
+    /// No child BodyStructure or executable recipe is requested.
+    pub(crate) fn prepare_parameter_type(
+        self: &Arc<Self>,
+        db: &mut Database,
+        signature: &crate::syntax::signatures::FunctionSignature,
+        ordinal: u32,
+    ) -> QueryPoll<NamedTypePreparation> {
+        ready!(self.require_current(db));
+        let current = ready!(db.fetch(
+            &SyntaxProvider,
+            QueryKey::FunctionSignature(signature.definition)
+        ));
+        if !matches!(current.value.as_ref(), QueryValue::FunctionSignature(actual) if std::ptr::eq(actual.as_ref(), signature) || actual.as_ref()==signature)
+        {
+            return QueryPoll::Ready(Err(error("parameter Type current signature differs")));
+        }
+        let row = checked!(
+            self.context
+                .facts()
+                .items
+                .iter()
+                .find(|row| row.item.def_key.fingerprint() == signature.definition)
+                .ok_or_else(|| error("parameter Type canonical local owner absent"))
+        );
+        if row.item.def_key.item_kind != ItemKind::Function
+            || row.item.scope != signature.scope
+            || !matches!(db.input(&InputKey::LocalDeclarationOwner(signature.definition)).as_deref(),Some(InputValue::LocalDeclarationOwner(body)) if body==self.context.source().index().body())
+            || !matches!(db.input(&InputKey::DefinitionSource(signature.definition)).as_deref(),Some(InputValue::DefinitionSource(parse)) if *parse==self.context.source().parsed().key())
+            || !matches!(db.input(&InputKey::DeclarationContext(signature.definition)).as_deref(),Some(InputValue::DeclarationContext(actual)) if actual.scope==row.item.scope && actual.range==row.item.declaration_span)
+        {
+            return QueryPoll::Ready(Err(error(
+                "parameter Type current owning declaration differs",
+            )));
+        }
+        let header_key = InputKey::DefinitionHeader(signature.definition);
+        if !matches!(
+            db.input(&header_key).as_deref(),
+            Some(InputValue::DefinitionHeader(_))
+        ) {
+            return QueryPoll::Ready(Err(error("parameter Type header input absent")));
+        }
+        let header_input = checked!(
+            db.published_input(&header_key)
+                .map(|(_, fingerprint)| fingerprint)
+                .ok_or_else(|| error("parameter Type header stamp absent"))
+        );
+        let header = checked!(self.field_types.parameter(signature, ordinal, header_input));
+        // Complex symbolic signature lowering does not prove the hygiene of
+        // nested Type NameRefs. The shared header service retains a typed
+        // owner-context demand until those actual occurrences are joined.
+        let range = header.field.range;
+        self.prepare_header_type(
+            db,
+            header,
+            super::DeclarationTypeSite::Parameter {
+                definition: signature.definition,
+                ordinal,
+                range,
+            },
+            &signature.scope,
+        )
+    }
     pub(crate) fn prepare_field_type(
         self: &Arc<Self>,
         db: &mut Database,
@@ -411,9 +644,28 @@ impl PreparedSourceLocalPlan {
             )));
         }
         let header = checked!(self.field_types.select(schema, field));
+        self.prepare_header_type(
+            db,
+            header,
+            super::DeclarationTypeSite::Field {
+                definition: schema.definition,
+                range: field.type_range,
+            },
+            &schema.scope,
+        )
+    }
+    /// Field and parameter sites enter the same opaque local/import/module
+    /// prefix and final current declaration/Type preparation service.
+    fn prepare_header_type(
+        self: &Arc<Self>,
+        db: &mut Database,
+        header: HeaderTypeSite<'_>,
+        identity: super::DeclarationTypeSite,
+        scope: &crate::syntax::outline::ScopeKey,
+    ) -> QueryPoll<NamedTypePreparation> {
         let Some(name) = &header.field.name else {
             return QueryPoll::Ready(Ok(NamedTypePreparation::Name(
-                SignatureName::NeedOwnerContext(schema.scope.clone()),
+                SignatureName::NeedOwnerContext(scope.clone()),
             )));
         };
         let site = crate::frontend::source_locals::OrdinaryNameSite {
@@ -441,7 +693,7 @@ impl PreparedSourceLocalPlan {
         let mut prefix = LocalTypePrefix {
             plan: Arc::clone(self),
             node: None,
-            field: Some((schema.definition, field.type_range)),
+            header: Some(identity),
             selection,
             use_name: Some(LocalTypeUse {
                 name: name.name.clone(),
