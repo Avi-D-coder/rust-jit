@@ -30,8 +30,14 @@ use std::{
     sync::Arc,
 };
 
+#[path = "local_type_modules.rs"]
+mod type_modules;
 #[path = "local_type_names.rs"]
 mod type_names;
+pub(crate) use type_modules::LocalTypeModuleSelector;
+use type_modules::{LexicalTypeModule, ModuleRoute};
+#[path = "body_type_declarations.rs"]
+pub(crate) mod type_declarations;
 pub(super) use type_names::{ItemNames, LocalTypeNames};
 /// These are required proof joins, not negative language answers.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -63,6 +69,7 @@ pub(crate) struct LocalTypePrefix {
     node: crate::ir::pc::NodeId,
     selection: LocalTypePrefixSelection,
     use_name: Option<LocalTypeUse>,
+    module_selector: Option<LocalTypeModuleSelector>,
     fingerprint: Digest,
 }
 pub(crate) struct LocalTypeUse {
@@ -95,9 +102,63 @@ pub(crate) enum LocalTypePrefixSelection {
     NeedSource(crate::frontend::source_body_context::type_occurrences::BodyTypeAuthorityDemand),
     NeedUnqualifiedPath,
     NeedExpansionDefinition(Key),
-    NeedModuleScope,
+    NeedDefinitionModule(Key),
+    NeedModulePublication,
 }
 impl LocalTypePrefix {
+    pub(crate) fn module_selector(&self) -> Option<&LocalTypeModuleSelector> {
+        self.module_selector.as_ref()
+    }
+    /// Cold query tail only. The owning current environment publication remains
+    /// a prerequisite for final Type authority; this returns the ordinary current
+    /// module observation, including incomplete/unsealed states unchanged.
+    pub(crate) fn module_name(
+        &self,
+        db: &mut Database,
+    ) -> QueryPoll<Option<Arc<crate::frontend::current_module_names::CurrentModuleNameObservation>>>
+    {
+        if !matches!(self.selection, LocalTypePrefixSelection::ModuleTail) {
+            return QueryPoll::Ready(Ok(None));
+        }
+        match self.plan.context.require_current(db) {
+            QueryPoll::Ready(Ok(())) => {}
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
+        let Some(name) = &self.use_name else {
+            return QueryPoll::Ready(Err(error("module tail has no actual Type use")));
+        };
+        if self.module_selector.is_none() {
+            return QueryPoll::Ready(Err(error("module tail has no use-context selector")));
+        }
+        let key = match self
+            .plan
+            .lexical_module
+            .request(name.name(), name.edition())
+        {
+            Ok(Some(key)) => key,
+            Ok(None) => {
+                return QueryPoll::Ready(Err(error("module tail source publication absent")));
+            }
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let result = match db.fetch(
+            &crate::db::provider::SyntaxProvider,
+            crate::db::key::QueryKey::CurrentModuleName(Box::new(key.clone())),
+        ) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        match result.value.as_ref() {
+            crate::db::value::QueryValue::CurrentModuleName(observation)
+                if observation.matches_request(&key) =>
+            {
+                QueryPoll::Ready(Ok(Some(Arc::clone(observation))))
+            }
+            _ => QueryPoll::Ready(Err(error("module tail current observation differs"))),
+        }
+    }
     pub(crate) fn retained_plan(&self) -> &Arc<PreparedSourceLocalPlan> {
         &self.plan
     }
@@ -134,7 +195,7 @@ impl LocalTypePrefix {
     }
 }
 impl StableEncode for LocalTypePrefix {
-    const DOMAIN: &'static str = "lrr/v1/local-type-prefix-source-proof";
+    const DOMAIN: &'static str = "lrr/v2/local-type-prefix-source-proof";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.plan.source_identity());
         e.u32(self.node.0);
@@ -145,6 +206,7 @@ impl StableEncode for LocalTypePrefix {
             e.digest(Digest(name.context().0));
             e.u16(name.edition());
         });
+        e.option(&self.module_selector, |e, selector| selector.encode(e));
         match &self.selection {
             LocalTypePrefixSelection::Lookup(lookup) => {
                 e.u8(0);
@@ -180,7 +242,11 @@ impl StableEncode for LocalTypePrefix {
                 e.u8(8);
                 e.digest(Digest(key.0));
             }
-            LocalTypePrefixSelection::NeedModuleScope => e.u8(9),
+            LocalTypePrefixSelection::NeedDefinitionModule(expansion) => {
+                e.u8(10);
+                e.digest(Digest(expansion.0));
+            }
+            LocalTypePrefixSelection::NeedModulePublication => e.u8(11),
         }
     }
 }
@@ -190,7 +256,7 @@ pub(crate) struct PreparedSourceLocalPlan {
     context: Arc<PreparedBodyContext>,
     missing_expansions: Vec<Key>,
     type_names: LocalTypeNames,
-    module_scope: Option<crate::syntax::outline::ScopeKey>,
+    lexical_module: LexicalTypeModule,
     source_identity: Digest,
     exclusive_bytes: usize,
 }
@@ -238,6 +304,20 @@ impl SourceLocalPlanRoots<'_> {
     }
 }
 impl PreparedSourceLocalPlan {
+    /// Cold source Type preparation. Production callers must consume the
+    /// retained result through the owning current environment query.
+    pub(crate) fn prepare_body_type(
+        self: &Arc<Self>,
+        db: &mut Database,
+        node: crate::ir::pc::NodeId,
+    ) -> QueryPoll<type_declarations::BodyTypeOutcome> {
+        let prefix = match self.type_prefix(db, node) {
+            QueryPoll::Ready(Ok(prefix)) => prefix,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        type_declarations::prepare(db, prefix)
+    }
     pub(crate) fn prepare(
         db: &mut Database,
         parent: &PublishedMacroIndex,
@@ -248,46 +328,27 @@ impl PreparedSourceLocalPlan {
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         }
-        QueryPoll::Ready(Self::build(parent, context).map(Arc::new))
+        let lexical_module = match LexicalTypeModule::prepare(db, &context) {
+            QueryPoll::Ready(Ok(module)) => module,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        QueryPoll::Ready(Self::build(parent, context, lexical_module).map(Arc::new))
     }
     fn build(
         parent: &PublishedMacroIndex,
         context: Arc<PreparedBodyContext>,
+        lexical_module: LexicalTypeModule,
     ) -> Result<Self, Diagnostic> {
         let entered = parent.enter_prepared_body(Arc::clone(&context))?;
         let (expansions, missing_expansions) = expansion_definitions(&entered, &context)?;
         let (root, hygiene) = entered.local_hygiene();
         let type_names = LocalTypeNames::prepare(&context, root, &hygiene)?;
-        // The declaration supplies a lookup goal; only an actual retained
-        // module-outline row can supply module-tail membership authority.
-        let module_goal = crate::syntax::outline::ScopeKey {
-            crate_key: context.source().scope().crate_key,
-            module_path: context.source().scope().module_path.clone(),
-            owner: None,
-        };
-        let module_scope = context.module_source().and_then(|source| {
-            source
-                .outline()
-                .scopes
-                .get_key_value(&module_goal)
-                .map(|(scope, _)| scope.clone())
-        });
-        let module_bytes = module_scope
-            .as_ref()
-            .map_or(Some(0), |scope| {
-                scope.module_path.iter().try_fold(
-                    scope
-                        .module_path
-                        .capacity()
-                        .checked_mul(std::mem::size_of::<String>())?,
-                    |bytes, part| bytes.checked_add(part.capacity()),
-                )
-            })
-            .ok_or_else(crate::runtime::arena::resource)?;
-        let mut identity = StableEncoder::new("lrr/v2/owned-local-source-environment");
+        let module_bytes = lexical_module.extra_bytes();
+        let mut identity = StableEncoder::new("lrr/v3/owned-local-source-environment");
         identity.digest(context.source().identity());
         identity.digest(type_names.fingerprint());
-        identity.option(&module_scope, |e, scope| e.record(scope));
+        identity.digest(lexical_module.fingerprint());
         identity.u64(expansions.len() as u64);
         for (key, definition) in &expansions {
             identity.digest(Digest(key.0));
@@ -337,7 +398,7 @@ impl PreparedSourceLocalPlan {
             context,
             missing_expansions,
             type_names,
-            module_scope,
+            lexical_module,
             source_identity: identity.finish(),
             exclusive_bytes,
         })
@@ -358,6 +419,7 @@ impl PreparedSourceLocalPlan {
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
+        let mut module_selector = None;
         let answer = (|| -> Result<LocalTypePrefixSelection, Diagnostic> {
             if matches!(
                 occurrence.origin(),
@@ -406,10 +468,19 @@ impl PreparedSourceLocalPlan {
                         LocalTypePrefixSelection::Parameter(parameter)
                     }
                     super::PrefixResolution::ModuleTail => {
-                        if self.module_scope.is_some() {
-                            LocalTypePrefixSelection::ModuleTail
-                        } else {
-                            LocalTypePrefixSelection::NeedModuleScope
+                        let (_, hygiene) = self.entered.local_hygiene();
+                        match self.lexical_module.route(&hygiene, context)? {
+                            ModuleRoute::Definition(expansion) => {
+                                LocalTypePrefixSelection::NeedDefinitionModule(expansion)
+                            }
+                            ModuleRoute::Lexical(selector) => {
+                                module_selector = Some(selector);
+                                if self.lexical_module.has_module_source() {
+                                    LocalTypePrefixSelection::ModuleTail
+                                } else {
+                                    LocalTypePrefixSelection::NeedModulePublication
+                                }
+                            }
                         }
                     }
                     super::PrefixResolution::NeedImport(identity) => {
@@ -444,6 +515,7 @@ impl PreparedSourceLocalPlan {
                 node,
                 selection,
                 use_name,
+                module_selector,
                 fingerprint: Digest([0; 32]),
             };
             proof
@@ -456,7 +528,16 @@ impl PreparedSourceLocalPlan {
         }))
     }
     pub(crate) fn module_scope(&self) -> Option<&crate::syntax::outline::ScopeKey> {
-        self.module_scope.as_ref()
+        // Membership only. A use must consume type_prefix/module_selector,
+        // not turn this retained module row into a hygienic lookup decision.
+        Some(self.lexical_module.scope())
+    }
+    /// Shared query allocation, retained independently of its outer memo.
+    pub(crate) fn lexical_outline_root(&self) -> &Arc<crate::syntax::outline::Outline> {
+        self.lexical_module.outline_root()
+    }
+    pub(crate) fn lexical_outline_key(&self) -> &crate::db::key::OutlineKey {
+        self.lexical_module.key()
     }
     pub(crate) fn context(&self) -> &Arc<PreparedBodyContext> {
         &self.context

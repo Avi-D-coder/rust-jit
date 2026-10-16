@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "component": "common-local-type-module-selector-source3",
+  "status": "uncompiled-unexecuted; held unchanged for parent copy",
+  "fingerprint": "7b335b5ae310c085775e1d690b3db3b74ea64d7f5695fdce373cf9c29762f6f0",
+  "fingerprint_encoding": "sha256 compact json.dumps(leaves,sort_keys=True,separators=(comma,colon)), ordered listed leaves",
+  "leaves": [
+    {
+      "path": "crates/lrr/src/frontend/local_type_modules.rs",
+      "bytes": 10352,
+      "sha256": "fcac47c8e41cc509813592afebcfce451c8668ae01c012b4f109be3bc827178e"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "bytes": 27270,
+      "sha256": "605aedfb6649d1079cb5ba93ed3ea4eb9dbee3af5c224218d9d475825c6ee8b5"
+    },
+    {
+      "path": "crates/lrr/src/frontend/local_type_prefix_tests.rs",
+      "bytes": 18788,
+      "sha256": "3df7c96eff10107cfbed195af81b6bb2966ec2f393337b064faf87df5db36e2b"
+    }
+  ],
+  "handoff": {
+    "path": "worktracks/04-calls-source-views/common-local-type-module-selector-handoff.md",
+    "bytes": 15458,
+    "sha256": "455f4bfece3948cd3af1fbdb2ebd0b806b8c7130cbb54ea23f032cf1bfbd50dd"
+  },
+  "prerequisites": [
+    "localType8 source manifest f1507e974fad35b125644278647ebdd35aa75aa912467c8abd9eaebe03b16c0c + separate StableEncode fix206f8aac",
+    "root current module name query/service, original owning body/source7 dependencies",
+    "root source_macros Arc None-branch mechanical correction; peer inert-macro hook independent",
+    "root must register lexical_outline_root shared Arc ownership before production admission"
+  ],
+  "execution": {
+    "cargo": "not run by worker",
+    "native": "not run by worker",
+    "stock_main": "unexecuted",
+    "all_four_macro_runtime_contexts": "unexecuted"
+  }
+}

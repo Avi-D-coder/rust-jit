@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "scope": "Separate immutable component banks, never one combined passing suite.",
+  "packets": [
+    {
+      "packet": "sol-common-body-type-declaration-validation-v1",
+      "release_sha256": "bc42f5f7064cdb349a60277a98e9c08513b119e49a216c8b44f0efbe03fae705",
+      "source_fingerprint": "6e8b1f3a096e24a6495af64b935f5b032a2ef69daae7d1a959e626e8925e7753",
+      "bodies": 10,
+      "passed": 10,
+      "failed": 0,
+      "actual_terminals": {
+        "compose": "482623/0",
+        "inactive_before": "460caa/0",
+        "assembly": "790bc8/0",
+        "prebuild_report": "e4bb33/0",
+        "compile": {
+          "launch": "a4d48e",
+          "session": 92957,
+          "pid": 13929,
+          "terminal": "17392b/0",
+          "seconds": 92.967892625
+        },
+        "newpriority": {
+          "launch": "a193bd",
+          "session": 41005,
+          "terminal": "e98005/0"
+        },
+        "regressions": {
+          "launch": "54d7c0",
+          "session": 95446,
+          "terminal": "6a49f6/0"
+        }
+      },
+      "failure": null,
+      "unexecuted": [
+        "opaque187 knownfailure not rerun",
+        "coreRoot/no_core prior failures not rerun",
+        "strict/fullmilestone/CLI/stock"
+      ]
+    },
+    {
+      "packet": "sol-common-bound-macro-export-source-role-validation-v1",
+      "release_sha256": "87eb955ee1ab7c6bcd00cca19b5fd790b10241c9a6bf07acea5ea0dced06a88a",
+      "source_fingerprint": "aea9e3aa6cf7ef272d43b6921a6421fe895d2a41c0163e1105666b3168fd3880",
+      "bodies": 4,
+      "passed": 3,
+      "failed": 1,
+      "actual_terminals": {
+        "compose": "0080cd/0",
+        "inactive_before": "d8bd99/0",
+        "assembly": "5123a4/0",
+        "prebuild": "1ea8f5/0",
+        "compile": {
+          "launch": "a2a005",
+          "session": 86942,
+          "pid": 14492,
+          "terminal": "d9e529/0",
+          "seconds": 221.775756041
+        },
+        "live_process": "aca31a/0",
+        "priority": {
+          "launch": "4d27d5",
+          "session": 95934,
+          "terminal": "ce6316/1"
+        },
+        "raw_failure": "4df06a/0",
+        "inactive_after": "3a25f2/0"
+      },
+      "failure": {
+        "path": "crates/lrr/src/expand/source_declarative/sealed_macro_export_view_tests.rs",
+        "line": 293,
+        "call": "with_declarative_compiler(...).unwrap() after actual root constructor and bound role observation accepted",
+        "code": "LRR-E-MACRO-SCOPE",
+        "message": "source routes have unresolved import demands",
+        "producer_path": "crates/lrr/src/frontend/module_aliases.rs",
+        "producer_line": 263,
+        "stage": "compiler/source route configuration before discovery.poll/fullseal publication",
+        "child_exit": 101,
+        "owning_edition": 2024,
+        "no_runtime_execution": true
+      },
+      "unexecuted": [
+        "dependentAUXsealed2/publication5",
+        "bounded original inert/profile regressions",
+        "strict/fullmilestone/CLI/stock"
+      ]
+    }
+  ],
+  "runtime_contract_pass_increment": 0,
+  "full_fixture_pass_increment": 0,
+  "architecture_gate": "Open; E-R5-005/all eight legacy shortcut removals and current-environment integration remain incomplete."
+}

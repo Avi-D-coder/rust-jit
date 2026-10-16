@@ -493,6 +493,16 @@ impl Provider for SyntaxProvider {
                     }
                 }
                 for source in &input.sources {
+                    match db.macro_export_source_observation(source, key.unit_graph) {
+                        Ok(Some(observation)) => {
+                            if let Err(error) = observation.validate_discovery(input) {
+                                return QueryPoll::Ready(Err(error));
+                            }
+                            continue;
+                        }
+                        Ok(None) => {}
+                        Err(error) => return QueryPoll::Ready(Err(error)),
+                    }
                     if !matches!(db.input(&InputKey::CapturedSource(source.location_identity())).as_deref(),Some(InputValue::CapturedSource(actual)) if actual==source)
                     {
                         return QueryPoll::NeedInput(super::poll::InputRequest::Discover {

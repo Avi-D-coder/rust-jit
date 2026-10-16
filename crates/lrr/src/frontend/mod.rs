@@ -4,6 +4,8 @@ mod glob_lookup;
 pub mod hygiene;
 pub mod item_attributes;
 pub mod local_scopes;
+pub(crate) mod macro_boundary;
+pub(crate) mod macro_definition_modules;
 pub mod macro_names;
 pub mod macro_origins;
 pub mod macro_scopes;
@@ -24,6 +26,8 @@ mod body_namespace;
 pub mod container_catalogue;
 
 pub mod source_locals;
+
+pub(crate) mod source_body_context;
 
 pub mod nested_compile_inputs;
 
@@ -86,6 +90,3 @@ pub(crate) mod type_name_namespace;
 pub(crate) mod source_types;
 
 pub mod current_module_names;
-
-pub(crate) mod source_body_context;
-pub(crate) mod macro_boundary;

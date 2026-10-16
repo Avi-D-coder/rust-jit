@@ -2,8 +2,12 @@
 //! substitute language suite. Constructed schema4 records exercise admission;
 //! they do not claim a physically adopted SDK/tool preparation or guest run.
 use super::*;
+#[path = "original_annotations_tests.rs"]
+mod original_annotation_tests;
 #[path = "../../db/macro_export_inputs_tests.rs"]
 mod publication_tests;
+#[path = "sealed_macro_export_view_tests.rs"]
+mod sealed_view_tests;
 use crate::{
     core::profile::{GUEST_TARGET, ProfileIdentity},
     db::key::OutlineKey,

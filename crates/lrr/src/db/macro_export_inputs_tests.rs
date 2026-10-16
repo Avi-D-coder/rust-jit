@@ -169,6 +169,75 @@ fn macro_export_receipts_publish_no_runtime_source_or_retained_graph() {
 }
 
 #[test]
+fn macro_export_source_observation_binds_actual_outline_and_graph_without_runtime_grant() {
+    let (manifest, facet, _) = preparation_with_pair();
+    let mut db = database(&manifest);
+    let selection = facet.source().selection().clone();
+    let graph = manifest.graph.fingerprint();
+    assert!(
+        db.macro_export_source_observation(&selection, graph)
+            .unwrap()
+            .is_none()
+    );
+    db.publish_macro_export_sources(std::slice::from_ref(&facet))
+        .unwrap();
+    let observation = db
+        .macro_export_source_observation(&selection, graph)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        observation.outline_fingerprint(),
+        facet.source().outline().fingerprint()
+    );
+    assert_eq!(
+        observation.dependencies(),
+        &db.macro_export_source_dependencies(&facet).unwrap()
+    );
+    assert_eq!(
+        observation.outline_stamp(),
+        (
+            crate::db::key::QueryKey::Outline(selection.outline.clone()).fingerprint(),
+            facet.source().outline().fingerprint(),
+        )
+    );
+    assert!(
+        db.macro_export_source_observation(&selection, Digest([176; 32]))
+            .is_err()
+    );
+    let mut changed = selection.clone();
+    changed.outline.parse.content = Digest([177; 32]);
+    assert_eq!(changed.location_identity(), selection.location_identity());
+    assert!(db.macro_export_source_observation(&changed, graph).is_err());
+    let Some((InputValue::MacroExportSource(receipt), _)) =
+        db.published_input(&InputKey::MacroExportSource(selection.location_identity()))
+    else {
+        panic!("actual configured source receipt absent")
+    };
+    assert_eq!(receipt.unit_graph(), graph);
+    assert_eq!(
+        receipt.outline_fingerprint(),
+        facet.source().outline().fingerprint()
+    );
+    assert!(db.prepared_source(&selection).unwrap().is_none());
+    assert!(db.prepared_parse(&selection.outline.parse).is_none());
+    assert!(db.prepared_outline(&selection.outline).is_none());
+    assert!(
+        db.input(&InputKey::CapturedSource(selection.location_identity()))
+            .is_none()
+    );
+    assert!(
+        db.input(&InputKey::SourceBlob(selection.outline.parse.content))
+            .is_none()
+    );
+    db.publish_inputs(BTreeMap::new()).unwrap();
+    assert!(
+        db.macro_export_source_observation(&selection, graph)
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
 fn macro_export_publication_is_atomic_idempotent_and_forbidden_in_runs() {
     let (manifest, one, _) = preparation_with_pair();
     let mut db = database(&manifest);

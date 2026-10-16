@@ -1358,3 +1358,60 @@ A separate2-leaf Arc-lifetime repair is frozen and assigned async validation.
 Actual full SDK/module graph adoption, role annotation replay, complete retained
 provider ownership and legacy assertion-route removal remain prerequisites.
 These live successors are excluded from the validated171 source checkpoint.
+
+
+Actual checkpoint b758c9e35e02baf7951d9a3cf7f9424a07f54f4a pushed
+c7be2b/0 after sourceguard6a2cfe/0 (69stagedfiles/2446594bytes/0violations),
+difff00bcd/0 and plan0c182b/0. Only exact compiled171 and9 explicit documents
+were staged; live role181, replay/source ownership and definition-module code
+remain separate. Commit9ed8b3/0 unsigned as authorized. No build products,
+validation snapshots or targets included. Source WIP, no acceptance milestone.
+
+
+New component packets remain separate by frozen source: role source/seal V3
+13/13 PASS; retained proof replay V1 2 PASS plus required core failure; actual
+core root V2 1 FAIL at the live no_core guard; local Type/definition module V1
+3 PASS/1 FAIL before publication; retained prefix replay V1 10/10 PASS. The
+last bank removes repeated prefix/proof parsing while retaining actual binding
+and source checks. No new stock runtime or full-fixture passes, integrated task,
+architecture closure or JIT admission. The opaque-control diagnostic successor
+identifies an unresolved discovery producer; it does not repair the failure.
+Existing generic Outline pins cover inner handles retained after memo eviction
+by source inspection; complete local-plan retention/publication remains held.
+Evidence: worktracks/evidence/2026-10-15-common-macro-source-validation-frontiers.json.
+
+
+Body-Type declaration189 compiled and passed10 distinct controls (new3 plus7
+nearest existing);15warnings remain. It shares the existing canonical nominal
+Type builder and retains owning environment/cache publication as an explicit
+production prerequisite. Role190 compiled and passed3 authority controls, while
+required full-core source failed1: root/no_core admission advanced to unresolved
+import demands during compiler route configuration, before discovery/publication.
+No stock/runtime/full-fixture increment. Exact separate evidence:
+worktracks/evidence/2026-10-15-body-type-and-macro-role-frontiers.json.
+
+Root selected local declaration4 plus peer local canonical2 compose a separate
+frozen192 source085e9f9c, asynchronously compiling. Source publication accepts
+only actual current entered facts/AST, publishes selected source/header/context
+rows without name/scope/body authority, and preserves producer/conflict/run/query/
+budget barriers. Shared nominal schema uses exact syntax_at instead of scanning
+the whole file. No pass claimed before the actual terminal. Producer diagnosis
+for the older opaque-body failure is queued separately; namespace code has not
+been changed on an unconfirmed explanation.
+
+
+Local192 actual compile0ba889/0 retained17warnings; DB4 bank5801fe/1
+passed2/failed2. The unchanged local structs/shared schema and pending attribute
+barrier passed. Conflict/current-owner controls failed in setup while replaying
+derived granular ScopeBlockers/NameCandidates alongside original ScopeMembers;
+actual publish_inputs correctly rejected duplicate projections. Corrected test
+helper retains complete ScopeMembers and lets publication derive projections
+once; production publisher unchanged. Exact2leaf successor ee58f8/0 also drops
+the unused range import and is uncompiled/unexecuted. New local2/schema3 remain
+unexecuted. Separate diagnostic singleton is ahead of this correction in queue.
+
+Preparing source-only checkpoint from exact validated189 (10 scoped passes,
+15warnings, inherited opaque/core failures open) plus explicit documents and
+three-worker AGENTS rule. Prefix188, macro role190, root192 and current worker
+successors are deliberately excluded from these staged source bytes. This is
+a reproducible WIP source checkpoint, not integrated interpreter acceptance.

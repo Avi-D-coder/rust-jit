@@ -166,7 +166,7 @@ pub struct GeneratedMacroCatalog {
     calls: BTreeMap<(u32, Digest), GeneratedCallIndex>,
     call_sites: BTreeMap<Digest, (u32, GeneratedCallIndex)>,
     call_scopes: BTreeMap<Digest, SourceScope>,
-    module_scopes: BTreeMap<SourceScope, ScopeKey>,
+    module_scopes: Arc<BTreeMap<SourceScope, ScopeKey>>,
     module_sources: BTreeMap<Digest, ModuleParent>,
     completed_module_sources: BTreeMap<Digest, ModuleParent>,
     source_body_owners: BTreeMap<Digest, Arc<crate::expand::source_declarative::SourceDeclarative>>,
@@ -190,7 +190,7 @@ pub struct GeneratedMacroCatalog {
     test_registration_candidates: BTreeMap<Digest, Arc<crate::syntax::outline::ItemOutline>>,
     test_registration_candidate_bytes: usize,
     test_registrations: BTreeMap<Digest, Arc<crate::syntax::outline::ItemOutline>>,
-    derive_parent_views: BTreeMap<Digest, TextualScopes>,
+    derive_parent_views: BTreeMap<Digest, Arc<TextualScopes>>,
     derive_parent_view_bytes: usize,
     completed: BTreeMap<Digest, Arc<ExpansionRecord>>,
     inflight: BTreeMap<Digest, ExpansionKey>,
@@ -202,11 +202,11 @@ pub struct GeneratedMacroCatalog {
     body_owners: BTreeMap<Digest, Arc<GeneratedItems>>,
     route_children: Vec<Arc<GeneratedRouteSnapshot>>,
     selection_children: Vec<Arc<Self>>,
-    scopes: TextualScopes,
+    scopes: Arc<TextualScopes>,
     scope: ScopeKey,
-    declarations: MacroDeclarations,
+    declarations: Arc<MacroDeclarations>,
     facts: Arc<HygieneFacts>,
-    ancestry: ExpansionAncestry,
+    ancestry: Arc<ExpansionAncestry>,
     edition: u16,
 }
 pub(crate) struct GeneratedCompilerInput<'a> {
@@ -386,6 +386,56 @@ fn contained_scope(scope: &SourceScope, owner: &SourceScope) -> bool {
         && scope.module_path.starts_with(&owner.module_path)
 }
 impl GeneratedMacroCatalog {
+    pub(crate) fn retained_items(&self) -> &Arc<GeneratedItems> {
+        &self.items
+    }
+    pub(crate) fn retained_module_scopes(&self) -> &Arc<BTreeMap<SourceScope, ScopeKey>> {
+        &self.module_scopes
+    }
+    pub(crate) fn retain_body_outer(
+        &self,
+        owner: &SourceScope,
+        before: u64,
+    ) -> Result<super::macro_boundary::RetainedMacroScope, Diagnostic> {
+        let scope = *self
+            .module_scopes
+            .get(owner)
+            .ok_or_else(|| fault("generated body module macro scope absent"))?;
+        super::macro_boundary::RetainedMacroScope::new(
+            Arc::clone(&self.scopes),
+            Arc::clone(&self.declarations),
+            Arc::clone(&self.facts),
+            Arc::clone(&self.ancestry),
+            scope,
+            before,
+        )
+    }
+    pub(crate) fn retain_outer(
+        &self,
+        outer: super::macro_scopes::OuterMacroScope<'_>,
+    ) -> Result<Option<super::macro_boundary::RetainedMacroScope>, Diagnostic> {
+        if !std::ptr::eq(outer.declarations, self.declarations.as_ref()) {
+            return Ok(None);
+        }
+        let scopes = if std::ptr::eq(outer.scopes, self.scopes.as_ref()) {
+            Some(&self.scopes)
+        } else {
+            self.derive_parent_views
+                .values()
+                .find(|view| std::ptr::eq(outer.scopes, view.as_ref()))
+        };
+        let Some(scopes) = scopes else {
+            return Ok(None);
+        };
+        Ok(Some(super::macro_boundary::RetainedMacroScope::new(
+            Arc::clone(scopes),
+            Arc::clone(&self.declarations),
+            Arc::clone(&self.facts),
+            Arc::clone(&self.ancestry),
+            outer.scope,
+            outer.before,
+        )?))
+    }
     pub fn new(
         items: &GeneratedItems,
         owner: SourceScope,
@@ -875,7 +925,9 @@ impl GeneratedMacroCatalog {
             .unwrap_or_else(|| items.hygiene_facts());
         Arc::make_mut(&mut facts).extend(&items.hygiene_facts())?;
         let mut declarations = MacroDeclarations::default();
-        let mut ancestry = parent.map(|p| p.ancestry.clone()).unwrap_or_default();
+        let mut ancestry = parent
+            .map(|p| p.ancestry.as_ref().clone())
+            .unwrap_or_default();
         let origin = Key(items.record().key().fingerprint().0);
         ancestry.register(origin, parent.map(Self::origin))?;
         let headers = items
@@ -1133,7 +1185,7 @@ impl GeneratedMacroCatalog {
             calls,
             call_sites,
             call_scopes,
-            module_scopes,
+            module_scopes: Arc::new(module_scopes),
             module_sources,
             completed_module_sources: BTreeMap::new(),
             source_body_owners: BTreeMap::new(),
@@ -1170,11 +1222,11 @@ impl GeneratedMacroCatalog {
             body_owners: BTreeMap::new(),
             route_children: Vec::new(),
             selection_children: Vec::new(),
-            scopes,
+            scopes: Arc::new(scopes),
             scope,
-            declarations,
+            declarations: Arc::new(declarations),
             facts,
-            ancestry,
+            ancestry: Arc::new(ancestry),
             edition: items.record().key().call_edition,
         })
     }
@@ -2014,7 +2066,7 @@ impl GeneratedMacroCatalog {
                             );
                             self.call_scopes.insert(request.key().invocation, scope);
                             self.derive_parent_views
-                                .insert(request.key().invocation, view);
+                                .insert(request.key().invocation, Arc::new(view));
                             self.derive_parent_view_bytes = bytes;
                             let record = self
                                 .derive_outputs
@@ -2116,7 +2168,7 @@ impl GeneratedMacroCatalog {
                         if self.derive_parent_views.contains_key(&identity) {
                             return Err(fault("later attribute parent view already retained"));
                         }
-                        self.derive_parent_views.insert(identity, view);
+                        self.derive_parent_views.insert(identity, Arc::new(view));
                         self.derive_parent_view_bytes = bytes;
                     }
                     self.pending = Some(request.clone());
@@ -2642,7 +2694,7 @@ impl GeneratedMacroCatalog {
                 .module_scopes
                 .get(&scope)
                 .ok_or_else(|| fault("empty derive lexical scope absent"))?;
-            self.scopes.complete_prefix(lexical, u64::from(at), id)?;
+            Arc::make_mut(&mut self.scopes).complete_prefix(lexical, u64::from(at), id)?;
             self.calls.remove(&(at, id));
             self.settled_derive_items.insert(id);
         }
@@ -2853,8 +2905,7 @@ impl GeneratedMacroCatalog {
             .module_scopes
             .get(scope)
             .ok_or_else(|| fault("compiler test lexical module absent"))?;
-        self.scopes
-            .complete_prefix(lexical, u64::from(at), identity)?;
+        Arc::make_mut(&mut self.scopes).complete_prefix(lexical, u64::from(at), identity)?;
         self.calls.remove(&(at, identity));
         self.compiler_test_items.insert(identity, proof);
         self.settled_derive_items.insert(identity);
@@ -3019,7 +3070,7 @@ impl GeneratedMacroCatalog {
             .module_scopes
             .get(scope)
             .ok_or_else(|| fault("inherited item lexical scope absent"))?;
-        self.scopes.complete_prefix(lexical, u64::from(at), id)?;
+        Arc::make_mut(&mut self.scopes).complete_prefix(lexical, u64::from(at), id)?;
         self.calls.remove(&(at, id));
         self.inherited_items.insert(id, proof);
         self.settled_derive_items.insert(id);
@@ -3275,7 +3326,7 @@ impl GeneratedMacroCatalog {
         captured: CapturedMacroContext<'_>,
         ancestors: &[&Self],
     ) -> Result<Option<Digest>, Diagnostic> {
-        let mut ancestry = self.ancestry.clone();
+        let mut ancestry = self.ancestry.as_ref().clone();
         let mut origin = self.declarations.origin_of(definition)?;
         for ancestor in ancestors {
             ancestry.extend(&ancestor.ancestry)?;
@@ -3543,7 +3594,7 @@ impl GeneratedMacroCatalog {
         if self.scopes.metadata_bytes()? > 32 * 1024 * 1024 {
             return Err(fault("generated compiler argument scope budget"));
         }
-        let mut scopes = self.scopes.clone();
+        let mut scopes = self.scopes.as_ref().clone();
         scopes.omit_invocation_position(lexical, u64::from(*at))?;
         let resolver = GeneratedEagerResolver {
             catalog: self,
@@ -4099,8 +4150,12 @@ impl GeneratedMacroCatalog {
             .get(&scope)
             .ok_or_else(|| fault("derive completion lexical scope absent"))?;
         let bindings = self.merge_child_metadata(&child, &scope, key, at, true)?;
-        self.scopes
-            .publish_prefix(lexical, u64::from(at), original, bindings)?;
+        Arc::make_mut(&mut self.scopes).publish_prefix(
+            lexical,
+            u64::from(at),
+            original,
+            bindings,
+        )?;
         self.selection_children.push(Arc::new(child));
         self.completed.insert(key.fingerprint(), record.clone());
         self.inflight.remove(&key.invocation);
@@ -4121,8 +4176,7 @@ impl GeneratedMacroCatalog {
                     .all(|at| consumed.contains(&at))
             }
         {
-            self.scopes
-                .complete_prefix(lexical, u64::from(at), original)?;
+            Arc::make_mut(&mut self.scopes).complete_prefix(lexical, u64::from(at), original)?;
             self.calls.remove(&(at, original));
             self.settled_derive_items.insert(original);
         }
@@ -4232,13 +4286,24 @@ impl GeneratedMacroCatalog {
             None => Vec::new(),
         };
         if after_derive {
-            self.scopes
-                .publish_prefix(lexical, u64::from(position.0), position.1, bindings)?;
-            self.scopes
-                .complete_prefix(lexical, u64::from(position.0), position.1)?;
+            Arc::make_mut(&mut self.scopes).publish_prefix(
+                lexical,
+                u64::from(position.0),
+                position.1,
+                bindings,
+            )?;
+            Arc::make_mut(&mut self.scopes).complete_prefix(
+                lexical,
+                u64::from(position.0),
+                position.1,
+            )?;
         } else {
-            self.scopes
-                .publish(lexical, u64::from(position.0), position.1, bindings)?;
+            Arc::make_mut(&mut self.scopes).publish(
+                lexical,
+                u64::from(position.0),
+                position.1,
+                bindings,
+            )?;
         }
         self.calls.remove(&position);
         if let Some(child) = child {
@@ -4284,7 +4349,7 @@ impl GeneratedMacroCatalog {
             .try_reserve(child.outward.len())
             .map_err(|_| fault("child outward allocation"))?;
         Arc::make_mut(&mut self.facts).extend(&child.facts)?;
-        self.ancestry.extend(&child.ancestry)?;
+        Arc::make_mut(&mut self.ancestry).extend(&child.ancestry)?;
         let insertion = self
             .outward
             .partition_point(|e| e.at < position || (append && e.at == position));
@@ -4295,7 +4360,7 @@ impl GeneratedMacroCatalog {
             if self.definitions.contains_key(&entry.definition.identity) {
                 return Err(fault("generated child definition already registered"));
             }
-            self.declarations.register(
+            Arc::make_mut(&mut self.declarations).register(
                 entry.definition.clone(),
                 entry.context,
                 entry.origin,
@@ -4623,9 +4688,13 @@ impl GeneratedMacroCatalog {
             .try_reserve(bindings.len())
             .map_err(|_| fault("module outward binding allocation"))?;
         Arc::make_mut(&mut self.facts).extend(index.hygiene_facts())?;
-        self.ancestry.extend(index.expansion_ancestry())?;
-        self.declarations
-            .copy_selected(index.declarations(), &ids, &self.facts, &self.ancestry)?;
+        Arc::make_mut(&mut self.ancestry).extend(index.expansion_ancestry())?;
+        Arc::make_mut(&mut self.declarations).copy_selected(
+            index.declarations(),
+            &ids,
+            &self.facts,
+            &self.ancestry,
+        )?;
         for (name, definition) in &bindings {
             let (context, origin) = index.declarations().metadata_of(definition)?;
             self.definitions
@@ -4642,7 +4711,7 @@ impl GeneratedMacroCatalog {
             });
         }
         self.outward.sort_by_key(|entry| entry.at);
-        self.scopes.publish(child_scope, 0, producer, bindings)?;
+        Arc::make_mut(&mut self.scopes).publish(child_scope, 0, producer, bindings)?;
         let module = self
             .module_sources
             .remove(&producer)
@@ -4698,7 +4767,7 @@ impl GeneratedMacroCatalog {
             .ok_or_else(|| fault("generated parent lexical scope absent"))?;
         let (scopes, before) = if let Some(view) = self.derive_parent_views.get(&invocation) {
             (
-                view,
+                view.as_ref(),
                 u64::from(position)
                     .checked_add(1)
                     .ok_or_else(|| fault("derive prefix position overflow"))?,
@@ -4707,7 +4776,7 @@ impl GeneratedMacroCatalog {
             if matches!(index, GeneratedCallIndex::Derive(_, _)) {
                 return Err(fault("derive parent prefix view absent"));
             }
-            (&self.scopes, u64::from(position))
+            (self.scopes.as_ref(), u64::from(position))
         };
         Ok(super::macro_scopes::OuterMacroScope {
             scopes,

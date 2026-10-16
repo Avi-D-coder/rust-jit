@@ -245,7 +245,92 @@ impl SourceMacroRoutes {
             |module, at, name| index.lookup(module, at, name),
         )?;
         result.export_pending = index.pending_producers().collect();
+        result.include_restored_original_macros(outline, index)?;
         Ok(result)
+    }
+    /// Original attribute completion publishes source declarations in the
+    /// ordinary index. Their initial textual event was a producer, so preserve
+    /// the actual restored row's dialect, visibility and export annotation.
+    pub(crate) fn include_restored_original_macros(
+        &mut self,
+        outline: &Outline,
+        index: &SourceMacroIndex,
+    ) -> Result<(), Diagnostic> {
+        let mut bytes = self.metadata_bytes()?;
+        for (identity, ordinal, dialect) in index.restored_original_macros() {
+            let item = outline
+                .items
+                .get(ordinal)
+                .filter(|item| item.def_key.fingerprint() == identity)
+                .ok_or_else(|| error("restored original macro header differs"))?;
+            let path = match dialect {
+                crate::syntax::macro_calls::MacroDefinitionDialect::Rules => {
+                    if !item
+                        .header
+                        .attributes
+                        .iter()
+                        .any(|attribute| attribute.class == AttributeClass::MacroExport)
+                    {
+                        continue;
+                    }
+                    vec![semantic(
+                        &item.def_key.declared_name,
+                        outline.profile.edition,
+                    )?]
+                }
+                crate::syntax::macro_calls::MacroDefinitionDialect::Macro2 => {
+                    let mut path = module_names(&item.scope.module_path, outline.profile.edition)?;
+                    path.push(semantic(
+                        &item.def_key.declared_name,
+                        outline.profile.edition,
+                    )?);
+                    path
+                }
+            };
+            let definition = index
+                .definition(identity)
+                .filter(|definition| {
+                    definition.defining_unit == outline.root_scope.crate_key
+                        && definition.definition_edition == outline.profile.edition
+                })
+                .ok_or_else(|| error("restored original macro definition differs"))?;
+            let route = DefinitionRoute {
+                path: MacroPath::new(item.scope.crate_key, path)?,
+                definition: definition.clone(),
+                visibility: if dialect == crate::syntax::macro_calls::MacroDefinitionDialect::Rules
+                {
+                    Visibility::Public
+                } else {
+                    item.header.visibility.clone()
+                },
+            };
+            if self.definitions.contains(&route) || self.definitions.len() >= 100_000 {
+                return Err(error("restored original macro route conflict/count"));
+            }
+            let route_bytes = route
+                .path
+                .components()
+                .iter()
+                .try_fold(320usize, |bytes, name| {
+                    bytes
+                        .checked_add(64)?
+                        .checked_add(name.as_str().len().checked_mul(4)?)
+                })
+                .and_then(|bytes| {
+                    bytes.checked_add(crate::syntax::imports::visibility_bytes(&route.visibility))
+                })
+                .ok_or_else(|| error("restored original macro route metadata overflow"))?;
+            bytes = bytes
+                .checked_add(route_bytes)
+                .filter(|bytes| *bytes <= 64 * 1024 * 1024)
+                .ok_or_else(|| error("restored original macro route metadata limit"))?;
+            self.definitions
+                .try_reserve(1)
+                .map_err(|_| error("restored original macro route allocation"))?;
+            self.definitions.push(route);
+        }
+        self.metadata_bytes()?;
+        Ok(())
     }
     pub(crate) fn from_lookup(
         outline: &Outline,

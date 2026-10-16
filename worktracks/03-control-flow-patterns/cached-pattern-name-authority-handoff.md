@@ -521,3 +521,58 @@ provider and publication guards; pattern agent owns exact SourceDiscovery hooks.
 All eight recurring modes: no executable macro/literal/pattern/method/numeric
 route added, no generated syntax exemption, no execution planning or world scan,
 no deep body copy. Existing legacy runtime routes remain held for replacement.
+
+
+Root role-owned nested annotation replay join (before edits): extend the same
+private publish_discovery coordinator call with borrowed CompilerReplaySource
+views from actual original annotation plans, prepared independently of proof
+scans. Validate exact selected macro role receipt, configured graph, full seal
+input closure, retained outline fingerprint and original source context before
+consuming replay data. Each actual role source must have one separately owned
+source/scan replay; bound count/temporary metadata and reject duplicates or
+unselected replay inputs. NestedInertProof then uses its existing common row /
+compiler-descriptor revalidation kernel against that current retained scan,
+not against its own proof.scan as a purported currentness witness. No parser or
+source facts are published into runtime inputs. Other argument/fragment/module
+replay paths keep their existing refusals until their genuine role dependencies
+are implemented; do not expand the legacy runtime-no-item/assertion proof route
+by supplying it role source data. Original no-transform item proofs already
+replay actual source, independent plan and namespace before sealing. Full SDK
+ancestry/adoption and owning export transport remain outstanding. Acceptance
+requires actual role/source nested annotation publication and revocation controls
+over unchanged official input; isolated pure replay controls are only prerequisites.
+
+
+## Selected entered declaration publication (root, October 15)
+
+LOCAL-024 / WT04 T014/T024/T032, M014/M017/M018. Unchanged official
+borrowck-assign-to-subfield.rs contains local A/B declarations, already discovered
+by PreparedBodyContext and selected through the actual local Type occurrence.
+The common Type query currently cannot consume them because exact selected
+DefinitionSource/Header/DeclarationContext rows are absent. This is a concrete
+preparation prerequisite, not evidence that a source name grants current use.
+
+Root extends coordinator DB publication in new local_declaration_inputs.rs and
+its external control leaf. It consumes only a genuine current PreparedBodyContext
+and selects an exact item already retained in its EnteredMacroFacts, verifies
+its exact indexed AST header/range/profile/scope, and publishes only that item's
+three declaration rows atomically. A pending attribute producer stays a typed
+demand. No ScopeMembers/NameCandidates/DefinitionBody, expansion, executable
+query, macro-name rule, alternate Type constructor or source-origin exclusion.
+Header changes/foreign contexts/conflicting rows/active query/run/budget refusal
+must leave all selected rows unchanged; identical rows are idempotent. Relevant
+published input stamps feed the existing Signature/TypeSchema/body declaration
+queries. Publication is cold and bounded by actual retained selected header size;
+there is no new per-operation guard or whole-world namespace census.
+
+The current environment-publication/cache and complete plan-retention joins remain
+mandatory before production use. Peer owns the common local canonical declaration
+join (including genuine generated/retained body-local facts); root owns DB only.
+Existing source_types::prepare_nominal remains the one Type construction kernel.
+Root also replaces nominal_schema's whole-file descendants lookup with existing
+ParsedFile::syntax_at(context.range), retaining exact kind/header checks. Same
+ordinary parser/query path for every source origin, no second schema parser.
+All eight recurring architecture modes remain open overall; these changes remove
+no legacy macro evaluator. Required external controls reuse unchanged A/B in all
+four editions, actual schema query and exact publication/revocation/budget/producer
+barriers. Runtime main/full-fixture/architecture acceptance are not claimed.

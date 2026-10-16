@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "scope": "Separate frozen component results; not one combined test suite or current-tree acceptance.",
+  "packets": [
+    {
+      "packet": "sol-common-role-source-seal-validation-v3",
+      "release_sha256": "3350dda0c2913f8ac8ff6b87083aec64a89f62d22e12c324228d50d2089f8aca",
+      "source_fingerprint": "fb4ee222431689dc079d8160bb5a704fbf24e6d02f19b1967eee5cbe28311ec6",
+      "compiled_source_rows": 181,
+      "bodies": 13,
+      "passed": 13,
+      "failed": 0,
+      "warnings": 20,
+      "actual_terminals": {
+        "exact_delta": "726232/0",
+        "inactive_fresh": "cf6d3b/0",
+        "compile": {
+          "launch": "e482e2",
+          "session": 35425,
+          "pid": 11376,
+          "terminal": "7c9629/0",
+          "seconds": 23.307975292000002
+        },
+        "list_priority_launch": "e998d6",
+        "priority_sequence": {
+          "session": 65012,
+          "terminal": "f58f8c/0"
+        },
+        "regression_sequence": {
+          "launch": "8ca372",
+          "session": 97851,
+          "terminal": "a0446f/0"
+        },
+        "inactive_after": "a3482a/0"
+      },
+      "failure": null,
+      "unexecuted": [
+        "strict compilation",
+        "CLI runtime characterization",
+        "full milestone",
+        "all unrelated test banks"
+      ]
+    },
+    {
+      "packet": "sol-common-role-owned-proof-replay-validation-v1",
+      "release_sha256": "0f4209ab1ad6fb271d91c5f95afb902da1855f48610580cd660d0dee956efe9e",
+      "source_fingerprint": "4fb22370053507753214922278fee0dbeda2dbc20416c8d9ec9f30f13ce913bc",
+      "compiled_source_rows": 184,
+      "bodies": 3,
+      "passed": 2,
+      "failed": 1,
+      "warnings": 20,
+      "actual_terminals": {
+        "composition": "b6ab0b/0",
+        "inactive_before": "a6a09e/0",
+        "assembly": "54867c/0",
+        "compile": {
+          "launch": "caa218",
+          "session": 58016,
+          "pid": 12192,
+          "terminal": "b6c089/0",
+          "seconds": 23.169163167
+        },
+        "list_priority_launch": "d329e9",
+        "sequence": {
+          "session": 72555,
+          "terminal": "933322/1"
+        },
+        "first_raw_failure": "c7e296/0",
+        "inactive_after": "188d50/0"
+      },
+      "failure": {
+        "path": "crates/lrr/src/expand/source_declarative/sealed_macro_export_view_tests.rs",
+        "line": 252,
+        "call": "SourceDiscovery::new(vec![macros_module_source],...).unwrap() BEFORE with_declarative_compiler",
+        "code": "LRR-E-SOURCE-LIMIT",
+        "message": "namespace unit root outline is absent",
+        "producer_path": "crates/lrr/src/frontend/names.rs",
+        "producer_line": 513,
+        "child_exit": 101,
+        "dynamic_effect": "constructor failed before discovery.poll, final proof publication, borrowed view creation or runtime execution",
+        "source_only_diagnosis": "Actual selected source is module_path=[macros], no same-unit empty-module root outline; NameNamespaces::admit_source_outlines builds root set from empty module paths then rejects missing root. Genuine source dependency prerequisite, not an accepted refusal."
+      },
+      "unexecuted": [
+        "priorsealed2",
+        "priorpublication5",
+        "strict",
+        "CLI/runtime/stock",
+        "full milestone"
+      ]
+    },
+    {
+      "packet": "sol-common-full-core-owning-root-validation-v2",
+      "release_sha256": "c531997e8e3d77a922e4e21f021c65bfe8e8ebe410054e1d656ca5822848cf67",
+      "source_fingerprint": "93e7f45c8605631a3a5a21d8f4e9d8914e90a89623ac1f48b4584cdbc626dc1c",
+      "compiled_source_rows": 184,
+      "bodies": 1,
+      "passed": 0,
+      "failed": 1,
+      "warnings": 20,
+      "actual_terminals": {
+        "compose": "81ac04/0",
+        "inactive_before": "834caf/0",
+        "assembly": "9579f3/0",
+        "compile": {
+          "launch": "e3bcfe",
+          "session": 76557,
+          "pid": 12666,
+          "terminal": "c2fabb/0",
+          "seconds": 24.329124167
+        },
+        "list_run_launch": "a4a36e",
+        "test": {
+          "session": 68214,
+          "pid": 12890,
+          "terminal": "06546b/1",
+          "child_exit": 101,
+          "seconds": 0.17914770799999996
+        },
+        "raw_failure": "3191f5/0",
+        "inactive_after": "8c69e2/0"
+      },
+      "failure": {
+        "path": "crates/lrr/src/expand/source_declarative/sealed_macro_export_view_tests.rs",
+        "line": 277,
+        "call": "with_declarative_compiler(...).unwrap(), after SourceDiscovery::new accepted genuine root outline",
+        "code": "LRR-E-UNSUPPORTED",
+        "message": "no_core is outside the live runtime profile",
+        "producer_path": "crates/lrr/src/syntax/macro_prelude.rs",
+        "producer_line": 36,
+        "actual_original": "library/core/src/lib.rs line64 #![no_core] unchanged",
+        "stage": "before with_macro_export_source_publications/discovery.poll/final publication/runtime",
+        "child_exit": 101
+      },
+      "unexecuted": [
+        "replay2 not repeated",
+        "old sealed/publication7",
+        "187 name controls excluded",
+        "strict/full milestone/CLI/runtime stock"
+      ]
+    },
+    {
+      "packet": "sol-common-local-type-definition-module-validation-v1",
+      "release_sha256": "7ea820d002f1e17ff8599a7fe29869830c161fc8380db19edd5bc537029ee23a",
+      "source_fingerprint": "a9592bc19bb7d1c7f5f647c1cc65910478684f6db359b539b1d6d99e10cda56d",
+      "compiled_source_rows": 187,
+      "bodies": 4,
+      "passed": 3,
+      "failed": 1,
+      "warnings": 15,
+      "actual_terminals": {
+        "compose": "35d4bb/0",
+        "inactive_before": "7f2090/0",
+        "assembly": "7180ad/0",
+        "compile": {
+          "launch": "171f62",
+          "session": 68905,
+          "pid": 12454,
+          "terminal": "b1adc1/0",
+          "seconds": 23.068261417000002
+        },
+        "list_priority_launch": "dd43d0",
+        "sequence": {
+          "session": 7444,
+          "terminal": "0c02cb/1"
+        },
+        "first_raw_failure": "a89780/0",
+        "inactive_after": "1fd294/0"
+      },
+      "failure": {
+        "path": "crates/lrr/src/frontend/macro_definition_module_tests.rs",
+        "line": 128,
+        "test": "frontend::macro_definition_modules::tests::actual_opaque_body_record_joins_selected_definition_module_and_expires",
+        "message": "opaque source authority needs another actual producer",
+        "actual_poll_outcome": "unobserved: wildcard panic does not print typed event; no inferred NeedInput/Incomplete code",
+        "stage": "SourceDiscovery::poll loop before publication; authority receipt not reached",
+        "edition": "loop starts2015; diagnostic does not print actual edition",
+        "source_setup": "LRR authority program #![feature(decl_macro)] mod definitions{struct Target... pub macro emit...} definitions::emit!(); actual root Type discovery/standalone compiler"
+      },
+      "unexecuted": [
+        "nearest existing localType prefix3 after failed priority",
+        "old fullcore required failure unchanged/unrerun",
+        "strict/fullmilestone/CLI/stock"
+      ]
+    },
+    {
+      "packet": "sol-common-retained-original-prefix-replay-validation-v1",
+      "release_sha256": "a16d3ca259f8dd8e12443b6a675d28562c91fa4c34fffc5155ce540814f35d41",
+      "source_fingerprint": "13a698efaa520c572c02e1f2fcf2bc0a7614f53108e64c93d56ced0b8110c554",
+      "compiled_source_rows": 188,
+      "bodies": 10,
+      "passed": 10,
+      "failed": 0,
+      "warnings": 20,
+      "actual_terminals": {
+        "compose": "fe489c/0",
+        "inactive_before": "72e90f/0",
+        "assembly": "d8b93f/0",
+        "compile": {
+          "launch": "56afda",
+          "session": 88625,
+          "pid": 13163,
+          "terminal": "35468d/0",
+          "seconds": 31.887328709
+        },
+        "priority": {
+          "launch": "d0a03f",
+          "session": 50429,
+          "terminal": "0cca63/0"
+        },
+        "regressions": {
+          "launch": "329d6b",
+          "session": 9203,
+          "terminal": "4af6fb/0"
+        }
+      },
+      "failure": null,
+      "unexecuted": [
+        "full original_inert bank beyond selected6",
+        "requiredcore/name187 not repeated",
+        "strict/fullmilestone/CLI/stock"
+      ]
+    }
+  ],
+  "runtime_contract_pass_increment": 0,
+  "full_fixture_pass_increment": 0,
+  "architecture_status": "E-R5-005 and all eight recurring failure modes remain open. Legacy assertion-specific production paths remain reachable.",
+  "remaining_frontiers": [
+    "Actual MacroExport role-world preparation for unchanged full core source: current required control fails at live no_core guard.",
+    "Opaque body selected-definition control: current discovery stops with an unresolved producer before publication.",
+    "Shared Type declaration construction still needs owning environment publication and full retention integration.",
+    "Ordinary generated execution integration and removal of superseded macro-specific production paths."
+  ],
+  "accounting_source_review": {
+    "status": "Source review only; no new test execution. Existing generic Outline pin mechanism can be reused.",
+    "symbols": [
+      "db/memo.rs::QueryPin::new",
+      "db/memo.rs::QueryPin::external",
+      "db/memo.rs::Database::returned",
+      "db/memo.rs::Database::cache_usage",
+      "frontend/local_type_modules.rs::LexicalTypeModule::prepare"
+    ],
+    "existing_regression": "crates/lrr/tests/source_publication.rs::retired_outline_inner_handle_is_charged_until_release",
+    "limit": "This does not establish full PreparedSourceLocalPlan accounting or environment publication."
+  }
+}

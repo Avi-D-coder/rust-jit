@@ -253,3 +253,223 @@ fn unchanged_box_local_type_keeps_its_actual_unfinished_macro_frontier() {
     }
     // Genuine standard-macro output/currentness remains required. No Box/main pass.
 }
+
+#[test]
+fn unchanged_const_module_tail_demands_its_actual_current_type_bucket() {
+    const ORIGINAL: &str =
+        include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/issue-19244.rs");
+    use crate::{
+        db::dependency::{DependencyStamp, InputKey},
+        expand::source_discovery::{SourceDiscovery, SourceDiscoveryStep},
+        frontend::{
+            compile_input_catalog::CompileInputCatalog, current_module_names::ModuleNameCompletion,
+        },
+        source::manifest::Namespace,
+    };
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, plan) = prepare(ORIGINAL, "STRUCT", edition);
+        db.begin_expansion_epoch(1).unwrap();
+        let prefix = ready(plan.type_prefix(&mut db, NodeId(0)));
+        assert!(matches!(
+            prefix.selection(),
+            LocalTypePrefixSelection::ModuleTail
+        ));
+        let selector = prefix.module_selector().unwrap();
+        let (_, hygiene) = plan.entered.local_hygiene();
+        let used = prefix.use_name().unwrap();
+        assert_eq!(
+            selector.normalized_context(),
+            hygiene.item(used.context()).unwrap()
+        );
+        assert_eq!(
+            selector.comparison_context(),
+            hygiene.name_item(used.context()).unwrap()
+        );
+        assert!(
+            hygiene
+                .context(selector.normalized_context())
+                .unwrap()
+                .parent
+                .is_none()
+        );
+        assert_eq!(
+            plan.lexical_outline_key().parse,
+            plan.context().source().parsed().key()
+        );
+        assert_eq!(
+            plan.lexical_outline_root().content,
+            plan.lexical_outline_key().parse.content
+        );
+        let unsealed = ready(prefix.module_name(&mut db)).unwrap();
+        assert_eq!(unsealed.completion(), ModuleNameCompletion::Unsealed);
+        assert!(unsealed.lookup().is_none());
+
+        let source = plan.context().module_source().unwrap();
+        let mut discovery = SourceDiscovery::new(
+            vec![source.share()],
+            source.outline().root_scope.clone(),
+            Namespace::Type,
+            Digest::of_bytes(b"actual local Type tail upstream discovery"),
+            1,
+        )
+        .unwrap()
+        .with_declarative_compiler(
+            Digest::of_bytes(b"actual local Type tail compile context"),
+            crate::expand::source_declarative::engine_version(),
+            Arc::new(CompileInputCatalog::standalone(&source.outline().profile).unwrap()),
+        )
+        .unwrap();
+        let mut published = false;
+        for _ in 0..100_000 {
+            match discovery.poll().unwrap() {
+                SourceDiscoveryStep::NeedExpansion { request } => discovery
+                    .admit_expansion(Arc::new(request.expand().unwrap()))
+                    .unwrap(),
+                SourceDiscoveryStep::NeedGeneratedExpansion { request } => discovery
+                    .admit_expansion(Arc::new(request.expand().unwrap()))
+                    .unwrap(),
+                SourceDiscoveryStep::Sealed(_) => {
+                    discovery.publish(&mut db).unwrap();
+                    published = true;
+                    break;
+                }
+                _ => panic!("unchanged const source needs another actual producer"),
+            }
+        }
+        assert!(published);
+        let completed = ready(prefix.module_name(&mut db)).unwrap();
+        assert_eq!(completed.completion(), ModuleNameCompletion::Complete);
+        let Some(NameLookup::Defined(definition)) = completed.lookup() else {
+            panic!("actual MyStruct module source was not selected")
+        };
+        let declared = source
+            .outline()
+            .items
+            .iter()
+            .find(|item| item.def_key.declared_name == "MyStruct")
+            .unwrap();
+        assert_eq!(definition.identity, declared.def_key.fingerprint());
+        assert!(matches!(
+            completed.answer_dependency(),
+            Some(DependencyStamp::Query {
+                key: QueryKey::SealedName(_),
+                ..
+            })
+        ));
+        assert!(matches!(
+            completed.certificate_dependency(),
+            Some(DependencyStamp::Input {
+                key: InputKey::DiscoverySeal(_),
+                ..
+            })
+        ));
+        let same = ready(prefix.module_name(&mut db)).unwrap();
+        assert!(Arc::ptr_eq(&same, &completed));
+
+        db.begin_expansion_epoch(2).unwrap();
+        let refreshed = ready(prefix.module_name(&mut db)).unwrap();
+        assert_eq!(refreshed.completion(), ModuleNameCompletion::Unsealed);
+        assert!(refreshed.lookup().is_none());
+        assert_ne!(refreshed.semantic_identity(), completed.semantic_identity());
+
+        // Retaining the old result is not current authority after actual source
+        // removal. This mutates LRR publication only, never the upstream input.
+        db.publish_inputs(Default::default()).unwrap();
+        assert!(matches!(
+            prefix.module_name(&mut db),
+            QueryPoll::Ready(Err(_))
+        ));
+        assert!(!db.trace.events.iter().any(|event| matches!(
+            event.key,
+            QueryKey::Thunk(_)
+                | QueryKey::Constant(_)
+                | QueryKey::TypeSchema(_)
+                | QueryKey::FunctionSignature(_)
+        )));
+    }
+}
+
+#[test]
+fn pinned_opaque_outer_mark_never_falls_back_to_lexical_module_membership() {
+    const ORIGINAL: &str =
+        include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/issue-19244.rs");
+    use lrr_expand_adapter::{
+        hygiene::{HygieneStore, MarkRequest},
+        token_wire::{Edition, Key as WireKey, TokenForest, Transparency},
+    };
+    for edition in [2015, 2018, 2021, 2024] {
+        let (_, plan) = prepare(ORIGINAL, "STRUCT", edition);
+        let wire_edition = match edition {
+            2015 => Edition::E2015,
+            2018 => Edition::E2018,
+            2021 => Edition::E2021,
+            _ => Edition::E2024,
+        };
+        let mut pinned = HygieneStore::default();
+        let owner = WireKey([240; 32]);
+        let root = pinned.root(owner, wire_edition).unwrap();
+        let foreign_root = pinned.root(WireKey([245; 32]), wire_edition).unwrap();
+        let outer = WireKey([242; 32]);
+        let opaque = pinned
+            .apply(MarkRequest {
+                parent: root,
+                call_site: root,
+                expansion: outer,
+                defining_unit: owner,
+                definition_edition: wire_edition,
+                transparency: Transparency::Opaque,
+            })
+            .unwrap();
+        let emitted = pinned
+            .apply(MarkRequest {
+                parent: foreign_root,
+                call_site: opaque,
+                expansion: WireKey([243; 32]),
+                defining_unit: WireKey([245; 32]),
+                definition_edition: wire_edition,
+                transparency: Transparency::SemiTransparent,
+            })
+            .unwrap();
+        let rules_only = pinned
+            .apply(MarkRequest {
+                parent: foreign_root,
+                call_site: root,
+                expansion: WireKey([244; 32]),
+                defining_unit: WireKey([245; 32]),
+                definition_edition: wire_edition,
+                transparency: Transparency::SemiTransparent,
+            })
+            .unwrap();
+        let keys = [root, opaque, emitted, rules_only];
+        let normalized = pinned.resolution_contexts(&keys).unwrap();
+        let names = pinned.name_contexts(&keys).unwrap();
+        let encoded = TokenForest::new(vec![], pinned.records(), vec![])
+            .unwrap()
+            .encode()
+            .unwrap();
+        let decoded = crate::syntax::token_wire::TokenForest::decode(&encoded).unwrap();
+        let facts = HygieneFacts::new(
+            decoded.contexts().to_vec(),
+            serde_json::from_slice(&serde_json::to_vec(&normalized).unwrap()).unwrap(),
+        )
+        .unwrap()
+        .with_name_contexts(serde_json::from_slice(&serde_json::to_vec(&names).unwrap()).unwrap())
+        .unwrap();
+        assert!(
+            matches!(plan.lexical_module.route(&facts, Key(opaque.0)).unwrap(), ModuleRoute::Definition(key) if key.0 == outer.0)
+        );
+        // The inner macro_rules call class inherited the opaque outer mark;
+        // latest call-context equality must not choose the lexical module.
+        assert!(
+            matches!(plan.lexical_module.route(&facts, Key(emitted.0)).unwrap(), ModuleRoute::Definition(key) if key.0 == outer.0)
+        );
+        assert!(matches!(
+            plan.lexical_module
+                .route(&facts, Key(rules_only.0))
+                .unwrap(),
+            ModuleRoute::Lexical(_)
+        ));
+        assert!(plan.lexical_module.route(&facts, Key([246; 32])).is_err());
+    }
+    // Pure adapter-context authority control, not an admitted generated program.
+}

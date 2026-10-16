@@ -3,6 +3,8 @@ use super::discovery::{
     Discovery, DiscoveryJob, DiscoveryKind, DiscoveryLimits, DiscoveryStep, DiscoveryUpdate,
     JobTicket,
 };
+#[path = "source_discovery/macro_export_view.rs"]
+mod macro_export_view;
 use crate::{
     core::{
         diagnostic::Diagnostic,
@@ -13,6 +15,7 @@ use crate::{
     source::{changes::PreparedSourceView, manifest::Namespace},
     syntax::outline::{ScopeKey, TextualEventKind},
 };
+pub use macro_export_view::SealedMacroExportView;
 use std::collections::{BTreeMap, BTreeSet};
 #[path = "source_discovery/compiler_profiles.rs"]
 mod compiler_profiles;
@@ -398,6 +401,9 @@ enum AttributeSourceOwner {
 struct StagedModule {
     ordinary_modules: Vec<crate::frontend::source_module_declarations::SourceModuleDeclaration>,
     provider: super::source_declarative::SourceDeclarative,
+    annotation_plan: Option<
+        std::sync::Arc<super::source_declarative::original_annotations::OriginalAnnotationPlan>,
+    >,
     catalogs:
         BTreeMap<Digest, std::sync::Arc<crate::frontend::generated_macros::GeneratedMacroCatalog>>,
     syntax: StagedModuleSyntax,
@@ -429,6 +435,7 @@ pub struct SourceDiscovery {
     imports: ImportResolution,
     producers: BTreeSet<Digest>,
     seal: Option<Seal>,
+    body_boundary_seal_fingerprint: Option<Digest>,
     epoch: u64,
     started: bool,
     declarative: Option<(
@@ -451,6 +458,10 @@ pub struct SourceDiscovery {
     completed_argument_fragments:
         Vec<std::sync::Arc<super::declaration_fragment::CompletedDeclarationFragment>>,
     nested_inert_proofs: BTreeMap<Digest, super::nested_inert::NestedInertProof>,
+    original_annotation_plans: BTreeMap<
+        usize,
+        std::sync::Arc<super::source_declarative::original_annotations::OriginalAnnotationPlan>,
+    >,
     nested_runtime_proofs:
         BTreeMap<Digest, crate::frontend::runtime_macro_plan::RuntimeNoItemProof>,
     nested_sources:
@@ -533,6 +544,8 @@ pub struct SourceDiscovery {
         BTreeMap<Digest, std::sync::Arc<crate::syntax::origin::MacroOrigin>>,
     generated_procedural_origin_bytes: usize,
     generated_owners: BTreeMap<Digest, (usize, ScopeKey)>,
+    completed_empty_boundaries:
+        BTreeMap<Digest, super::body_macro_boundary::CompletedEmptyBoundary>,
     generated_source_modules: BTreeMap<Digest, Digest>,
     compiler_inputs: BTreeMap<crate::db::dependency::InputKey, Digest>,
     admitting_compiler: bool,
@@ -834,6 +847,7 @@ impl SourceDiscovery {
             ordinary_coverage.insert((*ordinal, *start), coverage_end);
         }
         let mut nested_sources = BTreeMap::new();
+        let mut original_annotation_plans = BTreeMap::new();
         let mut nested_jobs = BTreeMap::new();
         let mut original_prefix_jobs = BTreeSet::new();
         let mut nested_bytes = 0usize;
@@ -865,6 +879,15 @@ impl SourceDiscovery {
                 return Err(fault("original root annotation count limit"));
             }
             original_prefix_jobs.extend(prefixes.iter().copied());
+            if scan.generated_origin().is_none() {
+                let plan = super::source_declarative::original_annotations::OriginalAnnotationPlan::capture(source, scan.clone())?;
+                nested_bytes = nested_bytes
+                    .checked_add(plan.metadata_bytes())
+                    .and_then(|n| n.checked_add(128))
+                    .filter(|n| *n <= 512 * 1024 * 1024)
+                    .ok_or_else(|| fault("original annotation plan metadata limit"))?;
+                original_annotation_plans.insert(ordinal, std::sync::Arc::new(plan));
+            }
             let mut index = crate::frontend::impl_index::DeclarationMacroIndex::new(scan)?;
             // The runtime outline owns module items, not associated items.
             // An associated header can have no executable owner; that does not
@@ -961,6 +984,7 @@ impl SourceDiscovery {
             imports,
             producers,
             seal: None,
+            body_boundary_seal_fingerprint: None,
             epoch,
             started: false,
             declarative: None,
@@ -972,6 +996,7 @@ impl SourceDiscovery {
             argument_discoveries: BTreeMap::new(),
             completed_argument_fragments: Vec::new(),
             nested_inert_proofs: BTreeMap::new(),
+            original_annotation_plans,
             nested_runtime_proofs: BTreeMap::new(),
             nested_sources,
             nested_jobs,
@@ -1017,6 +1042,7 @@ impl SourceDiscovery {
             generated_procedural_origins: BTreeMap::new(),
             generated_procedural_origin_bytes: 0,
             generated_owners: BTreeMap::new(),
+            completed_empty_boundaries: BTreeMap::new(),
             generated_source_modules: BTreeMap::new(),
             compiler_inputs: BTreeMap::new(),
             admitting_compiler: false,
@@ -2926,7 +2952,7 @@ impl SourceDiscovery {
             .iter()
             .map(NameNamespaces::import_identity)
             .collect::<BTreeSet<_>>();
-        let mut catalog = if !plan.attribute_frontiers().is_empty()
+        let requires_macro_catalog = !plan.attribute_frontiers().is_empty()
             || !plan.module_sources().is_empty()
             || !plan.discovery_imports().is_empty()
             || !items.calls().is_empty()
@@ -2936,7 +2962,8 @@ impl SourceDiscovery {
                     super::generated_items::GeneratedHeaderKind::MacroRules
                         | super::generated_items::GeneratedHeaderKind::ExternCrate
                 )
-            }) {
+            });
+        let mut catalog = if requires_macro_catalog {
             match crate::frontend::generated_macros::GeneratedMacroCatalog::for_discovery(
                 &items,
                 call.scope.clone(),
@@ -2959,6 +2986,29 @@ impl SourceDiscovery {
         {
             catalog.inherit_original_helpers(helpers.clone())?;
         }
+        let empty_boundary = if !requires_macro_catalog {
+            if self.completed_empty_boundaries.len() >= 100_000
+                || self.completed_empty_boundaries.contains_key(&identity)
+            {
+                return Err(fault("completed empty macro boundary count/conflict"));
+            }
+            Some(super::body_macro_boundary::CompletedEmptyBoundary {
+                record: record.clone(),
+                source_ordinal: ordinal,
+                call: call.clone(),
+            })
+        } else {
+            None
+        };
+        let retained_bytes = retained_bytes
+            .checked_add(if empty_boundary.is_some() {
+                256usize
+                    .checked_add(call.scope.heap_bytes())
+                    .ok_or_else(|| fault("empty macro boundary metadata overflow"))?
+            } else {
+                0
+            })
+            .ok_or_else(|| fault("empty macro boundary metadata overflow"))?;
         let retained_bytes = retained_bytes
             .checked_add(
                 catalog
@@ -3143,6 +3193,9 @@ impl SourceDiscovery {
                     )?;
                 } else {
                     provider.complete_without_macro_bindings(call.item_input)?;
+                    if let Some(boundary) = empty_boundary {
+                        self.completed_empty_boundaries.insert(identity, boundary);
+                    }
                 }
                 for id in &discharged {
                     self.graph.release_generated_frontier(&call.scope, *id);
@@ -5511,6 +5564,16 @@ impl SourceDiscovery {
                 .ok_or_else(|| fault("staged module compiler owner absent"))?
                 .compiler
                 .clone();
+            let annotation_scan = syntax
+                .prepared_source()
+                .declaration_inventory(Default::default())?;
+            let annotation_plan = if annotation_scan.generated_origin().is_none() {
+                Some(std::sync::Arc::new(super::source_declarative::original_annotations::OriginalAnnotationPlan::capture(
+                    syntax.prepared_source(), annotation_scan,
+                )?))
+            } else {
+                None
+            };
             let mut source_calls = BTreeMap::new();
             for call in &outline.item_invocations {
                 source_calls.insert(call.item_input, call.clone());
@@ -5568,6 +5631,13 @@ impl SourceDiscovery {
             let bytes = bytes
                 .checked_add(route_bytes)
                 .and_then(|n| n.checked_add(call_bytes))
+                .and_then(|n| {
+                    n.checked_add(
+                        annotation_plan
+                            .as_ref()
+                            .map_or(0, |plan| plan.metadata_bytes()),
+                    )
+                })
                 .and_then(|n| n.checked_add(provider.module_index_bytes().ok()?))
                 .filter(|n| *n <= 320 * 1024 * 1024)
                 .ok_or_else(|| fault("staged module macro index metadata limit"))?;
@@ -5582,6 +5652,7 @@ impl SourceDiscovery {
                 ordinary_modules,
                 ordinal,
                 source_calls,
+                annotation_plan,
             ))
         })();
         let (
@@ -5595,6 +5666,7 @@ impl SourceDiscovery {
             ordinary_modules,
             ordinal,
             source_calls,
+            annotation_plan,
         ) = match planned {
             Ok(plan) => plan,
             Err(error) => return QueryPoll::Ready(Err(error)),
@@ -5665,6 +5737,7 @@ impl SourceDiscovery {
             StagedModule {
                 ordinary_modules,
                 provider,
+                annotation_plan,
                 catalogs: BTreeMap::new(),
                 completed_invocations: BTreeSet::new(),
                 syntax: syntax.clone(),
@@ -6323,6 +6396,7 @@ impl SourceDiscovery {
                     return Err(fault("module readiness duplicate invocation identity"));
                 }
             }
+            let annotation_plan = staged.annotation_plan.clone();
             let module_provider = staged.provider.module_snapshot()?;
             for call in &calls {
                 if call.attribute_input.is_some() {
@@ -6338,11 +6412,12 @@ impl SourceDiscovery {
                         &self.nested_inert_proofs,
                     )?;
                     if let Some(proof) = self.source_empty_derives.get(&call.item_input) {
-                        if super::source_derives::prepare_empty(
+                        if super::source_derives::prepare_empty_with_annotations(
                             syntax.prepared_source(),
                             &module_provider,
                             call.item_input,
                             &names,
+                            annotation_plan.as_deref(),
                         )?
                         .as_ref()
                             != Some(proof)
@@ -6775,6 +6850,145 @@ impl SourceDiscovery {
             &self.staged_modules,
             identity,
             0,
+        )
+    }
+    /// Cold sealed-demand export of the actual selected output's outer macro
+    /// boundary. The query owner must retain it and its precise dependencies.
+    pub(crate) fn generated_body_macro_boundary(
+        &self,
+        unit: &super::generated_syntax::GeneratedSyntaxInput,
+    ) -> Result<std::sync::Arc<super::body_macro_boundary::GeneratedBodyBoundary>, Diagnostic> {
+        if let Some(error) = &self.failed {
+            return Err(error.clone());
+        }
+        let seal = self
+            .seal
+            .as_ref()
+            .ok_or_else(|| fault("generated body boundary discovery is unsealed"))?;
+        let seal_value = self
+            .body_boundary_seal_fingerprint
+            .ok_or_else(|| fault("generated body boundary sealed value is absent"))?;
+        let identity = unit.items.record().key().fingerprint();
+        let (ordinal, owner) = self
+            .generated_owners
+            .get(&identity)
+            .ok_or_else(|| fault("generated body boundary owner absent"))?;
+        if owner != &unit.scope
+            || unit.seal != self.key
+            || unit.items.epoch() != self.epoch
+            || unit.cfg.fingerprint() != self.sources[*ordinal].captured_macro_cfg()?.fingerprint()
+            || self
+                .records
+                .get(&identity)
+                .is_none_or(|record| !record.same_record(unit.items.record()))
+        {
+            return Err(fault("generated body boundary actual output/owner differs"));
+        }
+        let providers = &self
+            .declarative
+            .as_ref()
+            .ok_or_else(|| fault("generated body boundary source providers absent"))?
+            .2;
+        let (selected, modules, parents) =
+            if let Some(empty) = self.completed_empty_boundaries.get(&identity) {
+                if empty.source_ordinal != *ordinal
+                    || empty.call.scope != *owner
+                    || empty.call.item_input != unit.items.record().key().invocation
+                    || !empty.record.same_record(unit.items.record())
+                {
+                    return Err(fault("completed empty macro insertion receipt differs"));
+                }
+                let provider = providers
+                    .get(*ordinal)
+                    .ok_or_else(|| fault("empty macro insertion provider absent"))?;
+                let captured = super::source_declarative::CapturedMacroContext {
+                    provider,
+                    owners: providers,
+                    before: u64::from(empty.call.range.start),
+                    inherited: None,
+                };
+                (
+                    None,
+                    std::sync::Arc::new(BTreeMap::new()),
+                    captured.retain_source_scopes(owner)?,
+                )
+            } else {
+                let scope = self.generated_module_scope(identity)?;
+                if !scope
+                    .catalog
+                    .retained_items()
+                    .record()
+                    .same_record(unit.items.record())
+                {
+                    return Err(fault("generated body selected catalogue output differs"));
+                }
+                let mut parents = scope.compiler_context().retain_source_scopes(
+                    scope
+                        .ancestors
+                        .last()
+                        .map_or(scope.catalog.owner(), |root| root.owner()),
+                )?;
+                let extra = scope.ancestors.len();
+                if extra
+                    .checked_add(parents.scopes.len())
+                    .is_none_or(|n| n > 256)
+                    || extra
+                        .checked_add(parents.items.len())
+                        .is_none_or(|n| n > 256)
+                {
+                    return Err(fault("generated body outer ancestry limit"));
+                }
+                // Keep the existing innermost-to-outermost ancestor order exactly.
+                let mut generated = Vec::new();
+                generated
+                    .try_reserve_exact(extra + parents.scopes.len())
+                    .map_err(|_| crate::runtime::arena::resource())?;
+                for (at, ancestor) in scope.ancestors.iter().enumerate() {
+                    let child = if at == 0 {
+                        scope.catalog
+                    } else {
+                        scope.ancestors[at - 1]
+                    };
+                    generated.push(
+                        ancestor
+                            .retain_outer(ancestor.invocation_outer(child.invocation())?)?
+                            .ok_or_else(|| fault("generated ancestor root differs"))?,
+                    );
+                    parents
+                        .items
+                        .push(std::sync::Arc::clone(ancestor.retained_items()));
+                }
+                generated.append(&mut parents.scopes);
+                parents.scopes = generated;
+                (
+                    Some(scope.catalog.retain_body_outer(owner, u64::MAX)?),
+                    std::sync::Arc::clone(scope.catalog.retained_module_scopes()),
+                    parents,
+                )
+            };
+        for items in std::iter::once(&unit.items).chain(parents.items.iter()) {
+            let record = items.record();
+            if seal
+                .input_dependencies()
+                .binary_search(&(
+                    record.key().fingerprint(),
+                    record.descriptor().fingerprint(),
+                ))
+                .is_err()
+            {
+                return Err(fault(
+                    "owning boundary record is absent from actual sealed closure",
+                ));
+            }
+        }
+        super::body_macro_boundary::GeneratedBodyBoundary::prepare(
+            std::sync::Arc::clone(&unit.items),
+            owner.clone(),
+            selected,
+            modules,
+            parents,
+            self.key.clone(),
+            seal_value,
         )
     }
     fn module_scope_in<'a>(
@@ -7550,6 +7764,44 @@ impl SourceDiscovery {
         if seal.key() != self.key {
             return Err(fault("discovery certificate context differs"));
         }
+        let mut replay_sources = Vec::new();
+        for (ordinal, source) in self.sources.iter().enumerate() {
+            if db
+                .macro_export_source_observation(source.selection(), self.key.unit_graph)?
+                .is_none()
+            {
+                continue;
+            }
+            if replay_sources.len() >= 256 {
+                return Err(fault("macro-export replay source count limit"));
+            }
+            let plan = self
+                .original_annotation_plans
+                .get(&ordinal)
+                .ok_or_else(|| {
+                    fault("macro-export replay requires its actual original source plan")
+                })?;
+            let replay =
+                crate::source::compiler_replay::CompilerReplaySource::prepare(source, plan.scan())?;
+            if replay_sources.is_empty() {
+                let capacity = self.sources.len().min(256);
+                capacity
+                    .checked_mul(replay.exclusive_metadata_bytes())
+                    .filter(|bytes| *bytes <= 1024 * 1024)
+                    .ok_or_else(|| fault("macro-export replay temporary metadata limit"))?;
+                replay_sources
+                    .try_reserve_exact(capacity)
+                    .map_err(|_| fault("macro-export replay temporary allocation"))?;
+            }
+            replay_sources.push(replay);
+        }
+        let replay_bytes = replay_sources
+            .capacity()
+            .checked_mul(std::mem::size_of::<
+                crate::source::compiler_replay::CompilerReplaySource<'_>,
+            >())
+            .filter(|bytes| *bytes <= 1024 * 1024)
+            .ok_or_else(|| fault("macro-export replay temporary metadata overflow"))?;
         let scope = if !matches!(&self.key.domain, SealDomain::Scope { .. })
             || (self.namespace == Namespace::Macro && self.declarative.is_none())
         {
@@ -7560,7 +7812,10 @@ impl SourceDiscovery {
                     .certified_scope(&self.scope, self.namespace, self.scope_edition()?)?,
             )
         };
-        let mut bytes = seal.metadata_bytes()?;
+        let mut bytes = seal
+            .metadata_bytes()?
+            .checked_add(replay_bytes)
+            .ok_or_else(|| fault("macro-export replay publication metadata overflow"))?;
         if let Some(scope) = &scope {
             bytes = bytes
                 .checked_add(scope.metadata_bytes()?)
@@ -7796,6 +8051,7 @@ impl SourceDiscovery {
             &outputs,
             &modules,
             &ordinary_modules,
+            &replay_sources,
             derived,
         )
     }
@@ -9023,6 +9279,21 @@ impl SourceDiscovery {
                                     dependencies: {
                                         let mut dependencies =
                                             vec![(job.identity, outline.fingerprint())];
+                                        // These pre-poll selected inputs belong to the
+                                        // complete discovery. Attach them once rather
+                                        // than copying the whole map for every source.
+                                        if self.source_jobs.get(&job.identity) == Some(&0) {
+                                            dependencies
+                                                .try_reserve_exact(self.compiler_inputs.len())
+                                                .map_err(|_| {
+                                                    fault("source selected input allocation")
+                                                })?;
+                                            dependencies.extend(self.compiler_inputs.iter().map(
+                                                |(key, fingerprint)| {
+                                                    (key.fingerprint(), *fingerprint)
+                                                },
+                                            ));
+                                        }
                                         if let Some((_, _, providers)) = &self.declarative {
                                             for catalog in providers
                                                 .iter()
@@ -9120,12 +9391,15 @@ impl SourceDiscovery {
                                         .get(&producer)
                                         .ok_or_else(|| fault("staged attribute source absent"))?;
                                     let source = staged.syntax.prepared_source();
-                                    if let Some(proof) = super::source_derives::prepare_empty(
-                                        source,
-                                        &staged.provider,
-                                        job.identity,
-                                        &names,
-                                    )? {
+                                    if let Some(proof) =
+                                        super::source_derives::prepare_empty_with_annotations(
+                                            source,
+                                            &staged.provider,
+                                            job.identity,
+                                            &names,
+                                            staged.annotation_plan.as_deref(),
+                                        )?
+                                    {
                                         if self.source_empty_derives.len() >= 100_000 {
                                             return Err(fault(
                                                 "staged compiler annotation proof limit",
@@ -9155,7 +9429,7 @@ impl SourceDiscovery {
                                             })?;
                                         staged
                                             .provider
-                                            .complete_without_macro_bindings(job.identity)?;
+                                            .complete_original_inert_item(job.identity, &proof)?;
                                         staged.completed_invocations.insert(job.identity);
                                         self.graph
                                             .release_generated_frontier(&call.scope, call.frontier);
@@ -9220,12 +9494,17 @@ impl SourceDiscovery {
                                     &self.nested_sources,
                                     &self.nested_inert_proofs,
                                 )?;
-                                if let Some(proof) = super::source_derives::prepare_empty(
-                                    &self.sources[ordinal],
-                                    &providers[ordinal],
-                                    job.identity,
-                                    &namespaces,
-                                )? {
+                                if let Some(proof) =
+                                    super::source_derives::prepare_empty_with_annotations(
+                                        &self.sources[ordinal],
+                                        &providers[ordinal],
+                                        job.identity,
+                                        &namespaces,
+                                        self.original_annotation_plans
+                                            .get(&ordinal)
+                                            .map(std::sync::Arc::as_ref),
+                                    )?
+                                {
                                     if self.source_empty_derives.len() >= 100_000 || self.source_empty_derives.len()
                                         .checked_add(1).and_then(|n| n.checked_mul(std::mem::size_of::<super::source_derives::SourceEmptyDeriveProof>() + 128))
                                         .is_none_or(|n| n > 32 * 1024 * 1024) {
@@ -9248,7 +9527,7 @@ impl SourceDiscovery {
                                         .as_mut()
                                         .ok_or_else(|| fault("source provider absent"))?
                                         .2[ordinal]
-                                        .complete_without_macro_bindings(job.identity)?;
+                                        .complete_original_inert_item(job.identity, &proof)?;
                                     let frontier = self
                                         .frontier_producers
                                         .get_mut(&(call.scope.clone(), call.frontier))
@@ -9702,6 +9981,12 @@ impl SourceDiscovery {
                             return Err(error);
                         }
                     }
+                    // Compute this existing query-value identity once at
+                    // completion, never by walking the closure on body entry.
+                    self.body_boundary_seal_fingerprint = Some(
+                        crate::db::value::QueryValue::DiscoverySeal(Box::new(seal.clone()))
+                            .fingerprint(),
+                    );
                     self.seal = Some(seal.clone());
                     return Ok(SourceDiscoveryStep::Sealed(seal));
                 }
@@ -9765,11 +10050,14 @@ impl SourceDiscovery {
                 continue;
             }
             if let Some(proof) = self.source_empty_derives.get(identity) {
-                if super::source_derives::prepare_empty(
+                if super::source_derives::prepare_empty_with_annotations(
                     &self.sources[*ordinal],
                     &providers[*ordinal],
                     *identity,
                     namespaces,
+                    self.original_annotation_plans
+                        .get(ordinal)
+                        .map(std::sync::Arc::as_ref),
                 )?
                 .as_ref()
                     != Some(proof)
@@ -9860,11 +10148,12 @@ impl SourceDiscovery {
                     ));
                 }
                 if let Some(proof) = self.source_empty_derives.get(&call.item_input) {
-                    if super::source_derives::prepare_empty(
+                    if super::source_derives::prepare_empty_with_annotations(
                         module.syntax.prepared_source(),
                         &module.provider,
                         call.item_input,
                         namespaces,
+                        module.annotation_plan.as_deref(),
                     )?
                     .as_ref()
                         != Some(proof)

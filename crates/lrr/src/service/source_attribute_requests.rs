@@ -256,14 +256,10 @@ impl SourceAttributeSelection {
                         == crate::syntax::declaration_scan::DeclarationProducerKind::Attribute
             })
             .ok_or_else(|| fault("cold attribute producer absent"))?;
-        let parsed = crate::syntax::parse::ParsedFile::parse(
-            source.captured_macro_blob()?,
-            source.outline().profile.clone(),
-        )?;
         // Namespace selection is independent of a target item's eligibility.
         // Root inert attributes have an exact source/scope attachment without
         // an ast::Item owner. Effectful selection still validates its target.
-        let (segments, absolute) = parsed.attribute_lookup_path_at(row.range)?;
+        let (segments, absolute) = source.attribute_lookup_path_at(row.range)?;
         crate::frontend::declaration_imports::DeclarationImportIndex::new(scan)?
             .lookup(producer, &segments, absolute, namespaces)
     }

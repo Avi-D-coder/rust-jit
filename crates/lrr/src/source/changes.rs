@@ -990,6 +990,30 @@ impl PreparedSourceView {
             .parsed
             .macro_definition_shape_at(range)
     }
+    /// Readonly parser owner for borrowed compiler-source replay. This does
+    /// not publish the parser in the database or grant runtime source access.
+    pub(crate) fn retained_declaration_parser(
+        &self,
+    ) -> Result<&std::sync::Arc<crate::syntax::parse::ParsedFile>, Diagnostic> {
+        self.state
+            .files
+            .get(&self.location)
+            .map(|file| &file.parsed)
+            .ok_or_else(|| publication_fault("compiler replay parser is absent"))
+    }
+    /// Attach an exact attribute Meta to the retained parser; cold resolution
+    /// must not parse the complete source again for each annotation.
+    pub(crate) fn attribute_lookup_path_at(
+        &self,
+        range: crate::syntax::spans::SourceRange,
+    ) -> Result<(Vec<crate::syntax::imports::ImportSegment>, bool), Diagnostic> {
+        self.state
+            .files
+            .get(&self.location)
+            .ok_or_else(|| publication_fault("captured attribute parser is absent"))?
+            .parsed
+            .attribute_lookup_path_at(range)
+    }
     pub(crate) fn macro_definition_header_at(
         &self,
         range: crate::syntax::spans::SourceRange,

@@ -37,10 +37,27 @@ pub struct SourceMacroIndex {
     module_inputs: BTreeMap<Digest, SourceScope>,
     macro_use_inputs: BTreeSet<Digest>,
     imported_definitions: BTreeSet<Digest>,
+    restored_original:
+        BTreeMap<Digest, (usize, crate::syntax::macro_calls::MacroDefinitionDialect)>,
     imported_bytes: usize,
     facts: std::sync::Arc<HygieneFacts>,
     context: Key,
     ancestry: std::sync::Arc<ExpansionAncestry>,
+}
+/// Borrowed actual declaration facts. This grants neither namespace selection
+/// nor a body/source entry; current selected-expansion authority is joined by
+/// the owning module receipt service.
+pub(crate) struct SourceMacroDefinitionModule<'a> {
+    item: &'a crate::syntax::outline::ItemOutline,
+    context: Key,
+}
+impl SourceMacroDefinitionModule<'_> {
+    pub(crate) fn item(&self) -> &crate::syntax::outline::ItemOutline {
+        self.item
+    }
+    pub(crate) fn context(&self) -> Key {
+        self.context
+    }
 }
 fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-SCOPE", message.into())
@@ -133,6 +150,7 @@ impl SourceMacroIndex {
             module_inputs: BTreeMap::new(),
             macro_use_inputs: BTreeSet::new(),
             imported_definitions: BTreeSet::new(),
+            restored_original: BTreeMap::new(),
             imported_bytes: 0,
             facts: std::sync::Arc::new(facts),
             context,
@@ -359,6 +377,102 @@ impl SourceMacroIndex {
         self.producers.remove(&identity);
         Ok(())
     }
+    /// Publish one unchanged original declaration only after the generic item
+    /// annotation service has certified its exact source and complete header.
+    pub(crate) fn complete_original_inert_macro(
+        &mut self,
+        source: &crate::source::changes::PreparedSourceView,
+        producer: Digest,
+        proof: &crate::expand::source_derives::SourceEmptyDeriveProof,
+    ) -> Result<bool, Diagnostic> {
+        let Some((ordinal, item, dialect)) = proof.original_macro(source, producer)? else {
+            return Ok(false);
+        };
+        if self.source_key != source.selection().outline.parse
+            || self.cfg != source.selection().outline.cfg
+            || self.root != source.outline().root_scope
+            || self.producers.get(&producer) != Some(&ProducerKind::Attribute)
+            || self.definitions.contains_key(&proof.item)
+            || self.restored_original.contains_key(&proof.item)
+            || self.definitions.len() >= 100_000
+        {
+            return Err(error("original inert macro source/index/producer differs"));
+        }
+        // Account the new declaration, definition, restored-row and textual
+        // position before either shared table changes. The removed producer
+        // and pending row deliberately receive no credit during admission.
+        self.metadata_bytes()?
+            .checked_add(2048)
+            .and_then(|bytes| bytes.checked_add(item.def_key.declared_name.len().checked_mul(4)?))
+            .filter(|bytes| *bytes <= 64 * 1024 * 1024)
+            .ok_or_else(|| error("original inert macro index budget"))?;
+        let scope = *self
+            .scope_keys
+            .get(&item.scope)
+            .ok_or_else(|| error("original inert macro scope absent"))?;
+        let definition = MacroDefinition {
+            identity: proof.item,
+            defining_unit: item.def_key.crate_key,
+            definition_edition: source.outline().profile.edition,
+        };
+        let bindings = if dialect == crate::syntax::macro_calls::MacroDefinitionDialect::Rules {
+            vec![(
+                super::source_macro_routes::semantic(
+                    &item.def_key.declared_name,
+                    definition.definition_edition,
+                )?,
+                definition.clone(),
+            )]
+        } else {
+            Vec::new()
+        };
+        self.declarations.preflight_register(
+            &definition,
+            self.context,
+            None,
+            &self.facts,
+            &self.ancestry,
+        )?;
+        self.scopes.preflight_publish(
+            scope,
+            u64::from(item.declaration_span.start),
+            producer,
+            &bindings,
+        )?;
+        // The two shared preflights admit the same immutable tables; each
+        // mutation below repeats only its own already-admitted checks.
+        Arc::make_mut(&mut self.declarations).register(
+            definition.clone(),
+            self.context,
+            None,
+            &self.facts,
+            &self.ancestry,
+        )?;
+        Arc::make_mut(&mut self.scopes).publish(
+            scope,
+            u64::from(item.declaration_span.start),
+            producer,
+            bindings,
+        )?;
+        self.definitions.insert(definition.identity, definition);
+        self.restored_original
+            .insert(proof.item, (ordinal, dialect));
+        self.producers.remove(&producer);
+        Ok(true)
+    }
+    pub(crate) fn restored_original_macros(
+        &self,
+    ) -> impl Iterator<
+        Item = (
+            Digest,
+            usize,
+            crate::syntax::macro_calls::MacroDefinitionDialect,
+        ),
+    > + '_ {
+        self.restored_original
+            .iter()
+            .map(|(identity, (ordinal, dialect))| (*identity, *ordinal, *dialect))
+    }
     pub(crate) fn complete_generated_item_producer(
         &mut self,
         scope: &SourceScope,
@@ -480,6 +594,91 @@ impl SourceMacroIndex {
     }
     pub fn definition(&self, key: Digest) -> Option<&MacroDefinition> {
         self.definitions.get(&key)
+    }
+    /// One cold exact identity join to the source that actually built this
+    /// index. Imported aliases and unrelated source/header spellings cannot
+    /// supply a defining module. Generated declarations need their real
+    /// canonical declaration/context receipt, not original root substitution.
+    pub(crate) fn source_definition_module<'a>(
+        &self,
+        source: &'a crate::source::changes::PreparedSourceView,
+        definition: &MacroDefinition,
+    ) -> Result<Option<SourceMacroDefinitionModule<'a>>, Diagnostic> {
+        if self.source_key != source.selection().outline.parse
+            || self.cfg != source.selection().outline.cfg
+            || self.root != source.outline().root_scope
+        {
+            return Err(error("macro declaration module source/index differs"));
+        }
+        if self.definition(definition.identity) != Some(definition)
+            || !self.owns_definition(definition.identity)
+        {
+            return Ok(None);
+        }
+        // This is a positive physical-source proof. Missing actual generated
+        // declaration attachment stays pending in the receipt service.
+        if source.require_original_hygiene().is_err() {
+            return Ok(None);
+        }
+        let mut rows = source
+            .outline()
+            .items
+            .iter()
+            .filter(|item| item.def_key.fingerprint() == definition.identity);
+        let Some(item) = rows.next() else {
+            return Ok(None);
+        };
+        if rows.next().is_some()
+            || item.def_key.item_kind != crate::source::manifest::ItemKind::Macro
+            || item.scope.owner.is_some()
+            || !source.outline().scopes.contains_key(&item.scope)
+            || !self.scope_keys.contains_key(&item.scope)
+            || definition.defining_unit != item.def_key.crate_key
+            || definition.definition_edition != source.outline().profile.edition
+        {
+            return Err(error("macro declaration module identity/scope differs"));
+        }
+        let mut events = source.outline().textual_events.iter().filter(|event| {
+            matches!(event.kind,
+                TextualEventKind::Definition { identity, .. }
+                | TextualEventKind::ModuleDefinition { identity, .. }
+                if identity == definition.identity)
+        });
+        match events.next() {
+            Some(event) if event.scope == item.scope && events.next().is_none() => {}
+            Some(_) => return Err(error("macro declaration module event/scope differs")),
+            None => {
+                // The existing generic annotation proof can restore an actual
+                // unchanged declaration whose outline event was its producer.
+                // Reuse that admitted row; do not reinterpret its attributes.
+                let Some((ordinal, _)) = self.restored_original.get(&definition.identity) else {
+                    return Ok(None);
+                };
+                if source.outline().items.get(*ordinal).is_none_or(|row| {
+                    row.def_key.fingerprint() != definition.identity
+                        || row.scope != item.scope
+                        || row.declaration_span != item.declaration_span
+                }) {
+                    return Err(error("restored macro declaration module row differs"));
+                }
+            }
+        }
+        let (context, origin) = self.declarations.metadata_of(definition)?;
+        let authority = self.facts.context(context)?;
+        if origin.is_some()
+            || context != self.context
+            || authority.parent.is_some()
+            || authority.defining_unit.0 != definition.defining_unit.0
+        {
+            return Err(error("original macro declaration context differs"));
+        }
+        // Existing exact syntax capture checks the actual declaration AST name;
+        // no whole-file syntax search or name-to-module mapping is introduced.
+        let (label, name) = source.macro_definition_header(definition.identity)?;
+        if !item.declaration_span.contains(label) || name != item.def_key.declared_name {
+            return Err(error("macro declaration exact syntax label differs"));
+        }
+        Ok(Some(SourceMacroDefinitionModule { item, context }))
     }
     pub fn definition_count(&self) -> usize {
         self.definitions.len()
@@ -874,6 +1073,7 @@ impl SourceMacroIndex {
             self.producers.len(),
             self.macro_use_inputs.len(),
             self.imported_definitions.len(),
+            self.restored_original.len(),
         ] {
             bytes = count
                 .checked_mul(256)

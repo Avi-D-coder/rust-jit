@@ -18,3 +18,5 @@ pub mod module_view;
 pub mod module_syntax;
 
 pub mod ordinary_module;
+
+pub(crate) mod compiler_replay;

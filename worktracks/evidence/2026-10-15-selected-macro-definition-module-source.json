@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "component": "selected-macro-definition-module-source4",
+  "status": "held unchanged; uncompiled-unexecuted",
+  "baseline_at_review": "b758c9e35e02baf7951d9a3cf7f9424a07f54f4a",
+  "fingerprint": "f9dbf64a367e10f035cc24a0929234f88d0bde5540e33357e112c38442ec5d5e",
+  "fingerprint_encoding": "sha256 compact sorted-key JSON of ordered leaf rows",
+  "leaves": [
+    {
+      "path": "crates/lrr/src/frontend/macro_definition_modules.rs",
+      "bytes": 18314,
+      "sha256": "9c388fc7980a05e59fc9e01d4e8fc8349b94728dfd09b983a7b7cd3d2f1b9113"
+    },
+    {
+      "path": "crates/lrr/src/frontend/macro_definition_module_tests.rs",
+      "bytes": 11006,
+      "sha256": "01342d8a135ec653f5f9069da76d64ed9121ac705fd6c9c300ece74170d208a7"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_macros.rs",
+      "bytes": 106408,
+      "sha256": "79007100ccabf3103217a86ec7639ec544c0a1e683b3539732ce01499ce90aac"
+    },
+    {
+      "path": "crates/lrr/src/frontend/mod.rs",
+      "bytes": 1630,
+      "sha256": "f94539767cc25bc9a9e5f50bee4f00498ff3a16339a625c2938372c661811dc7"
+    }
+  ],
+  "handoff": {
+    "path": "worktracks/04-calls-source-views/common-macro-definition-module-receipt-handoff.md",
+    "bytes": 16672,
+    "sha256": "a11291f4b8f01865d66147690cffa2985c608d5aada2277b43f7109c2c29a4b8"
+  },
+  "required_prerequisites": [
+    "source3 immutable lexical module selector/source8 local occurrence proof/root body context boundaries",
+    "existing genuine SealedMacroExportView selected2+DiscoverySeal3 dependency API",
+    "root current private owning-environment publication and pure-query plan/receipt accounting",
+    "configured export actual crate-root/module-parent ancestry missing: explicit ConfiguredOwnerModule, never Ready",
+    "pinned module expansion adjustment/final declaration Type/member/privacy authority still held"
+  ],
+  "execution": {
+    "rust_compile": "not run by worker",
+    "cargo_tests": "not run by worker",
+    "native_tools": "not run by worker",
+    "stock_runtime": "unexecuted",
+    "full_macro_context_runtime_matrix": "unexecuted"
+  }
+}

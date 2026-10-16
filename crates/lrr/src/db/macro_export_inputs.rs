@@ -24,7 +24,9 @@ pub struct MacroExportSourceReceipt {
     unit: Digest,
     facet: Digest,
     preparation: Digest,
+    unit_graph: Digest,
     environment: Digest,
+    outline: Digest,
     source: SourceSelection,
     bytes: usize,
 }
@@ -44,7 +46,9 @@ impl MacroExportSourceReceipt {
             unit: facet.unit(),
             facet: facet.identity(),
             preparation: facet.preparation(),
+            unit_graph: facet.unit_graph(),
             environment: facet.environment(),
+            outline: facet.source().outline().fingerprint(),
             source: source.clone(),
             bytes,
         })
@@ -64,6 +68,12 @@ impl MacroExportSourceReceipt {
     pub fn environment(&self) -> Digest {
         self.environment
     }
+    pub fn unit_graph(&self) -> Digest {
+        self.unit_graph
+    }
+    pub fn outline_fingerprint(&self) -> Digest {
+        self.outline
+    }
     pub fn source(&self) -> &SourceSelection {
         &self.source
     }
@@ -74,23 +84,152 @@ impl MacroExportSourceReceipt {
         self.facet == facet.identity()
             && self.unit == facet.unit()
             && self.preparation == facet.preparation()
+            && self.unit_graph == facet.unit_graph()
             && self.environment == facet.environment()
             && &self.source == facet.source().selection()
     }
 }
 impl StableEncode for MacroExportSourceReceipt {
-    const DOMAIN: &'static str = "lrr/v1/macro-export-source-receipt";
+    const DOMAIN: &'static str = "lrr/v2/macro-export-source-receipt";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.location);
         e.digest(self.unit);
         e.digest(self.facet);
         e.digest(self.preparation);
+        e.digest(self.unit_graph);
         e.digest(self.environment);
+        e.digest(self.outline);
         e.string(self.source.path.as_str());
         e.record(&self.source.outline);
     }
 }
+
+/// Preparation-only source contribution. No source/parser/provider handle is
+/// retained or returned. Construction requires the actual published role row.
+pub(crate) struct MacroExportSourceObservation {
+    outline_key: Digest,
+    outline: Digest,
+    dependencies: [DependencyStamp; 2],
+}
+impl MacroExportSourceObservation {
+    pub(crate) fn outline_fingerprint(&self) -> Digest {
+        self.outline
+    }
+    pub(crate) fn dependencies(&self) -> &[DependencyStamp; 2] {
+        &self.dependencies
+    }
+    pub(crate) fn outline_stamp(&self) -> (Digest, Digest) {
+        (self.outline_key, self.outline)
+    }
+    /// The ordinary full seal must bind the actual outline contribution and
+    /// both selected role inputs. A source receipt cannot manufacture a seal.
+    pub(crate) fn validate_discovery(
+        &self,
+        input: &crate::db::seals::DiscoveryInput,
+    ) -> Result<(), Diagnostic> {
+        use crate::{db::seals::SealDomain, source::manifest::Namespace};
+        if !matches!(
+            input.seal.domain(),
+            SealDomain::Scope {
+                namespace: Namespace::Macro,
+                ..
+            }
+        ) {
+            return Err(preparation(
+                "macro-only source requires a macro scope certificate",
+            ));
+        }
+        if input
+            .seal
+            .input_dependencies()
+            .binary_search(&self.outline_stamp())
+            .is_err()
+        {
+            return Err(preparation(
+                "macro-export outline is absent from complete discovery",
+            ));
+        }
+        for dependency in &self.dependencies {
+            let DependencyStamp::Input { key, fingerprint } = dependency else {
+                return Err(preparation(
+                    "macro-export source dependency variant differs",
+                ));
+            };
+            if input.compiler_inputs.get(key) != Some(fingerprint)
+                || input
+                    .seal
+                    .input_dependencies()
+                    .binary_search(&(key.fingerprint(), *fingerprint))
+                    .is_err()
+            {
+                return Err(preparation(
+                    "macro-export input is absent from complete discovery",
+                ));
+            }
+        }
+        Ok(())
+    }
+}
 impl Database {
+    /// Observe exactly the selected role source and configured environment.
+    /// Absence leaves the existing ordinary-source route unchanged. A stale or
+    /// overlapping role is an error, never an ordinary parser fallback.
+    pub(crate) fn macro_export_source_observation(
+        &mut self,
+        selection: &SourceSelection,
+        graph: Digest,
+    ) -> Result<Option<MacroExportSourceObservation>, Diagnostic> {
+        let key = InputKey::MacroExportSource(selection.location_identity());
+        let Some(value) = self.input(&key) else {
+            return Ok(None);
+        };
+        let InputValue::MacroExportSource(receipt) = value.as_ref() else {
+            return Err(preparation("macro-export source input variant differs"));
+        };
+        if receipt.source() != selection || receipt.unit_graph() != graph {
+            return Err(preparation(
+                "macro-export source selection or unit graph changed",
+            ));
+        }
+        if self
+            .input(&InputKey::CapturedSource(selection.location_identity()))
+            .is_some()
+        {
+            return Err(preparation(
+                "macro-only source also has an ordinary publication",
+            ));
+        }
+        let environment_key = InputKey::UnitCompileEnv(receipt.unit());
+        if !matches!(self.input(&environment_key).as_deref(), Some(InputValue::UnitCompileEnv(environment))
+            if environment.unit() == receipt.unit() && environment.fingerprint() == receipt.environment())
+        {
+            return Err(preparation(
+                "macro-export configured environment is absent or replaced",
+            ));
+        }
+        let source_stamp = self
+            .published_input(&key)
+            .expect("read current macro receipt")
+            .1;
+        let environment_stamp = self
+            .published_input(&environment_key)
+            .expect("read current environment")
+            .1;
+        Ok(Some(MacroExportSourceObservation {
+            outline_key: crate::db::key::QueryKey::Outline(selection.outline.clone()).fingerprint(),
+            outline: receipt.outline_fingerprint(),
+            dependencies: [
+                DependencyStamp::Input {
+                    key,
+                    fingerprint: source_stamp,
+                },
+                DependencyStamp::Input {
+                    key: environment_key,
+                    fingerprint: environment_stamp,
+                },
+            ],
+        }))
+    }
     /// Explicit preparation replaces just this compile-time receipt set.
     /// Source storage stays with the preparation catalog, never the live-source
     /// registry. All validation/resource failures precede input publication.

@@ -303,40 +303,7 @@ fn prepare_selected(
                 Ok(definition) => definition,
                 Err(error) => return QueryPoll::Ready(Err(error)),
             };
-            let captured = match db.fetch(&SyntaxProvider, QueryKey::TypeSchema(identity)) {
-                QueryPoll::Ready(Ok(captured)) => captured,
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
-            };
-            let QueryValue::TypeSchema(schema) = captured.value.as_ref() else {
-                return QueryPoll::Ready(Err(fault("selected nominal schema query differs")));
-            };
-            if schema.definition != identity
-                || definition.namespace != Namespace::Type
-                || !matches!(definition.item_kind, ItemKind::Struct | ItemKind::Enum)
-                || !matches!(db.input(&InputKey::DefinitionHeader(identity)).as_deref(),Some(InputValue::DefinitionHeader(header)) if header==&schema.header)
-                || !matches!(db.input(&InputKey::DeclarationContext(identity)).as_deref(),Some(InputValue::DeclarationContext(context)) if context.scope==schema.scope)
-                || !matches!(db.input(&InputKey::DefinitionSource(identity)).as_deref(),Some(InputValue::DefinitionSource(parse)) if parse.profile==schema.header.profile)
-            {
-                return QueryPoll::Ready(Err(fault(
-                    "selected nominal source/schema publication differs",
-                )));
-            }
-            if !schema.generics.is_empty() {
-                return QueryPoll::Ready(Ok(NamedTypePreparation::Alias(AliasTarget::Nominal(
-                    identity,
-                ))));
-            }
-            SourceType {
-                source: TyTerm::Nominal(identity, vec![]),
-                key: TypeKey::Nominal {
-                    identity,
-                    definition,
-                    schema: schema.fingerprint(),
-                    args: Box::new([]),
-                    const_args: Box::new([]),
-                },
-            }
+            return prepare_nominal(db, identity, definition);
         }
         other => return QueryPoll::Ready(Ok(NamedTypePreparation::Name(other))),
     };
@@ -345,6 +312,72 @@ fn prepare_selected(
     }
     QueryPoll::Ready(Ok(NamedTypePreparation::Ready(proof)))
 }
+/// The same canonical nominal/schema kernel serves header-selected and
+/// body-occurrence-selected Types. Namespace/use authority is supplied before
+/// this function; neither a TypeId nor a public NameLookup enters this core.
+fn prepare_nominal(
+    db: &mut Database,
+    identity: crate::core::digest::Digest,
+    definition: DefKey,
+) -> QueryPoll<NamedTypePreparation> {
+    let captured = match db.fetch(&SyntaxProvider, QueryKey::TypeSchema(identity)) {
+        QueryPoll::Ready(Ok(captured)) => captured,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
+    };
+    let QueryValue::TypeSchema(schema) = captured.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("selected nominal schema query differs")));
+    };
+    if schema.definition != identity
+        || definition.namespace != Namespace::Type
+        || !matches!(definition.item_kind, ItemKind::Struct | ItemKind::Enum)
+        || !matches!(db.input(&InputKey::DefinitionHeader(identity)).as_deref(),Some(InputValue::DefinitionHeader(header)) if header==&schema.header)
+        || !matches!(db.input(&InputKey::DeclarationContext(identity)).as_deref(),Some(InputValue::DeclarationContext(context)) if context.scope==schema.scope)
+        || !matches!(db.input(&InputKey::DefinitionSource(identity)).as_deref(),Some(InputValue::DefinitionSource(parse)) if parse.profile==schema.header.profile)
+    {
+        return QueryPoll::Ready(Err(fault(
+            "selected nominal source/schema publication differs",
+        )));
+    }
+    if !schema.generics.is_empty() {
+        return QueryPoll::Ready(Ok(NamedTypePreparation::Alias(AliasTarget::Nominal(
+            identity,
+        ))));
+    }
+    let proof = SourceType {
+        source: TyTerm::Nominal(identity, vec![]),
+        key: TypeKey::Nominal {
+            identity,
+            definition,
+            schema: schema.fingerprint(),
+            args: Box::new([]),
+            const_args: Box::new([]),
+        },
+    };
+    if let Err(error) = proof.allocated_bytes() {
+        return QueryPoll::Ready(Err(error));
+    }
+    QueryPoll::Ready(Ok(NamedTypePreparation::Ready(proof)))
+}
+
+/// Body Type authority is the opaque current occurrence/declaration proof, not
+/// a synthetic function signature or caller-selected source/name answer.
+pub(crate) fn prepare_body_declaration(
+    db: &mut Database,
+    declaration: &super::source_locals::owned_plan::type_declarations::BodyTypeDeclaration,
+) -> QueryPoll<NamedTypePreparation> {
+    match declaration.require_current(db) {
+        QueryPoll::Ready(Ok(())) => {}
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    }
+    prepare_nominal(
+        db,
+        declaration.definition_identity(),
+        declaration.definition().clone(),
+    )
+}
+
 pub(super) fn nominal_definition(
     db: &mut Database,
     sources: &[&PreparedSourceView],

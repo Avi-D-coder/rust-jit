@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "component": "common-body-type-declaration-source4",
+  "status": "uncompiled-unexecuted; held unchanged for parent copy",
+  "baseline_at_review": "b758c9e35e02baf7951d9a3cf7f9424a07f54f4a",
+  "fingerprint": "6f0fcf3ac6a4941f9cd7f5696fd4038382dd89da3c2e9ed8cbf0f218eb09c163",
+  "fingerprint_encoding": "sha256 compact sorted-key JSON ordered leaf rows",
+  "leaves": [
+    {
+      "path": "crates/lrr/src/frontend/body_type_declarations.rs",
+      "bytes": 22646,
+      "sha256": "8ef7fcc85d738acdd0530cdd415cd4f8c7764c4e21f2132b865224326e538465"
+    },
+    {
+      "path": "crates/lrr/src/frontend/body_type_declaration_tests.rs",
+      "bytes": 14324,
+      "sha256": "3aae4406b87d9a5a52dd688bb3a635aa2f9f5ff065417fa8d00cd4a59a22c94d"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_types.rs",
+      "bytes": 17009,
+      "sha256": "c32aa31f1a7d2b4832ed39deab7e1109696caf610bbf60e3270f9858e941c768"
+    },
+    {
+      "path": "crates/lrr/src/frontend/source_local_plan.rs",
+      "bytes": 28002,
+      "sha256": "e745d75c6b5945149908e6e86ecabacf558747be082b0c9a615e92447c4f3c53"
+    }
+  ],
+  "handoff": {
+    "path": "worktracks/04-calls-source-views/common-body-type-declaration-handoff.md",
+    "bytes": 16748,
+    "sha256": "1521715e4853e7d1a8d47b91fe81a30ef86f6e0811f156025a385b04207f6b52"
+  },
+  "authority_hold": [
+    "root genuine current owning-environment publication must compose before production current use grant",
+    "direct declaration/source Type prepared; imported binding, alias current context, opaque pinned adjustment and local/retained publication remain typed",
+    "no production/runtime/constructor caller or new query cache"
+  ],
+  "separate_diagnostic_override": "/private/tmp/lrr-selected-module-step-diagnostic-v1/FIX.json SHA045658f8546ccd2d6e4c2c43cd776f9cd11c66b6e0e267baf6dc79dc9ad9ed9e",
+  "execution": {
+    "rust_compile": "not run by worker",
+    "cargo_tests": "not run by worker",
+    "native": "not run by worker",
+    "runtime_matrix": "unexecuted",
+    "full_stock": "unexecuted"
+  }
+}

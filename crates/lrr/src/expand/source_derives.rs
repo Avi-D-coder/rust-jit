@@ -15,6 +15,50 @@ use crate::{
 pub(crate) struct SourceEmptyDeriveProof {
     pub(crate) item: Digest,
     pub(crate) fingerprint: Digest,
+    original_macro: Option<OriginalMacroProof>,
+}
+#[derive(PartialEq, Eq)]
+struct OriginalMacroProof {
+    source: Digest,
+    producer: Digest,
+    item_ordinal: usize,
+    dialect: crate::syntax::macro_calls::MacroDefinitionDialect,
+}
+fn source_identity(source: &PreparedSourceView) -> Digest {
+    let mut e = StableEncoder::new("lrr/v1/original-no-transform-source");
+    e.string(source.selection().path.as_str());
+    e.record(&source.selection().outline);
+    e.finish()
+}
+impl SourceEmptyDeriveProof {
+    pub(crate) fn original_macro<'a>(
+        &self,
+        source: &'a PreparedSourceView,
+        producer: Digest,
+    ) -> Result<
+        Option<(
+            usize,
+            &'a crate::syntax::outline::ItemOutline,
+            crate::syntax::macro_calls::MacroDefinitionDialect,
+        )>,
+        Diagnostic,
+    > {
+        let Some(proof) = &self.original_macro else {
+            return Ok(None);
+        };
+        if proof.source != source_identity(source) || proof.producer != producer {
+            return Err(fault("original no-transform macro source/producer differs"));
+        }
+        let item = source
+            .outline()
+            .items
+            .get(proof.item_ordinal)
+            .filter(|item| {
+                item.def_key.fingerprint() == self.item && item.def_key.item_kind == ItemKind::Macro
+            })
+            .ok_or_else(|| fault("original no-transform macro is absent"))?;
+        Ok(Some((proof.item_ordinal, item, proof.dialect)))
+    }
 }
 #[derive(PartialEq, Eq)]
 pub(crate) struct SourceDeriveCompletionProof {
@@ -48,21 +92,121 @@ fn inert(
         && (attr.name == "cfg"
             || crate::expand::builtin_attributes::retained_descriptor(&attr.name)?.is_some()))
 }
+#[cfg(test)]
 pub(crate) fn prepare_empty(
     source: &PreparedSourceView,
     provider: &SourceDeclarative,
     producer: Digest,
     names: &MacroNamespaces,
 ) -> Result<Option<SourceEmptyDeriveProof>, Diagnostic> {
-    let item = source
-        .outline()
-        .items
-        .iter()
-        .find(|item| {
-            crate::syntax::outline::potential_attribute_producer(item)
-                .is_some_and(|c| c.item_input == producer)
-        })
-        .ok_or_else(|| fault("original derive producer absent"))?;
+    prepare_empty_with_annotations(source, provider, producer, names, None)
+}
+pub(crate) fn prepare_empty_with_annotations(
+    source: &PreparedSourceView,
+    provider: &SourceDeclarative,
+    producer: Digest,
+    names: &MacroNamespaces,
+    annotations: Option<&super::source_declarative::original_annotations::OriginalAnnotationPlan>,
+) -> Result<Option<SourceEmptyDeriveProof>, Diagnostic> {
+    let item = if let Some(plan) = annotations {
+        let ordinal = plan.item_ordinal(producer)?;
+        source
+            .outline()
+            .items
+            .get(ordinal)
+            .ok_or_else(|| fault("original item annotation ordinal is absent"))?
+    } else {
+        source
+            .outline()
+            .items
+            .iter()
+            .find(|item| {
+                crate::syntax::outline::potential_attribute_producer(item)
+                    .is_some_and(|c| c.item_input == producer)
+            })
+            .ok_or_else(|| fault("original derive producer absent"))?
+    };
+    if let Some(plan) = annotations
+        && provider
+            .compiler
+            .as_ref()
+            .and_then(|c| c.attribute_catalog())
+            .is_some()
+        && let Some(rows) = plan.rows(source, producer, item.def_key.fingerprint())?
+    {
+        if !source.same_publication(provider.module_source())
+            || source.selection() != provider.module_source().selection()
+        {
+            return Err(fault("original no-transform item provider/source differs"));
+        }
+        let selected_names = names.before_attribute(producer, item.header.fingerprint());
+        let mut e = StableEncoder::new("lrr/v1/original-inert-item-completion");
+        e.digest(source_identity(source));
+        e.digest(producer);
+        e.record(&item.def_key);
+        e.record(&item.header);
+        let mut complete = true;
+        let mut count = 0usize;
+        for row in rows {
+            let Some(mut proof) =
+                super::nested_inert::NestedInertProof::select_original_plan(plan, row.scan_row)?
+            else {
+                complete = false;
+                break;
+            };
+            // Test/derive actions retain their existing handlers. Only genuine
+            // pinned inert descriptors certify an unchanged original item.
+            if super::builtin_attributes::inert_descriptor(proof.name()?)?.is_none() {
+                complete = false;
+                break;
+            }
+            let lookup = selected_names.lookup_invocation_segments(
+                &row.segments,
+                row.absolute,
+                &item.scope,
+                source.outline().profile.edition,
+            )?;
+            let Some(binding) = super::builtin_attributes::certify_inert_binding(
+                proof.name()?,
+                &lookup,
+                provider.procedural.as_deref(),
+                provider
+                    .compiler
+                    .as_ref()
+                    .and_then(|c| c.attribute_catalog()),
+            )?
+            else {
+                complete = false;
+                break;
+            };
+            proof = proof.with_attribute_facet(binding);
+            e.digest(proof.fingerprint());
+            count += 1;
+        }
+        if complete && count == item.header.attributes.len() {
+            let original_macro = if item.def_key.item_kind == ItemKind::Macro {
+                let shape = source.macro_definition_shape_at(item.declaration_span)?;
+                e.u8(match shape.dialect() {
+                    crate::syntax::macro_calls::MacroDefinitionDialect::Rules => 0,
+                    crate::syntax::macro_calls::MacroDefinitionDialect::Macro2 => 1,
+                });
+                Some(OriginalMacroProof {
+                    source: source_identity(source),
+                    producer,
+                    item_ordinal: plan.item_ordinal(producer)?,
+                    dialect: shape.dialect(),
+                })
+            } else {
+                e.u8(2);
+                None
+            };
+            return Ok(Some(SourceEmptyDeriveProof {
+                item: item.def_key.fingerprint(),
+                fingerprint: e.finish(),
+                original_macro,
+            }));
+        }
+    }
     if item.def_key.item_kind == ItemKind::Function
         && item.header.attributes.iter().any(|a| a.name == "test")
     {
@@ -132,6 +276,7 @@ pub(crate) fn prepare_empty(
         return Ok(Some(SourceEmptyDeriveProof {
             item: item.def_key.fingerprint(),
             fingerprint: encoder.finish(),
+            original_macro: None,
         }));
     }
     let Some(builtin) = provider
@@ -247,6 +392,7 @@ pub(crate) fn prepare_empty(
     Ok(Some(SourceEmptyDeriveProof {
         item: owner,
         fingerprint: e.finish(),
+        original_macro: None,
     }))
 }
 

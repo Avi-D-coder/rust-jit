@@ -259,21 +259,7 @@ impl TextualScopes {
         invocation: Digest,
         definitions: Vec<(MacroName, MacroDefinition)>,
     ) -> Result<(), Diagnostic> {
-        let scope = self.get(key)?;
-        if scope.pending.get(&at) != Some(&invocation) {
-            return Err(error("stale or missing expansion input"));
-        }
-        let count = self.admit(definitions.len())?;
-        for (name, definition) in &definitions {
-            definition.validate()?;
-            if scope
-                .definitions
-                .get(name)
-                .is_some_and(|d| d.contains_key(&at))
-            {
-                return Err(error("conflicting generated declaration position"));
-            }
-        }
+        let count = self.preflight_publish(key, at, invocation, &definitions)?;
         let scope = self.scopes.get_mut(&key).expect("validated scope");
         // Preserve every emitted binding: the latest compatible name shadows
         // predecessors only after hygiene filtering. Lexical lookup uses last.
@@ -289,6 +275,32 @@ impl TextualScopes {
         scope.pending.remove(&at);
         self.headers = count;
         Ok(())
+    }
+    /// Check the same publication without changing the scope. Declaration
+    /// registration may join this check before either table publishes a row.
+    pub(crate) fn preflight_publish(
+        &self,
+        key: ScopeKey,
+        at: u64,
+        invocation: Digest,
+        definitions: &[(MacroName, MacroDefinition)],
+    ) -> Result<usize, Diagnostic> {
+        let scope = self.get(key)?;
+        if scope.pending.get(&at) != Some(&invocation) {
+            return Err(error("stale or missing expansion input"));
+        }
+        let count = self.admit(definitions.len())?;
+        for (name, definition) in definitions {
+            definition.validate()?;
+            if scope
+                .definitions
+                .get(name)
+                .is_some_and(|d| d.contains_key(&at))
+            {
+                return Err(error("conflicting generated declaration position"));
+            }
+        }
+        Ok(count)
     }
     pub(crate) fn publish_prefix(
         &mut self,

@@ -25,6 +25,8 @@ type RouteDependencySets = (DependencyRoutes, DependencyRoutes);
 pub mod assembly;
 #[path = "source_declarative/macro_exports.rs"]
 pub mod macro_exports;
+#[path = "source_declarative/original_annotations.rs"]
+pub(crate) mod original_annotations;
 #[path = "source_declarative/scalar_pattern_replay.rs"]
 mod scalar_pattern_replay;
 pub struct SourceDeclarative {
@@ -210,6 +212,86 @@ impl<'a> InheritedMacroContext<'a> {
     }
 }
 impl<'a> CapturedMacroContext<'a> {
+    pub(crate) fn retain_source_scopes(
+        self,
+        scope: &crate::syntax::outline::ScopeKey,
+    ) -> Result<super::body_macro_boundary::RetainedBoundaryParents, Diagnostic> {
+        self.source_scope_count()?;
+        if self
+            .provider
+            .parents
+            .len()
+            .checked_add(1)
+            .and_then(|n| n.checked_add(self.inherited.map_or(0, |parent| parent.sources.len())))
+            .is_none_or(|n| n > 256)
+            || self
+                .inherited
+                .is_some_and(|parent| parent.bodies.len() > 256)
+        {
+            return Err(fault(
+                "LRR-E-MACRO-SCOPE",
+                "retained source boundary owner limit",
+            ));
+        }
+        let mut retained = super::body_macro_boundary::RetainedBoundaryParents::new()?;
+        let outer = self.provider.index.outer_scope(scope, self.before)?;
+        retained.scopes.push(
+            self.provider
+                .index
+                .retain_outer(outer)?
+                .ok_or_else(|| fault("LRR-E-MACRO-SCOPE", "captured source outer root differs"))?,
+        );
+        retained.sources.push(self.provider.source.share());
+        for (ordinal, input) in &self.provider.parents {
+            let parent = self
+                .owners
+                .get(*ordinal)
+                .ok_or_else(|| fault("LRR-E-MACRO-SCOPE", "captured source parent absent"))?;
+            let outer = parent.index.module_outer(*input)?;
+            retained.scopes.push(
+                parent.index.retain_outer(outer)?.ok_or_else(|| {
+                    fault("LRR-E-MACRO-SCOPE", "captured parent outer root differs")
+                })?,
+            );
+            retained.sources.push(parent.source.share());
+        }
+        if let Some(parent) = self.inherited {
+            for outer in &parent.outers {
+                let mut selected = None;
+                for body in &parent.bodies {
+                    if let Some(root) = body.retain_outer(*outer)? {
+                        selected = Some(root);
+                        break;
+                    }
+                }
+                if selected.is_none() {
+                    for source in &parent.sources {
+                        if let Some(root) = source.index.retain_outer(*outer)? {
+                            selected = Some(root);
+                            break;
+                        }
+                    }
+                }
+                retained.scopes.push(selected.ok_or_else(|| {
+                    fault(
+                        "LRR-E-MACRO-SCOPE",
+                        "inherited outer immutable owner absent",
+                    )
+                })?);
+            }
+            retained
+                .sources
+                .extend(parent.sources.iter().map(|source| source.source.share()));
+            retained.items.extend(
+                parent
+                    .bodies
+                    .iter()
+                    .map(|body| std::sync::Arc::clone(body.retained_items())),
+            );
+        }
+        retained.require_bound()?;
+        Ok(retained)
+    }
     pub(crate) fn source_scope_count(self) -> Result<usize, Diagnostic> {
         self.provider
             .parents
@@ -363,8 +445,10 @@ enum DeclarativeBody {
 pub fn engine_version() -> Digest {
     let mut e = crate::core::digest::StableEncoder::new("lrr/v1/source-declarative-engine");
     e.string(lrr_expand_adapter::UPSTREAM_COMMIT);
-    e.digest(Digest(lrr_expand_adapter::builtin_attributes::compiler_inert_inventory_identity().0));
-    e.u32(3); // Compiler annotation metadata and original macro dialect/hygiene.
+    e.digest(Digest(
+        lrr_expand_adapter::builtin_attributes::compiler_inert_inventory_identity().0,
+    ));
+    e.u32(3); // Original declarations plus pinned compiler annotation inventory.
     e.finish()
 }
 fn fault(code: &'static str, message: &str) -> Diagnostic {
@@ -826,6 +910,19 @@ impl SourceDeclarative {
             self.index
                 .lookup_with_external(module, before, name, &outers, &facts, &ancestry)
         }
+    }
+    pub(crate) fn complete_original_inert_item(
+        &mut self,
+        invocation: Digest,
+        proof: &super::source_derives::SourceEmptyDeriveProof,
+    ) -> Result<(), Diagnostic> {
+        if self
+            .index
+            .complete_original_inert_macro(&self.source, invocation, proof)?
+        {
+            return Ok(());
+        }
+        self.complete_without_macro_bindings(invocation)
     }
     pub(crate) fn complete_without_macro_bindings(
         &mut self,
@@ -2976,6 +3073,7 @@ impl SourceDeclarative {
                 },
             )?;
         original.export_pending = self.index.pending_producers().collect();
+        original.include_restored_original_macros(self.source.outline(), &self.index)?;
         routes.push(std::sync::Arc::new(original));
         let mut bytes = routes[0].metadata_bytes()?;
         for (invocation, catalog) in &self.catalogs {

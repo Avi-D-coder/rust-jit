@@ -23,6 +23,7 @@ fn fault(message: &str) -> Diagnostic {
 pub struct SourceMacroExportFacet {
     identity: Digest,
     preparation: Digest,
+    unit_graph: Digest,
     unit: Digest,
     environment: Digest,
     source: PreparedSourceView,
@@ -209,6 +210,7 @@ impl SourceMacroExportFacet {
         Ok(Self {
             identity: identity.finish(),
             preparation,
+            unit_graph: manifest.graph.fingerprint(),
             unit,
             environment: environment.fingerprint(),
             source,
@@ -264,6 +266,9 @@ impl SourceMacroExportFacet {
     }
     pub fn identity(&self) -> Digest {
         self.identity
+    }
+    pub fn unit_graph(&self) -> Digest {
+        self.unit_graph
     }
     pub fn unit(&self) -> Digest {
         self.unit

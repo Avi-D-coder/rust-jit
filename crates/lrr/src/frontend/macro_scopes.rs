@@ -86,12 +86,30 @@ impl MacroDeclarations {
         facts: &HygieneFacts,
         ancestry: &ExpansionAncestry,
     ) -> Result<(), Diagnostic> {
+        self.preflight_register(&definition, context, origin, facts, ancestry)?;
+        self.declarations
+            .entry(definition.identity)
+            .or_insert(Declaration {
+                definition,
+                context,
+                origin,
+            });
+        Ok(())
+    }
+    pub(crate) fn preflight_register(
+        &self,
+        definition: &MacroDefinition,
+        context: Key,
+        origin: Option<Key>,
+        facts: &HygieneFacts,
+        ancestry: &ExpansionAncestry,
+    ) -> Result<(), Diagnostic> {
         definition.validate()?;
         facts.name_item(context)?;
         ancestry.descendant_of(origin, None)?;
         let id = definition.identity;
         let declaration = Declaration {
-            definition,
+            definition: definition.clone(),
             context,
             origin,
         };
@@ -105,7 +123,6 @@ impl MacroDeclarations {
         if self.declarations.len() >= 1_000_000 {
             return Err(error("macro declaration table limit exceeded"));
         }
-        self.declarations.insert(id, declaration);
         Ok(())
     }
     pub(crate) fn copy_selected(

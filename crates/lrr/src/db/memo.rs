@@ -1094,6 +1094,7 @@ impl Database {
         records: &[Arc<crate::expand::record::ExpansionRecord>],
         modules: &[Arc<crate::source::module_syntax::ModuleSyntaxInput>],
         ordinary_modules: &[Arc<crate::source::ordinary_module::OrdinaryModuleSyntaxInput>],
+        replay_sources: &[crate::source::compiler_replay::CompilerReplaySource<'_>],
         derived: BTreeMap<InputKey, InputValue>,
     ) -> Result<(), Diagnostic> {
         use crate::core::digest::StableEncode;
@@ -1197,10 +1198,11 @@ impl Database {
                 "certified namespace owner differs from seal",
             ));
         }
-        let epoch = self
+        let epoch_owner = self
             .inputs
             .get(&InputKey::ExpansionEpoch)
-            .map(|v| v.value.as_ref());
+            .map(|v| Arc::clone(&v.value));
+        let epoch = epoch_owner.as_deref();
         if epoch.is_some_and(
             |v| !matches!(v,InputValue::ExpansionEpoch(e) if *e==input.seal.key().epoch),
         ) {
@@ -1346,6 +1348,73 @@ impl Database {
                 }
             }
         }
+        // Resolve only role sources actually present in this complete seal.
+        // This scalar observation does not register their parser/provider graph.
+        let mut macro_sources = BTreeMap::new();
+        for source in &input.sources {
+            if let Some(observation) =
+                self.macro_export_source_observation(source, input.seal.key().unit_graph)?
+            {
+                observation.validate_discovery(&input)?;
+                let location = source.location_identity();
+                if module_rows.contains_key(&InputKey::CapturedSource(location)) {
+                    return Err(fault(
+                        "LRR-E-MACRO-EXPORT-PUBLICATION",
+                        "macro-only source also has a staged ordinary publication",
+                    ));
+                }
+                if macro_sources.insert(location, observation).is_some() {
+                    return Err(fault(
+                        "LRR-E-MACRO-EXPORT-PUBLICATION",
+                        "duplicate macro-export discovery source",
+                    ));
+                }
+            }
+        }
+        // Replay facts remain borrowed from preparation owners for this one
+        // coordinator call. They never enter the ordinary runtime input map.
+        if replay_sources.len() > 256 {
+            return Err(fault(
+                "LRR-E-MACRO-EXPORT-PUBLICATION",
+                "macro-export replay source count limit",
+            ));
+        }
+        let mut macro_replays = BTreeMap::new();
+        for replay in replay_sources {
+            let selected = replay.selection();
+            let location = selected.location_identity();
+            let Some(observation) = macro_sources.get(&location) else {
+                return Err(fault(
+                    "LRR-E-MACRO-EXPORT-PUBLICATION",
+                    "compiler replay source has no selected role publication",
+                ));
+            };
+            if !input.sources.contains(selected)
+                || observation.outline_fingerprint() != replay.source().outline().fingerprint()
+                || replay.scan().generated_origin().is_some()
+            {
+                return Err(fault(
+                    "LRR-E-MACRO-EXPORT-PUBLICATION",
+                    "compiler replay source differs from complete role publication",
+                ));
+            }
+            replay.source().require_original_hygiene()?;
+            if macro_replays.insert(location, replay).is_some() {
+                return Err(fault(
+                    "LRR-E-MACRO-EXPORT-PUBLICATION",
+                    "duplicate macro-export compiler replay source",
+                ));
+            }
+        }
+        if macro_sources
+            .keys()
+            .any(|key| !macro_replays.contains_key(key))
+        {
+            return Err(fault(
+                "LRR-E-MACRO-EXPORT-PUBLICATION",
+                "selected macro-export source lacks its actual preparation scan",
+            ));
+        }
         let current = |key: &InputKey| -> Option<&InputValue> {
             self.inputs
                 .get(key)
@@ -1359,6 +1428,10 @@ impl Database {
         };
         for source in &input.sources {
             source.canonical()?;
+            if let Some(observation) = macro_sources.get(&source.location_identity()) {
+                dependencies.push(observation.outline_stamp());
+                continue;
+            }
             let key = InputKey::CapturedSource(source.location_identity());
             match current(&key) {
                 Some(InputValue::CapturedSource(actual)) if actual == source => {}
@@ -1909,19 +1982,35 @@ impl Database {
         let mut inert_bytes = 0usize;
         for proof in &input.nested_inert_proofs {
             let scan = proof.scan();
-            if previous_inert.is_some_and(|old| old >= proof.producer())
-                || !input.sources.iter().any(|selected| {
-                    selected.outline.parse == *scan.parse()
-                        && selected.path == *scan.path()
-                        && selected.outline.cfg == scan.cfg()
-                        && selected.outline.crate_key == scan.scope().crate_key
-                        && selected.outline.module_path == scan.scope().module_path
-                })
-            {
+            let selected = input.sources.iter().find(|selected| {
+                selected.outline.parse == *scan.parse()
+                    && selected.path == *scan.path()
+                    && selected.outline.cfg == scan.cfg()
+                    && selected.outline.crate_key == scan.scope().crate_key
+                    && selected.outline.module_path == scan.scope().module_path
+            });
+            if previous_inert.is_some_and(|old| old >= proof.producer()) || selected.is_none() {
                 return Err(fault(
                     "LRR-E-INTERNAL-SNAPSHOT",
                     "nested inert proof source/order differs",
                 ));
+            }
+            let selected = selected.expect("validated source selection");
+            if let Some(replay) = macro_replays.get(&selected.location_identity()) {
+                inert_bytes = inert_bytes
+                    .checked_add(replay.blob().bytes().len())
+                    .and_then(|n| n.checked_add(proof.metadata_bytes().ok()?))
+                    .filter(|n| *n <= 64 * 1024 * 1024)
+                    .ok_or_else(|| {
+                        fault(
+                            "LRR-E-METADATA-LIMIT",
+                            "nested inert proof publication budget",
+                        )
+                    })?;
+                proof.revalidate_prepared(replay)?;
+                dependencies.push((proof.producer(), proof.fingerprint()));
+                previous_inert = Some(proof.producer());
+                continue;
             }
             let Some(InputValue::SourceBlob(blob)) =
                 current(&InputKey::SourceBlob(scan.parse().content))
