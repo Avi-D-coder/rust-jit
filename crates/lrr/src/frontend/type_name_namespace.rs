@@ -1,6 +1,6 @@
 //! Common current Type-namespace proof for reached primitive name lookup.
 //! Call contracts and ordinary expressions share this source-owned decision.
-use super::names::NameNamespaces;
+use super::names::{NameLookup, NameNamespaces};
 use crate::{
     core::{
         diagnostic::Diagnostic,
@@ -18,6 +18,7 @@ use crate::{
 use std::collections::BTreeMap;
 
 /// These are actual published declaration facts, never a synthetic signature.
+#[derive(Clone, Copy)]
 pub(crate) struct SourceTypeOwner<'a> {
     pub definition: Digest,
     pub scope: &'a ScopeKey,
@@ -33,6 +34,123 @@ pub(crate) fn require_primitive_name(
     stamps: &BTreeMap<InputKey, Digest>,
     written_name: &str,
 ) -> Result<(), Diagnostic> {
+    require_selected_name(
+        db,
+        declaration,
+        sources,
+        stamps,
+        written_name,
+        &NameLookup::Absent,
+    )
+}
+/// Exact current Type lookup, shared by primitive absence and source definitions.
+pub(crate) fn require_selected_name(
+    db: &mut Database,
+    declaration: SourceTypeOwner<'_>,
+    sources: &[&PreparedSourceView],
+    stamps: &BTreeMap<InputKey, Digest>,
+    written_name: &str,
+    expected: &NameLookup,
+) -> Result<(), Diagnostic> {
+    if !matches!(expected, NameLookup::Absent | NameLookup::Defined(_)) {
+        return Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "Type authority needs a completed selected lookup",
+        ));
+    }
+    let actual = lookup_name(db, declaration, sources, stamps, written_name)?;
+    if actual != *expected {
+        return Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "primitive name requires its current owning Type namespace",
+        ));
+    }
+    Ok(())
+}
+
+/// Shared current lookup for ordinary nominal/alias declaration contexts.
+/// Generated headers enter the same origin/receipt core after actual memo proof.
+pub(crate) fn lookup_declaration_name(
+    db: &mut Database,
+    declaration: SourceTypeOwner<'_>,
+    sources: &[&PreparedSourceView],
+    written_name: &str,
+) -> QueryPoll<NameLookup> {
+    let Some(source) = db.input(&InputKey::DefinitionSource(declaration.definition)) else {
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "Type declaration source absent",
+        )));
+    };
+    let InputValue::DefinitionSource(parse) = source.as_ref() else {
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "Type declaration source variant differs",
+        )));
+    };
+    if db
+        .published_input(&InputKey::GeneratedSyntax(parse.content))
+        .is_some()
+    {
+        super::call_contracts::generated_result_namespace::lookup_type_declaration(
+            db,
+            declaration,
+            parse,
+            written_name,
+        )
+    } else {
+        let stamps = match db.lexical_namespace_stamps() {
+            Ok(stamps) => stamps,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        QueryPoll::Ready(lookup_name(db, declaration, sources, &stamps, written_name))
+    }
+}
+
+/// Ordinary declaration-local preparation and classification, shared by alias
+/// targets and reached member type preparation. No synthetic function owner.
+pub(crate) fn resolve_declaration_name(
+    db: &mut Database,
+    declaration: SourceTypeOwner<'_>,
+    generics: &[crate::syntax::signatures::DefinitionParameter],
+    sources: &[&PreparedSourceView],
+    written_name: &str,
+) -> QueryPoll<super::signature_names::SignatureName> {
+    use super::signature_names::{declaration_type_name_local, declaration_type_name_with_lookup};
+    match declaration_type_name_local(
+        declaration.definition,
+        declaration.scope,
+        declaration.header.profile.edition,
+        generics,
+        written_name,
+    ) {
+        Ok(Some(local)) => return QueryPoll::Ready(Ok(local)),
+        Ok(None) => {}
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    }
+    match lookup_declaration_name(db, declaration, sources, written_name) {
+        QueryPoll::Ready(Ok(lookup)) => QueryPoll::Ready(declaration_type_name_with_lookup(
+            declaration.definition,
+            declaration.scope,
+            declaration.header.profile.edition,
+            generics,
+            written_name,
+            lookup,
+        )),
+        QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(request) => QueryPoll::NeedInput(request),
+    }
+}
+
+/// Obtain the actual completed lookup from this declaration's current Type
+/// authority. Classification happens only after this source/namespace join.
+pub(crate) fn lookup_name(
+    db: &mut Database,
+    declaration: SourceTypeOwner<'_>,
+    sources: &[&PreparedSourceView],
+    stamps: &BTreeMap<InputKey, Digest>,
+    written_name: &str,
+) -> Result<NameLookup, Diagnostic> {
     let missing = || {
         fault(
             "LRR-E-CALL-CONTEXT",
@@ -212,10 +330,7 @@ pub(crate) fn require_primitive_name(
             }
         }
         // Borrow this one canonical bucket instead of cloning the scope.
-        if scope.names.contains_key(name.as_str()) {
-            return Err(missing());
-        }
-        return Ok(());
+        return completed_bucket_lookup(&scope.names, name.as_str()).ok_or_else(missing);
     }
     // A genuine completed Value or TestCatalog publication may retain
     // independently certified Type facts. The parent domain alone never
@@ -262,12 +377,10 @@ pub(crate) fn require_primitive_name(
     if let Some((input, receipt)) = nested {
         receipt.require_owner(declaration.scope, &declaration.header.profile)?;
         receipt.require_current(db, input)?;
-        if receipt.scope().namespace != Namespace::Type
-            || receipt.scope().names.contains_key(name.as_str())
-        {
+        if receipt.scope().namespace != Namespace::Type {
             return Err(missing());
         }
-        return Ok(());
+        return completed_bucket_lookup(&receipt.scope().names, name.as_str()).ok_or_else(missing);
     }
     // Plain start_with_sources has no discovery certificates. Reconstruct
     // only from the complete actual current retained original source set;
@@ -320,19 +433,50 @@ pub(crate) fn require_primitive_name(
     }
     let mut current = NameNamespaces::from_outlines(&outlines)?;
     let resolved = current.resolve_imports()?;
-    if !resolved.pending.is_empty()
+    let lookup = current.lookup_unqualified(
+        Namespace::Type,
+        name.as_str(),
+        declaration.scope,
+        declaration.header.profile.edition,
+        None,
+    )?;
+    if (!resolved.pending.is_empty()
         || !resolved.missing.is_empty()
         || !resolved.inaccessible.is_empty()
-        || !resolved.ambiguous.is_empty()
-        || current.lookup_unqualified(
-            Namespace::Type,
-            name.as_str(),
-            declaration.scope,
-            declaration.header.profile.edition,
-            None,
-        )? != super::names::NameLookup::Absent
+        || !resolved.ambiguous.is_empty())
+        && matches!(lookup, NameLookup::Absent | NameLookup::Defined(_))
     {
         return Err(missing());
     }
-    Ok(())
+    Ok(lookup)
+}
+
+/// A stored negative/incomplete row is not proof of absence. Completed scope
+/// producers omit absent names and retain exact positive canonical identities.
+pub(crate) fn completed_bucket_lookup(
+    names: &BTreeMap<String, NameLookup>,
+    name: &str,
+) -> Option<NameLookup> {
+    match names.get(name) {
+        None => Some(NameLookup::Absent),
+        Some(selected @ NameLookup::Defined(definition))
+            if definition.namespace == Namespace::Type =>
+        {
+            Some(selected.clone())
+        }
+        _ => None,
+    }
+}
+
+/// Preserve strict absence while allowing one exact completed positive bucket.
+pub(crate) fn bucket_selects(
+    names: &BTreeMap<String, NameLookup>,
+    name: &str,
+    expected: &NameLookup,
+) -> bool {
+    match expected {
+        NameLookup::Absent => !names.contains_key(name),
+        NameLookup::Defined(_) => names.get(name) == Some(expected),
+        _ => false,
+    }
 }

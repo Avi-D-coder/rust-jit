@@ -304,6 +304,40 @@ impl GenericEnv {
             .and_then(|proof| proof.result_source())
             .ok_or_else(|| invalid("reference result requires its admitted source certificate"))
     }
+    pub(crate) fn reference_parameter_source(&self, ordinal: usize) -> Option<&TyTerm> {
+        self.closed_references
+            .as_ref()
+            .and_then(|proof| proof.parameter_source(ordinal))
+    }
+    pub(crate) fn require_reference_parameter_descriptor(
+        &self,
+        ordinal: usize,
+        store: &crate::runtime::cell::GuestStore,
+        descriptor: TypeId,
+    ) -> Result<(), Diagnostic> {
+        self.closed_references
+            .as_ref()
+            .ok_or_else(|| invalid("reference parameter source certificate absent"))?
+            .require_parameter_descriptor(ordinal, store, descriptor)
+    }
+    pub(crate) fn reference_result_descriptor(
+        &self,
+        store: &crate::runtime::cell::GuestStore,
+    ) -> Result<Option<TypeId>, Diagnostic> {
+        self.closed_references
+            .as_ref()
+            .ok_or_else(|| invalid("reference result source certificate absent"))?
+            .result_hint_descriptor(store)
+    }
+    pub(crate) fn materialize_reference_result_descriptor(
+        &self,
+        store: &mut crate::runtime::cell::GuestStore,
+    ) -> Result<TypeId, Diagnostic> {
+        self.closed_references
+            .as_ref()
+            .ok_or_else(|| invalid("reference result source certificate absent"))?
+            .materialize_result_hint(store)
+    }
     pub fn retained_bytes(&self) -> usize {
         self.bytes
     }

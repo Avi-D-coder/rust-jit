@@ -186,6 +186,12 @@
       "bytes": 916
     },
     {
+      "path": "tests/ui/binding/if-let.rs",
+      "git_blob": "495d5ce9495887ec57a73453797e50e3a82028d7",
+      "sha256": "267def6c0f6e9e87d3d738bbfa31c02b6fac53f66882d40701dd3109a310e8b6",
+      "bytes": 1317
+    },
+    {
       "path": "tests/ui/binding/let-destruct-ref.rs",
       "git_blob": "824ac6f5f02428e3b444ebdceb00966824da84e7",
       "sha256": "d6d1eef36c6f86be1a007e4f971d7445b61222cfb77116e8dc8c8f49c33bdf31",
@@ -682,6 +688,12 @@
       "git_blob": "d11f4ea77c474012086a013dff6c81095a450418",
       "sha256": "ea2ef00a878f74349c68eb5db9f3026befe26b02bac48fbc3eadaf24dc58978b",
       "bytes": 762
+    },
+    {
+      "path": "tests/ui/consts/const_in_pattern/cyclic-const-dag-pass.rs",
+      "git_blob": "cecf55d23e6b731f0ada8a26c6cd9800b23c0c90",
+      "sha256": "31ee02b5cd60be7801100d9b856e8a65939e6c6ca054275598c3994f6d228d1f",
+      "bytes": 295
     },
     {
       "path": "tests/ui/consts/const_let_irrefutable.rs",
@@ -2616,6 +2628,12 @@
       "bytes": 185
     },
     {
+      "path": "tests/ui/regions/regions-infer-borrow-scope.rs",
+      "git_blob": "2f25d0010833b01fc533e3bd5eeefadf5892ec1b",
+      "sha256": "b296c6d78fbf362d7ab196a4dd3418f8bc12f8a6c365bbfe5c0a5a75b6473979",
+      "bytes": 243
+    },
+    {
       "path": "tests/ui/regions/regions-infer-call.rs",
       "git_blob": "ad48f3aa93a3654b4eaa579fb24cead7fa9f6ec0",
       "sha256": "92dce9e6d86786593d7f073831208a8dab8de6a4beee7a62e1b46fbe4efe981c",
@@ -2680,6 +2698,12 @@
       "git_blob": "d5f6628e0dbc14011b4e372970021b2e4c86ce1c",
       "sha256": "399f6cf79751edd57f5a7941a585f06800ca77213e21c64f596f04117bd15c22",
       "bytes": 8297
+    },
+    {
+      "path": "tests/ui/rfcs/rfc-2497-if-let-chains/ast-lowering-does-not-wrap-let-chains.rs",
+      "git_blob": "dc052c38fe7ade1132f354e469a980af79605836",
+      "sha256": "27b70dc63ab348eb971e3057ff27b178023b3ff6fb7ff0de7199417583428a4c",
+      "bytes": 308
     },
     {
       "path": "tests/ui/rust-2018/auxiliary/time.rs",
@@ -3232,6 +3256,14 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/binding/if-let.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/binding/let-destruct-ref.rs",
       "directives": [
         "//@ run-pass"
@@ -3640,6 +3672,14 @@
     },
     {
       "path": "tests/ui/consts/const-struct.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/consts/const_in_pattern/cyclic-const-dag-pass.rs",
       "directives": [
         "//@ run-pass"
       ],
@@ -5302,6 +5342,14 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/regions/regions-infer-borrow-scope.rs",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/regions/regions-infer-call.rs",
       "directives": [
         "//@ run-pass"
@@ -5369,6 +5417,15 @@
       "directives": [
         "//@ run-pass",
         "//@ needs-unwind"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/rfcs/rfc-2497-if-let-chains/ast-lowering-does-not-wrap-let-chains.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ edition: 2024"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"

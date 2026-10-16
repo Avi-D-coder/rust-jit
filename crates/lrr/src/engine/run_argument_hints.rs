@@ -141,7 +141,7 @@ pub(super) fn runtime_hint(
                 end,
             },
             proof.mutable(),
-            Box::new(TyTerm::Primitive(proof.pointee())),
+            Box::new(proof.pointee_source().clone()),
         )
     });
     // Materialize only the checked descriptor, after source admission.

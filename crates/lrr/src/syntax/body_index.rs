@@ -180,6 +180,7 @@ pub struct BodyIndex {
     /// Derived from the explicitly encoded node ranges/IDs, never a second
     /// source identity. Equal ranges preserve original preorder selection.
     source_order: Vec<NodeId>,
+    pattern_bindings: super::pattern_bindings::PatternBindings,
     scopes: Vec<LexicalScope>,
     labels: Vec<LabelTarget>,
     constructor_guards: Vec<(SlotId, NodeId)>,
@@ -198,6 +199,9 @@ impl BodyIndex {
     }
     pub fn nodes(&self) -> &[StructuralNode] {
         &self.nodes
+    }
+    pub(crate) fn pattern_bindings(&self) -> &super::pattern_bindings::PatternBindings {
+        &self.pattern_bindings
     }
     /// Exact relative source location, retaining all role-distinct nodes at
     /// that location in original NodeId order. No source walk or resolution.
@@ -312,11 +316,12 @@ impl BodyIndex {
     }
 }
 impl StableEncode for BodyIndex {
-    const DOMAIN: &'static str = "lrr/v4/original-body-structure";
+    const DOMAIN: &'static str = "lrr/v5/original-body-structure";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.body);
         e.record(&self.profile);
         e.record(&self.cfg);
+        e.record(&self.pattern_bindings);
         e.u32(self.slots);
         e.sequence(&self.nodes, |e, n| {
             e.u32(n.id.0);
@@ -537,6 +542,7 @@ impl ParsedFile {
             cfg: cfg.clone(),
             nodes: Vec::new(),
             source_order: Vec::new(),
+            pattern_bindings: super::pattern_bindings::PatternBindings::empty(),
             scopes: Vec::new(),
             labels: Vec::new(),
             constructor_guards: Vec::new(),
@@ -1355,6 +1361,30 @@ impl ParsedFile {
             let node = &nodes[id.0 as usize];
             (node.range.start, node.range.end, id.0)
         });
+        let remaining = limits
+            .metadata_bytes
+            .checked_sub(index.estimated_bytes)
+            .filter(|remaining| {
+                *remaining >= std::mem::size_of::<super::pattern_bindings::PatternBindings>()
+            })
+            .ok_or_else(|| limit("pattern binding metadata budget"))?;
+        let bindings =
+            super::pattern_bindings::PatternBindings::prepare(self, body, &index, remaining)
+                .map_err(|error| {
+                    if error.code == "LRR-E-METADATA-LIMIT" {
+                        limit("pattern binding metadata budget")
+                    } else {
+                        error
+                    }
+                })?;
+        charge(
+            &mut index.estimated_bytes,
+            bindings
+                .metadata_bytes()
+                .ok_or_else(|| limit("pattern binding metadata overflow"))?,
+            limits.metadata_bytes,
+        )?;
+        index.pattern_bindings = bindings;
         Ok(index)
     }
 }

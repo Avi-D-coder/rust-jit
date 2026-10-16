@@ -236,6 +236,13 @@ pub(super) struct Plan {
     next: PcKey,
     range: bool,
 }
+impl Plan {
+    pub(super) fn requires_binding_admission(&self, key: &PcKey) -> bool {
+        key.node == self.id.0
+            && self.binding.is_some()
+            && matches!(Phase::from_code(key.phase), Phase::Entry | Phase::Commit)
+    }
+}
 pub(super) fn plan(
     parsed: &ParsedFile,
     body: &BodyHandle,
@@ -335,6 +342,7 @@ pub(super) fn prepare(
         index,
         key,
         retained.as_ref().map_err(Clone::clone),
+        None,
     )
 }
 pub(super) fn prepare_inner(
@@ -343,6 +351,7 @@ pub(super) fn prepare_inner(
     index: &BodyIndex,
     key: &PcKey,
     retained: Result<&Plan, Diagnostic>,
+    admission: Option<&crate::frontend::scalar_pattern_binding::ScalarPatternBindingAdmission>,
 ) -> Result<VerifiedRecipe, Diagnostic> {
     let fallback = index.pc(NodeId(key.node), Phase::Exit)?;
     let refuse =
@@ -375,6 +384,32 @@ pub(super) fn prepare_inner(
         .value
         .ok_or_else(|| error("condition Bool result absent"))?;
     let phase = Phase::from_code(key.phase);
+    let binding_admission = if plan.requires_binding_admission(key) {
+        let Some(admission) = admission else {
+            return refuse("pattern name requires current Value namespace binding admission");
+        };
+        admission.require(
+            parsed,
+            body,
+            index,
+            key,
+            binding.ok_or_else(|| error("condition binding identity absent"))?,
+        )?;
+        Some(admission)
+    } else {
+        None
+    };
+    let draft = |index: &BodyIndex,
+                 key: &PcKey,
+                 operations: Vec<Op>,
+                 exit: RecipeExit|
+     -> Result<VerifiedRecipe, Diagnostic> {
+        if let Some(admission) = binding_admission {
+            literal_match::binding_draft(index, key, operations, exit, admission)
+        } else {
+            super::draft(index, key, operations, exit)
+        }
+    };
     let result = (|| match phase {
         Phase::Entry => draft(
             index,

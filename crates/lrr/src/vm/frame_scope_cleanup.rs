@@ -161,7 +161,8 @@ impl Frame {
         let base = Self::metadata_bytes(&self.body, self.parameter_metadata_count())
             .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
             .and_then(|n| n.checked_add(self.projection_bytes))
-            .and_then(|n| n.checked_add(self.source_field_bytes()?))
+            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
+            .and_then(|n| n.checked_add(self.auxiliary_metadata_bytes()?))
             .ok_or_else(crate::runtime::arena::resource)?;
         (32_usize * 1024 * 1024)
             .checked_sub(base)
@@ -361,6 +362,10 @@ impl Frame {
             .checked_sub(bytes)
             .ok_or_else(|| invalid("cleanup place accounting underflow"))?;
         slot.cell = None;
+        self.source_extra_bytes = self
+            .source_extra_bytes
+            .checked_sub(Self::source_excess(slot.source.as_ref())?)
+            .ok_or_else(|| invalid("cleanup slot source accounting underflow"))?;
         slot.source = None;
         slot.place = None;
         slot.hint = None;
@@ -379,10 +384,13 @@ impl Frame {
                     .bindings
                     .get_mut(index)
                     .ok_or_else(|| invalid("cleanup binding absent"))? = None;
-                *self
-                    .binding_sources
-                    .get_mut(index)
-                    .ok_or_else(|| invalid("cleanup binding source absent"))? = None;
+                self.set_binding_source_view(
+                    NodeId(
+                        u32::try_from(index)
+                            .map_err(|_| invalid("binding source index overflow"))?,
+                    ),
+                    None,
+                )?;
             }
             Owner::Parameter(index) => {
                 *self
@@ -646,15 +654,22 @@ impl Frame {
                             .nodes()
                             .get(index)
                             .ok_or_else(|| invalid("cleanup binding cursor invalid"))?;
-                        if node.scope == active.scope
-                            && let Some(cell) = self.bindings.get(index).copied().flatten()
-                        {
-                            self.start_cleanup_owner(
-                                &mut active,
-                                Owner::Binding(index),
-                                cell,
-                                store,
-                            )?;
+                        if node.scope == active.scope {
+                            if let Some(cell) = self.bindings.get(index).copied().flatten() {
+                                self.start_cleanup_owner(
+                                    &mut active,
+                                    Owner::Binding(index),
+                                    cell,
+                                    store,
+                                )?;
+                            } else {
+                                self.set_binding_source_view(
+                                    NodeId(u32::try_from(index).map_err(|_| {
+                                        invalid("binding source cleanup index overflow")
+                                    })?),
+                                    None,
+                                )?;
+                            }
                         }
                         active.stage = Stage::Bindings(index);
                     }
@@ -677,7 +692,7 @@ impl Frame {
                         }
                         self.preflight_leave(active.scope)?;
                         if active.scope == ScopeId(0) {
-                            self.parameter_sources.clear();
+                            self.clear_parameter_source_views()?;
                         }
                         if matches!(active.boundary, Boundary::Return) {
                             self.counters.return_scopes_cleaned = self

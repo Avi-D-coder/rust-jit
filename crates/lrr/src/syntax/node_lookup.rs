@@ -7,7 +7,7 @@ use super::{
     spans::SourceRange,
 };
 use crate::{core::diagnostic::Diagnostic, ir::pc::NodeId};
-use ra_ap_syntax::{AstNode, NodeOrToken, SyntaxKind, SyntaxNode, TextRange, ast};
+use ra_ap_syntax::{AstNode, NodeOrToken, SyntaxNode, TextRange, ast};
 const MAX_DEPTH: usize = 4096;
 fn invalid(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-BODY-INDEX", message.into())
@@ -17,18 +17,9 @@ fn role_matches(node: &SyntaxNode, role: NodeRole) -> bool {
         NodeRole::Expression(_) => ast::Expr::can_cast(node.kind()),
         NodeRole::Statement => ast::Stmt::can_cast(node.kind()),
         NodeRole::MatchArm => ast::MatchArm::can_cast(node.kind()),
-        NodeRole::Pattern => {
-            matches!(
-                node.kind(),
-                SyntaxKind::LITERAL_PAT
-                    | SyntaxKind::WILDCARD_PAT
-                    | SyntaxKind::IDENT_PAT
-                    | SyntaxKind::RANGE_PAT
-            ) && node
-                .ancestors()
-                .take(MAX_DEPTH)
-                .any(|parent| ast::MatchArm::can_cast(parent.kind()))
-        }
+        // Attachment is structural, as in index_body. The shared pattern
+        // planner/verifier owns supported forms and binding/phase authority.
+        NodeRole::Pattern => ast::Pat::can_cast(node.kind()),
         NodeRole::OpaqueItem => ast::Item::can_cast(node.kind()),
         _ => false,
     }

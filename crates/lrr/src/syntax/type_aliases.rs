@@ -39,12 +39,9 @@ impl ParsedFile {
             return Err(fault("alias/source profile mismatch"));
         }
         let alias = self
-            .parsed
-            .tree()
-            .syntax()
-            .descendants()
-            .filter_map(ast::TypeAlias::cast)
-            .find(|alias| {
+            .syntax_at(context.range, |node| ast::TypeAlias::can_cast(node.kind()))?
+            .and_then(ast::TypeAlias::cast)
+            .filter(|alias| {
                 range(alias.syntax().text_range()) == context.range
                     && tokens(alias.syntax(), None) == header.tokens
             })

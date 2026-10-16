@@ -1,7 +1,8 @@
 //! Bounded demand expansion through immutable original and generated declaration contexts.
 use super::{
     names::{NameLookup, NameNamespaces},
-    signature_names::{SignatureName, declaration_type_name},
+    signature_names::SignatureName,
+    type_name_namespace::{SourceTypeOwner, lookup_declaration_name, resolve_declaration_name},
 };
 use crate::{
     core::{
@@ -45,7 +46,6 @@ struct AliasDeclaration {
     header: HeaderRecipe,
 }
 pub struct AliasNormalizer<'a> {
-    graph: &'a NameNamespaces,
     sources: &'a [&'a PreparedSourceView],
 }
 fn fault(message: &str) -> Diagnostic {
@@ -62,7 +62,7 @@ impl<'a> AliasNormalizer<'a> {
         for source in sources {
             graph.require_source(source.selection(), source.outline())?;
         }
-        Ok(Self { graph, sources })
+        Ok(Self { sources })
     }
     fn declaration(&self, db: &mut Database, identity: Digest) -> QueryPoll<AliasDeclaration> {
         if let Some((source, item)) = self.sources.iter().find_map(|source| {
@@ -117,14 +117,28 @@ impl<'a> AliasNormalizer<'a> {
         let InputValue::DefinitionHeader(header) = header.as_ref() else {
             return QueryPoll::Ready(Err(fault("generated alias header variant differs")));
         };
+        let Some(context) = db.input(&InputKey::DeclarationContext(identity)) else {
+            return QueryPoll::Ready(Err(fault("generated alias declaration context absent")));
+        };
+        let InputValue::DeclarationContext(context) = context.as_ref() else {
+            return QueryPoll::Ready(Err(fault(
+                "generated alias declaration context variant differs",
+            )));
+        };
         if header.profile != unit.key.profile
-            || !matches!(db.input(&InputKey::DeclarationContext(identity)).as_deref(),Some(InputValue::DeclarationContext(context)) if context.scope==unit.scope)
+            || definition.crate_key != context.scope.crate_key
+            || definition.module_path != context.scope.module_path
+            || context.scope.crate_key != unit.scope.crate_key
+            || !context
+                .scope
+                .module_path
+                .starts_with(&unit.scope.module_path)
         {
             return QueryPoll::Ready(Err(fault("generated alias declaration context differs")));
         }
         QueryPoll::Ready(Ok(AliasDeclaration {
             definition: definition.clone(),
-            scope: unit.scope.clone(),
+            scope: context.scope.clone(),
             header: header.clone(),
         }))
     }
@@ -134,6 +148,10 @@ impl<'a> AliasNormalizer<'a> {
     /// Bind a successful return normalization to every reached alias and its
     /// captured namespace source world. This reads immutable input identities;
     /// it never enters bodies, expands producers or executes build tools.
+    /// The sole runtime consumer additionally pins Database::revision/source_revision
+    /// in NormalizedDeferredReturn, retaining conservative currentness for the
+    /// actual Type receipt/origin lookups rather than treating this trace alone
+    /// as a complete namespace publication certificate.
     pub(crate) fn normalize_with_dependencies(
         &self,
         db: &mut Database,
@@ -205,15 +223,19 @@ impl<'a> AliasNormalizer<'a> {
             if item.scope.owner.is_some() {
                 return QueryPoll::Ready(Ok(AliasTarget::NeedOwnerContext(item.scope.clone())));
             }
-            let selected = match self.graph.lookup_unqualified(
-                crate::source::manifest::Namespace::Type,
+            let selected = match lookup_declaration_name(
+                db,
+                SourceTypeOwner {
+                    definition,
+                    scope: &item.scope,
+                    header: &item.header,
+                },
+                self.sources,
                 &item.definition.declared_name,
-                &item.scope,
-                item.header.profile.edition,
-                None,
             ) {
-                Ok(value) => value,
-                Err(error) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::Ready(Ok(value)) => value,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
             };
             match selected {
                 NameLookup::Defined(selected) if selected.identity == definition => {}
@@ -288,17 +310,20 @@ impl<'a> AliasNormalizer<'a> {
                     target: alias.target.clone(),
                 }));
             }
-            let resolved = match declaration_type_name(
-                self.graph,
-                definition,
-                &alias.scope,
-                alias.header.profile.edition,
+            let resolved = match resolve_declaration_name(
+                db,
+                SourceTypeOwner {
+                    definition,
+                    scope: &alias.scope,
+                    header: &alias.header,
+                },
                 &alias.generics,
+                self.sources,
                 &alias.target[0].text,
-                None,
             ) {
-                Ok(value) => value,
-                Err(error) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::Ready(Ok(value)) => value,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
             };
             match resolved {
                 SignatureName::Primitive(p) => {

@@ -79,6 +79,68 @@ impl GuestStore {
         // validate_value checks the real record's descriptor, not the reverse.
         Ok(TypeId(value.type_id))
     }
+
+    /// A changed pointee requires a source-selected member edge from the
+    /// original input location. Runtime shape and equal endpoints are not a
+    /// replacement for that edge's source certificate.
+    pub(crate) fn require_reference_projection_return(
+        &self,
+        ticket: TicketId,
+        expected: &ReferenceTarget,
+        mutable: bool,
+        origin: TypeId,
+        pointee: TypeId,
+    ) -> Result<TypeId, Diagnostic> {
+        if expected.session != self.pattern_binding_session() || expected.target != origin {
+            return Err(ownership());
+        }
+        self.validate_reference_target(
+            expected.root,
+            &expected.enclosing,
+            expected.final_cell,
+            expected.target,
+        )?;
+        let value = self.peek_ticket(ticket)?;
+        self.object_owner(value, ValueOwner::Ticket(ticket))?;
+        if value.kind != 9 {
+            return Err(invalid());
+        }
+        let record = self.references.get(RefId::from_bits(value.payload))?;
+        self.validate_reference_record(record)?;
+        let prefix = expected.enclosing.len();
+        if record.root != expected.root
+            || record.enclosing.len() != prefix.checked_add(1).ok_or_else(resource)?
+            || record.enclosing.get(..prefix) != Some(expected.enclosing.as_slice())
+            || record.target != pointee
+            || (record.access == Access::Mutable) != mutable
+            || mutable && expected.access != Access::Mutable
+        {
+            return Err(ownership());
+        }
+        let edge = &record.enclosing[prefix];
+        if edge.parent != expected.final_cell || edge.child != record.final_cell.cell {
+            return Err(ownership());
+        }
+        let index = u32::try_from(prefix).map_err(|_| resource())?;
+        let source = record
+            .source_projections
+            .binary_search_by_key(&index, |step| step.chain_index)
+            .ok()
+            .and_then(|index| record.source_projections.get(index))
+            .ok_or_else(ownership)?;
+        Self::require_source_projection_parent(
+            &source.member,
+            self.types.descriptor(origin)?.key.as_ref(),
+        )?;
+        if crate::runtime::shape::PrimitiveIdentity::from_recipe(source.member.primitive)?.id()
+            != pointee
+        {
+            return Err(ownership());
+        }
+        // Current member admission proves primitive fields. Further structural
+        // paths need the same common source-member proof before admission.
+        Ok(TypeId(value.type_id))
+    }
 }
 
 #[cfg(test)]

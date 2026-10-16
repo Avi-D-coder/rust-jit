@@ -30,8 +30,30 @@ pub enum PlaceRoot {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Projection {
     Field(u32),
+    SourceField(SourceFieldProjection),
     Tuple(u32),
     Index(u32),
+}
+/// Opaque selected nominal member facts, never derived from a runtime layout.
+/// The checked source-member projection operation is the only constructor.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct SourceFieldProjection {
+    pub(super) definition: crate::core::digest::Digest,
+    pub(super) schema: crate::core::digest::Digest,
+    pub(super) variant: u32,
+    pub(super) field: u32,
+    pub(super) primitive: crate::ir::op::PrimitiveType,
+}
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) struct SourceProjectionStep {
+    pub chain_index: u32,
+    pub member: SourceFieldProjection,
+}
+pub(crate) fn checked_source_projection_bytes(count: usize) -> Result<usize, Diagnostic> {
+    count
+        .checked_mul(std::mem::size_of::<SourceProjectionStep>())
+        .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+        .ok_or_else(resource)
 }
 pub struct Place {
     pub root: PlaceRoot,
@@ -118,6 +140,7 @@ pub(crate) struct ResolvedPlace {
     pub target: CellStamp,
     pub ty: TypeId,
     pub writable: bool,
+    pub source_projections: Vec<SourceProjectionStep>,
 }
 pub(crate) fn checked_chain_bytes(count: usize) -> Result<usize, Diagnostic> {
     count

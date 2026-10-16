@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "source_baseline": "f0a30dcc2a67799ab3bab462ec930cf938016735",
+  "scope": "WT03 structural pattern prerequisites: canonical candidates, closed tuple source correspondence/storage, ordinary tuple construction and Copy source lifecycle",
+  "status": "source_reviewed_uncompiled_unexecuted",
+  "fingerprint_encoding": "SHA-256 of sorted sha256 + two spaces + path + LF rows",
+  "fingerprint": "37e38ba0474f57a5a326b750a159b208e6ec95157e4d48cf3017a3b61a4595b0",
+  "files": [
+    {
+      "path": "crates/lrr/src/syntax/literal_match.rs",
+      "sha256": "d8665cf92ed1283e67c9c1b37db4825efd48e1cc0dece0cb4dd413e6c858a838",
+      "bytes": 48356
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_bindings.rs",
+      "sha256": "e258cdb23b66429596d3ec56bce4fac2641a6a4a76d457b26e953aab983afd77",
+      "bytes": 18889
+    },
+    {
+      "path": "crates/lrr/src/syntax/pattern_bindings_tests.rs",
+      "sha256": "9962090df21a2b5af02040e40da920a97830b7ad7c44e0fc06737a3b962f441a",
+      "bytes": 6007
+    },
+    {
+      "path": "crates/lrr/src/vm/frame.rs",
+      "sha256": "41ba0fdcdbf4dad4f54af0d7d73a50cb80b7647decfd51d990eb70206d95dd6a",
+      "bytes": 309339
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_aggregate_copy.rs",
+      "sha256": "f4e5b170f841a469332a2b634f56ca9d798f8bd4aaf2d658221416e3fbf95b92",
+      "bytes": 8416
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_constant_arrays.rs",
+      "sha256": "999b0405eda633a676c1599d2edb14c3a806812df9ea7f43939b57eb14b87d3f",
+      "bytes": 9250
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_constant_chunk_publication.rs",
+      "sha256": "0137d83343d31ace147fe395291f408a4520b5da0d86f8eda0a3080579723565",
+      "bytes": 14603
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_pattern.rs",
+      "sha256": "8bc3106dc9eb5701f2ae274a89b7d688c623da2334e7effbc95666e7572bf872",
+      "bytes": 9981
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_scope_cleanup.rs",
+      "sha256": "4d25f9b3f154aae3f49be5edd67d542e29b21ea0a2bae13d70905f3d2da477e0",
+      "bytes": 30548
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_source_storage.rs",
+      "sha256": "2931d3abb98a4e9287be975b068423e9496acc683fdb8eb4b327f732631034c9",
+      "bytes": 9321
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_source_types.rs",
+      "sha256": "55edbf67020d0681cc75cf83fd2526771ecc622793b7387f28aef4efd0242446",
+      "bytes": 3880
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_source_types_tests.rs",
+      "sha256": "1df2c5a1d7de8686e42bbdf837ddbabf75b9de4cb33743b3c370cf64b0603e31",
+      "bytes": 21791
+    },
+    {
+      "path": "crates/lrr/src/vm/frame_tuple_sources.rs",
+      "sha256": "26a44cf8fe01c3abd38dd20a77cad096e80a5e74e1d6fcc1227f8e9ec63c2e2b",
+      "bytes": 5681
+    },
+    {
+      "path": "crates/lrr/src/vm/step.rs",
+      "sha256": "5238442b678057a802debf3697f5750b7adcb1393e9f7405ce1055a40e9fdaea",
+      "bytes": 58495
+    }
+  ],
+  "tests": {
+    "syntactic_binding_fact_bodies": 4,
+    "frame_source_component_bodies": 8,
+    "runtime_full_fixture_passes": 0
+  },
+  "shared_join": "frame.rs and step.rs include coordinated reference-peer definition-result and parameter source symbols; root must combine their dependencies before execution",
+  "upstream_original": {
+    "path": "fixtures/upstream/rustc-checkout/tests/ui/or-patterns/search-via-bindings.rs",
+    "sha256": "38723ec8521136188a19a4b465362e979d95f59ed65009a358aff640a23a08b6",
+    "unchanged": true
+  },
+  "holds": [
+    "ordered structural tuple/@/nested-or transaction decision lowering remains pending",
+    "all Rust/Cargo/native execution reserved to sole validator",
+    "no architecture, task, runtime-contract or full-fixture closure"
+  ]
+}

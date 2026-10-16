@@ -1,7 +1,10 @@
 //! Run-owned location leases. Shared access never grants mutation permission.
 pub use super::cell::RefId;
 use super::{
-    place::{CellStamp, EnclosingObject, ResolvedPlace, checked_chain_bytes},
+    place::{
+        CellStamp, EnclosingObject, ResolvedPlace, SourceProjectionStep, checked_chain_bytes,
+        checked_source_projection_bytes,
+    },
     shape::TypeId,
 };
 use crate::core::diagnostic::Diagnostic;
@@ -20,6 +23,7 @@ pub struct ReferenceRecord {
     pub(crate) root: CellStamp,
     pub(crate) enclosing: Vec<EnclosingObject>,
     pub(crate) final_cell: CellStamp,
+    pub(crate) source_projections: Vec<SourceProjectionStep>,
 }
 impl ReferenceRecord {
     pub(crate) fn from_place(place: ResolvedPlace, access: Access) -> Self {
@@ -30,11 +34,17 @@ impl ReferenceRecord {
             root: place.root,
             enclosing: place.enclosing,
             final_cell: place.target,
+            source_projections: place.source_projections,
         }
     }
     pub(crate) fn owned_bytes(&self) -> Result<usize, Diagnostic> {
         // GuestArena accounts for the record itself; charge only its owned buffer.
-        checked_chain_bytes(self.enclosing.capacity())
+        checked_chain_bytes(self.enclosing.capacity())?
+            .checked_add(checked_source_projection_bytes(
+                self.source_projections.capacity(),
+            )?)
+            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+            .ok_or_else(super::arena::resource)
     }
 }
 pub(crate) fn access_fault() -> Diagnostic {

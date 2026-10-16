@@ -714,7 +714,7 @@ fn empty_binding_header(arm: &Arm) -> bool {
 fn plain_binding_header(_parsed: &ParsedFile, arm: &Arm) -> Option<NodeId> {
     arm.binding
 }
-fn binding_draft(
+pub(super) fn binding_draft(
     index: &BodyIndex,
     key: &PcKey,
     operations: Vec<Op>,

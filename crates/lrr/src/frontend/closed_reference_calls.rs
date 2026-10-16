@@ -41,7 +41,7 @@ pub struct ClosedReferenceParameter {
     signature: Digest,
     region: DeclaredRegion,
     source: TyTerm,
-    primitive: PrimitiveType,
+    pointee: super::super::source_types::SourceType,
     revision: u64,
     source_revision: u64,
     inputs: BTreeMap<InputKey, Digest>,
@@ -60,35 +60,25 @@ impl ClosedReferenceParameter {
             return Ok(None);
         };
         syntax.require(signature)?;
-        let parse = plan.parse();
-        let primitive = match SignatureNames::from_database(db, graph, signature)?
-            .unqualified(syntax.target(), None)?
-        {
-            SignatureName::Primitive(primitive) => primitive,
-            _ => return Ok(None), // Existing typed NeedType/NeedName frontier remains.
+        let pointee = match super::super::source_types::prepare_reference_pointee(
+            db,
+            graph,
+            sources,
+            signature,
+            syntax.reference(),
+        ) {
+            QueryPoll::Ready(Ok(super::super::source_types::NamedTypePreparation::Ready(
+                pointee,
+            ))) => pointee,
+            QueryPoll::Ready(Ok(_)) => return Ok(None),
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(_) => {
+                return Err(invalid("reference pointee source authority is not current"));
+            }
         };
-        primitive_runtime_id(primitive)?;
         let inputs = db.lexical_namespace_stamps()?;
         if inputs.len() > 4096 {
             return Err(limit());
-        }
-        if db
-            .published_input(&InputKey::GeneratedSyntax(parse.content))
-            .is_some()
-        {
-            generated_result_namespace::require_reference(db, signature, &syntax)?;
-        } else {
-            super::super::type_name_namespace::require_primitive_name(
-                db,
-                super::super::type_name_namespace::SourceTypeOwner {
-                    definition: signature.definition,
-                    scope: &signature.scope,
-                    header: &signature.header,
-                },
-                sources,
-                &inputs,
-                syntax.target(),
-            )?;
         }
         let region = match syntax.lifetime() {
             Some("'static") => {
@@ -123,7 +113,7 @@ impl ClosedReferenceParameter {
         let source = TyTerm::Ref(
             source_region,
             syntax.mutable(),
-            Box::new(TyTerm::Primitive(primitive)),
+            Box::new(pointee.source().clone()),
         );
         let proof = Self {
             syntax,
@@ -132,7 +122,7 @@ impl ClosedReferenceParameter {
             signature: signature.fingerprint(),
             region,
             source,
-            primitive,
+            pointee,
             revision: db.revision(),
             source_revision: db.source_revision(),
             inputs,
@@ -142,8 +132,8 @@ impl ClosedReferenceParameter {
         }
         Ok(Some(Arc::new(proof)))
     }
-    pub fn pointee(&self) -> PrimitiveType {
-        self.primitive
+    pub fn pointee_source(&self) -> &TyTerm {
+        self.pointee.source()
     }
     pub fn ordinal(&self) -> u32 {
         self.syntax.ordinal()
@@ -188,14 +178,21 @@ impl ClosedReferenceParameter {
     }
     /// Descriptor only: the caller slot must retain its actual borrow region.
     pub fn materialize_hint(&self, store: &mut GuestStore) -> Result<TypeId, Diagnostic> {
+        let target = self.pointee.materialize(store)?;
         store.intern_type(TypeKey::Ref {
             mutable: self.syntax.mutable(),
-            target: primitive_runtime_id(self.primitive)?,
+            target,
         })
     }
     pub fn allocated_bytes(&self) -> Result<usize, Diagnostic> {
         let mut bytes = std::mem::size_of::<Self>()
             .checked_add(self.source.heap_bytes().ok_or_else(limit)?)
+            .and_then(|n| {
+                self.pointee
+                    .heap_bytes()
+                    .ok()
+                    .and_then(|m| n.checked_add(m))
+            })
             .ok_or_else(limit)?;
         for key in self.inputs.keys() {
             bytes = bytes
@@ -268,6 +265,7 @@ impl ClosedReferenceArgument {
             ));
         };
         if !matches!(target.as_ref(), TyTerm::Primitive(_))
+            && !matches!(target.as_ref(), TyTerm::Nominal(_, args) if args.is_empty())
             || matches!(
                 region,
                 RegionTerm::Placeholder(_) | RegionTerm::Bound { .. }
@@ -332,18 +330,49 @@ fn validate_value(
     let TyTerm::Ref(_, mutable, target) = source else {
         return Err(invalid("reference source shape differs"));
     };
-    let TyTerm::Primitive(primitive) = target.as_ref() else {
-        return Err(invalid("reference source pointee is not primitive"));
-    };
     store.reference_from_cell(cell)?; // actual lease/owner/access/target validation
     let descriptor = store.type_descriptor(TypeId(value.type_id))?;
-    if value.kind != 9
-        || !matches!(descriptor.key.as_ref(),TypeKey::Ref{mutable:actual,target} if actual==mutable && *target==primitive_runtime_id(*primitive)?)
-    {
+    let TypeKey::Ref {
+        mutable: actual,
+        target: descriptor_target,
+    } = descriptor.key.as_ref()
+    else {
+        return Err(invalid("reference value descriptor shape differs"));
+    };
+    if value.kind != 9 || actual != mutable {
         return Err(invalid(
-            "reference source/access/pointee and actual descriptor disagree",
+            "reference source/access and actual descriptor disagree",
         ));
     }
+    // Validate already admitted caller source identity. The callee's SourceType
+    // proof separately checks the exact current nominal schema before admission.
+    let pointee = store.type_descriptor(*descriptor_target)?;
+    let matches = match (target.as_ref(), pointee.key.as_ref()) {
+        (TyTerm::Primitive(primitive), TypeKey::Primitive(actual)) => {
+            primitive_runtime_id(*primitive)? == actual.id()
+        }
+        (
+            TyTerm::Nominal(identity, args),
+            TypeKey::Nominal {
+                definition,
+                args: runtime_args,
+                const_args,
+                ..
+            },
+        ) => {
+            args.is_empty()
+                && runtime_args.is_empty()
+                && const_args.is_empty()
+                && definition.fingerprint() == *identity
+        }
+        _ => false,
+    };
+    if !matches {
+        return Err(invalid(
+            "reference caller source pointee differs from actual descriptor",
+        ));
+    }
+
     Ok(())
 }
 #[derive(Debug, Clone)]
@@ -361,6 +390,46 @@ pub struct ClosedReferenceContracts {
     result: Option<ReferenceResultContract>,
 }
 impl ClosedReferenceContracts {
+    fn require_store_session(&self, store: &GuestStore) -> Result<(), Diagnostic> {
+        if self.bindings.is_empty()
+            || self
+                .bindings
+                .iter()
+                .any(|binding| binding.argument.session != store.pattern_binding_session())
+        {
+            return Err(invalid(
+                "reference source certificate belongs to another store session",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn parameter_source(&self, ordinal: usize) -> Option<&TyTerm> {
+        self.bindings
+            .iter()
+            .find(|binding| binding.ordinal == ordinal)
+            .map(|binding| &binding.argument.source)
+    }
+    pub(crate) fn require_parameter_descriptor(
+        &self,
+        ordinal: usize,
+        store: &GuestStore,
+        descriptor: TypeId,
+    ) -> Result<(), Diagnostic> {
+        self.require_store_session(store)?;
+        let binding = self
+            .bindings
+            .iter()
+            .find(|binding| binding.ordinal == ordinal)
+            .ok_or_else(|| invalid("reference parameter source certificate absent"))?;
+        let TypeKey::Ref { mutable, target } = store.type_descriptor(descriptor)?.key.as_ref()
+        else {
+            return Err(invalid("reference parameter descriptor shape differs"));
+        };
+        if *mutable != binding.parameter.mutable() {
+            return Err(invalid("reference parameter descriptor access differs"));
+        }
+        binding.parameter.pointee.require_descriptor(store, *target)
+    }
     pub(super) fn admits(&self, ordinal: usize) -> bool {
         self.bindings
             .iter()
@@ -421,7 +490,7 @@ impl ClosedReferenceContracts {
                 || signature.parameters[ordinal].receiver
                 || signature.parameters[ordinal].variadic
                 || !matches!(source,TyTerm::Ref(_,mutable,target)
-                    if *mutable==parameter.mutable() && target.as_ref()==&TyTerm::Primitive(parameter.primitive))
+                    if *mutable==parameter.mutable() && target.as_ref()==parameter.pointee_source())
                 || source != &binding.argument.source
                 || packet.parameter_descriptors[ordinal] != TypeId(binding.argument.value.type_id)
             {
@@ -552,14 +621,17 @@ pub(super) fn bind_references(
         let TyTerm::Ref(region, mutable, target) = &argument.source else {
             return Err(invalid("reference actual source absent"));
         };
-        if *mutable != parameter.syntax.mutable()
-            || target.as_ref() != &TyTerm::Primitive(parameter.primitive)
-        {
+        if *mutable != parameter.syntax.mutable() || target.as_ref() != parameter.pointee_source() {
             return Err(fault(
                 "LRR-E-CALL-ARG-TYPE",
-                "reference argument source differs from selected primitive pointee/access",
+                "reference argument source differs from selected source pointee/access",
             ));
         }
+        let TypeKey::Ref { target, .. } = store.type_descriptor(actual.descriptor)?.key.as_ref()
+        else {
+            return Err(invalid("reference argument descriptor shape differs"));
+        };
+        parameter.pointee.require_descriptor(store, *target)?;
         for previous in &bindings {
             let previous: &ReferenceBinding = previous;
             if parameter.region == previous.parameter.region {
@@ -630,7 +702,10 @@ mod tests {
     const ORIGINAL: &str = include_str!(
         "../../../../fixtures/upstream/rustc-checkout/tests/ui/regions/regions-infer-call.rs"
     );
-    fn source(text: &str, edition: u16) -> (Database, PreparedSourceView, NameNamespaces) {
+    pub(super) fn source(
+        text: &str,
+        edition: u16,
+    ) -> (Database, PreparedSourceView, NameNamespaces) {
         let profile = ProfileIdentity {
             edition,
             ..ProfileIdentity::current()
@@ -672,7 +747,7 @@ mod tests {
         assert!(imports.pending.is_empty() && imports.missing.is_empty());
         (db, source, graph)
     }
-    fn callable(
+    pub(super) fn callable(
         db: &mut Database,
         source: &PreparedSourceView,
         graph: &NameNamespaces,
@@ -1086,6 +1161,32 @@ mod tests {
             Some(frame.definition_result_source().unwrap()),
             packet.source_result
         );
+        assert!(
+            frame
+                .definition_result_descriptor(&c.store)
+                .unwrap()
+                .is_some()
+        );
+        let mut foreign = GuestStore::new(2, 1000, 1_000_000).unwrap();
+        let before = (
+            foreign.budget().handles(),
+            foreign.budget().bytes(),
+            foreign.type_metadata_bytes(),
+        );
+        assert!(frame.definition_result_descriptor(&foreign).is_err());
+        assert!(
+            frame
+                .materialize_definition_result_descriptor(&mut foreign)
+                .is_err()
+        );
+        assert_eq!(
+            before,
+            (
+                foreign.budget().handles(),
+                foreign.budget().bytes(),
+                foreign.type_metadata_bytes()
+            )
+        );
         let counters = frame.counters.operations_started;
         frame.pc = index.pc(NodeId(0), Phase::Commit).unwrap();
         assert!(frame.definition_result_source().is_err());
@@ -1179,3 +1280,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "named_reference_source_tests.rs"]
+mod named_reference_source_tests;

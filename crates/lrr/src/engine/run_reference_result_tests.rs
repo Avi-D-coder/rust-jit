@@ -78,3 +78,152 @@ fn ambiguous_elided_reference_result_never_selects_an_arbitrary_input() {
     assert!(run.calls.is_empty());
     assert_eq!(run.peak_guest_frames(), 1);
 }
+
+const NAMED_ORIGINAL: &str = include_str!(
+    "../../../../fixtures/upstream/rustc-checkout/tests/ui/regions/regions-infer-borrow-scope.rs"
+);
+#[test]
+fn named_source_reference_identity_returns_the_actual_target_then_cleans_the_callee() {
+    // The actual imported Point declaration is unchanged; stock Box/assert main
+    // and x_coord stay cold. This is an external common-route identity control.
+    let source = format!(
+        "{NAMED_ORIGINAL}\nfn lrr_identity(p:&Point)->&Point{{p}}\nfn lrr_probe()->isize{{let p=Point{{x:3_isize,y:4_isize}};let q=lrr_identity(&p);q.x}}"
+    );
+    let (mut db, mut run) = super::super::borrows::tests::start_stock_body(&source, "lrr_probe");
+    let cold: Vec<_> = run.sources[0]
+        .outline()
+        .items
+        .iter()
+        .filter(|item| matches!(item.def_key.declared_name.as_str(), "main" | "x_coord"))
+        .filter_map(|item| item.body.as_ref().map(|body| body.key()))
+        .collect();
+    let RunPoll::Completed(report) = run.poll(&mut db) else {
+        panic!("source-certified nominal reference identity did not complete")
+    };
+    assert!(matches!(report.value,ValueSummary::Signed(ref value) if value=="3"));
+    assert!(run.calls.is_empty());
+    assert!(run.returning.is_none());
+    assert_eq!(run.call_bytes, 0);
+    assert!(run.frame.active_scopes().is_empty());
+    assert_eq!(
+        report.opcode_counters.operations_started,
+        report.opcode_counters.operations_completed
+    );
+    assert!(report.opcode_counters.return_scopes_cleaned >= 2);
+    assert!(
+        !db.trace
+            .events
+            .iter()
+            .any(|event| matches!(&event.key,QueryKey::BodyStructure(body) if cold.contains(body)))
+    );
+}
+#[test]
+fn nominal_reference_result_cannot_return_an_equal_schema_callee_local() {
+    let source = format!(
+        "{NAMED_ORIGINAL}\nfn lrr_wrong(p:&Point)->&Point{{let wrong=Point{{x:3_isize,y:4_isize}};&wrong}}\nfn lrr_probe(){{let p=Point{{x:3_isize,y:4_isize}};lrr_wrong(&p);}}"
+    );
+    let (mut db, mut run) = super::super::borrows::tests::start_stock_body(&source, "lrr_probe");
+    let RunPoll::Fault(error) = run.poll(&mut db) else {
+        panic!("callee-local nominal target escaped")
+    };
+    assert!(matches!(
+        error.code,
+        "LRR-E-OWNERSHIP" | "LRR-E-CALL-CONTEXT"
+    ));
+    assert_eq!(run.calls.len(), 1);
+    assert!(run.returning.is_none());
+    assert_eq!(run.frame.status, crate::vm::frame::FrameStatus::Faulted);
+}
+#[test]
+fn unchanged_point_interior_return_keeps_source_projection_and_caller_region() {
+    let source = format!(
+        "{NAMED_ORIGINAL}\nfn lrr_probe()->isize{{let p=Point{{x:3_isize,y:4_isize}};*x_coord(&p)}}"
+    );
+    let (mut db, mut run) = super::super::borrows::tests::start_stock_body(&source, "lrr_probe");
+    let callee = run.sources[0]
+        .outline()
+        .items
+        .iter()
+        .find(|item| item.def_key.declared_name == "x_coord")
+        .unwrap()
+        .body
+        .as_ref()
+        .unwrap()
+        .key();
+    let cold_main = run.sources[0]
+        .outline()
+        .items
+        .iter()
+        .find(|item| item.def_key.declared_name == "main")
+        .unwrap()
+        .body
+        .as_ref()
+        .unwrap()
+        .key();
+    let RunPoll::Completed(report) = run.poll(&mut db) else {
+        panic!("unchanged source-certified interior-result body did not complete")
+    };
+    assert!(matches!(report.value, ValueSummary::Signed(ref value) if value=="3"));
+    assert!(run.calls.is_empty());
+    assert!(run.returning.is_none());
+    assert_eq!(run.call_bytes, 0);
+    assert!(run.frame.active_scopes().is_empty());
+    assert_eq!(report.opcode_counters.started_by_opcode[19], 1);
+    assert_eq!(report.opcode_counters.started_by_opcode[26], 0);
+    assert_eq!(
+        report.opcode_counters.operations_started,
+        report.opcode_counters.operations_completed
+    );
+    assert!(report.opcode_counters.return_scopes_cleaned >= 2);
+    assert!(
+        db.trace
+            .events
+            .iter()
+            .any(|event| matches!(&event.key,QueryKey::BodyStructure(body) if body==&callee))
+    );
+    assert!(
+        !db.trace
+            .events
+            .iter()
+            .any(|event| matches!(&event.key,QueryKey::BodyStructure(body) if body==&cold_main))
+    );
+    // Source-only external unchanged-body control, never a stock Box/assert
+    // full-main pass. Sole validator must execute this candidate.
+}
+
+#[test]
+fn derived_reference_result_cannot_escape_a_callee_local_field() {
+    let source = format!(
+        "{NAMED_ORIGINAL}\nfn lrr_wrong(p:&Point)->&isize{{let wrong=Point{{x:3_isize,y:4_isize}};&wrong.x}}\nfn lrr_probe(){{let p=Point{{x:3_isize,y:4_isize}};lrr_wrong(&p);}}"
+    );
+    let (mut db, mut run) = super::super::borrows::tests::start_stock_body(&source, "lrr_probe");
+    let RunPoll::Fault(error) = run.poll(&mut db) else {
+        panic!("callee-local selected field escaped")
+    };
+    assert!(matches!(
+        error.code,
+        "LRR-E-OWNERSHIP" | "LRR-E-CALL-CONTEXT"
+    ));
+    assert_eq!(run.calls.len(), 1);
+    assert!(run.returning.is_none());
+    assert_eq!(run.frame.counters.return_scopes_cleaned, 0);
+}
+
+#[test]
+fn named_declared_lifetime_uses_the_same_source_selected_projection_return() {
+    let source = format!(
+        "{NAMED_ORIGINAL}\nfn lrr_named<'a>(p:&'a Point)->&'a isize{{&p.x}}\nfn lrr_probe()->isize{{let p=Point{{x:3_isize,y:4_isize}};*lrr_named(&p)}}"
+    );
+    let (mut db, mut run) = super::super::borrows::tests::start_stock_body(&source, "lrr_probe");
+    let RunPoll::Completed(report) = run.poll(&mut db) else {
+        panic!("named lifetime selected-field return did not complete")
+    };
+    assert!(matches!(report.value,ValueSummary::Signed(ref value) if value=="3"));
+    assert!(run.calls.is_empty());
+    assert!(run.returning.is_none());
+    assert_eq!(run.call_bytes, 0);
+    assert_eq!(
+        report.opcode_counters.operations_started,
+        report.opcode_counters.operations_completed
+    );
+}

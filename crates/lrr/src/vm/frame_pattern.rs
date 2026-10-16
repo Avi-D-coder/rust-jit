@@ -171,7 +171,7 @@ impl Frame {
             let ticket = store.copy_from(source)?;
             store.initialize(destination, ticket)?;
             self.bindings[pending.binding.0 as usize] = Some(destination);
-            self.binding_sources[pending.binding.0 as usize] = source_view;
+            self.set_binding_source_view(pending.binding, source_view)?;
         }
         Ok(())
     }

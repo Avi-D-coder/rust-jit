@@ -677,6 +677,48 @@ fn binding_name_matches(
     }
     parsed.same_local_name_context(reference_range, binding_range)
 }
+/// Select a retained syntactic candidate. Namespace admission and actual live
+/// binding publication remain with the reached shared pattern transaction.
+fn pattern_binding_at(
+    parsed: &ParsedFile,
+    index: &BodyIndex,
+    body: &BodyHandle,
+    reference: &SyntaxNode,
+    name: &MacroName,
+    pattern: &ast::Pat,
+) -> Result<Option<NodeId>, Diagnostic> {
+    let root = id_for(index, body, pattern.syntax())?;
+    pattern_binding_group_at(parsed, index, reference, name, root)
+}
+fn pattern_binding_group_at(
+    parsed: &ParsedFile,
+    index: &BodyIndex,
+    reference: &SyntaxNode,
+    name: &MacroName,
+    root: NodeId,
+) -> Result<Option<NodeId>, Diagnostic> {
+    for group in index.pattern_bindings().groups(root) {
+        if group.name() != name.as_str() {
+            continue;
+        }
+        let candidate = parsed
+            .syntax_at(group.canonical_name_range(), |node| {
+                ast::Name::can_cast(node.kind())
+            })?
+            .and_then(ast::Name::cast)
+            .ok_or_else(|| error("retained pattern candidate name attachment absent"))?;
+        if binding_name_matches(parsed, reference, name, &candidate)? {
+            return group.canonical_candidate().map(Some).ok_or_else(|| {
+                Diagnostic::new(
+                    "LRR-E-UNSUPPORTED",
+                    "pattern binding candidates have unresolved alternative, mode or hygiene facts"
+                        .into(),
+                )
+            });
+        }
+    }
+    Ok(None)
+}
 fn local_binding_at(
     parsed: &ParsedFile,
     index: &BodyIndex,
@@ -702,11 +744,11 @@ fn local_binding_at(
                     if statement.syntax().text_range().end() > syntax.text_range().start() {
                         continue;
                     }
-                    if let Some(ast::Pat::IdentPat(pattern)) = statement.pat()
-                        && let Some(candidate) = pattern.name()
-                        && binding_name_matches(parsed, syntax, name, &candidate)?
+                    if let Some(pattern) = statement.pat()
+                        && let Some(candidate) =
+                            pattern_binding_at(parsed, index, body, syntax, name, &pattern)?
                     {
-                        binding = Some(id_for(index, body, pattern.syntax())?);
+                        binding = Some(candidate);
                     }
                 }
             }
@@ -724,22 +766,15 @@ fn local_binding_at(
                 .expr()
                 .is_some_and(|result| result.syntax().text_range().contains_range(here));
             if (in_guard || in_result)
-                && let Some(ast::Pat::IdentPat(pattern)) = arm.pat()
-                && pattern.ref_token().is_none()
-                && pattern.mut_token().is_none()
-                && pattern.at_token().is_none()
-                && !pattern
-                    .syntax()
-                    .children()
-                    .any(|node| ast::Attr::can_cast(node.kind()))
-                && let Some(candidate) = pattern.name()
-                && binding_name_matches(parsed, syntax, name, &candidate)?
+                && let Some(pattern) = arm.pat()
+                && let Some(candidate) =
+                    pattern_binding_at(parsed, index, body, syntax, name, &pattern)?
             {
                 // This is the exact lexical binding location, not a proof that
                 // the pattern name denotes a binding. The reached pattern must
                 // obtain that private namespace admission before entering either
                 // continuation; ReadLocal still requires its actual live cell.
-                return Ok(Some(id_for(index, body, pattern.syntax())?));
+                return Ok(Some(candidate));
             }
         }
         let (condition, consequent) = if let Some(expression) = ast::IfExpr::cast(ancestor.clone())
@@ -779,32 +814,10 @@ fn local_binding_at(
                     continue;
                 }
             }
-            let indexed = &index.nodes()[pattern.0 as usize];
-            let start = body
-                .range
-                .start
-                .checked_add(indexed.range.start)
-                .ok_or_else(|| error("condition pattern range overflow"))?;
-            let end = body
-                .range
-                .start
-                .checked_add(indexed.range.end)
-                .ok_or_else(|| error("condition pattern range overflow"))?;
-            let pattern = condition
-                .syntax()
-                .descendants()
-                .filter_map(ast::IdentPat::cast)
-                .find(|p| {
-                    u32::from(p.syntax().text_range().start()) == start
-                        && u32::from(p.syntax().text_range().end()) == end
-                });
-            if let Some(pattern) = pattern
-                && pattern.ref_token().is_none()
-                && pattern.at_token().is_none()
-                && let Some(candidate) = pattern.name()
-                && binding_name_matches(parsed, syntax, name, &candidate)?
+            if let Some(candidate) =
+                pattern_binding_group_at(parsed, index, syntax, name, *pattern)?
             {
-                binding = Some(id_for(index, body, pattern.syntax())?);
+                binding = Some(candidate);
             }
         }
         if binding.is_some() {

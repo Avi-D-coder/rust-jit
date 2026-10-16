@@ -57,7 +57,7 @@ fn frame_hint(
     store: &GuestStore,
 ) -> Result<Option<TypeId>, Diagnostic> {
     if matches!(hint, HintRecipe::DefinitionResult) {
-        frame_hint(frame, &frame.definition_result_hint()?, required, store)
+        frame.definition_result_descriptor(store)
     } else if let HintRecipe::DefinitionParameter(ordinal) = hint {
         concrete(&HintRecipe::Primitive(
             frame.definition_parameter_primitive(*ordinal)?,
@@ -101,7 +101,9 @@ fn materialize_hint(
     store: &mut GuestStore,
 ) -> Result<Option<TypeId>, Diagnostic> {
     if matches!(hint, HintRecipe::DefinitionResult) {
-        return materialize_hint(frame, &frame.definition_result_hint()?, required, store);
+        return frame
+            .materialize_definition_result_descriptor(store)
+            .map(Some);
     }
     if let HintRecipe::Reference {
         mutable, target, ..
@@ -1454,7 +1456,7 @@ pub(crate) fn step_with_constant(
             RecipeExit::Control(ControlRecipe::Return { value }) => {
                 frame.preflight_return(*value, store)?;
                 let cell = frame.cell(*value)?;
-                frame.return_source = frame.certified_return_source(*value, store)?;
+                frame.set_return_source_view(frame.certified_return_source(*value, store)?)?;
                 StepOutcome::Return(store.move_from(cell)?)
             }
             RecipeExit::Control(ControlRecipe::Break {

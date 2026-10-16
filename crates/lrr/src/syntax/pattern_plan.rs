@@ -56,7 +56,11 @@ impl PatternSourcePlan {
     }
 
     pub(crate) fn requires_binding_admission(&self, key: &PcKey) -> bool {
-        matches!(&self.prepared, Prepared::Match(Some(plan)) if plan.requires_binding_admission(key))
+        match &self.prepared {
+            Prepared::Match(Some(plan)) => plan.requires_binding_admission(key),
+            Prepared::Condition(Ok(plan)) => plan.requires_binding_admission(key),
+            _ => false,
+        }
     }
 
     /// Indexed ownership only. An expression inside a match result does not
@@ -122,18 +126,14 @@ impl PatternSourcePlan {
                 plan.as_ref(),
                 admission,
             ),
-            Prepared::Condition(plan) => {
-                if admission.is_some() {
-                    return Err(error("condition cannot consume match namespace admission"));
-                }
-                condition_ranges::prepare_inner(
-                    &self.parsed,
-                    &self.body,
-                    &self.index,
-                    key,
-                    plan.as_ref().map_err(Clone::clone),
-                )
-            }
+            Prepared::Condition(plan) => condition_ranges::prepare_inner(
+                &self.parsed,
+                &self.body,
+                &self.index,
+                key,
+                plan.as_ref().map_err(Clone::clone),
+                admission,
+            ),
             Prepared::Disabled(recipe) if key == &self.owner => Ok(recipe.as_ref().clone()),
             Prepared::Disabled(_) => {
                 self.refuse(key, "disabled pattern owner has no evaluated continuation")

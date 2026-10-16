@@ -8,6 +8,12 @@ mod call_scope_tests;
 mod constant_array_frame;
 #[path = "frame_source_constant.rs"]
 mod source_constant_frame;
+#[path = "frame_source_storage.rs"]
+mod source_storage_frame;
+#[path = "frame_source_types.rs"]
+mod source_types_frame;
+#[path = "frame_tuple_sources.rs"]
+mod tuple_sources_frame;
 pub(crate) use constant_array_frame::{ConstantPublicationActivation, ConstantPublicationChunk};
 #[cfg(test)]
 #[path = "integer_literal_decode_tests.rs"]
@@ -129,6 +135,7 @@ struct ActiveConstruction {
     result: ConstructionResult,
     cleaning: bool,
     mapping: Option<std::sync::Arc<[u32]>>,
+    source_operands: Option<Arc<[SlotId]>>,
 }
 #[derive(Clone, Copy)]
 enum ConstructionResult {
@@ -137,11 +144,12 @@ enum ConstructionResult {
 }
 impl ActiveConstruction {
     fn mapping_bytes(&self) -> Option<usize> {
-        self.mapping.as_ref().map_or(Some(0), |map| {
+        let mapping = self.mapping.as_ref().map_or(Some(0), |map| {
             map.len()
                 .checked_mul(std::mem::size_of::<u32>())?
                 .checked_add(3 * std::mem::size_of::<usize>())
-        })
+        })?;
+        mapping.checked_add(Frame::tuple_operand_bytes(self.source_operands.as_deref())?)
     }
     fn storage_field(&self, written: u32) -> Result<u32, Diagnostic> {
         self.mapping.as_ref().map_or(Ok(written), |map| {
@@ -164,6 +172,7 @@ struct PreparedConstructor {
     guard: SlotId,
     binding: ConstructorBinding,
     hints: Vec<(SlotId, TypeId)>,
+    source_operands: Option<Arc<[SlotId]>>,
 }
 /// Per-operation preparation owns only checked guest identities. It is discarded
 /// on a fuel refusal and committed immediately after this exact operation starts.
@@ -202,6 +211,7 @@ pub struct Frame {
     constructor_start: Option<PreparedConstructor>,
     source_field: Option<PreparedSourceField>,
     constructor_mapping_bytes: usize,
+    source_extra_bytes: usize,
     projection_bytes: usize,
     constant_activation: Option<source_constant_frame::BoundSourceConstant>,
     copy_activation: Option<aggregate_copy_frame::OpActivation>,
@@ -236,9 +246,8 @@ impl Frame {
         store.require_frame(self.anchor)
     }
     pub(crate) fn metadata_bytes(body: &BodyIndex, parameters: usize) -> Option<usize> {
-        // supported_source admits at most two owned boxed nodes: & [primitive; N].
-        // Reserve that complete heap bound for each retained slot/binding view
-        // and the return view. Abstract/nested views need later table accounting.
+        // Reserve the original two-node floor per source view. Composite
+        // source storage tracks its actual additional heap separately.
         let source_heap = std::mem::size_of::<crate::traits::term::TyTerm>().checked_mul(2)?;
         (body.slot_count() as usize)
             .checked_mul(
@@ -273,6 +282,9 @@ impl Frame {
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<PreparedConstructor>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<(PcKey, SlotId)>>()))
             .and_then(|bytes| bytes.checked_add(source_heap))
+            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<crate::traits::term::TyTerm>>()))
+            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Vec<(super::call::CallIdentity, (u32, u32))>>()))
+            .and_then(|bytes| bytes.checked_add(std::mem::size_of::<usize>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<super::call::CallStartFacts>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<std::sync::Arc<crate::syntax::runtime_macro_scalars::RuntimeMacroCall>>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<source_constant_frame::BoundSourceConstant>>()))
@@ -418,6 +430,7 @@ impl Frame {
             constructor_start: None,
             source_field: None,
             constructor_mapping_bytes: 0,
+            source_extra_bytes: 0,
             projection_bytes: 0,
             constant_activation: None,
             copy_activation: None,
@@ -642,6 +655,17 @@ impl Frame {
                         "parameter reference access differs from its source view".into(),
                     ));
                 }
+                if matches!(target.as_ref(), TyTerm::Nominal(_, args) if args.is_empty()) {
+                    self.context
+                        .as_ref()
+                        .filter(|context| {
+                            context.definition().definition == self.body.body().definition
+                        })
+                        .ok_or_else(|| {
+                            invalid("nominal reference parameter requires its source environment")
+                        })?
+                        .require_reference_parameter_descriptor(ordinal as usize, store, ty)?;
+                }
                 Self::require_borrow_source_target(Some(target.as_ref()), *actual_target, store)
             }
             // Rigid parameters retain their identities under the existing
@@ -746,7 +770,8 @@ impl Frame {
         Self::metadata_bytes(&self.body, self.parameter_metadata_count())
             .and_then(|bytes| bytes.checked_add(self.constructor_mapping_bytes))
             .and_then(|bytes| bytes.checked_add(self.projection_bytes))
-            .and_then(|bytes| bytes.checked_add(self.source_field_bytes()?))
+            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
+            .and_then(|bytes| bytes.checked_add(self.auxiliary_metadata_bytes()?))
             .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
         Ok(())
@@ -759,8 +784,8 @@ impl Frame {
     ) -> Result<(), Diagnostic> {
         self.preflight_parameter_place(ordinal, destination, store)?;
         let cell = self.parameter(ordinal)?;
-        let source = self.parameter_sources[ordinal as usize].clone();
-        self.set_source_view(destination, Some(source))?;
+        let source = self.clone_source(self.parameter_sources.get(ordinal as usize))?;
+        self.set_source_view(destination, source)?;
         self.slots[destination.0 as usize].place = Some(crate::runtime::place::Place::cell(cell));
         Ok(())
     }
@@ -780,6 +805,7 @@ impl Frame {
             )
         })?;
         self.preflight_parameter_source(ordinal, ty, store)?;
+        self.preflight_source_view(destination, self.parameter_sources.get(ordinal as usize))?;
         self.preflight_write_value(destination, value, store)
     }
     pub(crate) fn read_parameter(
@@ -790,14 +816,12 @@ impl Frame {
     ) -> Result<(), Diagnostic> {
         self.preflight_parameter(ordinal, destination, store)?;
         let cell = self.parameter(ordinal)?;
+        let source = self.clone_source(self.parameter_sources.get(ordinal as usize))?;
         store.reserve_owning_read_result(self.slot(destination)?.cell.is_none(), false)?;
         self.prepare_write(destination, store)?;
         let ticket = store.read_owning(cell)?;
         self.write(destination, ticket, store)?;
-        self.set_source_view(
-            destination,
-            self.parameter_sources.get(ordinal as usize).cloned(),
-        )
+        self.set_source_view(destination, source)
     }
     pub(crate) fn call_identity(&self, site: u32) -> super::call::CallIdentity {
         (site, self.runtime_call.as_ref().map(|call| call.ordinal()))
@@ -849,6 +873,7 @@ impl Frame {
                 "ordinary call scope witness requires an indexed call",
             ));
         }
+        self.preflight_call_source_views(hints)?;
         for ((slot, _, source), argument) in hints.iter().zip(arguments) {
             if slot != argument {
                 return Err(invalid("call hint slot mismatch"));
@@ -868,31 +893,14 @@ impl Frame {
     pub(crate) fn start_call(&mut self, site: u32, arguments: &[SlotId]) -> Result<(), Diagnostic> {
         self.preflight_call_start(site, arguments)?;
         let identity = self.call_identity(site);
-        self.call_progress
-            .len()
-            .checked_add(1)
-            .and_then(|count| {
-                count.checked_mul(std::mem::size_of::<(super::call::CallIdentity, (u32, u32))>())
-            })
-            .and_then(|bytes| {
-                Self::metadata_bytes(&self.body, self.parameters.len())?.checked_add(bytes)
-            })
-            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+        let additional = usize::from(self.call_progress.len() == self.call_progress.capacity())
+            .checked_mul(std::mem::size_of::<(super::call::CallIdentity, (u32, u32))>())
             .ok_or_else(crate::runtime::arena::resource)?;
+        self.source_storage_limit(self.source_extra_bytes, additional)?;
         self.call_progress
             .try_reserve_exact(1)
             .map_err(|_| crate::runtime::arena::resource())?;
-        if self
-            .call_progress
-            .capacity()
-            .checked_mul(std::mem::size_of::<(super::call::CallIdentity, (u32, u32))>())
-            .and_then(|bytes| {
-                Self::metadata_bytes(&self.body, self.parameters.len())?.checked_add(bytes)
-            })
-            .is_none_or(|bytes| bytes > 32 * 1024 * 1024)
-        {
-            return Err(crate::runtime::arena::resource());
-        }
+        self.source_storage_limit(self.source_extra_bytes, 0)?;
         let super::call::CallStartFacts {
             hints, ordinary, ..
         } = self
@@ -1106,9 +1114,12 @@ impl Frame {
                     "root destination source differs from certified return".into(),
                 ));
             }
+            self.preflight_source_view(destination, source_view.as_ref())?;
             Ok(source_view)
         } else {
-            self.source_view(source)
+            let source_view = self.source_view(source)?;
+            self.preflight_source_view(destination, source_view.as_ref())?;
+            Ok(source_view)
         }
     }
     pub(crate) fn install_context(
@@ -1127,8 +1138,9 @@ impl Frame {
         self.context = Some(context);
         Ok(())
     }
-    /// Current closed-source component also retains primitive-reference views.
-    /// Abstract/composite parameter tables still require later source integration.
+    /// Closed reference views retain their actual caller source; nominal
+    /// pointees additionally require the prepared source/schema certificate.
+    /// Abstract/composite parameter tables still require later integration.
     pub(crate) fn install_parameter_sources(
         &mut self,
         sources: Vec<crate::traits::term::TyTerm>,
@@ -1143,12 +1155,30 @@ impl Frame {
                         crate::traits::term::TyTerm::Primitive(_)
                             | crate::traits::term::TyTerm::Param(_)
                     ) && !matches!(source, crate::traits::term::TyTerm::Ref(_, _, target)
-                    if matches!(target.as_ref(), crate::traits::term::TyTerm::Primitive(_))))
+                    if matches!(target.as_ref(), crate::traits::term::TyTerm::Primitive(_))
+                        || matches!(target.as_ref(), crate::traits::term::TyTerm::Nominal(_, args) if args.is_empty())))
             })
         {
             return Err(invalid(
                 "parameter source views require fresh closed-source frame",
             ));
+        }
+        for (ordinal, source) in sources.iter().enumerate() {
+            if matches!(source, crate::traits::term::TyTerm::Ref(_, _, target)
+                if matches!(target.as_ref(), crate::traits::term::TyTerm::Nominal(_, args) if args.is_empty()))
+                && self
+                    .context
+                    .as_ref()
+                    .filter(|context| {
+                        context.definition().definition == self.body.body().definition
+                    })
+                    .and_then(|context| context.reference_parameter_source(ordinal))
+                    != Some(source)
+            {
+                return Err(invalid(
+                    "nominal reference parameter lacks its admitted source certificate",
+                ));
+            }
         }
         if sources.iter().any(|source| {
             matches!(source, crate::traits::term::TyTerm::Param(key)
@@ -1156,14 +1186,25 @@ impl Frame {
         }) {
             return Err(invalid("parameter source identity mismatch"));
         }
+        let added_source = sources.iter().try_fold(0usize, |bytes, source| {
+            bytes
+                .checked_add(Self::source_excess(Some(source))?)
+                .ok_or_else(crate::runtime::arena::resource)
+        })?;
         if Self::metadata_bytes(&self.body, sources.capacity())
             .and_then(|bytes| bytes.checked_add(self.constructor_mapping_bytes))
             .and_then(|bytes| bytes.checked_add(self.projection_bytes))
-            .and_then(|bytes| bytes.checked_add(self.source_field_bytes()?))
+            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
+            .and_then(|bytes| bytes.checked_add(added_source))
+            .and_then(|bytes| bytes.checked_add(self.auxiliary_metadata_bytes()?))
             .is_none_or(|bytes| bytes > 32 * 1024 * 1024)
         {
             return Err(crate::runtime::arena::resource());
         }
+        self.source_extra_bytes = self
+            .source_extra_bytes
+            .checked_add(added_source)
+            .ok_or_else(crate::runtime::arena::resource)?;
         self.parameter_sources = sources;
         Ok(())
     }
@@ -1171,7 +1212,7 @@ impl Frame {
         &self,
         slot: SlotId,
     ) -> Result<Option<crate::traits::term::TyTerm>, Diagnostic> {
-        self.source_view_ref(slot).map(|source| source.cloned())
+        self.clone_source(self.source_view_ref(slot)?)
     }
     /// Immutable admission compares the retained source without allocating a clone.
     pub(crate) fn source_view_ref(
@@ -1206,7 +1247,9 @@ impl Frame {
     fn supported_source(source: &crate::traits::term::TyTerm) -> bool {
         use crate::traits::term::TyTerm;
         matches!(source, TyTerm::Primitive(_) | TyTerm::Param(_))
+            || (matches!(source, TyTerm::Tuple(_)) && Self::supported_structural_source(source))
             || matches!(source, TyTerm::Ref(region, _, target) if !matches!(region, crate::traits::term::RegionTerm::Placeholder(_)) && (matches!(target.as_ref(), TyTerm::Primitive(_))
+                || (matches!(target.as_ref(), TyTerm::Tuple(_)) && Self::supported_structural_source(target))
                 || matches!(target.as_ref(), TyTerm::Nominal(_, args) if args.is_empty())
                 || matches!(target.as_ref(), TyTerm::Array(element, crate::traits::term::ConstTerm::Value(len))
                     if matches!(element.as_ref(), TyTerm::Primitive(_)) && u32::try_from(*len).is_ok())))
@@ -1366,7 +1409,8 @@ impl Frame {
         }
         let source = context.reference_result_source()?;
         if !matches!(source, crate::traits::term::TyTerm::Ref(_, _, target)
-            if matches!(target.as_ref(), crate::traits::term::TyTerm::Primitive(_)))
+            if matches!(target.as_ref(), crate::traits::term::TyTerm::Primitive(_))
+                || matches!(target.as_ref(), crate::traits::term::TyTerm::Nominal(_, args) if args.is_empty()))
         {
             return Err(invalid(
                 "prepared reference result source is outside its closed contract",
@@ -1374,20 +1418,27 @@ impl Frame {
         }
         Ok(source.clone())
     }
-    pub(crate) fn definition_result_hint(&self) -> Result<crate::ir::op::HintRecipe, Diagnostic> {
-        let crate::traits::term::TyTerm::Ref(region, mutable, target) =
-            self.definition_result_source()?
-        else {
-            return Err(invalid("prepared reference result disappeared"));
-        };
-        let crate::traits::term::TyTerm::Primitive(target) = *target else {
-            return Err(invalid("prepared reference result pointee disappeared"));
-        };
-        Ok(crate::ir::op::HintRecipe::Reference {
-            region,
-            mutable,
-            target,
-        })
+    pub(crate) fn definition_result_descriptor(
+        &self,
+        store: &GuestStore,
+    ) -> Result<Option<TypeId>, Diagnostic> {
+        self.require_store(store)?;
+        self.definition_result_source()?;
+        self.context
+            .as_ref()
+            .ok_or_else(|| invalid("reference result environment absent"))?
+            .reference_result_descriptor(store)
+    }
+    pub(crate) fn materialize_definition_result_descriptor(
+        &self,
+        store: &mut GuestStore,
+    ) -> Result<TypeId, Diagnostic> {
+        self.require_store(store)?;
+        self.definition_result_source()?;
+        self.context
+            .as_ref()
+            .ok_or_else(|| invalid("reference result environment absent"))?
+            .materialize_reference_result_descriptor(store)
     }
     pub(crate) fn resolved_annotation_source(
         &self,
@@ -1443,7 +1494,10 @@ impl Frame {
         source: Option<crate::traits::term::TyTerm>,
     ) -> Result<(), Diagnostic> {
         self.preflight_source_view(slot, source.as_ref())?;
+        let excess =
+            self.preflight_source_replacement(self.source_view_ref(slot)?, source.as_ref())?;
         self.slots[slot.0 as usize].source = source;
+        self.source_extra_bytes = excess;
         Ok(())
     }
     /// Source attachment is admitted while its current call environment still
@@ -1461,6 +1515,8 @@ impl Frame {
                 "composite frame source view requires table integration",
             ));
         }
+        let excess = self.preflight_source_replacement(self.source_view_ref(slot)?, source)?;
+        self.source_storage_limit(excess, Self::source_heap(source)?)?;
         Ok(())
     }
     pub(crate) fn set_binding_source(
@@ -1475,10 +1531,7 @@ impl Frame {
                     "binding source view requires admitted frame metadata",
                 ));
             }
-            *self
-                .binding_sources
-                .get_mut(binding.0 as usize)
-                .ok_or_else(|| invalid("binding source absent"))? = Some(written);
+            self.set_binding_source_view(binding, Some(written))?;
         }
         Ok(())
     }
@@ -1577,6 +1630,10 @@ impl Frame {
             ));
         }
         store.location_epoch(self.binding(binding)?)?;
+        self.preflight_source_view(
+            destination,
+            self.binding_sources[binding.0 as usize].as_ref(),
+        )?;
         Ok(())
     }
     pub(crate) fn make_place(
@@ -1586,12 +1643,11 @@ impl Frame {
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
         self.preflight_make_place(binding, destination, store)?;
+        let source = self.clone_source(self.binding_sources[binding.0 as usize].as_ref())?;
+        self.set_source_view(destination, source)?;
         self.slots[destination.0 as usize].place =
             Some(crate::runtime::place::Place::cell(self.binding(binding)?));
-        self.set_source_view(
-            destination,
-            self.binding_sources[binding.0 as usize].clone(),
-        )
+        Ok(())
     }
     pub(crate) fn preflight_value_place(
         &self,
@@ -1613,6 +1669,7 @@ impl Frame {
                 "temporary receiver requires its retained symbolic source binding".into(),
             ));
         }
+        self.preflight_source_view(destination, self.source_view_ref(source)?)?;
         // Formation never reads/copies/moves the guest value or allocates a new
         // guest cell. The value's original slot remains its sole cleanup owner.
         store
@@ -1701,20 +1758,27 @@ impl Frame {
             .checked_sub(bytes)
             .ok_or_else(|| invalid("place projection accounting underflow"))?;
         self.slots[id.0 as usize].place = None;
-        self.slots[id.0 as usize].source = None;
+        self.set_source_view(id, None)?;
         Ok(())
     }
     #[cfg(test)]
     pub(crate) fn has_source_field_for_test(&self) -> bool {
         self.source_field.is_some()
     }
-    fn source_field_bytes(&self) -> Option<usize> {
-        self.source_field.as_ref().map_or(Some(0), |facts| {
-            facts
-                .binding
-                .estimated_bytes()?
-                .checked_add(std::mem::size_of::<PreparedSourceField>())
-        })
+    fn auxiliary_metadata_bytes(&self) -> Option<usize> {
+        self.source_field
+            .as_ref()
+            .map_or(Some(0), |facts| {
+                facts
+                    .binding
+                    .estimated_bytes()?
+                    .checked_add(std::mem::size_of::<PreparedSourceField>())
+            })?
+            .checked_add(
+                self.call_progress
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<(super::call::CallIdentity, (u32, u32))>())?,
+            )
     }
     pub(crate) fn nominal_place_source(
         &self,
@@ -1755,7 +1819,8 @@ impl Frame {
         Self::metadata_bytes(&self.body, self.parameter_metadata_count())
             .and_then(|bytes| bytes.checked_add(self.constructor_mapping_bytes))
             .and_then(|bytes| bytes.checked_add(self.projection_bytes))
-            .and_then(|bytes| bytes.checked_add(self.source_field_bytes()?))
+            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
+            .and_then(|bytes| bytes.checked_add(self.auxiliary_metadata_bytes()?))
             .and_then(|bytes| bytes.checked_add(binding.estimated_bytes()?))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<PreparedSourceField>()))
             .filter(|bytes| *bytes <= 32 * 1024 * 1024)
@@ -1802,7 +1867,7 @@ impl Frame {
         metadata
             .checked_add(self.projection_bytes)
             .and_then(|bytes| bytes.checked_add(self.constructor_mapping_bytes))
-            .and_then(|bytes| bytes.checked_add(self.source_field_bytes()?))
+            .and_then(|bytes| bytes.checked_add(self.auxiliary_metadata_bytes()?))
             .and_then(|bytes| bytes.checked_add(added))
             .filter(|bytes| *bytes <= 32 * 1024 * 1024)
             .ok_or_else(crate::runtime::arena::resource)?;
@@ -1826,6 +1891,23 @@ impl Frame {
         } else {
             match (op, self.place_slot(base)?.source.as_ref()) {
                 (_, None) => None,
+                (
+                    Op::ProjectTuple { field, .. },
+                    Some(source @ crate::traits::term::TyTerm::Tuple(members)),
+                ) => {
+                    // The source ordinal selects a member of the actual
+                    // retained tuple type. Runtime shape is correspondence
+                    // evidence, never a replacement for that source identity.
+                    Self::require_structural_source_target(
+                        source,
+                        store.place_type_id(base_place)?,
+                        store,
+                    )?;
+                    let member = members.get(*field as usize).ok_or_else(|| {
+                        Diagnostic::new("LRR-E-PLACE-FIELD", "tuple source field is absent".into())
+                    })?;
+                    self.clone_source(Some(member))?
+                }
                 (
                     Op::ProjectIndex { .. },
                     Some(crate::traits::term::TyTerm::Array(
@@ -1917,6 +1999,17 @@ impl Frame {
             }
             _ => return Err(invalid("projection preflight discriminator changed").into()),
         };
+        self.preflight_source_view(destination, source.as_ref())?;
+        let source_excess = self.preflight_source_replacement(
+            self.place_slot(destination)?.source.as_ref(),
+            source.as_ref(),
+        )?;
+        self.source_storage_limit(
+            source_excess,
+            added
+                .checked_add(Self::source_heap(source.as_ref())?)
+                .ok_or_else(crate::runtime::arena::resource)?,
+        )?;
         let retained_bytes = self
             .projection_bytes
             .checked_sub(base_place.projection_bytes()?)
@@ -1937,7 +2030,7 @@ impl Frame {
         self.set_source_view(prepared.destination, prepared.source)?;
         self.slots[prepared.destination.0 as usize].place = Some(prepared.place);
         self.slots[prepared.base.0 as usize].place = None;
-        self.slots[prepared.base.0 as usize].source = None;
+        self.set_source_view(prepared.base, None)?;
         self.projection_bytes = prepared.retained_bytes;
         if self.source_field.as_ref().is_some_and(|facts| {
             facts.pc == self.pc
@@ -1987,6 +2080,11 @@ impl Frame {
                 .into());
             }
         }
+        let copied_source = match self.place_slot(reference)?.source.as_ref() {
+            Some(crate::traits::term::TyTerm::Ref(_, _, target)) => Some(target.as_ref()),
+            _ => None,
+        };
+        self.preflight_source_view(destination, copied_source)?;
         // A previously retained destination source is a constraint, not
         // scratch space. Reject mismatch before replacing it or publishing
         // an address; neither runtime shape nor spelling can override it.
@@ -2004,7 +2102,9 @@ impl Frame {
         self.preflight_deref_place(reference, destination, store)?;
         let place = store.dereference_place(self.executed_place(reference)?)?;
         let source = match self.place_slot(reference)?.source.as_ref() {
-            Some(crate::traits::term::TyTerm::Ref(_, _, pointee)) => Some(pointee.as_ref().clone()),
+            Some(crate::traits::term::TyTerm::Ref(_, _, pointee)) => {
+                self.clone_source(Some(pointee.as_ref()))?
+            }
             _ => None,
         };
         self.set_source_view(destination, source)?;
@@ -2045,6 +2145,7 @@ impl Frame {
             }
             Self::require_borrow_source_target(retained, TypeId(value.type_id), store)?;
         }
+        self.preflight_source_view(destination, retained)?;
         self.preflight_write_value(destination, value, store)?;
         Ok(())
     }
@@ -2055,7 +2156,7 @@ impl Frame {
         store: &mut GuestStore,
     ) -> Result<(), crate::runtime::place::PlaceFailure> {
         self.preflight_read_place(place, destination, store)?;
-        let source = self.place_slot(place)?.source.clone();
+        let source = self.clone_source(self.place_slot(place)?.source.as_ref())?;
         store.reserve_place_read_result()?;
         self.prepare_write(destination, store)?;
         let ticket = store.read_owning_place(self.executed_place(place)?)?;
@@ -2133,10 +2234,7 @@ impl Frame {
         binding: NodeId,
     ) -> Result<(), Diagnostic> {
         self.binding(binding)?;
-        *self
-            .binding_sources
-            .get_mut(binding.0 as usize)
-            .ok_or_else(|| invalid("test binding source absent"))? = None;
+        self.set_binding_source_view(binding, None)?;
         Ok(())
     }
     #[cfg(test)]
@@ -2182,7 +2280,7 @@ impl Frame {
         store.discard(old_value)?;
         store.retire_cell(old)?;
         self.slots[id.0 as usize].cell = Some(fresh);
-        self.slots[id.0 as usize].source = None;
+        self.set_source_view(id, None)?;
         Ok(())
     }
     fn require_borrow_source_target(
@@ -2198,6 +2296,9 @@ impl Frame {
             ),
             Some(TyTerm::Primitive(primitive)) => {
                 crate::runtime::shape::PrimitiveIdentity::from_recipe(*primitive)?.id() == target
+            }
+            Some(source @ TyTerm::Tuple(_)) => {
+                return Self::require_structural_source_target(source, target, store);
             }
             Some(TyTerm::Nominal(definition, arguments)) if arguments.is_empty() => {
                 matches!(store.type_descriptor(target)?.key.as_ref(),
@@ -2259,6 +2360,7 @@ impl Frame {
         };
         let target = store.admit_place_borrow(source, access)?;
         Self::require_borrow_source_target(self.place_slot(place)?.source.as_ref(), target, store)?;
+        self.preflight_borrow_source_storage(place, destination)?;
         let result = self.slot(destination)?;
         if !self.active_scopes.contains(&result.scope) {
             return Err(invalid("borrow result scope inactive").into());
@@ -2323,7 +2425,8 @@ impl Frame {
                 Some(
                     source @ (crate::traits::term::TyTerm::Primitive(_)
                     | crate::traits::term::TyTerm::Nominal(_, _)
-                    | crate::traits::term::TyTerm::Array(_, _)),
+                    | crate::traits::term::TyTerm::Array(_, _)
+                    | crate::traits::term::TyTerm::Tuple(_)),
                 ) => {
                     // Preflight has already matched this written source target
                     // to the actual descriptor; a worker TypeId never invents it.
@@ -2452,12 +2555,18 @@ impl Frame {
             }
             _ => {}
         }
-        self.admit_constructor_hints(&hints, 0)?;
+        let source_operands = self.prepare_tuple_source_operands(plan)?;
+        self.admit_constructor_hints(
+            &hints,
+            Self::tuple_operand_bytes(source_operands.as_deref())
+                .ok_or_else(crate::runtime::arena::resource)?,
+        )?;
         self.constructor_start = Some(PreparedConstructor {
             pc: self.pc.clone(),
             guard,
             binding: ConstructorBinding::Structural(ty),
             hints,
+            source_operands,
         });
         Ok(())
     }
@@ -2500,12 +2609,18 @@ impl Frame {
             return Err(crate::runtime::arena::resource());
         }
         let hints = Vec::new();
-        self.admit_constructor_hints(&hints, 0)?;
+        let source_operands = self.prepare_tuple_source_operands(plan)?;
+        self.admit_constructor_hints(
+            &hints,
+            Self::tuple_operand_bytes(source_operands.as_deref())
+                .ok_or_else(crate::runtime::arena::resource)?,
+        )?;
         self.constructor_start = Some(PreparedConstructor {
             pc: self.pc.clone(),
             guard,
             binding: ConstructorBinding::Observed { kind, fields },
             hints,
+            source_operands,
         });
         Ok(())
     }
@@ -2604,6 +2719,7 @@ impl Frame {
             guard,
             binding: ConstructorBinding::Nominal(Box::new(bound)),
             hints,
+            source_operands: None,
         });
         Ok(())
     }
@@ -2621,7 +2737,8 @@ impl Frame {
             .and_then(|n| n.checked_add(extra))
             .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
             .and_then(|n| n.checked_add(self.projection_bytes))
-            .and_then(|n| n.checked_add(self.source_field_bytes()?))
+            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
+            .and_then(|n| n.checked_add(self.auxiliary_metadata_bytes()?))
             .and_then(|n| {
                 n.checked_add(Self::metadata_bytes(
                     &self.body,
@@ -2668,9 +2785,11 @@ impl Frame {
                 ));
             }
         }
-        for (slot, _) in &facts.hints {
-            self.preflight_hint(*slot)?;
-        }
+        self.admit_constructor_hints(
+            &facts.hints,
+            Self::tuple_operand_bytes(facts.source_operands.as_deref())
+                .ok_or_else(crate::runtime::arena::resource)?,
+        )?;
         Ok(())
     }
     pub(crate) fn start_prepared_constructor(
@@ -2695,11 +2814,27 @@ impl Frame {
                     result: ConstructionResult::Observed(kind),
                     cleaning: false,
                     mapping: None,
+                    source_operands: None,
                 });
             }
             ConstructorBinding::Nominal(bound) => {
                 self.begin_bound_nominal_constructor(guard, &bound, store)?
             }
+        }
+        if let Some(operands) = facts.source_operands {
+            // The source slots are unique indexed operands of this admitted
+            // constructor, retained through suspension without cloning syntax.
+            let bytes = Self::tuple_operand_bytes(Some(&operands))
+                .ok_or_else(crate::runtime::arena::resource)?;
+            self.constructor_mapping_bytes = self
+                .constructor_mapping_bytes
+                .checked_add(bytes)
+                .ok_or_else(crate::runtime::arena::resource)?;
+            self.slots[guard.0 as usize]
+                .construction
+                .as_mut()
+                .ok_or_else(|| invalid("entered constructor guard absent"))?
+                .source_operands = Some(operands);
         }
         // Every hint destination was checked before fuel/guard allocation.
         for (slot, ty) in facts.hints {
@@ -2745,6 +2880,7 @@ impl Frame {
             result: ConstructionResult::Bound(ty),
             cleaning: false,
             mapping: None,
+            source_operands: None,
         });
         Ok(())
     }
@@ -2763,6 +2899,7 @@ impl Frame {
             result: ConstructionResult::Bound(ty),
             cleaning: false,
             mapping: None,
+            source_operands: None,
         });
         self.publish_nominal_source(id, bound.definition().fingerprint())
     }
@@ -2788,7 +2925,8 @@ impl Frame {
         if Self::metadata_bytes(&self.body, self.parameter_metadata_count())
             .and_then(|base| base.checked_add(total))
             .and_then(|base| base.checked_add(self.projection_bytes))
-            .and_then(|base| base.checked_add(self.source_field_bytes()?))
+            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
+            .and_then(|base| base.checked_add(self.auxiliary_metadata_bytes()?))
             .is_none_or(|bytes| bytes > 32 * 1024 * 1024)
         {
             return Err(crate::runtime::arena::resource());
@@ -2804,6 +2942,7 @@ impl Frame {
             result: ConstructionResult::Bound(ty),
             cleaning: false,
             mapping: Some(mapping),
+            source_operands: None,
         });
         self.constructor_mapping_bytes = total;
         self.publish_nominal_source(id, bound.variant().definition().fingerprint())
@@ -2827,7 +2966,13 @@ impl Frame {
             active.storage_field(field)?,
             self.cell(source)?,
         )?;
-        self.set_source_view(source, None)
+        // A moved cell retains its actual source annotation until its ordinary
+        // scope retires. The admitted tuple constructor may use that annotation
+        // at finish; this never creates a second guest owner.
+        if active.source_operands.is_none() {
+            self.set_source_view(source, None)?;
+        }
+        Ok(())
     }
     pub(crate) fn preflight_constructor_field(
         &self,
@@ -2851,6 +2996,13 @@ impl Frame {
                 "rigid field source requires a matching constructor binding".into(),
             ));
         }
+        if let Some(operands) = &active.source_operands
+            && operands.get(field as usize) != Some(&source)
+        {
+            return Err(invalid(
+                "constructor field differs from its retained source operand",
+            ));
+        }
         store.admit_construction_move(
             active.guard,
             active.storage_field(field)?,
@@ -2870,6 +3022,7 @@ impl Frame {
             .clone()
             .filter(|active| !active.cleaning)
             .ok_or_else(|| invalid("building construction guard absent"))?;
+        let source = self.constructor_tuple_source(&active, destination, store)?;
         // Reserve destination storage before consuming the guard. Failure leaves
         // all completed fields owned by the guard for explicit cleanup/retry.
         let remaining_mapping_bytes = self
@@ -2893,6 +3046,9 @@ impl Frame {
         store.initialize(cell, ticket)?;
         self.slots[id.0 as usize].construction = None;
         self.constructor_mapping_bytes = remaining_mapping_bytes;
+        if let Some(source) = source {
+            self.set_source_view(destination, Some(source))?;
+        }
         // The admitted source view remains attached to the completed constructor.
         // Descriptor commitment cannot erase its written array element/length.
         Ok(())
@@ -2914,6 +3070,7 @@ impl Frame {
                 "construction destination belongs to another expression",
             ));
         }
+        self.preflight_constructor_tuple_source(&active, destination, store)?;
         match active.result {
             ConstructionResult::Bound(ty) => {
                 if let crate::runtime::shape::TypeKey::Nominal { definition, .. } =
@@ -3091,6 +3248,9 @@ impl Frame {
     ) -> Result<(), Diagnostic> {
         self.preflight_hint(child)?;
         self.numeric_hint_value(parent, left, operator, store)?;
+        if operator.is_none() {
+            self.preflight_source_view(child, self.source_view_ref(parent)?)?;
+        }
         Ok(())
     }
     pub(crate) fn preflight_branch_hint(
@@ -3113,6 +3273,7 @@ impl Frame {
             self.preflight_hint(child)?;
             if !boolean {
                 self.numeric_hint_value(parent, None, None, store)?;
+                self.preflight_source_view(child, self.source_view_ref(parent)?)?;
             }
         }
         Ok(())
@@ -3503,6 +3664,7 @@ impl Frame {
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
         let value = store.admit_move(self.cell(source)?)?;
+        self.preflight_source_view(destination, self.source_view_ref(source)?)?;
         self.preflight_write_value(destination, value, store)
     }
     fn check_rigid_local_source(
@@ -3576,6 +3738,7 @@ impl Frame {
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
         self.preflight_declaration(binding)?;
+        self.preflight_binding_source_view(binding, self.source_view_ref(source)?)?;
         let value = store.admit_move(self.cell(source)?)?;
         store.admit_new_contract(hint, value)
     }
@@ -3591,7 +3754,7 @@ impl Frame {
         use crate::traits::term::TyTerm;
         let source = self.binding_sources[binding.0 as usize].as_ref();
         if source.is_some() {
-            return Ok(source.cloned());
+            return self.clone_source(source);
         }
         let cell = self.binding(binding)?;
         let value = store.admit_move(cell)?;
@@ -3631,6 +3794,9 @@ impl Frame {
         store.admit_owning_read(cell)?;
         let source = self.local_read_source(binding, destination, store)?;
         self.preflight_source_view(destination, source.as_ref())?;
+        if self.binding_sources[binding.0 as usize].is_none() {
+            self.preflight_binding_source_view(binding, source.as_ref())?;
+        }
         let mut value = store.admit_move(cell)?;
         if matches!(value.kind, 11 | 12)
             && let Some(hint) = store.effective_type(value)?.or(self.hint(destination)?)
@@ -3683,6 +3849,11 @@ impl Frame {
             _ => return Err(invalid("assignment target retired")),
         };
         self.check_rigid_local_source(self.binding_sources[binding.0 as usize].as_ref(), source)?;
+        if store.state(target)? == CellState::Uninit
+            && self.binding_sources[binding.0 as usize].is_none()
+        {
+            self.preflight_binding_source_view(binding, self.source_view_ref(source)?)?;
+        }
         self.preflight_write_value(destination, ValueRepr::unit(), store)
     }
     pub(crate) fn preflight_discard(
@@ -3765,7 +3936,7 @@ impl Frame {
         let ticket = store.move_from(source)?;
         store.initialize(destination, ticket)?;
         self.bindings[binding.0 as usize] = Some(destination);
-        self.binding_sources[binding.0 as usize] = source_view;
+        self.set_binding_source_view(binding, source_view)?;
         Ok(())
     }
     pub(crate) fn declare_local(
@@ -3885,6 +4056,7 @@ impl Frame {
         store: &GuestStore,
     ) -> Result<(), Diagnostic> {
         self.preflight_hint(child)?;
+        self.preflight_source_view(child, self.binding_sources[binding.0 as usize].as_ref())?;
         self.local_hint_value(binding, store)?;
         Ok(())
     }
@@ -3896,7 +4068,10 @@ impl Frame {
     ) -> Result<(), Diagnostic> {
         let hint = self.local_hint_value(binding, store)?;
         self.declared_hint(child, hint)?;
-        self.set_source_view(child, self.binding_sources[binding.0 as usize].clone())
+        self.set_source_view(
+            child,
+            self.clone_source(self.binding_sources[binding.0 as usize].as_ref())?,
+        )
     }
     pub(crate) fn assign_local(
         &mut self,
@@ -3931,7 +4106,7 @@ impl Frame {
             _ => return Err(invalid("assignment target retired")),
         }
         if state == CellState::Uninit && self.binding_sources[binding.0 as usize].is_none() {
-            self.binding_sources[binding.0 as usize] = source_view;
+            self.set_binding_source_view(binding, source_view)?;
         }
         let unit = store.ticket(ValueRepr::unit())?;
         self.write(destination, unit, store)
@@ -3975,7 +4150,7 @@ impl Frame {
         };
         self.write(destination, ticket, store)?;
         if self.binding_sources[binding.0 as usize].is_none() {
-            self.binding_sources[binding.0 as usize] = source.clone();
+            self.set_binding_source_view(binding, self.clone_source(source.as_ref())?)?;
         }
         self.set_source_view(destination, source)
     }
@@ -3994,7 +4169,7 @@ impl Frame {
         }
         store.retire_cell(cell)?;
         self.slots[source.0 as usize].cell = None;
-        self.slots[source.0 as usize].source = None;
+        self.set_source_view(source, None)?;
         self.slots[source.0 as usize].hint = None;
         self.slots[source.0 as usize].strict_hint = true;
         Ok(())
@@ -4099,7 +4274,10 @@ impl Frame {
                 "reached return value does not match its declared primitive descriptor".into(),
             ));
         }
-        self.certified_return_source(value, store)?;
+        let source = self.certified_return_source(value, store)?;
+        let excess =
+            self.preflight_source_replacement(self.return_source.as_ref(), source.as_ref())?;
+        self.source_storage_limit(excess, Self::source_heap(source.as_ref())?)?;
         Ok(())
     }
     pub(crate) fn preflight_control(
@@ -4135,6 +4313,11 @@ impl Frame {
             } else {
                 ValueRepr::unit()
             };
+            let source = value
+                .map(|slot| self.source_view_ref(slot))
+                .transpose()?
+                .flatten();
+            self.preflight_source_view(destination, source)?;
             self.preflight_write_value(destination, incoming, store)?;
         }
         Ok(())
@@ -4268,8 +4451,14 @@ impl Frame {
                 }
                 store.retire_cell(id)?;
                 *cell = None;
-                self.binding_sources[ordinal] = None;
                 self.counters.cleanup_elements_completed = completed;
+            }
+            if self.body.nodes()[ordinal].scope == scope {
+                let old = self.binding_sources[ordinal].take();
+                self.source_extra_bytes = self
+                    .source_extra_bytes
+                    .checked_sub(Self::source_excess(old.as_ref())?)
+                    .ok_or_else(|| invalid("binding source cleanup accounting underflow"))?;
             }
         }
         Ok(())
@@ -4314,6 +4503,10 @@ impl Frame {
                 slot.cell = None;
                 self.counters.cleanup_elements_completed = completed;
             }
+            self.source_extra_bytes = self
+                .source_extra_bytes
+                .checked_sub(Self::source_excess(slot.source.as_ref())?)
+                .ok_or_else(|| invalid("slot source cleanup accounting underflow"))?;
             slot.source = None;
             let bytes = slot
                 .place
@@ -4331,7 +4524,7 @@ impl Frame {
             self.retire_bindings(scope, store)?;
         }
         if scope == ScopeId(0) {
-            self.parameter_sources.clear();
+            self.clear_parameter_source_views()?;
             for cell in self.parameters.iter_mut().rev() {
                 if let Some(id) = *cell {
                     store.admit_discard(id)?;

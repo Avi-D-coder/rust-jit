@@ -18,6 +18,8 @@ pub(super) struct OpActivation {
     copy: AggregateCopy,
     source: CellId,
     destination: SlotId,
+    source_view: Option<crate::traits::term::TyTerm>,
+    source_reservation: usize,
 }
 fn place_error(error: PlaceFailure) -> Diagnostic {
     match error {
@@ -61,11 +63,13 @@ impl Frame {
         }
         Ok(())
     }
-    fn copy_metadata_limit(&self) -> Result<usize, Diagnostic> {
+    fn copy_metadata_limit(&self, source_reservation: usize) -> Result<usize, Diagnostic> {
         let base = Self::metadata_bytes(&self.body, self.parameter_metadata_count())
             .and_then(|n| n.checked_add(self.constructor_mapping_bytes))
             .and_then(|n| n.checked_add(self.projection_bytes))
-            .and_then(|n| n.checked_add(self.source_field_bytes()?))
+            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
+            .and_then(|n| n.checked_add(self.auxiliary_metadata_bytes()?))
+            .and_then(|n| n.checked_add(source_reservation))
             .ok_or_else(crate::runtime::arena::resource)?;
         (32_usize * 1024 * 1024)
             .checked_sub(base)
@@ -101,7 +105,23 @@ impl Frame {
             return Ok(false);
         }
         let index = u32::try_from(index).map_err(|_| invalid("copy operation index overflow"))?;
-        let limit = self.copy_metadata_limit()?;
+        let source_view = match op {
+            Op::ReadLocal { binding, .. } => {
+                self.clone_source(self.binding_sources[binding.0 as usize].as_ref())?
+            }
+            Op::ReadPlace { place, .. } => {
+                self.clone_source(self.place_slot(*place)?.source.as_ref())?
+            }
+            _ => return Err(invalid("aggregate Copy holds a non-read operation")),
+        };
+        self.preflight_source_view(destination, source_view.as_ref())?;
+        let source_reservation = Self::source_heap(source_view.as_ref())?
+            .checked_add(
+                Self::source_excess(source_view.as_ref())?
+                    .saturating_sub(Self::source_excess(self.source_view_ref(destination)?)?),
+            )
+            .ok_or_else(crate::runtime::arena::resource)?;
+        let limit = self.copy_metadata_limit(source_reservation)?;
         store.reserve_owning_read_result(self.slot(destination)?.cell.is_none(), false)?;
         self.prepare_write(destination, store)?;
         let copy = AggregateCopy::begin(store, source, limit)?;
@@ -112,6 +132,8 @@ impl Frame {
             copy,
             source,
             destination,
+            source_view,
+            source_reservation,
         });
         Ok(true)
     }
@@ -121,7 +143,12 @@ impl Frame {
         &mut self,
         store: &mut GuestStore,
     ) -> Result<bool, Diagnostic> {
-        let limit = self.copy_metadata_limit()?;
+        let source_reservation = self
+            .copy_activation
+            .as_ref()
+            .ok_or_else(|| invalid("copy activation absent"))?
+            .source_reservation;
+        let limit = self.copy_metadata_limit(source_reservation)?;
         for _ in 0..256 {
             self.fuel.poll()?;
             let activation = self
@@ -141,6 +168,14 @@ impl Frame {
             if source != activation.source {
                 return Err(invalid("copy activation source location changed"));
             }
+            let current_source = match &activation.expected {
+                Op::ReadLocal { binding, .. } => self.binding_sources[binding.0 as usize].as_ref(),
+                Op::ReadPlace { place, .. } => self.place_slot(*place)?.source.as_ref(),
+                _ => return Err(invalid("copy activation holds a non-read operation")),
+            };
+            if current_source != activation.source_view.as_ref() {
+                return Err(invalid("copy activation source annotation changed"));
+            }
             if activation.copy.retained_bytes().is_none_or(|n| n > limit) {
                 return Err(crate::runtime::arena::resource());
             }
@@ -158,13 +193,7 @@ impl Frame {
                     .copy_activation
                     .take()
                     .ok_or_else(|| invalid("copy activation absent"))?;
-                let source = match activation.expected {
-                    Op::ReadLocal { binding, .. } => {
-                        self.binding_sources[binding.0 as usize].clone()
-                    }
-                    Op::ReadPlace { place, .. } => self.place_slot(place)?.source.clone(),
-                    _ => return Err(invalid("copy activation holds a non-read operation")),
-                };
+                let source = activation.source_view;
                 self.write(activation.destination, ticket, store)?;
                 self.set_source_view(activation.destination, source)?;
                 if let Op::ReadPlace { place, .. } = activation.expected {

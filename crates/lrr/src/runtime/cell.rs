@@ -22,13 +22,14 @@ use super::{
     },
     place::{
         CellStamp, EnclosingObject, Place, PlaceFailure, PlacePanic, PlaceRoot, Projection,
-        ResolvedPlace, checked_chain_bytes,
+        ResolvedPlace, SourceFieldProjection, SourceProjectionStep, checked_chain_bytes,
+        checked_source_projection_bytes,
     },
     reference::{Access, ReferenceRecord, access_fault, lease_fault},
     shape::{ShapeCategory, TypeDescriptor, TypeId, TypeKey, TypeRegistry},
     value::{ValueRepr, invalid},
 };
-use crate::core::diagnostic::Diagnostic;
+use crate::core::{diagnostic::Diagnostic, digest::StableEncode};
 pub use construction_cleanup::ConstructionCleanupTransfer;
 pub(crate) use reference_return::ReferenceTarget;
 pub(crate) use run_session::StoreSession;
@@ -750,7 +751,49 @@ impl GuestStore {
             &reference.enclosing,
             reference.final_cell,
             reference.target,
-        )
+        )?;
+        self.validate_source_projection_steps(&reference.enclosing, &reference.source_projections)
+    }
+    fn validate_source_projection_steps(
+        &self,
+        enclosing: &[EnclosingObject],
+        sources: &[SourceProjectionStep],
+    ) -> Result<(), Diagnostic> {
+        let mut previous = None;
+        for source in sources {
+            if previous.is_some_and(|previous| previous >= source.chain_index) {
+                return Err(lease_fault());
+            }
+            previous = Some(source.chain_index);
+            let link = enclosing
+                .get(source.chain_index as usize)
+                .ok_or_else(lease_fault)?;
+            let key = self
+                .types
+                .descriptor(self.place_type(link.parent.cell)?)?
+                .key
+                .as_ref();
+            Self::require_source_projection_parent(&source.member, key)?;
+            if link.variant != Some(source.member.variant)
+                || link.field != source.member.field
+                || self.place_type(link.child)?
+                    != super::shape::PrimitiveIdentity::from_recipe(source.member.primitive)?.id()
+            {
+                return Err(lease_fault());
+            }
+        }
+        Ok(())
+    }
+    fn require_source_projection_parent(
+        source: &SourceFieldProjection,
+        key: &TypeKey,
+    ) -> Result<(), Diagnostic> {
+        if !matches!(key,TypeKey::Nominal {definition,schema,args,const_args}
+            if definition.fingerprint()==source.definition && *schema==source.schema && args.is_empty() && const_args.is_empty())
+        {
+            return Err(ownership());
+        }
+        Ok(())
     }
     /// The same checked chain serves live leases and retained input-target
     /// receipts. Endpoint stamps alone cannot certify intermediate ownership.
@@ -900,7 +943,7 @@ impl GuestStore {
         place: &Place,
         usage: PlaceUse,
     ) -> Result<ResolvedPlace, PlaceFailure> {
-        let (root, mut target, writable, prefix) = match place.root {
+        let (root, mut target, writable, prefix, mut source_projections) = match place.root {
             PlaceRoot::Cell(id) => {
                 if usage == PlaceUse::OwningRead {
                     self.admit_read_location(id)?;
@@ -914,7 +957,7 @@ impl GuestStore {
                     .checked_add(place.projections.len())
                     .ok_or_else(resource)?;
                 checked_chain_bytes(count)?;
-                (root, id, writable, enclosing)
+                (root, id, writable, enclosing, Vec::new())
             }
             PlaceRoot::Deref(id) => {
                 let reference = self.references.get(id)?;
@@ -933,6 +976,15 @@ impl GuestStore {
                         prefix.extend_from_slice(&reference.enclosing);
                         prefix
                     },
+                    {
+                        let mut sources = Vec::new();
+                        checked_source_projection_bytes(reference.source_projections.len())?;
+                        sources
+                            .try_reserve_exact(reference.source_projections.len())
+                            .map_err(|_| resource())?;
+                        sources.extend_from_slice(&reference.source_projections);
+                        sources
+                    },
                 )
             }
         };
@@ -944,12 +996,29 @@ impl GuestStore {
         let mut enclosing = Vec::new();
         enclosing.try_reserve_exact(count).map_err(|_| resource())?;
         enclosing.extend_from_slice(&prefix);
+        let additional_sources = place
+            .projections
+            .iter()
+            .filter(|projection| matches!(projection, Projection::SourceField(_)))
+            .count();
+        let source_count = source_projections
+            .len()
+            .checked_add(additional_sources)
+            .ok_or_else(resource)?;
+        checked_source_projection_bytes(source_count)?;
+        source_projections
+            .try_reserve_exact(additional_sources)
+            .map_err(|_| resource())?;
         let mut writable = writable;
         for projection in &place.projections {
             let parent = self.place_stamp(target)?;
             let ty = self.place_type(target)?;
             let key = self.types.descriptor(ty)?.key.as_ref();
             let field = match (projection, key) {
+                (Projection::SourceField(source), key @ TypeKey::Nominal { .. }) => {
+                    Self::require_source_projection_parent(source, key)?;
+                    source.field
+                }
                 (Projection::Field(field), TypeKey::Nominal { .. }) => *field,
                 (Projection::Tuple(field), TypeKey::Tuple(_)) => *field,
                 (Projection::Index(index), TypeKey::Array { .. }) => *index,
@@ -974,6 +1043,18 @@ impl GuestStore {
             {
                 return Err(lease_fault().into());
             }
+            if let Projection::SourceField(source) = projection {
+                if storage.variant != Some(source.variant)
+                    || self.address_type(child)?
+                        != super::shape::PrimitiveIdentity::from_recipe(source.primitive)?.id()
+                {
+                    return Err(ownership().into());
+                }
+                source_projections.push(SourceProjectionStep {
+                    chain_index: u32::try_from(enclosing.len()).map_err(|_| resource())?,
+                    member: *source,
+                });
+            }
             enclosing.push(EnclosingObject {
                 parent,
                 object,
@@ -987,7 +1068,12 @@ impl GuestStore {
             }
             writable &= self.cells.get(target)?.writable;
         }
-        checked_chain_bytes(enclosing.capacity())?;
+        checked_chain_bytes(enclosing.capacity())?
+            .checked_add(checked_source_projection_bytes(
+                source_projections.capacity(),
+            )?)
+            .filter(|bytes| *bytes <= 32 * 1024 * 1024)
+            .ok_or_else(resource)?;
         Ok(ResolvedPlace {
             root,
             enclosing,
@@ -1002,6 +1088,7 @@ impl GuestStore {
                 self.place_type(target)?
             },
             writable,
+            source_projections,
         })
     }
     /// Publish a checked run-owned lease only after validation and quota reservation.
@@ -1178,7 +1265,13 @@ impl GuestStore {
             )
             .into());
         }
-        let place = base.projected(Projection::Field(field))?;
+        let place = base.projected(Projection::SourceField(SourceFieldProjection {
+            definition: definition_witness.fingerprint(),
+            schema: schema_witness,
+            variant: variant_witness,
+            field,
+            primitive,
+        }))?;
         self.resolve_place_for_use(&place, PlaceUse::Address)?;
         Ok(place)
     }
@@ -4593,7 +4686,7 @@ pub(crate) mod tests {
             names.bind_variant(variant)
         })
     }
-    fn stock_schema_selection<T>(
+    pub(super) fn stock_schema_selection<T>(
         original: &str,
         logical_path: &str,
         schema_name: &str,

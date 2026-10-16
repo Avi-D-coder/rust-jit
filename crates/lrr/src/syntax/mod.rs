@@ -22,6 +22,7 @@ pub mod macro_calls;
 pub mod body_items;
 
 pub mod local_bindings;
+pub(crate) mod pattern_bindings;
 
 pub mod attributes;
 

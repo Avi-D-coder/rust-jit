@@ -24,9 +24,6 @@ impl ReferenceHeaderPlan {
     pub fn definition(&self) -> Digest {
         self.definition
     }
-    pub(crate) fn parse(&self) -> &ParseKey {
-        &self.parse
-    }
     pub(crate) fn parameter(&self, ordinal: usize) -> Option<&Arc<ClosedReferenceSyntax>> {
         self.parameters.get(ordinal).and_then(Option::as_ref)
     }

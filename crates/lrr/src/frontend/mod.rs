@@ -82,3 +82,5 @@ pub(crate) mod runtime_macro_numeric;
 
 pub(crate) mod primitive_type_names;
 pub(crate) mod type_name_namespace;
+
+pub(crate) mod source_types;

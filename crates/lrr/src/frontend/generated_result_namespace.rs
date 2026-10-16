@@ -3,8 +3,7 @@ use super::*;
 use crate::{
     source::manifest::Namespace,
     syntax::{
-        closed_reference_signatures::{ClosedReferenceSyntax, ClosedReferenceTypeSyntax},
-        parse::ParseKey,
+        closed_reference_signatures::ClosedReferenceTypeSyntax, parse::ParseKey,
         signatures::FunctionSignature,
     },
 };
@@ -20,26 +19,59 @@ pub(super) fn require(
             "primitive result requires its exact current generated Type namespace",
         ));
     }
-    require_name(db, signature, parse, &signature.result[0].text, None)
+    require_name(
+        db,
+        signature,
+        parse,
+        &signature.result[0].text,
+        None,
+        &super::super::names::NameLookup::Absent,
+    )
 }
 
 /// Parameter authority is supplied by the ordinary parser's opaque RefType
 /// proof. No caller-selected spelling or range can masquerade as that role.
+#[cfg(test)]
 pub(super) fn require_reference(
     db: &Database,
     signature: &FunctionSignature,
-    syntax: &ClosedReferenceSyntax,
+    syntax: &crate::syntax::closed_reference_signatures::ClosedReferenceSyntax,
 ) -> Result<(), Diagnostic> {
     syntax.require(signature)?;
     require_reference_type(db, signature, syntax.reference())
 }
+#[cfg(test)]
 pub(super) fn require_reference_type(
     db: &Database,
     signature: &FunctionSignature,
     syntax: &ClosedReferenceTypeSyntax,
 ) -> Result<(), Diagnostic> {
     syntax.require(signature)?;
-    require_name(db, signature, syntax.parse(), syntax.target(), Some(syntax))
+    require_reference_selected(
+        db,
+        signature,
+        syntax,
+        &super::super::names::NameLookup::Absent,
+    )
+}
+
+/// The exact parser-owned Type name is admitted only against its actual current
+/// insertion/definer lookup, including a positive canonical source definition.
+pub(super) fn require_reference_selected(
+    db: &Database,
+    signature: &FunctionSignature,
+    syntax: &ClosedReferenceTypeSyntax,
+    expected: &super::super::names::NameLookup,
+) -> Result<(), Diagnostic> {
+    syntax.require(signature)?;
+    require_name(
+        db,
+        signature,
+        syntax.parse(),
+        syntax.target(),
+        Some(syntax),
+        expected,
+    )
 }
 
 fn require_name(
@@ -48,7 +80,87 @@ fn require_name(
     parse: &ParseKey,
     written_name: &str,
     reference: Option<&ClosedReferenceTypeSyntax>,
+    expected: &super::super::names::NameLookup,
 ) -> Result<(), Diagnostic> {
+    let actual = lookup_name(db, signature, parse, written_name, reference)?;
+    if actual != *expected {
+        return Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "primitive result requires its exact current generated Type namespace",
+        ));
+    }
+    Ok(())
+}
+
+/// Current completed Type lookup, with the same actual declaration, source
+/// occurrence, insertion/definer and discovery receipt checks as admission.
+pub(crate) fn lookup_name(
+    db: &Database,
+    signature: &FunctionSignature,
+    parse: &ParseKey,
+    written_name: &str,
+    reference: Option<&ClosedReferenceTypeSyntax>,
+) -> Result<super::super::names::NameLookup, Diagnostic> {
+    lookup_name_inner(
+        db,
+        signature,
+        parse,
+        written_name,
+        reference,
+        reference.is_none(),
+    )
+}
+
+/// A memo-owned ordinary function signature supplies the same parser proof for
+/// general declaration names. Fetching it replays dependencies, not its AST.
+pub(crate) fn lookup_prepared_name(
+    db: &mut Database,
+    signature: &FunctionSignature,
+    parse: &ParseKey,
+    written_name: &str,
+) -> QueryPoll<super::super::names::NameLookup> {
+    let captured = match db.fetch(
+        &SyntaxProvider,
+        QueryKey::FunctionSignature(signature.definition),
+    ) {
+        QueryPoll::Ready(Ok(captured)) => captured,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
+    };
+    if !matches!(captured.value.as_ref(), crate::db::value::QueryValue::FunctionSignature(actual) if actual.as_ref()==signature)
+    {
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "prepared named Type signature differs",
+        )));
+    }
+    QueryPoll::Ready(lookup_name_inner(
+        db,
+        signature,
+        parse,
+        written_name,
+        None,
+        false,
+    ))
+}
+
+fn lookup_name_inner(
+    db: &Database,
+    signature: &FunctionSignature,
+    parse: &ParseKey,
+    written_name: &str,
+    reference: Option<&ClosedReferenceTypeSyntax>,
+    replay_signature: bool,
+) -> Result<super::super::names::NameLookup, Diagnostic> {
+    if let Some(reference) = reference {
+        reference.require(signature)?;
+        if reference.parse() != parse || reference.target() != written_name {
+            return Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "generated Type source occurrence differs",
+            ));
+        }
+    }
     let missing = || {
         fault(
             "LRR-E-CALL-CONTEXT",
@@ -94,26 +206,10 @@ fn require_name(
     {
         return Err(missing());
     }
-    let header = unit
-        .items
-        .items()
-        .iter()
-        .find(|header| header.key.fingerprint() == signature.definition)
-        .ok_or_else(missing)?;
-    let header_range =
-        crate::syntax::spans::SourceRange::checked(header.header_start, header.header_end)?;
-    let selected_range = reference.map_or(header_range, ClosedReferenceTypeSyntax::target_range);
-    if !header_range.contains(selected_range) {
-        return Err(missing());
-    }
-    let origins = unit.items.project_source_spans(selected_range)?;
-    if origins.is_empty() {
-        return Err(missing());
-    }
     // The reference proof already came from the common ParseFile query and
     // exact current signature. Results preserve their historical full-signature
     // replay check; no additional replay is needed for a captured parameter.
-    if reference.is_none() {
+    if replay_signature {
         // Reuse exact retained token syntax and the normal pinned signature capture.
         // No body-structure query, preparation, macro execution or source reparse.
         let transient = unit
@@ -149,6 +245,154 @@ fn require_name(
         }
         drop(parsed);
     }
+    lookup_declaration_inner(
+        db,
+        super::super::type_name_namespace::SourceTypeOwner {
+            definition: signature.definition,
+            scope: &signature.scope,
+            header: &signature.header,
+        },
+        parse,
+        written_name,
+        reference.map(ClosedReferenceTypeSyntax::target_range),
+    )
+}
+
+/// Nonfunction declarations use the actual memo-owned nominal/alias recipe;
+/// no synthetic function signature or runtime descriptor can grant authority.
+pub(crate) fn lookup_type_declaration(
+    db: &mut Database,
+    declaration: super::super::type_name_namespace::SourceTypeOwner<'_>,
+    parse: &ParseKey,
+    written_name: &str,
+) -> QueryPoll<super::super::names::NameLookup> {
+    let Some(input) = db.input(&InputKey::GeneratedSyntax(parse.content)) else {
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "generated Type declaration source absent",
+        )));
+    };
+    let InputValue::GeneratedSyntax(unit) = input.as_ref() else {
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "generated Type declaration source differs",
+        )));
+    };
+    let Some(definition) = unit.definitions.get(&declaration.definition) else {
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "generated Type canonical declaration absent",
+        )));
+    };
+    use crate::source::manifest::ItemKind;
+    let key = match definition.item_kind {
+        ItemKind::Struct | ItemKind::Enum => QueryKey::TypeSchema(declaration.definition),
+        ItemKind::TypeAlias => QueryKey::TypeAlias(declaration.definition),
+        _ => {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "generated declaration has no nominal/alias Type recipe",
+            )));
+        }
+    };
+    let captured = match db.fetch(&SyntaxProvider, key) {
+        QueryPoll::Ready(Ok(captured)) => captured,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
+    };
+    let valid = match captured.value.as_ref() {
+        crate::db::value::QueryValue::TypeSchema(recipe) => {
+            recipe.definition == declaration.definition
+                && &recipe.scope == declaration.scope
+                && &recipe.header == declaration.header
+        }
+        crate::db::value::QueryValue::TypeAlias(recipe) => {
+            recipe.definition == declaration.definition
+                && &recipe.scope == declaration.scope
+                && &recipe.header == declaration.header
+        }
+        _ => false,
+    };
+    if !valid {
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "generated Type declaration memo proof differs",
+        )));
+    }
+    QueryPoll::Ready(lookup_declaration_inner(
+        db,
+        declaration,
+        parse,
+        written_name,
+        None,
+    ))
+}
+
+/// Shared source/header/origin/Type receipt service. Its callers first prove the
+/// actual function signature/reference site or nominal/alias memo recipe.
+fn lookup_declaration_inner(
+    db: &Database,
+    declaration: super::super::type_name_namespace::SourceTypeOwner<'_>,
+    parse: &ParseKey,
+    written_name: &str,
+    selected_range: Option<crate::syntax::spans::SourceRange>,
+) -> Result<super::super::names::NameLookup, Diagnostic> {
+    let missing = || {
+        fault(
+            "LRR-E-CALL-CONTEXT",
+            "primitive result requires its exact current generated Type namespace",
+        )
+    };
+    let Some((InputValue::GeneratedSyntax(unit), _)) =
+        db.published_input(&InputKey::GeneratedSyntax(parse.content))
+    else {
+        return Err(missing());
+    };
+    let Some(definition) = unit.definitions.get(&declaration.definition) else {
+        return Err(missing());
+    };
+    let Some((InputValue::DeclarationContext(context), _)) =
+        db.published_input(&InputKey::DeclarationContext(declaration.definition))
+    else {
+        return Err(missing());
+    };
+    if unit.key != *parse
+        || !matches!(db.published_input(&InputKey::DefinitionSource(declaration.definition)), Some((InputValue::DefinitionSource(current), _)) if current == parse)
+        || declaration.header.profile != unit.key.profile
+        || &context.scope != declaration.scope
+        || declaration.scope.owner.is_some()
+        || definition.crate_key != declaration.scope.crate_key
+        || definition.module_path != declaration.scope.module_path
+        || declaration.scope.crate_key != unit.scope.crate_key
+        || !declaration
+            .scope
+            .module_path
+            .starts_with(&unit.scope.module_path)
+        || !matches!(db.published_input(&InputKey::DefinitionHeader(declaration.definition)), Some((InputValue::DefinitionHeader(header), _)) if header == declaration.header)
+        || !unit.items.items().iter().any(|header| {
+            header.key.fingerprint() == declaration.definition
+                && header.start == context.range.start
+                && header.end == context.range.end
+        })
+    {
+        return Err(missing());
+    }
+    let header = unit
+        .items
+        .items()
+        .iter()
+        .find(|header| header.key.fingerprint() == declaration.definition)
+        .ok_or_else(missing)?;
+    let header_range =
+        crate::syntax::spans::SourceRange::checked(header.header_start, header.header_end)?;
+    let selected_range = selected_range.unwrap_or(header_range);
+    if !header_range.contains(selected_range) {
+        return Err(missing());
+    }
+    let origins = unit.items.project_source_spans(selected_range)?;
+    if origins.is_empty() {
+        return Err(missing());
+    }
     let Some((InputValue::DiscoverySeal(publication), _)) =
         db.published_input(&InputKey::DiscoverySeal(unit.seal.clone()))
     else {
@@ -167,8 +411,8 @@ fn require_name(
     }
     let mut selected = None;
     for receipt in &publication.type_scopes {
-        if receipt.scope().scope == signature.scope
-            && receipt.scope().edition == signature.header.profile.edition
+        if &receipt.scope().scope == declaration.scope
+            && receipt.scope().edition == declaration.header.profile.edition
         {
             if selected.is_some() {
                 return Err(missing());
@@ -177,20 +421,31 @@ fn require_name(
         }
     }
     let receipt = selected.ok_or_else(missing)?;
-    receipt.require_owner(&signature.scope, &signature.header.profile)?;
+    receipt.require_owner(declaration.scope, &declaration.header.profile)?;
     receipt.require_current(db, publication)?;
+    let name =
+        crate::expand::scopes::MacroName::parse(written_name, declaration.header.profile.edition)?;
+    if receipt.scope().namespace != Namespace::Type {
+        return Err(missing());
+    }
+    let actual = super::super::type_name_namespace::completed_bucket_lookup(
+        &receipt.scope().names,
+        name.as_str(),
+    )
+    .ok_or_else(missing)?;
     // Source-authority roots are not name-comparison classes. A foreign root
     // needs its own current original declaration and independently sealed Type
     // lookup; absence in the insertion scope alone cannot authorize it.
-    require_original_origins(db, signature, unit, publication, &origins, written_name)?;
-    let name =
-        crate::expand::scopes::MacroName::parse(written_name, signature.header.profile.edition)?;
-    if receipt.scope().namespace != Namespace::Type
-        || receipt.scope().names.contains_key(name.as_str())
-    {
-        return Err(missing());
-    }
-    Ok(())
+    require_original_origins(
+        db,
+        declaration,
+        unit,
+        publication,
+        &origins,
+        written_name,
+        &actual,
+    )?;
+    Ok(actual)
 }
 
 fn edition_year(edition: crate::syntax::token_wire::Edition) -> u16 {
@@ -207,11 +462,12 @@ fn edition_year(edition: crate::syntax::token_wire::Edition) -> u16 {
 /// namespaces. This does not implement general mixed-site/opaque Type lookup.
 fn require_original_origins(
     db: &Database,
-    signature: &FunctionSignature,
+    declaration: super::super::type_name_namespace::SourceTypeOwner<'_>,
     unit: &crate::expand::generated_syntax::GeneratedSyntaxInput,
     publication: &crate::db::seals::DiscoveryInput,
     origins: &[&crate::syntax::token_wire::SpanRecord],
     written_name: &str,
+    expected: &super::super::names::NameLookup,
 ) -> Result<(), Diagnostic> {
     use crate::{expand::identity::MacroIdentity, syntax::declaration_scan::DeclarationScanLimits};
     let missing = || {
@@ -221,7 +477,7 @@ fn require_original_origins(
         )
     };
     if generated_parent::is_generated_definition(db, unit.items.record()) {
-        return generated_parent::require(db, unit, publication, origins, written_name);
+        return generated_parent::require(db, unit, publication, origins, written_name, expected);
     }
     let hygiene = unit.items.hygiene_facts();
     // Bounded by project_source_spans' 64-row limit. Retain only borrowed source
@@ -239,7 +495,7 @@ fn require_original_origins(
         if item.parent.is_some() {
             return Err(missing());
         }
-        if item.defining_unit.0 == signature.scope.crate_key.0 {
+        if item.defining_unit.0 == declaration.scope.crate_key.0 {
             continue;
         }
         // Only actual original-root macro_rules template tokens are supported.
@@ -324,7 +580,11 @@ fn require_original_origins(
                 source.outline.parse.profile.edition,
             )?;
             if proof.scope().namespace != Namespace::Type
-                || proof.scope().names.contains_key(name.as_str())
+                || !super::super::type_name_namespace::bucket_selects(
+                    &proof.scope().names,
+                    name.as_str(),
+                    expected,
+                )
             {
                 return Err(missing());
             }

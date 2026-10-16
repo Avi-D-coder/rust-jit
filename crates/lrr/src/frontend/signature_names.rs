@@ -74,6 +74,37 @@ impl<'a> SignatureNames<'a> {
         )
     }
 
+    /// Resolve declaration-local meanings before requesting namespace authority.
+    pub(crate) fn unqualified_local(
+        &self,
+        name: &str,
+    ) -> Result<Option<SignatureName>, Diagnostic> {
+        declaration_type_name_local(
+            self.signature.definition,
+            &self.signature.scope,
+            self.signature.header.profile.edition,
+            &self.signature.generics,
+            name,
+        )
+    }
+
+    /// Classify a lookup supplied by the owning, current source Type authority.
+    /// Pending or ambiguous lookups remain unresolved, including builtin spellings.
+    pub(crate) fn unqualified_with_lookup(
+        &self,
+        name: &str,
+        lookup: NameLookup,
+    ) -> Result<SignatureName, Diagnostic> {
+        declaration_type_name_with_lookup(
+            self.signature.definition,
+            &self.signature.scope,
+            self.signature.header.profile.edition,
+            &self.signature.generics,
+            name,
+            lookup,
+        )
+    }
+
     pub fn qualified(&self, path: &NamePath) -> Result<SignatureName, Diagnostic> {
         if self.signature.scope.owner.is_some() {
             return Ok(SignatureName::NeedOwnerContext(
@@ -128,29 +159,99 @@ pub(crate) fn declaration_type_name(
     name: &str,
     prelude: Option<&ScopeKey>,
 ) -> Result<SignatureName, Diagnostic> {
+    Ok(
+        match prepare_type_name(definition, scope, edition, generics, name)? {
+            PreparedTypeName::Local(local) => local,
+            PreparedTypeName::Namespace(name) => classify_type_lookup(
+                name.as_str(),
+                graph.lookup_unqualified(
+                    Namespace::Type,
+                    name.as_str(),
+                    scope,
+                    edition,
+                    prelude,
+                )?,
+            ),
+        },
+    )
+}
+
+enum PreparedTypeName {
+    Local(SignatureName),
+    Namespace(crate::expand::scopes::MacroName),
+}
+
+/// Declaration-local priority shared by function and nominal member headers.
+pub(crate) fn declaration_type_name_local(
+    definition: crate::core::digest::Digest,
+    scope: &ScopeKey,
+    edition: u16,
+    generics: &[crate::syntax::signatures::DefinitionParameter],
+    name: &str,
+) -> Result<Option<SignatureName>, Diagnostic> {
+    Ok(
+        match prepare_type_name(definition, scope, edition, generics, name)? {
+            PreparedTypeName::Local(local) => Some(local),
+            PreparedTypeName::Namespace(_) => None,
+        },
+    )
+}
+
+/// Classification only; the caller supplies actual current owning lookup authority.
+pub(crate) fn declaration_type_name_with_lookup(
+    definition: crate::core::digest::Digest,
+    scope: &ScopeKey,
+    edition: u16,
+    generics: &[crate::syntax::signatures::DefinitionParameter],
+    name: &str,
+    lookup: NameLookup,
+) -> Result<SignatureName, Diagnostic> {
+    Ok(
+        match prepare_type_name(definition, scope, edition, generics, name)? {
+            PreparedTypeName::Local(local) => local,
+            PreparedTypeName::Namespace(name) => classify_type_lookup(name.as_str(), lookup),
+        },
+    )
+}
+
+fn prepare_type_name(
+    definition: crate::core::digest::Digest,
+    scope: &ScopeKey,
+    edition: u16,
+    generics: &[crate::syntax::signatures::DefinitionParameter],
+    name: &str,
+) -> Result<PreparedTypeName, Diagnostic> {
     if name == "Self" {
-        return Ok(SignatureName::NeedOwnerContext(scope.clone()));
+        return Ok(PreparedTypeName::Local(SignatureName::NeedOwnerContext(
+            scope.clone(),
+        )));
     }
     let name = crate::expand::scopes::MacroName::parse(name, edition)?;
     if let Some(parameter) = generics
         .iter()
         .find(|p| p.kind == GenericKind::Type && p.name == name.as_str())
     {
-        return Ok(SignatureName::Parameter(ParamKey {
-            definition,
-            ordinal: parameter.ordinal,
-        }));
+        return Ok(PreparedTypeName::Local(SignatureName::Parameter(
+            ParamKey {
+                definition,
+                ordinal: parameter.ordinal,
+            },
+        )));
     }
     if scope.owner.is_some() {
-        return Ok(SignatureName::NeedOwnerContext(scope.clone()));
+        return Ok(PreparedTypeName::Local(SignatureName::NeedOwnerContext(
+            scope.clone(),
+        )));
     }
-    let lookup =
-        graph.lookup_unqualified(Namespace::Type, name.as_str(), scope, edition, prelude)?;
-    Ok(match lookup {
+    Ok(PreparedTypeName::Namespace(name))
+}
+
+fn classify_type_lookup(name: &str, lookup: NameLookup) -> SignatureName {
+    match lookup {
         NameLookup::Defined(definition) => SignatureName::Source(definition),
         NameLookup::Absent => {
-            builtin(name.as_str()).unwrap_or(SignatureName::Unresolved(NameLookup::Absent))
+            builtin(name).unwrap_or(SignatureName::Unresolved(NameLookup::Absent))
         }
         other => SignatureName::Unresolved(other),
-    })
+    }
 }

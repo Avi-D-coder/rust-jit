@@ -220,3 +220,72 @@ fn common_reference_results_forward_real_caller_provenance_after_cleanup_all_edi
     // Forwarding to a second real source call exercises the restored caller
     // reference source; a matching scalar value alone cannot admit that call.
 }
+
+#[test]
+fn retained_caller_and_generated_named_reference_identity_use_the_ordinary_source_engine() {
+    const POINT: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/regions/regions-infer-borrow-scope.rs"
+    );
+    for edition in [2015, 2018, 2021, 2024] {
+        for declaration in [
+            "fn lrr_identity(p:&Point)->&Point{p}",
+            "macro_rules! emit{()=>{fn lrr_identity(p:&Point)->&Point{p}}}emit!();",
+            "macro_rules! emit{()=>{fn lrr_identity(p:&Point)->&Point{p}}}macro_rules! wrap{()=>{emit!();}}wrap!();",
+        ] {
+            let text = format!(
+                "{POINT}\n{declaration}\nfn lrr_probe()->isize{{let p=Point{{x:3_isize,y:4_isize}};let q=lrr_identity(&p);q.x}}"
+            );
+            let mut db = Database::default();
+            db.trace.detailed = true;
+            let (input, discovery) = super::retained_body_tests::prepare_expanded_body_source(
+                &mut db,
+                &text,
+                edition,
+                1,
+                "lrr_probe",
+            );
+            let source = db
+                .prepared_source(input.prepared().source())
+                .unwrap()
+                .unwrap();
+            let original_probe = body(&source, "lrr_probe");
+            let cold_main = body(&source, "main");
+            ready(db.publish_retained_syntax(input.clone()));
+            let probe = ready(db.publish_retained_body(input, original_probe.definition));
+            let mut run = ready(RunMachine::start_with_discovery(
+                &mut db, probe, 100_000, discovery,
+            ));
+            let report = match run.poll(&mut db) {
+                RunPoll::Completed(report) => report,
+                RunPoll::Fault(error) => panic!("common named reference identity: {error:?}"),
+                RunPoll::NeedInput(input) => panic!("common named reference suspension: {input:?}"),
+                RunPoll::Panicked(report) => panic!("common named reference panic: {report:?}"),
+            };
+            assert!(matches!(report.value,ValueSummary::Signed(ref value) if value=="3"));
+            assert_eq!(run.peak_guest_frames(), 2);
+            assert_eq!(report.opcode_counters.started_by_opcode[19], 1);
+            assert_eq!(report.opcode_counters.started_by_opcode[26], 0);
+            assert_eq!(
+                report.opcode_counters.operations_started,
+                report.opcode_counters.operations_completed
+            );
+            assert!(!db.trace.events.iter().any(
+                |event| matches!(&event.key,QueryKey::BodyStructure(body) if body==&cold_main)
+            ));
+            assert!(
+                db.trace
+                    .events
+                    .iter()
+                    .any(|event| matches!(event.key, QueryKey::ReferenceHeader(_)))
+            );
+            assert!(
+                db.trace
+                    .events
+                    .iter()
+                    .any(|event| matches!(event.key, QueryKey::TypeSchema(_)))
+            );
+        }
+    }
+    // Stock x_coord/Box/assert main and nested standard-macro execution remain
+    // separate acceptance gaps. This external probe does not rewrite originals.
+}

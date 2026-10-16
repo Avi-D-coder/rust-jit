@@ -1,7 +1,10 @@
 //! Exact token comparison for the ordinary local/parameter resolver. Normal
 //! forms are retained once during parsing, using the pinned hygiene machinery.
 use super::{ParsedFile, TokenContext};
-use crate::{core::diagnostic::Diagnostic, syntax::spans::SourceRange};
+use crate::{
+    core::diagnostic::Diagnostic,
+    syntax::{spans::SourceRange, token_wire::NameContextKey},
+};
 
 impl ParsedFile {
     pub(super) fn token_context(
@@ -29,6 +32,24 @@ impl ParsedFile {
         Ok(Some(context))
     }
 
+    /// Prepared pinned class for an actual identifier occurrence. This does
+    /// not adjust definition-site ribs or certify a namespace binding.
+    pub(crate) fn local_name_class(
+        &self,
+        range: SourceRange,
+    ) -> Result<Option<NameContextKey>, Diagnostic> {
+        let Some(context) = self.token_context(range)? else {
+            return Ok(None);
+        };
+        let facts = self.hygiene_facts().ok_or_else(|| {
+            Diagnostic::new(
+                "LRR-E-MACRO-OUTPUT",
+                "lexical source lacks its prepared hygiene facts".into(),
+            )
+        })?;
+        Ok(Some(facts.name_local(context.context)?))
+    }
+
     /// Compare actual single identifier occurrences; equality is neither a
     /// namespace admission nor a definition-site scope adjustment. Incomplete
     /// source joins must remain unresolved instead of capturing caller names.
@@ -37,17 +58,12 @@ impl ParsedFile {
         reference: SourceRange,
         binding: SourceRange,
     ) -> Result<bool, Diagnostic> {
-        match (self.token_context(reference)?, self.token_context(binding)?) {
+        match (
+            self.local_name_class(reference)?,
+            self.local_name_class(binding)?,
+        ) {
             (None, None) => Ok(true),
-            (Some(reference), Some(binding)) => {
-                let facts = self.hygiene_facts().ok_or_else(|| {
-                    Diagnostic::new(
-                        "LRR-E-MACRO-OUTPUT",
-                        "lexical source lacks its prepared hygiene facts".into(),
-                    )
-                })?;
-                Ok(facts.name_local(reference.context)? == facts.name_local(binding.context)?)
-            }
+            (Some(reference), Some(binding)) => Ok(reference == binding),
             _ => Err(Diagnostic::new(
                 "LRR-E-MACRO-OUTPUT",
                 "lexical reference and binding source contexts differ".into(),

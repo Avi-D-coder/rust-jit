@@ -1,4 +1,4 @@
-//! Original match IdentPat and prelude-header source selection; no name authority.
+//! Reached direct pattern name and prelude-header source selection; no name authority.
 use crate::{
     core::{
         diagnostic::Diagnostic,
@@ -7,7 +7,7 @@ use crate::{
     ir::pc::{NodeId, PcKey, Phase},
     source::snapshot::CfgSet,
     syntax::{
-        body_index::{BodyIndex, NodeRole},
+        body_index::{BodyIndex, ExpressionKind, NodeRole},
         outline::{BodyHandle, ScopeKey},
         parse::{ParseKey, ParsedFile},
         spans::SourceRange,
@@ -25,7 +25,9 @@ pub(crate) struct ScalarPatternSite {
     parse: ParseKey,
     body: crate::source::manifest::BodyKey,
     pattern: NodeId,
+    canonical: NodeId,
     range: SourceRange,
+    name_range: SourceRange,
     name: String,
     index: Digest,
 }
@@ -35,6 +37,12 @@ impl ScalarPatternSite {
     }
     pub(crate) fn range(&self) -> SourceRange {
         self.range
+    }
+    pub(crate) fn name_range(&self) -> SourceRange {
+        self.name_range
+    }
+    pub(crate) fn canonical(&self) -> NodeId {
+        self.canonical
     }
     pub(crate) fn name(&self) -> &str {
         &self.name
@@ -47,7 +55,7 @@ impl ScalarPatternSite {
         pc: &PcKey,
     ) -> Result<(), Diagnostic> {
         if parsed
-            .scalar_match_binding_site(handle, index, pc)?
+            .scalar_pattern_binding_site(handle, index, pc)?
             .as_ref()
             != Some(self)
         {
@@ -57,7 +65,7 @@ impl ScalarPatternSite {
     }
 }
 impl ParsedFile {
-    pub(crate) fn scalar_match_binding_site(
+    pub(crate) fn scalar_pattern_binding_site(
         &self,
         handle: &BodyHandle,
         index: &BodyIndex,
@@ -73,20 +81,48 @@ impl ParsedFile {
         let Some(node) = index.nodes().get(pc.node as usize) else {
             return Err(fault("plain pattern node absent"));
         };
-        if node.role != NodeRole::Pattern
-            || !matches!(Phase::from_code(pc.phase), Phase::Entry | Phase::Commit)
-        {
+        if !matches!(Phase::from_code(pc.phase), Phase::Entry | Phase::Commit) {
             return Ok(None);
         }
+        let condition =
+            node.role == NodeRole::Expression(ExpressionKind::Other) && node.clause_scope.is_some();
+        let pattern_node = if condition {
+            let Some(expression) = self
+                .entered_node_syntax(handle, index, node.id)?
+                .and_then(ast::LetExpr::cast)
+            else {
+                return Err(fault("condition binding owner syntax absent"));
+            };
+            let Some(pattern) = expression.pat() else {
+                return Err(fault("condition binding pattern absent"));
+            };
+            let range = pattern.syntax().text_range();
+            let relative = SourceRange {
+                start: u32::from(range.start())
+                    .checked_sub(handle.range.start)
+                    .ok_or_else(|| fault("condition binding precedes body"))?,
+                end: u32::from(range.end())
+                    .checked_sub(handle.range.start)
+                    .ok_or_else(|| fault("condition binding precedes body"))?,
+            };
+            index
+                .nodes_at_range(relative)
+                .find(|candidate| candidate.role == NodeRole::Pattern)
+                .ok_or_else(|| fault("condition binding pattern identity absent"))?
+        } else if node.role == NodeRole::Pattern {
+            node
+        } else {
+            return Ok(None);
+        };
         let start = handle
             .range
             .start
-            .checked_add(node.range.start)
+            .checked_add(pattern_node.range.start)
             .ok_or_else(|| fault("plain pattern start overflow"))?;
         let end = handle
             .range
             .start
-            .checked_add(node.range.end)
+            .checked_add(pattern_node.range.end)
             .ok_or_else(|| fault("plain pattern end overflow"))?;
         if end > handle.range.end || start > end {
             return Err(fault("plain pattern range escapes body"));
@@ -107,20 +143,41 @@ impl ParsedFile {
         else {
             return Ok(None);
         };
-        if pat.mut_token().is_some()
-            || pat.ref_token().is_some()
-            || pat.at_token().is_some()
-            || pat
-                .syntax()
-                .children()
-                .any(|child| ast::Attr::can_cast(child.kind()) || ast::Pat::can_cast(child.kind()))
+        if pat
+            .syntax()
+            .children()
+            .any(|child| ast::Attr::can_cast(child.kind()))
         {
             return Ok(None);
         }
-        let Some(arm) = pat.syntax().parent().and_then(ast::MatchArm::cast) else {
-            return Ok(None);
-        };
-        if arm.pat().is_none_or(|p| p.syntax().text_range() != range) {
+        let mut root = ast::Pat::IdentPat(pat.clone());
+        let mut parent = pat.syntax().parent();
+        let mut owner = false;
+        // Cross source pattern structure only, never a statement/body boundary.
+        for _ in 0..256 {
+            let Some(current) = parent else { break };
+            if let Some(pattern) = ast::Pat::cast(current.clone()) {
+                root = pattern;
+                parent = current.parent();
+            } else if let Some(arm) = ast::MatchArm::cast(current.clone()) {
+                owner = arm.pat().is_some_and(|p| p.syntax() == root.syntax());
+                break;
+            } else if let Some(expression) = ast::LetExpr::cast(current.clone()) {
+                owner = expression
+                    .pat()
+                    .is_some_and(|p| p.syntax() == root.syntax());
+                break;
+            } else if matches!(
+                current.kind(),
+                ra_ap_syntax::SyntaxKind::RECORD_PAT_FIELD
+                    | ra_ap_syntax::SyntaxKind::RECORD_PAT_FIELD_LIST
+            ) {
+                parent = current.parent();
+            } else {
+                break;
+            }
+        }
+        if !owner {
             return Ok(None);
         }
         if self.generated_origin.is_some() {
@@ -131,16 +188,35 @@ impl ParsedFile {
         let name = pat
             .name()
             .ok_or_else(|| fault("plain pattern name absent"))?;
+        let name_range = super::ast_adapter::range(name.syntax().text_range());
         let name = super::ast_adapter::semantic_name(&name.syntax().text().to_string())
             .ok_or_else(|| fault("plain pattern name invalid"))?;
         if name.len() > 256 {
             return Err(fault("plain pattern name budget"));
         }
+        let group = index
+            .pattern_bindings()
+            .group_for(pattern_node.id)
+            .ok_or_else(|| fault("pattern occurrence lacks retained binding candidates"))?;
+        let canonical = group
+            .canonical_candidate()
+            .ok_or_else(|| fault("pattern occurrence has unresolved binding group facts"))?;
+        if group.name() != name
+            || group
+                .occurrence(pattern_node.id)
+                .is_none_or(|occurrence| occurrence.name_range != name_range)
+        {
+            return Err(fault(
+                "pattern occurrence differs from its retained candidate group",
+            ));
+        }
         Ok(Some(ScalarPatternSite {
             parse: self.key(),
             body: pc.body.clone(),
-            pattern: NodeId(pc.node),
+            pattern: pattern_node.id,
+            canonical,
             range: SourceRange { start, end },
+            name_range,
             name,
             index: index.fingerprint(),
         }))

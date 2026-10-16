@@ -16,6 +16,9 @@ const ORIGINALS: &[&str] = &[
     include_str!(
         "../../../../fixtures/upstream/rustc-checkout/tests/ui/binding/match-range-infer.rs"
     ),
+    include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/or-patterns/search-via-bindings.rs"
+    ),
 ];
 #[test]
 fn indexed_role_lookup_matches_source_preorder_on_unchanged_originals_all_editions() {
@@ -61,9 +64,9 @@ fn indexed_role_lookup_matches_source_preorder_on_unchanged_originals_all_editio
                     let actual = parsed.entered_node_syntax(body, &index, node.id).unwrap();
                     assert_eq!(actual, expected, "edition {edition}, node {:?}", node.id);
                     // Separate structural oracle for let ownership. The normal
-                    // executable-pattern lookup intentionally selects only
-                    // match patterns; local declaration lookup accepts the
-                    // exact indexed pattern and its immediate owning let.
+                    // source attachment grants no binding authority; local
+                    // declaration lookup selects the exact indexed pattern
+                    // and its immediate owning let.
                     let expected_let = (node.role == NodeRole::Pattern)
                         .then(|| {
                             parsed.parsed.tree().syntax().descendants().find(|syntax| {

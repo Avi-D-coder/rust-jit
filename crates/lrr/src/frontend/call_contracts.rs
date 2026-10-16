@@ -2,7 +2,7 @@
 use super::{
     callables::SourceCallable,
     names::NameNamespaces,
-    signature_names::{SignatureName, SignatureNames},
+    signature_names::SignatureName,
     signature_subst::SignatureSubstitution,
     type_aliases::{AliasNormalizer, AliasTarget},
 };
@@ -28,7 +28,7 @@ use std::collections::BTreeMap;
 #[path = "closed_reference_calls.rs"]
 mod closed_reference_calls;
 #[path = "generated_result_namespace.rs"]
-mod generated_result_namespace;
+pub(super) mod generated_result_namespace;
 pub(crate) use closed_reference_calls::{ClosedReferenceArgument, ReferenceCallArguments};
 pub use closed_reference_calls::{ClosedReferenceContracts, ClosedReferenceParameter};
 #[derive(Debug, Clone)]
@@ -202,9 +202,22 @@ impl NormalizedDeferredReturn {
         let signature = callee.signature();
         if signature.result_symbolic.is_some()
             || signature.result.len() != 1
-            || SignatureNames::from_database(db, graph, signature)?
-                .unqualified(&signature.result[0].text, None)?
-                != SignatureName::Primitive(source)
+            || match super::source_types::resolve_named(
+                db,
+                graph,
+                sources,
+                signature,
+                &signature.result[0].text,
+            ) {
+                QueryPoll::Ready(Ok(selected)) => selected != SignatureName::Primitive(source),
+                QueryPoll::Ready(Err(error)) => return Err(error),
+                QueryPoll::NeedInput(_) => {
+                    return Err(fault(
+                        "LRR-E-CALL-CONTEXT",
+                        "primitive result source certificate is not current",
+                    ));
+                }
+            }
         {
             return Err(fault(
                 "LRR-E-CALL-CONTEXT",
@@ -805,8 +818,9 @@ fn argument_hints(
     callee.revalidate(db)?;
     let signature = callee.signature();
     let definition = signature.definition;
-    let names = SignatureNames::from_database(db, graph, signature)?;
-    let normalizer = AliasNormalizer::new(graph, sources)?;
+    // Preserve the ordinary source catalogue/graph admission before even a
+    // symbolic or primitive hint. Named resolution below shares SourceType.
+    let _catalogue = AliasNormalizer::new(graph, sources)?;
     let mut templates = Vec::new();
     let mut template_bytes = 0usize;
     let mut reference_hints = BTreeMap::new();
@@ -858,30 +872,36 @@ fn argument_hints(
                 syntax: parameter.ty.clone(),
             })));
         }
-        match names.unqualified(&parameter.ty[0].text, None)? {
-            SignatureName::Primitive(p) => {
-                push_template(&mut templates, &mut template_bytes, TyTerm::Primitive(p))?
+        match super::source_types::prepare_named(
+            db,
+            graph,
+            sources,
+            signature,
+            &parameter.ty[0].text,
+        ) {
+            QueryPoll::Ready(Ok(super::source_types::NamedTypePreparation::Ready(proof))) => {
+                push_template(&mut templates, &mut template_bytes, proof.source().clone())?;
             }
-            SignatureName::Parameter(p) => {
-                push_template(&mut templates, &mut template_bytes, TyTerm::Param(p))?
+            QueryPoll::Ready(Ok(super::source_types::NamedTypePreparation::Parameter(key))) => {
+                push_template(&mut templates, &mut template_bytes, TyTerm::Param(key))?;
             }
-            SignatureName::Source(found) => match normalizer.normalize(db, found.identity) {
-                QueryPoll::Ready(Ok(AliasTarget::Type(term))) => {
-                    push_template(&mut templates, &mut template_bytes, term)?
-                }
-                QueryPoll::Ready(Ok(other)) => {
-                    return Ok(QueryPoll::Ready(Ok(ArgumentHintPreparation::NeedAlias(
-                        other,
-                    ))));
-                }
-                QueryPoll::Ready(Err(error)) => return Err(error),
-                QueryPoll::NeedInput(input) => return Ok(QueryPoll::NeedInput(input)),
-            },
-            other => {
+            QueryPoll::Ready(Ok(super::source_types::NamedTypePreparation::Alias(
+                AliasTarget::Type(term),
+            ))) => {
+                push_template(&mut templates, &mut template_bytes, term)?;
+            }
+            QueryPoll::Ready(Ok(super::source_types::NamedTypePreparation::Alias(other))) => {
+                return Ok(QueryPoll::Ready(Ok(ArgumentHintPreparation::NeedAlias(
+                    other,
+                ))));
+            }
+            QueryPoll::Ready(Ok(super::source_types::NamedTypePreparation::Name(other))) => {
                 return Ok(QueryPoll::Ready(Ok(ArgumentHintPreparation::NeedName(
                     other,
                 ))));
             }
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(request) => return Ok(QueryPoll::NeedInput(request)),
         }
     }
     let mut hints = Vec::new();
@@ -1078,8 +1098,17 @@ fn prepare(
         instantiated.result_symbolic = Some(TyTerm::Primitive(proof.source));
         normalized_deferred_return = Some(Box::new(proof));
     } else if instantiated.result_symbolic.is_none() && signature.result.len() == 1 {
-        let names = SignatureNames::from_database(db, graph, signature)?;
-        let resolved = names.unqualified(&signature.result[0].text, None)?;
+        let resolved = match super::source_types::resolve_named(
+            db,
+            graph,
+            sources,
+            signature,
+            &signature.result[0].text,
+        ) {
+            QueryPoll::Ready(Ok(selected)) => selected,
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(request) => return Ok(QueryPoll::NeedInput(request)),
+        };
         if let SignatureName::Primitive(primitive) = resolved {
             normalized_deferred_return = Some(Box::new(NormalizedDeferredReturn::mint_primitive(
                 db, callee, graph, sources, primitive,

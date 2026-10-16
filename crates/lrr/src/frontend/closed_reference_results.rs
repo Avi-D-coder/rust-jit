@@ -9,7 +9,7 @@ pub(super) struct ReferenceResultContract {
     syntax: Arc<ClosedReferenceTypeSyntax>,
     plan: Arc<ReferenceHeaderPlan>,
     source: TyTerm,
-    primitive: PrimitiveType,
+    pointee: super::super::super::source_types::SourceType,
     inputs: Box<[usize]>,
     descriptor: Option<TypeId>,
 }
@@ -35,32 +35,20 @@ impl ReferenceResultContract {
             return Ok(None);
         };
         syntax.require_result(signature)?;
-        let parse = plan.parse();
-        let primitive = match SignatureNames::from_database(db, graph, signature)?
-            .unqualified(syntax.target(), None)?
-        {
-            SignatureName::Primitive(primitive) => primitive,
-            _ => return Ok(None),
+        let pointee = match super::super::super::source_types::prepare_reference_pointee(
+            db, graph, sources, signature, &syntax,
+        ) {
+            QueryPoll::Ready(Ok(
+                super::super::super::source_types::NamedTypePreparation::Ready(pointee),
+            )) => pointee,
+            QueryPoll::Ready(Ok(_)) => return Ok(None),
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(_) => {
+                return Err(invalid(
+                    "reference result pointee source authority is not current",
+                ));
+            }
         };
-        let stamps = db.lexical_namespace_stamps()?;
-        if db
-            .published_input(&InputKey::GeneratedSyntax(parse.content))
-            .is_some()
-        {
-            generated_result_namespace::require_reference_type(db, signature, &syntax)?;
-        } else {
-            super::super::super::type_name_namespace::require_primitive_name(
-                db,
-                super::super::super::type_name_namespace::SourceTypeOwner {
-                    definition: signature.definition,
-                    scope: &signature.scope,
-                    header: &signature.header,
-                },
-                sources,
-                &stamps,
-                syntax.target(),
-            )?;
-        }
         if syntax.lifetime() == Some("'static") {
             return Err(fault(
                 "LRR-E-UNSUPPORTED",
@@ -77,17 +65,14 @@ impl ReferenceResultContract {
                 Some("'_") | None => input_count == 1,
                 Some(name) => binding.parameter.syntax.lifetime() == Some(name),
             };
-            if related
-                && binding.parameter.primitive == primitive
-                && (!syntax.mutable() || binding.parameter.mutable())
-            {
+            if related && (!syntax.mutable() || binding.parameter.mutable()) {
                 inputs.push(index);
             }
         }
         let Some(first) = inputs.first().and_then(|index| bindings.get(*index)) else {
             return Err(fault(
                 "LRR-E-UNSUPPORTED",
-                "reference result requires an unambiguous declared input region and pointee",
+                "reference result requires an unambiguous declared input region",
             ));
         };
         let TyTerm::Ref(region, _, _) = &first.argument.source else {
@@ -96,7 +81,7 @@ impl ReferenceResultContract {
         let source = TyTerm::Ref(
             region.clone(),
             syntax.mutable(),
-            Box::new(TyTerm::Primitive(primitive)),
+            Box::new(pointee.source().clone()),
         );
         for index in &inputs {
             let TyTerm::Ref(other, _, _) = &bindings[*index].argument.source else {
@@ -109,15 +94,17 @@ impl ReferenceResultContract {
                 ));
             }
         }
-        let descriptor = store.find_type(&TypeKey::Ref {
-            mutable: syntax.mutable(),
-            target: primitive_runtime_id(primitive)?,
+        let descriptor = pointee.find_descriptor(store).and_then(|target| {
+            store.find_type(&TypeKey::Ref {
+                mutable: syntax.mutable(),
+                target,
+            })
         });
         let proof = Self {
             syntax,
             plan,
             source,
-            primitive,
+            pointee,
             inputs: inputs.into_boxed_slice(),
             descriptor,
         };
@@ -136,6 +123,12 @@ impl ReferenceResultContract {
     pub(super) fn allocated_bytes(&self) -> Result<usize, Diagnostic> {
         std::mem::size_of::<Self>()
             .checked_add(self.source.heap_bytes().ok_or_else(limit)?)
+            .and_then(|n| {
+                self.pointee
+                    .heap_bytes()
+                    .ok()
+                    .and_then(|m| n.checked_add(m))
+            })
             .and_then(|n| {
                 self.inputs
                     .len()
@@ -166,7 +159,7 @@ impl ReferenceResultContract {
             };
             if !matches!(&self.source, TyTerm::Ref(expected, mutable, target)
                 if expected == region && *mutable == self.syntax.mutable()
-                    && target.as_ref() == &TyTerm::Primitive(self.primitive))
+                    && target.as_ref() == self.pointee.source())
             {
                 return Err(invalid("reference result region certificate differs"));
             }
@@ -184,12 +177,32 @@ impl ReferenceResultContract {
             let binding = bindings
                 .get(*index)
                 .ok_or_else(|| invalid("reference result input certificate absent"))?;
-            match store.require_reference_return(
-                ticket,
-                &binding.argument.target,
-                self.syntax.mutable(),
-                primitive_runtime_id(self.primitive)?,
-            ) {
+            let pointee = self
+                .pointee
+                .find_descriptor(store)
+                .ok_or_else(|| invalid("reference result pointee descriptor absent"))?;
+            let checked = if binding.parameter.pointee.same_type(&self.pointee) {
+                store.require_reference_return(
+                    ticket,
+                    &binding.argument.target,
+                    self.syntax.mutable(),
+                    pointee,
+                )
+            } else {
+                let origin = binding
+                    .parameter
+                    .pointee
+                    .find_descriptor(store)
+                    .ok_or_else(|| invalid("reference result input descriptor absent"))?;
+                store.require_reference_projection_return(
+                    ticket,
+                    &binding.argument.target,
+                    self.syntax.mutable(),
+                    origin,
+                    pointee,
+                )
+            };
+            match checked {
                 Ok(descriptor) => {
                     if self
                         .descriptor
@@ -206,6 +219,37 @@ impl ReferenceResultContract {
     }
 }
 impl ClosedReferenceContracts {
+    pub(crate) fn result_hint_descriptor(
+        &self,
+        store: &GuestStore,
+    ) -> Result<Option<TypeId>, Diagnostic> {
+        self.require_store_session(store)?;
+        let result = self
+            .result
+            .as_ref()
+            .ok_or_else(|| invalid("reference result source certificate absent"))?;
+        Ok(result.pointee.find_descriptor(store).and_then(|target| {
+            store.find_type(&TypeKey::Ref {
+                mutable: result.syntax.mutable(),
+                target,
+            })
+        }))
+    }
+    pub(crate) fn materialize_result_hint(
+        &self,
+        store: &mut GuestStore,
+    ) -> Result<TypeId, Diagnostic> {
+        self.require_store_session(store)?;
+        let result = self
+            .result
+            .as_ref()
+            .ok_or_else(|| invalid("reference result source certificate absent"))?;
+        let target = result.pointee.materialize(store)?;
+        store.intern_type(TypeKey::Ref {
+            mutable: result.syntax.mutable(),
+            target,
+        })
+    }
     pub(crate) fn has_result(&self) -> bool {
         self.result.is_some()
     }
@@ -271,9 +315,7 @@ impl PreparedCallContracts {
         let Some(TyTerm::Ref(region, mutable, target)) = source else {
             return Err(invalid("returned reference lacks actual source provenance"));
         };
-        if *mutable != result.syntax.mutable()
-            || target.as_ref() != &TyTerm::Primitive(result.primitive)
-        {
+        if *mutable != result.syntax.mutable() || target.as_ref() != result.pointee.source() {
             return Err(invalid("returned reference source pointee/access differs"));
         }
         let expected_region = match &result.source {

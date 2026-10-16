@@ -15,6 +15,8 @@ use crate::{
     },
 };
 use std::collections::{BTreeMap, BTreeSet};
+#[path = "source_local_patterns.rs"]
+mod pattern_equivalence;
 // Per-call memoization is valid only under this immutable source/namespace borrow.
 #[derive(Default)]
 struct ImportMemo {
@@ -130,6 +132,48 @@ impl EnteredMacroIndex<'_> {
         resolutions: &BTreeMap<Digest, PatternResolution>,
         expansions: &[(Key, MacroDefinition)],
         publications: &[SourceLocalPublication],
+    ) -> Result<SourceLocalIndex<'_>, Diagnostic> {
+        self.local_index_inner(expected, body, resolutions, expansions, publications, None)
+    }
+    pub(crate) fn local_index_with_pattern_index(
+        &self,
+        expected: &SourceSelection,
+        handle: &crate::syntax::outline::BodyHandle,
+        resolutions: &BTreeMap<Digest, PatternResolution>,
+        expansions: &[(Key, MacroDefinition)],
+        index: &crate::syntax::body_index::BodyIndex,
+    ) -> Result<SourceLocalIndex<'_>, Diagnostic> {
+        if handle.key() != self.body
+            || index.body() != &self.body
+            || index.profile() != &expected.outline.parse.profile
+            || !self
+                .parent
+                .view
+                .outline()
+                .items
+                .iter()
+                .any(|item| item.body.as_ref() == Some(handle))
+        {
+            return Err(error("local pattern index owning body/profile differs"));
+        }
+        let equivalence = pattern_equivalence::prepare(&self.facts.bindings, handle, index)?;
+        self.local_index_inner(
+            expected,
+            &handle.key(),
+            resolutions,
+            expansions,
+            &[],
+            Some(&equivalence),
+        )
+    }
+    fn local_index_inner(
+        &self,
+        expected: &SourceSelection,
+        body: &BodyKey,
+        resolutions: &BTreeMap<Digest, PatternResolution>,
+        expansions: &[(Key, MacroDefinition)],
+        publications: &[SourceLocalPublication],
+        equivalence: Option<&BTreeMap<Digest, Digest>>,
     ) -> Result<SourceLocalIndex<'_>, Diagnostic> {
         if expected.canonical()? != *self.parent.source() || *body != self.body {
             return Err(error("local index source/body revision mismatch"));
@@ -314,15 +358,33 @@ impl EnteredMacroIndex<'_> {
             }
         }
         let mut resolved_names = BTreeMap::new();
+        let canonical = |identity: Digest| {
+            equivalence
+                .and_then(|map| map.get(&identity))
+                .copied()
+                .unwrap_or(identity)
+        };
+        let mut resolved_groups = BTreeMap::new();
+        for (identity, resolution) in resolutions {
+            if resolved_groups
+                .insert(canonical(*identity), *resolution)
+                .is_some_and(|old| old != *resolution)
+            {
+                return Err(error(
+                    "equivalent pattern occurrences have conflicting resolutions",
+                ));
+            }
+        }
         for binding in &self.facts.bindings {
             if (binding.classification == PatternNameKind::ExplicitBinding
-                || resolutions.get(&binding.identity) == Some(&PatternResolution::Binding))
+                || resolved_groups.get(&canonical(binding.identity))
+                    == Some(&PatternResolution::Binding))
                 && resolved_names
                     .insert(
                         (binding.scope, binding.visible_from, binding.name.as_str()),
-                        binding.identity,
+                        canonical(binding.identity),
                     )
-                    .is_some()
+                    .is_some_and(|old| old != canonical(binding.identity))
             {
                 return Err(error(
                     "duplicate pattern binding requires equivalence or diagnostic resolution",
@@ -339,7 +401,9 @@ impl EnteredMacroIndex<'_> {
         rows.try_reserve(count)
             .map_err(|_| error("source local row allocation failed"))?;
         for b in &self.facts.bindings {
-            rows.push((b.scope, b.visible_from, b.identity, 0, Row::Binding(b)));
+            if canonical(b.identity) == b.identity {
+                rows.push((b.scope, b.visible_from, b.identity, 0, Row::Binding(b)));
+            }
         }
         for e in &self.facts.events {
             if matches!(e.kind, BodyMacroEventKind::Producer { identity, .. } if self.no_item_retired(identity))
@@ -384,8 +448,8 @@ impl EnteredMacroIndex<'_> {
                 Row::Binding(b) => {
                     let resolution = match b.classification {
                         PatternNameKind::ExplicitBinding => PatternResolution::Binding,
-                        PatternNameKind::BindingOrConstant => resolutions
-                            .get(&b.identity)
+                        PatternNameKind::BindingOrConstant => resolved_groups
+                            .get(&canonical(b.identity))
                             .copied()
                             .unwrap_or(PatternResolution::NeedInput(b.identity)),
                     };

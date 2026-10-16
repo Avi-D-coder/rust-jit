@@ -48,6 +48,7 @@ pub(crate) struct ScalarPatternBindingAdmission {
     parse: ParseKey,
     body: crate::source::manifest::BodyKey,
     pattern: NodeId,
+    canonical: NodeId,
     range: SourceRange,
     name: String,
     index: Digest,
@@ -63,7 +64,7 @@ fn plain_pattern(
     pattern: NodeId,
 ) -> Result<(SourceRange, String), Diagnostic> {
     let site = parsed
-        .scalar_match_binding_site(handle, index, pc)?
+        .scalar_pattern_binding_site(handle, index, pc)?
         .ok_or_else(|| fault("reached plain match binding site absent"))?;
     if site.pattern() != pattern {
         return Err(fault("plain match binding node differs"));
@@ -140,7 +141,11 @@ impl ScalarPatternBindingAdmission {
         let parsed = db
             .prepared_parse(&source.selection().outline.parse)
             .ok_or_else(|| fault("plain pattern original parse lease absent"))?;
-        let pattern = NodeId(pc.node);
+        let site = parsed
+            .scalar_pattern_binding_site(handle, index, pc)?
+            .ok_or_else(|| fault("reached direct pattern binding site absent"))?;
+        let pattern = site.pattern();
+        let canonical = site.canonical();
         let (range, name) = plain_pattern(&parsed, handle, index, pc, pattern)?;
         let namespace = db.lexical_namespace_stamps()?;
         for key in namespace.keys() {
@@ -341,13 +346,18 @@ impl ScalarPatternBindingAdmission {
             .facts()
             .bindings
             .iter()
-            .find(|binding| binding.pattern_range == range && binding.name == name)
+            .find(|binding| binding.name_range == site.name_range() && binding.name == name)
             .ok_or_else(|| fault("plain pattern exact lexical binding candidate absent"))?;
         if binding.visible_from <= u64::from(range.start) {
             return Err(fault("plain pattern binding is prematurely visible"));
         }
-        let locals =
-            entered.local_index(source.selection(), &handle.key(), &BTreeMap::new(), &[])?;
+        let locals = entered.local_index_with_pattern_index(
+            source.selection(),
+            handle,
+            &BTreeMap::new(),
+            &[],
+            index,
+        )?;
         let found = locals.lookup_ordinary(
             OrdinaryNameSite {
                 source: source.selection(),
@@ -394,6 +404,7 @@ impl ScalarPatternBindingAdmission {
             parse: parsed.key(),
             body: pc.body.clone(),
             pattern,
+            canonical,
             range,
             name,
             index: index.fingerprint(),
@@ -417,6 +428,9 @@ impl ScalarPatternBindingAdmission {
             || range != self.range
             || name != self.name
             || index.fingerprint() != self.index
+            || parsed
+                .scalar_pattern_binding_site(handle, index, pc)?
+                .is_none_or(|site| site.canonical() != self.canonical_binding())
         {
             return Err(fault(
                 "plain pattern binding certificate belongs to another source/body/node",
@@ -445,6 +459,9 @@ impl ScalarPatternBindingAdmission {
     }
     pub(crate) fn dependencies(&self) -> &[DependencyStamp] {
         &self.dependencies
+    }
+    pub(crate) fn canonical_binding(&self) -> NodeId {
+        self.canonical
     }
     pub(crate) fn allocated_bytes(&self) -> usize {
         self.bytes
@@ -698,6 +715,169 @@ mod tests {
             let key = sites(&source, &handle, &body, "None").remove(0);
             capture(&mut db, &source, &body, &key, 64 * 1024 * 1024).unwrap();
         }
+    }
+    #[test]
+    fn unchanged_conditional_binding_header_uses_the_same_actual_namespace_admission() {
+        const SOURCE: &str = include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/rfcs/rfc-2497-if-let-chains/ast-lowering-does-not-wrap-let-chains.rs"
+        );
+        let (mut db, source, handle, body) = world(SOURCE, "main", 2024);
+        let parsed = db
+            .prepared_parse(&source.selection().outline.parse)
+            .unwrap();
+        let sites: Vec<_> = body
+            .nodes()
+            .iter()
+            .filter(|node| node.clause_scope.is_some())
+            .filter_map(|node| {
+                let pc = body.pc(node.id, Phase::Entry).unwrap();
+                parsed
+                    .scalar_pattern_binding_site(&handle, &body, &pc)
+                    .unwrap()
+                    .map(|site| (pc, site))
+            })
+            .collect();
+        assert_eq!(sites.len(), 2);
+        for (pc, site) in sites {
+            assert_ne!(site.pattern(), NodeId(pc.node));
+            let proof = capture(&mut db, &source, &body, &pc, 64 * 1024 * 1024).unwrap();
+            proof
+                .require(&parsed, &handle, &body, &pc, site.pattern())
+                .unwrap();
+            let mut commit = pc.clone();
+            commit.phase = Phase::Commit.code().unwrap();
+            proof
+                .require(&parsed, &handle, &body, &commit, site.pattern())
+                .unwrap();
+            let recipe = match db.fetch(
+                &crate::db::provider::SyntaxProvider,
+                crate::db::key::QueryKey::Thunk(commit),
+            ) {
+                crate::db::poll::QueryPoll::Ready(Ok(value)) => value,
+                other => panic!("actual conditional binding query: {other:?}"),
+            };
+            let crate::db::value::QueryValue::Thunk(recipe) = recipe.value.as_ref() else {
+                panic!("actual conditional binding recipe absent")
+            };
+            assert!(recipe.recipe().operations.iter().any(|operation| matches!(
+                operation,
+                crate::ir::op::Op::Pattern {
+                    operation: crate::ir::op::PatternOperation::StageBinding { binding, .. }
+                } if *binding == site.pattern()
+            )));
+            assert!(!recipe.recipe().dependencies.is_empty());
+            proof.revalidate(&mut db).unwrap();
+        }
+        // This checks source/namespace/recipe authority without executing the
+        // original aggregate/library program. It is not a stock runtime pass.
+    }
+    #[test]
+    fn unchanged_nested_or_and_at_names_keep_occurrence_and_canonical_authority_distinct() {
+        const SOURCE: &str = include_str!(
+            "../../../../fixtures/upstream/rustc-checkout/tests/ui/or-patterns/search-via-bindings.rs"
+        );
+        for edition in [2015, 2018, 2021, 2024] {
+            let (mut db, source, handle, body) = world(SOURCE, "search", edition);
+            let parsed = db
+                .prepared_parse(&source.selection().outline.parse)
+                .unwrap();
+            let mut groups: BTreeMap<String, (NodeId, usize)> = BTreeMap::new();
+            let mut distinct_occurrence = false;
+            for node in body
+                .nodes()
+                .iter()
+                .filter(|node| node.role == NodeRole::Pattern)
+            {
+                let pc = body.pc(node.id, Phase::Entry).unwrap();
+                let Some(site) = parsed
+                    .scalar_pattern_binding_site(&handle, &body, &pc)
+                    .unwrap()
+                else {
+                    continue;
+                };
+                let proof = capture(&mut db, &source, &body, &pc, 64 * 1024 * 1024).unwrap();
+                proof
+                    .require(&parsed, &handle, &body, &pc, node.id)
+                    .unwrap();
+                let canonical = body
+                    .pattern_bindings()
+                    .group_for(node.id)
+                    .unwrap()
+                    .canonical_candidate()
+                    .unwrap();
+                assert_eq!(proof.canonical_binding(), canonical);
+                distinct_occurrence |= node.id != canonical;
+                let entry = groups
+                    .entry(site.name().to_owned())
+                    .or_insert((canonical, 0));
+                assert_eq!(entry.0, canonical);
+                entry.1 += 1;
+                let mut commit = pc.clone();
+                commit.phase = Phase::Commit.code().unwrap();
+                proof
+                    .require(&parsed, &handle, &body, &commit, node.id)
+                    .unwrap();
+            }
+            assert_eq!(groups.len(), 3);
+            assert!(groups.values().all(|(_, occurrences)| *occurrences == 2));
+            assert!(distinct_occurrence);
+        }
+        // Namespace proof only. Guard ordering, tuple projection and whole
+        // original main execution require the shared product transaction join.
+    }
+    #[test]
+    fn unchanged_if_let_none_does_not_acquire_binding_authority_all_editions() {
+        const SOURCE: &str =
+            include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/binding/if-let.rs");
+        for edition in [2015, 2018, 2021, 2024] {
+            let (mut db, source, handle, body) = world(SOURCE, "main", edition);
+            let parsed = db
+                .prepared_parse(&source.selection().outline.parse)
+                .unwrap();
+            let sites: Vec<_> = body
+                .nodes()
+                .iter()
+                .filter(|node| node.clause_scope.is_some())
+                .filter_map(|node| {
+                    let pc = body.pc(node.id, Phase::Entry).unwrap();
+                    parsed
+                        .scalar_pattern_binding_site(&handle, &body, &pc)
+                        .unwrap()
+                        .filter(|site| site.name() == "None")
+                        .map(|site| (pc, site))
+                })
+                .collect();
+            assert_eq!(sites.len(), 1);
+            for (pc, site) in sites {
+                assert_ne!(site.pattern(), NodeId(pc.node));
+                for phase in [Phase::Entry, Phase::Commit] {
+                    let pc = body.pc(NodeId(pc.node), phase).unwrap();
+                    assert_eq!(
+                        capture(&mut db, &source, &body, &pc, 64 * 1024 * 1024)
+                            .unwrap_err()
+                            .code,
+                        "LRR-E-PATTERN-PRELUDE"
+                    );
+                    let error = match db.fetch(
+                        &crate::db::provider::SyntaxProvider,
+                        crate::db::key::QueryKey::Thunk(pc),
+                    ) {
+                        crate::db::poll::QueryPoll::Ready(Err(error)) => error,
+                        crate::db::poll::QueryPoll::Ready(Ok(value)) => {
+                            let crate::db::value::QueryValue::Error(error) = value.value.as_ref()
+                            else {
+                                panic!("conditional prelude name acquired a binding recipe")
+                            };
+                            error.clone()
+                        }
+                        other => panic!("actual conditional prelude query: {other:?}"),
+                    };
+                    assert_eq!(error.code, "LRR-E-PATTERN-PRELUDE");
+                }
+            }
+        }
+        // Safe refusal is not correct execution of None's constant/variant
+        // pattern contract. That common selection/execution remains required.
     }
     #[test]
     fn source_certificate_refuses_wrong_phase_budget_and_current_epoch() {

@@ -34,12 +34,22 @@ pub(super) fn require(
     publication: &crate::db::seals::DiscoveryInput,
     origins: &[&SpanRecord],
     name: &str,
+    expected: &super::super::super::names::NameLookup,
 ) -> Result<(), Diagnostic> {
     let mut seen = Vec::new();
     seen.try_reserve_exact(16)
         .map_err(|_| crate::runtime::arena::resource())?;
     let mut bytes = 0usize;
-    require_chain(db, unit, publication, origins, name, &mut seen, &mut bytes)
+    require_chain(
+        db,
+        unit,
+        publication,
+        origins,
+        name,
+        expected,
+        &mut seen,
+        &mut bytes,
+    )
 }
 fn current_record(
     db: &Database,
@@ -66,6 +76,7 @@ fn type_scope(
     scope: &crate::syntax::outline::ScopeKey,
     profile: &crate::core::profile::ProfileIdentity,
     name: &str,
+    expected: &super::super::super::names::NameLookup,
 ) -> Result<(), Diagnostic> {
     let mut receipts = publication
         .type_scopes
@@ -78,7 +89,12 @@ fn type_scope(
     proof.require_owner(scope, profile)?;
     proof.require_current(db, publication)?;
     let name = crate::expand::scopes::MacroName::parse(name, profile.edition)?;
-    if proof.scope().namespace != Namespace::Type || proof.scope().names.contains_key(name.as_str())
+    if proof.scope().namespace != Namespace::Type
+        || !super::super::super::type_name_namespace::bucket_selects(
+            &proof.scope().names,
+            name.as_str(),
+            expected,
+        )
     {
         return Err(missing());
     }
@@ -90,6 +106,7 @@ fn require_chain(
     publication: &crate::db::seals::DiscoveryInput,
     origins: &[&SpanRecord],
     name: &str,
+    expected: &super::super::super::names::NameLookup,
     seen: &mut Vec<Digest>,
     bytes: &mut usize,
 ) -> Result<(), Diagnostic> {
@@ -121,7 +138,14 @@ fn require_chain(
                 return Err(missing());
             }
         }
-        type_scope(db, publication, &unit.scope, &unit.key.profile, name)?;
+        type_scope(
+            db,
+            publication,
+            &unit.scope,
+            &unit.key.profile,
+            name,
+            expected,
+        )?;
         if origins.is_empty()
             || origins.iter().any(|origin| {
                 origin.source.unit.0 != view.location().unit.0
@@ -188,7 +212,14 @@ fn require_chain(
         // The expansion insertion scope may contain an inline module whose
         // macro owns this declaration. Use its real nested Type receipt; the
         // retained outline below must still match that exact item and scope.
-        type_scope(db, publication, &context.scope, &declared.profile, name)?;
+        type_scope(
+            db,
+            publication,
+            &context.scope,
+            &declared.profile,
+            name,
+            expected,
+        )?;
         // Retained AST only: exact macro_rules token tree, no body lowering,
         // parsing generated display text, discovery or adapter expansion.
         let transient = parent
@@ -262,7 +293,16 @@ fn require_chain(
                 return Err(missing());
             }
         }
-        require_chain(db, parent, publication, &parent_origins, name, seen, bytes)?;
+        require_chain(
+            db,
+            parent,
+            publication,
+            &parent_origins,
+            name,
+            expected,
+            seen,
+            bytes,
+        )?;
     } else {
         // Terminal original macro declaration. Source and scan identities are
         // joined by actual current source/header/context and declaration range.
@@ -328,7 +368,14 @@ fn require_chain(
                 {
                     return Err(missing());
                 }
-                type_scope(db, publication, scope, &source.outline.parse.profile, name)?;
+                type_scope(
+                    db,
+                    publication,
+                    scope,
+                    &source.outline.parse.profile,
+                    name,
+                    expected,
+                )?;
                 checked.push((source, header.body));
                 header.body
             };
