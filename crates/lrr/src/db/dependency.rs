@@ -10,6 +10,7 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum InputKey {
     SourceDependencies,
+    ScopeCertificateSelection(Digest),
     GeneratedSyntax(Digest),
     RetainedSyntax(Digest),
     DiscoverySeal(super::seals::SealKey),
@@ -32,6 +33,10 @@ pub enum InputKey {
 }
 #[derive(Debug, Clone)]
 pub enum InputValue {
+    ScopeCertificateSelection {
+        selection: Digest,
+        candidate_set: Digest,
+    },
     SourceDependencies(Arc<crate::source::dependencies::SourceDependencies>),
     GeneratedSyntax(Arc<crate::expand::generated_syntax::GeneratedSyntaxInput>),
     RetainedSyntax(Arc<super::retained_syntax::RetainedSyntaxInput>),
@@ -101,7 +106,7 @@ impl InputValue {
             Self::RetainedSyntax(input) => add(input.metadata_bytes()?)?,
             Self::DiscoverySeal(input) => add(input.metadata_bytes()?)?,
             Self::CapturedSource(source) => add(source.metadata_bytes()?)?,
-            Self::ExpansionEpoch(_) => {}
+            Self::ExpansionEpoch(_) | Self::ScopeCertificateSelection { .. } => {}
             Self::DefinitionSource(k) => add(k.profile.semantics.capacity())?,
             Self::UnitCompileEnv(env) => add(env.allocated_bytes()?)?,
             Self::ModuleRecord { captured, .. } => add(captured.metadata_bytes()?)?,
@@ -137,6 +142,13 @@ impl InputValue {
         Ok(bytes)
     }
     pub fn matches(&self, k: &InputKey) -> bool {
+        if let (
+            Self::ScopeCertificateSelection { selection, .. },
+            InputKey::ScopeCertificateSelection(key),
+        ) = (self, k)
+        {
+            return selection == key;
+        }
         if let (Self::RetainedSyntax(input), InputKey::RetainedSyntax(key)) = (self, k) {
             return input.key().content == *key;
         }
@@ -188,6 +200,14 @@ impl InputValue {
             _ => "lrr/v2/input-value",
         });
         match self {
+            Self::ScopeCertificateSelection {
+                selection,
+                candidate_set,
+            } => {
+                e.u32(30);
+                e.digest(*selection);
+                e.digest(*candidate_set);
+            }
             Self::RetainedSyntax(input) => {
                 e.u32(29);
                 e.record(input.as_ref());
@@ -326,6 +346,10 @@ impl StableEncode for InputKey {
     const DOMAIN: &'static str = "lrr/v2/input-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::ScopeCertificateSelection(id) => {
+                e.u32(30);
+                e.digest(*id);
+            }
             Self::RetainedSyntax(id) => {
                 e.u32(29);
                 e.digest(*id);

@@ -35,6 +35,45 @@ pub trait Provider {
 }
 pub struct SyntaxProvider;
 impl SyntaxProvider {
+    fn current_module_name(
+        db: &mut Database,
+        key: &super::key::CurrentModuleNameKey,
+    ) -> Result<crate::source::changes::PreparedSourceView, Diagnostic> {
+        use crate::source::{changes::SourceSelection, snapshot::SourcePath};
+        let fail = |message: &str| Diagnostic::new("LRR-E-QUERY-REQUEST", message.into());
+        key.source.parse.profile.validate_source()?;
+        if key.path.len() > 64 * 1024
+            || key.bucket.name.len() > 64 * 1024
+            || key.bucket.scope.owner.is_some()
+            || key.heap_bytes() > 32 * 1024 * 1024
+        {
+            return Err(fail("current module-name request limit/owner differs"));
+        }
+        let selection = SourceSelection {
+            path: SourcePath::new(key.path.clone())?,
+            outline: key.source.clone(),
+        };
+        if selection.canonical()? != selection
+            || crate::frontend::names::owned_name(
+                &key.bucket.name,
+                key.source.parse.profile.edition,
+            )?
+            .as_str()
+                != key.bucket.name
+        {
+            return Err(fail("current module-name request is not canonical"));
+        }
+        if !matches!(db.input(&InputKey::CapturedSource(selection.location_identity())).as_deref(), Some(InputValue::CapturedSource(actual)) if actual == &selection)
+        {
+            return Err(fail("current module-name captured source differs"));
+        }
+        if !matches!(db.input(&InputKey::CrateCfg(key.source.crate_key)).as_deref(), Some(InputValue::CrateCfg(cfg)) if cfg.fingerprint() == key.source.cfg)
+        {
+            return Err(fail("current module-name source cfg differs"));
+        }
+        db.prepared_source(&selection)?
+            .ok_or_else(|| fail("current module-name source lease absent"))
+    }
     /// Pure preparation of this reached pattern's exact owning namespace.
     /// No macro, source discovery, file capture or callable body executes here.
     fn original_scope_inputs(
@@ -316,6 +355,20 @@ impl Provider for SyntaxProvider {
     fn execute(&self, db: &mut Database, key: &QueryKey) -> QueryPoll<Provided> {
         let current_expansion = matches!(key, QueryKey::CurrentExpansionInput(_));
         let value = match key {
+            QueryKey::CurrentModuleName(key) => {
+                let source = match Self::current_module_name(db, key) {
+                    Ok(source) => source,
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                };
+                return match crate::frontend::current_module_names::CurrentModuleNameObservation::prepare(
+                    db, &source, &key.bucket.scope, key.bucket.namespace, &key.bucket.name,
+                ) {
+                    QueryPoll::Ready(Ok(value)) if value.matches_request(key) => Provided::pure(QueryValue::CurrentModuleName(value)),
+                    QueryPoll::Ready(Ok(_)) => Provided::error("LRR-E-INTERNAL-SNAPSHOT", "current module-name answer request differs"),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(request) => QueryPoll::NeedInput(request),
+                };
+            }
             QueryKey::SealedName(key) => {
                 if key.seal.domain
                     != (super::seals::SealDomain::Scope {

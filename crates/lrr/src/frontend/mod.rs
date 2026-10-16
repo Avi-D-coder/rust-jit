@@ -84,3 +84,5 @@ pub(crate) mod primitive_type_names;
 pub(crate) mod type_name_namespace;
 
 pub(crate) mod source_types;
+
+pub mod current_module_names;

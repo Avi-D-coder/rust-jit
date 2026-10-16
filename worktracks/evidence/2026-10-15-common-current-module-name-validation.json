@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "at": "2026-10-16T04:08:25.342356+00:00",
+  "claim": "LOCAL-024",
+  "tasks": [
+    "T024",
+    "T050",
+    "T051",
+    "M014"
+  ],
+  "status": "scoped_component_validated_production_binding_and_architecture_held",
+  "owning_platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "source_packet": "artifacts/macos-first/common-current-module-name-v3/SOURCE.json",
+  "source_packet_sha256": "491e4580382d8345d982f0272e7b540b7bd7197cf692a717de8ea3699cf9c60c",
+  "baseline": "f0a30dcc2a67799ab3bab462ec930cf938016735",
+  "source_rows": 110,
+  "changes": [
+    "Pure typed CurrentModuleName projection from exact admitted source and genuine current selected scope certificate and SealedName answer",
+    "Semantic answer fingerprint excludes provenance while actual source/cfg/selector/epoch/seal/query dependencies remain recorded",
+    "Owned bounded source/name answer and genuine evidence stamps retain zero input/query payload roots",
+    "Actual observation Arc counted once, cached external pin and inner-only retirement tracked",
+    "General memo validation stops an obsolete dependency suffix after known mismatch and recomputes current provider"
+  ],
+  "validation_history": [
+    {
+      "version": 1,
+      "receipt": "artifacts/macos-first/sol-common-current-module-name-validation-v1/RELEASE.json",
+      "receipt_sha256": "79adab2dc0475fc6b9b172be63b752a8eb922aae2521a968d9a3236345132b73",
+      "source_member": "0fff6daf10cb9bd6d065d50a2b54da083d274c6a31c5a219b730d77e1401e030",
+      "source_packet_sha256": "ffe49313de030beafa20041e0492ce99e064c5219805c03e47dc90117b09d1c3",
+      "actual_terminals": {
+        "launch": "30d0a9",
+        "session": 96042,
+        "pid": 97745,
+        "terminal": "7f4a42",
+        "wrapper_exit": 1,
+        "cargo_exit": 101,
+        "elapsed_seconds": 10.876112208992708
+      },
+      "bodies": 0,
+      "passed": 0,
+      "failed": 0,
+      "source_unchanged": true,
+      "target_released": true
+    },
+    {
+      "version": 2,
+      "receipt": "artifacts/macos-first/sol-common-current-module-name-validation-v2/RELEASE.json",
+      "receipt_sha256": "e46d5ae8ddd67a3e69e28576638a991e39107048fdfbecce3e96c4e07fa2a0d4",
+      "source_member": "b76e7ef7bd71d1ae9d0770a25ef681d504f6ec1df979274896aca82a7f6936db",
+      "source_packet_sha256": "2aecfd4c59b42ac55eda7cb8aa4ac4dd3510301b0608a960a1f9b69ccfc64b5b",
+      "actual_terminals": {
+        "compile": {
+          "launch": "242878",
+          "session": 10751,
+          "pid": 97913,
+          "terminal": "ea7430",
+          "wrapper_exit": 0,
+          "cargo_exit": 0,
+          "seconds": 21.52078508300474
+        },
+        "current_module_name": {
+          "launch": "8cfb5e",
+          "session": 9708,
+          "pid": 98019,
+          "terminal": "0742ed",
+          "wrapper_exit": 1,
+          "cargo_exit": 101,
+          "seconds": 2.9917798330425285
+        }
+      },
+      "bodies": 4,
+      "passed": 2,
+      "failed": 2,
+      "source_unchanged": true,
+      "target_released": true
+    },
+    {
+      "version": 3,
+      "receipt": "artifacts/macos-first/sol-common-current-module-name-validation-v3/RELEASE.json",
+      "receipt_sha256": "dd6d3bd637a2c7776eda96dd2d9a0145590099a6387509f7c5e85f4c4ee268fd",
+      "source_member": "3de7fd298bd6db206a58ec59589d2654dfea7dc132dcb23ca991ee0aa2647320",
+      "source_packet_sha256": "491e4580382d8345d982f0272e7b540b7bd7197cf692a717de8ea3699cf9c60c",
+      "actual_terminals": {
+        "compile": {
+          "launch": "7c8182",
+          "session": 77834,
+          "pid": 98422,
+          "terminal": "453b74",
+          "wrapper_exit": 0,
+          "cargo_exit": 0,
+          "seconds": 25.84348504099762
+        },
+        "sequence": {
+          "launch": "923015",
+          "session": 68806,
+          "terminal": "17be2d",
+          "wrapper_exit": 0,
+          "scopes": {
+            "current-module-name": {
+              "terminal_json_sha256": "93cf132e24a9d7f25efc40d271f40c1303fa33265d1ef31e857d24a787dfc120",
+              "child_terminal_sha256": "49a0004a67532b2f0036008c4cc5c70b6dfbac41cfc4fedd3b0b2720b5531adf",
+              "cargo_pid": 98597,
+              "cargo_exit": 0,
+              "bodies": 4,
+              "passed": 4,
+              "failed": 0,
+              "elapsed_seconds": 5.263360583980102
+            },
+            "selector-two": {
+              "terminal_json_sha256": "e2afe02c666a79d1537008cf3e10952167482a9bcffd30acab98142c8a0b2501",
+              "child_terminal_sha256": "9ce46bcaf928740b02537bb6f3c2e38c02b53f09e0afcbef51e6b46ccd89e0d6",
+              "cargo_pid": 98615,
+              "cargo_exit": 0,
+              "bodies": 2,
+              "passed": 2,
+              "failed": 0,
+              "elapsed_seconds": 2.9251909580198117
+            },
+            "discovery-suspension": {
+              "terminal_json_sha256": "67283a6e334721aeb794af2f4eea7a605c63010191e3ace041f51a3a32a4ef19",
+              "child_terminal_sha256": "f00f5e031bb31cc81e28193f21c89931699adda501be72ff876760207992affd",
+              "cargo_pid": 98624,
+              "cargo_exit": 0,
+              "bodies": 1,
+              "passed": 1,
+              "failed": 0,
+              "elapsed_seconds": 24.831168250006158
+            },
+            "stale-discovery": {
+              "terminal_json_sha256": "b73dc9ac3194be7ceec508d54d479f17441e9aeabb28a48dc0ac19638c288096",
+              "child_terminal_sha256": "1964adb3f5bb635a3c11e021fcbc8ba020f27f02ba7dd56ceec24b5c438a5cf7",
+              "cargo_pid": 98806,
+              "cargo_exit": 0,
+              "bodies": 1,
+              "passed": 1,
+              "failed": 0,
+              "elapsed_seconds": 0.14483037503669038
+            },
+            "deleted-capture": {
+              "terminal_json_sha256": "3bdc52a82f3b8f3f7a6d3e7ae69a24235bd54ba2827eb59f2b894d8f0adf8880",
+              "child_terminal_sha256": "188557f768c6f97b993a904b9ee58b9f5857e22bf10c86038e29f44d094b6014",
+              "cargo_pid": 98810,
+              "cargo_exit": 0,
+              "bodies": 1,
+              "passed": 1,
+              "failed": 0,
+              "elapsed_seconds": 0.11894345801556483
+            }
+          }
+        }
+      },
+      "bodies": 9,
+      "passed": 9,
+      "failed": 0,
+      "source_unchanged": true,
+      "target_released": true
+    }
+  ],
+  "latest_component_controls": {
+    "passed": 9,
+    "failed": 0,
+    "groups": {
+      "current_module_name": 4,
+      "selector": 2,
+      "pure_discovery": 3
+    },
+    "native_oracle_control_unexecuted": 1,
+    "strict": "unexecuted",
+    "full_milestone": "unexecuted",
+    "warnings": "Actual dead-code warnings retained; see frozen raw stderr and RELEASE.json."
+  },
+  "runtime_acceptance_increment": 0,
+  "full_fixture_acceptance_increment": 0,
+  "architecture_holds": [
+    "E-R5-005",
+    "MA001",
+    "MA002",
+    "MA003",
+    "MA004",
+    "MA005",
+    "MA006",
+    "MA007",
+    "MA008"
+  ],
+  "remaining": [
+    "Production source/macro body entry integration and legacy evaluator removal",
+    "Real owned entered local prefix, Type declaration and generic use-site hygiene, retained mixed-origin authority",
+    "No stock total or full-fixture pass inferred from scoped controls"
+  ],
+  "source_only_followups": [
+    "Frozen117 composition: shared local scalar constraints, symbolic Str and immutable UTF8 buffer/reference storage; uncompiled until separate validator terminal",
+    "Owned entered/local roots and source-certified ordinary string literal VM route in disjoint active worker source; excluded from validated110 checkpoint"
+  ]
+}

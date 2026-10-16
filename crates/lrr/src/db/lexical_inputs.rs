@@ -60,6 +60,76 @@ impl Database {
                 )
             })
     }
+    /// Pure current selection with a relevant missing/present dependency. The
+    /// locator grants no name authority: selection still reads the genuine
+    /// admitted scope certificate and validates its actual source/epoch.
+    pub(crate) fn current_lexical_scope_certificate(
+        &mut self,
+        source: &crate::source::changes::SourceSelection,
+        scope: &crate::syntax::outline::ScopeKey,
+    ) -> Result<Option<Arc<InputValue>>, Diagnostic> {
+        self.current_scope_certificate(source, scope, crate::source::manifest::Namespace::Value)
+    }
+    pub(crate) fn current_scope_certificate(
+        &mut self,
+        source: &crate::source::changes::SourceSelection,
+        scope: &crate::syntax::outline::ScopeKey,
+        namespace: crate::source::manifest::Namespace,
+    ) -> Result<Option<Arc<InputValue>>, Diagnostic> {
+        let (key, expected) = self
+            .scope_certificates
+            .selection_row(source, scope, namespace);
+        let current = self.input(&key);
+        match current.as_deref() {
+            Some(actual)
+                if actual.matches(&key) && actual.fingerprint() == expected.fingerprint() => {}
+            None if matches!(expected, InputValue::ScopeCertificateSelection { candidate_set, .. }
+                if candidate_set == missing_fingerprint()) => {}
+            _ => {
+                return Err(fault(
+                    "LRR-E-INTERNAL-SNAPSHOT",
+                    "scope certificate selector input/index differs",
+                ));
+            }
+        }
+        // Epoch absence is a dependency too. An invalid present row must not
+        // silently turn a stale selected certificate into a negative answer.
+        if self
+            .input(&InputKey::ExpansionEpoch)
+            .as_deref()
+            .is_some_and(|value| !matches!(value, InputValue::ExpansionEpoch(_)))
+        {
+            return Err(fault(
+                "LRR-E-INTERNAL-SNAPSHOT",
+                "scope certificate epoch input differs",
+            ));
+        }
+        let selected = self.optional_scope_certificate(source, scope, namespace)?;
+        if let Some(selected) = selected {
+            let InputValue::DiscoverySeal(input) = selected.as_ref() else {
+                return Err(fault(
+                    "LRR-E-INTERNAL-SNAPSHOT",
+                    "selected scope certificate differs",
+                ));
+            };
+            let current = self.input(&InputKey::DiscoverySeal(input.seal.key()));
+            // The selector just returned this exact immutable input allocation;
+            // input() records its cached fingerprint without hashing the seal's
+            // complete source/producer payload again.
+            if !current
+                .as_ref()
+                .is_some_and(|actual| Arc::ptr_eq(actual, &selected))
+            {
+                return Err(fault(
+                    "LRR-E-INTERNAL-SNAPSHOT",
+                    "selected scope certificate input changed",
+                ));
+            }
+            Ok(current)
+        } else {
+            Ok(None)
+        }
+    }
     /// Optional inference may preserve unresolved syntax if no owning seal
     /// exists. Ambiguous, invalid and stale publication errors remain errors.
     pub(crate) fn optional_lexical_scope_certificate(
@@ -67,12 +137,16 @@ impl Database {
         source: &crate::source::changes::SourceSelection,
         scope: &crate::syntax::outline::ScopeKey,
     ) -> Result<Option<Arc<InputValue>>, Diagnostic> {
+        self.optional_scope_certificate(source, scope, crate::source::manifest::Namespace::Value)
+    }
+    fn optional_scope_certificate(
+        &self,
+        source: &crate::source::changes::SourceSelection,
+        scope: &crate::syntax::outline::ScopeKey,
+        namespace: crate::source::manifest::Namespace,
+    ) -> Result<Option<Arc<InputValue>>, Diagnostic> {
         let mut selected = None;
-        for key in self.scope_certificates.candidates(
-            source,
-            scope,
-            crate::source::manifest::Namespace::Value,
-        ) {
+        for key in self.scope_certificates.candidates(source, scope, namespace) {
             let row = self
                 .inputs
                 .get(&InputKey::DiscoverySeal(key.clone()))
@@ -95,7 +169,7 @@ impl Database {
                 )
             })?;
             if certified.scope != *scope
-                || certified.namespace != crate::source::manifest::Namespace::Value
+                || certified.namespace != namespace
                 || certified.edition != source.outline.parse.profile.edition
                 || !input.sources.contains(source)
             {

@@ -81,6 +81,8 @@ struct QueryPin {
     reference_header:
         std::sync::Weak<crate::syntax::closed_reference_signatures::ReferenceHeaderPlan>,
     pattern_plan: std::sync::Weak<crate::syntax::pattern_plan::PatternSourcePlan>,
+    module_name:
+        std::sync::Weak<crate::frontend::current_module_names::CurrentModuleNameObservation>,
 }
 impl QueryPin {
     fn new(value: &Arc<QueryValue>) -> Self {
@@ -93,8 +95,10 @@ impl QueryPin {
             inventory: std::sync::Weak::new(),
             reference_header: std::sync::Weak::new(),
             pattern_plan: std::sync::Weak::new(),
+            module_name: std::sync::Weak::new(),
         };
         match value.as_ref() {
+            QueryValue::CurrentModuleName(v) => pin.module_name = Arc::downgrade(v),
             QueryValue::ReferenceHeader(v) => pin.reference_header = Arc::downgrade(v),
             QueryValue::PatternPlan(v) => {
                 pin.pattern_plan = Arc::downgrade(v);
@@ -146,6 +150,11 @@ impl QueryPin {
             || self.pattern_plan.strong_count()
                 > inner
                     .get(&(self.pattern_plan.as_ptr() as usize))
+                    .copied()
+                    .unwrap_or(0)
+            || self.module_name.strong_count()
+                > inner
+                    .get(&(self.module_name.as_ptr() as usize))
                     .copied()
                     .unwrap_or(0)
             || self.value.upgrade().is_some_and(|value| {
@@ -230,6 +239,7 @@ impl Database {
             *count += 1;
             if *count == 1 {
                 let allocation = match memo.value.as_ref() {
+                    QueryValue::CurrentModuleName(v) => Some(Arc::as_ptr(v) as usize),
                     QueryValue::ReferenceHeader(v) => Some(Arc::as_ptr(v) as usize),
                     QueryValue::PatternPlan(v) => {
                         if plans.insert(Arc::as_ptr(v)) {
@@ -498,8 +508,10 @@ impl Database {
         let mut cached_bodies = BTreeMap::new();
         let mut reference_header_allocations = std::collections::BTreeSet::new();
         let mut pattern_plan_allocations = std::collections::BTreeSet::new();
+        let mut module_name_allocations = std::collections::BTreeSet::new();
         let mut cached_reference_headers = BTreeMap::new();
         let mut cached_pattern_plans = BTreeMap::new();
+        let mut cached_module_names = BTreeMap::new();
         let mut cached_plan_parses = BTreeMap::new();
         let (memo_outer, memo_inner) = self.memo_owners();
         // A retained Product handle does not clone its nested index handle.
@@ -546,6 +558,17 @@ impl Database {
                 0
             };
             let plan_bytes = match memo.value.as_ref() {
+                QueryValue::CurrentModuleName(observation) => {
+                    let pinned = QueryPin::new(&memo.value).external(&memo_outer, &memo_inner);
+                    cached_module_names
+                        .entry(Arc::as_ptr(observation))
+                        .and_modify(|(_, previous): &mut (_, bool)| *previous |= pinned)
+                        .or_insert((observation, pinned));
+                    account_add(
+                        observation.exclusive_metadata_bytes(),
+                        2 * std::mem::size_of::<usize>(),
+                    )?
+                }
                 QueryValue::ReferenceHeader(plan) => {
                     let pinned = Arc::strong_count(&memo.value)
                         > memo_outer[&(Arc::as_ptr(&memo.value) as usize)]
@@ -622,6 +645,17 @@ impl Database {
                 usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, bytes)?;
             }
         }
+        for (allocation, (observation, pinned)) in cached_module_names {
+            module_name_allocations.insert(allocation);
+            let bytes = account_add(
+                observation.exclusive_metadata_bytes(),
+                2 * std::mem::size_of::<usize>(),
+            )?;
+            usage.memo_bytes = account_add(usage.memo_bytes, bytes)?;
+            if pinned {
+                usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, bytes)?;
+            }
+        }
         for (allocation, (parsed, pinned)) in cached_plan_parses {
             if parse_allocations.insert(allocation) {
                 let bytes = parsed.estimated_bytes();
@@ -680,6 +714,10 @@ impl Database {
             .collect();
         for value in &retired_values {
             let inner_bytes = match value.as_ref() {
+                QueryValue::CurrentModuleName(v) => account_add(
+                    v.exclusive_metadata_bytes(),
+                    2 * std::mem::size_of::<usize>(),
+                )?,
                 QueryValue::BodyStructure(v) => {
                     account_add(v.estimated_bytes(), 2 * std::mem::size_of::<usize>())?
                 }
@@ -785,6 +823,20 @@ impl Database {
             .collect();
         for plan in &query_pattern_plans {
             let bytes = account_add(plan.metadata_bytes(), 2 * std::mem::size_of::<usize>())?;
+            usage.memo_bytes = account_add(usage.memo_bytes, bytes)?;
+            usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, bytes)?;
+        }
+        let query_module_names: Vec<_> = self
+            .query_pins
+            .values()
+            .filter(|pin| module_name_allocations.insert(pin.module_name.as_ptr()))
+            .filter_map(|pin| pin.module_name.upgrade())
+            .collect();
+        for observation in &query_module_names {
+            let bytes = account_add(
+                observation.exclusive_metadata_bytes(),
+                2 * std::mem::size_of::<usize>(),
+            )?;
             usage.memo_bytes = account_add(usage.memo_bytes, bytes)?;
             usage.pinned_memo_bytes = account_add(usage.pinned_memo_bytes, bytes)?;
         }
@@ -949,6 +1001,7 @@ impl Database {
                     | InputValue::DiscoverySeal(_)
                     | InputValue::GeneratedSyntax(_)
                     | InputValue::RetainedSyntax(_)
+                    | InputValue::ScopeCertificateSelection { .. }
             )
         }) {
             return Err(fault(
@@ -2064,6 +2117,31 @@ impl Database {
         }
         let prepared_sources = self.module_prepared_registry(modules, ordinary_modules)?;
         let scope_certificates = self.scope_certificates.with_input(&input)?;
+        // Stage only affected selector rows alongside their genuine immutable
+        // seals. Their fixed-size fingerprints record relevant new/ambiguous
+        // candidates without making a full-world census a query dependency.
+        let selector_rows = scope_certificates
+            .as_ref()
+            .unwrap_or(&self.scope_certificates)
+            .selection_rows(&input);
+        for (key, value) in selector_rows {
+            let fingerprint = value.fingerprint();
+            if self
+                .inputs
+                .get(&key)
+                .is_some_and(|row| row.fingerprint == fingerprint)
+            {
+                continue;
+            }
+            extra_bytes = account_add(extra_bytes, input_metadata_bytes(&key, &value)?)?;
+            staged.insert(
+                key,
+                InputRecord {
+                    fingerprint,
+                    value: Arc::new(value),
+                },
+            );
+        }
         let usage =
             self.cache_usage_with_prepared(&prepared_sources, prepared_sources.capacity())?;
         let budgets = self.run_budgets.unwrap_or_default();
@@ -2676,6 +2754,12 @@ impl Database {
                 };
                 if current != expected {
                     matches = false;
+                }
+                if !matches {
+                    // The old result cannot be reused. Its remaining query
+                    // edges may demand inputs from an obsolete source/epoch;
+                    // let the provider discover the current dependency set.
+                    break;
                 }
             }
             let validation = self.collectors.pop().expect("validation collector");

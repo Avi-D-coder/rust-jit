@@ -18,6 +18,7 @@ pub struct Bucket {
 }
 #[derive(Debug, Clone)]
 pub enum QueryValue {
+    CurrentModuleName(Arc<crate::frontend::current_module_names::CurrentModuleNameObservation>),
     SealedName {
         key: Box<super::key::SealedNameKey>,
         lookup: crate::frontend::names::NameLookup,
@@ -70,6 +71,10 @@ impl QueryValue {
         }
     }
     pub fn matches(&self, key: &QueryKey) -> bool {
+        if let (Self::CurrentModuleName(value), QueryKey::CurrentModuleName(request)) = (self, key)
+        {
+            return value.matches_request(request);
+        }
         if let (Self::SealedName { key: actual, .. }, QueryKey::SealedName(expected)) = (self, key)
         {
             return actual == expected;
@@ -138,6 +143,10 @@ impl QueryValue {
     pub fn fingerprint(&self) -> Digest {
         let mut e = StableEncoder::new("lrr/v2/query-value");
         match self {
+            Self::CurrentModuleName(value) => {
+                e.u32(33);
+                e.digest(value.semantic_identity());
+            }
             Self::SealedName { key, lookup } => {
                 e.u32(25);
                 e.record(key.as_ref());
@@ -236,6 +245,9 @@ impl QueryValue {
     }
     pub fn estimated_bytes(&self) -> usize {
         std::mem::size_of::<Self>().saturating_add(match self {
+            Self::CurrentModuleName(value) => value
+                .exclusive_metadata_bytes()
+                .saturating_add(2 * std::mem::size_of::<usize>()),
             Self::SealedName { key, lookup } => std::mem::size_of::<super::key::SealedNameKey>()
                 .saturating_add(key.bucket.scope.heap_bytes())
                 .saturating_add(key.bucket.name.capacity())

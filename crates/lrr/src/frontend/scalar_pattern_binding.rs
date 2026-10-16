@@ -991,4 +991,7 @@ mod tests {
             Digest::of_bytes(b"printed v")
         );
     }
+    mod current_scope_selector {
+        include!("pattern_binding_selector_tests.rs");
+    }
 }

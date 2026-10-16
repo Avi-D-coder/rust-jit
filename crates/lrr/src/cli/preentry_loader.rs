@@ -343,7 +343,8 @@ impl Packet {
         }
         for event in &db.trace.events {
             match &event.key {
-                QueryKey::SealedName(_)
+                QueryKey::CurrentModuleName(_)
+                | QueryKey::SealedName(_)
                 | QueryKey::DiscoverySeal(_)
                 | QueryKey::ScopeDeclarationInventory(_)
                 | QueryKey::ParseFile(_)

@@ -47,9 +47,46 @@ impl StableEncode for SealedNameKey {
         e.record(&self.bucket);
     }
 }
+/// Exact source/module request. A key is a demand, never name authority.
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+pub struct CurrentModuleNameKey {
+    pub source: OutlineKey,
+    pub path: String,
+    pub bucket: BucketKey,
+}
+impl CurrentModuleNameKey {
+    pub(crate) fn heap_bytes(&self) -> usize {
+        self.path
+            .capacity()
+            .saturating_add(self.source.parse.profile.semantics.capacity())
+            .saturating_add(
+                self.source
+                    .module_path
+                    .capacity()
+                    .saturating_mul(std::mem::size_of::<String>()),
+            )
+            .saturating_add(
+                self.source
+                    .module_path
+                    .iter()
+                    .fold(0usize, |n, part| n.saturating_add(part.capacity())),
+            )
+            .saturating_add(self.bucket.scope.heap_bytes())
+            .saturating_add(self.bucket.name.capacity())
+    }
+}
+impl StableEncode for CurrentModuleNameKey {
+    const DOMAIN: &'static str = "lrr/v1/current-module-name-key";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.record(&self.source);
+        e.string(&self.path);
+        e.record(&self.bucket);
+    }
+}
 pub use crate::frontend::constants::query_identity::ConstQueryIdentity as ConstantKey;
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum QueryKey {
+    CurrentModuleName(Box<CurrentModuleNameKey>),
     SealedName(Box<SealedNameKey>),
     DiscoverySeal(super::seals::SealKey),
     ScopeDeclarationInventory(super::seals::SealKey),
@@ -72,6 +109,9 @@ pub enum QueryKey {
 impl QueryKey {
     pub fn heap_bytes(&self) -> usize {
         match self {
+            Self::CurrentModuleName(key) => {
+                std::mem::size_of::<CurrentModuleNameKey>().saturating_add(key.heap_bytes())
+            }
             Self::SealedName(key) => {
                 std::mem::size_of::<SealedNameKey>()
                     + key.bucket.scope.heap_bytes()
@@ -102,6 +142,7 @@ impl QueryKey {
     }
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::CurrentModuleName(_) => "CurrentModuleName",
             Self::SealedName(_) => "SealedName",
             Self::DiscoverySeal(_) => "DiscoverySeal",
             Self::ScopeDeclarationInventory(_) => "ScopeDeclarationInventory",
@@ -127,6 +168,10 @@ impl StableEncode for QueryKey {
     const DOMAIN: &'static str = "lrr/v2/query-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::CurrentModuleName(key) => {
+                e.u32(33);
+                e.record(key.as_ref());
+            }
             Self::SealedName(key) => {
                 e.u32(25);
                 e.record(key.as_ref());

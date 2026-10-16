@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "at": "2026-10-16T03:21:19.087031+00:00",
+  "at": "2026-10-16T03:29:12.222007+00:00",
   "claim": "LOCAL-024",
   "tasks": [
     "T014",
@@ -10,7 +10,7 @@
     "T051",
     "M014"
   ],
-  "state": "parameter78_core5pass3fail_missing_common_Drop;pattern_retirement102_test_successor26pass_staged",
+  "state": "latest_root_module_name110_pass9; latest_stock_bank1pass4fail; architecture_and_runtime_milestone_held",
   "source_packet": "artifacts/macos-first/common-call-result-source-v1/SOURCE.json",
   "source_packet_sha256": "67ca07c6ca61cfc6f0e4f8acd37235797205a41687993ec16e75aba5a923a36e",
   "source_baseline": "f0a30dcc2a67799ab3bab462ec930cf938016735",
@@ -952,12 +952,40 @@
         }
       },
       "new_complete_upstream_fixtures": 0
+    },
+    "relevant_scope_selector104": {
+      "distinct_bodies": 27,
+      "passed": 27,
+      "failed": 0,
+      "terminals": [
+        "e4c1ff/0",
+        "64e6c6/0",
+        "429470/0"
+      ],
+      "scope": "New2actual selector dependency/currentness controls +9legacybindingauthority +12foreignconstant +4retainedlexical.27distinct samefrozen104. Stabletag30 audit sourceonly; strict/fullmilestoneunexecuted. Newpurequeryreader tested, productionglobalcensus notremoved. No stockincrement.",
+      "receipts": {
+        "RELEASE.json": {
+          "path": "artifacts/macos-first/sol-common-scope-selection-validation-v1/RELEASE.json",
+          "sha256": "4c032230d331e3115f818058b393ff17efb248c1d4b2ec5bb5e158908ae523e8"
+        },
+        "EVIDENCE-HASHES.json": {
+          "path": "artifacts/macos-first/sol-common-scope-selection-validation-v1/EVIDENCE-HASHES.json",
+          "sha256": "a2e738a612e81464f3510879930205decf29c44b83023351215766ca8a03fd60"
+        },
+        "HANDOFF.md": {
+          "path": "artifacts/macos-first/sol-common-scope-selection-validation-v1/HANDOFF.md",
+          "sha256": "d36f3eb1e42ac53ca66705eeedcbd778fc711a78f333c4dbe132f31680ec159a"
+        }
+      },
+      "new_complete_upstream_fixtures": 0
     }
   },
   "current_repairs": [
-    "Current nominal positives require genuine source-selected Drop/no-user-Drop witness; no missing-destructor or empty-inventory inference. GoalEngine/complete relevant impl-catalog and resume integration remain prerequisites.",
-    "Exact common pattern retirement101 source queued for asynchronous review/compilation, no production pattern switch or binding authority closure.",
-    "Genuine generated outer macro-boundary receipt and relevant cached pattern occurrence proof remain independent source-only work."
+    "Source-selected Drop/no-user-Drop witness remains missing; no destructor-none or empty-inventory shortcut.",
+    "Shared Product retirement and selector controls are validated scoped components; production structural binding/census replacement remains held.",
+    "Current module-name110 passed9 scoped controls, including strict source deletion after shared memo validation fix; see separate exact evidence.",
+    "Bodycontext112 retained failed-control history plus6 independent passes. New exact import/bodyType/owned prefix source is separate uncompiled work; not a passing body transport feature.",
+    "Frozen scalar/symbolicStr/backing117 failed compilation in two external control API leaves (4errors,0bodies); exact test-only successor is validating, no stock increment."
   ],
   "architecture_holds": [
     "MA001-MA008 remain open",
@@ -976,7 +1004,17 @@
     "actual_commit": "d5e9eecd68790b38eb3ae5c1a408729a804cf0da",
     "actual_push": "fc1555/0; f0a30dcc2a..d5e9eecd68; local HEAD and origin tracking verified51777a/0",
     "scope": "Exact V3 frozen54 plus13 documentation/evidence files; WIP, not integration/runtime/fullfixture/task acceptance. Later condition57/identity59/result61 and live field/product changes are not this pushed source.",
-    "latest_source_checkpoint": "4da79b710efaddb99656911bf32f93f2d4425974",
-    "next_source_checkpoint_packet": "artifacts/macos-first/common-pattern-retirement-v3/SOURCE.json"
+    "latest_source_checkpoint": "2032a7a570dce4b21c49c4502c548d40c18754a7",
+    "next_source_checkpoint_packet": "artifacts/macos-first/common-current-module-name-v3/SOURCE.json",
+    "latest_source_checkpoint_scope": "Exact compiled retirement102/testonlyV3,26currentcontrols plus10previoussnapshot separate. PushedsourceWIP, not milestone/integration.",
+    "next_source_checkpoint_scope": "Exact validated110 + explicitly selected source-only evidence/plans. Later117/live body/local/string successors excluded."
+  },
+  "latest_root_evidence": "worktracks/evidence/2026-10-15-common-current-module-name-validation.json",
+  "latest_stock_observation": {
+    "receipt": "artifacts/macos-first/sol-common-pipeline-stock-cli-validation-v1/RELEASE.json",
+    "runtime_contract_passes": 1,
+    "interpreter_failures": 4,
+    "full_fixture_passes": 0,
+    "aggregate_new_unique_passes": "unassessed; no inferred global increment"
   }
 }

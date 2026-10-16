@@ -33,9 +33,40 @@ impl SelectionKey {
     }
 }
 
+impl StableEncode for SelectionKey {
+    const DOMAIN: &'static str = "lrr/v1/scope-certificate-selection";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.digest(self.source);
+        e.digest(self.scope);
+        e.u32(self.namespace.tag());
+        e.u16(self.edition);
+    }
+}
+#[derive(Clone)]
+struct SelectionEntry {
+    candidates: BTreeSet<SealKey>,
+    fingerprint: Digest,
+}
+impl SelectionEntry {
+    fn new() -> Self {
+        Self {
+            candidates: BTreeSet::new(),
+            fingerprint: missing_fingerprint(),
+        }
+    }
+    fn insert(&mut self, seal: SealKey) {
+        self.candidates.insert(seal);
+        let mut e = StableEncoder::new("lrr/v1/scope-certificate-candidates");
+        e.u64(self.candidates.len() as u64); // bounded at publication
+        for seal in &self.candidates {
+            e.record(seal);
+        }
+        self.fingerprint = e.finish();
+    }
+}
 #[derive(Default, Clone)]
 pub(super) struct ScopeCertificateIndex {
-    entries: BTreeMap<SelectionKey, BTreeSet<SealKey>>,
+    entries: BTreeMap<SelectionKey, SelectionEntry>,
     associations: usize,
     bytes: usize,
 }
@@ -69,7 +100,7 @@ impl ScopeCertificateIndex {
             if current
                 .entries
                 .get(&key)
-                .is_some_and(|keys| keys.contains(&seal))
+                .is_some_and(|keys| keys.candidates.contains(&seal))
             {
                 continue;
             }
@@ -89,7 +120,7 @@ impl ScopeCertificateIndex {
                 bytes = account_add(
                     bytes,
                     128 + std::mem::size_of::<SelectionKey>()
-                        + std::mem::size_of::<BTreeSet<SealKey>>(),
+                        + std::mem::size_of::<SelectionEntry>(),
                 )?;
             }
             if bytes > MAX_METADATA {
@@ -99,11 +130,46 @@ impl ScopeCertificateIndex {
                 ));
             }
             let next = next.get_or_insert_with(|| self.clone());
-            next.entries.entry(key).or_default().insert(seal.clone());
+            next.entries
+                .entry(key)
+                .or_insert_with(SelectionEntry::new)
+                .insert(seal.clone());
             next.associations = associations;
             next.bytes = bytes;
         }
         Ok(next)
+    }
+    pub(super) fn selection_row(
+        &self,
+        source: &SourceSelection,
+        scope: &ScopeKey,
+        namespace: Namespace,
+    ) -> (InputKey, InputValue) {
+        let key = SelectionKey::new(source, scope, namespace);
+        let selection = key.fingerprint();
+        let candidate_set = self
+            .entries
+            .get(&key)
+            .map_or_else(missing_fingerprint, |row| row.fingerprint);
+        (
+            InputKey::ScopeCertificateSelection(selection),
+            InputValue::ScopeCertificateSelection {
+                selection,
+                candidate_set,
+            },
+        )
+    }
+    pub(super) fn selection_rows(&self, input: &DiscoveryInput) -> BTreeMap<InputKey, InputValue> {
+        let mut rows = BTreeMap::new();
+        if let Some(scope) = &input.scope {
+            for source in &input.sources {
+                if source.outline.parse.profile.edition == scope.edition {
+                    let (key, value) = self.selection_row(source, &scope.scope, scope.namespace);
+                    rows.insert(key, value);
+                }
+            }
+        }
+        rows
     }
     pub(super) fn candidates(
         &self,
@@ -114,6 +180,6 @@ impl ScopeCertificateIndex {
         self.entries
             .get(&SelectionKey::new(source, scope, namespace))
             .into_iter()
-            .flat_map(|keys| keys.iter())
+            .flat_map(|keys| keys.candidates.iter())
     }
 }

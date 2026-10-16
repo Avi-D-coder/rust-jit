@@ -180,3 +180,96 @@ only that unrelated whole-cache equality; graph+index pinned-byte floor, refusal
 below their required budget, delayed final graph/index destruction and exact
 post-eviction accounting remain. Old failure and raw bytes are preserved. This
 is an LRR cache invariant correction, not a changed Rust language oracle.
+
+## Current common module-name query
+
+Root extends the existing typed QueryKey/QueryValue/SyntaxProvider framework with
+CurrentModuleName. Its key retains exact path+OutlineKey and BucketKey; the
+provider validates canonical source/name/profile/module request and obtains the
+actual admitted source lease before the common carrier prepares a genuine
+SealedName observation. The carrier semantic fingerprint retains request and
+complete/incomplete/unsealed answer identity, while real selector/epoch/source/
+seal/query dependencies remain in the ordinary memo. Unsealed never means Absent.
+This separates a current relevant semantic answer from a whole-seal provenance
+identity, permitting unchanged answers to validate downstream pure queries.
+
+Actual InputValue/QueryValue Arc roots and external carrier handles require
+retirement/accounting alongside cached entries; no caller lookup/completeness
+boolean is accepted. One shared namespace reader serves Type/Value/other module
+namespaces; legacy Value APIs remain adapters. This is module lookup only and
+cannot authorize a body token's hygiene, local prefix, prelude, pattern binding,
+member, call, or globally absent impl. Existing final binding, body transport and
+legacy removal holds remain. Source tests must cover current complete/negative/
+unsealed answers, unchanged semantic identity after irrelevant certificate changes,
+relevant additions, epoch/cfg/source/currentness and retained owner budget/eviction.
+No existing production scalar path switches until these joins are established.
+
+
+## Current-name ownership continuation (root, uncompiled)
+
+LOCAL-024 / WT03/WT08/WT10, T024/T050/T051/M014. Actual upstream witness remains
+search-via-bindings.rs and its relevant module/currentness controls; the full
+program still fails argument-source typing. This prerequisite does not close it.
+
+The new pure CurrentModuleName provider retains exact source+scope+namespace+
+edition and genuine selector/epoch/certificate dependencies. Its immutable result
+will own a bounded cold semantic NameLookup projection and the genuine answer
+dependency stamp, rather than retaining an entire nested SealedName QueryValue
+allocation. Preflight result metadata before cloning; cached reuse does no clone
+or namespace replay. This removes an unnecessary cross-query allocation graph
+without replacing the actual resolver or granting caller-supplied name authority.
+
+QueryPin must track the real observation Arc as well as the outer query value.
+Charge the observation/control block once per allocation and retain accounting
+after invalidation when a consumer keeps only that inner handle. Source/cfg/seal
+input handles keep the existing input-pin accounting. No source parsing, body
+index cloning, world census, generated-source exclusion or macro-specific
+semantics is added. Installed production binding remains held until real
+use-site hygiene/local-prefix/prelude proof joins and legacy removal pass.
+
+Acceptance: compile the exact frozen candidate asynchronously; exercise actual
+complete/absent/unsealed module answers, relevant versus unrelated certificate
+changes, source/epoch invalidation and inner-only ownership/eviction controls.
+These are LRR authority/cache controls over unchanged upstream source worlds,
+not extra stock runtime passes. Strict/milestone and architecture matrix remain
+unexecuted until separately reported. All eight audit modes remain open at
+project scope; this slice directly addresses modes6–8 only.
+
+Independent validator source review found that retaining source/cfg/certificate
+InputValue payloads would make old cached-only answers pin an obsolete whole
+discovery input universe before their own memo could be evicted. The root
+continuation therefore removes all nested input/query Arc roots from this
+semantic projection. It owns only exact SourceSelection, bounded NameLookup and
+genuine cached certificate/answer dependency stamps. Actual source/cfg/selector/
+epoch/seal/query reads remain recorded by the pure provider; old detached result
+handles never constitute currentness authority. Consumers must obtain the current
+query result through Database::fetch. This supersedes the earlier planned raw
+input-root retention for this module-answer carrier, not body-source leases.
+
+Weak observation pins now track exclusive result payloads after outer memo
+replacement, deduplicate real observation allocations and pin cached payloads
+only for real external owners. Four upstream-backed controls cover unsealed vs
+positive/negative answers, namespace and epoch evidence separation, inner-only
+retirement, and cached-only reclamation after base-source replacement. They are
+uncompiled/unexecuted until the assigned validator reports actual terminals.
+
+Current-name V1 failed compilation with two missing exhaustive query joins
+(pre-entry pure-query classification and checked expansion-demand metadata).
+Exact V2 compiled; four controls executed with two passes and two failures. Both
+failures expected a stale-source error after complete source removal. Source
+review independently identifies a general memo issue: validation continues into
+old nested queries after a direct input fingerprint has already changed, and an
+obsolete SealedName/DiscoverySeal demand can suspend before the provider sees the
+current missing source. Actual failure output did not print the returned variant;
+typed suspension is a source-derived diagnosis, not an observed terminal detail.
+
+Root successor changes Database::fetch dependency validation: once any dependency
+has changed or become non-cacheable, old-result reuse is impossible, so stop
+validating the obsolete dependency suffix and recompute the provider against
+current inputs. Input stamps sort before query stamps. Rerun dependencies are
+collected separately, so no partial validation dependency set becomes a current
+result certificate. Genuine current-provider NeedInput/suspension remains intact.
+This is shared memo semantics, not a module/macro-specific exception or relaxed
+error oracle. Four strict controls and existing selector2 remain the acceptance
+scope, plus relevant ordinary memo suspension/dependency controls. Old failures
+remain attached to their original exact sources.
